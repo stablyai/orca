@@ -1,4 +1,7 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsRemovedResult,
+  RuntimeMobileSessionTabsResult
+} from '../../../../shared/runtime-types'
 import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner'
 import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
 import {
@@ -25,8 +28,16 @@ import {
 } from './inventory-generation-fence'
 import { forgetRetiredEpochRepairsOutside } from './retired-epoch-repair'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
+import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 
 export const LOCAL_STRUCTURED_SESSION_OWNER = 'local-structured-session'
+
+/** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
+function isWorktreeRetraction(
+  snapshot: RuntimeMobileSessionTabsResult
+): snapshot is RuntimeMobileSessionTabsRemovedResult {
+  return (snapshot as Partial<RuntimeMobileSessionTabsRemovedResult>).removed === true
+}
 
 export type StructuredSessionSnapshotApplyOptions = {
   /**
@@ -90,6 +101,13 @@ export function applyLocalStructuredSessionTabSnapshots<
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
       continue
     }
+    // "Ask me later", not an answer: a worktree the host holds no entry for still answers a forced
+    // inventory, with `none` at version 0. Absence there proves nothing, so it neither applies nor
+    // records — recording it would retire the epoch below. Its cursor is left alone, so a genuinely
+    // stale frame arriving late is still fenced.
+    if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
+      continue
+    }
     const prior = localStructuredSessionVersionByWorktree.get(snapshot.worktree)
     const sharesLineage = Boolean(
       prior && sameSessionTabsPublicationLineage(prior.publicationEpoch, snapshot.publicationEpoch)
@@ -122,6 +140,32 @@ export function applyLocalStructuredSessionTabSnapshots<
       }
     )
     next = patch === next ? next : ({ ...next, ...patch } as State)
+    if (isWorktreeRetraction(snapshot)) {
+      // A retraction was applied above — the mirrored rows must go — but it is not a publication
+      // to fence later frames against. Recording it would retire the renderer's own epoch, which
+      // is one string for the whole process lifetime, and every republication afterwards would be
+      // dropped until a reload minted a new one. That is what left a revealed chat invisible.
+      //
+      // The cursor stays: the host mints a fresh epoch when it rebuilds a pruned entry, so a
+      // republication is never gated by it, while dropping it would leave a frame issued before
+      // the close free to land afterwards and strand a row nothing republishes.
+      //
+      // The history keeps its tombstones but forgets what is current. Unlike the mainstream path —
+      // where the epochs belong to a remote publisher — here the consumer IS the publisher, and
+      // `current` is the renderer's own lifetime epoch: leave it set and the next frame under any
+      // other epoch retires it for good, which is this bug again one cycle later. Clearing the
+      // whole record would instead let a delayed frame from an already-superseded epoch back in,
+      // because the version cursor only fences within a lineage. Dropping `current` alone does
+      // neither: `noteRetiredValue` retires nothing when there is nothing current.
+      const history = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
+      if (history) {
+        localStructuredSessionEpochHistoryByWorktree.set(snapshot.worktree, {
+          current: null,
+          retired: history.retired
+        })
+      }
+      continue
+    }
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
       publicationEpoch: snapshot.publicationEpoch,
       snapshotVersion: snapshot.snapshotVersion

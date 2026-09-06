@@ -10,7 +10,7 @@ import { readFileSync, existsSync, realpathSync, rmSync } from 'node:fs'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 
 export function linkedWorktreePaths(testRepoDir: string): string[] {
-  const root = realpathSync(testRepoDir)
+  const root = realpathSync.native(testRepoDir)
   const output = execFileSync('git', ['-C', testRepoDir, 'worktree', 'list', '--porcelain'], {
     encoding: 'utf8'
   })
@@ -23,7 +23,7 @@ export function linkedWorktreePaths(testRepoDir: string): string[] {
     if (!existsSync(recordedPath)) {
       continue
     }
-    const canonicalPath = realpathSync(recordedPath)
+    const canonicalPath = realpathSync.native(recordedPath)
     if (canonicalPath !== root) {
       linked.add(canonicalPath)
     }
@@ -32,7 +32,7 @@ export function linkedWorktreePaths(testRepoDir: string): string[] {
 }
 
 export function cleanupTestRepository(testRepoDir: string): void {
-  const root = realpathSync(testRepoDir)
+  const root = realpathSync.native(testRepoDir)
   let worktreePaths: string[] = []
   try {
     worktreePaths = linkedWorktreePaths(root)

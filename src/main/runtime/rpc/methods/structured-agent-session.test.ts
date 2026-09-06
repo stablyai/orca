@@ -14,6 +14,7 @@ import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -140,6 +141,12 @@ function hostStub(): StructuredAgentSessionHost {
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
+    revealSession: vi.fn(async () => ({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent: 'codex' as const,
+      readable: true
+    })),
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
@@ -193,6 +200,10 @@ function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatch
         variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
         path: params.agent === 'claude' ? '/host/.claude' : '/host/.codex'
       },
+      options:
+        params.agent === 'claude'
+          ? { model: 'opus', effort: 'high' }
+          : { model: 'gpt-5.6-sol', effort: 'medium' },
       runtimeKind: 'native'
     })),
     publishStructuredAgentSessionTab: vi.fn()
@@ -253,6 +264,92 @@ afterEach(() => {
   setStructuredAgentSessionHost(null)
 })
 
+describe('agentSession.reveal', () => {
+  it.each(['codex', 'claude'] as const)('republishes a persisted %s chat tab', async (agent) => {
+    hostCalls.revealSession.mockResolvedValueOnce({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent,
+      readable: true
+    })
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(hostCalls.revealSession).toHaveBeenCalledWith(SESSION)
+    expect(response).toMatchObject({ ok: true, result: { ok: true, agent } })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent, activate: true })
+    )
+  })
+
+  it('publishes the workspace the host reported, not one the client could assert', async () => {
+    // The client sends only a session id, so a stale or forged one cannot aim the publish at
+    // another workspace.
+    hostCalls.revealSession.mockResolvedValueOnce({
+      sessionId: SESSION,
+      workspaceId: 'workspace-from-record',
+      agent: 'claude',
+      readable: true
+    })
+
+    await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith({
+      workspaceId: 'workspace-from-record',
+      sessionId: SESSION,
+      agent: 'claude',
+      activate: true
+    })
+  })
+
+  it('publishes the tab even when the journal could not be read', async () => {
+    // A pre-SQLite chat restores to nothing, but attach still recovers it, so the tab is worth
+    // publishing and the pane's hold finishes the job. Refusing here would strand it forever.
+    hostCalls.revealSession.mockResolvedValueOnce({
+      sessionId: SESSION,
+      workspaceId: 'workspace-1',
+      agent: 'codex',
+      readable: false
+    })
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: true, result: { ok: true, readable: false } })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledOnce()
+  })
+
+  it('refuses rather than throws when the host holds no such record', async () => {
+    hostCalls.revealSession.mockRejectedValueOnce(new Error('agent_session_identity_required'))
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { code: 'agent_session_identity_required' } }
+    })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).not.toHaveBeenCalled()
+  })
+
+  it('does not launder an unrelated fault into a refusal', async () => {
+    hostCalls.revealSession.mockRejectedValueOnce(new Error('EACCES: journal directory'))
+
+    const response = await call('agentSession.reveal', { sessionId: SESSION }, STRUCTURED_CLIENT)
+
+    expect(response).toMatchObject({ ok: false })
+  })
+
+  it('is refused for a client that cannot read structured sessions', async () => {
+    const response = await call(
+      'agentSession.reveal',
+      { sessionId: SESSION },
+      { clientKind: 'runtime', clientCapabilities: [] }
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(hostCalls.revealSession).not.toHaveBeenCalled()
+  })
+})
+
 describe('capability gating', () => {
   it('clears durable tab visibility when closing through the agent-session RPC', async () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT)
@@ -277,6 +374,7 @@ describe('capability gating', () => {
   it('advertises the capability without bumping the protocol version', () => {
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
     // Additive methods do not break an old client; bumping would strand every
     // paired device that has not updated.
     expect(RUNTIME_PROTOCOL_VERSION).toBe(3)
@@ -289,7 +387,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(18)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(19)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -388,7 +486,8 @@ describe('method routing', () => {
     expect(hostCalls.attach).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' }
+        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+        options: { model: 'gpt-5.6-sol', effort: 'medium' }
       })
     )
     expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('providerHandle')

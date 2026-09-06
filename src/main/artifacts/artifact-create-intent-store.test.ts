@@ -188,8 +188,7 @@ describe('artifact create intent store', () => {
       }
       // The verify pass re-reads the DACL; answer with the three protected inheritable rules.
       const rules = ['host\\me', 'NT AUTHORITY\\SYSTEM', 'BUILTIN\\Administrators'].map(
-        (name, index) =>
-          index === 0 ? `${args[0]} ${name}:(OI)(CI)(F)` : `   ${name}:(OI)(CI)(F)`
+        (name, index) => (index === 0 ? `${args[0]} ${name}:(OI)(CI)(F)` : `   ${name}:(OI)(CI)(F)`)
       )
       return { ...ok, stdout: `${rules.join('\r\n')}\r\n\r\nSuccessfully processed 1 files\r\n` }
     })

@@ -11,7 +11,6 @@ import {
   isUnconfirmedSshCommandTermination
 } from './ssh-relay-deploy-helpers'
 import { uploadRelayDirectory, writeRelayFile } from './ssh-relay-install-transfers'
-import { writeRelayEndpointCredential } from './ssh-relay-endpoint-credential'
 import {
   createRelayInstallMarkerCommand,
   createRelayInstallNamespace,
@@ -88,6 +87,10 @@ import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import { resolveRelayEndpointBeforeRelaunch } from './ssh-relay-endpoint-takeover'
+import {
+  isRelayEndpointHeldError,
+  isRelayEndpointUnresponsiveError
+} from './ssh-relay-endpoint-incumbent'
 import { sweepSupersededRelayEndpoints } from './ssh-relay-superseded-endpoints'
 import {
   parseShortRelaySocketDir,
@@ -1766,7 +1769,14 @@ async function launchRelay(
       }
     }
   } catch (err) {
-    if (isUnconfirmedSshCommandTermination(err)) {
+    // Why rethrow the verdicts: this catch predates the incumbent probe and was meant for a failed
+    // `test -S`. Swallowing a Held/Unresponsive verdict launches a fresh daemon over a live one —
+    // the exact collision the probe exists to prevent (it lost the bind, but only by luck).
+    if (
+      isUnconfirmedSshCommandTermination(err) ||
+      isRelayEndpointHeldError(err) ||
+      isRelayEndpointUnresponsiveError(err)
+    ) {
       throw err
     }
     signal?.throwIfAborted()
@@ -1776,14 +1786,14 @@ async function launchRelay(
   // Why: relay must outlive the SSH connection so PTY sessions survive app restarts — nohup + </dev/null + & detach it from the exec channel.
   // Why: execCommand would block on channel close that backgrounded children never allow; fire-and-forget via conn.exec, the socket poll detects readiness.
   const logFile = `${remoteDir}/relay.log`
-  await writeRelayEndpointCredential(conn, hostPlatform, nodePath, credentialFile, {
-    signal
-  })
+  // Why no credential write here: the daemon publishes it after it owns the socket. A launch
+  // that loses the bind to a live relay then leaves the file — and every later --connect —
+  // intact, where a client-side rewrite locked the survivor's clients out for good.
   // Why: --log-file lets the relay rotate relay.log in-process; the shell redirect stays to capture pre-JS boot/crash output.
   // Why: the relay derives its hook endpoint dir from the socket path; pin it back under the relay dir when the socket moved to /tmp.
   const endpointDirArg =
     sockFile === defaultSockFile ? '' : ` --endpoint-dir ${shellEscape(endpointDir)}`
-  const launchCmd = `cd ${escapedDir} && chmod 600 ${shellEscape(credentialFile)} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
@@ -2044,13 +2054,7 @@ async function launchWindowsRelay(
 
   const logFile = joinRemotePath(hostPlatform, launchOpts.remoteDir, 'relay.log')
   const errFile = joinRemotePath(hostPlatform, launchOpts.remoteDir, 'relay.err.log')
-  await writeRelayEndpointCredential(
-    conn,
-    hostPlatform,
-    launchOpts.nodePath,
-    launchOpts.credentialFile,
-    { signal }
-  )
+  // Why no credential write: see launchRelay — the daemon publishes after it owns the pipe.
   await execHostCommand(
     conn,
     hostPlatform,
@@ -2184,7 +2188,6 @@ function windowsRelayLaunchCommand(
     nodePath,
     remoteDir,
     [
-      `& icacls.exe ${powerShellLiteral(credentialFile)} /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null`,
       `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${powerShellLiteral(wmiCommandLine)}; CurrentDirectory = ${powerShellLiteral(remoteDir)} }`,
       `if ($result.ReturnValue -ne 0) { throw "Win32_Process.Create failed with $($result.ReturnValue)" }`
     ].join('; ')

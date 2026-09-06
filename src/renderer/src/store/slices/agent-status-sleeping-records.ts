@@ -59,7 +59,11 @@ export function sleepingRecordFromEntry(args: {
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
     ...(args.entry.interrupted ? { interrupted: true } : {}),
-    ...(args.origin ? { origin: args.origin } : {})
+    ...(args.origin ? { origin: args.origin } : {}),
+    // The worker can settle while the tab is open, so the fence arrives before this record exists.
+    ...(args.state.automaticResumeBlockedPaneKeys?.[args.entry.paneKey]
+      ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' as const }
+      : {})
   }
 }
 

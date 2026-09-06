@@ -41,7 +41,9 @@ function eolAttributes(paths) {
 function trackedManifestSources() {
   const paths = new Set()
   for (const { filename } of RELAY_ARTIFACTS) {
-    const hits = git(['ls-files', '-z', '--', `*/${filename}`]).split('\0').filter(Boolean)
+    const hits = git(['ls-files', '-z', '--', `*/${filename}`])
+      .split('\0')
+      .filter(Boolean)
     for (const path of hits) {
       paths.add(path)
     }

@@ -28,6 +28,33 @@ export function resolveNativeChatSessionOptionDefaults(
   return values
 }
 
+/** Why only these two: they are the only ids the picker persists into
+ *  `nativeChatSessionOptions` that both structured providers also accept as
+ *  strings. Claude's `fastMode` is a boolean the durable `Record<string, string>`
+ *  record cannot carry, and the providers' remaining keys are settable only
+ *  mid-session, never seeded at launch. */
+const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort'] as const
+
+/** The saved selection a structured create seeds into its reservation, narrowed
+ *  to the wire-safe string subset the durable record and both providers accept. */
+export function resolveStructuredLaunchSeedOptions(
+  persisted: PersistedNativeChatSessionOptions | null | undefined,
+  agent: AgentType
+): Record<string, string> | undefined {
+  const defaults = resolveNativeChatSessionOptionDefaults(persisted, agent)
+  if (!defaults) {
+    return undefined
+  }
+  const seeded: Record<string, string> = {}
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+    const value = defaults[id]
+    if (typeof value === 'string' && value.trim()) {
+      seeded[id] = value
+    }
+  }
+  return Object.keys(seeded).length > 0 ? seeded : undefined
+}
+
 /** Why: an authoritative probe proved this id gone, and a stale `model` is emitted
  *  verbatim as a launch flag — grok exits fatally on an unknown one. Dropping only
  *  `model` keeps the per-model option values for a later reselect. */

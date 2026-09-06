@@ -12,6 +12,7 @@ export function createWebAgentStatusApi(): Partial<PreloadApi> {
       onMigrationUnsupported: () => noopUnsubscribe,
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       onLegacyWorkerTerminalRecovery: () => noopUnsubscribe,
+      onLegacyWorkerTerminalResumeFence: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
       drop: () => {},
       dropPersisted: () => {},
