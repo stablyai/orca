@@ -30,6 +30,11 @@ export function mobileWebPackageGzipBound(sourceByteLength: number): number {
     MOBILE_WEB_PACKAGE_GZIP_WRAPPER_BYTES
   )
 }
+// Host->client, and the client here is the APK's downloader (mobile-web-package-chunk-decoder),
+// never the hosted page — the APK ships from the store while this ceiling ships with the desktop,
+// so narrowing it strands every APK already compiled against the wider one. The surface is
+// unreleased, which is the only reason the retired flat +64 (9 bytes short of a stored-block
+// 384 KiB range) stranded nobody.
 export const MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES = mobileWebPackageGzipBound(
   MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES
 )

@@ -3,6 +3,7 @@ import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_PACKAGE_CHUNK_BASE64_CHARS,
+  MOBILE_WEB_PACKAGE_GZIP_CHUNK_BASE64_CHARS,
   MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES,
   MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES,
   MobileWebPackageAssetChunkSchema,
@@ -51,15 +52,29 @@ describe('mobile web package RPC contract', () => {
   })
 
   // The gzip ceiling used to be a flat +64, which zlib exceeds on incompressible input at every
-  // level; a full-range PNG read then failed the response schema and aborted the download.
+  // level; a full-range PNG read then failed the response schema and aborted the download. The
+  // stored-block fallback the host now uses does not rescue that margin either, so no APK compiled
+  // against it could read this host — only the surface being unreleased kept that unreachable.
   it('covers what zlib really emits for a full incompressible range', () => {
     const source = randomBytes(MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES)
+    const retiredFlatCeiling = MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES + 64
 
     for (const level of [0, 6, 9] as const) {
       const compressed = gzipSync(source, { level })
-      expect(compressed.byteLength).toBeGreaterThan(MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES)
+      expect(compressed.byteLength).toBeGreaterThan(retiredFlatCeiling)
       expect(compressed.byteLength).toBeLessThanOrEqual(MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES)
     }
+  })
+
+  // The ceiling is only affordable because the widest chunk it permits still crosses the relay in
+  // one frame; raising MOBILE_WEB_PACKAGE_RANGE_CHUNKS is what would break that, not gzip.
+  it('keeps the widest permitted chunk inside the relay control-lane frame', () => {
+    const e2eeBase64Chars = Math.ceil(MOBILE_WEB_PACKAGE_GZIP_CHUNK_BASE64_CHARS / 3) * 4
+
+    expect(MOBILE_WEB_PACKAGE_GZIP_CHUNK_BASE64_CHARS).toBe(
+      Math.ceil(MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES / 3) * 4
+    )
+    expect(e2eeBase64Chars).toBeLessThan(1024 * 1024)
   })
 
   it.each(['../secret', '/index.html', 'assets//app.js', 'assets\\app.js', 'a%2Fb.js'])(
