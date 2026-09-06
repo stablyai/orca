@@ -40,8 +40,8 @@ const URL_USERINFO = /(https?:\/\/)([^/@\s]+)@/g
 
 // Per-line .env shape. `m` anchors `^` in multi-line strings; `\S.*` redacts the whole value (so `FOO=Bearer <jwt>` can't leak its tail), leading `\S` skips empty `FOO=`.
 const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/my
-const NON_WHITESPACE = /\S/g
-const LINE_TERMINATOR = /[\r\n\u2028\u2029]/g
+// First content after a failed line start through the end of its line (same terminator set `.` and `^`/m use).
+const LINE_CONTENT = /\S[^\r\n\u2028\u2029]*/g
 
 // Attribute keys dropped regardless of value. Matched case-insensitively since HTTP headers vary in case.
 const CLIENT_ATTR_BLOCKLIST = new Set([
@@ -127,22 +127,16 @@ function redactEnvironmentLines(input: string): string {
     if (match) {
       parts.push(input.slice(copiedThrough, start), `${match[1]}=[redacted:env-value]`)
       copiedThrough = ENV_LINE.lastIndex
-      start = copiedThrough
+      // `.*` stops at end of input or a line terminator, so the next line starts one past it.
+      start = copiedThrough + 1
     } else {
-      // Failed starts within this leading whitespace all see the same next key.
-      NON_WHITESPACE.lastIndex = start
-      const nextContent = NON_WHITESPACE.exec(input)
-      if (!nextContent) {
+      // Failed starts within this leading whitespace all see the same next key; skip past that line.
+      LINE_CONTENT.lastIndex = start
+      if (!LINE_CONTENT.test(input)) {
         break
       }
-      start = nextContent.index
+      start = LINE_CONTENT.lastIndex + 1
     }
-    LINE_TERMINATOR.lastIndex = start
-    const terminator = LINE_TERMINATOR.exec(input)
-    if (!terminator) {
-      break
-    }
-    start = terminator.index + 1
   }
   if (parts.length === 0) {
     return input
