@@ -61,6 +61,10 @@ undo fix. After changing the patch, run `pnpm install`, regenerate native projec
 with `pnpm exec expo prebuild --no-install`, and rebuild the native app; Metro
 reload alone cannot apply it.
 
+The React Native Gradle plugin is also patched to use Foojay resolver 1.0.0:
+the upstream 0.5.0 resolver references an API removed in Expo's generated Gradle 9.
+Android builds require Java 17 or later, matching the release workflow.
+
 Android source builds also compile Hermes and C++ dependencies. Set `ANDROID_HOME`
 or `ANDROID_SDK_ROOT` to your Android SDK directory, even if `local.properties`
 already specifies it. Install the native build tools for your host (Xcode command
