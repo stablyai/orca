@@ -111,15 +111,19 @@ jobs:
             notes_file="$RUNNER_TEMP/android-release-notes.md"
             previous_tag="$(
               gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
-                | grep '^mobile-android-v' | grep -v "^$tag$" | sort -V | tail -1 || true
+                | grep '^mobile-android-v' | grep -Fxv "$tag" | sort -V | tail -1 || true
             )"
 
             if [ -n "$previous_tag" ]; then
-              gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -X POST \
+              # Why: gh writes the JSON error body to stdout on an HTTP error, so a
+              # non-empty file is not proof of success — gate on exit status.
+              if ! gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -X POST \
                 -f tag_name="$tag" \
                 -f target_commitish="$GITHUB_SHA" \
                 -f previous_tag_name="$previous_tag" \
-                --jq .body > "$notes_file" || true
+                --jq .body > "$notes_file"; then
+                : > "$notes_file"
+              fi
             fi
             if [ ! -s "$notes_file" ]; then
               printf 'Orca Mobile Android %s\n' "$tag" > "$notes_file"
