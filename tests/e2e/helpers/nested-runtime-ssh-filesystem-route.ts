@@ -5,6 +5,7 @@ import { expect } from './orca-app'
 import type { PairedElectronClient } from './paired-electron-client'
 import type { ProjectedWorktreeRoute } from './nested-runtime-ssh-client-route'
 import { focusActiveTerminalInput, getTerminalContent } from './terminal'
+import { terminalMarkerCommand } from './terminal-output-marker'
 
 type PairedClientLocalMutationCanary = {
   assertUntouched(): void
@@ -42,7 +43,7 @@ async function assertRemoteFilesystemMarker(
   marker: string
 ): Promise<void> {
   await focusActiveTerminalInput(client.page)
-  await client.page.keyboard.insertText(`${command} && printf '${marker}\\n'`)
+  await client.page.keyboard.insertText(`${command} && ${terminalMarkerCommand(marker)}`)
   await client.page.keyboard.press('Enter')
   await expect.poll(() => getTerminalContent(client.page), { timeout: 15_000 }).toContain(marker)
 }
@@ -68,10 +69,21 @@ export async function assertNestedFilesystemRoute(
     `paired-client-local-${suffix}\n`
   )
 
+  const trace = await client.page.evaluateHandle(() => {
+    const state = window.__store!.getState()
+    const manager = window.__paneManagers!.get(state.activeTabId!)!
+    const events: unknown[] = []
+    const record = (event: unknown) => { events.push(event); if(events.length > 100) events.shift() }
+    const subscriptions = manager.getPanes().map((pane) => pane.terminal.onData((data) => record({time:performance.now(),type:'data',ptyId:pane.container.dataset.ptyId,data:data.slice(-2048)})))
+    const focus = (event: Event) => record({time:performance.now(),type:event.type,tag:(event.target as Element)?.tagName,className:(event.target as Element)?.className})
+    document.addEventListener('focusin',focus,true)
+    document.addEventListener('focusout',focus,true)
+    return {events,dispose:() => {subscriptions.forEach((s) => s.dispose());document.removeEventListener('focusin',focus,true);document.removeEventListener('focusout',focus,true)}}
+  })
   try {
     await focusActiveTerminalInput(client.page)
     await client.page.keyboard.insertText(
-      `mkdir -p '${directory}' && printf 'nested-route-content\\n' > '${directory}/${sourceName}' && printf '${marker}\\n'`
+      `mkdir -p '${directory}' && printf 'nested-route-content\\n' > '${directory}/${sourceName}' && ${terminalMarkerCommand(marker)}`
     )
     await client.page.keyboard.press('Enter')
     await expect.poll(() => getTerminalContent(client.page), { timeout: 15_000 }).toContain(marker)
@@ -117,7 +129,7 @@ export async function assertNestedFilesystemRoute(
     const fileDeleteDialog = client.page.locator('[role="dialog"]:visible').last()
     const fileDeleteButton = fileDeleteDialog.getByRole('button', { name: 'Delete', exact: true })
     await expect(fileDeleteButton).toBeEnabled()
-    await fileDeleteButton.click({ force: true })
+    await fileDeleteButton.click()
     await expect(fileDeleteDialog).toBeHidden()
     await expect(row(renamedName)).toHaveCount(0, { timeout: 15_000 })
     await assertRemoteFilesystemMarker(
@@ -135,7 +147,7 @@ export async function assertNestedFilesystemRoute(
       exact: true
     })
     await expect(directoryDeleteButton).toBeEnabled()
-    await directoryDeleteButton.click({ force: true })
+    await directoryDeleteButton.click()
     await expect(directoryDeleteDialog).toBeHidden()
     await expect(row(directory)).toHaveCount(0, { timeout: 15_000 })
     await assertRemoteFilesystemMarker(
@@ -145,6 +157,9 @@ export async function assertNestedFilesystemRoute(
     )
     localCanary.assertUntouched()
   } finally {
+    console.log('[nested-filesystem-focus-events]', JSON.stringify(await trace.evaluate((t) => t.events)))
+    await trace.evaluate((t) => t.dispose())
+    await trace.dispose()
     localCanary.dispose()
   }
 }
