@@ -155,6 +155,11 @@ async function launchServeMode(
   }
   // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  // Why before the RPC listener: a reconnecting client can call status.get in the gap and
+  // read a transient remoteUpdateSupport.reason: 'updater-unavailable'. Init is synchronous,
+  // so arming it first leaves no window. Post-whenReady is required by electron-updater;
+  // ahead of printServeReady so clients pairing at first contact see the real update verdict.
+  initializeServeAutoUpdater(runtime.getRuntimeId(), () => state.store!, runtime)
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
@@ -203,11 +208,6 @@ async function launchServeMode(
   // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
   // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
   scheduleAllPendingHistoryTreeRemovals()
-  // Why here and not in a window path: serve never opens a window, so setupAutoUpdater would
-  // otherwise never run and `updater.getStatus` would report updater-unavailable forever.
-  // Post-whenReady is required by electron-updater; ahead of printServeReady so clients pairing
-  // at first contact already see the real update verdict.
-  initializeServeAutoUpdater(runtime.getRuntimeId(), () => state.store!, runtime)
   await printServeReady(serveOptions)
 }
 

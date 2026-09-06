@@ -14533,8 +14533,8 @@
         "requestedVersionUnavailable": "The server updater did not offer the requested Orca version.",
         "updateUnavailable": "The server did not report an available update.",
         "downloadIncomplete": "The server update did not finish downloading.",
-        "reconnectTimeout": "The server did not reconnect on the updated version.",
-        "liveTerminals": "The server still has live terminals or agents. Close them, then try the update again."
+        "reconnectTimeout": "El servidor no se reconectó con la versión actualizada.",
+        "liveTerminals": "El servidor todavía tiene terminales o agentes activos. Ciérrelos e inténtelo de nuevo."
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "The workspace is not connected to a remote Orca host."

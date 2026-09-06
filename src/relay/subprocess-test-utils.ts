@@ -42,12 +42,11 @@ export function spawnRelay(
   let decoderActive = false
 
   // Why: relayLogLine writes boot failures to stderr, which would otherwise be drained silently.
-  const stderrTail: string[] = []
+  // Oversized single chunks keep their tail instead of being dropped whole, so the failure
+  // diagnostics always carry the most recent output.
+  let stderrTail = ''
   const recordStderr = (chunk: Buffer): void => {
-    stderrTail.push(chunk.toString('utf-8'))
-    while (stderrTail.reduce((sum, line) => sum + line.length, 0) > 8000) {
-      stderrTail.shift()
-    }
+    stderrTail = `${stderrTail}${chunk.toString('utf-8')}`.slice(-8000)
   }
 
   const sentinelReceived = new Promise<void>((resolve, reject) => {
@@ -97,7 +96,7 @@ export function spawnRelay(
       sentinelResolved = true
       sentinelReject(
         new Error(
-          `Relay exited (code=${proc.exitCode}, signal=${proc.signalCode}) before the READY sentinel.\nstderr:\n${stderrTail.join('')}`
+          `Relay exited (code=${proc.exitCode}, signal=${proc.signalCode}) before the READY sentinel.\nstderr:\n${stderrTail}`
         )
       )
     }
@@ -190,7 +189,7 @@ export function spawnRelay(
     proc,
     responses,
     sentinelReceived,
-    stderrTail: () => stderrTail.join(''),
+    stderrTail: () => stderrTail,
     send,
     sendNotification,
     waitForResponse,

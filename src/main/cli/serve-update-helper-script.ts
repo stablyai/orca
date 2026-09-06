@@ -48,6 +48,35 @@ LOG_TAG="orca-serve-update-helper"
 
 log() { echo "[$LOG_TAG] $*" >&2; }
 
+# Prints whichever version is semver-higher. sort -V alone cannot do this: it
+# ranks a stable release BELOW its own prereleases (1.2.3 < 1.2.3-beta.1), so a
+# stable->own-prerelease move would pass a plain sort -V downgrade gate. Base
+# triples compare with sort -V; on a tie the stable side always wins, and two
+# prereleases of the same triple compare by their identifiers via sort -V
+# (alpha < beta < rc).
+semver_higher() {
+  local cur="$1" tgt="$2"
+  local cbase="\${cur%%-*}" tbase="\${tgt%%-*}"
+  local cpre="" tpre=""
+  [[ "$cur" == *-* ]] && cpre="\${cur#*-}"
+  [[ "$tgt" == *-* ]] && tpre="\${tgt#*-}"
+  if [[ "$cbase" != "$tbase" ]]; then
+    local hi
+    hi=$(printf '%s\\n' "$cbase" "$tbase" | sort -V | tail -n 1)
+    [[ "$hi" == "$tbase" ]] && printf '%s\\n' "$tgt" || printf '%s\\n' "$cur"
+  elif [[ -z "$cpre" && -n "$tpre" ]]; then
+    printf '%s\\n' "$cur"
+  elif [[ -n "$cpre" && -z "$tpre" ]]; then
+    printf '%s\\n' "$tgt"
+  elif [[ -n "$cpre" && -n "$tpre" && "$cpre" != "$tpre" ]]; then
+    local hip
+    hip=$(printf '%s\\n' "$cpre" "$tpre" | sort -V | tail -n 1)
+    [[ "$hip" == "$tpre" ]] && printf '%s\\n' "$tgt" || printf '%s\\n' "$cur"
+  else
+    printf '%s\\n' "$tgt"
+  fi
+}
+
 write_result() {
   local tmp
   tmp=$(mktemp "$SPOOL_DIR/result.XXXXXXXX")
@@ -163,8 +192,11 @@ if [[ -n "$CURRENT_VERSION" ]]; then
   if [[ "$TARGET_VERSION" == "$CURRENT_VERSION" ]]; then
     reject "already at version $TARGET_VERSION"
   fi
-  OLDEST=$(printf '%s\\n' "$CURRENT_VERSION" "$TARGET_VERSION" | sort -V | head -n 1)
-  if [[ "$OLDEST" == "$TARGET_VERSION" ]]; then
+  # SemVer-aware gate: sort -V ranks a stable release above its own prereleases
+  # (1.2.3 > 1.2.3-beta.1), so accepting only when the target sorts strictly
+  # highest blocks both plain downgrades and stable->its-own-prerelease moves.
+  HIGHEST=$(semver_higher "$CURRENT_VERSION" "$TARGET_VERSION")
+  if [[ "$HIGHEST" != "$TARGET_VERSION" ]]; then
     reject "refusing downgrade from $CURRENT_VERSION to $TARGET_VERSION"
   fi
 fi
