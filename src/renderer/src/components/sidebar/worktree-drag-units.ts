@@ -1,6 +1,7 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
 import { getNaturalWorktreeIds } from './natural-worktree-ids'
+import { isCollectionSectionKey } from './worktree-list-collections'
 
 export type WorktreeDragUnitGroup = WorktreeDragGroup & {
   units: { worktreeId: string; worktreeIds: string[] }[]
@@ -39,6 +40,10 @@ export function getWorktreeDragUnitGroups(
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'
     ) {
+      continue
+    }
+    // Why: collection rows are duplicates of project-list rows; see TECH-7345.
+    if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {

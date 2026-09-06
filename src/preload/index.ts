@@ -14,6 +14,7 @@ import { gitBashApi } from './api/git-bash-bridge'
 import { pluginsApi } from './api/plugins-bridge'
 import { reposApi } from './api/repos-bridge'
 import { projectsApi } from './api/projects-bridge'
+import { collectionsApi } from './api/collections-bridge'
 import { projectGroupsApi } from './api/project-groups-bridge'
 import { folderWorkspacesApi } from './api/folder-workspaces-bridge'
 import { sparsePresetsApi } from './api/sparse-presets-bridge'
@@ -108,6 +109,7 @@ const api = {
   plugins: pluginsApi,
   repos: reposApi,
   projects: projectsApi,
+  collections: collectionsApi,
   projectGroups: projectGroupsApi,
   folderWorkspaces: folderWorkspacesApi,
   sparsePresets: sparsePresetsApi,

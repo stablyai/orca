@@ -1,4 +1,5 @@
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
+import type { Collection } from '../../../../shared/collection-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type {
   NestedRepoScanResult,
@@ -143,6 +144,7 @@ export type RepoSlice = {
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
   projectGroups: readonly ProjectGroup[]
+  collections: readonly Collection[]
   folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
@@ -156,6 +158,7 @@ export type RepoSlice = {
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
   fetchProjectGroups: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchProjectGroupsForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
+  fetchCollections: () => Promise<void>
   fetchFolderWorkspaces: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchFolderWorkspacesForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   addRepo: () => Promise<Repo | null>
@@ -194,6 +197,12 @@ export type RepoSlice = {
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createCollection: (name: string) => Promise<Collection | null>
+  updateCollection: (
+    collectionId: string,
+    updates: Partial<Pick<Collection, 'name' | 'isCollapsed' | 'order' | 'color'>>
+  ) => Promise<Collection | null>
+  deleteCollection: (collectionId: string) => Promise<boolean>
   createFolderWorkspace: (
     args: {
       projectGroupId: string

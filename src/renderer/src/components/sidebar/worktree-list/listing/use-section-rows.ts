@@ -12,6 +12,11 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import { buildRows } from '../grouping/build-rows'
+import type { Collection } from '../../../../../../shared/collection-types'
+import {
+  buildCollectionRows,
+  insertCollectionRowsAfterPinned
+} from '../../worktree-list-collections'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, Row, WorktreeGroupBy } from '../grouping/row-types'
 import { getLogicalRepoOrderRankById } from '../../project-header-drop'
@@ -68,8 +73,11 @@ function collectRenderedSidebarRowKeys(sectionRows: ReturnType<typeof addHostSec
 
 // Builds the full sidebar row model: grouped worktree rows first, then the host-section
 // tier wrapped around them.
+const EMPTY_COLLECTIONS: readonly Collection[] = []
+
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, effectiveCollapsedGroups, defaultHostId } = args
+  const collections = useAppStore((s) => s.collections ?? EMPTY_COLLECTIONS)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
@@ -141,33 +149,51 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [hostOptions]
   )
 
-  const rows: Row[] = useMemo(
+  // Why: collections are additive sections above EVERY grouping mode (like the
+  // Pinned section, they are orthogonal to Group by); the list below stays
+  // byte-identical (COLLECTIONS R9/D2).
+  const collectionRows: Row[] = useMemo(
     () =>
-      buildRows(
-        args.groupBy,
+      buildCollectionRows({
+        collections,
         worktrees,
         repoMap,
-        args.prCache,
-        effectiveCollapsedGroups,
-        repoOrder,
-        args.workspaceStatuses,
-        args.projectOrderBy,
-        args.worktreeLineageById,
-        args.worktreeMap,
-        true,
-        args.settings,
-        args.visibleProjectGroupsForRows,
-        placeholderRepoIds,
-        args.importedWorktreesByRepo,
-        args.newExternalWorktreesInboxByRepo,
-        pendingCreations,
-        args.projectGrouping,
-        args.visibleFolderWorkspacesForRows,
-        hostLabelById,
-        defaultHostId,
-        args.pinnedDisplayPolicy
+        collapsedGroups: effectiveCollapsedGroups,
+        repoOrder
+      }),
+    [collections, worktrees, repoMap, effectiveCollapsedGroups, repoOrder]
+  )
+  const rows: Row[] = useMemo(
+    () =>
+      insertCollectionRowsAfterPinned(
+        buildRows(
+          args.groupBy,
+          worktrees,
+          repoMap,
+          args.prCache,
+          effectiveCollapsedGroups,
+          repoOrder,
+          args.workspaceStatuses,
+          args.projectOrderBy,
+          args.worktreeLineageById,
+          args.worktreeMap,
+          true,
+          args.settings,
+          args.visibleProjectGroupsForRows,
+          placeholderRepoIds,
+          args.importedWorktreesByRepo,
+          args.newExternalWorktreesInboxByRepo,
+          pendingCreations,
+          args.projectGrouping,
+          args.visibleFolderWorkspacesForRows,
+          hostLabelById,
+          defaultHostId,
+          args.pinnedDisplayPolicy
+        ),
+        collectionRows
       ),
     [
+      collectionRows,
       args.groupBy,
       worktrees,
       repoMap,

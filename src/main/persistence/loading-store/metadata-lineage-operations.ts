@@ -30,6 +30,7 @@ import {
   setWorktreeMetaForHost as setWorktreeMetaForHostOperation
 } from './worktree-identity-metadata'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
+import { normalizeWrittenCollectionIds } from './worktree-collection-membership'
 import {
   captureNativeLocalWorktreeMetadataScanExpectation as captureNativeLocalWorktreeMetadataScanExpectationOperation,
   pruneSessionlessMissingLocalWorktreeMetadataForRepo as pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation,
@@ -121,6 +122,7 @@ export class MetadataLineageOperations {
       )
     }
     const updated = mergeWorktreeMetaForWrite(stored, meta)
+    normalizeWrittenCollectionIds(state, updated)
     state.worktreeMeta[worktreeId] = updated
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
     return updated

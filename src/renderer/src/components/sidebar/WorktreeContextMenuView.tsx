@@ -34,6 +34,8 @@ import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import { useWorktreeCollectionActions } from './use-worktree-collection-actions'
+import { WorktreeCollectionMenuItems } from './WorktreeCollectionMenuItems'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
 import {
@@ -47,6 +49,7 @@ import {
 } from './worktree-context-menu-policy'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
+  const collections = useWorktreeCollectionActions(model.worktree)
   const {
     batchDeleteWorktrees,
     children,
@@ -244,6 +247,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   ) : null}
                 </>
               ) : null}
+              {folderWorkspaceId ? null : (
+                <WorktreeCollectionMenuItems actions={collections} isDeleting={isDeleting} />
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={handleOpenParentPicker}
@@ -380,7 +386,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <WorktreeContextMenuOverlays model={model} />
+      <WorktreeContextMenuOverlays model={model} collections={collections} />
     </div>
   )
 }

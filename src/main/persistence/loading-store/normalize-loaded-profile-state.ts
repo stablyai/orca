@@ -34,7 +34,12 @@ export function normalizeLoadedProfileState(
   markNeedsSave: () => void
 ): PersistedState {
   const { defaults, migratedExternalVisibility, osc52ClipboardNoticePending } = terminal
-  const { normalizedOnboarding, normalizedProjectGroups, loadedCompactWorktreeCards } = profile
+  const {
+    normalizedOnboarding,
+    normalizedProjectGroups,
+    normalizedCollections,
+    loadedCompactWorktreeCards
+  } = profile
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
   // Ordered: the host partitions drop the global fields this slice already owns.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
@@ -46,6 +51,7 @@ export function normalizeLoadedProfileState(
       parsed.featureInteractionTelemetryBuckets
     ),
     projectGroups: normalizedProjectGroups,
+    collections: normalizedCollections,
     repos: migratedExternalVisibility.repos,
     // Why: persisted catalog rows are untrusted JSON; consumers call string methods on fields the type says are strings.
     projects: projectCatalog.projects,

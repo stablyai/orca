@@ -11,6 +11,7 @@ export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+  | { type: 'collection-rename'; collectionId: string; currentName: string }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -74,6 +75,7 @@ export function useProjectGroupDialogs(args: {
   const deleteProjectGroupWithContainedProjects = useAppStore(
     (s) => s.deleteProjectGroupWithContainedProjects
   )
+  const updateCollection = useAppStore((s) => s.updateCollection)
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
 
@@ -105,6 +107,10 @@ export function useProjectGroupDialogs(args: {
     []
   )
 
+  const handleRenameCollection = useCallback((collectionId: string, currentName: string) => {
+    setNameDialog({ type: 'collection-rename', collectionId, currentName })
+  }, [])
+
   const handleSubmitProjectGroupName = useCallback(
     async (name: string) => {
       if (!nameDialog) {
@@ -115,6 +121,10 @@ export function useProjectGroupDialogs(args: {
         if (group) {
           await moveProjectToGroup(nameDialog.repo.id, group.id)
         }
+        return
+      }
+      if (nameDialog.type === 'collection-rename') {
+        await updateCollection(nameDialog.collectionId, { name })
         return
       }
       const renamed = await updateProjectGroup(
@@ -138,7 +148,7 @@ export function useProjectGroupDialogs(args: {
         )
       }
     },
-    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup]
+    [createProjectGroup, moveProjectToGroup, nameDialog, updateProjectGroup, updateCollection]
   )
 
   const deleteTargets = useMemo(() => {
@@ -199,6 +209,7 @@ export function useProjectGroupDialogs(args: {
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
     handleRenameProjectGroup,
+    handleRenameCollection,
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
     handleConfirmDeleteProjectGroup

@@ -5,7 +5,7 @@ import { getEnvironmentSshStateGeneration } from './slices/runtime-environment-s
 import { getRuntimeEnvironmentConnectionGeneration } from './slices/runtime-status'
 import { getRuntimeTargetHostId } from './runtime-target-host'
 
-export type HostCatalogKind = 'project-groups' | 'folder-workspaces'
+export type HostCatalogKind = 'project-groups' | 'folder-workspaces' | 'collections'
 
 export type HostCatalogFence = {
   key: string

@@ -42,6 +42,7 @@ export function createProjectGroupCatalogActions(
       } catch (err) {
         console.error('Failed to fetch project groups:', err)
       }
+      void get().fetchCollections()
     },
 
     fetchProjectGroupsForAllHosts: async (options) => {
@@ -71,6 +72,7 @@ export function createProjectGroupCatalogActions(
       } catch (err) {
         console.error('Failed to fetch local project groups for all-host load:', err)
       }
+      void get().fetchCollections()
       if (options?.remoteHosts === 'skip') {
         return
       }

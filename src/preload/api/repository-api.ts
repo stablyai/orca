@@ -1,3 +1,4 @@
+import type { Collection } from '../../shared/collection-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   HostRepoCatalogSnapshot,
@@ -128,6 +129,16 @@ export type ProjectsApi = {
   setupExistingFolder: (args: ProjectHostSetupExistingFolderArgs) => Promise<ProjectHostSetupResult>
   updateHostSetup: (args: ProjectHostSetupUpdateArgs) => Promise<ProjectHostSetupUpdateResult>
   deleteHostSetup: (args: ProjectHostSetupDeleteArgs) => Promise<ProjectHostSetupDeleteResult>
+}
+
+export type CollectionsApi = {
+  list: () => Promise<Collection[]>
+  create: (args: { name: string; color?: string | null }) => Promise<Collection>
+  update: (args: {
+    collectionId: string
+    updates: Partial<Pick<Collection, 'name' | 'isCollapsed' | 'order' | 'color'>>
+  }) => Promise<Collection | null>
+  delete: (args: { collectionId: string }) => Promise<boolean>
 }
 
 export type ProjectGroupsApi = {

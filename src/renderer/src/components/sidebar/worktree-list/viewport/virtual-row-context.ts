@@ -73,6 +73,13 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
     onWorkspaceStatusDragOver: statusDrag.handleWorkspaceStatusDragOver,
     onWorkspaceStatusDragLeave: statusDrag.handleWorkspaceStatusDragLeave,
     onWorkspaceStatusDrop: statusDrag.handleWorkspaceStatusDrop,
+    collectionHeader: {
+      collapsedGroups: props.collapsedGroups,
+      toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
+      onRenameCollection: props.handleRenameCollection,
+      onDeleteCollection: props.handleDeleteCollection,
+      onAddWorktreesToCollection: props.handleAddWorktreesToCollection
+    },
     header: {
       groupBy: props.groupBy,
       collapsedGroups: props.collapsedGroups,

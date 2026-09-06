@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
+import { COLLECTION_METHODS } from './collection'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import { createRepoUpdateSchema } from './repo-update-schema'
 import {
@@ -147,6 +148,7 @@ export const REPO_METHODS: RpcMethod[] = [
     params: ProjectGroupSelector,
     handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId)
   }),
+  ...COLLECTION_METHODS,
   defineMethod({
     name: 'projectGroup.moveProject',
     params: ProjectGroupMoveProject,

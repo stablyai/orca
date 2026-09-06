@@ -83,7 +83,7 @@ export function updateLatestWorktreeStatusDropTarget(
   preview: WorktreeSidebarDropPreview | null
 ): void {
   drag.latestStatusDropTarget =
-    target.status || target.isPinDrop || target.lineageParentId
+    target.status || target.isPinDrop || target.lineageParentId || target.collectionId
       ? {
           target,
           preview,

@@ -38,6 +38,7 @@ import {
   ProjectCollectionOperations,
   installProjectCollectionOperationsContext
 } from './project-collection-operations'
+import { CollectionOperations, installCollectionOperationsContext } from './collection-operations'
 import {
   AutomationPersistence,
   installAutomationPersistenceContext
@@ -80,6 +81,7 @@ export type StoreDomains = {
   sessionSnapshots: SessionSnapshotOperations
   metadata: MetadataLineageOperations
   projects: ProjectCollectionOperations
+  collections: CollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
   sparsePresets: SparsePresetPersistence
@@ -93,6 +95,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   WriteSchedulingOperations,
   PrimaryStateWriteOperations,
   ProjectCollectionOperations,
+  CollectionOperations,
   RepoLifecycleOperations,
   MobileTabSelectionPersistence,
   SparsePresetPersistence,
@@ -112,6 +115,7 @@ export function installStoreDomainContexts(target: object, domains: StoreDomains
   installWriteSchedulingOperationsContext(target, domains.scheduling)
   installPrimaryStateWriteOperationsContext(target, domains.writes)
   installProjectCollectionOperationsContext(target, domains.projects)
+  installCollectionOperationsContext(target, domains.collections)
   installRepoLifecycleOperationsContext(target, domains.repos)
   installMobileTabSelectionPersistenceContext(target, domains.mobileTabSelections)
   installSparsePresetPersistenceContext(target, domains.sparsePresets)
@@ -148,6 +152,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   )
   const metadata = new MetadataLineageOperations(runtime, scheduling, sessions)
   const projects = new ProjectCollectionOperations(runtime, repos, scheduling, metadata)
+  const collections = new CollectionOperations(runtime, scheduling, metadata)
   const automations = new AutomationPersistence(runtime, flushBarriers, preferences)
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const sparsePresets = new SparsePresetPersistence(runtime, scheduling)
@@ -176,6 +181,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     sessionSnapshots,
     metadata,
     projects,
+    collections,
     automations,
     mobileTabSelections,
     sparsePresets,

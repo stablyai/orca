@@ -3,6 +3,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { planWorktreeSortOrderUpdates } from '../../shared/worktree/sort-order-update'
+import { clampExclusiveCollectionMembership } from '../../shared/collections'
 import { stripOrcaProvenanceMetaUpdates } from '../worktree-removal-safety'
 import type { RuntimeStore } from './runtime-store-contract'
 import { RuntimeLineageError } from './runtime-worktree-lineage-resolution'
@@ -50,6 +51,14 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   )
   if (clearPushTarget) {
     persisted.pushTarget = undefined
+  }
+  if (persisted.collectionIds !== undefined) {
+    // Why: amended D1 is a data invariant at this boundary — no RPC/CLI/web
+    // caller can file a feature worktree into several collections.
+    persisted.collectionIds = clampExclusiveCollectionMembership(
+      persisted.collectionIds,
+      worktree.isMainWorktree
+    )
   }
   if (lineage?.noParent === true) {
     args.store.removeWorktreeLineage?.(worktree.id)

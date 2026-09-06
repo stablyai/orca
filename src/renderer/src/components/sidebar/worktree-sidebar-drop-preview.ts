@@ -24,6 +24,8 @@ export type WorktreeSidebarDropPreview = {
 export type WorktreeSidebarStatusDropTarget = {
   status: string | null
   isPinDrop: boolean
+  /** Collection header (or its repo sub-header) under the pointer; drop files the drag into it. */
+  collectionId?: string | null
 }
 
 export type WorktreeSidebarTrackedStatusDropTarget = {

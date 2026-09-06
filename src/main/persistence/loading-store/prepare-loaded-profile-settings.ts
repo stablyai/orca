@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Collection } from '../../../shared/collection-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/project-execution-runtime'
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
@@ -11,6 +12,7 @@ import {
 } from '../../../shared/mobile-pairing-custom-address'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
 import { normalizeProjectGroups } from '../../../shared/project-groups'
+import { normalizeCollections } from '../../../shared/collections'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
@@ -53,6 +55,7 @@ export type PreparedLoadedProfileSettings = {
   normalizedSourceControlGroupOrder: GlobalSettings['sourceControlGroupOrder']
   normalizedOnboarding: PersistedState['onboarding']
   normalizedProjectGroups: ProjectGroup[]
+  normalizedCollections: Collection[]
 }
 
 export function prepareLoadedProfileSettings(
@@ -180,6 +183,7 @@ export function prepareLoadedProfileSettings(
     markNeedsSave()
   }
   const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
+  const normalizedCollections = normalizeCollections(parsed.collections)
   const loadedCompactWorktreeCards =
     parsed.settings?.compactWorktreeCards ??
     parsed.settings?.experimentalCompactWorktreeCards ??
@@ -250,6 +254,7 @@ export function prepareLoadedProfileSettings(
     normalizedNotifications,
     normalizedSourceControlGroupOrder,
     normalizedOnboarding,
-    normalizedProjectGroups
+    normalizedProjectGroups,
+    normalizedCollections
   }
 }

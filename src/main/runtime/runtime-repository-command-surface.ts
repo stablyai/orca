@@ -1,6 +1,7 @@
 import type { RuntimeGitHubRepositoryQueryCommands } from './runtime-github-repository-query-commands'
 import type { RuntimeHostedReviewCommands } from './runtime-hosted-review-commands'
 import type { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
+import type { RuntimeCollectionController } from './runtime-collection-controller'
 import type { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import type { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import type { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
@@ -46,6 +47,10 @@ export type RuntimeRepositoryCommandSurface = {
   updateProjectGroup: RuntimeProjectGroupController['updateGroup']
   deleteProjectGroup: RuntimeProjectGroupController['deleteGroup']
   moveProjectToGroup: RuntimeProjectGroupController['moveProject']
+  listCollections: RuntimeCollectionController['listCollections']
+  createCollection: RuntimeCollectionController['createCollection']
+  updateCollection: RuntimeCollectionController['updateCollection']
+  deleteCollection: RuntimeCollectionController['deleteCollection']
   createFolderWorkspace: RuntimeProjectGroupController['createFolderWorkspace']
   getFolderWorkspacePathStatus: RuntimeProjectGroupController['getFolderPathStatus']
   updateFolderWorkspace: RuntimeProjectGroupController['updateFolderWorkspace']
@@ -76,6 +81,7 @@ export type RuntimeRepositoryCommandSurface = {
 type RuntimeRepositoryCommandOwners = {
   projectHostSetups: RuntimeProjectHostSetupController
   projectGroups: RuntimeProjectGroupController
+  collections: RuntimeCollectionController
   nestedRepoImport: RuntimeNestedRepoImport
   serverEnvironment: RuntimeServerEnvironmentCommands
   repositorySparsePresets: RuntimeRepositorySparsePresets
@@ -95,6 +101,7 @@ export function installRuntimeRepositoryCommandSurface(
 ): void {
   const host = owners.projectHostSetups
   const groups = owners.projectGroups
+  const collections = owners.collections
   const nested = owners.nestedRepoImport
   const server = owners.serverEnvironment
   const sparse = owners.repositorySparsePresets
@@ -121,6 +128,10 @@ export function installRuntimeRepositoryCommandSurface(
     updateProjectGroup: groups.updateGroup.bind(groups),
     deleteProjectGroup: groups.deleteGroup.bind(groups),
     moveProjectToGroup: groups.moveProject.bind(groups),
+    listCollections: collections.listCollections.bind(collections),
+    createCollection: collections.createCollection.bind(collections),
+    updateCollection: collections.updateCollection.bind(collections),
+    deleteCollection: collections.deleteCollection.bind(collections),
     createFolderWorkspace: groups.createFolderWorkspace.bind(groups),
     getFolderWorkspacePathStatus: groups.getFolderPathStatus.bind(groups),
     updateFolderWorkspace: groups.updateFolderWorkspace.bind(groups),

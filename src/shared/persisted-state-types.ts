@@ -1,3 +1,4 @@
+import type { Collection } from './collection-types'
 import type { ExecutionHostId } from './execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -53,6 +54,8 @@ export type PersistedState = {
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]
   projectGroups: ProjectGroup[]
+  /** Worktree collections (cross-repo workstream sections). Absent on pre-collection files. */
+  collections?: Collection[]
   folderWorkspaces: FolderWorkspace[]
   /** Folder-workspace review notes, keyed by FolderWorkspace.id. Top-level, NOT nested in
    *  folderWorkspaces[]: normalizeFolderWorkspaces rebuilds each record field-by-field, so an

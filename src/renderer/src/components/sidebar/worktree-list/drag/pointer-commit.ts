@@ -29,6 +29,10 @@ function commitStatusOrPinDrop(
   dropIndex: number | null
 ): void {
   const { drag, ctx } = args
+  if (target.collectionId) {
+    ctx.onDropWorktreesOnCollection(drag.draggedIds, target.collectionId)
+    return
+  }
   if (target.isPinDrop) {
     ctx.onPinWorktrees(drag.draggedIds)
     return

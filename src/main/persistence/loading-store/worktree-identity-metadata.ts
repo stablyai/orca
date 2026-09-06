@@ -12,6 +12,7 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
+import { normalizeWrittenCollectionIds } from './worktree-collection-membership'
 
 type MetadataRuntime = Pick<StoreRuntimeState, 'state'>
 
@@ -227,6 +228,7 @@ export function setWorktreeMetaForHost(
     instanceId,
     hostId: executionHostId
   })
+  normalizeWrittenCollectionIds(state, updated)
   state.worktreeMetaByIdentity ??= {}
   state.worktreeIdentityAliases ??= {}
   if (existingIdentityKey && existingIdentityKey !== identityKey) {

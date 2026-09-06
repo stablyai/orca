@@ -51,6 +51,7 @@ export const projectsUpdateHostSetup: Mock = vi.fn()
 export const projectsDeleteHostSetup: Mock = vi.fn()
 export const projectsUpdate: Mock = vi.fn()
 export const projectGroupsMoveProject: Mock = vi.fn()
+export const collectionsCreate: Mock = vi.fn()
 export const ptyKill: Mock = vi.fn()
 export const runtimeEnvironmentCall: Mock = vi.fn()
 export const runtimeEnvironmentTransportCall: Mock = vi.fn()
@@ -82,6 +83,7 @@ export function installReposRuntimeRoutingHarness(): void {
     projectsDeleteHostSetup.mockReset()
     projectsUpdate.mockReset()
     projectGroupsMoveProject.mockReset()
+    collectionsCreate.mockReset()
     ptyKill.mockReset()
     orcaProfileFindProjectProfiles.mockReset()
     runtimeEnvironmentCall.mockReset()
@@ -115,6 +117,9 @@ export function installReposRuntimeRoutingHarness(): void {
         },
         projectGroups: {
           moveProject: projectGroupsMoveProject
+        },
+        collections: {
+          create: collectionsCreate
         },
         orcaProfiles: {
           findProjectProfiles: orcaProfileFindProjectProfiles
