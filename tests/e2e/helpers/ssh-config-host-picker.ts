@@ -86,14 +86,18 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
       throw new Error('Open dialog is missing its Radix identity')
     }
     const dialog = page.locator(`[role="dialog"][id=${JSON.stringify(dialogId)}]`)
-    const cancelOrBack = dialog.getByRole('button', { name: /^(Cancel|Back)$/ })
-    await ((await cancelOrBack
-      .first()
-      .isVisible()
-      .catch(() => false))
-      ? cancelOrBack.first().click()
-      : page.keyboard.press('Escape'))
-    // Back can replace the picker with its parent without reducing the dialog count.
+    const back = dialog.getByRole('button', { name: 'Back', exact: true })
+    if (await back.isVisible()) {
+      await back.click()
+      // The picker and host form reuse the same Radix dialog.
+      await expect(back).toBeHidden({ timeout: 3_000 })
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible({
+        timeout: 3_000
+      })
+      continue
+    }
+    const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true })
+    await ((await cancel.isVisible()) ? cancel.click() : page.keyboard.press('Escape'))
     await expect(dialog).toBeHidden({ timeout: 3_000 })
   }
   await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
