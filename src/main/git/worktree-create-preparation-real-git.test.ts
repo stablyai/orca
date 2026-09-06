@@ -72,7 +72,8 @@ describe('prepared worktree creation with real Git', () => {
       calls.push([...args])
       if (args.includes('reset')) {
         watcher = watch(preparedPath, (_event, filename) => {
-          if (filename?.toString().startsWith('payload-')) {
+          // Only the reset writes here, so an event without a filename is still materialization.
+          if (filename === null || filename.toString().startsWith('payload-')) {
             observedMaterialization = true
             watcher?.close()
             controller.abort()
