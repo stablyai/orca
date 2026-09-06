@@ -128,11 +128,17 @@ jobs:
             if [ ! -s "$notes_file" ]; then
               printf 'Orca Mobile Android %s\n' "$tag" > "$notes_file"
             fi
-            if [ "$(wc -c < "$notes_file")" -gt 120000 ]; then
-              head -c 120000 "$notes_file" > "$notes_file.trimmed"
-              printf '\n\n_Notes truncated; see the full changelog._\n' >> "$notes_file.trimmed"
-              mv "$notes_file.trimmed" "$notes_file"
-            fi
+            # Why: reuse the desktop release path's character-safe truncation so a
+            # multi-byte character cannot be split at the cap.
+            NOTES_FILE="$notes_file" \
+            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
+            node --input-type=module -e '
+              const { readFileSync, writeFileSync } = await import("node:fs")
+              const { pathToFileURL } = await import("node:url")
+              const { truncateReleaseBody } = await import(pathToFileURL(process.env.NOTES_MODULE).href)
+              const file = process.env.NOTES_FILE
+              writeFileSync(file, truncateReleaseBody(readFileSync(file, "utf8")))
+            '
 
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
