@@ -24,11 +24,7 @@ export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
 export { PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT } from '../../../shared/work-items'
 
-export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
-  ? 'win32'
-  : navigator.userAgent.includes('Mac')
-    ? 'darwin'
-    : 'linux'
+export { CLIENT_PLATFORM } from './client-platform'
 
 export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
