@@ -120,7 +120,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      // A fallback adds a surface without retiring the renderer that will publish its next tabs.
+      publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
       // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
       activeGroupId:
