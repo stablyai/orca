@@ -129,7 +129,8 @@ jobs:
           # branch. tree:0 keeps the fetch to the commit graph — no trees, no
           # blobs — so this stays cheap next to the build it fronts.
           scratch="$RUNNER_TEMP/vet-requested-ref"
-          git init -q --bare "$scratch"
+          # Reftable preserves case-distinct refs on macOS's default filesystem.
+          git init -q --bare --ref-format=reftable "$scratch"
           git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
           # Branch first to keep actions/checkout's old tie-break: bare
           # rev-parse would prefer the tag when a branch shares its name.
