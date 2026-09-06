@@ -18151,6 +18151,109 @@
         "No p95 CI history or full product mutation proof."
       ],
       "demotionRule": "Keep experimental while any recovery reproduction fails or any teardown, identity, resource-count, or rendered oracle flakes; never promote by extending sleeps or retries."
+    },
+    {
+      "id": "terminal.windows-wsl-launch-and-paste",
+      "title": "Real WSL terminal agent launch and paste ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "electron-windows-wsl",
+      "surfaces": [
+        "agent tab launch",
+        "keyboard paste",
+        "terminal runtime retention"
+      ],
+      "platforms": [
+        "windows"
+      ],
+      "providers": [
+        "wsl1",
+        "wsl2"
+      ],
+      "coveredPlatforms": [
+        "windows"
+      ],
+      "coveredProviders": [
+        "wsl1"
+      ],
+      "coverageNotes": "Two Windows CI runs each passed the three WSL1 cases three times. The final per-scenario participation verifier and PR routing still await CI validation. WSL2 remains untested.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/actions/runs/34030832614"
+      ],
+      "invariant": "An agent launched into WSL runs in the guest; keyboard paste reaches exactly one owning PTY and preserves Linux content even after the default shell changes.",
+      "oracle": "Run the existing real WSL launch and two paste cases three times; require nine passes and zero skipped, unexpected, or flaky results in the Playwright JSON report.",
+      "commands": [
+        "gh workflow run windows-terminal-restart-e2e.yml --ref nwparker/validate-reusable-wsl-lane",
+        "gh workflow run windows-wsl-e2e.yml",
+        "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs"
+      ],
+      "testFiles": [
+        "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
+        "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
+        "config/scripts/wsl-e2e-lane-contract.test.mjs",
+        "config/scripts/verify-wsl-e2e-participation.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
+          "assertions": [
+            "requires a distro-only marker from the launched agent"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
+          "assertions": [
+            "requires exact Linux pasted content and exactly one PTY write",
+            "retains WSL paste ownership after changing the default shell"
+          ]
+        },
+        {
+          "file": "config/scripts/verify-wsl-e2e-participation.test.mjs",
+          "assertions": [
+            "rejects skipped, missing, substituted and retried scenarios"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-06",
+          "runner": "ci",
+          "platform": "windows",
+          "result": "passed",
+          "command": "gh workflow run windows-terminal-restart-e2e.yml --ref nwparker/validate-reusable-wsl-lane",
+          "durationSeconds": 234,
+          "summary": "Run34030832614 at4de05e5: real WSL1 launch3 and paste6 passed; aggregate receipt required9 expected and0 skipped/unexpected/flaky. Final per-scenario verifier is newer and pending."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 1800,
+        "scope": "CI job timeout; measured p95 is not established"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Pinned-image run34030695826 and reusable-action run34030832614 each passed9/9 with no skips; final verifier head pending."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Verifier tests reject absent or skipped scenarios, substituted titles, and passes after retries. Actual nine-pass report verification on the final verifier head is pending."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "CI-only provisioning and routing; no application runtime changes."
+      },
+      "promotionCriteria": [
+        "Require all nine real WSL executions on the final workflow head.",
+        "Demonstrate missing or skipped WSL execution fails participation.",
+        "Collect repeated CI history before adding this experimental lane to required verification."
+      ],
+      "knownGaps": [
+        "WSL2 is not provisioned.",
+        "No SSH, folder-only workspace, packaged mixed-version, or live-service claim.",
+        "The new PR lane is outside verify until reliability is established."
+      ],
+      "demotionRule": "Keep experimental if provisioning or an execution flakes; never promote by skipping a case, raising timeouts, or retrying until green."
     }
   ]
 }

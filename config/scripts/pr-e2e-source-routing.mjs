@@ -14,6 +14,18 @@ const NATIVE_IME_HARNESS =
 
 export const PR_E2E_SOURCE_ROUTES = [
   {
+    id: 'terminal.windows-wsl-launch-and-paste',
+    specs: [
+      'tests/e2e/golden-tab-bar-agent-launch.spec.ts',
+      'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^(?:config\/scripts\/verify-wsl-e2e-participation\.mjs$|src\/main\/(?:wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:wsl-|windows-terminal-shell)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
+        file
+      )
+  },
+  {
     id: 'ephemeral-vm-runtime.rollback-readable-sidecar',
     specs: ['tests/e2e/ephemeral-vm-provisioned-root.spec.ts'],
     matches: (file) =>
@@ -227,6 +239,13 @@ export function shouldRunReusablePrE2e(changedPaths) {
   )
 }
 
+export function hasWslSourceChange(changedPaths) {
+  const route = PR_E2E_SOURCE_ROUTES.find(
+    (candidate) => candidate.id === 'terminal.windows-wsl-launch-and-paste'
+  )
+  return changedPaths.some(route.matches)
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let input = ''
   process.stdin.setEncoding('utf8')
@@ -238,6 +257,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.stdout.write(`${hasSshSourceChange(changedPaths)}\n`)
   } else if (process.argv.includes('--reusable-workflow')) {
     process.stdout.write(`${shouldRunReusablePrE2e(changedPaths)}\n`)
+  } else if (process.argv.includes('--wsl-source')) {
+    process.stdout.write(`${hasWslSourceChange(changedPaths)}\n`)
   } else if (process.argv.includes('--native-ime-source')) {
     process.stdout.write(`${hasNativeImeSourceChange(changedPaths)}\n`)
   } else {
