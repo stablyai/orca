@@ -83,8 +83,8 @@ describe('docs-only path classification', () => {
     expect(shouldRunPrChecks([])).toBe(true)
   })
 
-  it('does not start desktop PR Checks for mobile-only diffs', () => {
-    expect(shouldRunPrChecks(['mobile/src/App.tsx', 'mobile/package.json'])).toBe(false)
+  it('does not start desktop PR Checks for mobile UI-only diffs', () => {
+    expect(shouldRunPrChecks(['mobile/src/App.tsx'])).toBe(false)
   })
 
   it('does not start desktop PR Checks for cloud-only diffs', () => {
@@ -257,6 +257,8 @@ describe('per-job path classification', () => {
   it('runs cross-version wire checks for every working-tree wire module', () => {
     for (const file of [
       'src/shared/protocol-version.ts',
+      'src/shared/mobile-e2ee-v2-framing.ts',
+      'src/shared/ws-outbound-backpressure-queue.ts',
       'src/shared/terminal-stream-protocol.ts',
       'src/shared/agent-session-wire.ts',
       'src/shared/agent-session-mutation-envelope.ts',
@@ -269,6 +271,9 @@ describe('per-job path classification', () => {
       'src/main/native-chat/agent-session-wire/structured-agent-session-host.ts',
       'src/main/runtime/agent-session-record-store.ts',
       'src/main/runtime/rpc/dispatcher.ts',
+      'src/main/runtime/rpc/e2ee-channel.ts',
+      'src/main/runtime/rpc/mobile-e2ee-v2-desktop-session.ts',
+      'src/main/runtime/rpc/runtime-client-capabilities.ts',
       'src/main/runtime/rpc/methods/ai-vault.ts',
       'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
       'src/main/runtime/rpc/methods/session-tabs.ts',
@@ -289,6 +294,7 @@ describe('per-job path classification', () => {
       ['tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts'],
       { 'cross-version-wire': true }
     )
+    expectClassification(['config/vitest.config.ts'], { 'cross-version-wire': true })
   })
 
   it('runs workflow-self-change and lockfile diffs as force-all', () => {
@@ -327,10 +333,9 @@ describe('per-job path classification', () => {
     expect(
       classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
     ).toBe(true)
-    // Why false: a mobile-only diff skips every desktop job, so the install step's own
-    // job never runs and claiming the install is needed contradicts should_run.
+    // Mobile-only wire diffs use the compatibility job's unconditional install.
     expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(false)
-    expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
+    expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(true)
     expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(false)
   })
 
@@ -338,6 +343,28 @@ describe('per-job path classification', () => {
     expectClassification(['src/main/git/git-status.test.ts'], {
       git_compatibility: true
     })
+  })
+
+  it('runs only wire compatibility for mobile transport and dependency changes', () => {
+    for (const file of [
+      'mobile/src/transport/e2ee-v2-client-session.ts',
+      'mobile/src/transport/relay-rpc-streams.ts',
+      'mobile/package.json',
+      'mobile/pnpm-lock.yaml',
+      'mobile/pnpm-workspace.yaml'
+    ]) {
+      expect(classifyPrJobs([file]), file).toEqual({
+        should_run: true,
+        native_cache_changed: false,
+        mobile_dependencies: false,
+        ...expectedJobs({ 'cross-version-wire': true }, { alwaysOn: false })
+      })
+      expectClassification([file, 'src/main/index.ts'], {
+        'cross-version-wire': true,
+        package: true,
+        package_windows: true
+      })
+    }
   })
 
   it('emits GitHub output pairs from the shipped CLI', () => {
@@ -389,6 +416,25 @@ describe('PR Checks skip wiring', () => {
   it('keeps the cheap root-directory guard on docs-only PRs', () => {
     expect(prWorkflow.jobs.root_directory_guard.if).toBeUndefined()
     expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
+  })
+
+  it('installs mobile crypto dependencies before both mobile skew suites', () => {
+    const steps = prWorkflow.jobs['cross-version-wire'].steps
+    const install = steps.findIndex((step) => step.name === 'Install mobile dependencies')
+    const journey = steps.findIndex(
+      (step) => step.name === 'Old/new client and server compatibility journeys'
+    )
+    expect(install).toBeGreaterThan(-1)
+    expect(install).toBeLessThan(journey)
+    expect(steps[install].if).toBeUndefined()
+    expect(steps[install]['working-directory']).toBe('mobile')
+    expect(steps[install].run).toContain('pnpm install --frozen-lockfile --ignore-scripts')
+    expect(steps[install].run).toContain(
+      'git diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml'
+    )
+    for (const suite of ['versioned-mobile-terminal-wire', 'cross-version-mobile-input']) {
+      expect(steps[journey].run).toContain(`tests/e2e/cross-version-wire/${suite}.unit.test.ts`)
+    }
   })
 
   it('gates each expensive job on its classifier and cache prerequisite', () => {

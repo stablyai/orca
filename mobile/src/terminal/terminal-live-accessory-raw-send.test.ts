@@ -25,6 +25,30 @@ const BASE_ARGS = {
 } as const
 
 describe('terminal live accessory raw send', () => {
+  it.each([true, false])('uses negotiated receipts without RPC fallback: %s', async (accepted) => {
+    const { client, sendRequest } = captureClient()
+    const sendTerminalStreamInput = vi.fn(() => Promise.resolve(accepted))
+    await expect(
+      sendTerminalLiveAccessoryRawBytes({
+        ...BASE_ARGS,
+        client: { ...client, sendTerminalStreamInput }
+      })
+    ).resolves.toBe(accepted)
+    expect(sendTerminalStreamInput).toHaveBeenCalledWith('terminal-a', '\u001b')
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('falls back only before stream admission when negotiation is absent', async () => {
+    const { client, sendRequest } = captureClient()
+    await expect(
+      sendTerminalLiveAccessoryRawBytes({
+        ...BASE_ARGS,
+        client: { ...client, sendTerminalStreamInput: () => null }
+      })
+    ).resolves.toBe(true)
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+  })
+
   it('sends raw bytes now-or-never with the device presence tag', async () => {
     const { client, sendRequest } = captureClient()
 

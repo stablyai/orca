@@ -13,7 +13,9 @@ import {
   isTerminalSubscribedResult
 } from './rpc-subscription-result-shapes'
 import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-router'
-import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
+import type { RpcResponse, RpcSuccess } from './types'
+import type { StreamRegistryOptions } from './rpc-client-stream-options'
+import { TerminalOrderedInput, advertiseTerminalOrderedInput } from './terminal-ordered-input'
 
 export type RpcStreamingListener = (result: unknown) => void
 
@@ -31,20 +33,25 @@ type StreamRequest = {
   sent?: boolean
 }
 
-type StreamRegistryOptions = {
-  nextId: () => string
-  deviceToken: string
-  getState: () => ConnectionState
-  sendEncrypted: (request: unknown) => boolean
-}
-
 export class RpcClientStreamRegistry {
   private readonly streams = new Map<string, StreamRequest>()
   private readonly terminalRouter = new RpcClientTerminalStreamRouter()
   private activeBrowserRequestId: string | null = null
   private pendingBrowserRequestId: string | null = null
-
+  private readonly orderedInput = new TerminalOrderedInput(
+    (bytes) => this.options.sendBinary?.(bytes) ?? false
+  )
   constructor(private readonly options: StreamRegistryOptions) {}
+  readonly sendTerminalStreamInput = this.orderedInput.send.bind(this.orderedInput)
+  readonly supportsTerminalStreamInput = this.orderedInput.supports.bind(this.orderedInput)
+  readonly getTerminalStreamInputFailure = this.orderedInput.failure.bind(this.orderedInput)
+  readonly recoverTerminalStreamInput = this.orderedInput.recover.bind(this.orderedInput)
+  readonly fenceTerminalStreamInput = this.orderedInput.fence.bind(this.orderedInput)
+  cancelTerminalStreamInput(terminal: string): void {
+    for (const id of this.orderedInput.cancel(terminal)) {
+      this.dispose(id)
+    }
+  }
 
   subscribe(
     method: string,
@@ -55,7 +62,7 @@ export class RpcClientStreamRegistry {
     const id = this.options.nextId()
     const stream: StreamRequest = {
       method,
-      params,
+      params: advertiseTerminalOrderedInput(method, params),
       listener,
       onBinaryFrame: subscribeOptions?.onBinaryFrame
     }
@@ -156,9 +163,7 @@ export class RpcClientStreamRegistry {
     updateTerminalSubscriptionViewport(this.streams.values(), terminal, viewport)
   }
 
-  size(): number {
-    return this.streams.size
-  }
+  readonly size = (): number => this.streams.size
 
   private handleStreamingResponse(response: RpcSuccess): void {
     const stream = this.streams.get(response.id)
@@ -187,7 +192,11 @@ export class RpcClientStreamRegistry {
       }
     }
     if (isTerminalSubscribedResult(result)) {
-      this.terminalRouter.register(response.id, result.streamId, stream.listener)
+      this.orderedInput.register(response.id, stream.params, result)
+      this.terminalRouter.register(response.id, result.streamId, (event) => {
+        this.orderedInput.handle(result.streamId, event)
+        stream.listener(event)
+      })
     }
     if (!stream.cancelled) {
       stream.listener(result)
@@ -251,9 +260,8 @@ export class RpcClientStreamRegistry {
     }
   }
 
-  private sendBrowserUnsubscribe(subscriptionId: string): void {
-    this.sendRpc('browser.screencast.unsubscribe', { subscriptionId })
-  }
+  private sendBrowserUnsubscribe = (subscriptionId: string): void =>
+    void this.sendRpc('browser.screencast.unsubscribe', { subscriptionId })
 
   private sendRpc(method: string, params: unknown): boolean {
     return this.options.sendEncrypted({
@@ -293,6 +301,7 @@ export class RpcClientStreamRegistry {
   }
 
   private resetTerminalRouting(id: string): void {
+    this.orderedInput.reset(id)
     this.terminalRouter.reset(id)
   }
 

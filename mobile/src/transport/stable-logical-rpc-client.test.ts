@@ -68,6 +68,43 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
+  it('fences JSON terminal.send after an ordered prefix crosses a logical cutover', async () => {
+    const old = new FakeSession('connected')
+    const pending = deferred<boolean>()
+    Object.assign(old, { sendTerminalStreamInput: () => pending.promise })
+    const client = createStableLogicalRpcClient(old, 'lan')
+    const prefix = client.sendTerminalStreamInput?.('t', 'prefix')
+    const fresh = new FakeSession('connected')
+    Object.assign(fresh, { recoverTerminalStreamInput: () => true })
+    fresh.sendRequest.mockResolvedValue(success({}))
+    await client.migrateTo(fresh, 'relay')
+    await expect(
+      client.sendRequest('terminal.send', { terminal: 't', text: '\r' })
+    ).rejects.toThrow('Terminal input stopped')
+    expect(fresh.sendRequest).not.toHaveBeenCalled()
+    expect(client.getTerminalStreamInputFailure?.('t')?.outcome).toBe('unknown')
+    expect(client.recoverTerminalStreamInput?.('t')).toBe(true)
+    pending.resolve(true)
+    expect(await prefix).toBe(false)
+    expect(client.getTerminalStreamInputFailure?.('t')).toBe(null)
+    await client.sendRequest('terminal.send', { terminal: 't', text: 'new' })
+    expect(fresh.sendRequest).toHaveBeenCalledOnce()
+    client.close()
+  })
+  it('exposes negotiated stream support without probing or sending input', async () => {
+    const session = new FakeSession('connected')
+    const supports = vi.fn(() => true)
+    const send = vi.fn(() => Promise.resolve(false))
+    Object.assign(session, { supportsTerminalStreamInput: supports, sendTerminalStreamInput: send })
+    const client = createStableLogicalRpcClient(session, 'lan')
+    expect(client.supportsTerminalStreamInput?.('t')).toBe(true)
+    expect(send).not.toHaveBeenCalled()
+    expect(await client.sendTerminalStreamInput?.('t', 'x')).toBe(false)
+    expect(client.supportsTerminalStreamInput?.('t')).toBe(true)
+    client.close()
+    expect(client.supportsTerminalStreamInput?.('t')).toBe(true)
+    expect(await client.sendTerminalStreamInput?.('t', '\r')).toBe(false)
+  })
   it('advertises source-default support on worktree catalog requests', async () => {
     const session = new FakeSession('connected')
     session.sendRequest.mockResolvedValue(success([]))

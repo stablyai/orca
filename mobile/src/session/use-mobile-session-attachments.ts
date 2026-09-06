@@ -33,6 +33,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     nativeChatScopeKey,
     nativeChatSendError,
     nativeChatInputLeaseReadyRef,
+    getSendCompletionGeneration,
     nativeChatInputLeaseReady,
     nativeChatController,
     getActiveWorktreeConnectionId,
@@ -64,6 +65,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     activeHandleRef,
     activeSessionTabTypeRef,
     nativeChatInputLeaseReadyRef,
+    getSendCompletionGeneration,
     showToast
   })
 

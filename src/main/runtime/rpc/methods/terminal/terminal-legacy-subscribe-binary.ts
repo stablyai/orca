@@ -1,6 +1,5 @@
 import {
   TerminalStreamOpcode,
-  encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal-stream-protocol'
 import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
@@ -24,6 +23,7 @@ import type { TerminalOutputChunk } from './terminal-stream-types'
 import { publishLegacyBinaryInitialSnapshot } from './terminal-legacy-subscribe-snapshot'
 import { activateLegacyBinarySubscription } from './terminal-legacy-subscribe-live'
 import { registerLegacyBinaryControlFrames } from './terminal-legacy-binary-control-frames'
+import { createLegacyTerminalFrameSender } from './terminal-legacy-frame-sender'
 const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
 export async function runTerminalBinarySubscription(args: TerminalSubscriptionArgs): Promise<void> {
   const { params, runtime, connectionId, sendBinary, signal, emit, ptyId, clientId, isMobile } =
@@ -34,8 +34,8 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   let registeredRemoteDesktopDriver = false
   const streamId = allocateTerminalSubscriptionStreamId()
   const remoteDesktopSubscriptionKey = `stream:${streamId}`
-  let cursor = 0
   let closed = false
+  const inputAbort = new AbortController()
   let buffering = true
   let pendingRemoteDesktopViewport: { cols: number; rows: number } | null = null
   let lastResizeCols: number | undefined
@@ -66,6 +66,11 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     subscriptionId,
     () => {
       stopWatchingLifetime()
+      inputAbort.abort()
+      // Negotiated input receipts cannot be flushed into a closing transport.
+      if (args.supportsOrderedInput) {
+        closed = true
+      }
       outputBatcher?.flush()
       outputBatcher?.dispose()
       closed = true
@@ -89,16 +94,12 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     // Why: an already-exited pty releases synchronously, so cleanup ran before this setup registers anything.
     return
   }
-  const sendFrame = (
-    opcode: TerminalStreamOpcode,
-    payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
-    frameSeq = cursor++
-  ): void => {
-    if (closed || !sendBinary) {
-      return
-    }
-    sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }))
-  }
+  const sendFrame = createLegacyTerminalFrameSender({
+    streamId,
+    isClosed: () => closed,
+    sendBinary,
+    closeOnFailure: args.supportsOrderedInput ? () => registration.releaseIfCurrent() : undefined
+  })
   outputBatcher = createTerminalOutputBatcher((data, meta) => {
     if (meta?.cwd !== undefined) {
       sendFrame(
@@ -117,6 +118,8 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     remoteDesktopSubscriptionKey,
     {
       isClosed: () => closed,
+      signal: inputAbort.signal,
+      close: () => registration.releaseIfCurrent(),
       isBuffering: () => buffering,
       setRegisteredRemoteDesktopDriver: () => {
         registeredRemoteDesktopDriver = true

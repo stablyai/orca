@@ -106,8 +106,15 @@ const ORCAD_BROWSER_PREFIXES = [
 ]
 
 const CROSS_VERSION_WIRE_PREFIXES = [
+  'config/vitest.config.ts',
+  'mobile/src/transport/',
+  'mobile/package.json',
+  'mobile/pnpm-lock.yaml',
+  'mobile/pnpm-workspace.yaml',
   'tests/e2e/cross-version-wire/',
   'src/shared/protocol-version',
+  'src/shared/mobile-e2ee-',
+  'src/shared/ws-outbound-backpressure-queue',
   'src/shared/terminal-stream-protocol',
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
@@ -120,6 +127,9 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-session-wire/',
   'src/main/runtime/agent-session-record-store',
   'src/main/runtime/rpc/dispatcher',
+  'src/main/runtime/rpc/e2ee-',
+  'src/main/runtime/rpc/mobile-e2ee-',
+  'src/main/runtime/rpc/runtime-client-capabilities',
   'src/main/runtime/rpc/methods/ai-vault.ts',
   'src/main/runtime/rpc/methods/browser-tab-create-schema',
   'src/main/runtime/rpc/methods/session-tabs.ts',
@@ -266,6 +276,10 @@ export function isDocsOnlyPath(file) {
 }
 
 export function shouldRunPrChecks(changedFiles) {
+  return shouldRunDesktopChecks(changedFiles) || jobDetector('cross-version-wire')(changedFiles)
+}
+
+function shouldRunDesktopChecks(changedFiles) {
   // Why empty-run: a silent empty diff is more likely a detector bug than a
   // genuine no-op PR, so fail closed and keep the expensive jobs.
   if (changedFiles.length === 0) {
@@ -285,17 +299,20 @@ export function needsMobileDependencies(changedFiles) {
 export function classifyPrJobs(changedFiles) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
+  const desktopChecks = shouldRunDesktopChecks(changedFiles)
   const forceAll = emptyDiff || changedFiles.some(isGlobalForcePath)
   const jobs = Object.fromEntries(
     PR_CHECK_JOBS.map((job) => [
       job,
-      shouldRun && (forceAll || ALWAYS_ON_CODE_JOBS.has(job) || jobDetector(job)(changedFiles))
+      (desktopChecks || job === 'cross-version-wire') &&
+        shouldRun &&
+        (forceAll || ALWAYS_ON_CODE_JOBS.has(job) || jobDetector(job)(changedFiles))
     ])
   )
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
-    mobile_dependencies: shouldRun && needsMobileDependencies(changedFiles),
+    mobile_dependencies: desktopChecks && needsMobileDependencies(changedFiles),
     ...jobs
   }
 }

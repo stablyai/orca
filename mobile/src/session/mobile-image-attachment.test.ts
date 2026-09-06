@@ -145,7 +145,11 @@ describe('attachMobileImageToTerminal', () => {
     })
 
     expect(sent).toBe(false)
-    expect(beforeTerminalSend).toHaveBeenCalledWith('term-pending')
+    expect(beforeTerminalSend).toHaveBeenCalledWith(
+      'term-pending',
+      expect.any(Function),
+      expect.any(String)
+    )
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
   })
 

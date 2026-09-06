@@ -22,6 +22,15 @@ type SubscribeOptions = {
 type StreamingListener = (result: unknown) => void
 
 export type RpcClient = {
+  supportsTerminalStreamInput?: (terminal: string) => boolean
+  getTerminalStreamInputFailure?: (
+    terminal: string
+  ) => import('./terminal-stream-input-failure').TerminalStreamInputFailure | null
+  recoverTerminalStreamInput?: (terminal: string) => boolean
+  cancelTerminalStreamInput?: (terminal: string) => void
+  fenceTerminalStreamInput?: () => void
+  /** null means no negotiated stream; a returned promise must never be retried over RPC. */
+  sendTerminalStreamInput?: (terminal: string, text: string) => Promise<boolean> | null
   sendRequest: (
     method: string,
     params?: unknown,

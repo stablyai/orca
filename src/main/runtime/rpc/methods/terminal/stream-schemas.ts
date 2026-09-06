@@ -32,6 +32,7 @@ export const TerminalSubscribe = TerminalHandle.extend({
       terminalBinaryStream: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       mobileInputLeaseOnly: z.literal(1).optional(),
+      orderedInput: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional()
     })
     .optional()

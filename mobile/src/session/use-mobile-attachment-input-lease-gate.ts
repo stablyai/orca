@@ -3,11 +3,12 @@ import { useCallback } from 'react'
 type CurrentRef<T> = { readonly current: T }
 
 type AttachmentInputLeaseGateArgs = {
-  readonly flushPendingLiveInputBeforeExternalSend: (handle: string) => Promise<boolean>
+  readonly flushPendingLiveInputBeforeExternalSend: import('../terminal/terminal-live-input-sender').TerminalLiveExternalSend
   readonly connStateRef: CurrentRef<string>
   readonly activeHandleRef: CurrentRef<string | null>
   readonly activeSessionTabTypeRef: CurrentRef<string | null>
   readonly nativeChatInputLeaseReadyRef: CurrentRef<boolean>
+  readonly getSendCompletionGeneration: () => number
   readonly showToast: (message: string, durationMs?: number) => void
 }
 
@@ -28,40 +29,61 @@ export function useMobileAttachmentInputLeaseGate({
   activeHandleRef,
   activeSessionTabTypeRef,
   nativeChatInputLeaseReadyRef,
+  getSendCompletionGeneration,
   showToast
-}: AttachmentInputLeaseGateArgs): (targetHandle: string) => Promise<boolean> {
+}: AttachmentInputLeaseGateArgs): import('../terminal/terminal-live-input-sender').TerminalLiveExternalSend {
   return useCallback(
-    async (targetHandle: string): Promise<boolean> => {
-      const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
-      // Why: image picking/upload and IME flushing can outlive the original tab.
-      if (
-        !flushedPendingInput ||
-        connStateRef.current !== 'connected' ||
-        targetHandle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal'
-      ) {
-        return false
-      }
-      const deadline = Date.now() + LEASE_READY_TIMEOUT_MS
-      while (!nativeChatInputLeaseReadyRef.current && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, LEASE_READY_POLL_MS))
-      }
-      // Why: the wait can outlive the target too — re-check so a tab/host switch
-      // or disconnect mid-wait doesn't send into the wrong (or dead) terminal.
-      // A moved-away target drops silently like the pre-wait guard; only a lease
-      // that never recovered warrants the toast.
-      if (
-        connStateRef.current !== 'connected' ||
-        targetHandle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal'
-      ) {
-        return false
-      }
-      if (nativeChatInputLeaseReadyRef.current) {
-        return true
-      }
-      showToast('Attach failed (reconnecting)', 1500)
-      return false
+    async (
+      targetHandle: string,
+      send?: import('../terminal/terminal-live-input-sender').TerminalLiveExternalAction,
+      retainedText?: string
+    ): Promise<boolean> => {
+      const surface = getSendCompletionGeneration()
+      const waitForLease: import('../terminal/terminal-live-input-sender').TerminalLiveExternalAction =
+        async (isCurrent) => {
+          const ownsSurface = () => surface === getSendCompletionGeneration()
+          if (!ownsSurface()) {
+            return 'cancelled'
+          }
+          // Why: image picking/upload and IME flushing can outlive the original tab.
+          if (
+            connStateRef.current !== 'connected' ||
+            targetHandle !== activeHandleRef.current ||
+            activeSessionTabTypeRef.current !== 'terminal'
+          ) {
+            return false
+          }
+          const deadline = Date.now() + LEASE_READY_TIMEOUT_MS
+          while (
+            isCurrent() &&
+            ownsSurface() &&
+            !nativeChatInputLeaseReadyRef.current &&
+            Date.now() < deadline
+          ) {
+            await new Promise((resolve) => setTimeout(resolve, LEASE_READY_POLL_MS))
+          }
+          if (!ownsSurface()) {
+            return 'cancelled'
+          }
+          // Why: the wait can outlive the target too — re-check so a tab/host switch
+          // or disconnect mid-wait doesn't send into the wrong (or dead) terminal.
+          // A moved-away target drops silently like the pre-wait guard; only a lease
+          // that never recovered warrants the toast.
+          if (
+            !isCurrent() ||
+            connStateRef.current !== 'connected' ||
+            targetHandle !== activeHandleRef.current ||
+            activeSessionTabTypeRef.current !== 'terminal'
+          ) {
+            return false
+          }
+          if (nativeChatInputLeaseReadyRef.current) {
+            return send ? send(isCurrent) : true
+          }
+          showToast('Attach failed (reconnecting)', 1500)
+          return false
+        }
+      return flushPendingLiveInputBeforeExternalSend(targetHandle, waitForLease, retainedText)
     },
     [
       activeHandleRef,
@@ -69,6 +91,7 @@ export function useMobileAttachmentInputLeaseGate({
       connStateRef,
       flushPendingLiveInputBeforeExternalSend,
       nativeChatInputLeaseReadyRef,
+      getSendCompletionGeneration,
       showToast
     ]
   )

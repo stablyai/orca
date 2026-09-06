@@ -29,6 +29,7 @@ export type WireCodec = {
 
 export type HostRpcContext = {
   connectionId: string
+  clientKind?: 'desktop' | 'mobile'
   sendBinary: (bytes: Uint8Array) => boolean | void
   registerBinaryStreamHandler: (
     streamId: number,

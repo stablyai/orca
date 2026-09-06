@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import type {
+  TerminalLiveInputSender,
+  TerminalLiveControlQueue
+} from './terminal-live-input-sender'
 import {
   buildTerminalLiveMirrorPayload,
   computeTerminalLiveMirrorStep,
@@ -37,6 +40,7 @@ type TerminalLivePendingInputFlush = {
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
+  readonly queueLiveInputControl: TerminalLiveControlQueue
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
@@ -58,6 +62,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   const liveInputComposingRef = useRef<boolean | undefined>(undefined)
   const sentLiveInputTextRef = useRef('')
   const pendingLiveInputHandleRef = useRef<string | null>(null)
+  const mirrorRevisionRef = useRef(0)
   const runMirrorStepRef = useRef<RunTerminalLiveMirrorStep>(async () => false)
 
   const clearHeldCommitTimer = useCallback(() => {
@@ -67,29 +72,73 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     }
   }, [])
 
-  const resetMirrorState = useCallback(() => {
+  const clearMirrorState = useCallback(() => {
+    mirrorRevisionRef.current += 1
     clearHeldCommitTimer()
-    cancelTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
     heldLiveInputTextRef.current = ''
     liveInputComposingRef.current = undefined
     sentLiveInputTextRef.current = ''
     pendingLiveInputHandleRef.current = null
   }, [clearHeldCommitTimer])
 
+  const cancelPendingMirror = useCallback(() => {
+    const state = pendingLiveInputFlushRef.current
+    if (state.current && state.requestCount > 0) {
+      const handles = new Set(
+        [...state.activeBatches, ...state.pendingBatches].map((batch) => batch.handle)
+      )
+      for (const handle of handles) {
+        sendLiveTerminalInputRef.current.cancelPending?.(handle)
+      }
+    }
+    cancelTerminalLivePendingFlush(state)
+  }, [sendLiveTerminalInputRef])
+
+  const resetMirrorState = useCallback(() => {
+    cancelPendingMirror()
+    clearMirrorState()
+  }, [cancelPendingMirror, clearMirrorState])
+
+  const clearMirrorCapture = useCallback(
+    (resetNative = true) => {
+      clearMirrorState()
+      setLiveInputCapture('')
+      if (resetNative) {
+        liveInputRef.current?.setNativeProps({ text: '' })
+      }
+    },
+    [clearMirrorState, liveInputRef, setLiveInputCapture]
+  )
+
   const clearPendingLiveInputCommit = useCallback(() => {
-    resetMirrorState()
-    setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
-  }, [liveInputRef, resetMirrorState, setLiveInputCapture])
+    cancelPendingMirror()
+    clearMirrorCapture()
+  }, [cancelPendingMirror, clearMirrorCapture])
+
+  const clearRejectedMirror = useCallback(
+    (handle: string) => {
+      clearMirrorCapture()
+      // Keep the failed lane owned so terminal switches can cancel it.
+      pendingLiveInputHandleRef.current = handle
+    },
+    [clearMirrorCapture]
+  )
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {
     return waitForTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
   }, [])
 
   const sendQueuedMirrorPayload = useCallback(
-    (handle: string, payload: string): Promise<boolean> =>
-      sendLiveTerminalInputRef.current(handle, payload),
-    [sendLiveTerminalInputRef]
+    (handle: string, payload: string): Promise<boolean> => {
+      if (
+        handle !== activeHandleRef.current ||
+        (activeSessionTabTypeRef.current != null && activeSessionTabTypeRef.current !== 'terminal')
+      ) {
+        return Promise.resolve(false)
+      }
+      return sendLiveTerminalInputRef.current(handle, payload)
+    },
+    [sendLiveTerminalInputRef, activeHandleRef, activeSessionTabTypeRef]
   )
 
   const runMirrorStep = useCallback<RunTerminalLiveMirrorStep>(
@@ -111,6 +160,8 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         commitHeld,
         composing
       })
+      const revision = ++mirrorRevisionRef.current
+      const generation = pendingLiveInputFlushRef.current.generation
       sentLiveInputTextRef.current = step.nextSentText
       heldLiveInputTextRef.current = step.heldText
       liveInputComposingRef.current = composing
@@ -130,23 +181,45 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       }
 
       const payload = buildTerminalLiveMirrorPayload(step)
-      if (payload.length === 0) {
-        return waitForPendingLiveInputFlush()
+      const reportFailure = sendLiveTerminalInputRef.current.captureFailureReporter?.(handle)
+      const sent = await (payload.length === 0
+        ? waitForPendingLiveInputFlush()
+        : queueTerminalLiveMirrorSend(
+            pendingLiveInputFlushRef.current,
+            handle,
+            payload,
+            sendQueuedMirrorPayload,
+            { pipeline: sendLiveTerminalInputRef.current.supportsPipeline?.(handle) === true }
+          ))
+      if (
+        !sent &&
+        generation === pendingLiveInputFlushRef.current.generation &&
+        pendingLiveInputFlushRef.current.failed
+      ) {
+        reportFailure?.()
       }
-      return queueTerminalLiveMirrorSend(
-        pendingLiveInputFlushRef.current,
-        handle,
-        payload,
-        sendQueuedMirrorPayload
-      )
+      if (
+        !sent &&
+        generation === pendingLiveInputFlushRef.current.generation &&
+        revision === mirrorRevisionRef.current &&
+        activeHandleRef.current === handle &&
+        (activeSessionTabTypeRef.current == null ||
+          activeSessionTabTypeRef.current === 'terminal') &&
+        liveInputTerminalHandlesRef.current.has(handle)
+      ) {
+        clearRejectedMirror(handle)
+      }
+      return sent
     },
     [
       activeHandleRef,
       activeSessionTabTypeRef,
       clearHeldCommitTimer,
+      clearRejectedMirror,
       liveInputTerminalHandlesRef,
       resetMirrorState,
       sendQueuedMirrorPayload,
+      sendLiveTerminalInputRef,
       waitForPendingLiveInputFlush
     ]
   )
@@ -162,6 +235,62 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     [runMirrorStep]
   )
 
+  const queueLiveInputControl = useCallback<TerminalLiveControlQueue>(
+    (handle, bytes, send, options): Promise<boolean> => {
+      if (
+        handle !== activeHandleRef.current ||
+        (!send && !liveInputTerminalHandlesRef.current.has(handle))
+      ) {
+        return Promise.resolve(false)
+      }
+      const pendingHandle = pendingLiveInputHandleRef.current
+      if (pendingHandle && pendingHandle !== handle) {
+        clearPendingLiveInputCommit()
+        return Promise.resolve(false)
+      }
+      if (heldLiveInputTextRef.current.length > 0) {
+        void runMirrorStep(
+          handle,
+          sentLiveInputTextRef.current + heldLiveInputTextRef.current,
+          true
+        )
+      }
+      // End this field now; a receipt must never clear text from a later native event.
+      clearMirrorCapture(options?.nativeFieldReset !== true)
+      pendingLiveInputHandleRef.current = handle
+      const generation = pendingLiveInputFlushRef.current.generation
+      const reportFailure = sendLiveTerminalInputRef.current.captureFailureReporter?.(handle)
+      const isCurrent = () =>
+        generation === pendingLiveInputFlushRef.current.generation &&
+        handle === activeHandleRef.current &&
+        (activeSessionTabTypeRef.current == null || activeSessionTabTypeRef.current === 'terminal')
+      return queueTerminalLiveMirrorSend(
+        pendingLiveInputFlushRef.current,
+        handle,
+        bytes,
+        send
+          ? () => (isCurrent() ? send(isCurrent) : Promise.resolve(false))
+          : sendQueuedMirrorPayload,
+        { barrier: true, onAdmitted: options?.onAdmitted, reservedBytes: options?.reservedBytes }
+      ).then((sent) => {
+        if (!sent && isCurrent() && pendingLiveInputFlushRef.current.failed) {
+          reportFailure?.()
+        }
+        return sent
+      })
+    },
+    [
+      activeHandleRef,
+      liveInputTerminalHandlesRef,
+      clearPendingLiveInputCommit,
+      runMirrorStep,
+      clearMirrorCapture,
+      sendQueuedMirrorPayload,
+      activeSessionTabTypeRef,
+      sendLiveTerminalInputRef
+    ]
+  )
+
   const flushPendingLiveInputText = useCallback(
     async (expectedHandle: string | null): Promise<boolean> => {
       const handle = pendingLiveInputHandleRef.current
@@ -174,37 +303,26 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       }
 
       const heldText = heldLiveInputTextRef.current
-      const result =
+      const flush =
         heldText.length > 0
-          ? await runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
-          : await waitForPendingLiveInputFlush()
-
-      // Why: an explicit flush ends the field's editing session; the echoed PTY
-      // text stays, so local mirror state must restart from empty.
-      clearPendingLiveInputCommit()
-      return result
+          ? runMirrorStep(handle, sentLiveInputTextRef.current + heldText, true)
+          : waitForPendingLiveInputFlush()
+      clearMirrorCapture()
+      pendingLiveInputHandleRef.current = handle
+      return flush
     },
-    [clearPendingLiveInputCommit, runMirrorStep, waitForPendingLiveInputFlush]
+    [clearPendingLiveInputCommit, clearMirrorCapture, runMirrorStep, waitForPendingLiveInputFlush]
   )
 
   useEffect(() => {
-    return () => {
-      if (heldCommitTimerRef.current) {
-        clearTimeout(heldCommitTimerRef.current)
-        heldCommitTimerRef.current = null
-      }
-      heldLiveInputTextRef.current = ''
-      liveInputComposingRef.current = undefined
-      sentLiveInputTextRef.current = ''
-      pendingLiveInputHandleRef.current = null
-      cancelTerminalLivePendingFlush(pendingLiveInputFlushRef.current)
-    }
-  }, [])
+    return resetMirrorState
+  }, [resetMirrorState])
 
   return {
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
+    queueLiveInputControl,
     heldLiveInputTextRef,
     liveInputComposingRef,
     pendingLiveInputHandleRef,

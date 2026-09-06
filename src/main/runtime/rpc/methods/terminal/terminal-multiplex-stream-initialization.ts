@@ -13,6 +13,7 @@ import type {
   TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { captureTerminalStreamInputTarget } from '../../../terminal-input-arrival'
 
 export async function initializeMultiplexStream(
   state: TerminalMultiplexConnection,
@@ -21,6 +22,7 @@ export async function initializeMultiplexStream(
   onInstalled: (stream: TerminalMultiplexStream) => void
 ): Promise<TerminalMultiplexStream | null> {
   const { runtime, connectionId, streams, sourceRangeRegistry, registerBinaryStreamHandler } = state
+  const inputTarget = captureTerminalStreamInputTarget(runtime, request.terminal, ptyId)
   const isMobile = request.client?.type === 'mobile'
   const remoteDesktopSubscriptionKey = `multiplex:${connectionId}:${request.streamId}`
   const streamGeneration = randomUUID()
@@ -40,6 +42,7 @@ export async function initializeMultiplexStream(
     sourceRangeLedger?.close()
   }
   const stream: TerminalMultiplexStream = {
+    inputTarget,
     streamId: request.streamId,
     terminal: request.terminal,
     ptyId,

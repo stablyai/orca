@@ -644,12 +644,22 @@ jobs:
         with:
           native-runtime: node
 
+      # Extracted mobile transports resolve their own crypto dependencies.
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: |
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code -- package.json pnpm-lock.yaml pnpm-workspace.yaml
+
       # A path filter that matches nothing exits 1 ("No test files found"), so this
       # lane cannot report success while running zero tests.
       - name: Old/new client and server compatibility journeys
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           tests/e2e/cross-version-wire/release-checkout.unit.test.ts
+          tests/e2e/cross-version-wire/versioned-mobile-terminal-wire.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-mobile-input.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-mobile-input-recovery.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
           tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts

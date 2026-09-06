@@ -301,7 +301,11 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
     (ptyId, data) => this.ptyController?.write(ptyId, data) ?? false,
-    (ptyId) => this.getPtyWriteHostPlatform(ptyId)
+    (ptyId) => this.getPtyWriteHostPlatform(ptyId),
+    (ptyId, initialize) =>
+      initialize
+        ? this.getPtyLifecycleGeneration(ptyId)
+        : this.ptyLifecycleGenerationById.get(ptyId)
   )
 
   protected readonly terminalIdlePolls = new RuntimeTerminalIdlePolls({

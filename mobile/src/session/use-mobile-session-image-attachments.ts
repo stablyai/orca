@@ -22,7 +22,7 @@ type Args = {
   readonly nativeChatScopeKey: string | null
   readonly nativeChatInputLeaseReady: boolean
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
-  readonly beforeTerminalSend: (terminal: string) => Promise<boolean>
+  readonly beforeTerminalSend: import('../terminal/terminal-live-input-sender').TerminalLiveExternalSend
   /** Outcome-preserving so an ambiguous ('unknown') delivery after an image
    *  paste can mark the terminal input for healing (#10228). Takes the image
    *  send's budget so the paste and this text body share one `sending` window. */

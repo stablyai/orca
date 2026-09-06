@@ -41,6 +41,8 @@ jobs:
         uses: actions/checkout@v6
 
       - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
 
       # bundler-cache installs mobile/Gemfile.lock, so this job is also what
       # proves the pinned fastlane the release workflow depends on still

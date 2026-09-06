@@ -37,7 +37,12 @@ type NativeRow = {
   creationTimeMs?: number
 }
 
-const SELF: NativeRow = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest.exe --run' }
+const SELF: NativeRow = {
+  pid: process.pid,
+  ppid: 0,
+  name: 'vitest.exe',
+  commandLine: 'vitest.exe --run'
+}
 const NATIVE: NativeRow[] = [
   SELF,
   {

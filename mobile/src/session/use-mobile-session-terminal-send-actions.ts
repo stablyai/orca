@@ -15,6 +15,8 @@ import {
 } from '../terminal/terminal-send-request'
 import { normalizeTerminalTextInput } from '../terminal/terminal-text-input-normalization'
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
+import { useTerminalInputRecovery } from './use-terminal-input-recovery'
+import type { TerminalLiveInputSender } from '../terminal/terminal-live-input-sender'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionTabActionSheetOpener } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
@@ -50,6 +52,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     showToast
   } = scope
   const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
+  const inputRecovery = useTerminalInputRecovery(scope)
 
   const dismissSoftwareKeyboard = useCallback(() => {
     dismissTerminalKeyboard({
@@ -121,7 +124,11 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     if (accessoryCommit.kind !== 'allow-raw') {
       return
     }
-    await sendTerminalLiveAccessoryRawBytes({
+    const rpc = clientRef.current
+    const reportFailure = rpc
+      ? inputRecovery.captureTerminalInputFailureReporter(targetHandle, rpc)
+      : null
+    const accepted = await sendTerminalLiveAccessoryRawBytes({
       client: clientRef.current,
       targetHandle,
       activeHandle: activeHandleRef.current,
@@ -130,9 +137,12 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       bytes: input.bytes,
       deviceToken: deviceTokenRef.current
     })
+    if (!accepted && rpc) {
+      reportFailure?.()
+    }
   }
 
-  const sendLiveTerminalInput = useCallback(
+  const sendLiveTerminalInput = useCallback<TerminalLiveInputSender>(
     async (handle: string, bytes: string): Promise<boolean> => {
       const text = normalizeTerminalTextInput(bytes)
       if (text.length === 0) {
@@ -155,21 +165,43 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
-      return rpc
-        .sendRequest(
-          'terminal.send',
-          buildTerminalSendParams({
-            terminal: handle,
-            text,
-            enter: false,
-            deviceToken: deviceTokenRef.current
-          }),
-          TERMINAL_INPUT_SEND_OPTIONS
-        )
-        .then(isTerminalSendRpcAccepted, () => false)
+      const reportFailure = inputRecovery.captureTerminalInputFailureReporter(handle, rpc)
+      const streamSend = rpc.sendTerminalStreamInput?.(handle, text) ?? null
+      const accepted = await (
+        streamSend ??
+        rpc
+          .sendRequest(
+            'terminal.send',
+            buildTerminalSendParams({
+              terminal: handle,
+              text,
+              enter: false,
+              deviceToken: deviceTokenRef.current
+            }),
+            TERMINAL_INPUT_SEND_OPTIONS
+          )
+          .then(isTerminalSendRpcAccepted, () => false)
+      ).catch(() => false)
+      if (!accepted) {
+        reportFailure()
+      }
+      return accepted
     },
-    [showToast]
+    [showToast, inputRecovery.captureTerminalInputFailureReporter]
   )
+  sendLiveTerminalInput.cancelPending = (handle: string) => {
+    const rpc = clientRef.current
+    rpc?.cancelTerminalStreamInput?.(handle)
+    if (rpc) {
+      inputRecovery.reportTerminalInputFailure(handle, rpc)
+    }
+  }
+  sendLiveTerminalInput.captureFailureReporter = (handle) => {
+    const rpc = clientRef.current
+    return rpc ? inputRecovery.captureTerminalInputFailureReporter(handle, rpc) : () => {}
+  }
+  sendLiveTerminalInput.supportsPipeline = (handle: string) =>
+    clientRef.current?.supportsTerminalStreamInput?.(handle) ?? false
   sendLiveTerminalInputRef.current = sendLiveTerminalInput
 
   const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
@@ -228,6 +260,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   )
 
   return {
+    ...inputRecovery,
     handleSend,
     handleAccessoryKey,
     sendLiveTerminalInput,

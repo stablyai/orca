@@ -43,7 +43,7 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   const [error, setError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
-  const [showSearch, setShowSearch] = useState(false)
+  const [showSearch, setShowSearch] = useState(action?.startsWith('keyboardSwitcher-') ?? false)
   const [sortMode, setSortMode] = useState<MobileSortMode>('recent')
   const [filters, setFilters] = useState<FilterState>({
     filterRepoIds: new Set(),

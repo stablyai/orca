@@ -196,18 +196,41 @@ describe('terminal live input', () => {
     const input = createFocusTarget(() => true)
     const refocus = vi.fn()
 
-    focusTerminalLiveInputTarget(input, { keyboardHeight: 0, refocus })
+    focusTerminalLiveInputTarget(input, {
+      keyboardHeight: 0,
+      refocus,
+      reopenFocusedInputWhenKeyboardHidden: true
+    })
 
     expect(input.blur).toHaveBeenCalledTimes(1)
     expect(input.focus).not.toHaveBeenCalled()
     expect(refocus).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the iPad hardware responder attached when the software keyboard is absent', () => {
+    const input = createFocusTarget(() => true)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, {
+      keyboardHeight: 0,
+      refocus,
+      reopenFocusedInputWhenKeyboardHidden: false
+    })
+
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
+    expect(refocus).not.toHaveBeenCalled()
+  })
+
   it('focuses the capture input directly when the keyboard is open', () => {
     const input = createFocusTarget(() => true)
     const refocus = vi.fn()
 
-    focusTerminalLiveInputTarget(input, { keyboardHeight: 240, refocus })
+    focusTerminalLiveInputTarget(input, {
+      keyboardHeight: 240,
+      refocus,
+      reopenFocusedInputWhenKeyboardHidden: true
+    })
 
     expect(input.blur).not.toHaveBeenCalled()
     expect(input.focus).toHaveBeenCalledTimes(1)
@@ -218,7 +241,11 @@ describe('terminal live input', () => {
     const input = createFocusTarget(() => false)
     const refocus = vi.fn()
 
-    focusTerminalLiveInputTarget(input, { keyboardHeight: 0, refocus })
+    focusTerminalLiveInputTarget(input, {
+      keyboardHeight: 0,
+      refocus,
+      reopenFocusedInputWhenKeyboardHidden: true
+    })
 
     expect(input.blur).not.toHaveBeenCalled()
     expect(input.focus).toHaveBeenCalledTimes(1)

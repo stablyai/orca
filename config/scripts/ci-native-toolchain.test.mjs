@@ -10,6 +10,19 @@ const steps = parse(readFileSync('.github/actions/install-node-dependencies/acti
 const toolchain = steps.find((step) => step.name === 'Use external node-gyp')
 
 describe('CI native toolchain preparation', () => {
+  it('prepares the Node PTY runtime before mobile integration tests', () => {
+    const workflow = parse(readFileSync('.github/workflows/mobile.yml', 'utf8'))
+    const mobileSteps = workflow.jobs.verify.steps
+    const installIndex = mobileSteps.findIndex(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const testIndex = mobileSteps.findIndex((step) => step.name === 'Test')
+    expect(installIndex).toBeGreaterThanOrEqual(0)
+    expect(testIndex).toBeGreaterThan(installIndex)
+    expect(mobileSteps[installIndex].with?.['native-runtime']).toBe('node')
+    expect(mobileSteps[testIndex].run).toBe('pnpm test')
+  })
+
   it('probes only after both cache restore variants and before native rebuilding', () => {
     const index = steps.indexOf(toolchain)
     for (const id of ['native-cache-restore', 'native-cache-restore-only']) {

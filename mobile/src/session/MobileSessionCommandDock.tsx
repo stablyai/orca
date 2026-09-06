@@ -9,12 +9,11 @@ import {
   Smartphone
 } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
+import { MobileTerminalLiveInputBar } from './MobileTerminalLiveInputBar'
+import { MobileTerminalInputRecovery } from './MobileTerminalInputRecovery'
+import { useHardwareKeyboardTextInputFocus } from '../hardware-keyboard/use-hardware-keyboard-text-input-focus'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
-import {
-  getTerminalCommandKeyboardType,
-  getTerminalLiveInputKeyboardType
-} from '../terminal/terminal-keyboard-type'
-import { MobileTerminalLiveInputStatus } from './MobileTerminalLiveInputStatus'
+import { getTerminalCommandKeyboardType } from '../terminal/terminal-keyboard-type'
 import { MobileTerminalInputActions } from './MobileTerminalInputActions'
 import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { colors } from '../theme/mobile-theme'
@@ -24,9 +23,9 @@ import type { MobileSessionController } from './use-mobile-session-controller'
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   const {
     insets,
+    worktreeId,
     bufferedTerminalDraftState,
     autocompleteEnabled,
-    liveInputCapture,
     activeHandle,
     customKeys,
     setShowCustomKeyModal,
@@ -37,17 +36,10 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     dictationMode,
     liveInputRef,
     commandInputRef,
-    handleLiveInputChange,
-    handleLiveInputKeyPress,
-    handleLiveInputSubmit,
-    getLiveInteractionGeneration,
-    getSendCompletionGeneration,
-    dismissKeyboardAfterAgentSend,
     activeSessionTab,
-    canSend,
+    canSend: connectionCanSend,
     canCompose,
     liveInputEnabled,
-    focusLiveInput,
     showNativeChat,
     dictation,
     cancelDictation,
@@ -69,6 +61,17 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeBrowserTab,
     keyboardLift
   } = controller
+  const canSend = connectionCanSend && !controller.terminalInputFailure
+  const hardwareInputFocus = useHardwareKeyboardTextInputFocus({
+    enabled:
+      !activeMarkdownTab &&
+      !activeFileTab &&
+      !activeBrowserTab &&
+      !showNativeChat &&
+      (liveInputEnabled ? canSend : canCompose),
+    inputRef: liveInputEnabled ? liveInputRef : commandInputRef,
+    surfaceId: `${worktreeId}\0${activeSessionTab?.id ?? activeHandle ?? ''}\0${liveInputEnabled}`
+  })
   return (
     !activeMarkdownTab &&
     !activeFileTab &&
@@ -77,9 +80,19 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       <View
         style={[
           styles.commandDock,
-          { paddingBottom: insets.bottom, transform: [{ translateY: -keyboardLift }] }
+          {
+            paddingBottom: insets.bottom,
+            transform: [{ translateY: -keyboardLift }]
+          }
         ]}
       >
+        {controller.terminalInputFailure && (
+          <MobileTerminalInputRecovery
+            failure={controller.terminalInputFailure}
+            onRecover={controller.recoverTerminalInput}
+            recoveryUnavailable={controller.terminalInputRecoveryUnavailable}
+          />
+        )}
         {/* Accessory keys */}
         <View style={styles.accessoryBar}>
           {/* Why: fixed keyboard escape hatch; outside ScrollView + shortcut path so it can't scroll away or be hidden (#5106). */}
@@ -257,80 +270,16 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
 
         {/* Input bar */}
         {liveInputEnabled ? (
-          <View style={[styles.inputBar, styles.liveInputBar]}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.liveInputFocusTarget,
-                pressed && styles.liveInputFocusTargetPressed,
-                !canSend && styles.liveInputFocusTargetDisabled
-              ]}
-              disabled={!canSend}
-              onPress={focusLiveInput}
-              accessibilityRole="button"
-              accessibilityLabel="Show keyboard for live terminal input"
-              accessibilityHint="Typed text is sent directly to the active terminal"
-            >
-              <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
-              <MobileTerminalLiveInputStatus
-                dictation={dictation}
-                isAttaching={isAttaching}
-                liveInputText={liveInputCapture}
-              />
-            </Pressable>
-            <MobileTerminalInputActions
-              canSend={canSend}
-              isAttaching={isAttaching}
-              dictation={dictation}
-              dictationMode={dictationMode}
-              buttonStyle={styles.dictationButton}
-              activeButtonStyle={styles.dictationButtonActive}
-              disabledButtonStyle={styles.sendButtonDisabled}
-              onAttachImage={() => void attachImage('library')}
-              onAttachFile={() => void attachImage('files')}
-              onDictationToggle={handleDictationToggle}
-              onDictationPressIn={handleDictationPressIn}
-              onDictationPressOut={handleDictationPressOut}
-              onDictationCancel={cancelDictation}
-            />
-            <TextInput
-              ref={liveInputRef}
-              style={styles.liveInputCapture}
-              value={liveInputCapture}
-              onChange={handleLiveInputChange}
-              onKeyPress={handleLiveInputKeyPress}
-              onSubmitEditing={() => {
-                const submit = handleLiveInputSubmit()
-                const sendOrigin = {
-                  tab: activeSessionTab,
-                  generation: getSendCompletionGeneration(),
-                  interaction: getLiveInteractionGeneration()
-                }
-                void submit.then((accepted) =>
-                  dismissKeyboardAfterAgentSend(
-                    sendOrigin,
-                    accepted && sendOrigin.interaction === getLiveInteractionGeneration()
-                  )
-                )
-              }}
-              placeholder=""
-              showSoftInputOnFocus
-              autoCapitalize="none"
-              autoCorrect={false}
-              spellCheck={false}
-              smartInsertDelete={false}
-              // Why: iOS textContentType overrides autoComplete and can narrow the keyboard; keep IME switching available.
-              autoComplete="off"
-              keyboardType={getTerminalLiveInputKeyboardType(Platform.OS)}
-              returnKeyType="default"
-              blurOnSubmit={false}
-              editable={canSend}
-              importantForAutofill="no"
-            />
-          </View>
+          <MobileTerminalLiveInputBar
+            controller={controller}
+            hardwareInputFocus={hardwareInputFocus}
+          />
         ) : (
           <View style={styles.inputBar}>
             <TextInput
               ref={commandInputRef}
+              onTouchStart={hardwareInputFocus.handleTouchStart}
+              showSoftInputOnFocus={hardwareInputFocus.showSoftInputOnFocus}
               // Why: Android caches IME inputType at mount, so toggling autocomplete must remount there; iOS updates in place.
               key={
                 Platform.OS === 'android'

@@ -16,6 +16,7 @@ type RequestTrackerOptions = {
   waitForConnected: (timeoutMs?: number) => Promise<void>
   sendEncrypted: (request: unknown) => boolean
   deviceToken: string
+  validateRequest?: (method: string, params: unknown) => void
 }
 
 export class RpcClientRequestTracker {
@@ -63,6 +64,7 @@ export class RpcClientRequestTracker {
     timeoutMs: number
   ): Promise<RpcResponse> {
     return new Promise((resolve, reject) => {
+      this.options.validateRequest?.(method, params)
       const id = this.options.nextId()
       const timeout = setTimeout(() => {
         this.pending.delete(id)

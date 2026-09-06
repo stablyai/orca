@@ -11,6 +11,7 @@ import {
 import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse, RpcSuccess } from './types'
+import { TerminalOrderedInput, advertiseTerminalOrderedInput } from './terminal-ordered-input'
 
 type StreamRecord = {
   method: string
@@ -47,6 +48,7 @@ type StreamManagerOptions = {
   nextId: () => string
   sendFrame: (request: { id: string; method: string; params?: unknown }) => boolean
   waitForConnected: () => Promise<void>
+  sendBinary?: (bytes: Uint8Array) => boolean
 }
 
 export class MobileRelayRpcStreams {
@@ -58,8 +60,27 @@ export class MobileRelayRpcStreams {
   private readonly terminalListeners = new Map<number, (result: unknown) => void>()
   private readonly terminalSnapshots = new Map<number, TerminalSnapshotState>()
   private activeBrowserStream: StreamRecord | null = null
+  private readonly orderedInput: TerminalOrderedInput
 
-  constructor(private readonly options: StreamManagerOptions) {}
+  constructor(private readonly options: StreamManagerOptions) {
+    this.orderedInput = new TerminalOrderedInput((bytes) => options.sendBinary?.(bytes) ?? false)
+  }
+
+  sendTerminalStreamInput(terminal: string, text: string): Promise<boolean> | null {
+    return this.orderedInput.send(terminal, text)
+  }
+  getTerminalStreamInputFailure = (terminal: string) => this.orderedInput.failure(terminal)
+  recoverTerminalStreamInput = (terminal: string) => this.orderedInput.recover(terminal)
+  fenceTerminalStreamInput = () => this.orderedInput.fence()
+  cancelTerminalStreamInput(terminal: string): void {
+    for (const id of this.orderedInput.cancel(terminal)) {
+      this.cancel(id)
+    }
+  }
+
+  supportsTerminalStreamInput(terminal: string): boolean {
+    return this.orderedInput.supports(terminal)
+  }
 
   subscribe(
     method: string,
@@ -70,7 +91,7 @@ export class MobileRelayRpcStreams {
     const id = this.options.nextId()
     const stream: StreamRecord = {
       method,
-      params,
+      params: advertiseTerminalOrderedInput(method, params),
       listener,
       onBinaryFrame: subscribeOptions?.onBinaryFrame,
       streamIds: new Set(),
@@ -142,8 +163,13 @@ export class MobileRelayRpcStreams {
         stream.subscriptionId = metadata.subscriptionId
       }
       if (typeof metadata.streamId === 'number') {
+        const streamId = metadata.streamId
+        this.orderedInput.register(response.id, stream.params, result)
         stream.streamIds.add(metadata.streamId)
-        this.terminalListeners.set(metadata.streamId, stream.listener)
+        this.terminalListeners.set(metadata.streamId, (event) => {
+          this.orderedInput.handle(streamId, event)
+          stream.listener(event)
+        })
       }
       if (stream.method === 'browser.screencast') {
         this.activeBrowserStream = stream
@@ -173,6 +199,7 @@ export class MobileRelayRpcStreams {
   }
 
   clear(): void {
+    this.orderedInput.clear()
     for (const stream of this.streams.values()) {
       stream.cancelled = true
     }
@@ -245,6 +272,7 @@ export class MobileRelayRpcStreams {
   }
 
   private remove(id: string): void {
+    this.orderedInput.reset(id)
     const stream = this.streams.get(id)
     if (!stream) {
       return

@@ -108,6 +108,7 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    onWriteAttempt?: () => void
   }
 ): Promise<TerminalStreamInputOutcome> {
   const action = { text: args.text, enter: false, interrupt: false }
@@ -115,7 +116,9 @@ export async function sendTerminalStreamInput(
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
   try {
     if (!clientId) {
-      const result = await runtime.sendTerminal(args.terminal, action)
+      const result = args.onWriteAttempt
+        ? await runtime.sendTerminal(args.terminal, action, { reserveWrite: args.onWriteAttempt })
+        : await runtime.sendTerminal(args.terminal, action)
       return result.accepted ? 'delivered' : 'rejected'
     }
     const result = await runtime.sendTerminal(args.terminal, action, {
@@ -125,6 +128,7 @@ export async function sendTerminalStreamInput(
           throw new Error('mobile_input_floor_unavailable')
         }
         floorClaim.current = claim
+        args.onWriteAttempt?.()
       },
       afterWrite: () => commitMobileInputFloorClaim(floorClaim)
     })

@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
+import { captureTerminalInputArrivalTestTarget } from './terminal-input-arrival-test-target'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -21,6 +22,7 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
     ((ptyId: string, opts?: { scrollbackRows?: number }) =>
       overrides.serializeTerminalBuffer?.(ptyId, opts))
   return {
+    captureTerminalInputArrivalTarget: captureTerminalInputArrivalTestTarget,
     getRuntimeId: () => 'test-runtime',
     subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: every multiplex stream registers as a remote view subscriber for

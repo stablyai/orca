@@ -98,7 +98,7 @@ describe('terminal live mirror send queue', () => {
     expect(payloads).toEqual(['a', 'bc'])
   })
 
-  it('Given a failed previous send When a mirror send queues Then it still runs in order', async () => {
+  it('Given a failed prefix When a mirror send queues Then dependent input is not sent', async () => {
     // Given
     const state = createTerminalLivePendingFlushState()
     const order: string[] = []
@@ -115,11 +115,12 @@ describe('terminal live mirror send queue', () => {
 
     // Then
     await expect(first).resolves.toBe(false)
-    await expect(second).resolves.toBe(true)
-    expect(order).toEqual(['first', 'second'])
+    await expect(second).resolves.toBe(false)
+    expect(order).toEqual(['first'])
+    await expect(waitForTerminalLivePendingFlush(state)).resolves.toBe(false)
   })
 
-  it('Given a throwing send When a mirror send queues Then the promise resolves false and the chain continues', async () => {
+  it('Given a throwing send When a mirror send queues Then both resolve false', async () => {
     // Given
     const state = createTerminalLivePendingFlushState()
     const first = queueTerminalLiveMirrorSend(state, 'terminal-1', 'first', async () => {
@@ -131,7 +132,7 @@ describe('terminal live mirror send queue', () => {
 
     // Then
     await expect(first).resolves.toBe(false)
-    await expect(second).resolves.toBe(true)
+    await expect(second).resolves.toBe(false)
   })
 
   it('Given a settled mirror send When it was the newest Then the state resets to null', async () => {

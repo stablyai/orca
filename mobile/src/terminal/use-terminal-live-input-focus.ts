@@ -11,6 +11,7 @@ type TerminalLiveInputFocusContext = {
   readonly canSend: boolean
   readonly keyboardHeight: number
   readonly liveInputEnabled: boolean
+  readonly reopenFocusedInputWhenKeyboardHidden: boolean | (() => boolean)
 }
 
 type UseTerminalLiveInputFocusOptions<T extends TerminalLiveInputFocusTarget> =
@@ -36,16 +37,23 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
   lifecycleIdentity,
   lifecycleKey,
   liveInputEnabled,
+  reopenFocusedInputWhenKeyboardHidden,
   timerRef
 }: UseTerminalLiveInputFocusOptions<T>): TerminalLiveInputFocusHandlers {
   const contextRef = useRef<TerminalLiveInputFocusContext>({
     canSend,
     keyboardHeight,
-    liveInputEnabled
+    liveInputEnabled,
+    reopenFocusedInputWhenKeyboardHidden
   })
   useLayoutEffect(() => {
-    contextRef.current = { canSend, keyboardHeight, liveInputEnabled }
-  }, [canSend, keyboardHeight, liveInputEnabled])
+    contextRef.current = {
+      canSend,
+      keyboardHeight,
+      liveInputEnabled,
+      reopenFocusedInputWhenKeyboardHidden
+    }
+  }, [canSend, keyboardHeight, liveInputEnabled, reopenFocusedInputWhenKeyboardHidden])
 
   const resetLiveInputFocus = useCallback(() => {
     clearTerminalLiveInputFocusTimer(timerRef)
@@ -62,6 +70,10 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
     }
     focusTerminalLiveInputTarget(inputRef.current, {
       keyboardHeight: context.keyboardHeight,
+      reopenFocusedInputWhenKeyboardHidden:
+        typeof context.reopenFocusedInputWhenKeyboardHidden === 'function'
+          ? context.reopenFocusedInputWhenKeyboardHidden()
+          : context.reopenFocusedInputWhenKeyboardHidden,
       refocus: () => scheduleTerminalLiveInputFocus(timerRef, focusLiveInput)
     })
   }, [inputRef, timerRef])

@@ -6,6 +6,46 @@ import {
 } from './runtime-rpc-call-queue'
 
 describe('runtime RPC call queue', () => {
+  it.each([
+    ['foreground', 'terminal.send'],
+    ['background', 'git.status']
+  ] as const)('releases consumed %s slots while later work stays active', async (lane, method) => {
+    const pool = new RuntimeRpcCallQueuePool(1, 1)
+    const payload = 'a'.repeat(1024 * 1024)
+    const first = pool.enqueue('runtime', method, async () => payload.length, payload.length * 2)
+    let release = () => {}
+    let blockedStarted = false
+    const blocked = pool.enqueue(
+      'runtime',
+      method,
+      async () => {
+        blockedStarted = true
+        await new Promise<void>((resolve) => {
+          release = resolve
+        })
+      },
+      2
+    )
+    const later = pool.enqueue('runtime', method, async () => 'later', 2)
+    await expect(first).resolves.toBe(payload.length)
+    await vi.waitFor(() => expect(blockedStarted).toBe(true))
+    const internals = pool as unknown as {
+      retainedCallBytes: number
+      queues: Map<string, { foreground: unknown[]; background: unknown[] }>
+    }
+    try {
+      expect(internals.retainedCallBytes).toBe(4)
+      const slots = internals.queues.get('runtime')![lane]
+      expect(slots[0] === undefined).toBe(true)
+      expect(slots[1] === undefined).toBe(true)
+      expect(slots[2]).toBeDefined()
+    } finally {
+      release()
+    }
+    await blocked
+    await expect(later).resolves.toBe('later')
+  })
+
   it('classifies per-worktree decoration lookups as background work', () => {
     expect(isBackgroundRuntimeMethod('github.prForBranch')).toBe(true)
     expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
-import type { Keyboard, TextInput } from 'react-native'
+import { Platform, type Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { isHardwareKeyboardConnected } from '@orca/expo-hardware-keyboard-navigation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalModes, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
@@ -58,6 +59,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
+  const terminalInputSubscribedRef = useRef<(handle: string) => void>(() => {})
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
     typeof Keyboard.addListener
   > | null>(null)
@@ -112,6 +114,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     getLiveInputInteractionGeneration,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputHardwareKey,
     handleLiveInputKeyPress,
     handleLiveInputSubmit
   } = useTerminalLiveInputCommit({
@@ -134,6 +137,10 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+  const reopenFocusedInputWhenKeyboardHidden = useCallback(
+    () => Platform.OS === 'android' && !isHardwareKeyboardConnected(),
+    []
+  )
   const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
@@ -142,6 +149,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     liveInputEnabled,
+    reopenFocusedInputWhenKeyboardHidden,
     timerRef: liveInputFocusTimerRef
   })
   useFocusEffect(
@@ -170,6 +178,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     liveInputFocusTimerRef,
     sendLiveTerminalInputRef,
     sessionTabActionSheetKeyboardHideSubRef,
+    terminalInputSubscribedRef,
     sessionTabActionSheetRequestSeqRef,
     dictationRouteContextRef,
     terminalUnsubsRef,
@@ -202,6 +211,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     flushPendingLiveInputBeforeExternalSend,
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputHardwareKey,
     handleLiveInputKeyPress,
     handleLiveInputSubmit,
     canCompose,

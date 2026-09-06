@@ -85,7 +85,13 @@ function createAccessoryInputCommitHarness({
       activeHandle,
       applyLiveInputMirror,
       clearPendingLiveInputCommit,
-      flushPendingLiveInputText,
+      queueLiveInputControl: async (handle, bytes) => {
+        const ready =
+          heldText.length > 0
+            ? await flushPendingLiveInputText(handle)
+            : await waitForPendingLiveInputFlush()
+        return ready && sendLiveTerminalInputRef.current(handle, bytes)
+      },
       heldLiveInputTextRef,
       liveInputComposingRef,
       liveInputRef,
@@ -93,7 +99,6 @@ function createAccessoryInputCommitHarness({
       onInteraction: vi.fn(),
       pendingLiveInputHandleRef,
       sentLiveInputTextRef,
-      sendLiveTerminalInputRef,
       setLiveInputCapture,
       waitForPendingLiveInputFlush
     })
@@ -186,7 +191,7 @@ describe('terminal live accessory input commit hook', () => {
     expect(result).toEqual({ kind: 'suppress-raw' })
   })
 
-  it('Given raw accessory bytes with no held text When committed Then allows the raw send without flushing', async () => {
+  it('Given raw accessory bytes with no held text When committed Then sends through the queue without flushing', async () => {
     // Given
     const harness = createAccessoryInputCommitHarness({ pendingHandle: null })
 
@@ -194,9 +199,9 @@ describe('terminal live accessory input commit hook', () => {
     const result = await harness.commit({ bytes: '\x1b' })
 
     // Then
-    expect(result).toEqual({ kind: 'allow-raw' })
+    expect(result).toEqual({ kind: 'handled' })
     expect(harness.flushPendingLiveInputText).not.toHaveBeenCalled()
-    expect(harness.sent).toEqual([])
+    expect(harness.sent).toEqual(['\x1b'])
   })
 
   it('Given accessory backspace with reported composition When committed Then keeps the edited preedit held', async () => {

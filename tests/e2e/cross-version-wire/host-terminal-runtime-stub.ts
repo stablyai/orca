@@ -115,6 +115,15 @@ export function createHostTerminalRuntimeStub(
 
   const runtime: Record<string, unknown> = {
     getRuntimeId: () => 'cross-version-host',
+    captureTerminalInputArrivalTarget: (handle: string) => {
+      const assertCurrent = (): void => {
+        if (handle !== terminalHandle) {
+          throw new Error('terminal_handle_stale')
+        }
+      }
+      assertCurrent()
+      return { ptyId, generation: 1, assertCurrent }
+    },
     resolveLiveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     resolveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     registerRemoteTerminalViewSubscriber: () => () => {},

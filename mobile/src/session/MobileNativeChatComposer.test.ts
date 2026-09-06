@@ -7,6 +7,26 @@ import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeCh
 
 const getNoComposerEditGeneration = () => 0
 
+vi.mock('expo-router', async () => {
+  const { useEffect } = await import('react')
+  return { useFocusEffect: useEffect }
+})
+
+vi.mock('@orca/expo-hardware-keyboard', () => ({
+  HardwareKeyboardCaptureView: 'HardwareKeyboardCaptureView'
+}))
+
+vi.mock('@orca/expo-hardware-keyboard-navigation', () => ({
+  isHardwareKeyboardConnected: () => false
+}))
+
+vi.mock('../hardware-keyboard/use-hardware-keyboard-text-input-focus', () => ({
+  useHardwareKeyboardTextInputFocus: () => ({
+    handleTouchStart: vi.fn(),
+    showSoftInputOnFocus: true
+  })
+}))
+
 function MobileNativeChatComposer({
   getComposerEditGeneration = getNoComposerEditGeneration,
   ...props
@@ -98,6 +118,54 @@ describe('MobileNativeChatComposer', () => {
       (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Send message'
     ) as { props: { onPress: () => Promise<void> } }
   }
+
+  it('requests primary-modifier Return and reuses send without dismissing the input responder', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn())
+    vi.mocked(Keyboard.dismiss).mockClear()
+    const capture = renderer!.root.findByType('HardwareKeyboardCaptureView')
+    expect(capture.props.mode).toBe('submit')
+    expect(capture.props.submitWithPrimaryModifier).toBe(true)
+    await act(async () =>
+      capture.props.onHardwareKey({ nativeEvent: { key: 'Enter', repeat: false } })
+    )
+    expect(onSend).toHaveBeenCalledWith(' hello ')
+    expect(Keyboard.dismiss).not.toHaveBeenCalled()
+  })
+
+  it('ignores repeated native Return callbacks', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn())
+    const capture = renderer!.root.findByType('HardwareKeyboardCaptureView')
+    await act(async () =>
+      capture.props.onHardwareKey({ nativeEvent: { key: 'Enter', repeat: true } })
+    )
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('submits the latest native text even before controlled props render it', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    await render(onSend, vi.fn())
+    const input = renderer!.root.findByType('TextInput')
+    const capture = renderer!.root.findByType('HardwareKeyboardCaptureView')
+    await act(async () => {
+      input.props.onChangeText('abc')
+      capture.props.onHardwareKey({ nativeEvent: { key: 'Enter', repeat: false } })
+    })
+    expect(onSend).toHaveBeenCalledWith('abc')
+  })
+
+  it('leaves software Return and Shift+Return text editing with the native multiline input', async () => {
+    const onSend = vi.fn().mockResolvedValue(true)
+    const onChangeText = vi.fn()
+    await render(onSend, onChangeText)
+    const input = renderer!.root.findByType('TextInput')
+    expect(input.props.multiline).toBe(true)
+    expect(input.props.onKeyPress).toBeUndefined()
+    await act(async () => input.props.onChangeText(' hello\n'))
+    expect(onChangeText).toHaveBeenCalledWith(' hello\n')
+    expect(onSend).not.toHaveBeenCalled()
+  })
 
   it('reports an accepted send without owning route-scoped draft cleanup', async () => {
     const onChangeText = vi.fn()
@@ -335,12 +403,13 @@ describe('MobileNativeChatComposer', () => {
 
   it('moves the caret to the insert point after an autocomplete pick, then releases control', async () => {
     const onChangeText = vi.fn()
+    const onSend = vi.fn().mockResolvedValue(true)
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatComposer, {
           value: '/c',
           onChangeText,
-          onSend: vi.fn().mockResolvedValue(true),
+          onSend,
           sendSurfaceId: 'tab-a',
           getSendCompletionGeneration: getCurrentSendCompletionGeneration,
           agent: 'claude'
@@ -363,8 +432,14 @@ describe('MobileNativeChatComposer', () => {
     const firstSuggestion = renderer!.root.findAll(
       (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
     )[0] as { props: { onPress: () => void } }
-    await act(async () => firstSuggestion.props.onPress())
+    await act(async () => {
+      firstSuggestion.props.onPress()
+      renderer!.root.findByType('HardwareKeyboardCaptureView').props.onHardwareKey({
+        nativeEvent: { key: 'Enter', repeat: false }
+      })
+    })
     expect(onChangeText).toHaveBeenCalledWith('/clear ')
+    expect(onSend).toHaveBeenCalledWith('/clear ')
     // `/clear ` is 7 chars — the caret jumps just past the inserted command + space.
     expect(input().props.selection).toEqual({ start: 7, end: 7 })
     // The next native selection event releases control so manual placement still works.

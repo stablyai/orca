@@ -24,7 +24,7 @@ type UseMobileImageAttachmentArgs = {
   readonly showToast: ShowToast
   readonly onSuccess: () => void
   readonly onError: () => void
-  readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
+  readonly beforeTerminalSend?: import('../terminal/terminal-live-input-sender').TerminalLiveExternalSend
 }
 
 type MobileImageAttachment = {

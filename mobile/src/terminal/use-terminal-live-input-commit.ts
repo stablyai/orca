@@ -1,31 +1,26 @@
 import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
+import {
+  mapTerminalLiveHardwareKeyEvent,
+  type TerminalLiveHardwareKeyEvent
+} from './terminal-live-hardware-key-mapping'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
-import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
-import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import type {
+  TerminalLiveInputSender,
+  TerminalLiveExternalSend
+} from './terminal-live-input-sender'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
+import { useTerminalNativeFieldBoundary } from './use-terminal-native-field-boundary'
+import type {
+  TerminalLiveInputChangeEvent,
+  TerminalLiveInputKeyPressEvent
+} from './terminal-live-input-events'
 import {
   useTerminalLiveAccessoryInputCommit,
   type TerminalLiveAccessoryInputCommitResult
 } from './use-terminal-live-accessory-input-commit'
-
-type TerminalLiveInputKeyPressEvent = {
-  readonly nativeEvent: {
-    readonly key: string
-  }
-}
-
-/** `isComposing` is the text system's marked-text range, forwarded by the pinned
- *  react-native patch on iOS; `onChangeText` would drop the payload entirely.
- *  Absent means the platform reports no range — not "not composing". */
-type TerminalLiveInputChangeEvent = {
-  readonly nativeEvent: {
-    readonly text: string
-    readonly isComposing?: boolean
-  }
-}
 
 type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly activeHandle: string | null
@@ -42,13 +37,14 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
 
 type TerminalLiveInputCommitHandlers = {
   readonly clearPendingLiveInputCommit: () => void
-  readonly flushPendingLiveInputBeforeExternalSend: (handle: string) => Promise<boolean>
+  readonly flushPendingLiveInputBeforeExternalSend: TerminalLiveExternalSend
   readonly getLiveInputInteractionGeneration: () => number
   readonly handleLiveInputAccessoryBytes: (
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
   readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
+  readonly handleLiveInputHardwareKey: (event: TerminalLiveHardwareKeyEvent) => void
   readonly handleLiveInputSubmit: () => Promise<boolean>
 }
 
@@ -72,6 +68,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
+    queueLiveInputControl,
     heldLiveInputTextRef,
     liveInputComposingRef,
     pendingLiveInputHandleRef,
@@ -111,9 +108,28 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     }
   }, [activeHandle, activeSessionTabType, clearPendingLiveInputCommit, liveInputTerminalHandles])
 
-  const flushPendingLiveInputBeforeExternalSend = useCallback(
-    async (handle: string): Promise<boolean> => {
+  const { nativeFieldBoundaryRef, acceptNativeFieldBoundary } = useTerminalNativeFieldBoundary(
+    connected,
+    activeHandle,
+    liveInputTerminalHandles,
+    applyLiveInputMirror
+  )
+
+  const flushPendingLiveInputBeforeExternalSend = useCallback<TerminalLiveExternalSend>(
+    async (handle, send, retainedText = '', options): Promise<boolean> => {
+      if (
+        options?.fieldBoundary &&
+        (handle !== activeHandle || !acceptNativeFieldBoundary(options.fieldBoundary))
+      ) {
+        return false
+      }
       advanceLiveInputInteractionGeneration()
+      if (send) {
+        return queueLiveInputControl(handle, retainedText, send, {
+          ...options,
+          nativeFieldReset: options?.fieldBoundary != null || options?.nativeFieldReset
+        })
+      }
       const pendingHandle = pendingLiveInputHandleRef.current
       if (pendingHandle && pendingHandle !== handle) {
         clearPendingLiveInputCommit()
@@ -127,15 +143,27 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       return waitForPendingLiveInputFlush()
     },
     [
+      activeHandle,
+      acceptNativeFieldBoundary,
       advanceLiveInputInteractionGeneration,
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
-      waitForPendingLiveInputFlush
+      waitForPendingLiveInputFlush,
+      queueLiveInputControl
     ]
   )
 
   const handleLiveInputChange = useCallback(
     ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
+      const boundary = nativeFieldBoundaryRef.current
+      if (
+        boundary &&
+        nativeEvent.target === boundary.target &&
+        nativeEvent.eventCount != null &&
+        nativeEvent.eventCount <= boundary.eventCount
+      ) {
+        return
+      }
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
         return
@@ -186,15 +214,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         case 'local-edit':
           return
         case 'send-now':
-          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
-            sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
-          return
         case 'commit-held-then-send':
-          void sendTerminalLiveControlAfterPendingFlush(
-            () => flushPendingLiveInputText(activeHandle),
-            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
+          void queueLiveInputControl(activeHandle, decision.bytes)
           return
         default:
           decision satisfies never
@@ -207,7 +228,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       flushPendingLiveInputText,
       liveInputTerminalHandles,
       sendLiveTerminalInputRef,
-      waitForPendingLiveInputFlush
+      waitForPendingLiveInputFlush,
+      queueLiveInputControl
     ]
   )
 
@@ -215,7 +237,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     activeHandle,
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
-    flushPendingLiveInputText,
+    queueLiveInputControl,
     heldLiveInputTextRef,
     liveInputComposingRef,
     liveInputRef,
@@ -223,7 +245,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     onInteraction: advanceLiveInputInteractionGeneration,
     pendingLiveInputHandleRef,
     sentLiveInputTextRef,
-    sendLiveTerminalInputRef,
     setLiveInputCapture,
     waitForPendingLiveInputFlush
   })
@@ -233,17 +254,59 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       return Promise.resolve(false)
     }
     advanceLiveInputInteractionGeneration()
-    return sendTerminalLiveControlAfterPendingFlush(
-      () => flushPendingLiveInputText(activeHandle),
-      () => sendLiveTerminalInputRef.current(activeHandle, '\r')
-    )
+    return queueLiveInputControl(activeHandle, '\r')
   }, [
     activeHandle,
     advanceLiveInputInteractionGeneration,
-    flushPendingLiveInputText,
+    queueLiveInputControl,
     liveInputTerminalHandles,
     sendLiveTerminalInputRef
   ])
+
+  const handleLiveInputHardwareKey = useCallback(
+    (event: TerminalLiveHardwareKeyEvent) => {
+      if (!connected || !activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
+        return
+      }
+      const boundary = event.fieldBoundary
+      if (!acceptNativeFieldBoundary(boundary)) {
+        return
+      }
+      const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+      const decision = mapTerminalLiveHardwareKeyEvent(event, {
+        heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
+        sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
+      })
+      if (decision.kind === 'ignore') {
+        if (boundary) {
+          void queueLiveInputControl(activeHandle, '', async () => true, { nativeFieldReset: true })
+        }
+        return
+      }
+      if (decision.kind === 'local-edit') {
+        void handleLiveInputAccessoryBytes({
+          bytes: '',
+          localEdit: decision.localEdit
+        })
+        return
+      }
+      advanceLiveInputInteractionGeneration()
+      // Physical controls end the mirror baseline and share the existing send barrier.
+      void queueLiveInputControl(activeHandle, decision.bytes, undefined, {
+        nativeFieldReset: boundary != null
+      })
+    },
+    [
+      activeHandle,
+      advanceLiveInputInteractionGeneration,
+      connected,
+      acceptNativeFieldBoundary,
+      queueLiveInputControl,
+      handleLiveInputAccessoryBytes,
+      liveInputTerminalHandles,
+      sendLiveTerminalInputRef
+    ]
+  )
 
   return {
     clearPendingLiveInputCommit,
@@ -252,6 +315,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     handleLiveInputAccessoryBytes,
     handleLiveInputChange,
     handleLiveInputKeyPress,
+    handleLiveInputHardwareKey,
     handleLiveInputSubmit
   }
 }

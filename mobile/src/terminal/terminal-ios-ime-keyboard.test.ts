@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 
-const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
+const commandDockSource = [
+  readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx'),
+  readMobileSessionRouteSource('../session/MobileTerminalLiveInputBar.tsx')
+].join('\n')
 
 describe('terminal iOS IME keyboard', () => {
   it('does not force terminal inputs onto the ASCII-only iOS keyboard', () => {
@@ -12,7 +15,8 @@ describe('terminal iOS IME keyboard', () => {
   it('subscribes live capture to onChange so the marked-text report survives', () => {
     // onChangeText hands over only a string, discarding the preedit report that
     // decides whether the text may reach the PTY at all.
-    expect(commandDockSource).toContain('onChange={handleLiveInputChange}')
+    expect(commandDockSource).toContain('onChange={(event) => {')
+    expect(commandDockSource).toContain('handleLiveInputChange(event)')
     expect(commandDockSource).not.toContain('onChangeText={handleLiveInputChange}')
   })
 

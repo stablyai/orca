@@ -7,8 +7,31 @@ import {
   buildTerminalSendPayload
 } from './terminal-send-payload'
 import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
+import {
+  captureTerminalInputArrivalWriteGuard,
+  type TerminalInputArrivalTarget
+} from './terminal-input-arrival'
 
 export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
+  captureTerminalInputArrivalTarget(handle: string): TerminalInputArrivalTarget {
+    const ptyId =
+      this.getLivePtyForHandle(handle)?.pty.ptyId ?? this.getLiveLeafForHandle(handle).leaf.ptyId
+    if (!ptyId) {
+      throw new Error('terminal_not_writable')
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    return {
+      ptyId,
+      generation,
+      assertCurrent: () => {
+        if (this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
+          throw new Error('terminal_handle_stale')
+        }
+        this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+      }
+    }
+  }
+
   protected controllerKnowsPtyIsLive(ptyId: string): boolean {
     try {
       return this.ptyController?.hasPty?.(ptyId) === true
@@ -137,6 +160,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         throw new Error('terminal_not_writable')
       }
       await assertTerminalInputWithinLimitWithYield(payload)
+      captureTerminalInputArrivalWriteGuard()(pty.pty.ptyId)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
       const submits = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
@@ -167,6 +191,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
+    captureTerminalInputArrivalWriteGuard()(leaf.ptyId)
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
     const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)

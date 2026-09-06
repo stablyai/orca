@@ -13,6 +13,7 @@ const terminalInputSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-input.ts'
 )
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
+const liveInputBarSource = readMobileSessionRouteSource('../session/MobileTerminalLiveInputBar.tsx')
 
 function sourceSlice(source: string, anchorStart: string, anchorEnd: string): string {
   const start = source.indexOf(anchorStart)
@@ -97,7 +98,7 @@ describe('session route offline-compose wiring', () => {
     expect(bufferedInput).toContain('editable={canCompose}')
 
     const liveCapture = sourceSlice(
-      commandDockSource,
+      liveInputBarSource,
       'ref={liveInputRef}',
       'importantForAutofill="no"'
     )

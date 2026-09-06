@@ -1,5 +1,6 @@
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
 import { DirectConnectionLog } from './direct-connection-log'
+import { assertTerminalInputRequestAllowed } from './terminal-input-request-fence'
 import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
 import { RpcClientConnectionState } from './rpc-client-connection-state'
 import {
@@ -19,6 +20,7 @@ import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
+import { sendSessionEncrypted } from './rpc-client-socket-send'
 
 const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
 
@@ -61,9 +63,12 @@ export class DirectRpcClient implements RpcClient {
       nextId: () => this.nextId(),
       deviceToken,
       getState: () => this.connectionState.get(),
-      sendEncrypted: (request) => this.sendEncrypted(request)
+      sendEncrypted: (request) => this.sendEncrypted(request),
+      sendBinary: (bytes) => this.socketSession?.sendBinary(bytes) ?? false
     })
     this.requests = new RpcClientRequestTracker({
+      validateRequest: (method, params) =>
+        assertTerminalInputRequestAllowed(method, params, this.getTerminalStreamInputFailure),
       nextId: () => this.nextId(),
       deviceToken,
       getState: () => this.connectionState.get(),
@@ -137,6 +142,18 @@ export class DirectRpcClient implements RpcClient {
     return this.requests.sendRequest(method, params, options)
   }
 
+  sendTerminalStreamInput = (terminal: string, text: string): Promise<boolean> | null =>
+    this.streams.sendTerminalStreamInput(terminal, text)
+
+  supportsTerminalStreamInput = (terminal: string): boolean =>
+    this.streams.supportsTerminalStreamInput(terminal)
+  getTerminalStreamInputFailure = (terminal: string) =>
+    this.streams.getTerminalStreamInputFailure(terminal)
+  recoverTerminalStreamInput = (terminal: string) =>
+    this.streams.recoverTerminalStreamInput(terminal)
+  cancelTerminalStreamInput = (terminal: string) => this.streams.cancelTerminalStreamInput(terminal)
+  fenceTerminalStreamInput = () => this.streams.fenceTerminalStreamInput()
+
   subscribe(
     method: string,
     params: unknown,
@@ -153,23 +170,14 @@ export class DirectRpcClient implements RpcClient {
     this.streams.updateTerminalViewport(terminal, viewport)
   }
 
-  getState(): ConnectionState {
-    return this.connectionState.get()
-  }
-
-  getReconnectAttempt(): number {
-    return this.reconnect.getAttempt()
-  }
-
-  getLastConnectedAt(): number | null {
-    return this.connectionState.getLastConnectedAt()
-  }
+  getState = (): ConnectionState => this.connectionState.get()
+  getReconnectAttempt = (): number => this.reconnect.getAttempt()
+  getLastConnectedAt = (): number | null => this.connectionState.getLastConnectedAt()
 
   getLastInboundAt = (): number | null => this.liveness.getLastInboundAt() || null
 
-  onStateChange(listener: (state: ConnectionState) => void): () => void {
-    return this.connectionState.addListener(listener)
-  }
+  onStateChange = (listener: (state: ConnectionState) => void): (() => void) =>
+    this.connectionState.addListener(listener)
 
   notifyForeground(_reason?: ForegroundNudgeReason): void {
     if (this.intentionallyClosed) {
@@ -204,6 +212,7 @@ export class DirectRpcClient implements RpcClient {
 
   close(): void {
     this.intentionallyClosed = true
+    this.streams.markForReplay()
     this.reconnect.cancel()
     const session = this.socketSession
     session?.clearTimers()
@@ -284,17 +293,8 @@ export class DirectRpcClient implements RpcClient {
     this.requests.rejectAll(reason)
   }
 
-  private sendEncrypted(request: unknown): boolean {
-    if (this.socketSession) {
-      return this.socketSession.sendEncrypted(request)
-    }
-    console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: false,
-      hasKey: false,
-      state: this.getState()
-    })
-    return false
-  }
+  private sendEncrypted = (request: unknown): boolean =>
+    sendSessionEncrypted(this.socketSession, request, this.getState())
 
   private sendLivenessProbe(identity: object): boolean {
     if (identity !== this.livenessSession || this.getState() !== 'connected') {

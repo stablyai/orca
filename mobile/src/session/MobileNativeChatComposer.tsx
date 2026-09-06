@@ -5,12 +5,15 @@ import {
   Keyboard,
   Pressable,
   ScrollView,
-  StyleSheet,
   TextInput,
   View
 } from 'react-native'
 import { ArrowUp, ImagePlus, Mic, Square, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { MobileNativeChatHardwareSubmit } from './MobileNativeChatHardwareSubmit'
+import { isHardwareKeyboardConnected } from '@orca/expo-hardware-keyboard-navigation'
+import { useHardwareKeyboardTextInputFocus } from '../hardware-keyboard/use-hardware-keyboard-text-input-focus'
+import { colors } from '../theme/mobile-theme'
+import { styles } from './mobile-native-chat-composer-styles'
 import { getVerifiedNativeChatCommands } from '../../../src/shared/native-chat-agent-profiles'
 import {
   applyAutocomplete,
@@ -89,10 +92,18 @@ export function MobileNativeChatComposer({
   filePaths = NO_FILE_PATHS,
   onNeedFiles
 }: Props): React.JSX.Element {
+  const inputRef = useRef<TextInput>(null)
+  const inputValueRef = useRef(value)
+  useLayoutEffect(() => {
+    inputValueRef.current = value
+  }, [value])
+  const hardwareFocus = useHardwareKeyboardTextInputFocus({
+    enabled: !disabled,
+    inputRef,
+    surfaceId: sendSurfaceId
+  })
   const [cursor, setCursor] = useState(0)
-  // Transiently drives the native caret after a mid-text autocomplete insert,
-  // then released on the next selection change so manual caret placement still
-  // works (a permanently controlled `selection` breaks it in React Native).
+  // Release autocomplete's caret override on the next native selection change.
   const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
     null
   )
@@ -107,16 +118,14 @@ export function MobileNativeChatComposer({
     }
   }, [sendSurfaceId])
   const [sending, setSending] = useState(false)
-  const trimmed = value.trim()
-  const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
   // An attached image alone is a valid send (desktop parity), so the image rides
   // along even when the user sends no accompanying text.
   const canSend =
-    (trimmed.length > 0 || attachments.length > 0) &&
+    (value.trim().length > 0 || attachments.length > 0) &&
     !disabled &&
     !sending &&
     !isAttaching &&
-    !sessionOptionDispatching
+    sessionOptions?.controller.pendingId == null
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
   const suggestions = useMemo<ComposerSuggestion[]>(() => {
@@ -154,6 +163,7 @@ export function MobileNativeChatComposer({
   }, [])
 
   const handleChange = (next: string): void => {
+    inputValueRef.current = next
     onChangeText(next)
   }
 
@@ -166,13 +176,21 @@ export function MobileNativeChatComposer({
       trigger,
       composerSuggestionInsertText(suggestion)
     )
-    onChangeText(nextText)
+    handleChange(nextText)
     setCursor(nextCursor)
     setPendingSelection({ start: nextCursor, end: nextCursor })
   }
 
-  const handleSend = async (): Promise<void> => {
-    if (!canSend || sendingRef.current) {
+  const handleSend = async (source: 'hardware' | 'touch' = 'touch'): Promise<void> => {
+    const text = source === 'hardware' ? inputValueRef.current : value
+    if (
+      (text.trim().length === 0 && attachments.length === 0) ||
+      disabled ||
+      sending ||
+      isAttaching ||
+      sessionOptions?.controller.pendingId != null ||
+      sendingRef.current
+    ) {
       return
     }
     sendingRef.current = true
@@ -181,9 +199,8 @@ export function MobileNativeChatComposer({
     const sendCompletionGeneration = getSendCompletionGeneration()
     const composerEditGeneration = getComposerEditGeneration()
     try {
-      // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
-      // to hand the user back exactly what they typed (#14819).
-      const accepted = await onSend(value)
+      // Preserve the verbatim draft on rejected sends (#14819).
+      const accepted = await onSend(text)
       if (
         accepted &&
         mountedRef.current &&
@@ -192,9 +209,10 @@ export function MobileNativeChatComposer({
         composerEditGeneration === getComposerEditGeneration()
       ) {
         setCursor(0)
-        // Why: the turn is now the agent's — the keyboard would cover the reply.
-        // A rejected send keeps it up so the handed-back draft stays editable.
-        Keyboard.dismiss()
+        // Keep hardware input focused for the next message.
+        if (source !== 'hardware' && !isHardwareKeyboardConnected()) {
+          Keyboard.dismiss()
+        }
       }
     } finally {
       sendingRef.current = false
@@ -238,25 +256,31 @@ export function MobileNativeChatComposer({
       ) : null}
       <View style={styles.composerInset} testID="native-chat-composer-inset">
         <View style={styles.bar} testID="native-chat-composer">
-          <TextInput
-            style={styles.input}
-            value={value}
-            onChangeText={handleChange}
-            // Controlled only transiently right after an autocomplete insert.
-            selection={pendingSelection ?? undefined}
-            onSelectionChange={(e) => {
-              setCursor(e.nativeEvent.selection.end)
-              setPendingSelection(null)
-            }}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textMuted}
-            selectionColor={colors.accentBlue}
-            multiline
-            // Why: never revoke `editable` — iOS resigns first responder on a focused
-            // field, so a transient lock would yank the keyboard mid-typing (#10681).
-            // The lock gates sending; the draft survives and rides the next send.
-            textAlignVertical="top"
-          />
+          <MobileNativeChatHardwareSubmit
+            enabled={!disabled}
+            onSubmit={() => handleSend('hardware')}
+          >
+            <TextInput
+              ref={inputRef}
+              showSoftInputOnFocus={hardwareFocus.showSoftInputOnFocus}
+              onTouchStart={hardwareFocus.handleTouchStart}
+              style={styles.input}
+              value={value}
+              onChangeText={handleChange}
+              // Controlled only transiently right after an autocomplete insert.
+              selection={pendingSelection ?? undefined}
+              onSelectionChange={(e) => {
+                setCursor(e.nativeEvent.selection.end)
+                setPendingSelection(null)
+              }}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textMuted}
+              selectionColor={colors.accentBlue}
+              multiline
+              // Gate sends without revoking editable and resigning iOS focus (#10681).
+              textAlignVertical="top"
+            />
+          </MobileNativeChatHardwareSubmit>
           <View style={styles.actionRow} testID="native-chat-composer-actions">
             {onAttachImage ? (
               <Pressable
@@ -308,7 +332,7 @@ export function MobileNativeChatComposer({
                 !canSend && styles.sendButtonDisabled,
                 pressed && canSend && styles.pressed
               ]}
-              onPress={handleSend}
+              onPress={() => handleSend()}
               disabled={!canSend}
             >
               <ArrowUp
@@ -323,102 +347,3 @@ export function MobileNativeChatComposer({
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  attachmentStrip: {
-    maxHeight: 76,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  attachmentStripContent: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  attachmentThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised
-  },
-  attachmentImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: radii.button
-  },
-  attachmentRemove: {
-    // Inset inside the thumb: Android drops touches outside the parent's bounds,
-    // so an overhanging badge would lose part of its tap target.
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle
-  },
-  composerInset: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md
-  },
-  bar: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    overflow: 'hidden'
-  },
-  actionRow: {
-    minHeight: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  actionSpacer: {
-    flex: 1
-  },
-  input: {
-    width: '100%',
-    maxHeight: 140,
-    minHeight: 40,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize + 1,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // White send affordance per design — dark arrow on a light circle.
-    backgroundColor: colors.textPrimary
-  },
-  sendButtonDisabled: {
-    backgroundColor: colors.bgRaised
-  },
-  pressed: {
-    opacity: 0.7
-  }
-})

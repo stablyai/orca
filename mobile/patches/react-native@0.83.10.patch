@@ -58,3 +58,49 @@ index 79ee7ffe43..956f189a1c 100644
 +  _textView.layoutMetrics = EmptyLayoutMetrics;
    _accessibilityProvider = nil;
  }
+diff --git a/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.kt b/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.kt
+--- a/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.kt
++++ b/ReactAndroid/src/main/java/com/facebook/react/views/textinput/ReactEditText.kt
+@@ -691,6 +691,19 @@
+     // text so, we have to set text to null, which will clear the currently composing text.
+     if (reactTextUpdate.text.length == 0) {
+       text = null
++    } else if (android.text.TextUtils.equals(text, spannableStringBuilder)) {
++      // Same-text Fabric echoes must update spans without adding a native undo operation.
++      val editable = checkNotNull(text)
++      for (span in spannableStringBuilder.getSpans(0, spannableStringBuilder.length, Any::class.java)) {
++        if (editable.getSpanStart(span) < 0) {
++          editable.setSpan(
++              span,
++              spannableStringBuilder.getSpanStart(span),
++              spannableStringBuilder.getSpanEnd(span),
++              spannableStringBuilder.getSpanFlags(span),
++          )
++        }
++      }
+     } else {
+       // When we update text, we trigger onChangeText code that will
+       // try to update state if the wrapper is available. Temporarily disable
+@@ -725,6 +738,7 @@
+       // Remove all styling spans we might have previously set
+       if (span is ReactSpan) {
+         text.removeSpan(span)
++        continue
+       }
+ 
+       // We only add spans back for EXCLUSIVE_EXCLUSIVE spans
+diff --git a/settings.gradle.kts b/settings.gradle.kts
+--- a/settings.gradle.kts
++++ b/settings.gradle.kts
+@@ -36,9 +36,9 @@
+ // for :packages and :packages:react-native as well as otherwise the build from
+ // source will fail with a missing folder exception.
+ 
+-project(":packages").projectDir = file("/tmp")
++project(":packages").projectDir = file(System.getProperty("java.io.tmpdir"))
+ 
+-project(":packages:react-native").projectDir = file("/tmp")
++project(":packages:react-native").projectDir = file(System.getProperty("java.io.tmpdir"))
+ 
+ // Gradle properties defined in `gradle.properties` are not inherited by
+ // included builds, see https://github.com/gradle/gradle/issues/2534.

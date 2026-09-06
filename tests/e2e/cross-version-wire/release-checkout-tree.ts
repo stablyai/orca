@@ -4,9 +4,15 @@ import { dirname, join, relative } from 'node:path'
 const CHECKOUT_PROCESS_TIMEOUT_MS = 45_000
 const CHECKOUT_MAX_OUTPUT_BYTES = 1024 * 1024
 
-// Why: the wire endpoints only need the runtime RPC host, the renderer client, and
-// the shared codec. Skipping cli/relay keeps a cold CI extraction a few seconds.
-const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
+// Keep cold extraction bounded to the host, desktop/mobile wire endpoints, and codecs.
+const ARCHIVE_PATHS = [
+  'src/main',
+  'src/shared',
+  'src/preload',
+  'src/renderer',
+  'src/types',
+  'mobile/src/transport'
+]
 
 const ALIAS_SPECIFIER =
   /(\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)(['"])@(renderer)?\/([^'"]+)\2/g
@@ -45,11 +51,11 @@ async function rewriteRendererAliases(file: string, rendererRoot: string): Promi
 
 async function prepareExtractedTree(root: string): Promise<void> {
   const rendererRoot = join(root, 'src', 'renderer', 'src')
-  const walk = async (directory: string): Promise<void> => {
+  const walk = async (directory: string, aliasRoot: string): Promise<void> => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const full = join(directory, entry.name)
       if (entry.isDirectory()) {
-        await walk(full)
+        await walk(full, aliasRoot)
         continue
       }
       if (!entry.isFile()) {
@@ -61,11 +67,12 @@ async function prepareExtractedTree(root: string): Promise<void> {
         continue
       }
       if (isRewritableSource(entry.name)) {
-        await rewriteRendererAliases(full, rendererRoot)
+        await rewriteRendererAliases(full, aliasRoot)
       }
     }
   }
-  await walk(join(root, 'src'))
+  await walk(join(root, 'src'), rendererRoot)
+  await walk(join(root, 'mobile', 'src', 'transport'), join(root, 'mobile', 'src'))
 }
 
 function checkoutTarProgram(): string {

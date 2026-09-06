@@ -3,6 +3,7 @@ import {
   serializeBudgetedMobileSnapshot,
   serializeStableMobileRendererSnapshot
 } from './terminal-snapshot-publication'
+import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../../../shared/terminal-ordered-input'
 import {
   getOutputAfterSnapshotSeq,
   isTerminalReadPayloadIncomplete,
@@ -143,6 +144,9 @@ export async function publishLegacyBinaryInitialSnapshot(
   emit({
     type: 'subscribed',
     streamId: state.streamId,
+    ...(args.supportsOrderedInput
+      ? { capabilities: { orderedInput: TERMINAL_ORDERED_INPUT_CAPABILITY } }
+      : {}),
     lines: read.tail,
     truncated: initialOutputOverflowed || (!sendBinary && isTerminalReadPayloadIncomplete(read)),
     cols: serialized?.cols ?? size?.cols,

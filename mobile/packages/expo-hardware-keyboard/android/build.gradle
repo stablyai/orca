@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+dependencies {
+  implementation 'com.facebook.react:react-android'
+  implementation project(':orca-expo-hardware-keyboard-navigation')
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.16'
+}
+
+group = 'expo.modules.hardwarekeyboard'
+version = '0.0.1'
+
+android {
+  namespace "expo.modules.hardwarekeyboard"
+  defaultConfig {
+    versionCode 1
+    versionName "0.0.1"
+  }
+}

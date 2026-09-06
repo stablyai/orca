@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.16'
+}
+
+group = 'expo.modules.hardwarekeyboardnavigation'
+version = '0.0.1'
+
+android {
+  namespace 'expo.modules.hardwarekeyboardnavigation'
+  defaultConfig {
+    versionCode 1
+    versionName '0.0.1'
+  }
+}
