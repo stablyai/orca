@@ -7,6 +7,11 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../../../shared/computer-use-permissions-types'
+import type {
+  AgentHealthProvider,
+  AgentHealthSnapshot,
+  AgentUpdateResult
+} from '../../../../shared/agent-health'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import type { SkillDiscoveryResult } from '../../../../shared/skills'
 import type { SkillDeletePlan, SkillDeleteResult } from '../../../../shared/skill-delete-contract'
@@ -43,6 +48,18 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
     pathSource: 'sync_seed_only',
     pathFailureReason: 'spawn_error'
   }
+  const fallbackAgentHealth = (provider: AgentHealthProvider): AgentHealthSnapshot => ({
+    provider,
+    cliStatus: 'unavailable',
+    health: 'unknown',
+    version: null,
+    durationMs: 0,
+    checkedAt: 0,
+    checks: [],
+    latestVersion: null,
+    updateAvailability: 'unknown',
+    updateSupported: false
+  })
   type WindowsTerminalCapabilityBridgeResult = {
     wslAvailable: boolean
     wslDistros: string[]
@@ -76,6 +93,16 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
             .then((result) => result as RefreshAgentsResult)
             .catch(() => fallbackRefreshAgents)
         : Promise.resolve(fallbackRefreshAgents),
+    probeAgentHealth: (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<AgentHealthSnapshot[]>('preflight.probeAgentHealth', args, 35_000)
+        : Promise.resolve([]),
+    probeAgentHealthProvider: (args) =>
+      requireActiveEnvironmentOrNull()
+        ? callRuntimeResult<AgentHealthSnapshot>('preflight.probeAgentHealthProvider', args, 35_000)
+        : Promise.resolve(fallbackAgentHealth(args.provider)),
+    updateAgent: (args) =>
+      callRuntimeResult<AgentUpdateResult>('preflight.updateAgent', args, 5 * 60_000 + 15_000),
     detectRemoteAgents: async (args) =>
       requireActiveEnvironmentOrNull()
         ? callRuntimeResult<string[]>('preflight.detectRemoteAgents', args).catch(() => [])

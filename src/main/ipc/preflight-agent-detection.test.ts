@@ -532,4 +532,15 @@ describe('preflight', () => {
       expect.objectContaining({ distro: undefined, loginPath: 'preferred' })
     )
   })
+
+  it.each(['preflight:probeAgentHealthProvider', 'preflight:updateAgent'])(
+    'rejects unsupported providers at the %s IPC boundary',
+    async (channel) => {
+      registerPreflightHandlers()
+
+      await expect(handlers[channel](undefined, { provider: 'other' })).rejects.toThrow(
+        'Unsupported agent health provider'
+      )
+    }
+  )
 })

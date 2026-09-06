@@ -164,6 +164,31 @@ describe('web MiniMax preload API', () => {
   })
 })
 
+describe('web browser-local agent health', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns unavailable health fallbacks before a runtime is paired', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(api.preflight.probeAgentHealth()).resolves.toEqual([])
+    await expect(
+      api.preflight.probeAgentHealthProvider({ provider: 'codex' })
+    ).resolves.toMatchObject({
+      provider: 'codex',
+      cliStatus: 'unavailable',
+      health: 'unknown',
+      updateAvailability: 'unknown',
+      updateSupported: false
+    })
+  })
+})
+
 describe('web AI Vault preload API', () => {
   beforeEach(() => {
     vi.resetModules()
