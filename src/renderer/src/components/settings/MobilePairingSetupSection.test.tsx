@@ -70,11 +70,12 @@ describe('MobilePairingSetupSection', () => {
   it('shows connection, address, and generate in a compact flow', () => {
     renderSection()
     expect(screen.getByText('Pair a phone')).toBeVisible()
+    expect(screen.getByText(/desktop pairing QR code/i)).toBeVisible()
     expect(screen.getByText('Connection')).toBeVisible()
     expect(screen.getByText('This computer’s address')).toBeVisible()
     expect(screen.getByTestId('path-control')).toBeVisible()
     expect(screen.getByRole('combobox')).toHaveTextContent('100.64.1.20 (tailscale0)')
-    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Generate pairing QR code' })).toBeVisible()
     expect(screen.getByText(/must be able to reach this address/i)).toBeVisible()
   })
 
@@ -85,7 +86,7 @@ describe('MobilePairingSetupSection', () => {
     })
     expect(screen.queryByText('This computer’s address')).toBeNull()
     expect(screen.queryByRole('combobox')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Generate pairing QR code' })).toBeEnabled()
 
     // Relay still advertises a LAN endpoint, so the picker must stay reachable.
     await user.click(screen.getByRole('button', { name: /Also use a faster local path/i }))
@@ -119,19 +120,26 @@ describe('MobilePairingSetupSection', () => {
   it('disables generate on LAN when no advertise address is selected', () => {
     renderSection({ connectionMode: 'local-only', selectedAddress: undefined })
     expect(screen.getByText('This computer’s address')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Generate pairing QR code' })).toBeDisabled()
+  })
+
+  it('explains the direct address when the Relay address picker is open', () => {
+    renderSection({ connectionMode: 'automatic', addressDisclosureForcedOpen: true })
+    expect(screen.getByRole('combobox')).toBeVisible()
+    expect(screen.getByText(/usually faster than Relay/i)).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Generate pairing QR code' })).toBeEnabled()
   })
 
   it('can move retry recovery into the persistent failure notice', () => {
     renderSection({ showGenerateAction: false })
-    expect(screen.queryByRole('button', { name: 'Generate QR code' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Generate pairing QR code' })).toBeNull()
   })
 
   it('disables generate when sign-in is required', () => {
     // The sign-in explanation lives in the connection panel above, not here, so
     // this section only gates the button rather than repeating the copy.
     renderSection({ canGenerate: false })
-    expect(screen.getByRole('button', { name: 'Generate QR code' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Generate pairing QR code' })).toBeDisabled()
     expect(screen.queryByText(/Sign in above first/i)).toBeNull()
   })
 
@@ -252,7 +260,7 @@ describe('MobilePairingSetupSection', () => {
 
   it('generates a pairing code', async () => {
     const { user, onGenerateQr } = renderSection()
-    await user.click(screen.getByRole('button', { name: 'Generate QR code' }))
+    await user.click(screen.getByRole('button', { name: 'Generate pairing QR code' }))
     expect(onGenerateQr).toHaveBeenCalledOnce()
   })
 })
