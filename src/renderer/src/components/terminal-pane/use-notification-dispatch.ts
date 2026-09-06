@@ -50,6 +50,17 @@ function hasFreshActiveHookStatus(
   return Boolean(isFreshNonDoneAgentStatus(snapshot) && !titleNamesDifferentKnownAgent)
 }
 
+function hasFreshWorkingHookStatus(
+  snapshot: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'agentType'> | undefined,
+  explicitTitleAgentType: string | null
+): boolean {
+  return snapshot?.state === 'working' && hasFreshActiveHookStatus(snapshot, explicitTitleAgentType)
+}
+
+function isAttentionAgentSnapshot(snapshot: AgentCompletionStatusSnapshot | undefined): boolean {
+  return snapshot?.state === 'waiting' || snapshot?.state === 'blocked'
+}
+
 export type TerminalNotificationEvent = {
   source: 'terminal-bell' | 'agent-task-complete'
   terminalTitle?: string
@@ -115,6 +126,14 @@ export function dispatchTerminalNotification(
   if (
     event.source === 'agent-task-complete' &&
     isSupersededAgentCompletionSnapshot(storedAgentStatus, eventAgentStatusSnapshot)
+  ) {
+    return
+  }
+  if (
+    event.source === 'agent-task-complete' &&
+    hasFreshWorkingHookStatus(storedAgentStatus, explicitTitleAgentType) &&
+    eventAgentStatusSnapshot?.state !== 'done' &&
+    !isAttentionAgentSnapshot(eventAgentStatusSnapshot)
   ) {
     return
   }
