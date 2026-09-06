@@ -154,6 +154,27 @@ describe('orchestration worker launch preferences', () => {
     ).not.toThrow()
   })
 
+  it('refuses --retry-of beside --spec, which could only create a fresh Task', () => {
+    const parsed = WorkerStartParams.safeParse({
+      spec: 'redo it',
+      retryOf: 'ctx_prior',
+      agent: 'claude',
+      from: 'term_coord'
+    })
+    expect(parsed.success).toBe(false)
+    expect(parsed.error?.issues.map((issue) => issue.message)).toContain(
+      '--retry-of needs --task <task_id> naming the failed Task; --spec creates a new one'
+    )
+    expect(
+      WorkerStartParams.safeParse({
+        task: 'task_1',
+        retryOf: 'ctx_prior',
+        agent: 'claude',
+        from: 'term_coord'
+      }).success
+    ).toBe(true)
+  })
+
   it('uses the requested launch receipt when an older worker omits it', () => {
     const requested = createPendingWorkerLaunchReceipt({
       agent: 'codex',

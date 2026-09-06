@@ -109,8 +109,9 @@ optional.
 
 ## Retry, stop, and abandon
 
-Retry only a positively proven failed or stopped attempt. Placement is never
-silently inherited:
+Retry only a positively proven failed or stopped attempt. Name the failed Task
+with `--task`, since `--spec` creates a new one. Placement is never silently
+inherited:
 
 ```text
 ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <explicit_placement> --agent <agent> --json

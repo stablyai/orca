@@ -48,6 +48,16 @@ export const WorkerStartParams = z
         message: '--task and --spec are mutually exclusive'
       })
     }
+    // Why: --spec creates a new Task, so a retry link to a prior Dispatch could never resolve and
+    // the refusal named a Task id the caller never supplied.
+    if (params.retryOf && params.spec) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['retryOf'],
+        message:
+          '--retry-of needs --task <task_id> naming the failed Task; --spec creates a new one'
+      })
+    }
   })
 
 export type WorkerStartInput = z.infer<typeof WorkerStartParams>
