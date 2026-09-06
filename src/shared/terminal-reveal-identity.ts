@@ -11,4 +11,5 @@ export type TerminalTabCreateReply = {
   title?: string
   identity?: TerminalRevealIdentity
   error?: string
+  errorCode?: string
 }
