@@ -126,6 +126,9 @@ export function EditorFileTabContextMenu({
           }
           skipMenuFocusRestoreRef.current = false
           event.preventDefault()
+          // The closing menu can still reclaim focus before its teardown completes.
+          onActivate()
+          onOpenRenameInput()
         }}
       >
         <TabWorkspaceLayoutMenuSection
@@ -137,8 +140,6 @@ export function EditorFileTabContextMenu({
           disabled={!canRename || isRenaming}
           onSelect={() => {
             skipMenuFocusRestoreRef.current = true
-            onActivate()
-            onOpenRenameInput()
           }}
         >
           <Pencil className="size-3.5" />
