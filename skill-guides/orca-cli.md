@@ -20,14 +20,6 @@ description: >-
 
 Use `orca` when Orca's running editor/runtime is the source of truth. Use plain shell tools when Orca state does not matter.
 
-## Outcome
-
-**Result:** the Orca state you were asked to read or change, plus the receipt that proves it: a worktree id, an agent handle, or the command's JSON result.
-
-**Done:** you reported that receipt. Handoffs have one more condition, under `## Full Handoffs`.
-
-**Safe failure:** no receipt, or an unsatisfied wait, means unproven. Report it that way and stop. A timeout, a quiet terminal, or a lost host never proves that input landed or that a process exited.
-
 ## Start Here
 
 `ORCA` in every example is the executable you used to run `skills get`. Keep using that executable. Substitute it before running anything; do not make a shell variable or run `ORCA` literally. This holds in POSIX shells, PowerShell, and cmd.exe.
@@ -245,7 +237,3 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | Creating, editing, running, or inspecting scheduled automations | `references/automations.md` |
 | Publishing or revoking an artifact link, or publishing installed skills | `references/publishing.md` |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions | invoke the `orca-emulator` skill |
-
-## Next Action
-
-Confirm `ORCA status --json` unless already checked this turn, then run the narrowest command for the job: `worktree ps/current/create`, `terminal list/read/wait/send`, or `worktree set --comment/--workspace-status`. For anything in the table above, load its row first.

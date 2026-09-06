@@ -12,16 +12,6 @@ license: Apache-2.0
 
 # Orca Emulator (iOS)
 
-**Result:** an observed UI state change on a booted Apple Simulator, driven from the CLI
-while the live stream stays visible in Orca's emulator pane.
-
-**Done:** every action you report names the command and the evidence you read back: an
-accessibility-tree dump, a returned payload, or a named error. No evidence means unverified;
-say so instead of done.
-
-**Safe failure:** if a command is unknown or its output has an unexpected shape, trust
-`ORCA emulator --help` over this guide and tell the user the guide may be stale.
-
 `ORCA` in every example, including tables and prose, is the executable you used to run
 `skills get`. Substitute it before running; do not make a shell variable or run `ORCA`
 literally. The examples work in POSIX shells, PowerShell, and cmd.exe.
@@ -112,11 +102,6 @@ ORCA emulator ax --json
 ORCA emulator exec --command "ca-debug blended on" --json
 ORCA emulator kill --device "iPhone 16 Pro" --json
 ```
-
-## Next action
-
-Confirm `ORCA status --json` and `ORCA emulator list --json`, attach a device, then drive it
-while reading back evidence for each action.
 
 See also: `orca-emulator-android` for Android devices, `orca-cli` for terminals, worktrees,
 and the built-in browser, and `computer-use` for desktop UI outside the simulator.
