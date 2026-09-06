@@ -150,6 +150,30 @@ test.describe('Tabs', () => {
       }
     })
 
+    await orcaPage.evaluate(() => {
+      const events: unknown[] = []
+      const start = performance.now()
+      const sample = (kind: string): void => {
+        if (events.length >= 160) return
+        const active = document.activeElement
+        events.push({ kind, at: Math.round(performance.now() - start),
+          active: active?.tagName + ':' + active?.getAttribute('role') + ':' + active?.className,
+          menus: [...document.querySelectorAll('[role="menu"]')].map((menu) => ({
+            state: menu.getAttribute('data-state'), text: menu.textContent?.slice(0, 250),
+            visible: menu.getBoundingClientRect().height > 0
+          })),
+          files: window.__store?.getState().openFiles.map((file) => file.filePath)
+        })
+      }
+      for (const kind of ['pointerdown', 'pointerup', 'click', 'focusin']) {
+        document.addEventListener(kind, () => sample(kind), true)
+      }
+      const timer = setInterval(() => sample('tick'), 100)
+      setTimeout(() => clearInterval(timer), 12000)
+      Object.assign(window, { __markdownMenuProbe: events })
+      sample('start')
+    })
+
     const preExistingFileIds = await orcaPage.evaluate(
       () => window.__store?.getState().openFiles.map((file) => file.id) ?? []
     )
@@ -157,7 +181,13 @@ test.describe('Tabs', () => {
     await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
     const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
     await newMarkdownMenuItem.click()
-    await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
+    try {
+      await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
+    } finally {
+      console.log('MARKDOWN_MENU_PROBE', JSON.stringify(await orcaPage.evaluate(() =>
+        Reflect.get(window, '__markdownMenuProbe')
+      )))
+    }
 
     // Why: require an id that did not exist before the click, so an already-open
     // Markdown file can't satisfy the assertions (or be deleted by cleanup), and
