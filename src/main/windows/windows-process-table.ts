@@ -33,8 +33,13 @@ import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
  *
  * Dropping Memory removed the second per-process handle: it took an
  * OpenProcess(...|VM_READ) it never read through. CommandLine's own read is no
- * longer a PEB walk either -- the patched addon asks the kernel, so identity is
- * now the only flag set that opens nothing at all.
+ * longer a PEB walk either -- the patched addon asks the kernel.
+ *
+ * Both Toolhelp32 rows predate `CreationTime`, which both flag sets now also
+ * ask for and which is unmeasured here: it costs one
+ * OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) plus GetProcessTimes per
+ * process, so identity no longer opens nothing at all -- but that pair is far
+ * cheaper than either handle the rows above measure.
  *
  * All Toolhelp32 rows assume the optional `windows-process-tree.node` addon.
  * The desktop bundles it; no released relay carries it, so on an SSH host the
@@ -110,8 +115,13 @@ type WindowsProcessTreeAddon = {
  * Mirrors the package's enum; the addon takes the raw bit field. `Memory` (1)
  * is listed for completeness and is deliberately never set — see the projections
  * below.
+ *
+ * Why `CreationTime` can be named here rather than probed: the bare addon is a
+ * content-hashed relay artifact, so it ships in the same immutable relay
+ * directory as the bundle reading it and can never be an older build than the
+ * code asking for the bit.
  */
-const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2 } as const
+const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 } as const
 
 /** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */
 const RELAY_ADDON_FILENAME = './windows-process-tree.node'
@@ -492,9 +502,9 @@ export function isWindowsProcessTableAvailable(): boolean {
 
 /**
  * PID-reuse-safe ownership needs the native creation-time field, not merely a
- * process list. Older addon builds expose the table without that field; keep
- * structured ownership unavailable on those hosts instead of fabricating proof
- * from a PID.
+ * process list. An install whose pnpm patch never applied exposes the table
+ * without that field; keep structured ownership unavailable on those hosts
+ * instead of fabricating proof from a PID.
  */
 export function isWindowsProcessStartTimeAvailable(): boolean {
   const native = moduleLoader()

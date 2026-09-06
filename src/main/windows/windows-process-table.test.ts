@@ -695,7 +695,7 @@ describe('resolving the native reader', () => {
     expect(isWindowsProcessTableAvailable()).toBe(true)
   })
 
-  it('asks the addon for the command line, as the package path does', async () => {
+  it('asks the addon for the command line and creation time, as the package path does', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -704,13 +704,15 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessTableFresh()
-    // CommandLine alone: a bare snapshot would silently drop the command line
-    // every agent-recognition caller matches on first, and Memory would add a
-    // second per-process handle nothing reads.
-    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 2)
+    // Same flag set as the package path (6). Dropping CreationTime would strand
+    // the relay's own teardown on bare pids: every Windows descendant identity
+    // is a pid plus a creation time, so a table without one can never prove a
+    // tree exited. Memory stays off -- a second per-process handle nothing reads.
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 6)
+    expect(isWindowsProcessStartTimeAvailable()).toBe(true)
   })
 
-  it('asks the addon for nothing per-process on the identity path', async () => {
+  it('asks the addon for the creation time alone on the identity path', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -719,9 +721,9 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessIdentityTableFresh()
-    // The relay addon exposes no CreationTime bit, so this is a bare Toolhelp32
-    // walk: zero OpenProcess calls.
-    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 0)
+    // CreationTime (4) and nothing else: no CommandLine, so the only per-process
+    // handle is the PROCESS_QUERY_LIMITED_INFORMATION one GetProcessTimes needs.
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 4)
   })
 
   it('reaches the CIM scan when neither the package nor the addon is present', async () => {
