@@ -41,6 +41,7 @@ let runtime: OrcaRuntimeService
 let dispatcher: RpcDispatcher
 let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
 let requests = 0
+let structuredNativeChatEnabled = true
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -57,6 +58,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-hold-wire-'))
   resetHostTestOperationIds()
   requests = 0
+  structuredNativeChatEnabled = true
   closeSession = vi.fn(async () => true)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   host = new StructuredAgentSessionHost({
@@ -86,6 +88,13 @@ beforeEach(async () => {
   })
   setStructuredAgentSessionHost(host)
   runtime = new OrcaRuntimeService()
+  // The structured surface is settings-gated for every caller, in-process included.
+  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
+    () =>
+      ({ experimentalStructuredNativeChat: structuredNativeChatEnabled }) as ReturnType<
+        OrcaRuntimeService['getClientSettings']
+      >
+  )
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
   expect(await host.attach({ callerKey: 'client-1' }, hostTestAttachParams(null))).toMatchObject({
     ok: true
@@ -117,6 +126,23 @@ describe('a client that holds a session', () => {
       await call('agentSession.release', { sessionId: SESSION, holderId: 'chat-1' })
     ).toMatchObject({ ok: true })
 
+    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
+  })
+
+  it('releases its hold and cleanup after the setting is disabled', async () => {
+    const release = vi.spyOn(host, 'release')
+    await call('agentSession.hold', { sessionId: SESSION, holderId: 'chat-1' })
+    structuredNativeChatEnabled = false
+
+    expect(
+      await call('agentSession.release', { sessionId: SESSION, holderId: 'chat-1' })
+    ).toMatchObject({ ok: true })
+    const releaseCallsAfterRpc = release.mock.calls.length
+    runtime.cleanupSubscriptionsForConnection(CONNECTION)
+
+    expect(releaseCallsAfterRpc).toBe(2)
+    expect(release).toHaveBeenCalledTimes(releaseCallsAfterRpc)
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
     expect(closeSession).toHaveBeenCalledWith(SESSION)
   })
@@ -208,6 +234,31 @@ describe('a client that disappears without cleanup', () => {
     expect(host.isHeld(SESSION)).toBe(true)
 
     transport.abort()
+
+    await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
+    expect(closeSession).toHaveBeenCalledWith(SESSION)
+  })
+
+  it('unsubscribes and releases stream retention after the setting is disabled', async () => {
+    await dispatcher.dispatchStreaming(
+      {
+        id: 'stream-disabled-cleanup',
+        authToken: 'token',
+        method: 'agentSession.subscribe',
+        params: { sessionId: SESSION }
+      },
+      () => {},
+      CLIENT
+    )
+    expect(host.isHeld(SESSION)).toBe(true)
+    structuredNativeChatEnabled = false
+
+    expect(
+      await call('agentSession.unsubscribe', {
+        sessionId: SESSION,
+        subscriptionId: 'stream-disabled-cleanup'
+      })
+    ).toMatchObject({ ok: true })
 
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
     expect(closeSession).toHaveBeenCalledWith(SESSION)

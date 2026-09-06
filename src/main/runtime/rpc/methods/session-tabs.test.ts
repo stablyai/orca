@@ -4,6 +4,7 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { SESSION_TAB_METHODS } from './session-tabs'
+import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -816,27 +817,3 @@ describe('session tab RPC methods', () => {
     )
   })
 })
-
-function visibleSnapshot() {
-  return {
-    worktree: 'wt-1',
-    publicationEpoch: 'epoch-1',
-    snapshotVersion: 1,
-    activeGroupId: 'group-1',
-    activeTabId: 'tab-1::leaf-1',
-    activeTabType: 'terminal' as const,
-    tabGroups: [{ id: 'group-1', activeTabId: 'tab-1', tabOrder: ['tab-1'] }],
-    tabs: [
-      {
-        type: 'terminal' as const,
-        id: 'tab-1::leaf-1',
-        parentTabId: 'tab-1',
-        leafId: 'leaf-1',
-        title: 'Terminal',
-        status: 'ready' as const,
-        terminal: 'pty-1',
-        isActive: true
-      }
-    ]
-  }
-}

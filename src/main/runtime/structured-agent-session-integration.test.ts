@@ -290,6 +290,7 @@ beforeEach(async () => {
   configuredCodexProfile = 'configured'
   const runtime = {
     getRuntimeId: () => 'runtime-1',
+    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {

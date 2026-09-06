@@ -12,7 +12,10 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
-import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
+import {
+  supportsStructuredAgentSessionCapability,
+  supportsStructuredAgentSessions
+} from './structured-agent-session-policy'
 
 /**
  * In-process callers are the same build as the host, so they carry no negotiated
@@ -30,6 +33,39 @@ export function requireStructuredCapability(ctx: RpcContext): void {
 
 export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHost {
   requireStructuredCapability(ctx)
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('structured_agent_session_unsupported')
+  }
+  return host
+}
+
+/**
+ * WHICH GATE DOES A NEW `agentSession.*` METHOD GET?
+ *
+ * The host setting is admission control, and admission can be revoked while sessions are still
+ * open. So the surface splits by what a method does to work in flight, not by how dangerous it
+ * sounds:
+ *
+ *   - Starts, extends, retains or reads work -> `requireStructuredHost`. Revoked admission means
+ *     no new turns, no new holds, no new reads. create, send, ensure, setOption, requestHandoff,
+ *     subscribe, hold, reveal, history, options and the status stream all live here.
+ *   - Stops or retires work the caller already owns -> `requireStructuredCleanupHost`. close,
+ *     cancel, unsubscribe and release live here.
+ *
+ * Cleanup keeps working after the setting is turned off because the alternative strands the user:
+ * a session opened while the setting was on stays open, and refusing its close leaves a chat with
+ * a live provider child that its own owner can no longer shut down. Stopping is never the thing
+ * the policy exists to prevent.
+ *
+ * Cleanup is not an escape hatch. It still demands the negotiated wire capability, so a client
+ * that never advertised the surface still cannot see it, and it never creates a host — it can
+ * only retire what already exists.
+ */
+export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
+  if (!supportsStructuredAgentSessionCapability(ctx)) {
+    throw new Error('structured_agent_session_unsupported')
+  }
   const host = getStructuredAgentSessionHost()
   if (!host) {
     throw new Error('structured_agent_session_unsupported')

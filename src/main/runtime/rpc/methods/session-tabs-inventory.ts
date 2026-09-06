@@ -28,7 +28,7 @@ export function projectSessionTabsForClient(
   snapshot: RuntimeMobileSessionTabsResult,
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2],
-  structuredNativeChatEnabled?: boolean
+  structuredNativeChatEnabled: boolean
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
     projectSessionTabAgentStatus(
@@ -41,12 +41,6 @@ export function projectSessionTabsForClient(
   )
 }
 
-function structuredNativeChatEnabledForContext(context: RpcContext): boolean | undefined {
-  return context.clientKind === 'mobile'
-    ? isStructuredNativeChatEnabled(context.runtime)
-    : undefined
-}
-
 function projectInventory(
   inventory: SessionTabsInventory,
   context: RpcContext
@@ -57,7 +51,7 @@ function projectInventory(
         snapshot,
         context.clientKind,
         context.clientCapabilities,
-        structuredNativeChatEnabledForContext(context)
+        isStructuredNativeChatEnabled(context.runtime)
       )
     ),
     ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
@@ -128,7 +122,7 @@ export async function subscribeSessionTabsInventory(
       snapshot,
       context.clientKind,
       context.clientCapabilities,
-      structuredNativeChatEnabledForContext(context)
+      isStructuredNativeChatEnabled(context.runtime)
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {

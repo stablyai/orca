@@ -12,6 +12,7 @@
 import { defineMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled,
+  requireStructuredCleanupHost,
   requireStructuredHost
 } from './structured-agent-session-gate'
 import { HoldParams } from './structured-agent-session-schemas'
@@ -53,7 +54,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.release',
     params: HoldParams,
     handler: async (params, ctx) => {
-      const host = requireStructuredHost(ctx)
+      const host = requireStructuredCleanupHost(ctx)
       const holderKey = holderKeyFor(ctx, params.holderId)
       host.release(params.sessionId, holderKey)
       // Retires the backstop too; its release is a no-op against a holder already gone.

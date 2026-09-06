@@ -21,9 +21,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           raw,
           context.clientKind,
           context.clientCapabilities,
-          context.clientKind === 'mobile'
-            ? isStructuredNativeChatEnabled(context.runtime)
-            : undefined
+          isStructuredNativeChatEnabled(context.runtime)
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
@@ -100,9 +98,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           raw,
           context.clientKind,
           context.clientCapabilities,
-          context.clientKind === 'mobile'
-            ? isStructuredNativeChatEnabled(context.runtime)
-            : undefined
+          isStructuredNativeChatEnabled(context.runtime)
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
