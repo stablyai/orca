@@ -618,62 +618,85 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.tabsByWorktree?.[WT]?.[0]?.title).toBe('gal@host: ~/dev')
   })
 
-  it('retains the exact prior pane binding while a mirrored surface is pending', () => {
-    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
-    const priorPtyId = 'remote:web-env-1@@terminal-1'
-    const existingTab: TerminalTab = {
-      id: mirroredId,
-      ptyId: priorPtyId,
-      worktreeId: WT,
-      title: 'host shell',
-      defaultTitle: 'host shell',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: NOW
-    }
-
-    const state = makeState({
-      tabsByWorktree: { [WT]: [existingTab] },
-      ptyIdsByTabId: { [mirroredId]: [priorPtyId] },
-      terminalLayoutsByTabId: {
-        [mirroredId]: {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: priorPtyId }
-        }
+  it.each([
+    { name: 'no retirement proof', retiredHandle: null, keepBinding: true },
+    { name: 'another handle retired', retiredHandle: 'terminal-other', keepBinding: true },
+    { name: 'the prior handle retired', retiredHandle: 'terminal-1', keepBinding: false }
+  ])(
+    'keeps a pending pane binding with $name only when allowed',
+    ({ retiredHandle, keepBinding }) => {
+      const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+      const priorPtyId = 'remote:web-env-1@@terminal-1'
+      const existingTab: TerminalTab = {
+        id: mirroredId,
+        ptyId: priorPtyId,
+        worktreeId: WT,
+        title: 'host shell',
+        defaultTitle: 'host shell',
+        customTitle: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: NOW
       }
-    })
-    const patch = applyWebSessionTabsSnapshot(
-      state,
-      makeSnapshot([
-        {
-          type: 'terminal',
-          id: HOST_SURFACE_ID,
-          title: 'reconnecting shell',
-          parentTabId: 'host-tab-1',
-          leafId: LEAF_ID,
-          isActive: true,
-          status: 'pending-handle',
-          terminal: null
+
+      const state = makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [mirroredId]: [priorPtyId] },
+        terminalLayoutsByTabId: {
+          [mirroredId]: {
+            root: { type: 'leaf', leafId: LEAF_ID },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [LEAF_ID]: priorPtyId }
+          }
         }
-      ]),
-      ENV,
-      NOW + 1
-    ) as Partial<WebSessionTabsSyncState>
+      })
+      const patch = applyWebSessionTabsSnapshot(
+        state,
+        makeSnapshot(
+          [
+            {
+              type: 'terminal',
+              id: HOST_SURFACE_ID,
+              title: 'reconnecting shell',
+              parentTabId: 'host-tab-1',
+              leafId: LEAF_ID,
+              isActive: true,
+              status: 'pending-handle',
+              terminal: null
+            }
+          ],
+          {
+            retiredTerminalSurfaces: retiredHandle
+              ? [
+                  {
+                    parentTabId: 'host-tab-1',
+                    leafId: LEAF_ID,
+                    terminal: retiredHandle,
+                    ptyId: 'retired-pty',
+                    incarnationId: 'retired-incarnation'
+                  }
+                ]
+              : []
+          }
+        ),
+        ENV,
+        NOW + 1
+      ) as Partial<WebSessionTabsSyncState>
 
-    const nextState = { ...state, ...patch } as WebSessionTabsSyncState
+      const nextState = { ...state, ...patch } as WebSessionTabsSyncState
 
-    expect(nextState.tabsByWorktree?.[WT]?.[0]).toMatchObject({
-      id: mirroredId,
-      ptyId: priorPtyId,
-      title: 'reconnecting shell'
-    })
-    expect(nextState.terminalLayoutsByTabId?.[mirroredId]?.ptyIdsByLeafId).toEqual({
-      [LEAF_ID]: priorPtyId
-    })
-  })
+      expect(nextState.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+        id: mirroredId,
+        ptyId: keepBinding ? priorPtyId : null,
+        title: 'reconnecting shell'
+      })
+      expect(nextState.terminalLayoutsByTabId?.[mirroredId]?.ptyIdsByLeafId).toEqual(
+        keepBinding ? { [LEAF_ID]: priorPtyId } : {}
+      )
+      expect(nextState.ptyIdsByTabId[mirroredId]).toEqual(keepBinding ? [priorPtyId] : undefined)
+    }
+  )
 
   it('retains only matching-environment pending bindings and never invents a sibling binding', () => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')

@@ -85,6 +85,15 @@ describe('web session terminal orphan adoption regressions', () => {
           ])
         }
       }
+      if (method === 'session.tabs.list') {
+        return {
+          ok: true as const,
+          result: {
+            ...snapshot,
+            tabs: [pendingSurface('host-tab', 'leaf-1', 'pty-live', 'term-live')]
+          }
+        }
+      }
       adoptionAttempts += 1
       if (adoptionAttempts === 1) {
         throw new Error('Remote runtime connection closed')
@@ -144,6 +153,15 @@ describe('web session terminal orphan adoption regressions', () => {
               orphaned: true
             }
           ])
+        }
+      }
+      if (method === 'session.tabs.list') {
+        return {
+          ok: true as const,
+          result: {
+            ...snapshot,
+            tabs: [pendingSurface('host-tab', 'leaf-1', 'pty-live', 'term-live')]
+          }
         }
       }
       adoptionAttempts += 1
@@ -262,6 +280,9 @@ describe('web session terminal orphan adoption regressions', () => {
           ])
         }
       }
+      if (method === 'session.tabs.list') {
+        return { ok: true as const, result: newerSnapshot }
+      }
       adoptionAttempts += 1
       if (adoptionAttempts === 1) {
         throw new Error('adoption unavailable')
@@ -292,7 +313,7 @@ describe('web session terminal orphan adoption regressions', () => {
       { call: call as never }
     )
 
-    expect(call).toHaveBeenCalledTimes(6)
+    expect(call).toHaveBeenCalledTimes(8)
     expect(adoptionAttempts).toBe(3)
     expect(recovered?.tabs).toEqual(
       expect.arrayContaining([
@@ -300,6 +321,170 @@ describe('web session terminal orphan adoption regressions', () => {
       ])
     )
   })
+
+  it.each([
+    'rpc-error',
+    'throw',
+    'invalid-snapshot',
+    'wrong-worktree',
+    'runtime-changed',
+    'runtime-missing',
+    'runtime-changed-without-frame-id'
+  ])('retains the client epoch and retries when the post-adoption list has %s', async (failure) => {
+    const worktree = 'folder:post-adoption-list'
+    const leaves = [{ leafId: 'leaf-1', handle: 'term-live' }]
+    const state = makeState(worktree, leaves)
+    const snapshot = makeSnapshot(worktree, 'renderer:host:client-navigation', leaves)
+    const adopted: RuntimeMobileSessionTabsResult = {
+      ...snapshot,
+      publicationEpoch: 'renderer:host',
+      snapshotVersion: 2,
+      tabs: [pendingSurface('host-tab', 'leaf-1', 'pty-live', 'term-live')]
+    }
+    const projected = { ...adopted, publicationEpoch: snapshot.publicationEpoch }
+    let listAttempts = 0
+    const call = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'terminal.list') {
+        return {
+          ok: true,
+          result: listResult(worktree, [
+            {
+              handle: 'term-live',
+              ptyId: 'pty-live',
+              incarnationId: 'inc-live',
+              orphaned: true
+            }
+          ])
+        }
+      }
+      if (method === 'terminal.adoptOrphans') {
+        return {
+          ok: true,
+          result: { adopted: true, topologyRevision: 8, snapshot: adopted },
+          _meta: { runtimeId: 'origin-runtime' }
+        }
+      }
+      expect(method).toBe('session.tabs.list')
+      listAttempts += 1
+      if (listAttempts > 1) {
+        return { ok: true, result: projected, _meta: { runtimeId: 'origin-runtime' } }
+      }
+      if (failure === 'throw') {
+        throw new Error('Remote runtime connection closed')
+      }
+      if (failure === 'rpc-error') {
+        return { ok: false, error: { code: 'unavailable', message: 'unavailable' } }
+      }
+      if (failure.startsWith('runtime-')) {
+        return {
+          ok: true,
+          result: projected,
+          ...(failure === 'runtime-missing' ? {} : { _meta: { runtimeId: 'replacement-runtime' } })
+        }
+      }
+      return {
+        ok: true,
+        _meta: { runtimeId: 'origin-runtime' },
+        result:
+          failure === 'wrong-worktree'
+            ? { ...projected, worktree: 'folder:other-host-workspace' }
+            : { ...projected, tabs: [null] }
+      }
+    })
+
+    const options = {
+      call: call as never,
+      expectedRuntimeId:
+        failure === 'runtime-changed-without-frame-id' ? undefined : 'origin-runtime'
+    }
+    const retained = await recoverWebSessionTerminalOrphansBeforeApply(
+      state,
+      snapshot,
+      ENVIRONMENT_ID,
+      options
+    )
+    expect(retained).toMatchObject({
+      publicationEpoch: snapshot.publicationEpoch,
+      snapshotVersion: snapshot.snapshotVersion,
+      tabs: [expect.objectContaining({ terminal: 'term-live', status: 'ready' })]
+    })
+    await expect(
+      recoverWebSessionTerminalOrphansBeforeApply(state, snapshot, ENVIRONMENT_ID, options)
+    ).resolves.toEqual(projected)
+    expect(listAttempts).toBe(2)
+  })
+
+  it.each(['retired', 'rebound', 'pending-replacement'])(
+    'honors fresh %s sibling state from the post-adoption list',
+    async (verdict) => {
+      const worktree = 'folder:post-adoption-sibling'
+      const leaves = [
+        { leafId: 'leaf-claim', handle: 'term-claim' },
+        { leafId: 'leaf-hold', handle: 'term-hold' }
+      ]
+      const state = makeState(worktree, leaves)
+      const snapshot: RuntimeMobileSessionTabsResult = {
+        ...makeSnapshot(worktree, 'renderer:host:client-navigation', leaves),
+        tabs: [
+          pendingSurface('host-tab', 'leaf-claim', 'pty-claim'),
+          pendingSurface('host-tab', 'leaf-hold', 'pty-hold')
+        ]
+      }
+      const adopted: RuntimeMobileSessionTabsResult = {
+        ...snapshot,
+        publicationEpoch: 'renderer:host',
+        snapshotVersion: 2,
+        tabs: [pendingSurface('host-tab', 'leaf-claim', 'pty-claim', 'term-claim')]
+      }
+      const projected: RuntimeMobileSessionTabsResult = {
+        ...adopted,
+        publicationEpoch: snapshot.publicationEpoch,
+        snapshotVersion: 3,
+        tabs:
+          verdict === 'rebound'
+            ? [...adopted.tabs, pendingSurface('host-tab', 'leaf-hold', 'pty-new', 'term-new')]
+            : verdict === 'pending-replacement'
+              ? [...adopted.tabs, pendingSurface('host-tab', 'leaf-hold', 'pty-new')]
+              : adopted.tabs,
+        retiredTerminalSurfaces:
+          verdict !== 'rebound'
+            ? [
+                {
+                  parentTabId: 'host-tab',
+                  leafId: 'leaf-hold',
+                  terminal: 'term-hold',
+                  ptyId: 'pty-hold',
+                  incarnationId: 'inc-hold'
+                }
+              ]
+            : []
+      }
+      const call = vi.fn(async ({ method }: { method: string }) => {
+        if (method === 'terminal.list') {
+          return {
+            ok: true,
+            result: listResult(worktree, [
+              {
+                handle: 'term-claim',
+                ptyId: 'pty-claim',
+                incarnationId: 'inc-claim',
+                orphaned: true
+              }
+            ])
+          }
+        }
+        if (method === 'terminal.adoptOrphans') {
+          return { ok: true, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
+        }
+        return { ok: true, result: projected }
+      })
+      await expect(
+        recoverWebSessionTerminalOrphansBeforeApply(state, snapshot, ENVIRONMENT_ID, {
+          call: call as never
+        })
+      ).resolves.toEqual(projected)
+    }
+  )
 
   it('does not apply an adoption result after the local tab closes while adoption is blocked', async () => {
     const worktree = 'repo::local-close-during-adoption'

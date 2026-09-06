@@ -101,6 +101,7 @@ export function handleGlobalSessionInventoryEvent({
             environmentId,
             {
               expectedEnvironmentPairingRevision,
+              expectedRuntimeId: runtimeId,
               getCurrentState: () => useAppStore.getState()
             }
           )
