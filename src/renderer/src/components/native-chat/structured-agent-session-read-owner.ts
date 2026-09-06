@@ -16,6 +16,7 @@ import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import { structuredAgentSessionErrorMessage } from './structured-agent-session-error-message'
 
 export type StructuredAgentSessionReadSnapshot = {
   state: StructuredAgentSessionState
@@ -231,7 +232,7 @@ function createReadOwner(
         }
       } catch (error) {
         if (!shouldStop()) {
-          apply({ type: 'error', message: String(error) })
+          apply({ type: 'error', message: structuredAgentSessionErrorMessage(error) })
         }
       } finally {
         if (!shouldStop()) {
