@@ -260,6 +260,14 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       },
       onBackgroundTasksChanged: (sessionId, state) =>
         host?.publishBackgroundTaskState(sessionId, state),
+      onDispatchSettledLate: (settlement) => {
+        void host?.settleLateDispatch(settlement).catch((error) =>
+          deps.onError?.({
+            scope: `structured-agent-session-late-settlement:${settlement.sessionId}`,
+            error
+          })
+        )
+      },
       ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
     })

@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
+} from '../../shared/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   claudeHasReplayContent,
@@ -14,9 +17,16 @@ import {
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
 
+/** A dispatch whose ack window expired, proven delivered by this replay. */
+export type ClaudeLateDispatchSettlement = (input: {
+  clientMessageId: string
+  providerIdentity: AgentJournalItemIdentity
+}) => void
+
 export function resolveClaudeReplayWaiter(
   session: ClaudeSession,
-  message: Record<string, unknown>
+  message: Record<string, unknown>,
+  onSettledLate?: ClaudeLateDispatchSettlement
 ): boolean {
   const envelope = readClaudeMessageEnvelope(message)
   const isUserReplay =
@@ -52,7 +62,7 @@ export function resolveClaudeReplayWaiter(
     )
     if (retired) {
       forgetRetiredWaiter(session, retired)
-      return recoverLateIdentity(session, retired, uuid, isUserReplay)
+      return recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
     }
     return false
   }
@@ -65,7 +75,7 @@ export function resolveClaudeReplayWaiter(
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (retired) {
     forgetRetiredWaiter(session, retired)
-    return recoverLateIdentity(session, retired, uuid, isUserReplay)
+    return recoverLateIdentity(session, retired, uuid, isUserReplay, onSettledLate)
   }
 
   if (isUserReplay) {
@@ -89,7 +99,7 @@ export function resolveClaudeReplayWaiter(
       if (lateCompatible.length === 1) {
         const [candidate] = lateCompatible
         forgetRetiredWaiter(session, candidate!)
-        return recoverLateIdentity(session, candidate!, uuid, true)
+        return recoverLateIdentity(session, candidate!, uuid, true, onSettledLate)
       }
     }
     return false
@@ -138,11 +148,19 @@ function recoverLateIdentity(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
   uuid: string,
-  isUserReplay: boolean
+  isUserReplay: boolean,
+  onSettledLate?: ClaudeLateDispatchSettlement
 ): boolean {
   if (!isUserReplay && !waiter.acceptsResult) {
     return false
   }
+  // The provider acted on this dispatch, so the send it came from is delivered.
+  // Unfenced on purpose: the dispatch-sequence check below only decides which
+  // turn owns the identity, while delivery is settled for good either way.
+  onSettledLate?.({
+    clientMessageId: waiter.clientMessageId,
+    providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+  })
   if (waiter.dispatchSequence === session.dispatchSequence) {
     session.activeTurnId = uuid
     session.activeTurnSequence = waiter.dispatchSequence
@@ -155,12 +173,14 @@ function waitForReplay(
   timeoutMs: number,
   acceptsResult: boolean,
   sentUuid: string,
-  replayContentKey: string
+  replayContentKey: string,
+  clientMessageId: string
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
     waiter = {
       acceptsResult,
+      clientMessageId,
       sentUuid,
       dispatchSequence: session.dispatchSequence,
       replayContentKey,
@@ -220,7 +240,8 @@ export async function dispatchClaudeTurn(
     timeoutMs,
     acceptsResult,
     sentUuid,
-    claudeDispatchContentKey(content)
+    claudeDispatchContentKey(content),
+    input.clientMessageId
   )
   const replayed = replay.promise
   try {
