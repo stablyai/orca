@@ -25,6 +25,7 @@ export default function DiffViewer({
   originalContent,
   modifiedContent,
   relativePath,
+  language,
   sideBySide,
   editable,
   worktreeId,
@@ -252,6 +253,7 @@ export default function DiffViewer({
               collapseUnchanged={false}
               worktreeId={worktreeId ?? ''}
               filePath={relativePath}
+              language={language}
               comments={comments}
               onDeleteComment={handleDeleteComment}
               onUpdateComment={handleUpdateComment}

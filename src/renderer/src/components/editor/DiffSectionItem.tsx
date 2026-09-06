@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PostRenderPhase } from '@pierre/diffs'
+import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
@@ -220,6 +221,7 @@ export function DiffSectionItem({
         collapseUnchanged
         worktreeId={worktreeId ?? ''}
         filePath={section.path}
+        language={detectLanguage(section.path)}
         comments={comments}
         onDeleteComment={handleDeleteComment}
         onUpdateComment={handleUpdateComment}

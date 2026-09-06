@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { FileDiff } from '@pierre/diffs/react'
 import type { FileDiffMetadata, PostRenderPhase, SelectedLineRange } from '@pierre/diffs'
 import type { FileContents } from '@pierre/diffs'
@@ -15,6 +15,7 @@ import {
   type PierreDiffCommentAnnotation
 } from './pierre-diff-comment-annotations'
 import { usePierreDiffFind } from './use-pierre-diff-find'
+import { installPierreContextualCopy } from './pierre-diff-context-copy'
 
 export type PierreDiffSurfaceProps = {
   fileDiff: FileDiffMetadata
@@ -31,6 +32,8 @@ export type PierreDiffSurfaceProps = {
   onUpdateComment?: (commentId: string, body: string) => Promise<boolean>
   /** Live document stream while an edit session is active. */
   onEditChange?: (file: FileContents) => void
+  /** Language id for copy-with-context; omit to disable that shortcut. */
+  language?: string
   /** Fires on Pierre's DOM lifecycle; used for height measurement. */
   onPostRender?: (node: HTMLElement, phase: PostRenderPhase) => void
   /** Gutter affordance for starting a note; omit to hide it. */
@@ -60,6 +63,7 @@ export function PierreDiffSurface({
   formatCommentPrompt,
   onDeleteComment,
   onUpdateComment,
+  language,
   onEditChange,
   onPostRender,
   onAddComment,
@@ -78,6 +82,17 @@ export function PierreDiffSurface({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { editEnabled, handleContainerKeyDown, handleContainerBlur, handleEditorAttach } =
     usePierreDiffFind({ isEditable, containerRef })
+
+  // Why: Monaco's diff panes owned `editor.copyContext`; restore it for Pierre rows.
+  const fileInfoRef = useRef({ relativePath: filePath, language: language ?? '' })
+  fileInfoRef.current = { relativePath: filePath, language: language ?? '' }
+  useEffect(() => {
+    const node = containerRef.current
+    if (!node) {
+      return
+    }
+    return installPierreContextualCopy(node, () => fileInfoRef.current)
+  }, [])
 
   const options = useMemo(
     () => ({
@@ -155,8 +170,18 @@ export function PierreDiffSurface({
 
   return (
     // Why: ⌘F must be caught before Pierre mounts an editor, so the listener lives on the host.
+    // Why tabIndex: Monaco's editor could hold focus, so the shortcut reached it. A plain div
+    // cannot, and a read-only diff has no contenteditable, so focus would sit on <body> and the
+    // handler would never fire. Focus on pointer-down makes the diff the key target like before.
     <div
+      ref={containerRef}
+      tabIndex={-1}
       className={className}
+      onMouseDown={(event) => {
+        if (!event.currentTarget.contains(document.activeElement)) {
+          event.currentTarget.focus({ preventScroll: true })
+        }
+      }}
       onKeyDownCapture={handleContainerKeyDown}
       onBlur={handleContainerBlur}
     >
