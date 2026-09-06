@@ -2580,11 +2580,21 @@
           },
           "ProjectPickerPanels": {
             "04ec212ccb": "Roadmap",
-            "9fe1ac868c": "Unsupported"
+            "9fe1ac868c": "Unsupported",
+            "96d5236d02": "Board"
           },
           "ProjectViewStates": {
             "ac83c45672": "Switch to a Table or Roadmap view to work with this project in Orca.",
-            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet."
+            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet.",
+            "3b96fb68cf": "Switch to a Table, Board, or Roadmap view to work with this project in Orca.",
+            "f43574ae9e": "Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet."
+          },
+          "ProjectBoard": {
+            "61a5e74e8a": "This board view has no single-select or iteration field to group by, so Orca is listing items instead."
+          },
+          "ProjectBoardCard": {
+            "aa5cdf1345": "Restricted item",
+            "325bbbf366": "{{value0}} — {{value1}}"
           }
         },
         "GitHubMarkdownComposer": {

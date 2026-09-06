@@ -88,6 +88,10 @@ export type GitHubProjectView = {
   fields: GitHubProjectField[]
   groupByFields: GitHubProjectField[]
   sortByFields: GitHubProjectSort[]
+  /** Board-layout column field(s). Optional for wire compat — older hosts
+   *  don't send it, and hosts fall back to omitting it when the GraphQL
+   *  schema lacks `verticalGroupByFields` (older GHES). */
+  verticalGroupByFields?: GitHubProjectField[]
 }
 
 export type GitHubProjectUser = {
