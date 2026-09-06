@@ -133,13 +133,21 @@ export function queueTerminalLiveMirrorSend(
   handle: string,
   payload: string,
   sender: TerminalLiveMirrorSender,
-  options: { pipeline?: boolean; barrier?: boolean } = {}
+  options: {
+    pipeline?: boolean
+    barrier?: boolean
+    onAdmitted?: () => void
+    reservedBytes?: number
+  } = {}
 ): Promise<boolean> {
   if (state.failed) {
     return Promise.resolve(false)
   }
-  const bytes =
-    payload.length > TERMINAL_LIVE_INPUT_MAX_BYTES ? Infinity : encoder.encode(payload).byteLength
+  const reservation = options.reservedBytes ?? 0
+  const bytes = Math.max(
+    payload.length > TERMINAL_LIVE_INPUT_MAX_BYTES ? Infinity : encoder.encode(payload).byteLength,
+    Number.isSafeInteger(reservation) && reservation >= 0 ? reservation : Infinity
+  )
   if (
     bytes > TERMINAL_LIVE_INPUT_MAX_BYTES ||
     state.retainedBytes + bytes > MAX_PENDING_BYTES ||
@@ -184,6 +192,11 @@ export function queueTerminalLiveMirrorSend(
     state.current = new Promise<boolean>((resolve) => {
       state.finish = resolve
     })
+  }
+  try {
+    options.onAdmitted?.()
+  } catch {
+    state.failed = true
   }
   pumpMirrorSends(state)
   return request

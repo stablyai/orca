@@ -271,7 +271,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         send
           ? () => (isCurrent() ? send(isCurrent) : Promise.resolve(false))
           : sendQueuedMirrorPayload,
-        { barrier: true }
+        { barrier: true, onAdmitted: options?.onAdmitted, reservedBytes: options?.reservedBytes }
       ).then((sent) => {
         if (!sent && isCurrent() && pendingLiveInputFlushRef.current.failed) {
           reportFailure?.()

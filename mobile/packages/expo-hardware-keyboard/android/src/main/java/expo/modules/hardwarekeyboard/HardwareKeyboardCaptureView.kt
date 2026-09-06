@@ -30,18 +30,24 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
   var captureMode: String = "terminal"
   var submitWithPrimaryModifier: Boolean = false
   var nativeFieldBoundaries: Boolean = false
+  var hardwarePaste: Boolean = false
   private val capturedKeys = mutableSetOf<Pair<Int, Int>>()
+  private val capturedPasteKeys = mutableSetOf<Pair<Int, Int>>()
 
   // Yoga owns child bounds; LinearLayout would collapse the hidden input after its siblings.
   override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) = Unit
 
   override fun onDetachedFromWindow() {
     capturedKeys.clear()
+    capturedPasteKeys.clear()
     super.onDetachedFromWindow()
   }
 
   override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
-    if (!hasWindowFocus) capturedKeys.clear()
+    if (!hasWindowFocus) {
+      capturedKeys.clear()
+      capturedPasteKeys.clear()
+    }
     super.onWindowFocusChanged(hasWindowFocus)
   }
 
@@ -61,11 +67,17 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
 
   private fun captureKeyEvent(event: KeyEvent, fallback: () -> Boolean): Boolean {
     val identity = event.deviceId to event.keyCode
+    if (event.action == KeyEvent.ACTION_UP) capturedPasteKeys.remove(identity)
+    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0 &&
+      identity in capturedPasteKeys) return true
     if (event.action == KeyEvent.ACTION_UP && capturedKeys.remove(identity)) {
       return true
     }
     // A fresh down supersedes a release lost during device or focus changes.
-    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) capturedKeys.remove(identity)
+    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+      capturedKeys.remove(identity)
+      capturedPasteKeys.remove(identity)
+    }
     if (!captureEnabled || event.action != KeyEvent.ACTION_DOWN || !isPhysicalKeyboardEvent(event)) {
       return fallback()
     }
@@ -125,7 +137,10 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
       return fallback()
     }
 
-    val key = canonicalKey(event) ?: return fallback()
+    val paste = hardwarePaste && nativeFieldBoundaries && captureMode == "terminal" &&
+      event.keyCode == KeyEvent.KEYCODE_V && event.hasModifiers(KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON)
+    if (paste && repeat) return identity in capturedKeys || fallback()
+    val key = if (paste) "Paste" else canonicalKey(event) ?: return fallback()
     if (nativeFieldBoundaries && !ctrl && !alt && !shift &&
       (key == "Backspace" || key == "Delete") && input.text.isNotEmpty()) return fallback()
     val isSpecial = isTerminalSpecialKey(key)
@@ -137,7 +152,7 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     val isCtrlPrintable =
       ctrl && !isAlternateLayoutPrintable && key.length == 1 && key[0] in '!'..'~'
 
-    if (!isSpecial && !isCtrlPrintable) {
+    if (!paste && !isSpecial && !isCtrlPrintable) {
       return fallback()
     }
 
@@ -157,6 +172,7 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
         ?: return fallback()
       capturedKeys.add(identity)
       val text = input.text.toString()
+      if (paste) capturedPasteKeys.add(identity)
       val count = input.incrementAndGetEventCounter()
       input.maybeSetTextFromJS(ReactTextUpdate(
         SpannableStringBuilder(""), count, false, input.gravity, input.breakStrategy,

@@ -34,7 +34,8 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer.test.ts src/shared/runtime-rpc-call-queue.test.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
         "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/transport/terminal-ordered-input-history.test.ts mobile/src/transport/logical-terminal-stream-input-history.test.ts",
-        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/terminal/use-terminal-live-input-commit.test.ts mobile/src/terminal/terminal-live-control-barrier.test.ts mobile/src/session/mobile-attachment-retained-blur.test.ts mobile/src/hardware-keyboard/hardware-keyboard-field-boundary-compatibility.test.ts"
+        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/terminal/use-terminal-live-input-commit.test.ts mobile/src/terminal/terminal-live-control-barrier.test.ts mobile/src/session/mobile-attachment-retained-blur.test.ts mobile/src/hardware-keyboard/hardware-keyboard-field-boundary-compatibility.test.ts",
+        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/session/mobile-terminal-paste-control-order.test.ts mobile/src/session/mobile-terminal-clipboard-admission.test.ts mobile/src/hardware-keyboard/hardware-keyboard-paste-compatibility.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/runtime-terminal-writer.test.ts",
@@ -45,7 +46,10 @@
         "mobile/src/terminal/use-terminal-live-input-commit.test.ts",
         "mobile/src/terminal/terminal-live-control-barrier.test.ts",
         "mobile/src/session/mobile-attachment-retained-blur.test.ts",
-        "mobile/src/hardware-keyboard/hardware-keyboard-field-boundary-compatibility.test.ts"
+        "mobile/src/hardware-keyboard/hardware-keyboard-field-boundary-compatibility.test.ts",
+        "mobile/src/session/mobile-terminal-paste-control-order.test.ts",
+        "mobile/src/session/mobile-terminal-clipboard-admission.test.ts",
+        "mobile/src/hardware-keyboard/hardware-keyboard-paste-compatibility.test.ts"
       ],
       "assertionRefs": [
         {
@@ -83,7 +87,20 @@
             "ignores stale native text after a native-owned control boundary",
             "preserves legitimate retyping of the same prefix after a native reset",
             "ends a native-reset baseline even when the control has no terminal mapping",
-            "preserves Alt+Enter terminal bytes across a native reset"
+            "preserves Alt+Enter terminal bytes across a native reset",
+            "orders an external paste boundary before new typing without replaying stale text"
+          ]
+        },
+        {
+          "file": "mobile/src/session/mobile-terminal-paste-control-order.test.ts",
+          "assertions": [
+            "reserves a paste before a following Enter while clipboard reading is unresolved"
+          ]
+        },
+        {
+          "file": "mobile/src/session/mobile-terminal-clipboard-admission.test.ts",
+          "assertions": [
+            "keeps image preparation permits until cancelled native reads actually settle"
           ]
         }
       ],

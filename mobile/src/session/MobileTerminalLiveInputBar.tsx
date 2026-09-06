@@ -50,15 +50,26 @@ export function MobileTerminalLiveInputBar({
     dismissKeyboardAfterAgentSend
   } = controller
   const canSend = connectionCanSend && !controller.terminalInputFailure
+  const handleHardwareKey = (event: HardwareKeyboardKeyEvent) => {
+    if (!canSend || !routeFocused) {
+      return
+    }
+    if (Platform.OS === 'android' && event.key === 'Paste' && event.fieldBoundary) {
+      if (!event.repeat) {
+        void controller.handlePaste({ fieldBoundary: event.fieldBoundary })
+      }
+    } else {
+      handleLiveInputHardwareKey(event)
+    }
+  }
   return (
     <HardwareKeyboardCaptureView
       nativeFieldBoundaries={Platform.OS === 'android'}
+      hardwarePaste={Platform.OS === 'android'}
       style={[styles.inputBar, styles.liveInputBar]}
       enabled={canSend && routeFocused}
       onHardwareKey={({ nativeEvent }) => {
-        if (canSend && routeFocused) {
-          handleLiveInputHardwareKey(nativeEvent)
-        }
+        handleHardwareKey(nativeEvent)
       }}
     >
       <Pressable
@@ -107,9 +118,7 @@ export function MobileTerminalLiveInputBar({
             }
           ).hardwareKey
           if (hardwareKey) {
-            if (canSend && routeFocused) {
-              handleLiveInputHardwareKey(hardwareKey)
-            }
+            handleHardwareKey(hardwareKey)
           } else {
             handleLiveInputChange(event)
           }

@@ -2,6 +2,7 @@ import React from 'react'
 import { View, type ViewProps } from 'react-native'
 import {
   getNativeHardwareKeyboardCaptureView,
+  supportsHardwarePaste,
   supportsNativeFieldBoundaries,
   supportsPrimaryModifierSubmit
 } from './ExpoHardwareKeyboardModule'
@@ -19,6 +20,7 @@ export function HardwareKeyboardCaptureView({
   enabled = true,
   mode = 'terminal',
   nativeFieldBoundaries = false,
+  hardwarePaste = false,
   submitWithPrimaryModifier = false,
   onHardwareKey,
   children,
@@ -40,6 +42,7 @@ export function HardwareKeyboardCaptureView({
       onHardwareKey={onHardwareKey}
       style={style}
       {...(supportsNativeFieldBoundaries() ? { nativeFieldBoundaries } : {})}
+      {...(supportsHardwarePaste() ? { hardwarePaste } : {})}
       {...(supportsPrimaryModifierSubmit() ? { submitWithPrimaryModifier } : {})}
       {...rest}
     >

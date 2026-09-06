@@ -1,14 +1,17 @@
 import { useCallback, type RefObject } from 'react'
-import * as Clipboard from 'expo-clipboard'
 import { File as FsFile, Paths } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { TERMINAL_INPUT_SEND_OPTIONS } from '../terminal/terminal-send-request'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
+  captureMobileTerminalClipboard,
+  MOBILE_TERMINAL_PASTE_RESERVED_BYTES
+} from './mobile-terminal-clipboard-snapshot'
+import {
   buildMobileImagePastePayload,
-  prepareMobileClipboardImageBase64,
   saveMobileClipboardImageAsTempFile,
   type MobileClipboardImageResizer
 } from './mobile-clipboard-image'
@@ -96,7 +99,6 @@ export function useMobileTerminalPaste({
   canSend,
   client,
   clientRef,
-  connState,
   connStateRef,
   deviceTokenRef,
   flushPendingLiveInputBeforeExternalSend,
@@ -106,102 +108,147 @@ export function useMobileTerminalPaste({
   ptyModesRef,
   refreshCanPaste,
   showToast
-}: UseMobileTerminalPasteOptions): () => Promise<void> {
-  return useCallback(async () => {
-    if (!client || !activeHandle || !canSend) {
-      return
-    }
-    const targetHandle = activeHandle
-    try {
-      const text = await Clipboard.getStringAsync()
-      let payload: string | null = null
-      if (text.length > 0) {
-        payload = buildMobileTerminalClipboardTextPayload(
-          text,
-          ptyModesRef.current.get(targetHandle)
-        )
-      } else {
-        const image = await Clipboard.getImageAsync({ format: 'png' })
-        if (!image) {
-          refreshCanPaste()
-          return
-        }
-        const connectionId = await getActiveWorktreeConnectionId()
-        const base64 = await prepareMobileClipboardImageBase64(image, resizeMobileClipboardImage)
-        const imagePath = await saveMobileClipboardImageAsTempFile(client, base64, {
-          connectionId
-        })
-        payload = buildMobileImagePastePayload(imagePath)
-      }
-
-      const wrappedBytes = new TextEncoder().encode(payload).byteLength
-      if (wrappedBytes > 256 * 1024) {
-        onError()
-        // eslint-disable-next-line no-console
-        console.warn('[mobile-clip] paste oversized', { wrappedBytes })
-        showToast('Paste too large (max 256 KiB)', 1500)
+}: UseMobileTerminalPasteOptions): (
+  options?: Pick<
+    import('../terminal/terminal-live-input-sender').TerminalLiveControlOptions,
+    'fieldBoundary'
+  >
+) => Promise<void> {
+  return useCallback(
+    async (options) => {
+      if (!client || !activeHandle || !canSend) {
         return
       }
-      // Why: paste lives in the accessory row and must not overtake pending IME text.
+      const targetHandle = activeHandle
+      let clipboard: ReturnType<typeof captureMobileTerminalClipboard> | undefined
+      const reportError = (e: unknown) => {
+        onError()
+        const err = e as { name?: string; message?: string }
+        // eslint-disable-next-line no-console
+        console.warn('[mobile-clip] paste failed', { name: err?.name, message: err?.message })
+        showToast(
+          connStateRef.current !== 'connected'
+            ? 'Paste failed (disconnected)'
+            : err?.message === 'Clipboard text is too large'
+              ? 'Paste too large (max 256 KiB)'
+              : err?.message === 'Clipboard image is too large'
+                ? 'Image too large to paste'
+                : 'Paste failed',
+          1500
+        )
+      }
+      // Reserve order before clipboard/image work can yield to a following key.
       const accepted = await flushPendingLiveInputBeforeExternalSend(
         targetHandle,
-        async () => {
-          const currentClient = clientRef.current
-          if (
-            !currentClient ||
-            connStateRef.current !== 'connected' ||
-            targetHandle !== activeHandleRef.current ||
-            activeSessionTabTypeRef.current !== 'terminal'
-          ) {
+        async (isCurrent) => {
+          const canPrepare = () =>
+            isCurrent() &&
+            clientRef.current === client &&
+            connStateRef.current === 'connected' &&
+            targetHandle === activeHandleRef.current &&
+            activeSessionTabTypeRef.current === 'terminal'
+          if (!canPrepare()) {
+            return 'cancelled'
+          }
+          let dispatched = false
+          try {
+            const snapshot = await clipboard?.read()
+            if (!canPrepare()) {
+              return 'cancelled'
+            }
+            if (!snapshot) {
+              return 'cancelled'
+            }
+            const { text, image } = snapshot
+            let payload: string | null = null
+            if (text.length > 0) {
+              payload = buildMobileTerminalClipboardTextPayload(
+                text,
+                ptyModesRef.current.get(targetHandle)
+              )
+            } else {
+              if (!image) {
+                refreshCanPaste()
+                return 'cancelled'
+              }
+              const connectionId = await getActiveWorktreeConnectionId()
+              if (!canPrepare()) {
+                return 'cancelled'
+              }
+              const imagePath = await saveMobileClipboardImageAsTempFile(client, image.data, {
+                connectionId
+              })
+              if (!canPrepare()) {
+                return 'cancelled'
+              }
+              payload = buildMobileImagePastePayload(imagePath)
+            }
+
+            const wrappedBytes = new TextEncoder().encode(payload).byteLength
+            if (wrappedBytes > 256 * 1024) {
+              onError()
+              // eslint-disable-next-line no-console
+              console.warn('[mobile-clip] paste oversized', { wrappedBytes })
+              showToast('Paste too large (max 256 KiB)', 1500)
+              return false
+            }
+            if (!canPrepare()) {
+              return 'cancelled'
+            }
+            dispatched = true
+            const response = await client.sendRequest(
+              'terminal.send',
+              {
+                terminal: targetHandle,
+                text: payload,
+                enter: false,
+                ...(deviceTokenRef.current
+                  ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+                  : {})
+              },
+              TERMINAL_INPUT_SEND_OPTIONS
+            )
+            return isTerminalSendRpcAccepted(response)
+          } catch (e) {
+            if (!dispatched && !canPrepare()) {
+              return 'cancelled'
+            }
+            if (canPrepare()) {
+              reportError(e)
+            }
             return false
           }
-          const response = await currentClient.sendRequest('terminal.send', {
-            terminal: targetHandle,
-            text: payload,
-            enter: false,
-            ...(deviceTokenRef.current
-              ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-              : {})
-          })
-          return isTerminalSendRpcAccepted(response)
         },
-        payload
-      )
-      if (!accepted) {
-        return
+        '',
+        {
+          fieldBoundary: options?.fieldBoundary,
+          reservedBytes: MOBILE_TERMINAL_PASTE_RESERVED_BYTES,
+          onAdmitted: () => {
+            clipboard = captureMobileTerminalClipboard(resizeMobileClipboardImage)
+          }
+        }
+      ).finally(() => clipboard?.dispose())
+      if (accepted) {
+        onSuccess()
+        refreshCanPaste()
       }
-      onSuccess()
-      refreshCanPaste()
-    } catch (e) {
-      onError()
-      const err = e as { name?: string; message?: string }
-      const isDisconnected = connState !== 'connected'
-      // eslint-disable-next-line no-console
-      console.warn('[mobile-clip] paste failed', { name: err.name, message: err.message })
-      if (isDisconnected) {
-        showToast('Paste failed (disconnected)', 1500)
-      } else if (err.message === 'Clipboard image is too large') {
-        showToast('Image too large to paste', 1500)
-      } else {
-        showToast('Paste failed', 1500)
-      }
-    }
-  }, [
-    activeHandle,
-    activeHandleRef,
-    activeSessionTabTypeRef,
-    canSend,
-    client,
-    clientRef,
-    connState,
-    connStateRef,
-    deviceTokenRef,
-    flushPendingLiveInputBeforeExternalSend,
-    getActiveWorktreeConnectionId,
-    onError,
-    onSuccess,
-    ptyModesRef,
-    refreshCanPaste,
-    showToast
-  ])
+    },
+    [
+      activeHandle,
+      activeHandleRef,
+      activeSessionTabTypeRef,
+      canSend,
+      client,
+      clientRef,
+      connStateRef,
+      deviceTokenRef,
+      flushPendingLiveInputBeforeExternalSend,
+      getActiveWorktreeConnectionId,
+      onError,
+      onSuccess,
+      ptyModesRef,
+      refreshCanPaste,
+      showToast
+    ]
+  )
 }

@@ -9,6 +9,32 @@ import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 type TerminalLiveInputCommitHandlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
 
 describe('physical terminal controls', () => {
+  it('orders an external paste boundary before new typing without replaying stale text', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ pipeline: true })
+    const boundary = { text: 'first', target: 10, eventCount: 2 }
+    const send = vi.fn(async () => {
+      sent.push('paste')
+      return true
+    })
+    const admitted = vi.fn()
+    const pasted = handlers.flushPendingLiveInputBeforeExternalSend('terminal-a', send, '', {
+      fieldBoundary: boundary,
+      onAdmitted: admitted
+    })
+    handlers.handleLiveInputChange({ nativeEvent: { text: 'first', target: 10, eventCount: 1 } })
+    handlers.handleLiveInputChange({ nativeEvent: { text: 'x', target: 10, eventCount: 3 } })
+    await pasted
+    await vi.waitFor(() => expect(sent.join('')).toBe('firstpastex'))
+    expect(
+      await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a', send, '', {
+        fieldBoundary: boundary,
+        onAdmitted: admitted
+      })
+    ).toBe(false)
+    expect(admitted).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledTimes(1)
+  })
+
   it('preserves Alt+Enter terminal bytes across a native reset', async () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness({ pipeline: true })
     handlers.handleLiveInputHardwareKey({

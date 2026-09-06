@@ -36,8 +36,85 @@ class HardwareKeyboardNativeBoundaryTest {
       input.setSelection(5)
       assertTrue(input.hasFocus())
     }
-    fun key(code: Int, action: Int = KeyEvent.ACTION_DOWN, repeat: Int = 0, deviceId: Int = 1) =
-      capture.dispatchKeyEventPreIme(KeyEvent(0, 0, action, code, repeat, 0, deviceId, 0, 0))
+    fun key(code: Int, action: Int = KeyEvent.ACTION_DOWN, repeat: Int = 0, deviceId: Int = 1,
+      meta: Int = 0, flags: Int = 0) =
+      capture.dispatchKeyEventPreIme(KeyEvent(0, 0, action, code, repeat, meta, deviceId, 0, flags))
+    fun lastKey(): Map<*, *> = context.events.last().javaClass.getDeclaredField("hardwareKey").let {
+      it.isAccessible = true
+      it.get(context.events.last()) as Map<*, *>
+    }
+  }
+
+  @Test fun optedInPasteUsesOneFieldBoundaryAndDoesNotResetOnRepeat() {
+    val fixture = Fixture()
+    fixture.capture.hardwarePaste = true
+    val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, meta = meta))
+    assertEquals("Paste", fixture.lastKey()["key"])
+    assertEquals("first", (fixture.lastKey()["fieldBoundary"] as Map<*, *>)["text"])
+    assertEquals("", fixture.input.text.toString())
+    fixture.input.append("x")
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, meta = meta, repeat = 1))
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, meta = KeyEvent.META_CTRL_ON, repeat = 2))
+    assertEquals("x", fixture.input.text.toString())
+    assertEquals(1, fixture.context.events.size)
+    assertFalse(fixture.key(KeyEvent.KEYCODE_V, KeyEvent.ACTION_UP, deviceId = 2))
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, KeyEvent.ACTION_UP))
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, meta = meta))
+    assertEquals(2, fixture.context.events.size)
+  }
+
+  @Test fun pasteOptInDoesNotChangeCtrlVOrLegacyCtrlShiftV() {
+    val fixture = Fixture()
+    val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, meta = meta))
+    assertEquals("v", fixture.lastKey()["key"])
+    fixture.capture.hardwarePaste = true
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, meta = KeyEvent.META_CTRL_ON))
+    assertEquals("v", fixture.lastKey()["key"])
+  }
+
+  @Test fun composingSoftwareDisabledAndChatCannotCreatePasteBoundaries() {
+    val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
+    for (variant in 0..5) {
+      val fixture = Fixture()
+      fixture.capture.hardwarePaste = true
+      when (variant) {
+        0 -> BaseInputConnection.setComposingSpans(fixture.input.text!!)
+        1 -> fixture.capture.captureEnabled = false
+        2 -> fixture.capture.captureMode = "submit"
+        3 -> fixture.capture.nativeFieldBoundaries = false
+      }
+      fixture.key(KeyEvent.KEYCODE_V, meta = meta,
+        deviceId = if (variant == 4) -1 else 1,
+        flags = if (variant == 5) KeyEvent.FLAG_SOFT_KEYBOARD else 0)
+      assertTrue(fixture.context.events.isEmpty())
+      assertEquals("first", fixture.input.text.toString())
+    }
+  }
+
+  @Test fun unavailableDispatcherAndBlurDoNotRetainPasteRepeatOwnership() {
+    val fixture = Fixture()
+    fixture.capture.hardwarePaste = true
+    val meta = KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON
+    fixture.context.dispatcherAvailable = false
+    assertFalse(fixture.key(KeyEvent.KEYCODE_V, meta = meta))
+    assertFalse(fixture.key(KeyEvent.KEYCODE_V, meta = meta, repeat = 1))
+    fixture.context.dispatcherAvailable = true
+    assertTrue(fixture.key(KeyEvent.KEYCODE_V, meta = meta))
+    fixture.capture.onWindowFocusChanged(false)
+    assertFalse(fixture.key(KeyEvent.KEYCODE_V, meta = meta, repeat = 1))
+    assertFalse(fixture.key(KeyEvent.KEYCODE_V, KeyEvent.ACTION_UP))
+  }
+
+  @Test fun altAndMetaModifiedVAreNeverPasteActions() {
+    for (extra in listOf(KeyEvent.META_ALT_ON, KeyEvent.META_META_ON)) {
+      val fixture = Fixture()
+      fixture.capture.hardwarePaste = true
+      fixture.key(KeyEvent.KEYCODE_V,
+        meta = KeyEvent.META_CTRL_ON or KeyEvent.META_SHIFT_ON or extra)
+      if (fixture.context.events.isNotEmpty()) assertNotEquals("Paste", fixture.lastKey()["key"])
+    }
   }
 
   @Test fun returnClearsRealNativeFieldBeforeTheNextEdit() {

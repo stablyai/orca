@@ -20,6 +20,7 @@ export type HardwareKeyboardKeyEvent = {
 }
 
 export type HardwareKeyboardCaptureViewProps = {
+  readonly hardwarePaste?: boolean
   readonly submitWithPrimaryModifier?: boolean
   readonly nativeFieldBoundaries?: boolean
   readonly mode?: 'terminal' | 'submit'

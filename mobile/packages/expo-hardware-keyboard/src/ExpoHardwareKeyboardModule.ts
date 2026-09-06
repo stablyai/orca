@@ -4,6 +4,13 @@ import type { HardwareKeyboardCaptureViewProps } from './ExpoHardwareKeyboard.ty
 
 type NativeCaptureView = ComponentType<HardwareKeyboardCaptureViewProps>
 
+export function supportsHardwarePaste(): boolean {
+  return (
+    requireOptionalNativeModule<{ supportsHardwarePaste?: boolean }>('ExpoHardwareKeyboard')
+      ?.supportsHardwarePaste === true
+  )
+}
+
 export function supportsPrimaryModifierSubmit(): boolean {
   return (
     requireOptionalNativeModule<{ supportsPrimaryModifierSubmit?: boolean }>('ExpoHardwareKeyboard')
