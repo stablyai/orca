@@ -22,6 +22,14 @@ import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured
  * rather than showing an effort nothing measured.
  */
 export function readClaudeSettingsEffort(settings: unknown): string | null {
+  // Why applied first: the SDK contract names applied.effort as the reported
+  // value ("the same value get_settings reports as applied.effort"); CLIs that
+  // predate that key reported it as effective.effortLevel.
+  const applied = record(record(settings)?.applied)
+  const fromApplied = text(applied?.effort)
+  if (fromApplied) {
+    return fromApplied
+  }
   return text(record(record(settings)?.effective)?.effortLevel)
 }
 
