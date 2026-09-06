@@ -22,6 +22,10 @@ export {
   RETIRED_PANE_FENCES_MAX
 } from './server/server-constants'
 export { isValidPaneKey }
+export {
+  getAgentHookRemotePostCount,
+  resetAgentHookRemotePostCount
+} from './server/server-ingest-remote'
 
 /** Public composition seam for the loopback hook listener and relay status adapter. */
 export class AgentHookServer extends AgentHookServerLifecycle {}

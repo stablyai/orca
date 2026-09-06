@@ -232,6 +232,7 @@ export type IPtyProvider = {
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
   listProcesses(opts?: {
     deadlineMs?: number
+    signal?: AbortSignal
     includeForegroundProcessEvidence?: boolean
   }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>

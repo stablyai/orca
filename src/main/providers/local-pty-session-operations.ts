@@ -16,12 +16,15 @@ import {
   ptyTerminalHandle,
   ptyWorktreeId,
   ptyWslDistroById,
+  ptyWslShellAnchors,
   startupIngressByPty,
   type DataCallback,
   type ExitCallback
 } from './local-pty-provider-state'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
 import type { PtyProcessInfo } from './types'
+import { wslRelayIdentityReader } from './wsl-relay-identity-reader'
+import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
 
 export function writeLocalPty(id: string, data: string): boolean {
   // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of
@@ -115,16 +118,108 @@ export function closeLocalPtyStartupQueryAuthority(id: string): number {
   return startupIngressByPty.get(id)?.closeQueryAuthority() ?? 0
 }
 
-export async function listLocalPtyProcesses(): Promise<PtyProcessInfo[]> {
-  return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
-    id,
-    ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
-    cwd: ptyInitialCwd.get(id) ?? '',
-    title: proc.process || ptyShellName.get(id) || 'shell',
-    ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
-    ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
-    ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {})
-  }))
+export async function listLocalPtyProcesses(opts?: {
+  deadlineMs?: number
+  signal?: AbortSignal
+}): Promise<PtyProcessInfo[]> {
+  const entries = Array.from(ptyProcesses.entries())
+  const evidenceEpoch = Date.now()
+  const wslByDistro = new Map<string, string[]>()
+  for (const [id] of entries) {
+    const distro = ptyWslDistroById.get(id)
+    // Without a shell anchor the inventory cannot resolve a foreground process;
+    // avoid paying for a guest scan whose verdict is necessarily unverifiable.
+    if (distro && ptyWslShellAnchors.has(id)) {
+      const ids = wslByDistro.get(distro) ?? []
+      ids.push(id)
+      wslByDistro.set(distro, ids)
+    }
+  }
+  const identityByPty = new Map<
+    string,
+    Awaited<ReturnType<typeof wslRelayIdentityReader.readBatch>>[number]
+  >()
+  const distros = [...wslByDistro.keys()]
+  await Promise.all(
+    distros.map(async (distro) => {
+      const ids = wslByDistro.get(distro) ?? []
+      const anchors = ids
+        .map((id) => ptyWslShellAnchors.get(id))
+        .filter((anchor): anchor is NonNullable<typeof anchor> => anchor !== undefined)
+      const results = await wslRelayIdentityReader.readBatch(distro, anchors, {
+        signal: opts?.signal,
+        // A process inventory is reused until a local PTY event resets the
+        // reader; polling itself is not evidence that guest state changed.
+        stableUntilReset: true,
+        timeoutMs:
+          opts?.deadlineMs === undefined ? undefined : Math.max(1, opts.deadlineMs - Date.now())
+      })
+      // Keep the pre-read id/order association. A pane can exit while the batch
+      // is in flight; filtering anchors against live state here would shift all
+      // subsequent results onto the wrong pane.
+      for (const [index, id] of ids.entries()) {
+        const result = results[index]
+        if (result) {
+          identityByPty.set(id, result)
+        }
+      }
+    })
+  )
+
+  return entries.flatMap(([id, proc]) => {
+    // Inventory reads are asynchronous; a PTY may have exited while they ran.
+    // Do not publish a row for an incarnation that is no longer authoritative.
+    if (ptyProcesses.get(id) !== proc) {
+      return []
+    }
+    const distro = ptyWslDistroById.get(id)
+    let title = proc.process || ptyShellName.get(id) || 'shell'
+    let foregroundProcessEvidence: ForegroundProcessEvidence | undefined
+    if (distro) {
+      const anchor = ptyWslShellAnchors.get(id)
+      const resolution = anchor
+        ? (identityByPty.get(id) ?? {
+            status: 'unverifiable' as const,
+            reason: 'relay_unavailable',
+            capturedAgeMs: 0
+          })
+        : { status: 'unverifiable' as const, reason: 'anchor_missing', capturedAgeMs: 0 }
+      foregroundProcessEvidence =
+        resolution.status === 'live'
+          ? {
+              verdict: 'live',
+              processName: resolution.processName,
+              authorityGeneration: ptyIncarnations.get(id) ?? 'local-wsl',
+              observationEpoch: evidenceEpoch,
+              capturedAgeMs: resolution.capturedAgeMs
+            }
+          : {
+              verdict: 'unverifiable',
+              reason: resolution.reason,
+              authorityGeneration: ptyIncarnations.get(id) ?? 'local-wsl',
+              observationEpoch: evidenceEpoch,
+              capturedAgeMs: resolution.capturedAgeMs
+            }
+      if (resolution.status === 'live') {
+        ptyWslShellAnchors.set(id, resolution.anchor)
+        if (resolution.processName) {
+          title = resolution.processName
+        }
+      }
+    }
+    return [
+      {
+        id,
+        ...(ptyIncarnations.get(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
+        cwd: ptyInitialCwd.get(id) ?? '',
+        title,
+        ...(ptyWorktreeId.get(id) ? { worktreeId: ptyWorktreeId.get(id) } : {}),
+        ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {}),
+        ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
+        ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {})
+      }
+    ]
+  })
 }
 
 export async function getDefaultLocalPtyShell(

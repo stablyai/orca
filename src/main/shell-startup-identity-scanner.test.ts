@@ -18,6 +18,37 @@ describe('shell startup identity scanner', () => {
     })
   })
 
+  it('parses a fenced WSL identity anchor', () => {
+    const state = createShellStartupIdentityScanState()
+    const result = scanForShellStartupIdentity(
+      state,
+      'x\x1b]777;orca-shell-start:v2:Ubuntu-24.04:01234567-89ab-cdef-0123-456789abcdef:123:456:/dev/pts/8\x07y'
+    )
+    expect(result).toEqual({
+      output: 'xy',
+      shellPid: 123,
+      shellIdentity: {
+        distro: 'Ubuntu-24.04',
+        bootId: '01234567-89ab-cdef-0123-456789abcdef',
+        shellPid: 123,
+        shellStartTime: 456,
+        tty: '/dev/pts/8'
+      }
+    })
+  })
+
+  it('holds a split v2 anchor until the BEL terminator', () => {
+    const state = createShellStartupIdentityScanState()
+    const first =
+      '\x1b]777;orca-shell-start:v2:Ubuntu:01234567-89ab-cdef-0123-456789abcdef:12:34:/dev/pts/'
+    expect(scanForShellStartupIdentity(state, first)).toEqual({ output: '', shellPid: null })
+    expect(scanForShellStartupIdentity(state, '2\x07ok')).toMatchObject({
+      output: 'ok',
+      shellPid: 12,
+      shellIdentity: { distro: 'Ubuntu', shellStartTime: 34, tty: '/dev/pts/2' }
+    })
+  })
+
   it('forwards lookalikes unchanged', () => {
     const state = createShellStartupIdentityScanState()
     const input = 'a\x1b]777;orca-shell-start:nope\x07b'

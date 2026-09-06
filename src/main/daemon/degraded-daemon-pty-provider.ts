@@ -206,7 +206,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     await this.fallback.revive(state)
   }
 
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: {
+    deadlineMs?: number
+    signal?: AbortSignal
+  }): Promise<PtyProcessInfo[]> {
     const results = await Promise.all(
       this.allProviders().map((provider) => provider.listProcesses(opts))
     )

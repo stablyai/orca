@@ -335,4 +335,38 @@ export class OrcaRuntimeWithRuntimeId {
   >()
 
   protected ptyLivenessObservationSequence = 0
+
+  // Catalog polls reuse the last controller census until a PTY lifecycle or
+  // output event invalidates it; this keeps idle mobile polls read-free.
+  protected ptyLivenessRefreshRequired = false
+
+  protected ptyLivenessRefreshInProgress = 0
+
+  // Concurrent catalog requests share one event-invalidated controller census;
+  // without this, each request observes the stale flag before the first one clears it.
+  protected ptyLivenessRefreshPromises = new Map<string, Promise<Set<string> | null>>()
+
+  // Monotonic event fence prevents an in-flight census from clearing a newer invalidation.
+  protected ptyLivenessInvalidationSequence = 0
+
+  // Reconciliation bookkeeping must not look like a new PTY event.
+  protected ptyLivenessRefreshBookkeeping = false
+
+  protected invalidatePtyLivenessSnapshot(): void {
+    if (this.ptyLivenessRefreshBookkeeping) {
+      return
+    }
+    this.ptyLivenessRefreshRequired = true
+    this.ptyLivenessInvalidationSequence += 1
+  }
+
+  protected withPtyLivenessRefreshBookkeeping<T>(callback: () => T): T {
+    const prior = this.ptyLivenessRefreshBookkeeping
+    this.ptyLivenessRefreshBookkeeping = true
+    try {
+      return callback()
+    } finally {
+      this.ptyLivenessRefreshBookkeeping = prior
+    }
+  }
 }

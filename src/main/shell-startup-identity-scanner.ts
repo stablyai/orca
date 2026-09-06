@@ -1,4 +1,7 @@
+import type { WslShellProcessAnchor } from '../shared/wsl-shell-process-anchor'
+
 export const SHELL_STARTUP_IDENTITY_PREFIX = '\x1b]777;orca-shell-start:'
+const POSSIBLE_V2_SUFFIX = /^v2(?::[A-Za-z0-9._/:-]{0,220})?$/
 const POSSIBLE_PID_SUFFIX = /^\d{0,20}$/
 
 export type ShellStartupIdentityScanState = {
@@ -8,6 +11,8 @@ export type ShellStartupIdentityScanState = {
 export type ShellStartupIdentityScanResult = {
   output: string
   shellPid: number | null
+  /** Full WSL identity; legacy PID-only markers intentionally do not qualify. */
+  shellIdentity?: WslShellProcessAnchor
 }
 
 export function createShellStartupIdentityScanState(): ShellStartupIdentityScanState {
@@ -28,7 +33,35 @@ function isPossibleMarker(candidate: string): boolean {
     return false
   }
   const suffix = candidate.slice(SHELL_STARTUP_IDENTITY_PREFIX.length)
-  return POSSIBLE_PID_SUFFIX.test(suffix)
+  return POSSIBLE_PID_SUFFIX.test(suffix) || POSSIBLE_V2_SUFFIX.test(suffix)
+}
+
+function parseIdentitySuffix(suffix: string): WslShellProcessAnchor | null {
+  const fields = suffix.split(':')
+  if (fields.length !== 6 || fields[0] !== 'v2') {
+    return null
+  }
+  const [, distro, bootId, pidText, startText, tty] = fields
+  if (
+    !distro ||
+    !/^[A-Za-z0-9._-]{1,128}$/.test(distro) ||
+    !bootId ||
+    !/^[A-Fa-f0-9-]{8,128}$/.test(bootId) ||
+    !/^\d{1,20}$/.test(pidText ?? '') ||
+    !/^\d{1,30}$/.test(startText ?? '') ||
+    !/^\/dev\/pts\/\d{1,8}$/.test(tty ?? '')
+  ) {
+    return null
+  }
+  const shellPid = Number(pidText)
+  const shellStartTime = Number(startText)
+  if (!Number.isSafeInteger(shellPid) || shellPid <= 0) {
+    return null
+  }
+  if (!Number.isSafeInteger(shellStartTime) || shellStartTime < 0) {
+    return null
+  }
+  return { distro, bootId, shellPid, shellStartTime, tty: tty! }
 }
 
 export function scanForShellStartupIdentity(
@@ -61,6 +94,15 @@ export function scanForShellStartupIdentity(
         return {
           output: output + candidate.slice(markerLength),
           shellPid: Number.isSafeInteger(shellPid) && shellPid > 0 ? shellPid : null
+        }
+      }
+      const identity = parseIdentitySuffix(terminator === -1 ? suffix : suffix.slice(0, terminator))
+      if (identity) {
+        const markerLength = SHELL_STARTUP_IDENTITY_PREFIX.length + terminator + 1
+        return {
+          output: output + candidate.slice(markerLength),
+          shellPid: identity.shellPid,
+          shellIdentity: identity
         }
       }
     }

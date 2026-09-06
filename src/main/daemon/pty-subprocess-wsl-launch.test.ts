@@ -183,6 +183,30 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('does not let inherited canonical features change daemon WSL launch intent', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        shellOverride: 'wsl.exe',
+        env: { ORCA_SHELL_FEATURES: 'overlay,history,ready,startup' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock.mock.calls.at(-1)?.[2].env.ORCA_SHELL_FEATURES).toBe('markers,identity')
+  })
+
   it('launches WSL for WSL worktree cwd even when a stale Windows shell override is present', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

@@ -123,6 +123,28 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
     // instead of tunneling back through renderer IPC, or live handles could
     // drift from the process they are supposed to control during reloads.
     this.ptyController = controller
+    // A controller attached after restart must reconcile persisted PTY ids once;
+    // an otherwise idle runtime with no persisted terminals stays read-free.
+    if (controller && this.hasPersistedPtyReferences()) {
+      this.invalidatePtyLivenessSnapshot()
+    }
+  }
+
+  private hasPersistedPtyReferences(): boolean {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session) {
+      return false
+    }
+    if (
+      Object.values(session.tabsByWorktree ?? {}).some((tabs) =>
+        tabs.some((tab) => tab.ptyId !== null)
+      )
+    ) {
+      return true
+    }
+    return Object.values(session.terminalLayoutsByTabId ?? {}).some((layout) =>
+      Object.values(layout?.ptyIdsByLeafId ?? {}).some((ptyId) => Boolean(ptyId))
+    )
   }
 
   setNotifier(notifier: RuntimeNotifier | null): void {
@@ -201,6 +223,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   }
 
   protected notifyWorktreesChanged(repoId: string): void {
+    this.invalidatePtyLivenessSnapshot()
     this.notifier?.worktreesChanged(repoId)
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
@@ -219,6 +242,7 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
   }
 
   protected notifyReposChanged(): void {
+    this.invalidatePtyLivenessSnapshot()
     wakeFolderRepoGitUpgradeWatch()
     this.notifier?.reposChanged()
     this.emitClientEvent({ type: 'reposChanged' })

@@ -120,10 +120,15 @@ export type RuntimePtyController = {
   hasPty?(ptyId: string): boolean | null
   listProcesses?(
     connectionId?: string | null,
-    opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
+    opts?: {
+      deadlineMs?: number
+      signal?: AbortSignal
+      includeForegroundProcessEvidence?: boolean
+    }
   ): Promise<PtyProcessInfo[]>
   listProcessesWithHostScope?(opts?: {
     deadlineMs?: number
+    signal?: AbortSignal
     includeForegroundProcessEvidence?: boolean
   }): Promise<{
     processes: PtyProcessInfo[]

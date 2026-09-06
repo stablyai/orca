@@ -22,6 +22,7 @@ import {
 } from '../terminal-history'
 import { addWslEnvKeys } from '../wsl-env'
 import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
+import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { promoteAgentTeamsShimPath } from './local-pty-launch-helpers'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import type { LocalPtyProviderOptions } from './local-pty-provider-types'
@@ -86,6 +87,26 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     // And for an exported HISTFILE: history off means the shell's own default,
     // not the history file of the worktree this Orca was launched from.
     dropInheritedOrcaHistFile(env)
+  }
+
+  if (plan.isWslShell) {
+    const isCodexStartupCommand = plan.startupAgentRecognition?.agent === 'codex'
+    const codexRequiresShellReady =
+      isCodexStartupCommand && spawn.command !== undefined
+        ? shouldUseShellReadyStartupDelivery({
+            command: spawn.command,
+            startupCommandDelivery: spawn.startupCommandDelivery
+          })
+        : false
+    const waitsForShellReady =
+      Boolean(spawn.command) && (!isCodexStartupCommand || codexRequiresShellReady)
+    // WSL's login shell is selected inside the distro; pass only this launch's
+    // intent so a parent's canonical feature list cannot alter the wrapper.
+    addOrcaWslInteropEnv(env, {
+      hasStartupCommand: Boolean(spawn.command),
+      waitsForShellReady,
+      emitsStartupIdentity: waitsForShellReady
+    })
   }
 
   if (!plan.wslInfo && process.platform !== 'win32') {

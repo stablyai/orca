@@ -14,9 +14,14 @@ import { parsePtySessionId } from './pty-session-id'
 import type { ListSessionsResult, SessionInfo } from './types'
 import { PtyProcessListAdmission } from '../providers/pty-process-list-admission'
 import type { PtyProcessInfo } from '../providers/types'
+import type { ForegroundProcessEvidence } from '../../shared/foreground-process-evidence'
+import { wslRelayIdentityReader } from '../providers/wsl-relay-identity-reader'
 
 export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspection {
-  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+  async listProcesses(opts?: {
+    deadlineMs?: number
+    signal?: AbortSignal
+  }): Promise<PtyProcessInfo[]> {
     // Why: snapshotted before the request so ids spawned mid-flight can never
     // be reconciled away below.
     const preRequestActiveIds = new Set(this.activeSessionIds)
@@ -45,12 +50,65 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       const admission = new PtyProcessListAdmission()
       const processes: PtyProcessInfo[] = []
       const aliveSessionIds = new Set<string>()
+      const evidenceEpoch = Date.now()
+      const wslBySession = new Map<
+        string,
+        Awaited<ReturnType<typeof wslRelayIdentityReader.readBatch>>[number]
+      >()
+      if (process.platform === 'win32') {
+        const byDistro = new Map<string, typeof result.sessions>()
+        for (const session of result.sessions) {
+          if (session.isAlive && session.wslDistro && session.wslShellAnchor) {
+            const group = byDistro.get(session.wslDistro) ?? []
+            group.push(session)
+            byDistro.set(session.wslDistro, group)
+          }
+        }
+        await Promise.all(
+          [...byDistro].map(async ([distro, sessions]) => {
+            const values = await wslRelayIdentityReader.readBatch(
+              distro,
+              sessions.map((session) => session.wslShellAnchor!),
+              {
+                signal: opts?.signal,
+                stableUntilReset: true,
+                timeoutMs:
+                  opts?.deadlineMs === undefined
+                    ? undefined
+                    : Math.max(1, opts.deadlineMs - Date.now())
+              }
+            )
+            sessions.forEach((session, index) =>
+              wslBySession.set(session.sessionId, values[index]!)
+            )
+          })
+        )
+      }
       for (const session of result.sessions) {
         if (!session.isAlive) {
           continue
         }
         aliveSessionIds.add(session.sessionId)
         const { worktreeId } = parsePtySessionId(session.sessionId)
+        const resolution = session.wslDistro ? wslBySession.get(session.sessionId) : null
+        const foregroundProcessEvidence: ForegroundProcessEvidence | undefined = session.wslDistro
+          ? resolution?.status === 'live'
+            ? {
+                verdict: 'live',
+                processName: resolution.processName,
+                authorityGeneration: session.incarnationId ?? 'daemon-wsl',
+                observationEpoch: evidenceEpoch,
+                capturedAgeMs: resolution.capturedAgeMs
+              }
+            : {
+                verdict: 'unverifiable',
+                reason:
+                  resolution?.status === 'unverifiable' ? resolution.reason : 'anchor_missing',
+                authorityGeneration: session.incarnationId ?? 'daemon-wsl',
+                observationEpoch: evidenceEpoch,
+                capturedAgeMs: resolution?.capturedAgeMs ?? 0
+              }
+          : undefined
         processes.push(
           admission.admit({
             id: session.sessionId,
@@ -58,10 +116,14 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
             ...(session.pid ? { rootProcessId: session.pid } : {}),
             // Why: OSC 7 may not arrive before cleanup; spawn cwd is authoritative until the daemon reports a live cwd.
             cwd: session.cwd ?? this.initialCwds.get(session.sessionId) ?? '',
-            title: 'shell',
+            title:
+              resolution?.status === 'live' && resolution.processName
+                ? resolution.processName
+                : 'shell',
             ...(worktreeId ? { worktreeId } : {}),
             ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
             ...(session.wslDistro !== undefined ? { wslDistro: session.wslDistro } : {}),
+            ...(foregroundProcessEvidence ? { foregroundProcessEvidence } : {}),
             ...this.validatedAgentSessionOwners(session.agentSessionOwners)
           })
         )

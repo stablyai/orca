@@ -38,7 +38,7 @@ src/main/agent-hooks/managed-hook-owner-identity.ts
 src/main/agent-hooks/managed-hook-runtime.ts
 src/main/agent-hooks/wsl-hook-relay-launch.ts
 src/main/agent-hooks/wsl-hook-relay-link.ts
-src/main/agent-hooks/wsl-hook-relay-manager.ts
+src/main/agent-hooks/wsl-hook-relay-lifecycle.ts
 src/main/agent-hooks/wsl-hook-relay-sentinel.ts
 src/main/ai-vault/session-scanner-service-client-state.ts
 src/main/ai-vault/session-scanner-service-client.ts

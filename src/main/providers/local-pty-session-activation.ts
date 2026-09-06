@@ -28,12 +28,20 @@ import {
   ptyTerminationMode,
   ptyWorktreeId,
   ptyWslDistroById,
+  ptyWslShellAnchors,
   startupIngressByPty
 } from './local-pty-provider-state'
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
+import {
+  createShellStartupIdentityScanState,
+  drainShellStartupIdentityHeldBytes,
+  scanForShellStartupIdentity,
+  type ShellStartupIdentityScanState
+} from '../shell-startup-identity-scanner'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
+import { wslRelayIdentityReader } from './wsl-relay-identity-reader'
 
 export function activateLocalPtySession(args: {
   id: string
@@ -48,6 +56,8 @@ export function activateLocalPtySession(args: {
 }): PtySpawnResult {
   const { id, incarnationId, spawn, getOptions, plan, env, proc, spawnedWslDistro } = args
   createPtyPhysicalExit(id)
+  // A newly created PTY can introduce a fresh WSL shell identity.
+  wslRelayIdentityReader.reset()
   ptyReportsChildExitStatus.set(id, args.reportsChildExitStatus)
   ptyProcesses.set(id, proc)
   ptyInitialCwd.set(id, plan.cwd)
@@ -71,13 +81,20 @@ export function activateLocalPtySession(args: {
   )
   ptyLoadGeneration.set(id, getLoadGeneration())
   ptyIncarnations.set(id, incarnationId)
+  // Foreground identity is event-invalidated: once output arrives, the next
+  // inventory may observe an agent transition instead of reusing the old read.
+  const resetWslIdentityCache = (): void => {
+    wslRelayIdentityReader.reset()
+  }
   getOptions().onSpawned?.(id, incarnationId)
 
   const emitIngressData = (emission: PtyIngressEmission): void => {
     const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
     if (emission.transformed || sequenceChars !== emission.data.length) {
+      resetWslIdentityCache()
       getOptions().onData?.(id, emission.data, Date.now(), sequenceChars, true)
     } else {
+      resetWslIdentityCache()
       getOptions().onData?.(id, emission.data, Date.now())
     }
     for (const cb of dataListeners) {
@@ -105,6 +122,11 @@ export function activateLocalPtySession(args: {
     onEmission: emitIngressData
   })
   startupIngressByPty.set(id, startupIngress)
+  // A Windows host only sees wsl.exe. Keep the guest PID marker separate from
+  // the shell-ready scanner so WSL panes without a startup command are still
+  // anchored, and strip it before bytes reach xterm/the user shell.
+  let wslIdentityScanState: ShellStartupIdentityScanState | null =
+    process.platform === 'win32' && spawnedWslDistro ? createShellStartupIdentityScanState() : null
 
   // Shell-ready startup command support
   const readiness = createLocalPtyShellReadinessSession({
@@ -117,7 +139,23 @@ export function activateLocalPtySession(args: {
   })
   const disposables: { dispose: () => void }[] = []
   const onDataDisposable = proc.onData((rawData) => {
-    readiness.acceptData(rawData)
+    let data = rawData
+    if (wslIdentityScanState) {
+      const scanned = scanForShellStartupIdentity(wslIdentityScanState, data)
+      data = scanned.output
+      if (scanned.shellIdentity) {
+        // The marker carries boot/start/TTY fencing. A legacy PID-only marker
+        // is intentionally ignored and remains unverifiable.
+        if (scanned.shellIdentity.distro.toLowerCase() === spawnedWslDistro!.toLowerCase()) {
+          ptyWslShellAnchors.set(id, scanned.shellIdentity)
+        }
+        wslIdentityScanState = null
+      } else if (scanned.shellPid) {
+        // Consume legacy PID-only markers without accepting them as evidence.
+        wslIdentityScanState = null
+      }
+    }
+    readiness.acceptData(data)
   })
   if (onDataDisposable) {
     disposables.push(onDataDisposable)
@@ -137,6 +175,15 @@ export function activateLocalPtySession(args: {
     // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
     if (process.platform !== 'win32') {
       ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+    }
+    // If the PTY dies mid-marker, return the withheld OSC bytes to the normal
+    // ingress path so teardown cannot silently eat user-visible output.
+    if (wslIdentityScanState) {
+      const heldIdentityBytes = drainShellStartupIdentityHeldBytes(wslIdentityScanState)
+      wslIdentityScanState = null
+      if (heldIdentityBytes.length > 0) {
+        readiness.acceptData(heldIdentityBytes)
+      }
     }
     readiness.prepareForExit()
     clearPtyState(id)

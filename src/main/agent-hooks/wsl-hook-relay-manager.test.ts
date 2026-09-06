@@ -15,13 +15,21 @@ import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
 } from './remote-managed-hook-installers'
-import { WslHookRelayManager } from './wsl-hook-relay-manager'
+import {
+  getWslRelayIdentityRpcCount,
+  resetWslRelayIdentityRpcCount,
+  getWslRelayGuestHookInstallCount,
+  resetWslRelayGuestHookInstallCount,
+  WslHookRelayManager
+} from './wsl-hook-relay-manager'
+import { getAgentHookRemotePostCount, resetAgentHookRemotePostCount } from './server'
 import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../../shared/agent-hook-relay'
+import { WSL_RELAY_PROCESS_METHODS } from '../../shared/wsl-hook-relay-contract'
 
 type GuestHarness = {
   transport: MultiplexerTransport
@@ -402,7 +410,7 @@ describe('WslHookRelayManager', () => {
     manager.disposeAll()
   })
 
-  it('is inert off-Windows, when remote hooks are disabled, and when agent status hooks are off', async () => {
+  it('is inert off-Windows but keeps relay residency when hooks are disabled', async () => {
     const offPlatform = createManager({ platform: () => 'darwin' })
     offPlatform.manager.ensureForDistro('Ubuntu')
     const disabled = createManager({ remoteHooksEnabled: () => false })
@@ -413,11 +421,12 @@ describe('WslHookRelayManager', () => {
     hooksOff.manager.ensureForDistro('Ubuntu')
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(offPlatform.deps.spawnRelay).not.toHaveBeenCalled()
-    expect(disabled.deps.spawnRelay).not.toHaveBeenCalled()
-    expect(hooksOff.deps.spawnRelay).not.toHaveBeenCalled()
+    expect(disabled.deps.spawnRelay).toHaveBeenCalledTimes(1)
+    expect(hooksOff.deps.spawnRelay).toHaveBeenCalledTimes(1)
+    expect(hooksOff.deps.installHooks).not.toHaveBeenCalled()
   })
 
-  it('stops live relays and refuses to revive them once agent status hooks are switched off', async () => {
+  it('keeps identity relay residency when agent status hooks are switched off', async () => {
     const settings = { agentStatusHooksEnabled: true }
     const { manager, deps } = createManager({ managedHookSettings: () => settings })
     manager.ensureForDistro('Ubuntu', codexHome)
@@ -429,16 +438,58 @@ describe('WslHookRelayManager', () => {
     manager.ensureForDistro('Ubuntu')
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
+    expect(deps.spawnRelay).toHaveBeenCalledTimes(2)
     expect(deps.installHooks).toHaveBeenCalledTimes(1)
-    expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull()
+    expect(manager.getGuestEndpointFilePath('Ubuntu')).not.toBeNull()
 
     // Re-enabling puts the relay back without waiting for the next WSL spawn.
     settings.agentStatusHooksEnabled = true
     manager.resumeStoppedRelays()
-    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(2))
-    await vi.waitFor(() => expect(deps.installCodex).toHaveBeenCalledTimes(2))
-    expect(deps.installCodex).toHaveBeenLastCalledWith(codexHome, 'Ubuntu')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(deps.spawnRelay).toHaveBeenCalledTimes(2)
+    expect(deps.installCodex).toHaveBeenCalled()
+    manager.disposeAll()
+  })
+
+  it('serves identity reads through connectWslRelayState with hooks disabled', async () => {
+    resetWslRelayIdentityRpcCount()
+    resetWslRelayGuestHookInstallCount()
+    resetAgentHookRemotePostCount()
+    const waitForSentinel = vi.fn(async () => {
+      const transport = guestTransport()
+      const guest = harnesses.at(-1)!.guestDispatcher
+      guest.onRequest(WSL_RELAY_PROCESS_METHODS.identityRead, async (params) => ({
+        capability: 'process.identity',
+        results: (params as { anchors: unknown[] }).anchors.map((anchor) => ({
+          status: 'live',
+          processName: 'claude',
+          anchor,
+          capturedAgeMs: 0
+        }))
+      }))
+      return transport
+    })
+    const { manager, deps } = createManager({
+      waitForSentinel,
+      managedHookSettings: () => ({ agentStatusHooksEnabled: false })
+    })
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(manager.getGuestEndpointFilePath('Ubuntu')).not.toBeNull())
+
+    const anchor = {
+      distro: 'Ubuntu',
+      bootId: '11111111-1111-1111-1111-111111111111',
+      shellPid: 1,
+      shellStartTime: 1,
+      tty: '/dev/pts/1'
+    }
+    await expect(manager.readProcessIdentity('Ubuntu', [anchor])).resolves.toMatchObject([
+      { status: 'live', processName: 'claude' }
+    ])
+    expect(getWslRelayIdentityRpcCount()).toBe(1)
+    expect(getWslRelayGuestHookInstallCount()).toBe(0)
+    expect(getAgentHookRemotePostCount()).toBe(0)
+    expect(deps.installHooks).not.toHaveBeenCalled()
     manager.disposeAll()
   })
 

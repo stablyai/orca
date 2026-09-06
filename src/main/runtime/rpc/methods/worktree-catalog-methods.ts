@@ -12,13 +12,15 @@ export const WORKTREE_CATALOG_METHODS: RpcMethod[] = [
     name: 'worktree.ps',
     params: WorktreePsParams,
     handler: async (params, context) => {
-      const result = await context.runtime.getWorktreePs(
-        params.limit,
-        supportsWorktreeVisibilitySourceDefaults(
-          context,
-          params.supportsWorktreeVisibilitySourceDefaults
-        )
+      const supportsSourceDefaults = supportsWorktreeVisibilitySourceDefaults(
+        context,
+        params.supportsWorktreeVisibilitySourceDefaults
       )
+      const result = context.signal
+        ? await context.runtime.getWorktreePs(params.limit, supportsSourceDefaults, {
+            signal: context.signal
+          })
+        : await context.runtime.getWorktreePs(params.limit, supportsSourceDefaults)
       // Why: callers that never send the field get the byte-exact legacy response.
       return params.afterSnapshotId === undefined
         ? result

@@ -22,6 +22,8 @@ export type PtyListedSession = {
    * Manager force-kill live agent sessions (#8459).
    */
   agentOwnership: AgentOwnershipEvidence
+  /** Optional process evidence from the execution host; absent on older providers. */
+  foregroundProcessEvidence?: ForegroundProcessEvidence
 }
 
 /** Only proven absence authorizes destroying a session without asking. */
@@ -30,3 +32,4 @@ export function mayDestroyWithoutOwnerEvidence(session: {
 }): boolean {
   return session.agentOwnership === 'absent'
 }
+import type { ForegroundProcessEvidence } from './foreground-process-evidence'

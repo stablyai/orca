@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildWslCapturedLoginShellCommand,
+  buildWslCapturedLoginShellCommandFromEnv,
   buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
   buildWslLoginShellCommand,
@@ -239,6 +240,22 @@ describe('wsl login shell command helpers', () => {
 
       expect(captured.command).toContain('_orca_capture_status=$?')
       expect(captured.command).toContain('exit $_orca_capture_status')
+    })
+
+    it('keeps an env-delivered nonce out of the command argv', () => {
+      const captured = buildWslCapturedLoginShellCommandFromEnv(
+        'printf payload',
+        'ORCA_WSL_CAPTURE_NONCE',
+        'nonce-env'
+      )
+      expect(captured.command).not.toContain('nonce-env')
+      expect(captured.command).toContain('${ORCA_WSL_CAPTURE_NONCE:-}')
+      expectValidShSyntax(captured.command)
+      expect(
+        captured.readStdout(
+          `noise\n__ORCA_WSL_CAPTURE_BEGIN_nonce-env__payload__ORCA_WSL_CAPTURE_END_nonce-env__`
+        )
+      ).toBe('payload')
     })
 
     it('keeps payload bytes that themselves contain a fence', () => {
