@@ -265,6 +265,12 @@ export async function acquireClaudeSession({
     })
     const acquired: AgentSessionAcquisition = publication.acquisition
     liveSession = publication.session
+    if (deps.onLateDispatchAccepted) {
+      const notify = deps.onLateDispatchAccepted
+      const bound = publication.session
+      bound.onLateDispatchAccepted = ({ clientMessageId, uuid }) =>
+        notify({ sessionId, clientMessageId, uuid, providerSessionId: bound.providerSessionId })
+    }
     await restoreClaudeStructuredSessionOptions(liveSession, deps.requestTimeoutMs)
     acquisitions.assertCurrent(sessionId, attempt)
     acquisitions.deleteIfCurrent(sessionId, attempt)

@@ -338,6 +338,54 @@ describe('send', () => {
     expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'unknown' } } })
   })
 
+  it('settles an unknown submission accepted when its replay lands late', async () => {
+    await attach()
+    dispatch.mockResolvedValueOnce({ state: 'unknown', reason: 'no replay in time' })
+    const body = hostTestMessage('add a retry')
+    const result = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    if (!result.ok) {
+      throw new Error(`expected a send, got ${result.refusal.code}`)
+    }
+    expect(result.value.submission.dispatchState).toBe('unknown')
+
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: result.value.clientMessageId,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-late', ordinal: 0 }
+    })
+
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const settled = (page.ok ? page.page.submissions : []).find(
+      (entry) => entry.clientMessageId === result.value.clientMessageId
+    )
+    expect(settled?.dispatchState).toBe('accepted')
+    // The message was already delivered; a late settlement must never re-dispatch it.
+    expect(dispatch).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves an already accepted submission alone when a late replay arrives', async () => {
+    await attach()
+    const body = hostTestMessage('add a retry')
+    const result = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    if (!result.ok) {
+      throw new Error(`expected a send, got ${result.refusal.code}`)
+    }
+    const before = host.history({ sessionId: SESSION, direction: 'tail' })
+    await host.settleLateDispatch({
+      sessionId: SESSION,
+      clientMessageId: result.value.clientMessageId,
+      providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-late', ordinal: 0 }
+    })
+    const after = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(after.ok && after.page.fence).toBe(before.ok && before.page.fence)
+  })
+
   it('replays a retried send from the journal without dispatching twice', async () => {
     await attach()
     const body = hostTestMessage('add a retry')

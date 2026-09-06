@@ -147,6 +147,12 @@ function recoverLateIdentity(
     session.activeTurnId = uuid
     session.activeTurnSequence = waiter.dispatchSequence
   }
+  // The waiter is retired, so its send already returned `unknown`. A user replay is Claude
+  // echoing the message, which proves delivery — regardless of whether a newer dispatch has
+  // since started, so this is deliberately not gated on `dispatchSequence`.
+  if (isUserReplay) {
+    session.onLateDispatchAccepted?.({ clientMessageId: waiter.clientMessageId, uuid })
+  }
   return isUserReplay && waiter.dispatchSequence === session.dispatchSequence
 }
 
@@ -155,12 +161,14 @@ function waitForReplay(
   timeoutMs: number,
   acceptsResult: boolean,
   sentUuid: string,
-  replayContentKey: string
+  replayContentKey: string,
+  clientMessageId: string
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
     waiter = {
       acceptsResult,
+      clientMessageId,
       sentUuid,
       dispatchSequence: session.dispatchSequence,
       replayContentKey,
@@ -220,7 +228,8 @@ export async function dispatchClaudeTurn(
     timeoutMs,
     acceptsResult,
     sentUuid,
-    claudeDispatchContentKey(content)
+    claudeDispatchContentKey(content),
+    input.clientMessageId
   )
   const replayed = replay.promise
   try {
