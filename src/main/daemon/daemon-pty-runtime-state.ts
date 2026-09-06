@@ -1,3 +1,4 @@
+import { addRemovableListener } from './add-removable-listener'
 import { DaemonClient } from './client'
 import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 import type {
@@ -10,7 +11,6 @@ import { SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION } from './daemon-p
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { readDaemonPidRecord } from './daemon-endpoint-incarnation'
-import { removeDaemonListener } from './daemon-listener-registry'
 import type { ParsedDaemonPid } from './daemon-pid-file-parse'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
@@ -273,15 +273,13 @@ export abstract class DaemonPtyRuntimeState {
   }
 
   onDaemonIdentityChanged(listener: (event: DaemonIdentityChangeEvent) => void): () => void {
-    this.identityChangeListeners.push(listener)
-    return () => removeDaemonListener(this.identityChangeListeners, listener)
+    return addRemovableListener(this.identityChangeListeners, listener)
   }
 
   onAuditEligibilityObservation(
     listener: (observation: DaemonAuditObservation) => void
   ): () => void {
-    this.auditObservationListeners.push(listener)
-    return () => removeDaemonListener(this.auditObservationListeners, listener)
+    return addRemovableListener(this.auditObservationListeners, listener)
   }
 
   supportsAgentSessionClaims(): boolean {

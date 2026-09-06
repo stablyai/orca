@@ -10,7 +10,7 @@ import {
 } from './daemon-endpoint-incarnation'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
-import { notifyDaemonAuditListeners } from './daemon-listener-registry'
+import { notifyDaemonAuditListeners } from './notify-daemon-audit-listeners'
 import { DaemonPtyEventSubscriptions } from './daemon-pty-event-subscriptions'
 import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 

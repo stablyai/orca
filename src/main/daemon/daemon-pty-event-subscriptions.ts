@@ -1,4 +1,5 @@
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import { addRemovableListener } from './add-removable-listener'
 import { DaemonPtySessionInventory } from './daemon-pty-session-inventory'
 import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
@@ -13,23 +14,11 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       seq?: number
     }) => void
   ): () => void {
-    this.dataListeners.push(callback)
-    return () => {
-      const idx = this.dataListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.dataListeners.splice(idx, 1)
-      }
-    }
+    return addRemovableListener(this.dataListeners, callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
-    this.backgroundStreamListeners.push(callback)
-    return () => {
-      const idx = this.backgroundStreamListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.backgroundStreamListeners.splice(idx, 1)
-      }
-    }
+    return addRemovableListener(this.backgroundStreamListeners, callback)
   }
 
   onReplay(_callback: (payload: { id: string; data: string }) => void): () => void {
@@ -39,23 +28,11 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
   onExit(
     callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
   ): () => void {
-    this.exitListeners.push(callback)
-    return () => {
-      const idx = this.exitListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.exitListeners.splice(idx, 1)
-      }
-    }
+    return addRemovableListener(this.exitListeners, callback)
   }
 
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
-    this.writeUnavailableListeners.push(callback)
-    return () => {
-      const idx = this.writeUnavailableListeners.indexOf(callback)
-      if (idx !== -1) {
-        this.writeUnavailableListeners.splice(idx, 1)
-      }
-    }
+    return addRemovableListener(this.writeUnavailableListeners, callback)
   }
 
   protected emitWriteUnavailable(id: string): void {
