@@ -24,12 +24,3 @@ permissions, the accessibility tree, and logcat. Read it first, then run the spe
 command you need.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA emulator devices --json
-```
-
-<!-- shared: older-binary-outro -->

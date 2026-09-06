@@ -26,13 +26,3 @@ PR/MR links, and triaging issues. The `orca-linear` topic serves the same conten
 first, then run the specific command you need.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA linear --help
-ORCA linear issue --current --full --json
-```
-
-<!-- shared: older-binary-outro -->

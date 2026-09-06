@@ -108,31 +108,6 @@ describe('bundled skill guide generator', () => {
     }
   })
 
-  it('keeps pre-guide fallback useful and read-only for every converted domain', async () => {
-    const expectedFallbackCommands = {
-      'computer-use': ['ORCA computer capabilities --json', 'ORCA computer list-apps --json'],
-      'linear-tickets': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
-      'orca-emulator': ['ORCA emulator list --json'],
-      'orca-emulator-android': ['ORCA emulator devices --json'],
-      'orca-linear': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
-      'orca-per-workspace-env': ['ORCA vm recipe doctor <recipe-id> --repo-path <repo> --json'],
-      orchestration: ['ORCA orchestration task-list --json', 'ORCA terminal list --json']
-    }
-
-    // Why: the fallback heading is now single-authored in the shared fragment, so the
-    // per-topic source no longer carries it — assert on the projection that actually ships.
-    for (const [name, commands] of Object.entries(expectedFallbackCommands)) {
-      const stub = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
-      const fallback = stub.split('## If an older Orca does not recognize `skills get`')[1]
-
-      expect(fallback, name).toBeDefined()
-      for (const command of commands) {
-        expect(fallback, name).toContain(command)
-      }
-      expect(fallback, name).not.toContain('ORCA worktree ps --json')
-    }
-  })
-
   it('uses the exported recipe id variable in per-workspace environment examples', async () => {
     // The guide is a kernel plus conditional references, so the env-var contract is asserted over
     // the whole corpus while the name-building recipe is pinned in the file that now carries it.
@@ -264,7 +239,13 @@ describe('bundled skill guide generator', () => {
         expect(reference.markdown).toBe(
           normalizeMarkdown(
             await readFile(
-              path.join(projectDir, 'skill-guides', guide.name, 'references', `${reference.name}.md`),
+              path.join(
+                projectDir,
+                'skill-guides',
+                guide.name,
+                'references',
+                `${reference.name}.md`
+              ),
               'utf8'
             )
           )
@@ -290,8 +271,6 @@ describe('bundled skill guide generator', () => {
     for (const name of ['orca-cli', 'computer-use', 'orca-emulator', 'orca-emulator-android']) {
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
 
-      expect(source).toContain('PowerShell')
-      expect(source).toContain('cmd.exe')
       expect(source).toMatch(/^ORCA .+--json$/mu)
       // Why: bare command lines can launch GNOME Orca, while shell variables make
       // the same guide unusable from PowerShell and cmd.exe.
@@ -300,15 +279,15 @@ describe('bundled skill guide generator', () => {
     }
   })
 
-  // Why: `skills get` already ran on a resolved executable, so guide bodies name that
-  // executable instead of carrying another copy of the ladder the stubs own.
-  it('points every guide at the executable that ran skills get', async () => {
+  // Why: `skills get` already ran on a resolved executable, so guide bodies point back at the
+  // stub's resolution instead of carrying another copy of the ladder the stubs own.
+  it('points every guide at the executable the stub resolved', async () => {
     // orchestration.md is rewritten to this contract by its own PR (#16904).
     for (const name of CANONICAL_GUIDE_NAMES.filter((name) => name !== 'orchestration')) {
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
 
       expect(source.replace(/\s+/gu, ' '), name).toContain(
-        'the executable you used to run `skills get`'
+        'the executable you resolved in the stub'
       )
       expect(source, name).not.toContain('ORCA_CLI_COMMAND')
     }
@@ -416,12 +395,7 @@ describe('bundled skill guide generator', () => {
   it('projects one shared resolver fragment byte-for-byte into every stub', async () => {
     const blocks = await readSharedStubBlocks(projectDir)
 
-    expect([...blocks.keys()]).toEqual([
-      'resolver',
-      'no-guessing',
-      'older-binary-intro',
-      'older-binary-outro'
-    ])
+    expect([...blocks.keys()]).toEqual(['resolver', 'no-guessing'])
     // Why: the guide copies of this warning had each dropped one half. #7904 is the incident
     // where bare `orca` started the screen reader talking on a user's Ubuntu box.
     expect(blocks.get('resolver').text).toContain('(`/usr/bin/orca`)')
@@ -429,15 +403,7 @@ describe('bundled skill guide generator', () => {
     for (const name of STUB_TOPICS) {
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
       for (const [id, block] of blocks) {
-        const expected = block.reflow ? null : block.text
-        if (expected === null) {
-          // The reflowed block carries the topic, so assert its substituted sentence instead.
-          expect(projection.replace(/\s+/gu, ' '), `${name}/${id}`).toContain(
-            `\`ORCA skills get ${name}\`. Beyond these commands, ask the user rather than guessing a command surface this older binary may not support.`
-          )
-          continue
-        }
-        expect(projection.split(expected), `${name}/${id}`).toHaveLength(2)
+        expect(projection.split(block.text), `${name}/${id}`).toHaveLength(2)
       }
       // The `ORCA` placeholder rule is stated once, in the fragment, never restated.
       expect(projection.split('is a placeholder for the executable'), name).toHaveLength(2)

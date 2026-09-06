@@ -15,30 +15,12 @@ description: >-
 
 Use `ORCA linear` when Linear is the source of task context or ticket updates.
 
-`ORCA` is a placeholder for the executable you used to run `skills get`. Substitute it before
-running; do not make a shell variable or run `ORCA` literally.
+`ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
 
 `orca-linear` and `linear-tickets` are skill names, not CLI namespaces. Always run
 `ORCA linear ...` commands.
 
 Prefer `--json` for agent-driven calls. Use plain chat updates when no Linear-linked task exists or when the user did not ask to touch Linear.
-
-## Preconditions
-
-```bash
-ORCA status --json
-ORCA linear --help
-```
-
-If Orca is not running, start it:
-
-```bash
-ORCA open --json
-ORCA status --json
-```
-
-`ORCA linear --help` and each verb's `--help` are the authority on the command surface. Where
-they disagree with this guide, trust them and tell the user the guide may be stale.
 
 ## Read First
 

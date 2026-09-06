@@ -26,9 +26,9 @@ is on the project's primary branch. Only the user can defer that, and only by sa
 **Safe failure:** stop and report the provider's own error text and the command that produced it.
 Never paraphrase a provider error, and never leave a paid resource running.
 
-`ORCA` in every example is the executable you used to run `skills get`. Substitute it before
-running; do not make a shell variable or run `ORCA` literally. Inside the lifecycle scripts the
-placeholder does not apply: `orca serve` written there runs on the remote machine's own binary.
+`ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
+Inside the lifecycle scripts the placeholder does not apply: `orca serve` written there runs on
+the remote machine's own binary.
 
 ## Autonomy envelope
 

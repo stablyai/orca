@@ -1,19 +1,14 @@
 ---
 name: orca-cli
 description: >-
-  Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, artifacts, skill sharing, worktree comments, and the browser
-  embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
-  "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
-  "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
-  "share HTML/Markdown", "public artifact link", "share skills", or "control the browser inside
-  Orca". Prefer this over raw `git worktree`, ad hoc
-  PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
-  Use Computer Use for external browser windows, webviews, or desktop UI only
-  when the task requires OS/window-level control such as focus, menus, dialogs,
-  coordinates, or screenshots. Use `orca-cli` for Orca's embedded pages and a
-  page-automation tool such as Playwright or CDP for external pages.
+  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, artifacts,
+  skill sharing, worktree comments, and Orca's embedded browser through the `orca` CLI. Use
+  when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
+  worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
+  agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
+  worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
+  for external windows or desktop UI that needs OS-level control, and Playwright or CDP for
+  external pages.
 ---
 
 # Orca CLI
@@ -22,22 +17,9 @@ Use `orca` when Orca's running editor/runtime is the source of truth. Use plain 
 
 ## Start Here
 
-`ORCA` in every example is the executable you used to run `skills get`. Keep using that executable. Substitute it before running anything; do not make a shell variable or run `ORCA` literally. This holds in POSIX shells, PowerShell, and cmd.exe.
+`ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
 
 **Dev builds (`pnpm dev`):** after `pnpm build:cli` the dev CLI is `orca-dev`, and `./config/scripts/orca-dev.mjs` invokes it worktree-locally without depending on the /usr/local/bin symlink. Plain `orca` targets any installed production Orca.
-
-```text
-ORCA status --json
-ORCA worktree ps --json
-ORCA terminal list --json
-```
-
-If Orca is not running, start it:
-
-```text
-ORCA open --json
-ORCA status --json
-```
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 

@@ -25,13 +25,3 @@ next commands — reading ticket context, posting updates, moving workflow state
 PR/MR links, and triaging issues. Read it first, then run the specific command you need.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA linear --help
-ORCA linear issue --current --full --json
-```
-
-<!-- shared: older-binary-outro -->

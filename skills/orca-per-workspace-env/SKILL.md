@@ -45,26 +45,8 @@ next commands — provider setup, base and auth snapshots, `environmentRecipes` 
 `orca.yaml`, lifecycle scripts, and `orca vm recipe doctor`. Read it first, then run the
 specific command you need.
 
-Don't guess subcommands or flags from memory or from a cached copy of this stub. They
-change between Orca releases, and this file deliberately no longer lists them. Confirm the
-app is up with `ORCA status --json` (start it with `ORCA open --json` if needed), and
-prefer `--json` for agent-driven calls.
-
-## If an older Orca does not recognize `skills get`
-
-Use this fallback only when the selected binary explicitly reports that `skills get` is an
-unknown command. Another failure is not proof of an older binary; report it rather than
-guessing or changing executables. For a confirmed pre-guide binary, use only this bounded,
-read-only bootstrap to orient. Do not dead-end and do not invent commands:
-
-```text
-ORCA status --json
-ORCA vm recipe doctor <recipe-id> --repo-path <repo> --json
-```
-
-The doctor command above is the free static check. Never add `--provision` without the
-user's explicit approval: it creates provider resources and spends the user's cloud money.
-
-Then tell the user that updating Orca restores the full, version-matched guide via
-`ORCA skills get orca-per-workspace-env`. Beyond these commands, ask the user rather than
-guessing a command surface this older binary may not support.
+Don't guess subcommands or flags from memory or from a cached copy of this stub. They change
+between Orca releases, and this file deliberately no longer lists them. Prefer `--json` for
+agent-driven calls. If a command reports that Orca is not running, start it with `ORCA open
+--json` and retry. If the binary does not recognize `skills get`, it predates this guide:
+tell the user that updating Orca restores it, and ask before running anything else.

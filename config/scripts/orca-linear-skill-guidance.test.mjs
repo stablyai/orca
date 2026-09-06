@@ -71,7 +71,7 @@ describe('orca-linear skill guidance', () => {
       const skill = readFileSync(guidePath, 'utf8')
 
       expect(skill, guidePath).toContain(
-        '`ORCA` is a placeholder for the executable you used to run `skills get`'
+        '`ORCA` is a placeholder for the executable you resolved in the stub'
       )
       expect(skill, guidePath).not.toMatch(/^orca /mu)
       expect(skill, guidePath).not.toMatch(/\$ORCA(?:_|\b)/u)
@@ -104,14 +104,6 @@ describe('orca-linear install stubs', () => {
       expect(stub).toContain('orca-ide')
       expect(stub).toContain('GNOME Orca screen reader')
       expect(stub).not.toMatch(/^orca /mu)
-    })
-
-    it(`gives an older ${name} binary a bounded fallback instead of a dead end`, () => {
-      const stub = readFileSync(stubPath, 'utf8').replace(/\s+/gu, ' ')
-
-      expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
-      expect(stub).toContain('do not invent commands')
-      expect(stub).toContain('ask the user rather than guessing')
     })
 
     it(`keeps the Linear untrusted-source boundary in the ${name} stub`, () => {

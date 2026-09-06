@@ -30,10 +30,7 @@ describe('orca CLI skill guidance', () => {
     const description = skill.replace(/\s+/gu, ' ')
 
     expect(description).toContain(
-      'Use Computer Use for external browser windows, webviews, or desktop UI only when the task requires OS/window-level control such as focus, menus, dialogs, coordinates, or screenshots.'
-    )
-    expect(description).toContain(
-      "`orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages."
+      'Use Computer Use only for external windows or desktop UI that needs OS-level control, and Playwright or CDP for external pages.'
     )
     expect(skill).toContain(
       'For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool only when the task requires OS/window-level control'
@@ -93,7 +90,9 @@ describe('orca CLI skill guidance', () => {
     const skill = readSkill()
 
     expect(skill).toContain('ORCA skills get orca-cli --reference references/<file>.md')
-    expect(skill).toContain('If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full`')
+    expect(skill).toContain(
+      'If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full`'
+    )
     for (const reference of [
       'references/browser.md',
       'references/automations.md',
@@ -191,21 +190,12 @@ describe('orca CLI install stub', () => {
     expect(stub).not.toMatch(/^orca /mu)
   })
 
-  it('gives older binaries a bounded fallback instead of a dead end', () => {
-    const stub = readSkill(stubPath).replace(/\s+/gu, ' ')
-
-    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
-    expect(stub).toContain('do not invent commands')
-    expect(stub).toContain('ask the user rather than guessing')
-  })
-
-  it('does not mistake resolution or execution failures for an older binary', () => {
+  it('does not fall through to another executable on a resolution failure', () => {
     const stub = readSkill(stubPath).replace(/\s+/gu, ' ')
 
     // Falling through can silently pair a version-matched guide with the wrong Orca build.
     expect(stub).toContain('report its exact error and stop')
     expect(stub).toContain('Do not fall through to another executable')
-    expect(stub).toContain('Another failure is not proof of an older binary')
   })
 
   it('drops the changing command reference from the installable file', () => {

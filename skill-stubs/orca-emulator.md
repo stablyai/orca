@@ -24,12 +24,3 @@ next commands — booting devices, taps and gestures, typing, hardware buttons, 
 the accessibility tree. Read it first, then run the specific command you need.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA emulator list --json
-```
-
-<!-- shared: older-binary-outro -->

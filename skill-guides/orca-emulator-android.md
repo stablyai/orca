@@ -12,9 +12,7 @@ license: Apache-2.0
 
 # Orca Emulator (Android)
 
-`ORCA` in every example, including tables and prose, is the executable you used to run
-`skills get`. Substitute it before running; do not make a shell variable or run `ORCA`
-literally. The examples work in POSIX shells, PowerShell, and cmd.exe.
+`ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
 
 ## Command surface
 

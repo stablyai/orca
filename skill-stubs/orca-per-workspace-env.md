@@ -18,15 +18,3 @@ next commands — provider setup, base and auth snapshots, `environmentRecipes` 
 specific command you need.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA vm recipe doctor <recipe-id> --repo-path <repo> --json
-```
-
-The doctor command above is the free static check. Never add `--provision` without the
-user's explicit approval: it creates provider resources and spends the user's cloud money.
-
-<!-- shared: older-binary-outro -->

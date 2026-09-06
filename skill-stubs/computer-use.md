@@ -22,13 +22,3 @@ next commands — listing apps/windows, reading UI, and driving clicks, typing, 
 accessibility actions. Read it first, then run the specific command you need.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA computer capabilities --json
-ORCA computer list-apps --json
-```
-
-<!-- shared: older-binary-outro -->

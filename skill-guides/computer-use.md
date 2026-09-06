@@ -1,12 +1,9 @@
 ---
 name: computer-use
 description: >-
-  Use Orca's computer-use CLI for OS/window-level inspection and input in visible
-  local app windows. Use when a task must read or operate a native app or an
-  external browser window (for example, Chrome, Edge, or Safari) or an app
-  webview. Do not use for Orca's embedded browser or page-only browser
-  automation. Use `orca-cli` for Orca's embedded pages and a page-automation
-  tool such as Playwright or CDP for external pages.
+  OS/window-level inspection and input in visible local app windows through `orca computer`:
+  native apps, external browser windows (Chrome, Edge, Safari), and app webviews. Not for
+  Orca's embedded browser (use `orca-cli`) or page-only automation (use Playwright or CDP).
 ---
 
 # Computer Use
@@ -15,15 +12,12 @@ Use this skill for desktop UI through `orca computer`. For a website or web app,
 
 ## Preconditions
 
-- `ORCA` in every example, including the shell-specific ones, is the executable you used to run
-  `skills get`. Substitute it before running; do not make a shell variable or run `ORCA`
-  literally. Blocks that name no shell work in POSIX shells, PowerShell, and cmd.exe.
+- `ORCA` is a placeholder for the executable you resolved in the stub; substitute it before running.
 - Prefer `--json`; see Screenshots below for image output.
 - Do not push, submit forms, send messages, buy items, delete data, change account settings, or expose secrets unless the user explicitly asked for that action.
 - If an app contains sensitive content, read only what the user requested.
 
 ```text
-ORCA status --json
 ORCA computer capabilities --json
 ```
 

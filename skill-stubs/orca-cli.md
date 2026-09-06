@@ -24,13 +24,3 @@ next commands — worktrees, handoffs, terminals, automations, and the built-in 
 Read it first, then run the specific command you need.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA worktree ps --json
-ORCA terminal list --json
-```
-
-<!-- shared: older-binary-outro -->

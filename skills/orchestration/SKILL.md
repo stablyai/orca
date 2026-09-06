@@ -1,18 +1,11 @@
 ---
 name: orchestration
 description: >-
-  Coordinate supervised Orca workers: threaded messages, blocking ask/reply,
-  task dispatch, worker_done/escalation waits, task DAGs, decision gates,
-  coordinator loops, and decomposing work across agents. Use `orca-cli` for full
-  ownership handoffs — "hand off", "handoff", "handover", "give this to another
-  agent", "another worktree" — unless asked to supervise, monitor, or coordinate
-  a DAG, and for terminal control, lightweight terminal prompts, shell commands,
-  Orca worktree management, and reading or waiting on terminals. Use Computer
-  Use for external browser windows, webviews, Orca app UI, or desktop UI outside
-  Orca's embedded browser only when the task requires OS/window-level control
-  such as focus, menus, dialogs, coordinates, or screenshots. Use `orca-cli` for
-  Orca's embedded pages and a page-automation tool such as Playwright or CDP for
-  external pages.
+  Coordinate supervised Orca workers: threaded messages, blocking ask/reply, task dispatch,
+  worker_done/escalation waits, task DAGs, decision gates, coordinator loops, and decomposing
+  work across agents. Use `orca-cli` instead for unsupervised handoffs ("hand off", "handoff",
+  "handover", "give this to another agent", "another worktree") and for plain terminal, shell,
+  or worktree work.
 ---
 
 # Orca Orchestration
@@ -63,24 +56,8 @@ reference that gate names with
 (`--references` lists the names). If that binary rejects `--reference`, run
 `ORCA skills get orchestration --full` and read the named bundled reference before acting.
 
-Don't guess subcommands or flags from memory or from a cached copy of this stub. They
-change between Orca releases, and this file deliberately no longer lists them. Confirm the
-app is up with `ORCA status --json` (start it with `ORCA open --json` if needed), and
-prefer `--json` for agent-driven calls.
-
-## If an older Orca does not recognize `skills get`
-
-Use this fallback only when the selected binary explicitly reports that `skills get` is an
-unknown command. Another failure is not proof of an older binary; report it rather than
-guessing or changing executables. For a confirmed pre-guide binary, use only this bounded,
-read-only bootstrap to orient. Do not dead-end and do not invent commands:
-
-```text
-ORCA status --json
-ORCA orchestration task-list --json
-ORCA terminal list --json
-```
-
-Then tell the user that updating Orca restores the full, version-matched guide via
-`ORCA skills get orchestration`. Beyond these commands, ask the user rather than guessing a
-command surface this older binary may not support.
+Don't guess subcommands or flags from memory or from a cached copy of this stub. They change
+between Orca releases, and this file deliberately no longer lists them. Prefer `--json` for
+agent-driven calls. If a command reports that Orca is not running, start it with `ORCA open
+--json` and retry. If the binary does not recognize `skills get`, it predates this guide:
+tell the user that updating Orca restores it, and ask before running anything else.

@@ -30,13 +30,3 @@ reference that gate names with
 `ORCA skills get orchestration --full` and read the named bundled reference before acting.
 
 <!-- shared: no-guessing -->
-
-<!-- shared: older-binary-intro -->
-
-```text
-ORCA status --json
-ORCA orchestration task-list --json
-ORCA terminal list --json
-```
-
-<!-- shared: older-binary-outro -->
