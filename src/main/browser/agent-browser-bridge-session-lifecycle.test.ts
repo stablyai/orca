@@ -81,6 +81,14 @@ function closeCallCount(): number {
 describe('AgentBrowserBridge', () => {
   let bridge: AgentBrowserBridge
 
+  // The mocked fs has no mkdirSync, so the constructor never claims a socket directory itself.
+  function ownSocketDirectory(): void {
+    Object.assign(bridge, {
+      ownsAgentBrowserSocketDirectory: true,
+      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
+    })
+  }
+
   beforeEach(() => {
     resetAgentBrowserBridgeMocks({
       webContentsFromIdMock,
@@ -89,35 +97,28 @@ describe('AgentBrowserBridge', () => {
       stdinWrites,
       cdpWsProxyInstances: CdpWsProxyMock.instances
     })
+    // Default to a socket that exists so an unprepared test still takes the reset path.
+    lstatSyncMock.mockReset()
+    lstatSyncMock.mockReturnValue({})
     bridge = new AgentBrowserBridge(mockBrowserManager())
     bridge.setActiveTab(100)
   })
 
   it('snapshots a fresh owned session without launching a helper just to close it', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    Object.assign(bridge, {
-      ownsAgentBrowserSocketDirectory: true,
-      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
-    })
+    ownSocketDirectory()
     lstatSyncMock.mockImplementation(() => {
       throw Object.assign(new Error('No socket'), { code: 'ENOENT' })
     })
     webContentsFromIdMock.mockReturnValue(mockWebContents(100))
     succeedWith({ snapshot: 'ready' })
 
-    try {
-      expect(await bridge.snapshot()).toMatchObject({ snapshot: 'ready' })
-      expect(closeCallCount()).toBe(0)
-    } finally {
-      vi.restoreAllMocks()
-    }
+    expect(await bridge.snapshot()).toMatchObject({ snapshot: 'ready' })
+    expect(closeCallCount()).toBe(0)
+    expect(lstatSyncMock).toHaveBeenCalledWith('/tmp/orca-ab-test/orca-tab-tab-1.sock')
   })
 
   it('fails closed when stale agent-browser session ownership cannot be reset', async () => {
-    Object.assign(bridge, {
-      ownsAgentBrowserSocketDirectory: true,
-      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
-    })
+    ownSocketDirectory()
     lstatSyncMock.mockReturnValue({})
     vi.useFakeTimers()
     try {

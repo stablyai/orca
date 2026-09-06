@@ -176,7 +176,6 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
   protected closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
     if (
       canSkipAgentBrowserSessionReset({
-        platform: process.platform,
         ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
         socketDirectory: this.agentBrowserEnv.AGENT_BROWSER_SOCKET_DIR,
         sessionName
