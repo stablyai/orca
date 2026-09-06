@@ -199,6 +199,16 @@ test.describe('reattach mouse-mode leak', () => {
           throw new Error('Active terminal screen unavailable')
         }
 
+        const writeEvents: unknown[] = []
+        const terminalWrite = pane.terminal.write.bind(pane.terminal)
+        pane.terminal.write = ((data: string | Uint8Array, callback?: () => void) => {
+          const text = typeof data === 'string' ? data : new TextDecoder().decode(data)
+          writeEvents.push({ at: performance.now(), length: text.length, mouseEnable: text.includes('[?1003h'), mouseDisable: text.includes('[?1003l'), stack: new Error().stack })
+          terminalWrite(data, () => {
+            writeEvents.push({ at: performance.now(), parsedMode: pane.terminal.modes.mouseTrackingMode })
+            callback?.()
+          })
+        }) as typeof pane.terminal.write
         const reports: string[] = []
         const disposable = pane.terminal.onData((data) => reports.push(data))
         const dispatchMotion = async (): Promise<void> => {
@@ -247,6 +257,7 @@ test.describe('reattach mouse-mode leak', () => {
 
           return {
             afterReattach,
+            writeEvents,
             requireAlt: pane.terminal.options.mouseEventsRequireAlt,
             connected: pane.terminal.element.isConnected,
             modeAfterArm: pane.terminal.modes.mouseTrackingMode,
@@ -258,6 +269,7 @@ test.describe('reattach mouse-mode leak', () => {
             armedMouseReporting: classAfterArm || armedReports > 0
           }
         } finally {
+          pane.terminal.write = terminalWrite
           disposable.dispose()
         }
       })
