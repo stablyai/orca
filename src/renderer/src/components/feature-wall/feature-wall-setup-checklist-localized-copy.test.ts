@@ -30,8 +30,10 @@ describe('feature-wall-setup-checklist-localized-copy', () => {
         .copy as Record<string, string>
       expect(Object.keys(localeKeys).length).toBe(16)
       for (const [hash, enVal] of Object.entries(enKeys)) {
-        expect(localeKeys[hash], hash).toBeTruthy()
-        expect(localeKeys[hash], hash).not.toBe(enVal)
+        const localeVal = localeKeys[hash]
+        expect(typeof localeVal, hash).toBe('string')
+        expect(localeVal, hash).toBeTruthy()
+        expect(localeVal, hash).not.toBe(enVal)
       }
     }
   )
