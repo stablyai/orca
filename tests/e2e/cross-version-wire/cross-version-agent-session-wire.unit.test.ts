@@ -21,6 +21,7 @@ import type { AgentSessionAttachParams } from '../../../src/main/native-chat/age
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
+import { captureTerminalInputArrivalTestTarget } from '../../../src/main/runtime/rpc/terminal-input-arrival-test-target'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
@@ -233,6 +234,7 @@ function runtimeStub(): unknown {
   const cleanups = new Map<string, () => void>()
   return {
     getRuntimeId: () => 'runtime-1',
+    captureTerminalInputArrivalTarget: captureTerminalInputArrivalTestTarget,
     ensureStructuredAgentSessionHost: async () => undefined,
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {
@@ -705,17 +707,19 @@ describe('cross-version structured agent sessions', () => {
           )
         )[0]
       ).toMatchObject({ ok: false, error: { code: 'agent_session_conflict' } })
-      expect(
-        (
-          await callBuild(
-            current,
-            'terminal.send',
-            { terminal: 'terminal-1', text: `codex resume '${THREAD}'`, enter: true },
-            { clientKind: 'runtime', clientCapabilities: legacyClientCapabilities() },
-            runtime
-          )
-        )[0]
-      ).toMatchObject({ ok: false, error: { code: 'agent_session_conflict' } })
+      const terminalReply = (
+        await callBuild(
+          current,
+          'terminal.send',
+          { terminal: 'terminal-1', text: `codex resume '${THREAD}'`, enter: true },
+          { clientKind: 'runtime', clientCapabilities: legacyClientCapabilities() },
+          runtime
+        )
+      )[0]
+      expect(terminalReply, JSON.stringify(terminalReply)).toMatchObject({
+        ok: false,
+        error: { code: 'agent_session_conflict' }
+      })
       expect(createMobileSessionTerminal).not.toHaveBeenCalled()
 
       // The positive control for the three refusals above: the same client, the

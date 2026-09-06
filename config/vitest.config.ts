@@ -9,6 +9,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // Extracted mobile endpoints use mobile's pinned v1 crypto package, not desktop's v2.
+      '@noble/hashes/hkdf': resolve('mobile/node_modules/@noble/hashes/hkdf.js'),
+      '@noble/hashes/sha256': resolve('mobile/node_modules/@noble/hashes/sha256.js'),
+      'expo-crypto': resolve('mobile/node_modules/expo-crypto/build/Crypto.js'),
       '@renderer': resolve('src/renderer/src'),
       '@': resolve('src/renderer/src')
     }

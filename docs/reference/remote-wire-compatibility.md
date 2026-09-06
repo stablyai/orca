@@ -154,10 +154,19 @@ Run it with:
 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
 ```
 
-The harness covers the terminal stream and the structured agent-session surface. It does
-**not** cover the session-tab sync channel, legacy agent-session publications, file or Git
-RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
-own reasoning against the three rules above.
+`cross-version-mobile-input.unit.test.ts` additionally pairs actual mobile E2EE sessions,
+physical channels, and stream registries with each build's encrypted host dispatcher over
+localhost WebSocket. All four version pairings must deliver exact UTF-8 and control bytes
+to a real PTY; current peers must negotiate ordered input, and mixed peers must agree with
+their same-version references. Released source uses the installed mobile crypto primitives;
+the Expo native random-byte boundary is mocked with Node crypto. JSON fallback requests are
+fixture-generated, and all pairings use the current runtime writer, so this does not prove
+the released app's full input-routing stack or released writer behavior.
+
+The harness does **not** cover the session-tab sync channel, legacy agent-session
+publications, file or Git RPCs, physical mobile keyboards, or the public relay service.
+The mobile journey does not yet cover reconnect or uncertain delivery. Changes on those
+paths still need their own reasoning against the three rules above.
 
 ## Worked example: `agentWait` on terminal and worker reads
 
