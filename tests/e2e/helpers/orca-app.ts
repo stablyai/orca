@@ -293,6 +293,13 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // especially on cold start with no prior dev userData. Isolated per-test
     // profiles make late-suite launches slower, so use the full test budget.
     const page = await electronApp.firstWindow({ timeout: 120_000 })
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      if (process.env.ORCA_E2E_HEADLESS === '1' && process.env.ORCA_E2E_HEADFUL !== '1') {
+        for (const window of BrowserWindow.getAllWindows()) {
+          window.webContents.setBackgroundThrottling(false)
+        }
+      }
+    })
     await page.waitForLoadState('domcontentloaded')
 
     // Wait for the store to be available
