@@ -87,6 +87,38 @@ describe('ReviewIcon', () => {
     expect(failing).toContain('text-rose-500/85')
   })
 
+  it('renders action-required checks in amber instead of failure red or passing green', () => {
+    const actionRequired = renderToStaticMarkup(
+      <ReviewIcon
+        review={{
+          provider: 'github',
+          number: 1,
+          title: 'Approval required',
+          state: 'open',
+          status: 'failure',
+          checksPresentationStatus: 'action_required'
+        }}
+        className="size-3"
+      />
+    )
+
+    expect(actionRequired).toContain('text-amber-500/85')
+    expect(actionRequired).not.toContain('text-rose-500/85')
+    expect(actionRequired).not.toContain('text-emerald-500/80')
+  })
+
+  it('keeps an open review neutral until its checks have loaded', () => {
+    const loadingChecks = renderToStaticMarkup(
+      <ReviewIcon
+        review={{ provider: 'github', number: 1, title: 'Loading checks', state: 'open' }}
+        className="size-3"
+      />
+    )
+
+    expect(loadingChecks).toContain('text-muted-foreground')
+    expect(loadingChecks).not.toContain('text-emerald-500/80')
+  })
+
   it('renders merged reviews with the merge glyph', () => {
     const merged = renderToStaticMarkup(
       <ReviewIcon

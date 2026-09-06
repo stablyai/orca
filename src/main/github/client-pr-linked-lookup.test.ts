@@ -284,6 +284,105 @@ describe('getPRForBranch', () => {
     )
   })
 
+  it('hydrates action-required checks when the exact PR rollup is partial and unstable', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'pr') {
+        return {
+          stdout: JSON.stringify({
+            number: 99,
+            title: 'Approval required',
+            state: 'OPEN',
+            url: 'https://github.com/acme/widgets/pull/99',
+            statusCheckRollup: [
+              {
+                __typename: 'CheckRun',
+                name: 'track-community-pr',
+                status: 'COMPLETED',
+                conclusion: 'SUCCESS',
+                detailsUrl: 'https://github.com/acme/widgets/actions/runs/1'
+              }
+            ],
+            updatedAt: '2026-08-26T10:00:00Z',
+            isDraft: false,
+            mergeable: 'MERGEABLE',
+            reviewDecision: '',
+            mergeStateStatus: 'UNSTABLE',
+            autoMergeRequest: null,
+            baseRefName: 'main',
+            headRefName: 'feature',
+            headRefOid: 'head-oid'
+          })
+        }
+      }
+      const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+      if (query.includes('pullRequest(number: $pr)')) {
+        return {
+          stdout: JSON.stringify({
+            data: {
+              repository: {
+                pullRequest: {
+                  headRefOid: 'head-oid',
+                  commits: {
+                    nodes: [
+                      {
+                        commit: {
+                          statusCheckRollup: { contexts: { nodes: [] } },
+                          checkSuites: {
+                            nodes: [
+                              {
+                                databaseId: 123,
+                                status: 'COMPLETED',
+                                conclusion: 'ACTION_REQUIRED',
+                                url: 'https://github.com/acme/widgets/commit/head-oid/checks?check_suite_id=123',
+                                app: { name: 'GitHub Actions', slug: 'github-actions' }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          })
+        }
+      }
+      if (args[1] === 'graphql') {
+        return {
+          stdout: JSON.stringify({ data: { repository: { mergeQueue: null } } })
+        }
+      }
+      return {
+        stdout: JSON.stringify({
+          number: 99,
+          title: 'Approval required',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/99',
+          updated_at: '2026-08-26T10:00:00Z',
+          mergeable_state: 'clean',
+          base: { ref: 'main' },
+          head: { ref: 'feature', sha: 'head-oid' }
+        })
+      }
+    })
+
+    const pr = await getPRForBranch('/repo-root', 'feature', 99)
+
+    expect(pr).toMatchObject({
+      checksStatus: 'failure',
+      checksPresentationStatus: 'action_required'
+    })
+    expect(
+      ghExecFileAsyncMock.mock.calls.some(([args]) =>
+        (args as string[]).some(
+          (arg) => arg.startsWith('query=') && arg.includes('pullRequest(number: $pr)')
+        )
+      )
+    ).toBe(true)
+  })
+
   it('isolates viewer-dependent merge metadata across SSH connections', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
     let metadataProbe = 0

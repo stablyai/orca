@@ -1,4 +1,5 @@
 import type {
+  CheckPresentationStatus,
   CheckStatus,
   PRMergeableState,
   PRReviewDecision,
@@ -6,7 +7,9 @@ import type {
   ProviderCheckSummary
 } from '../../../shared/github/pull-request-types'
 import { canEnableGitHubPRAutoMerge } from '../../../shared/github/pull-request-auto-merge-availability'
+import { getProviderChecksPresentationState } from '../../../shared/provider-check-summary'
 import { translate } from '@/i18n/i18n'
+import { getGitHubPRCheckMergePresentation } from './github-pr-check-merge-presentation'
 
 export type GitHubPRMergeStateInput = {
   state: PRState | 'open' | 'closed' | 'merged' | 'draft'
@@ -14,6 +17,7 @@ export type GitHubPRMergeStateInput = {
   mergeStateStatus?: string | null
   reviewDecision?: PRReviewDecision | null
   checksStatus?: CheckStatus
+  checksPresentationStatus?: CheckPresentationStatus
   checksSummary?: ProviderCheckSummary
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
@@ -40,11 +44,13 @@ const SUCCESS_TONE =
 const WARNING_TONE = 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
 const DANGER_TONE = 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
 
-function checksState(item: GitHubPRMergeStateInput): CheckStatus | 'none' | undefined {
+function checksState(
+  item: GitHubPRMergeStateInput
+): CheckStatus | 'action_required' | 'none' | undefined {
   if (item.checksSummary) {
-    return item.checksSummary.state
+    return getProviderChecksPresentationState(item.checksSummary)
   }
-  return item.checksStatus
+  return item.checksPresentationStatus ?? item.checksStatus
 }
 
 function checksPassed(item: GitHubPRMergeStateInput): boolean {
@@ -258,29 +264,7 @@ export function presentGitHubPRMergeState(
   }
   if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
     const checkState = checksState(item)
-    const checkStatus =
-      checkState === 'failure'
-        ? {
-            label: translate('auto.components.github.pr.merge.state.87fa36ac83', 'Checks failed'),
-            tone: DANGER_TONE,
-            tooltip: translate(
-              'auto.components.github.pr.merge.state.1432ecff30',
-              'GitHub says this PR can merge, but some checks failed'
-            )
-          }
-        : checkState === 'pending'
-          ? {
-              label: translate(
-                'auto.components.github.pr.merge.state.4e2507176b',
-                'Checks pending'
-              ),
-              tone: WARNING_TONE,
-              tooltip: translate(
-                'auto.components.github.pr.merge.state.9bd983ce8f',
-                'GitHub says this PR can merge, but checks are still running'
-              )
-            }
-          : null
+    const checkStatus = getGitHubPRCheckMergePresentation(checkState, DANGER_TONE, WARNING_TONE)
     return {
       label: checkStatus?.label ?? 'Able to merge',
       tone: checkStatus?.tone ?? SUCCESS_TONE,

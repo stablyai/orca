@@ -1,6 +1,7 @@
 import React from 'react'
+import { translate } from '@/i18n/i18n'
 import type { GitConflictOperation } from '../../../../shared/git-status-types'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // ── Pure helper functions ────────────────────────────────────────────
@@ -9,7 +10,7 @@ export function branchDisplayName(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-export function checksLabel(status: CheckStatus): string {
+export function checksLabel(status: CheckPresentationStatus): string {
   switch (status) {
     case 'success':
       return 'Passing'
@@ -17,6 +18,11 @@ export function checksLabel(status: CheckStatus): string {
       return 'Failing'
     case 'pending':
       return 'Pending'
+    case 'action_required':
+      return translate(
+        'auto.components.sidebar.WorktreeCardHelpers.actionRequiredCheckStatus',
+        'Action required'
+      )
     case 'neutral':
       return ''
   }

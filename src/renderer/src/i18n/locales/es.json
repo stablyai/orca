@@ -5172,7 +5172,11 @@
           "setParentFor": "Establecer padre para"
         },
         "WorktreeCardStatusSlot": {
-          "branchIdentity": "Rama"
+          "branchIdentity": "Rama",
+          "actionRequiredChecks": "Checks de {{reviewLabel}}: acción requerida"
+        },
+        "WorktreeCardHelpers": {
+          "actionRequiredCheckStatus": "Acción requerida"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Ocultar worktrees externos permanentemente para {{value0}}",
@@ -10941,6 +10945,7 @@
                 "f5cf324efa": "Opciones de visualización de comentarios",
                 "5e6e5a13fa": "Vista",
                 "actionRequiredHint": "Este check requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que el merge quede desbloqueado.",
+                "actionRequiredProviderHint": "Se necesita una acción manual en {{providerName}} para desbloquear el merge.",
                 "b3195cba33": "Desmarcar autor como bot",
                 "f588b46a6c": "Marcar autor como bot",
                 "e45324fbed": "No se pudieron cargar los detalles del check."
@@ -14276,6 +14281,7 @@
             "failingCount": "{{value0}} fallando",
             "pendingCount": "{{value0}} pendientes",
             "checksFailing": "Checks fallando",
+            "actionRequired": "Acción requerida",
             "mergeConflicts": "Conflictos de merge",
             "checksPending": "Checks pendientes",
             "checksPassing": "Checks correctos",
@@ -14491,7 +14497,7 @@
         "passingChip": "{{value0}} pasando",
         "failingChip": "{{value0}} fallando",
         "pendingChip": "{{value0}} pendiente",
-        "needsActionChip": "{{value0}} requiere acción",
+        "needsActionChip": "Acción requerida: {{value0}}",
         "unresolvedChip": "{{value0}} sin resolver"
       },
       "artifacts": {

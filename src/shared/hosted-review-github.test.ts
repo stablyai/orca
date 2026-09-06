@@ -29,4 +29,17 @@ describe('hostedReviewInfoFromGitHubPRInfo', () => {
       githubRepository
     })
   })
+
+  it('preserves the optional checks presentation status', () => {
+    expect(
+      hostedReviewInfoFromGitHubPRInfo({
+        ...pr,
+        checksStatus: 'failure',
+        checksPresentationStatus: 'action_required'
+      })
+    ).toMatchObject({
+      status: 'failure',
+      checksPresentationStatus: 'action_required'
+    })
+  })
 })

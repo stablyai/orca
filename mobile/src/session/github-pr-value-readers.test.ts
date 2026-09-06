@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { classifyCheckOutcome } from '../../../src/shared/provider-check-summary'
-import { readCheckRunConclusion, readRepoIdentity } from './github-pr-value-readers'
+import {
+  readCheckRunConclusion,
+  readCheckSummary,
+  readRepoIdentity
+} from './github-pr-value-readers'
 
 describe('readRepoIdentity', () => {
   it('parses a valid owner/repo identity', () => {
@@ -41,15 +45,38 @@ describe('readCheckRunConclusion', () => {
     }
   })
 
-  // Why: dropping this made a merge-blocking approval gate render as a harmless pending check.
-  it('keeps action_required so it still classifies as a failure', () => {
+  it('keeps action_required as a distinct presentation outcome', () => {
     const conclusion = readCheckRunConclusion('action_required')
     expect(conclusion).toBe('action_required')
-    expect(classifyCheckOutcome({ status: 'completed', conclusion })).toBe('failed')
+    expect(classifyCheckOutcome({ status: 'completed', conclusion })).toBe('action_required')
   })
 
   it('drops an unknown conclusion', () => {
     expect(readCheckRunConclusion('wat')).toBeNull()
     expect(readCheckRunConclusion(null)).toBeNull()
+  })
+})
+
+describe('readCheckSummary', () => {
+  it('preserves the optional action-required count across the RPC boundary', () => {
+    expect(
+      readCheckSummary({
+        state: 'failure',
+        total: 2,
+        passed: 1,
+        failed: 1,
+        actionRequired: 1,
+        pending: 0,
+        neutral: 0
+      })
+    ).toEqual({
+      state: 'failure',
+      total: 2,
+      passed: 1,
+      failed: 1,
+      actionRequired: 1,
+      pending: 0,
+      neutral: 0
+    })
   })
 })

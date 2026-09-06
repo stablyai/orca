@@ -85,6 +85,7 @@ vi.mock('./rate-limit', () => ({
 }))
 
 import { getPRChecks, rerunPRChecks, _resetOwnerRepoCache } from './client'
+import { getPRChecksWithExistingOperationPermit } from './client/check/get-pr-checks'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 
@@ -259,6 +260,19 @@ describe('getPRChecks', () => {
         workflowRunId: 1
       }
     ])
+  })
+
+  it('reuses an operation permit held by the caller', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce(
+      graphQLChecksResponse({ contexts: [graphQLCheckRun()] })
+    )
+
+    const checks = await getPRChecksWithExistingOperationPermit('/repo-root', 42, 'head-oid')
+
+    expect(checks).toHaveLength(1)
+    expect(acquireMock).not.toHaveBeenCalled()
+    expect(releaseMock).not.toHaveBeenCalled()
   })
 
   it('merges rollup check-runs with legacy commit status contexts', async () => {

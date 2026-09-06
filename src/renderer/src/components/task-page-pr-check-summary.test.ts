@@ -59,7 +59,7 @@ describe('deriveTaskPagePRCheckSummary', () => {
     })
   })
 
-  it('counts action_required as failed so a blocked PR never reads as passing', () => {
+  it('retains the blocking total while distinguishing action-required checks', () => {
     expect(
       deriveTaskPagePRCheckSummary([
         check({ conclusion: 'success' }),
@@ -71,7 +71,8 @@ describe('deriveTaskPagePRCheckSummary', () => {
       passed: 1,
       failed: 1,
       pending: 0,
-      neutral: 0
+      neutral: 0,
+      actionRequired: 1
     })
   })
 

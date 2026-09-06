@@ -5776,7 +5776,11 @@
           "setParentFor": "Définir le parent pour"
         },
         "WorktreeCardStatusSlot": {
-          "branchIdentity": "Branche"
+          "branchIdentity": "Branche",
+          "actionRequiredChecks": "Vérifications de {{reviewLabel}} : action requise"
+        },
+        "WorktreeCardHelpers": {
+          "actionRequiredCheckStatus": "Action requise"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Masquer définitivement les worktrees externes pour {{value0}}",
@@ -11998,6 +12002,7 @@
                 "f5cf324efa": "Options d'affichage des commentaires",
                 "5e6e5a13fa": "Affichage",
                 "actionRequiredHint": "Cette vérification nécessite une action manuelle sur GitHub (par exemple, approuver l'exécution du workflow) avant que le merge soit débloqué.",
+                "actionRequiredProviderHint": "Une action manuelle sur {{providerName}} est nécessaire pour débloquer le merge.",
                 "b3195cba33": "Retirer le marqueur bot de l'auteur",
                 "f588b46a6c": "Marquer l'auteur comme bot",
                 "e45324fbed": "Échec du chargement des détails de la vérification."
@@ -15566,6 +15571,7 @@
             "failingCount": "{{value0}} en échec",
             "pendingCount": "{{value0}} en attente",
             "checksFailing": "Vérifications en échec",
+            "actionRequired": "Action requise",
             "mergeConflicts": "Conflits de fusion",
             "checksPending": "Vérifications en attente",
             "checksPassing": "Vérifications réussies",
@@ -15797,7 +15803,7 @@
         "passingChip": "{{value0}} réussis",
         "failingChip": "{{value0}} en échec",
         "pendingChip": "{{value0}} en attente",
-        "needsActionChip": "{{value0}} action requise",
+        "needsActionChip": "Action requise : {{value0}}",
         "unresolvedChip": "{{value0}} non résolus"
       },
       "BrowserPane": {

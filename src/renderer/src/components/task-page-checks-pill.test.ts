@@ -36,6 +36,31 @@ describe('task page checks pill', () => {
     expect(getChecksPillTone(item)).toContain('text-muted-foreground')
   })
 
+  it('uses an amber action-required presentation without hiding real failures', () => {
+    const actionRequired = {
+      checksSummary: {
+        state: 'failure' as const,
+        total: 2,
+        passed: 0,
+        failed: 2,
+        pending: 0,
+        neutral: 0,
+        actionRequired: 2
+      }
+    }
+    const mixedFailure = {
+      checksSummary: {
+        ...actionRequired.checksSummary,
+        failed: 3
+      }
+    }
+
+    expect(getChecksLabel(actionRequired)).toBe('Action required: 2')
+    expect(getChecksPillTone(actionRequired)).toContain('amber')
+    expect(getChecksLabel(mixedFailure)).toBe('1 failing')
+    expect(getChecksPillTone(mixedFailure)).toContain('rose')
+  })
+
   it('falls back while the summary is unknown or empty', () => {
     expect(getChecksLabel({})).toBe('Checks')
     expect(

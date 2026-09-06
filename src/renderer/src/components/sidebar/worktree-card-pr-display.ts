@@ -1,5 +1,5 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus, PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 
@@ -38,6 +38,7 @@ export type WorktreeCardPrDisplay =
       state?: HostedReviewInfo['state']
       url?: string
       status?: HostedReviewInfo['status']
+      checksPresentationStatus?: CheckPresentationStatus
     }
 
 type WorktreeCardPrDisplayOptions = {

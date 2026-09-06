@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import type { CheckStatus, PRInfo } from '../../../../shared/github/pull-request-types'
+import { derivePRCheckStatusesFromRollup } from '../../../../shared/pr-check-status'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
+import { ReviewIcon } from './worktree-review-helpers'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -89,6 +93,50 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     expect(display).toMatchObject({ number: 8, status: 'success' })
   })
 
+  it('renders a producer-published action-required PR in amber through the folder cache path', () => {
+    const worktree = makeWorktree({ id: 'action-required', linkedPR: 42 })
+    const statuses = derivePRCheckStatusesFromRollup([{ state: 'ACTION_REQUIRED' }])
+    const pr = {
+      ...makePr(42, statuses.status),
+      checksPresentationStatus: statuses.presentationStatus
+    }
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::action-required': { data: pr, fetchedAt: 2 } }
+    })
+    expect(display).toMatchObject({
+      status: 'failure',
+      checksPresentationStatus: 'action_required'
+    })
+
+    const markup = renderToStaticMarkup(
+      createElement(ReviewIcon, { review: display!, className: 'size-3' })
+    )
+    expect(markup).toContain('text-amber-500/85')
+    expect(markup).not.toContain('text-rose-500/85')
+
+    const { checksPresentationStatus: _omitted, ...legacyPR } = pr
+    const legacyDisplay = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::action-required': { data: legacyPR, fetchedAt: 2 } }
+    })
+    const legacyMarkup = renderToStaticMarkup(
+      createElement(ReviewIcon, { review: legacyDisplay!, className: 'size-3' })
+    )
+    expect(legacyMarkup).toContain('text-rose-500/85')
+  })
+
   it('uses failing attached PR status ahead of pending and passing PRs', () => {
     const passing = makeWorktree({ id: 'passing', linkedPR: 1 })
     const pending = makeWorktree({ id: 'pending', linkedPR: 2 })
@@ -117,6 +165,39 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     })
 
     expect(display).toMatchObject({ number: 3, status: 'failure' })
+  })
+
+  it('uses a real failure ahead of an action-required attached PR', () => {
+    const actionRequired = makeWorktree({ id: 'action-required', linkedPR: 1 })
+    const failing = makeWorktree({ id: 'failing', linkedPR: 2 })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: {
+        [actionRequired.id]: makeWorkspaceLineage(actionRequired),
+        [failing.id]: makeWorkspaceLineage(failing)
+      },
+      worktreeLineageById: {},
+      worktreeMap: new Map([
+        [actionRequired.id, actionRequired],
+        [failing.id, failing]
+      ]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: {
+        'repo-1::action-required': {
+          data: {
+            ...makePr(1, 'failure'),
+            checksPresentationStatus: 'action_required'
+          },
+          fetchedAt: 2
+        },
+        'repo-1::failing': makePrEntry(2, 'failure')
+      }
+    })
+
+    expect(display).toMatchObject({ number: 2, status: 'failure' })
+    expect(display).not.toHaveProperty('checksPresentationStatus')
   })
 
   it('uses pending attached PR status ahead of passing PRs', () => {

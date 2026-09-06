@@ -33,8 +33,8 @@ describe('checkOutcome', () => {
     expect(checkOutcome(check({ conclusion: 'cancelled' }))).toBe('failure')
     expect(checkOutcome(check({ conclusion: 'timed_out' }))).toBe('failure')
   })
-  it('maps a merge-blocking action_required gate to failure', () => {
-    expect(checkOutcome(check({ conclusion: 'action_required' }))).toBe('failure')
+  it('maps a merge-blocking action_required gate to its amber presentation state', () => {
+    expect(checkOutcome(check({ conclusion: 'action_required' }))).toBe('action_required')
   })
   it('maps skipped to success and neutral to neutral (desktop parity)', () => {
     expect(checkOutcome(check({ conclusion: 'skipped' }))).toBe('success')
@@ -134,6 +134,36 @@ describe('summarizePRChecks', () => {
     ])
     expect(summary).toMatchObject({ total: 3, passed: 3, outcome: 'success' })
     expect(summary.label).toBe('3 passed')
+  })
+
+  it('separates action-required checks from genuine failures', () => {
+    const summary = summarizePRChecks([
+      check({ conclusion: 'success' }),
+      check({ conclusion: 'action_required' })
+    ])
+
+    expect(summary).toMatchObject({
+      total: 2,
+      passed: 1,
+      failed: 0,
+      actionRequired: 1,
+      outcome: 'action_required'
+    })
+    expect(summary.label).toBe('Action required: 1 · 1 passed')
+  })
+
+  it('keeps genuine failures as the worst outcome alongside action-required checks', () => {
+    const summary = summarizePRChecks([
+      check({ conclusion: 'failure' }),
+      check({ conclusion: 'action_required' })
+    ])
+
+    expect(summary).toMatchObject({
+      failed: 1,
+      actionRequired: 1,
+      outcome: 'failure'
+    })
+    expect(summary.label).toBe('1 failing · Action required: 1')
   })
 })
 

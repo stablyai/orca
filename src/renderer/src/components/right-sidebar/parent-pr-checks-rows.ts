@@ -20,8 +20,7 @@ import {
   type ParentPrChecksCacheEntry,
   type ParentPrChecksProjection,
   type ParentPrChecksRefreshOutcome,
-  type ParentPrChecksRow,
-  type ParentPrChecksSummary
+  type ParentPrChecksRow
 } from './parent-pr-checks-row-types'
 import {
   classifyParentPrChecksRowStatus,
@@ -29,6 +28,7 @@ import {
   getRowSummary,
   groupForRowStatus
 } from './parent-pr-checks-row-status'
+import { summarizeParentPrChecksRows } from './parent-pr-checks-summary'
 import {
   canUseParentPrChecksGitHubPRCacheEntry,
   getParentPrChecksGitHubPRCacheEntry
@@ -60,29 +60,6 @@ export function buildParentPrChecksRows(
       repo: args.repoById.get(worktree.repoId) ?? null
     })
   )
-}
-
-export function summarizeParentPrChecksRows(
-  rows: readonly ParentPrChecksRow[]
-): ParentPrChecksSummary {
-  return {
-    attached: rows.length,
-    knownReview: rows.filter((row) => row.reviewLabel !== null && row.status !== 'noReview').length,
-    failing: rows.filter((row) => row.group === 'needsAttention').length,
-    pending: rows.filter((row) => row.group === 'pending').length,
-    passing: rows.filter((row) => row.group === 'passing').length,
-    noPr: rows.filter((row) => row.status === 'noReview').length,
-    unknown: rows.filter((row) =>
-      [
-        'notFetched',
-        'loading',
-        'linkedDetailsUnavailable',
-        'refreshError',
-        'unsupported',
-        'unavailable'
-      ].includes(row.status)
-    ).length
-  }
 }
 
 export function getParentPrChecksRefreshIdentity(

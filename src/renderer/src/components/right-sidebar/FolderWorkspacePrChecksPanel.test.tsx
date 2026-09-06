@@ -74,12 +74,16 @@ vi.mock('./checks-panel/check-presentation', () => ({
   CHECK_COLOR: {
     success: 'success',
     failure: 'failure',
+    action_required: 'action-required',
     pending: 'pending',
     neutral: 'neutral'
   },
   CHECK_ICON: {
     success: (props: { className?: string }) => <span data-icon="success" {...props} />,
     failure: (props: { className?: string }) => <span data-icon="failure" {...props} />,
+    action_required: (props: { className?: string }) => (
+      <span data-icon="action-required" {...props} />
+    ),
     pending: (props: { className?: string }) => <span data-icon="pending" {...props} />,
     neutral: (props: { className?: string }) => <span data-icon="neutral" {...props} />
   },
@@ -272,6 +276,35 @@ describe('FolderWorkspacePrChecksPanel', () => {
     expect(container.textContent).not.toContain('1 attached')
     expect(container.textContent).not.toContain('with PR/MR')
     expect(container.textContent).not.toContain('unknown')
+  })
+
+  it('summarizes action-required rows separately from failures', () => {
+    const repo = mockState.store.repos[0]
+    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', null, repo.id)
+    mockState.store.hostedReviewCache[hostedKey] = {
+      data: makeReview({
+        status: 'failure',
+        checksPresentationStatus: 'action_required'
+      }),
+      fetchedAt: 1
+    }
+    const checksKey = getGitHubRepoCacheKey(
+      repo.path,
+      repo.id,
+      prChecksCacheSuffix(12, null, 'abc'),
+      null
+    )
+    mockState.store.checksCache[checksKey] = {
+      data: [makeCheck({ conclusion: 'action_required' })],
+      fetchedAt: 1,
+      headSha: 'abc'
+    }
+
+    renderPanel()
+
+    expect(container.textContent).toContain('Action required: 1 · 1 worktree')
+    expect(container.textContent).not.toContain('1 failing')
+    expect(container.querySelector('[data-icon="action-required"]')).not.toBeNull()
   })
 
   it('summarizes failing and pending rows before the worktree count', () => {

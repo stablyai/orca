@@ -5172,7 +5172,11 @@
           "setParentFor": "次のワークツリーの親を設定"
         },
         "WorktreeCardStatusSlot": {
-          "branchIdentity": "ブランチ"
+          "branchIdentity": "ブランチ",
+          "actionRequiredChecks": "{{reviewLabel}} チェック: 対応が必要"
+        },
+        "WorktreeCardHelpers": {
+          "actionRequiredCheckStatus": "対応が必要"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
@@ -10941,6 +10945,7 @@
                 "f5cf324efa": "コメント表示オプション",
                 "5e6e5a13fa": "表示",
                 "actionRequiredHint": "マージのブロックが解除されるまでに、このチェックには GitHub 上での手動操作（例: ワークフロー実行の承認）が必要です。",
+                "actionRequiredProviderHint": "{{providerName}} で手動操作を行い、マージのブロックを解除する必要があります。",
                 "b3195cba33": "作成者のボット指定を解除",
                 "f588b46a6c": "作成者をボットとして指定",
                 "e45324fbed": "チェック詳細の読み込みに失敗しました。"
@@ -14276,6 +14281,7 @@
             "failingCount": "{{value0}} 件失敗",
             "pendingCount": "{{value0}} 件保留中",
             "checksFailing": "チェック失敗",
+            "actionRequired": "対応が必要",
             "mergeConflicts": "マージ競合",
             "checksPending": "保留中のチェック",
             "checksPassing": "チェック成功",
@@ -14491,7 +14497,7 @@
         "passingChip": "{{value0}} 通過",
         "failingChip": "{{value0}} 件失敗",
         "pendingChip": "{{value0}} 件保留中",
-        "needsActionChip": "{{value0}} 件の対応が必要",
+        "needsActionChip": "対応が必要: {{value0}} 件",
         "unresolvedChip": "{{value0}} 件未解決"
       },
       "artifacts": {

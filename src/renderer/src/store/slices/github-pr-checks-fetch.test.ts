@@ -15,6 +15,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { getTaskSourceCacheScope } from '../../../../shared/task-source-context'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 
 describe('createGitHubSlice.fetchPRChecks', () => {
   beforeEach(() => {
@@ -53,6 +54,96 @@ describe('createGitHubSlice.fetchPRChecks', () => {
       .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
 
     expect(store.getState().prCache[prCacheKey]?.data?.checksStatus).toBe('success')
+  })
+
+  it('keeps the legacy failure status while publishing action-required presentation', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/needs-approval'
+    const prCacheKey = `${repoId}::${branch}`
+
+    const initialPR = makePR({ checksStatus: 'neutral' })
+    const hostedReviewCacheKey = `local::${repoId}::${branch}`
+    store.setState({
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ],
+      prCache: {
+        [prCacheKey]: {
+          data: initialPR,
+          fetchedAt: 1
+        }
+      },
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: hostedReviewInfoFromGitHubPRInfo(initialPR),
+          fetchedAt: 1
+        }
+      }
+    })
+    mockApi.gh.prChecks.mockResolvedValue([
+      { name: 'deploy', status: 'completed', conclusion: 'action_required', url: null }
+    ])
+
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
+
+    expect(store.getState().prCache[prCacheKey]?.data).toMatchObject({
+      checksStatus: 'failure',
+      checksPresentationStatus: 'action_required'
+    })
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]?.data).toMatchObject({
+      status: 'failure',
+      checksPresentationStatus: 'action_required'
+    })
+  })
+
+  it('updates action-required presentation after the matching PR cache entry was evicted', async () => {
+    const store = createTestStore()
+    const repoPath = '/repo'
+    const repoId = 'repo-id'
+    const branch = 'feature/evicted-pr-cache'
+    const hostedReviewCacheKey = `local::${repoId}::${branch}`
+
+    store.setState({
+      repos: [
+        {
+          id: repoId,
+          path: repoPath,
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ],
+      hostedReviewCache: {
+        [hostedReviewCacheKey]: {
+          data: hostedReviewInfoFromGitHubPRInfo(makePR({ checksStatus: 'neutral' })),
+          fetchedAt: 1
+        }
+      }
+    })
+    mockApi.gh.prChecks.mockResolvedValue([
+      { name: 'deploy', status: 'completed', conclusion: 'action_required', url: null }
+    ])
+
+    await store
+      .getState()
+      .fetchPRChecks(repoPath, 12, branch, undefined, null, { force: true, repoId })
+
+    expect(store.getState().hostedReviewCache[hostedReviewCacheKey]?.data).toMatchObject({
+      status: 'failure',
+      checksPresentationStatus: 'action_required'
+    })
   })
 
   it('stores runtime checks under runtime-scoped cache keys', async () => {

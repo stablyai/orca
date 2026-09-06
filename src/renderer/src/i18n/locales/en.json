@@ -6030,7 +6030,11 @@
           "setParentFor": "Set parent for"
         },
         "WorktreeCardStatusSlot": {
-          "branchIdentity": "Branch"
+          "branchIdentity": "Branch",
+          "actionRequiredChecks": "{{reviewLabel}} checks: Action required"
+        },
+        "WorktreeCardHelpers": {
+          "actionRequiredCheckStatus": "Action required"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
@@ -12457,6 +12461,7 @@
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "View",
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "actionRequiredProviderHint": "Needs a manual action on {{providerName}} to unblock merging.",
                 "b3195cba33": "Unmark author as bot",
                 "f588b46a6c": "Mark author as bot",
                 "e45324fbed": "Failed to load check details."
@@ -16304,6 +16309,7 @@
             "failingCount": "{{value0}} failing",
             "pendingCount": "{{value0}} pending",
             "checksFailing": "Checks failing",
+            "actionRequired": "Action required",
             "mergeConflicts": "Merge conflicts",
             "checksPending": "Checks pending",
             "checksPassing": "Checks passing",
@@ -16652,7 +16658,7 @@
         "passingChip": "{{value0}} passing",
         "failingChip": "{{value0}} failing",
         "pendingChip": "{{value0}} pending",
-        "needsActionChip": "{{value0}} action required",
+        "needsActionChip": "Action required: {{value0}}",
         "unresolvedChip": "{{value0}} unresolved"
       },
       "BrowserPane": {
