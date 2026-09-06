@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildPaneAgentIdentityEvidenceWire,
@@ -136,6 +138,34 @@ describe('uncovered compatibility lane', () => {
     ).toMatchObject({ agent: null, source: null, coverage: 'uncovered' })
   })
 
+  it('does not let a legacy title fallback promote a bare free-text name', () => {
+    expect(
+      resolveCanonicalPaneAgentIdentity({
+        title: 'grok',
+        uncoveredFallback: { agent: 'grok', titleOnly: true }
+      })
+    ).toMatchObject({
+      agent: null,
+      source: null,
+      coverage: 'uncovered',
+      titleOnly: false
+    })
+  })
+
+  it('keeps anchored canonical evidence when the legacy title parser disagrees', () => {
+    expect(
+      resolveCanonicalPaneAgentIdentity({
+        title: '✦ Claude Code',
+        uncoveredFallback: { agent: 'gemini', titleOnly: true }
+      })
+    ).toMatchObject({
+      agent: 'claude',
+      source: 'title',
+      coverage: 'uncovered',
+      titleOnly: true
+    })
+  })
+
   it('does not label a foreground-only compatibility answer as title-only', () => {
     const identity = resolveCanonicalPaneAgentIdentity({
       foregroundAgent: 'codex',
@@ -181,6 +211,29 @@ describe('canonical ladder inside the covered lane', () => {
       completedHookAgent: 'codex'
     })
     expect(identity).toMatchObject({ agent: null, ambiguousAt: 'completed-hook' })
+  })
+})
+
+describe('launch/completed-hook ordering expiry', () => {
+  it('fails when production begins supplying run keys so the order is revisited', () => {
+    const rendererAdapter = [
+      'src/renderer/src/lib/use-tab-agent.ts',
+      'src/renderer/src/lib/open-tab-occupant-agent.ts'
+    ]
+      .map((path) => readFileSync(join(process.cwd(), path), 'utf8'))
+      .join('\n')
+    const productionSuppliesRunKeys = /completedHookRun\s*:|launchRun\s*:/.test(rendererAdapter)
+    if (productionSuppliesRunKeys) {
+      throw new Error(
+        'run keys are now supplied; re-evaluate whether completed-hook should outrank launch.'
+      )
+    }
+    expect(
+      resolveCanonicalPaneAgentIdentity({
+        launchAgent: 'claude',
+        completedHookAgent: 'codex'
+      })
+    ).toMatchObject({ agent: 'claude', source: 'launch' })
   })
 })
 

@@ -119,7 +119,9 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
         panes: managerRef.current?.getPanes() ?? [],
         runtimePaneTitlesByPaneId,
         tabLabel: hasSingleKnownLeaf ? unifiedTabLabel : null,
-        terminalTitle: hasSingleKnownLeaf ? terminalTab?.title : null
+        terminalTitle: hasSingleKnownLeaf ? terminalTab?.title : null,
+        launchAgent: terminalTab?.launchAgent ?? null,
+        sleepingSessionAgent: (structuredSessionAgent as TuiAgent | null) ?? null
       })
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
@@ -127,6 +129,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       getNativeChatLeafIds,
       getTabWideAgentHintLeafId,
       runtimePaneTitlesByPaneId,
+      structuredSessionAgent,
+      terminalTab?.launchAgent,
       terminalTab?.title,
       unifiedTabLabel
     ]

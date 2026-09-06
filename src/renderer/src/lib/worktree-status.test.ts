@@ -30,8 +30,8 @@ describe('getWorktreeStatus', () => {
   it('prioritizes permission over other live activity states', () => {
     const status = getWorktreeStatus(
       [
-        { id: 'tab-1', title: 'claude [working]' },
-        { id: 'tab-2', title: 'claude [permission]' }
+        { id: 'tab-1', title: '⠋ working - claude' },
+        { id: 'tab-2', title: 'Claude - action required' }
       ],
       [{ id: 'browser-1' }],
       livePtyMap('tab-1', 'tab-2')
@@ -69,10 +69,10 @@ describe('getWorktreeStatus', () => {
     // use-terminal-pane-lifecycle.ts). If the focused pane is idle while
     // another pane is still working, the sidebar spinner must stay spinning.
     const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: 'claude [done]' }],
+      [{ id: 'tab-1', title: 'Claude Code' }],
       [],
       livePtyMap('tab-1'),
-      { 'tab-1': { 0: 'codex [working]', 1: 'claude [done]' } }
+      { 'tab-1': { 0: '⠋ working - codex', 1: 'Claude Code' } }
     )
 
     expect(status).toBe('working')
@@ -80,10 +80,10 @@ describe('getWorktreeStatus', () => {
 
   it('prefers pane-level permission status over tab.title', () => {
     const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: 'claude [done]' }],
+      [{ id: 'tab-1', title: 'Claude Code' }],
       [],
       livePtyMap('tab-1'),
-      { 'tab-1': { 0: 'claude [permission]', 1: 'claude [done]' } }
+      { 'tab-1': { 0: 'Claude - action required', 1: 'Claude Code' } }
     )
 
     expect(status).toBe('permission')
@@ -93,7 +93,7 @@ describe('getWorktreeStatus', () => {
   // as a wake-hint sessionId. Reading tab.ptyId for liveness was the bug —
   // pin the new behavior so it can't regress.
   it('returns inactive for a slept tab (ptyIdsByTabId empty even if heuristic title matches working)', () => {
-    const status = getWorktreeStatus([{ id: 'tab-1', title: 'claude [working]' }], [], {
+    const status = getWorktreeStatus([{ id: 'tab-1', title: '⠋ working - claude' }], [], {
       'tab-1': []
     })
 
@@ -131,7 +131,7 @@ describe('getWorktreeStatus', () => {
 
   it('still spins on an agent-attributable braille-spinner title', () => {
     const status = getWorktreeStatus(
-      [{ id: 'tab-1', title: '⠹ codex fix flaky test' }],
+      [{ id: 'tab-1', title: '⠹ fix flaky test - codex' }],
       [],
       livePtyMap('tab-1')
     )
@@ -143,7 +143,7 @@ describe('getWorktreeStatus', () => {
 describe('resolveWorktreeStatus', () => {
   it('returns inactive when no tab has a live pty and no explicit agent row exists', () => {
     const status = resolveWorktreeStatus({
-      tabs: [{ id: 'tab-1', title: 'claude [done]' }],
+      tabs: [{ id: 'tab-1', title: 'Claude Code' }],
       browserTabs: [],
       // Slept: live-pty array empty; tab.ptyId would be the wake-hint sessionId.
       ptyIdsByTabId: { 'tab-1': [] },
@@ -214,7 +214,7 @@ describe('resolveWorktreeStatus', () => {
 
   it('promotes to permission when an explicit agent row needs input, even without a live pty', () => {
     const status = resolveWorktreeStatus({
-      tabs: [{ id: 'tab-1', title: 'claude [permission]' }],
+      tabs: [{ id: 'tab-1', title: 'Claude - action required' }],
       browserTabs: [],
       ptyIdsByTabId: { 'tab-1': [] },
       hasPermission: true,
@@ -291,7 +291,7 @@ describe('resolveWorktreeStatus', () => {
 
   it('lets heuristic working beat hasLiveDone (newer in-progress signal wins)', () => {
     const status = resolveWorktreeStatus({
-      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      tabs: [{ id: 'tab-1', title: '⠋ working - claude' }],
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       hasPermission: false,
@@ -305,12 +305,12 @@ describe('resolveWorktreeStatus', () => {
 
   it('lets a hook-covered done pane suppress its stale working title', () => {
     const status = resolveWorktreeStatus({
-      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      tabs: [{ id: 'tab-1', title: '⠋ working - claude' }],
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       runtimePaneTitlesByTabId: {
         'tab-1': {
-          1: 'codex [working]',
+          1: '⠋ working - codex',
           2: 'bash'
         }
       },
@@ -331,12 +331,12 @@ describe('resolveWorktreeStatus', () => {
 
   it('lets a single hook-covered done pane suppress an unmapped single working title', () => {
     const status = resolveWorktreeStatus({
-      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      tabs: [{ id: 'tab-1', title: '⠋ working - claude' }],
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       runtimePaneTitlesByTabId: {
         'tab-1': {
-          1: 'codex [working]'
+          1: '⠋ working - codex'
         }
       },
       agentStatusPaneIdsByTabId: {
@@ -353,13 +353,13 @@ describe('resolveWorktreeStatus', () => {
 
   it('keeps sibling pane working when hook done covers only another pane', () => {
     const status = resolveWorktreeStatus({
-      tabs: [{ id: 'tab-1', title: 'claude [working]' }],
+      tabs: [{ id: 'tab-1', title: '⠋ working - claude' }],
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       runtimePaneTitlesByTabId: {
         'tab-1': {
           1: 'bash',
-          2: 'codex [working]'
+          2: '⠋ working - codex'
         }
       },
       agentStatusPaneIdsByTabId: {
@@ -384,7 +384,7 @@ describe('resolveWorktreeStatus', () => {
   // be silently downgraded to 'done' whenever a separate done overlay exists.
   it('honors heuristic permission over hasLiveDone (priority: permission > done)', () => {
     const status = resolveWorktreeStatus({
-      tabs: [{ id: 'tab-1', title: 'claude [permission]' }],
+      tabs: [{ id: 'tab-1', title: 'Claude - action required' }],
       browserTabs: [],
       ptyIdsByTabId: livePtyMap('tab-1'),
       hasPermission: false,

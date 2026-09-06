@@ -102,7 +102,7 @@ describe('useTabAgent retained completion identity', () => {
     useAppStore.setState(initialAppState, true)
   })
 
-  it('uses focused retained Codex identity over stale Claude launch metadata', async () => {
+  it('keeps Claude launch metadata ahead of focused retained Codex identity', async () => {
     const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
     useAppStore.setState({
       retainedAgentsByPaneKey: { [paneKey]: retainedEntry(paneKey, 'codex') }
@@ -110,7 +110,7 @@ describe('useTabAgent retained completion identity', () => {
 
     await renderProbe()
 
-    expect(latestAgent).toBe('codex')
+    expect(latestAgent).toBe('claude')
   })
 
   it('keeps a live focused hook ahead of retained identity', async () => {
@@ -127,7 +127,7 @@ describe('useTabAgent retained completion identity', () => {
     expect(latestAgent).toBe('gemini')
   })
 
-  it('lets an explicit cross-agent title reclaim a retained idle pane', async () => {
+  it('does not let a cross-agent title replace matching launch and retained identity', async () => {
     const paneKey = makePaneKey(TAB_ID, FOCUSED_LEAF_ID)
     useAppStore.setState({
       retainedAgentsByPaneKey: { [paneKey]: retainedEntry(paneKey, 'codex') }
@@ -135,7 +135,7 @@ describe('useTabAgent retained completion identity', () => {
 
     await renderProbe({ ...baseTab, launchAgent: 'codex', title: '✳ Claude Code' })
 
-    expect(latestAgent).toBe('claude')
+    expect(latestAgent).toBe('codex')
   })
 
   it('keeps focused launch metadata ahead of sibling retained identity', async () => {

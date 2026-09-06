@@ -144,7 +144,7 @@ describe('resolveTerminalTabActivityStatus', () => {
     vi.setSystemTime(31 * 60 * 1000)
     expect(
       resolveTerminalTabActivityStatus({
-        tab: { id: TAB_ID, title: 'Codex working' },
+        tab: { id: TAB_ID, title: '⠋ working - codex' },
         agentStatusByPaneKey: { [stale.paneKey]: stale },
         ptyIdsByTabId: LIVE_PTY
       })
@@ -155,7 +155,7 @@ describe('resolveTerminalTabActivityStatus', () => {
     const restored = entry(FIRST_LEAF_ID, 'working', { restoredUnconfirmed: true })
     expect(
       resolveTerminalTabActivityStatus({
-        tab: { id: TAB_ID, title: 'Codex working' },
+        tab: { id: TAB_ID, title: '⠋ working - codex' },
         agentStatusByPaneKey: { [restored.paneKey]: restored },
         ptyIdsByTabId: LIVE_PTY
       })
@@ -168,7 +168,9 @@ describe('resolveTerminalTabActivityStatus', () => {
       resolveTerminalTabActivityStatus({
         tab: TAB,
         agentStatusByPaneKey: { [restored.paneKey]: restored },
-        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex working', 2: 'Claude working' } },
+        runtimePaneTitlesByTabId: {
+          [TAB_ID]: { 1: '⠋ working - codex', 2: '⠋ working - claude' }
+        },
         ptyIdsByTabId: LIVE_PTY,
         terminalLayout: {
           root: {
@@ -214,8 +216,8 @@ describe('resolveTerminalTabActivityStatus', () => {
   it('does not treat a preserved title on a sleeping tab as activity', () => {
     expect(
       resolveTerminalTabActivityStatus({
-        tab: { id: TAB_ID, title: 'Codex working' },
-        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex working' } },
+        tab: { id: TAB_ID, title: '⠋ working - codex' },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: '⠋ working - codex' } },
         ptyIdsByTabId: { [TAB_ID]: [] }
       })
     ).toBe('inactive')

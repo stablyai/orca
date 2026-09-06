@@ -15,6 +15,7 @@ import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveCanonicalPaneAgentIdentity } from '../../../../../shared/pane-agent-identity-adapter'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
 
@@ -27,7 +28,14 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // can't drift and silently reintroduce the icon bug this fix closes.
   session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean => {
     const entry = state.agentStatusByPaneKey[session.cacheKey]
-    return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
+    if (entry?.state === 'done') {
+      return false
+    }
+    const identity = resolveCanonicalPaneAgentIdentity({
+      hookAgent: agentTypeToIconAgent(entry?.agentType),
+      hookIsLive: true
+    })
+    return Boolean(identity.agent)
   }
   // Why: one ladder for both launch-agent signals; a second copy could drift.
   const resolveLaunchAgentCandidate = (

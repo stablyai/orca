@@ -7,6 +7,9 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { resolveCanonicalPaneAgentIdentity } from '../../../../shared/pane-agent-identity-adapter'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type {
   WorkspaceSpaceItem,
@@ -39,7 +42,7 @@ export type WorkspaceSpaceDeleteReadiness = {
 
 export type WorkspaceSpaceAgentActivityInputs = {
   worktreeId: string
-  tabs: readonly Pick<TerminalTab, 'id' | 'title'>[]
+  tabs: readonly (Pick<TerminalTab, 'id' | 'title'> & { launchAgent?: TuiAgent | null })[]
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
@@ -72,7 +75,7 @@ function isActiveAgentState(entry: Pick<AgentStatusEntry, 'state'>): boolean {
 }
 
 function countTitleActiveAgentsForTab(
-  tab: Pick<TerminalTab, 'id' | 'title'>,
+  tab: Pick<TerminalTab, 'id' | 'title'> & { launchAgent?: TuiAgent | null },
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   ptyIdsByTabId: Record<string, string[]>
 ): number {
@@ -84,12 +87,25 @@ function countTitleActiveAgentsForTab(
   if (paneTitles && Object.keys(paneTitles).length > 0) {
     return Object.values(paneTitles).filter((title) => {
       const status = classifyTitleActivity(title)
-      return status === 'working' || status === 'permission'
+      const identity = resolveCanonicalPaneAgentIdentity({
+        launchAgent: tab.launchAgent ?? null,
+        title,
+        uncoveredFallback: { agent: resolveExplicitTerminalTitleAgentType(title), titleOnly: true }
+      })
+      return (status === 'working' || status === 'permission') && identity.agent !== null
     }).length
   }
 
   const status = classifyTitleActivity(tab.title)
-  return status === 'working' || status === 'permission' ? 1 : 0
+  const identity = resolveCanonicalPaneAgentIdentity({
+    launchAgent: tab.launchAgent ?? null,
+    title: tab.title,
+    uncoveredFallback: {
+      agent: resolveExplicitTerminalTitleAgentType(tab.title),
+      titleOnly: true
+    }
+  })
+  return (status === 'working' || status === 'permission') && identity.agent !== null ? 1 : 0
 }
 
 export function countWorkspaceSpaceActiveAgents({

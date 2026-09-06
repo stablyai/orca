@@ -57,10 +57,7 @@ function sleepingRecord(paneKey: string, agent: ResumableTuiAgent): SleepingAgen
 }
 
 describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
-  it("prefers a hibernated pane's session identity over a stale reused launchAgent", () => {
-    // Why: a codex launch later reused for claude leaves a claude sleeping record
-    // for the pane. Its generic spinner title names no agent, so only the session
-    // record proves the launch identity went stale.
+  it("prefers launch identity over a conflicting hibernated pane's session", () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -70,7 +67,7 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
         sleepingSessionAgent: 'claude',
         launchAgent: 'codex'
       })
-    ).toBe('claude')
+    ).toBe('codex')
   })
 
   it('keeps live hook identity ahead of a sleeping-session record', () => {
@@ -86,7 +83,7 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
     ).toBe('codex')
   })
 
-  it('keeps current sleeping ownership ahead of an unversioned conflicting title', () => {
+  it('keeps launch ownership ahead of sleeping-session identity and a conflicting title', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -96,7 +93,7 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
         sleepingSessionAgent: 'gemini',
         launchAgent: 'codex'
       })
-    ).toBe('gemini')
+    ).toBe('codex')
   })
 
   it('keeps a genuine tab icon when its sleeping record matches the launchAgent', () => {
@@ -158,11 +155,8 @@ describe('useTabAgent sleeping-session', () => {
     window.api = originalApi
   })
 
-  it('paints a hibernated pane with its sleeping-session agent over a stale launchAgent', async () => {
+  it('paints a hibernated pane with its stronger launch identity', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
-    // Why: the pane was launched as codex, then reused for claude and hibernated.
-    // No live hook/process remains and the frozen title names no agent, so the
-    // persisted session record is the only proof the launch identity went stale.
     useAppStore.setState({
       terminalLayoutsByTabId: {
         'tab-1': {
@@ -178,7 +172,7 @@ describe('useTabAgent sleeping-session', () => {
 
     await renderHookProbe({ ...baseTab, title: '⠐ Explain GitHub issue simply' })
 
-    expect(latestHookAgent).toBe('claude')
+    expect(latestHookAgent).toBe('codex')
     expect(getForegroundProcess).not.toHaveBeenCalled()
   })
 })

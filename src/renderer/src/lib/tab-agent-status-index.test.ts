@@ -26,16 +26,17 @@ function oracleAnyTabAgent(
   tabId: string,
   excludedLeafId?: string
 ): TuiAgent | null {
+  const agents = new Set<TuiAgent>()
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
       const agent = entry.state === 'done' ? null : agentTypeToIconAgent(entry.agentType)
       if (agent) {
-        return agent
+        agents.add(agent)
       }
     }
   }
-  return null
+  return agents.size === 1 ? [...agents][0]! : null
 }
 
 function oracleAnyCompletedTabAgent(
@@ -43,16 +44,17 @@ function oracleAnyCompletedTabAgent(
   tabId: string,
   excludedLeafId?: string
 ): TuiAgent | null {
+  const agents = new Set<TuiAgent>()
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
       const agent = entry.state === 'done' ? agentTypeToIconAgent(entry.agentType) : null
       if (agent) {
-        return agent
+        agents.add(agent)
       }
     }
   }
-  return null
+  return agents.size === 1 ? [...agents][0]! : null
 }
 
 function oracleAnyRetainedTabAgent(
@@ -60,16 +62,17 @@ function oracleAnyRetainedTabAgent(
   tabId: string,
   excludedLeafId?: string
 ): TuiAgent | null {
+  const agents = new Set<TuiAgent>()
   for (const [paneKey, retained] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
       const agent = agentTypeToIconAgent(retained.agentType)
       if (agent) {
-        return agent
+        agents.add(agent)
       }
     }
   }
-  return null
+  return agents.size === 1 ? [...agents][0]! : null
 }
 
 function activeLeafOf(layout: TerminalLayoutSnapshot | undefined): string | null {
@@ -310,17 +313,17 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
     }
   })
 
-  it('returns the first done sibling in insertion order when siblings run different agents', () => {
+  it('returns no sibling identity when completed siblings name different agents', () => {
     const map = {
       [`tab-1:${leafId(0)}`]: statusEntry(`tab-1:${leafId(0)}`, 'done', 'codex'),
       [`tab-1:${leafId(1)}`]: statusEntry(`tab-1:${leafId(1)}`, 'done', 'claude'),
       [`tab-1:${leafId(2)}`]: statusEntry(`tab-1:${leafId(2)}`, 'done', 'gemini')
     }
-    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(2)), 'tab-1')).toBe('codex')
-    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBe('claude')
-    // Fresh identity, reversed insertion order → first match flips.
+    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(2)), 'tab-1')).toBeNull()
+    expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBeNull()
+    // Conflicting same-rank sibling identity is ambiguous, regardless of insertion order.
     const reversed = Object.fromEntries(Object.entries(map).toReversed())
-    expect(resolveSiblingCompletedTabAgent(reversed, layoutOf(leafId(2)), 'tab-1')).toBe('claude')
+    expect(resolveSiblingCompletedTabAgent(reversed, layoutOf(leafId(2)), 'tab-1')).toBeNull()
   })
 
   it('excludes the active leaf and skips non-iconable agents', () => {

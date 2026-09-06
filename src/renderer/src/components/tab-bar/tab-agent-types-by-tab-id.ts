@@ -1,9 +1,12 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from '../native-chat/native-chat-leaf-routing'
+import { resolveCanonicalPaneAgentIdentity } from '../../../../shared/pane-agent-identity-adapter'
+import { agentTypeToIconAgent } from '@/lib/agent-status'
 
 type TabBarAgentProjectionSelectorDependencies = {
   onStatusEntryVisited?: (paneKey: string) => void
@@ -65,10 +68,17 @@ function projectTabAgentTypesByTabId(
       continue
     }
     const entry = agentStatusByPaneKey[`${tabId}:${activeLeafId}`]
-    if (entry?.agentType != null) {
-      byTabId[tabId] = entry.agentType
+    const entryAgent = agentTypeToIconAgent(entry?.agentType)
+    const identity = resolveCanonicalPaneAgentIdentity({
+      hookAgent: entry?.state === 'done' ? null : entryAgent,
+      hookIsLive: true,
+      completedHookAgent: entry?.state === 'done' ? entryAgent : null
+    })
+    if (identity.agent != null) {
+      byTabId[tabId] = identity.agent
     }
   }
+  const siblingAgentsByTabId = new Map<string, TuiAgent[]>()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     dependencies?.onStatusEntryVisited?.(paneKey)
     const colon = paneKey.indexOf(':')
@@ -79,9 +89,21 @@ function projectTabAgentTypesByTabId(
     if (claimed.has(tabId)) {
       continue
     }
-    claimed.add(tabId)
-    if (entry.agentType != null) {
-      byTabId[tabId] = entry.agentType
+    const entryAgent = agentTypeToIconAgent(entry.agentType)
+    if (!entryAgent) {
+      continue
+    }
+    const agents = siblingAgentsByTabId.get(tabId)
+    if (agents) {
+      agents.push(entryAgent)
+    } else {
+      siblingAgentsByTabId.set(tabId, [entryAgent])
+    }
+  }
+  for (const [tabId, siblingAgents] of siblingAgentsByTabId) {
+    const identity = resolveCanonicalPaneAgentIdentity({ siblingAgents, allowSibling: true })
+    if (identity.agent != null) {
+      byTabId[tabId] = identity.agent
     }
   }
   return byTabId

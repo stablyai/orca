@@ -28,7 +28,8 @@ const HELPERS = [
 ] as const
 
 const TEST_SUPPORT_PATHS = new Set([
-  'src/renderer/src/components/terminal-pane/pty-connection-test-environment.ts'
+  'src/renderer/src/components/terminal-pane/pty-connection-test-environment.ts',
+  'src/renderer/src/lib/tab-agent-identity-shipping-baseline.ts'
 ])
 
 type Helper = (typeof HELPERS)[number]
@@ -150,8 +151,14 @@ const INVENTORY: readonly InventoryGroup[] = [
     classification: 'identity-consumer',
     paths: [
       ['mobile/src/session/mobile-terminal-tab-agent.ts', 2],
-      ['src/renderer/src/lib/open-tab-occupant-agent.ts', 2],
-      ['src/renderer/src/lib/use-tab-agent.ts', 3]
+      ['src/renderer/src/components/sidebar/smart-attention-title-status.ts', 2],
+      ['src/renderer/src/components/sidebar/worktree-agent-row-type.ts', 2],
+      ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
+      ['src/renderer/src/components/status-bar/workspace-space-presentation.ts', 3],
+      ['src/renderer/src/components/terminal-pane/native-chat-leaf-title-agent.ts', 2],
+      ['src/renderer/src/lib/tab-agent-from-signals.ts', 2],
+      ['src/renderer/src/lib/use-tab-agent.ts', 2],
+      ['src/renderer/src/lib/worktree-status.ts', 2]
     ]
   },
   {
@@ -159,7 +166,6 @@ const INVENTORY: readonly InventoryGroup[] = [
     classification: 'parser-implementation',
     paths: [
       ['src/renderer/src/lib/pane-agent-evidence.ts', 2],
-      ['src/renderer/src/lib/tab-agent-from-signals.ts', 2],
       'src/shared/terminal-title-agent-type.ts'
     ]
   },
@@ -177,10 +183,7 @@ const INVENTORY: readonly InventoryGroup[] = [
   {
     helper: 'resolveCommittedTitleAgentType',
     classification: 'identity-consumer',
-    paths: [
-      ['src/renderer/src/components/terminal-pane/native-chat-leaf-title-agent.ts', 4],
-      ['src/renderer/src/components/terminal-pane/pty-connection/pane-agent-identity.ts', 2]
-    ]
+    paths: [['src/renderer/src/components/terminal-pane/pty-connection/pane-agent-identity.ts', 2]]
   },
   {
     helper: 'resolveCommittedTitleAgentType',
@@ -209,8 +212,7 @@ const INVENTORY: readonly InventoryGroup[] = [
     classification: 'identity-consumer',
     paths: [
       ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
-      ['src/renderer/src/components/terminal-pane/pty-connection/shell-command-inference.ts', 2],
-      ['src/renderer/src/lib/use-tab-agent.ts', 2]
+      ['src/renderer/src/components/terminal-pane/pty-connection/shell-command-inference.ts', 2]
     ]
   },
   {
@@ -222,11 +224,8 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'resolveCompatibleAgentTypeForOwner',
     classification: 'identity-consumer',
     paths: [
-      ['src/renderer/src/components/sidebar/worktree-agent-row-type.ts', 2],
       ['src/main/runtime/runtime-mobile-session-projection.ts', 3],
-      ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
-      ['src/renderer/src/lib/tab-agent-from-signals.ts', 2],
-      ['src/renderer/src/lib/use-tab-agent.ts', 2]
+      ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2]
     ]
   },
   {
@@ -253,12 +252,11 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'classifyTitleActivity',
     classification: 'identity-consumer',
     paths: [
-      ['src/renderer/src/components/sidebar/smart-attention.ts', 3],
+      ['src/renderer/src/components/sidebar/smart-attention-title-status.ts', 2],
       ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
       ['src/renderer/src/components/status-bar/workspace-space-presentation.ts', 3],
       ['src/renderer/src/lib/active-agent-note-target.ts', 2],
-      ['src/renderer/src/lib/worktree-status.ts', 3],
-      ['src/renderer/src/store/slices/terminal-helpers.ts', 2]
+      ['src/renderer/src/lib/worktree-status.ts', 3]
     ]
   },
   {
@@ -340,11 +338,7 @@ const INVENTORY: readonly InventoryGroup[] = [
   {
     helper: 'resolveAgentTypeFromTerminalTitle',
     classification: 'identity-consumer',
-    paths: [
-      ['src/renderer/src/components/sidebar/worktree-agent-row-type.ts', 2],
-      'src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts',
-      ['src/renderer/src/lib/worktree-status.ts', 2]
-    ]
+    paths: ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts']
   },
   {
     helper: 'resolvePaneAgentIdentity',
@@ -364,7 +358,21 @@ const INVENTORY: readonly InventoryGroup[] = [
   {
     helper: 'resolveCanonicalPaneAgentIdentity',
     classification: 'identity-consumer',
-    paths: [['src/shared/agent-status-identity.ts', 2]]
+    paths: [
+      ['src/shared/agent-status-identity.ts', 2],
+      ['src/renderer/src/components/sidebar/smart-attention-title-status.ts', 2],
+      ['src/renderer/src/components/sidebar/worktree-agent-row-type.ts', 2],
+      ['src/renderer/src/components/sidebar/worktree-title-derived-agent-rows.ts', 2],
+      ['src/renderer/src/components/status-bar/workspace-space-presentation.ts', 3],
+      ['src/renderer/src/components/tab-bar/tab-agent-types-by-tab-id.ts', 3],
+      ['src/renderer/src/components/terminal-pane/native-chat-leaf-title-agent.ts', 2],
+      ['src/renderer/src/components/terminal-pane/pty-connection/pane-agent-identity.ts', 2],
+      ['src/renderer/src/components/terminal-pane/terminal-tab-agent-type-index.ts', 2],
+      ['src/renderer/src/lib/tab-agent-from-signals.ts', 2],
+      ['src/renderer/src/lib/tab-agent-status-index.ts', 2],
+      ['src/renderer/src/lib/worktree-status.ts', 2],
+      ['src/renderer/src/store/slices/terminal-helpers.ts', 2]
+    ]
   },
   {
     helper: 'resolveCanonicalPaneAgentIdentity',

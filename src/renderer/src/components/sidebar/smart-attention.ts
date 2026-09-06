@@ -1,4 +1,4 @@
-import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
@@ -15,6 +15,8 @@ import {
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { resolveAttributedTitleStatus } from './smart-attention-title-status'
 
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
@@ -291,7 +293,7 @@ export type TabPaneInputSources = {
  * stale working-pattern title can't leak through.
  */
 export function collectTabPaneInputs(
-  tab: Pick<TerminalTab, 'id' | 'title'>,
+  tab: Pick<TerminalTab, 'id' | 'title'> & { launchAgent?: TuiAgent | null },
   worktreeLastActivityAt: number,
   sources: TabPaneInputSources,
   now: number
@@ -326,7 +328,7 @@ export function collectTabPaneInputs(
       // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
       panes.push({
         kind: 'title',
-        status: classifyTitleActivity(tab.title),
+        status: resolveAttributedTitleStatus(tab.title, tab.launchAgent),
         worktreeLastActivityAt
       })
     }
@@ -343,7 +345,11 @@ export function collectTabPaneInputs(
     if ((leafId !== null && hookLeafIds.has(leafId)) || hasSingleUnmappedHook) {
       continue
     }
-    panes.push({ kind: 'title', status: classifyTitleActivity(title), worktreeLastActivityAt })
+    panes.push({
+      kind: 'title',
+      status: resolveAttributedTitleStatus(title, tab.launchAgent),
+      worktreeLastActivityAt
+    })
   }
   return panes
 }

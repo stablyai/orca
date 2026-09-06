@@ -3,14 +3,15 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { agentTypeToIconAgent } from './agent-status'
+import { resolveCanonicalPaneAgentIdentity } from '../../../shared/pane-agent-identity-adapter'
 
 /**
  * Per-tab index of icon-capable agent panes for the tab-bar resolvers in
  * `tab-agent.ts`. Without it each of ~200 mounted tabs re-scanned (and
  * re-parsed the pane key of) the whole global status map on every render.
  *
- * Panes keep the source map's insertion order because the resolvers return the
- * FIRST match — order decides which icon a split tab shows.
+ * Panes keep the source map's insertion order for stable projections; the canonical resolver
+ * fences conflicting same-rank identities instead of letting insertion order choose an icon.
  */
 export type TabAgentPane = { readonly leafId: string; readonly agent: TuiAgent }
 
@@ -108,10 +109,11 @@ export function firstTabAgentExcludingLeaf(
   panes: readonly TabAgentPane[],
   excludedLeafId?: string
 ): TuiAgent | null {
-  for (const pane of panes) {
-    if (pane.leafId !== excludedLeafId) {
-      return pane.agent
-    }
-  }
-  return null
+  const siblingAgents = panes
+    .filter((pane) => pane.leafId !== excludedLeafId)
+    .map((pane) => pane.agent)
+  return resolveCanonicalPaneAgentIdentity({
+    siblingAgents,
+    allowSibling: true
+  }).agent
 }

@@ -1,8 +1,8 @@
-import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { resolveCanonicalPaneAgentIdentity } from '../../../shared/pane-agent-identity-adapter'
+import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
-import { containsAgentSpinnerGlyph } from '../../../shared/agent-title-core'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -112,13 +112,14 @@ function tabHasStatus(
 
 // Why: require agent attribution so a bare never-cleared spinner title can't spin the dot "0 agents" forever with no matching sidebar row.
 function titleStatusIsAgentAttributable(title: string, launchAgent?: TuiAgent | null): boolean {
-  if (resolveAgentTypeFromTerminalTitle(title) !== null) {
-    return true
-  }
-  // Why: a spinner proves activity but not identity (Claude's thinking title has no provider
-  // token, #9040); the tab's launch identity supplies it, mirroring the row builder's spinner
-  // fallback (#9647) so the dot and the sidebar row agree.
-  return containsAgentSpinnerGlyph(title) && Boolean(launchAgent)
+  // A title is only an activity hint here; identity attribution comes from the same canonical
+  // ladder as the tab icon, so a launch record cannot be displaced by a title token.
+  const identity = resolveCanonicalPaneAgentIdentity({
+    launchAgent: launchAgent ?? null,
+    title,
+    uncoveredFallback: { agent: resolveExplicitTerminalTitleAgentType(title), titleOnly: true }
+  })
+  return identity.agent !== null
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {

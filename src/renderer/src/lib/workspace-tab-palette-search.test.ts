@@ -606,22 +606,26 @@ describe('workspace-tab-palette-search', () => {
     expect(searchWorkspaceTabs(buildEntries(), query)).toEqual([])
   })
 
-  it('stamps grok occupancy from the idle OSC title the sidebar already shows', () => {
+  it('does not stamp grok occupancy from a bare idle OSC title', () => {
     const titledOnly = buildEntries({
       tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'grok' })] },
       unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
     })
-    expect(titledOnly[0]?.occupantAgent).toBe('grok')
-    expect(searchWorkspaceTabs(titledOnly, 'grok')[0]?.occupantAgent).toBe('grok')
+    // `grok` is free-text-only evidence; the canonical resolver requires an anchored owner
+    // suffix (for example `Task - grok`) before a title-only fallback can identify a pane.
+    expect(titledOnly[0]?.occupantAgent).toBeNull()
+    expect(searchWorkspaceTabs(titledOnly, 'grok')[0]?.occupantAgent).toBeNull()
   })
 
-  it('stamps occupancy from the live unified label when the terminal record title is stale', () => {
+  it('does not stamp occupancy from a bare unified label when the terminal record title is stale', () => {
     const staleRecord = buildEntries({
       tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'Terminal 1' })] },
       unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
     })
     expect(staleRecord[0]?.title).toBe('grok')
-    expect(staleRecord[0]?.occupantAgent).toBe('grok')
+    // `grok` is free-text-only evidence; the canonical resolver requires an anchored owner
+    // suffix (for example `Task - grok`) before a title-only fallback can identify a pane.
+    expect(staleRecord[0]?.occupantAgent).toBeNull()
   })
 
   it('does not stamp grok occupancy from a hyphenated filename-style title', () => {
