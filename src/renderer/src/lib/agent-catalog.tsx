@@ -306,6 +306,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'openinterpreter',
+    label: translate('auto.lib.agent.catalog.openinterpreter', 'OpenInterpreter'),
+    cmd: 'interpreter',
+    faviconDomain: 'openinterpreter.com',
+    // Why: the undetected-agent Settings row uses this URL as its Install
+    // action; link to the cross-platform quickstart instead of a source repo.
+    homepageUrl: 'https://www.openinterpreter.com/docs/terminal/quickstart'
   }
 ])
 

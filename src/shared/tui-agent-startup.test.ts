@@ -716,4 +716,8 @@ describe('tui agent startup plans', () => {
   it('appends Devin default permission-mode bypass before stdin prompt delivery', () => {
     expect(resolveTuiAgentLaunchArgs('devin', null)).toBe('--permission-mode bypass')
   })
+
+  it('exposes the OpenInterpreter terminal launch point', () => {
+    expect(TUI_AGENT_CONFIG.openinterpreter.launchCmd).toBe('interpreter')
+  })
 })

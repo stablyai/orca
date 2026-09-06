@@ -285,6 +285,15 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  openinterpreter: {
+    // Why: OpenInterpreter's documented terminal entry point is the generic
+    // `interpreter` binary. Keep it last in auto-pick order to avoid claiming
+    // an unrelated executable with the same name.
+    detectCmd: 'interpreter',
+    launchCmd: 'interpreter',
+    expectedProcess: 'interpreter',
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 
