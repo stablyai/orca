@@ -1,5 +1,17 @@
-import { normalizePromptField } from './agent-status-field-normalization'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import {
+  AGENT_STATUS_MAX_FIELD_LENGTH,
+  normalizeOptionalField,
+  normalizePromptField
+} from './agent-status-field-normalization'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalToolCallItem
+} from './agent-session-journal-types'
+import {
+  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_STATUS_TOOL_NAME_MAX_LENGTH
+} from './agent-status-types'
+import { describeToolInput } from './native-chat-tool-summary'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 
@@ -163,6 +175,10 @@ export function projectStructuredAgentSessionStatus(
   return activeStructuredAgentSessionTurnId(items) ? 'working' : 'idle'
 }
 
+function messageProse(blocks: readonly NativeChatBlock[]): string {
+  return blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+}
+
 /** The newest user prompt, as the sidebar quotes it. */
 export function latestStructuredAgentSessionPrompt(
   items: readonly AgentJournalRenderItem[]
@@ -170,24 +186,95 @@ export function latestStructuredAgentSessionPrompt(
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
     if (body?.kind === 'message' && body.role === 'user') {
-      return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+      return messageProse(body.blocks)
     }
   }
   return ''
 }
 
+/** The newest assistant prose in the latest user turn. Tool-only assistant items
+ *  are skipped; the user boundary clears prose from the preceding turn. */
+export function latestStructuredAgentSessionAssistantMessage(
+  items: readonly AgentJournalRenderItem[]
+): string {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const body = items[index]?.body
+    if (body?.kind === 'message' && body.role === 'user') {
+      return ''
+    }
+    if (body?.kind === 'message' && body.role === 'assistant') {
+      const prose = messageProse(body.blocks)
+      if (prose.trim()) {
+        return prose
+      }
+    }
+  }
+  return ''
+}
+
+/** The tool call the newest turn is still inside, or null when nothing is running.
+ *  Scanning stops at the turn's own lifecycle row so an abandoned `running` call
+ *  from an earlier crashed turn can never be reported as live work. */
+export function activeStructuredAgentSessionToolCall(
+  items: readonly AgentJournalRenderItem[]
+): AgentJournalToolCallItem | null {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const body = items[index]?.body
+    if (body?.kind === 'status' && body.turnLifecycle) {
+      return null
+    }
+    if (body?.kind === 'tool-call' && body.state === 'running') {
+      return body
+    }
+  }
+  return null
+}
+
+/** The activity fields a sidebar row shows beside the prompt, named as the agent-status
+ *  entry names them so the client can hand them straight to a row. */
+export type StructuredAgentSessionStatusProjection = {
+  status: StructuredAgentSessionProjectedStatus | null
+  latestPrompt: string
+  /** Present only while a turn is running — see showsAgentToolPreview, which reads
+   *  these on any state that carries them. */
+  toolName?: string
+  toolInput?: string
+  lastAssistantMessage?: string
+}
+
 /** One projection shared by host and client: null status means "no turn yet", not idle.
- *  The prompt is bounded to the same preview every other agent-status row carries — a send
- *  admits 256 KB, and one status frame carries every retained session at once. */
+ *  Every text field is bounded to the same preview an agent-status row carries — a send
+ *  admits 256 KB, and one status frame carries every retained session at once. The
+ *  assistant line is bounded harder than the hook field it stands in for (a preview, not
+ *  the 8 KB body): a streamed reply re-projects on every journal checkpoint, so the frame
+ *  has to stay small even though the row only ever renders one line of it. */
 export function projectStructuredAgentSessionStatusSummary(
   items: readonly AgentJournalRenderItem[]
-): { status: StructuredAgentSessionProjectedStatus | null; latestPrompt: string } {
+): StructuredAgentSessionStatusProjection {
   if (!hasPersistedStructuredAgentSessionTurn(items)) {
     return { status: null, latestPrompt: '' }
   }
+  const status = projectStructuredAgentSessionStatus(items)
+  const activeToolCall = status === 'working' ? activeStructuredAgentSessionToolCall(items) : null
+  const toolName = activeToolCall
+    ? normalizeOptionalField(activeToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
+    : undefined
+  const toolInput = activeToolCall
+    ? normalizeOptionalField(
+        describeToolInput(activeToolCall.input),
+        AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
+      )
+    : undefined
+  const lastAssistantMessage = normalizeOptionalField(
+    latestStructuredAgentSessionAssistantMessage(items),
+    AGENT_STATUS_MAX_FIELD_LENGTH
+  )
   return {
-    status: projectStructuredAgentSessionStatus(items),
-    latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items))
+    status,
+    latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items)),
+    ...(toolName ? { toolName } : {}),
+    ...(toolInput ? { toolInput } : {}),
+    ...(lastAssistantMessage ? { lastAssistantMessage } : {})
   }
 }
 

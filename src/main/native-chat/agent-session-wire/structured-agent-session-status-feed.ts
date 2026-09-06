@@ -12,6 +12,8 @@
 
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
+import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -42,6 +44,10 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     a.agent === b.agent &&
     a.status === b.status &&
     a.latestPrompt === b.latestPrompt &&
+    a.model === b.model &&
+    a.toolName === b.toolName &&
+    a.toolInput === b.toolInput &&
+    a.lastAssistantMessage === b.lastAssistantMessage &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
   )
 }
@@ -99,14 +105,17 @@ export class StructuredAgentSessionStatusFeed {
   ): AgentSessionStatusSummary {
     // An unreadable journal projects as "no turn": the chat itself shows the reset.
     const items = journal.isReadOnly ? [] : journal.snapshot().items
-    const providerSession = structuredAgentSessionProviderSessionMetadata(
-      this.deps.getRecord(sessionId)
-    )
+    const record = this.deps.getRecord(sessionId)
+    const providerSession = structuredAgentSessionProviderSessionMetadata(record)
+    // The journal has no model: the record's acknowledged options are where an owner
+    // handoff or a mid-session switch lands, so the row follows whichever is in force.
+    const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
       ...projectStructuredAgentSessionStatusSummary(items),
+      ...(model ? { model } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: this.deps.now()
     }
