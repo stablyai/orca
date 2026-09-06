@@ -8,10 +8,12 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, join, resolve } from 'node:path'
+import { isAbsolute, join, parse, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcessSync } from '../../src/shared/child-process/run-process.ts'
+import { resolveCliCommand } from '../../src/shared/node-cli-command-resolution.ts'
 import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
+import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
 
 /**
  * Run the command that actually consumes the patch hashes.
@@ -30,24 +32,27 @@ import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.
 const PROJECT_DIR = resolve(import.meta.dirname, '../..')
 const WINDOWS_PROCESS_TREE_PATCH = '@vscode__windows-process-tree@0.8.0.patch'
 
-/** runProcessSync wants an absolute program on Windows, where pnpm is a `.cmd` shim. */
-function resolvePnpmProgram() {
-  const names = process.platform === 'win32' ? ['pnpm.exe', 'pnpm.cmd'] : ['pnpm']
-  for (const dir of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(dir, name)
-      if (existsSync(candidate)) {
-        return candidate
-      }
-    }
+/**
+ * Which pnpm to run belongs to pnpm-cli-invocation.mjs, not to this file: naming
+ * the Windows shim here is what windows-cmd-shim-spawn-boundary.test.mjs rejects.
+ * Its `shell` is dropped on purpose -- runProcessSync refuses that flag and
+ * already drives a shim through the interpreter itself.
+ */
+function resolvePnpmInvocation() {
+  const { command, prefixArgs } = resolvePnpmCliInvocation()
+  if (isAbsolute(command)) {
+    return existsSync(command) ? { program: command, prefixArgs } : null
   }
-  return null
+  // Bare name only when npm_execpath is unset (bare `vitest`, not `pnpm test`).
+  // Drop the extension so the shared resolver tries every executable form of it.
+  const resolved = resolveCliCommand(parse(command).name)
+  return isAbsolute(resolved) ? { program: resolved, prefixArgs } : null
 }
 
 describe('patched dependencies', () => {
   it('installs with --frozen-lockfile, which is what validates every patch hash', () => {
-    const pnpm = resolvePnpmProgram()
-    expect(pnpm, 'pnpm must be on PATH; it is the only thing that can check this').not.toBeNull()
+    const pnpm = resolvePnpmInvocation()
+    expect(pnpm, 'pnpm must be installed; it is the only thing that can check this').not.toBeNull()
 
     // A copy, because a --frozen-lockfile run still rewrites parts of the
     // lockfile this repo does not track, and the real one must not move.
@@ -62,8 +67,14 @@ describe('patched dependencies', () => {
       })
 
       const result = runProcessSync({
-        program: pnpm,
-        args: ['install', '--frozen-lockfile', '--lockfile-only', '--ignore-scripts'],
+        program: pnpm.program,
+        args: [
+          ...pnpm.prefixArgs,
+          'install',
+          '--frozen-lockfile',
+          '--lockfile-only',
+          '--ignore-scripts'
+        ],
         cwd: scratch,
         timeoutMs: 300_000
       })
@@ -85,8 +96,8 @@ describe('patched dependencies', () => {
    * single dependency so it stays a ~2s check rather than a full install.
    */
   it('materializes the patched command-line reader on a real install', () => {
-    const pnpm = resolvePnpmProgram()
-    expect(pnpm, 'pnpm must be on PATH; it is the only thing that can check this').not.toBeNull()
+    const pnpm = resolvePnpmInvocation()
+    expect(pnpm, 'pnpm must be installed; it is the only thing that can check this').not.toBeNull()
 
     const scratch = mkdtempSync(join(tmpdir(), 'orca-patch-apply-'))
     try {
@@ -115,8 +126,8 @@ describe('patched dependencies', () => {
       )
 
       const result = runProcessSync({
-        program: pnpm,
-        args: ['install', '--no-frozen-lockfile', '--ignore-scripts'],
+        program: pnpm.program,
+        args: [...pnpm.prefixArgs, 'install', '--no-frozen-lockfile', '--ignore-scripts'],
         cwd: scratch,
         timeoutMs: 300_000
       })
