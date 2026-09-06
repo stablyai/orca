@@ -181,6 +181,7 @@ ORCA terminal read --terminal <handle> --json
 ORCA terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
 ORCA terminal read --json
 ORCA terminal send --terminal <handle> --text "continue" --enter --json
+ORCA terminal send --terminal <handle> --text "continue" --enter --wait-submit 10 --json
 ORCA terminal send --text "echo hello" --enter --json
 ORCA terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
 ORCA terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
@@ -204,7 +205,11 @@ Terminal rules:
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
-- For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --format` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
+- A text-plus-Enter agent prompt returns a durable request ID and additive stages: `input_accepted`, then `turn_started` once the agent's turn is proven. Raw text-only, bare Enter, interrupt, and terminal query replies keep their existing direct-input behavior.
+- A default send observes for 0 seconds, so a receipt that stops at `input_accepted` is expected and its warning means "unproven", not "failed". Pass `--wait-submit` when you need proof of submission.
+- `--wait-submit <seconds>` only observes the same accepted prompt. A timeout returns queued/input-accepted truth without resending; after an ambiguous transport failure, repeat the exact command with the reported `--retry-request <id>`. Both text and `--json` receipts carry the same `warnings`.
+- An older host reports a legacy `old-host` fallback for an ordinary send and refuses `--wait-submit` or `--retry-request` before input, because it cannot provide durable replay.
+- For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --peek --format --json` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
 - Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - Terminal handles are runtime-scoped. Use `startupTerminal.handle` as the sole agent handle when `worktree create --agent` returns it; if Orca restarts, omits the handle, or returns `terminal_handle_stale`, reacquire with `terminal list` and continue with the replacement only.

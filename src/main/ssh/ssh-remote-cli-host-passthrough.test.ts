@@ -160,6 +160,27 @@ describe('buildHostCliEnv', () => {
 })
 
 describe('resolveHostCliKillTimeoutMs', () => {
+  it.each([
+    ['--wait-submit', '3600'],
+    ['--wait-submit=3600'],
+    ['--wait-submit=3600.000000000000001'],
+    ['--wait-submit', '1', '--wait-submit=3600']
+  ])('keeps SSH prompt observation inside both outer deadlines: %j', (...waitFlags) => {
+    const argv = ['terminal', 'send', '--text', 'review', '--enter', ...waitFlags]
+    const innerTimeout = 3_600_000 + 10_000
+    const hostTimeout = resolveHostCliKillTimeoutMs(argv)
+    const relayTimeout = remoteCliRequestTimeoutMs({ argv })!
+    expect(hostTimeout).toBeGreaterThan(innerTimeout)
+    expect(relayTimeout).toBeGreaterThan(hostTimeout)
+  })
+
+  it('keeps pre-command Enter flags inside the prompt observation deadline', () => {
+    const argv = ['--enter', 'terminal', 'send', '--text', 'review', '--wait-submit', '3600']
+    const hostTimeout = resolveHostCliKillTimeoutMs(argv)
+    expect(hostTimeout).toBeGreaterThan(3_610_000)
+    expect(remoteCliRequestTimeoutMs({ argv })).toBeGreaterThan(hostTimeout)
+  })
+
   it('extends the kill timer past an explicit --timeout-ms budget', () => {
     expect(resolveHostCliKillTimeoutMs(['terminal', 'wait', '--timeout-ms', '1800000'])).toBe(
       1_920_000

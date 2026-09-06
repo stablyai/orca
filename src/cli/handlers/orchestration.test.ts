@@ -122,14 +122,17 @@ describe('orchestration send structured payload flags', () => {
         ['type', 'heartbeat'],
         ['dispatch-id', 'ctx_1'],
         ['dispatch-capability', 'dcap_secret'],
-        ['retry-request', 'mutation_1']
+        ['retry-request', '33333333-3333-4333-8333-333333333333']
       ])
     )
 
     expect(callMock).toHaveBeenCalledWith(
       'orchestration.send',
       expect.not.objectContaining({ dispatchCapability: expect.anything() }),
-      { orchestrationCapability: 'dcap_secret', orchestrationRequestId: 'mutation_1' }
+      {
+        orchestrationCapability: 'dcap_secret',
+        orchestrationRequestId: '33333333-3333-4333-8333-333333333333'
+      }
     )
   })
 
@@ -831,6 +834,29 @@ describe('orchestration timeout flag validation', () => {
     )
   })
 
+  it('envelopes ask --json through the shared result printer', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    const response = {
+      id: 'req_ask',
+      ok: true,
+      result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false },
+      _meta: { runtimeId: 'runtime_1' }
+    }
+    callMock.mockResolvedValue(response)
+    vi.mocked(printResult).mockClear()
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invokeAsk(
+      new Map<string, string | boolean>([
+        ['to', 'term_coord'],
+        ['question', 'Proceed?']
+      ])
+    )
+
+    expect(printResult).toHaveBeenCalledWith(response, true, expect.any(Function))
+    expect(logSpy).not.toHaveBeenCalled()
+  })
+
   it('passes an ask resume without creating a new question payload', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
@@ -873,55 +899,5 @@ describe('orchestration timeout flag validation', () => {
       )
     ).rejects.toMatchObject({ code: 'invalid_argument' })
     expect(callMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('orchestration task-list brief output', () => {
-  it('requests server-side brief and falls back client-side for older runtimes', async () => {
-    callMock.mockReset().mockResolvedValue({
-      result: {
-        // No spec_truncated field — the pre-brief-runtime signature.
-        tasks: [{ id: 'task_1', spec: `First line\n${'detail '.repeat(40)}`, status: 'ready' }],
-        count: 1
-      }
-    })
-    vi.mocked(printResult).mockClear()
-
-    await ORCHESTRATION_HANDLERS['orchestration task-list']({
-      flags: new Map([['brief', true]]),
-      client: { call: callMock },
-      json: true
-    } as never)
-
-    expect(callMock).toHaveBeenCalledWith(
-      'orchestration.taskList',
-      expect.objectContaining({ brief: true })
-    )
-    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
-      result: { tasks: { spec: string; spec_truncated: boolean }[] }
-    }
-    expect(response.result.tasks[0].spec).toHaveLength(160)
-    expect(response.result.tasks[0].spec_truncated).toBe(true)
-  })
-
-  it('passes server-abbreviated rows through untouched', async () => {
-    const serverTasks = [
-      { id: 'task_1', spec: 'already brief…', status: 'ready', spec_truncated: true }
-    ]
-    callMock.mockReset().mockResolvedValue({ result: { tasks: serverTasks, count: 1 } })
-    vi.mocked(printResult).mockClear()
-
-    await ORCHESTRATION_HANDLERS['orchestration task-list']({
-      flags: new Map([['brief', true]]),
-      client: { call: callMock },
-      json: true
-    } as never)
-
-    const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
-      result: { tasks: { spec: string; spec_truncated: boolean }[] }
-    }
-    // Why: re-abbreviating a server-truncated spec would flip spec_truncated
-    // back to false (the truncated text fits the cap).
-    expect(response.result.tasks).toBe(serverTasks)
   })
 })

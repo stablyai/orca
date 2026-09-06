@@ -1,3 +1,4 @@
+import type { AttemptObservationStoreMethods } from './attempt-observation-store'
 import type { CoordinatorRunStoreMethods } from './coordinator-runs/coordinator-run-store'
 import type { DecisionGateStoreMethods } from './decision-gates/decision-gate-store'
 import type { DispatchCapabilityMethods } from './dispatch-context/dispatch-capability'
@@ -7,12 +8,14 @@ import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
 import type { DispatchDepthMethods } from './dispatch-depth'
 import type { WorkerReportSettlementMethods } from './dispatch-context/worker-report-settlement'
 import type { FederatedDispatchStoreMethods } from './federation/federated-dispatch-store'
+import type { FederatedDispatchObservationFenceMethods } from './federation/federated-dispatch-observation-fence'
 import type { FederationRelayAckMethods } from './federation/federation-relay-ack'
 import type { FederationRelayEnqueueMethods } from './federation/federation-relay-enqueue'
 import type { FederationRelayImportMethods } from './federation/federation-relay-import'
 import type { FederationRelayItemMethods } from './federation/federation-relay-item'
 import type { RemoteDispatchAttachmentAuthorityMethods } from './federation/remote-dispatch-attachment-authority'
 import type { RemoteDispatchAttachmentCreateMethods } from './federation/remote-dispatch-attachment-create'
+import type { RemoteDispatchAttachmentReleaseMethods } from './federation/remote-dispatch-attachment-release'
 import type { RemoteDispatchAttachmentStopMethods } from './federation/remote-dispatch-attachment-stop'
 import type { RemoteQuestionStoreMethods } from './federation/remote-question-store'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
@@ -27,9 +30,12 @@ import type { LegacyReplyOperationMethods } from './legacy/legacy-reply-operatio
 import type { LegacyWorkerCompletionMethods } from './legacy/legacy-worker-completion'
 import type { DirectMailboxRoutingMethods } from './messages/direct-mailbox-routing'
 import type { ForeignDirectMailboxRoutingMethods } from './messages/foreign-direct-mailbox-routing'
+import type { MailboxPointerEnterStateMethods } from './messages/mailbox-pointer-enter-state'
 import type { MessageInboxMethods } from './messages/message-inbox'
 import type { MessageInsertMethods } from './messages/message-insert'
+import type { RoleMailboxDeliveryMethods } from './messages/role-mailbox-delivery'
 import type { MutationReceiptStoreMethods } from './mutation-receipts/mutation-receipt-store'
+import type { LifecycleTransitionMethods } from './lifecycle-transition'
 import type { QuestionThreadsMethods } from './questions/question-threads'
 import type { OrchestrationResetMethods } from './reset/orchestration-reset'
 import type { RunBindingMethods } from './runs/run-binding'
@@ -60,13 +66,15 @@ import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-term
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
-export type OrchestrationDbMethods = CreateTablesMethods &
+export type OrchestrationDbMethods = AttemptObservationStoreMethods &
+  CreateTablesMethods &
   SchemaMigrateMethods &
   SchemaColumnProbesMethods &
   MigrateLegacyContractStorageMethods &
   BackfillLegacyQuestionThreadsMethods &
   AdoptLegacyRunMethods &
   MutationReceiptStoreMethods &
+  LifecycleTransitionMethods &
   LegacyCompatibilityPrincipalsMethods &
   LegacyCompatibilityCandidatesMethods &
   LegacyWorkerCompletionMethods &
@@ -84,7 +92,9 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   LegacyCoordinatorMailTakeoverMethods &
   RunDeliveryMethods &
   MessageInsertMethods &
+  RoleMailboxDeliveryMethods &
   MessageInboxMethods &
+  MailboxPointerEnterStateMethods &
   DirectMailboxRoutingMethods &
   ForeignDirectMailboxRoutingMethods &
   QuestionThreadsMethods &
@@ -99,8 +109,10 @@ export type OrchestrationDbMethods = CreateTablesMethods &
   WorkerDispatchStopMethods &
   WorkerDispatchAbandonMethods &
   FederatedDispatchStoreMethods &
+  FederatedDispatchObservationFenceMethods &
   RemoteDispatchAttachmentCreateMethods &
   RemoteDispatchAttachmentAuthorityMethods &
+  RemoteDispatchAttachmentReleaseMethods &
   RemoteDispatchAttachmentStopMethods &
   FederationRelayEnqueueMethods &
   FederationRelayAckMethods &

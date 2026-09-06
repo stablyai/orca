@@ -10,6 +10,7 @@ import type {
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import type {
@@ -64,6 +65,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected terminalSideEffectConsumerAvailable = false
 
   protected readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+
+  protected readonly readObservedAgentStatusPaneIdentityFn: (
+    paneKey: string
+  ) => ObservedAgentStatusPaneIdentity
 
   protected readonly getAgentProviderSessionSnapshotFn: (() => AgentStatusIpcPayload[]) | null
 
@@ -131,7 +136,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     new RuntimeLegacyWorkerTerminalRecoveryPersistence(
       () => this.store,
       () => this.getOrchestrationDb(),
-      (worktreeId) => this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+      (worktreeId) => this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId),
+      (paneKey, blocked) => this.notifier?.setLegacyWorkerTerminalResumeFence?.(paneKey, blocked)
     )
 
   protected readonly legacyWorkerRecovery = new RuntimeLegacyWorkerTerminalRecoveryController({
