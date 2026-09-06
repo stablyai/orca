@@ -101,6 +101,14 @@ function readAclEntries(path: string): string[] {
   return entries
 }
 
+/**
+ * `toHaveLength` reports only the count, and vitest elides the array past a few items — which on a
+ * host that lists a DACL differently is exactly the information needed. Name the entries.
+ */
+function listed(entries: string[]): string {
+  return `icacls listed ${entries.length} entries: ${entries.join(' | ')}`
+}
+
 describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
   const elevated = isElevated()
   let root: string
@@ -220,14 +228,14 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
     ).toBe(0)
 
     const before = readAclEntries(file)
-    expect(before).toHaveLength(3)
+    expect(before, listed(before)).toHaveLength(3)
     expect(before.every((entry) => !entry.includes('(I)'))).toBe(true)
     expect(before.some((entry) => entry.startsWith('Everyone:'))).toBe(true)
 
     expect(restrictWindowsPathSync(file, false)).toBe(true)
 
     const after = readAclEntries(file)
-    expect(after).toHaveLength(3)
+    expect(after, listed(after)).toHaveLength(3)
     expect(after.some((entry) => entry.startsWith('Everyone:'))).toBe(false)
   })
 
@@ -260,14 +268,14 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
     ).toBe(0)
 
     const before = readAclEntries(dir)
-    expect(before).toHaveLength(3)
+    expect(before, listed(before)).toHaveLength(3)
     expect(before.every((entry) => !entry.includes('(I)'))).toBe(true)
     expect(before.every((entry) => entry.endsWith(rights))).toBe(true)
 
     expect(restrictWindowsPathSync(dir, true)).toBe(true)
 
     const after = readAclEntries(dir)
-    expect(after).toHaveLength(3)
+    expect(after, listed(after)).toHaveLength(3)
     expect(after.every((entry) => entry.endsWith(':(OI)(CI)(F)'))).toBe(true)
 
     // The point of the (IO) case: before the repair the directory object grants nobody anything,
