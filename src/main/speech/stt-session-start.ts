@@ -145,6 +145,7 @@ async function startSttSession(
     modelType: manifest.type,
     streaming: manifest.streaming,
     sampleRate: manifest.sampleRate,
+    featureDim: manifest.featureDim,
     files: manifest.files ?? [],
     hotwordsFilePath,
     modelingUnit: manifest.modelingUnit
