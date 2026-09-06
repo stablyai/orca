@@ -1,6 +1,7 @@
 // src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts
 import { describe, it, expect, vi } from 'vitest'
 import { FIND_QUERY_MAX_BYTES } from '@/lib/find-query-bounds'
+import { buildTerminalSearchOptions } from '../terminal-search-options'
 import {
   matchFileSearchShortcut,
   matchSearchNavigate,
@@ -8,6 +9,12 @@ import {
   runTerminalSearchNavigation
 } from './keyboard-handlers'
 
+/**
+ * Builds the subset of a keyboard event the shortcut matchers read.
+ *
+ * @param overrides Fields to change; the rest default to an unmodified `g`.
+ * @returns A stand-in keyboard event.
+ */
 function makeKeyEvent(
   overrides: Partial<{
     key: string
@@ -161,7 +168,10 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'next', searchState)).toBe(true)
-    expect(findNext).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findNext).toHaveBeenCalledWith(
+      'hello',
+      buildTerminalSearchOptions({ caseSensitive: true, regex: false })
+    )
     expect(findPrevious).not.toHaveBeenCalled()
   })
 
@@ -173,8 +183,25 @@ describe('runTerminalSearchNavigation', () => {
     >[0]
 
     expect(runTerminalSearchNavigation(pane, 'previous', searchState)).toBe(true)
-    expect(findPrevious).toHaveBeenCalledWith('hello', { caseSensitive: true, regex: false })
+    expect(findPrevious).toHaveBeenCalledWith(
+      'hello',
+      buildTerminalSearchOptions({ caseSensitive: true, regex: false })
+    )
     expect(findNext).not.toHaveBeenCalled()
+  })
+
+  it('carries decorations so the active match moves off the visible screen', () => {
+    // Why: without decorations the addon creates no active-match decoration,
+    // reports no result change, and stops refreshing highlights on write — the
+    // selection walks the scrollback while the highlight stays on screen.
+    const findNext = vi.fn((_term: string, _options?: unknown) => true)
+    const pane = { searchAddon: { findNext } } as unknown as Parameters<
+      typeof runTerminalSearchNavigation
+    >[0]
+
+    runTerminalSearchNavigation(pane, 'next', searchState)
+
+    expect(findNext.mock.calls[0][1]).toHaveProperty('decorations.activeMatchBackground')
   })
 
   it('contains the xterm decoration positive-integer crash from shortcut navigation', () => {
