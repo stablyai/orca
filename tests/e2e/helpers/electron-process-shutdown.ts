@@ -1,3 +1,4 @@
+import { tmpdir } from 'node:os'
 import { readWindowsProcessTableFresh } from '../../../src/main/windows/windows-process-table'
 import type { ChildProcess } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
@@ -247,6 +248,8 @@ export async function cleanupE2EDaemons(userDataDir: string): Promise<void> {
   // Why: app quit intentionally leaves daemon PTYs alive for warm reattach.
   // E2E temp profiles are deleted after each test, so their detached daemons
   // must be stopped explicitly or CI accumulates orphan Electron/shell trees.
+  const jobLog = path.join(tmpdir(), 'orca-pty-job-diagnostic.jsonl')
+  if (existsSync(jobLog)) console.error('NATIVE_JOB_DIAGNOSTIC', readFileSync(jobLog, 'utf8'))
   const daemonPids = readDaemonPidFiles(userDataDir)
   console.error('DAEMON_PID_FILES', userDataDir, daemonPids)
   await reportShutdownTree('before-daemon-cleanup')

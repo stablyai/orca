@@ -1,10 +1,13 @@
+import { appendFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import * as pty from 'node-pty'
 import {
   hostReportsChildExitStatus,
   wrapShellSpawnForMacosTccAttribution
 } from '../../providers/macos-tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
-import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
+import { assignHostProcessToKillOnCloseJob, listPtyJobProcessIds, isPtyJobOwnershipAvailable } from '../../windows/windows-pty-job'
 
 export type SpawnedDaemonPty = {
   process: pty.IPty
@@ -31,7 +34,7 @@ export function spawnNativeDaemonPty(args: {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
     if (process.platform === 'win32') {
-      assignHostProcessToKillOnCloseJob()
+      appendFileSync(join(tmpdir(), 'orca-pty-job-diagnostic.jsonl'), JSON.stringify({ event: 'host-job', pid: process.pid, available: isPtyJobOwnershipAvailable(), assigned: assignHostProcessToKillOnCloseJob() }) + '\n')
     }
     const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
@@ -42,6 +45,13 @@ export function spawnNativeDaemonPty(args: {
       // Why: bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+    if (process.platform === 'win32') {
+      const report = (event: string): void => {
+        appendFileSync(join(tmpdir(), 'orca-pty-job-diagnostic.jsonl'), JSON.stringify({ event, host: process.pid, shell: proc.pid, shellPath, members: listPtyJobProcessIds(proc) }) + '\n')
+      }
+      report('spawn-job')
+      setTimeout(() => report('job-after-launch'), 3000).unref()
+    }
     reportsChildExitStatus = hostReportsChildExitStatus(wrapped.file)
     args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
     return proc
