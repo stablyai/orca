@@ -132,6 +132,10 @@ export function resetWindowsPortScanDiagnosticsForTests(): void {
  * scan is itself a `powershell.exe` CIM query, just not a second one.
  * See docs/reference/windows-process-enumeration.md.
  *
+ * Only `name` is read here, so this wants `readWindowsProcessIdentityTable`
+ * once #17866 lands -- on the detailed reader it would pay per-process handles
+ * for a field it discards.
+ *
  * Best-effort by design: the snapshot is shared and TTL-cached, so it can
  * predate netstat and hand a recycled PID its previous owner's name. Only
  * labels read this field, and a fresh read would cost every caller a scan.

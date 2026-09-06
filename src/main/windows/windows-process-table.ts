@@ -27,6 +27,10 @@ import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
  * Those are the module's published figures for both extra fields together; the
  * only flag set this module asks for is `CommandLine` (+ `CreationTime`, free),
  * which sits between the two rows and has not been separately measured.
+ *
+ * Both Toolhelp32 rows assume the optional `windows-process-tree.node` addon.
+ * The desktop bundles it; no released relay carries it, so on an SSH host the
+ * CIM row is the operative number and the child process is not avoided at all.
  */
 
 export type WindowsProcessRow = {
