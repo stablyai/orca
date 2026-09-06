@@ -15469,6 +15469,9 @@
           "22b22034bc": "Terminal autonome indisponible dans Activité.",
           "afdc2139a8": "Terminal de l'agent fermé. Ouvrez un nouveau terminal dans cet espace de travail pour continuer."
         },
+        "ActivityScopeFilterControls": {
+          "resetScope": "Afficher tous les hôtes et projets"
+        },
         "ActivityThreadRow": {
           "clearNotification": "Effacer la notification"
         },

@@ -16179,6 +16179,7 @@
           "dc708f3eff": "Close agents"
         },
         "ActivityScopeFilterControls": {
+          "resetScope": "Show all hosts and projects",
           "hiddenCount": "{{value0}} hidden"
         },
         "ActivityThreadHoverCard": {

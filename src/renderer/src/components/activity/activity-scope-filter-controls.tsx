@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAppStore } from '@/store'
-import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { translate } from '@/i18n/i18n'
 import SidebarRepositoryFilterSection from '@/components/sidebar/SidebarRepositoryFilterSection'
 import { SidebarHostScopeMenuSection } from '@/components/sidebar/SidebarHostScopeMenuSection'
 import {
@@ -22,12 +23,26 @@ export function ActivityScopeFilterMenuSections(): React.JSX.Element | null {
   const setAgentsFilterRepoIds = useAppStore((s) => s.setAgentsFilterRepoIds)
   const { hostOptions } = useSidebarHostScopeOptions()
   const showHostScopeControls = shouldShowHostScopeControls(hostOptions)
+  const hasScopeFilter = agentsVisibleHostIds !== null || agentsFilterRepoIds.length > 0
 
-  if (!showHostScopeControls && repos.length <= 1) {
+  if (!hasScopeFilter && !showHostScopeControls && repos.length <= 1) {
     return null
   }
   return (
     <>
+      {hasScopeFilter ? (
+        <DropdownMenuItem
+          onSelect={() => {
+            setAgentsVisibleHostIds(null)
+            setAgentsFilterRepoIds([])
+          }}
+        >
+          {translate(
+            'auto.components.activity.ActivityScopeFilterControls.resetScope',
+            'Show all hosts and projects'
+          )}
+        </DropdownMenuItem>
+      ) : null}
       {showHostScopeControls ? (
         <SidebarHostScopeMenuSection
           hostVisibilityLabel={getSidebarHostVisibilityLabel(agentsVisibleHostIds, hostOptions)}

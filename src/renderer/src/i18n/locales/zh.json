@@ -14244,6 +14244,9 @@
           "22b22034bc": "独立终端在活动中不可用。",
           "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。"
         },
+        "ActivityScopeFilterControls": {
+          "resetScope": "显示所有主机和项目"
+        },
         "ActivityThreadRow": {
           "clearNotification": "清除通知"
         },

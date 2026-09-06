@@ -14188,6 +14188,9 @@
           "22b22034bc": "スタンドアロンターミナルはアクティビティでは使用できません。",
           "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。"
         },
+        "ActivityScopeFilterControls": {
+          "resetScope": "すべてのホストとプロジェクトを表示"
+        },
         "ActivityThreadRow": {
           "clearNotification": "通知を消去"
         },

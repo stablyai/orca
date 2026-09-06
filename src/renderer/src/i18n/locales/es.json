@@ -14188,6 +14188,9 @@
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
           "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar."
         },
+        "ActivityScopeFilterControls": {
+          "resetScope": "Mostrar todos los hosts y proyectos"
+        },
         "ActivityThreadRow": {
           "clearNotification": "Borrar notificación"
         },
