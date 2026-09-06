@@ -1,8 +1,19 @@
 import { EventEmitter } from 'node:events'
 import { vi } from 'vitest'
+
 import type { Mock } from 'vitest'
 import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
+
+// Why: model what actually crosses the relay. `dispatcher-rpc-routing.ts` forwards the handler's
+// message verbatim but replaces a string errno with -32000, so classification survives only via
+// the canonical message. Setting `code: 'ENOENT'` here would make these tests pass even if the
+// message arm broke.
+export function remoteEnoent(): Error {
+  return Object.assign(new Error("ENOENT: no such file or directory, stat '/home/user/created'"), {
+    code: -32000
+  })
+}
 
 /** Unconstrained spy; annotated explicitly so declaration emit never names @vitest/spy internals. */
 export type ReposIpcSpy = Mock<(...args: never[]) => unknown>
@@ -83,7 +94,7 @@ export function createReposIpcMocks(): ReposIpcMocks {
     mockFilesystemProvider: {
       readDir: vi.fn().mockResolvedValue([]),
       readFile: vi.fn().mockRejectedValue(new Error('not found')),
-      stat: vi.fn().mockRejectedValue(new Error('not found')),
+      stat: vi.fn().mockRejectedValue(remoteEnoent()),
       createDir: vi.fn().mockResolvedValue(undefined),
       createDirNoClobber: vi.fn().mockResolvedValue(undefined),
       deletePath: vi.fn().mockResolvedValue(undefined)
@@ -234,7 +245,7 @@ export function resetProjectGroupMocks(
   mocks.mockFilesystemProvider.readFile.mockReset()
   mocks.mockFilesystemProvider.readFile.mockRejectedValue(new Error('not found'))
   mocks.mockFilesystemProvider.stat.mockReset()
-  mocks.mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
+  mocks.mockFilesystemProvider.stat.mockRejectedValue(remoteEnoent())
   mocks.mockGitProvider.isGitRepoAsync.mockReset()
   mocks.mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
   mocks.mockGitProvider.listWorktrees.mockReset()
