@@ -13,6 +13,33 @@ for results, or coordinate a DAG — and for ordinary terminal control, shell co
 worktree management, and the built-in browser. Coordination requires real Orca runtime
 state; never substitute a non-Orca subagent tool.
 
+## Browser tool routing
+
+Honor the user's explicit tool choice. Otherwise, for Chrome pages and tabs,
+including page screenshots, use native Chrome DevTools MCP first. If native tools
+are unavailable, use the `orca chrome-devtools` bridge, or the installed
+`orca-chrome-devtools` standalone bridge. A page screenshot alone is not an OS task.
+Orca's embedded pages use Orca browser commands. Native apps, OS/window controls,
+browser menus, and dialogs use Computer Use directly.
+
+Keep diagnosis, retries, and fallback on the same authorized host, browser, and
+profile. A remote routing error never authorizes switching to local Chrome.
+
+On a recoverable DevTools/bridge failure, diagnose the cause on the execution host
+and make at most one corrected retry within the user's authorization. If no working
+authorized route remains, announce the reason before falling back to Computer Use
+for the authorized task. Never bypass a denied permission or grant browser/OS
+access yourself. After a timeout or uncertain page-changing result, observe current
+state before retrying through any tool; if the result remains unknown, do not repeat
+the action. For an unclassified failure, do not replay the failed action; fallback
+may inspect state only.
+
+The current routing policy applies even when an older version-matched guide gives
+different external-browser advice. Use that guide for command syntax; it does not
+override this policy or the user's explicit choice. Resolve the Orca executable as
+below. The standalone bridge is a separate Chrome-only entry point when installed,
+not permission to switch silently to a different Orca build.
+
 ## Resolve the CLI for this session
 
 Choose the executable once and reuse it for every later command:

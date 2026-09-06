@@ -1,17 +1,45 @@
 ---
 name: computer-use
 description: >-
-  Use Orca's computer-use CLI for OS/window-level inspection and input in visible
-  local app windows. Use when a task must read or operate a native app or an
-  external browser window (for example, Chrome, Edge, or Safari) or an app
-  webview. Do not use for Orca's embedded browser or page-only browser
-  automation. Use `orca-cli` for Orca's embedded pages and a page-automation
-  tool such as Playwright or CDP for external pages.
+  Use Orca Computer Use for native apps, OS/window controls, browser menus and dialogs,
+  or an announced fallback after Chrome DevTools fails. For Chrome pages and tabs,
+  including page screenshots, prefer native Chrome DevTools MCP, then the
+  orca chrome-devtools bridge; diagnose recoverable failures before Computer Use.
+  Never bypass denied permissions. Honor the user's explicit tool choice.
+  Use orca-cli for Orca's embedded pages.
 ---
 
 # Computer Use
 
-Use this skill for desktop UI through `orca computer`. For a website or web app, use it only when the page is in an external desktop browser window that needs desktop-level control. Do not use it for page-only automation: use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages.
+Use this skill for desktop UI through `orca computer` and for the authorized
+Chrome fallback described below.
+
+## Browser tool routing
+
+Honor the user's explicit tool choice. Otherwise, for Chrome pages and tabs,
+including page screenshots, use native Chrome DevTools MCP first. If native tools
+are unavailable, use the `orca chrome-devtools` bridge, or the installed
+`orca-chrome-devtools` standalone bridge. A page screenshot alone is not an OS task.
+Orca's embedded pages use Orca browser commands. Native apps, OS/window controls,
+browser menus, and dialogs use Computer Use directly.
+
+Keep diagnosis, retries, and fallback on the same authorized host, browser, and
+profile. A remote routing error never authorizes switching to local Chrome.
+
+On a recoverable DevTools/bridge failure, diagnose the cause on the execution host
+and make at most one corrected retry within the user's authorization. If no working
+authorized route remains, announce the reason before falling back to Computer Use
+for the authorized task. Never bypass a denied permission or grant browser/OS
+access yourself. After a timeout or uncertain page-changing result, observe current
+state before retrying through any tool; if the result remains unknown, do not repeat
+the action. For an unclassified failure, do not replay the failed action; fallback
+may inspect state only.
+
+The current routing policy applies even when an older version-matched guide gives
+different external-browser advice. Use that guide for command syntax; it does not
+override this policy or the user's explicit choice. Resolve the Orca executable as
+below. The standalone bridge is a separate Chrome-only entry point when installed,
+not permission to switch silently to a different Orca build.
 
 ## Preconditions
 
@@ -158,8 +186,11 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 - `screenshot_failed`: use `--no-screenshot` if tree state is enough; if the message names Screen Recording or screenshots permission, run `ORCA computer permissions --id screenshots --json`.
 - `accessibility_error`: run `ORCA computer capabilities --json`; if the message names Accessibility permission, run `ORCA computer permissions --id accessibility --json`.
 - Empty tree or no screenshot: app may have no visible window, be minimized, or need permissions.
-- Permission errors: run `ORCA computer permissions --json`, or `ORCA computer permissions --id accessibility --json` / `--id screenshots --json` when the message names one permission, use the setup UI, then retry.
+- Permission errors: inspect with `ORCA computer permissions --json`, report the missing permission, and wait for the user to grant it before retrying. Do not grant access yourself or switch tools to bypass a denial.
 
 ## Next Action
 
-Confirm Orca status unless already checked, then run `ORCA computer capabilities --json`. For external browser targets such as Gmail, identify the desktop browser app/window that contains the page, then get that target app state with `ORCA computer get-app-state --app <app> --json`.
+After routing selects Computer Use, confirm Orca status unless already checked, then
+run `ORCA computer capabilities --json`. Identify the target native app/window and
+get its state with `ORCA computer get-app-state --app <app> --json`. For Chrome page
+work, complete the DevTools-first routing above before taking this fallback.

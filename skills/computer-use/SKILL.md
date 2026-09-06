@@ -1,12 +1,12 @@
 ---
 name: computer-use
 description: >-
-  Use Orca's computer-use CLI for OS/window-level inspection and input in visible
-  local app windows. Use when a task must read or operate a native app or an
-  external browser window (for example, Chrome, Edge, or Safari) or an app
-  webview. Do not use for Orca's embedded browser or page-only browser
-  automation. Use `orca-cli` for Orca's embedded pages and a page-automation
-  tool such as Playwright or CDP for external pages.
+  Use Orca Computer Use for native apps, OS/window controls, browser menus and dialogs,
+  or an announced fallback after Chrome DevTools fails. For Chrome pages and tabs,
+  including page screenshots, prefer native Chrome DevTools MCP, then the
+  orca chrome-devtools bridge; diagnose recoverable failures before Computer Use.
+  Never bypass denied permissions. Honor the user's explicit tool choice.
+  Use orca-cli for Orca's embedded pages.
 ---
 
 # Computer Use
@@ -15,10 +15,34 @@ This file is a discovery stub, not the usage guide. The full, version-matched co
 reference is served by the `orca` binary itself — kept out of this file on purpose so it can
 never drift from the binary that will actually run your commands.
 
-Engage Orca's computer-use surface when a task requires desktop-level access to a visible local
-app or window, including a native app or an external browser window/webview. Do not use for
-Orca's embedded browser or page-only browser automation. Use `orca-cli` for Orca's embedded
-pages and a page-automation tool such as Playwright or CDP for external pages.
+Use Computer Use for native desktop UI and the authorized Chrome fallback below.
+
+## Browser tool routing
+
+Honor the user's explicit tool choice. Otherwise, for Chrome pages and tabs,
+including page screenshots, use native Chrome DevTools MCP first. If native tools
+are unavailable, use the `orca chrome-devtools` bridge, or the installed
+`orca-chrome-devtools` standalone bridge. A page screenshot alone is not an OS task.
+Orca's embedded pages use Orca browser commands. Native apps, OS/window controls,
+browser menus, and dialogs use Computer Use directly.
+
+Keep diagnosis, retries, and fallback on the same authorized host, browser, and
+profile. A remote routing error never authorizes switching to local Chrome.
+
+On a recoverable DevTools/bridge failure, diagnose the cause on the execution host
+and make at most one corrected retry within the user's authorization. If no working
+authorized route remains, announce the reason before falling back to Computer Use
+for the authorized task. Never bypass a denied permission or grant browser/OS
+access yourself. After a timeout or uncertain page-changing result, observe current
+state before retrying through any tool; if the result remains unknown, do not repeat
+the action. For an unclassified failure, do not replay the failed action; fallback
+may inspect state only.
+
+The current routing policy applies even when an older version-matched guide gives
+different external-browser advice. Use that guide for command syntax; it does not
+override this policy or the user's explicit choice. Resolve the Orca executable as
+below. The standalone bridge is a separate Chrome-only entry point when installed,
+not permission to switch silently to a different Orca build.
 
 ## Resolve the CLI for this session
 

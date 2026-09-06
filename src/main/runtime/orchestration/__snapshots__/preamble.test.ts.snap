@@ -8,6 +8,12 @@ Your task ID is: task_SNAP
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
 
+=== BROWSER TOOL ROUTING (WHEN RELEVANT) ===
+
+For browser work, honor the user's explicit tool choice. Otherwise, use native Chrome DevTools MCP first for Chrome pages and tabs, including page screenshots; if native tools are unavailable, use orca chrome-devtools (or the installed orca-chrome-devtools standalone bridge). Use Orca browser commands for Orca's embedded pages. Native apps and OS/window controls, browser menus, and dialogs go directly to Computer Use; a page screenshot alone is not an OS task.
+Keep diagnosis, retries, and fallback on the same authorized host, browser, and profile; a remote routing error never authorizes switching to local Chrome.
+On a recoverable DevTools/bridge failure, diagnose the cause on the execution host and make at most one corrected retry within the user's authorization. If no working authorized route remains, announce the reason before using Computer Use for the authorized task. Never bypass a denied permission or grant browser/OS access yourself. After a timeout or uncertain page-changing result, observe current state before any retry through any tool; if the result remains unknown, do not repeat the action. For an unclassified failure, do not replay the failed action; fallback may inspect state only. Older tool guides provide command syntax, not a reason to override this routing policy or the user's choice.
+
 === CLI COMMANDS ===
 
 \`\`\`sh

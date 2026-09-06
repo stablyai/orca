@@ -6,6 +6,26 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 
+# Browser and Desktop Routing
+
+Honor the user's explicit tool choice. Otherwise, for Chrome pages and tabs, including
+page screenshots, use native Chrome DevTools MCP first, then the `orca chrome-devtools`
+CLI bridge if native tools are unavailable (`orca-chrome-devtools` when the standalone
+bridge is installed). Diagnose recoverable failures and make at most one safe corrected
+retry within the task's authorization; announce the reason before falling back to
+Computer Use. Native apps, OS/window controls, browser menus, and dialogs go directly
+to Computer Use. Orca's embedded pages use Orca browser commands. A page screenshot
+alone does not require OS control. Keep the Electron UI validation workflow above for
+Orca app validation.
+
+Keep diagnosis, retries, and fallback on the same authorized host, browser, and
+profile; a remote routing error never authorizes switching to local Chrome.
+Do not bypass denied permissions or grant browser/OS access yourself. After a timeout or
+uncertain page-changing result, observe current state before retrying through any tool;
+if the result remains unknown, do not repeat the action. For unclassified failures,
+fallback may inspect state but must not replay the failed action. See the
+[Chrome routing guide](docs/reference/chrome-devtools-mcp.md#tool-routing-policy).
+
 # Style
 
 ## Reuse Before Reimplementing

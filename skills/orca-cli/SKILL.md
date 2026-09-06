@@ -1,19 +1,15 @@
 ---
 name: orca-cli
 description: >-
-  Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, artifacts, skill sharing, worktree comments, and the browser
-  embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
-  "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
-  "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
-  "share HTML/Markdown", "public artifact link", "share skills", or "control the browser inside
-  Orca". Prefer this over raw `git worktree`, ad hoc
-  PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
-  Use Computer Use for external browser windows, webviews, or desktop UI only
-  when the task requires OS/window-level control such as focus, menus, dialogs,
-  coordinates, or screenshots. Use `orca-cli` for Orca's embedded pages and a
-  page-automation tool such as Playwright or CDP for external pages.
+  Use the public Orca CLI for worktrees, folders, terminals, repos, automations,
+  artifacts, skill sharing, worktree comments, full handoffs, and Orca's embedded
+  browser. Triggers include $orca-cli, Orca worktree, terminal send, full handoff,
+  handover, another worktree, and public artifact link. Prefer it over raw git
+  worktree or ad hoc terminals for Orca-managed state. Chrome pages and tabs,
+  including screenshots: native Chrome DevTools MCP first, then orca chrome-devtools
+  bridge; diagnose recoverable failures before announcing Computer Use fallback.
+  OS/window controls, menus and dialogs use Computer Use directly. Honor explicit
+  user tool choice; never bypass denied permissions.
 ---
 
 # Orca CLI
@@ -28,6 +24,33 @@ browser embedded inside the Orca app. Triggers include "$orca-cli", "Orca worktr
 "child worktree", "spawn codex/claude in a worktree", "read/wait/send Orca terminal",
 "full handoff" / "handover" / "give this to another agent", and "control the browser
 inside Orca". Use plain shell tools when Orca state does not matter.
+
+## Browser tool routing
+
+Honor the user's explicit tool choice. Otherwise, for Chrome pages and tabs,
+including page screenshots, use native Chrome DevTools MCP first. If native tools
+are unavailable, use the `orca chrome-devtools` bridge, or the installed
+`orca-chrome-devtools` standalone bridge. A page screenshot alone is not an OS task.
+Orca's embedded pages use Orca browser commands. Native apps, OS/window controls,
+browser menus, and dialogs use Computer Use directly.
+
+Keep diagnosis, retries, and fallback on the same authorized host, browser, and
+profile. A remote routing error never authorizes switching to local Chrome.
+
+On a recoverable DevTools/bridge failure, diagnose the cause on the execution host
+and make at most one corrected retry within the user's authorization. If no working
+authorized route remains, announce the reason before falling back to Computer Use
+for the authorized task. Never bypass a denied permission or grant browser/OS
+access yourself. After a timeout or uncertain page-changing result, observe current
+state before retrying through any tool; if the result remains unknown, do not repeat
+the action. For an unclassified failure, do not replay the failed action; fallback
+may inspect state only.
+
+The current routing policy applies even when an older version-matched guide gives
+different external-browser advice. Use that guide for command syntax; it does not
+override this policy or the user's explicit choice. Resolve the Orca executable as
+below. The standalone bridge is a separate Chrome-only entry point when installed,
+not permission to switch silently to a different Orca build.
 
 ## Resolve the CLI for this session
 

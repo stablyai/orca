@@ -10,6 +10,41 @@ For any agent with shell access, including Aider, use the
 four native setup targets from the shared shell route and documents verification
 limits for clients not installed in the development environment.
 
+## Tool routing policy
+
+Respect an explicit user tool choice. Otherwise use this order for Chrome pages
+and tabs, including page screenshots:
+
+1. Native Chrome DevTools MCP tools when available.
+2. The `orca chrome-devtools` CLI bridge when native tools are unavailable; an
+   installed `orca-chrome-devtools` standalone entry point supplies the same bridge.
+3. Computer Use after a recoverable DevTools/bridge failure: diagnose the cause on
+   the execution host, make at most one safe corrected retry within the user's
+   authorization, and announce the failure reason before switching tools.
+
+OS/window controls, native apps, browser menus, and dialogs go directly to Computer
+Use. Orca's embedded pages use Orca browser commands. A page screenshot alone does
+not require OS control.
+
+Keep diagnosis, retries, and fallback on the same authorized host, browser, and
+profile. A remote routing failure does not authorize using Computer Use against
+a different local Chrome.
+
+A denied permission is a stopping condition for that operation, not a reason to
+switch tools around the denial. Do not grant browser or OS access automatically.
+After a timeout or uncertain page-changing result, observe current state before
+retrying through any tool. If the outcome remains unknown, do not repeat the
+action. For an unclassified failure, a fallback can inspect state but must not
+replay the failed action.
+
+The routing is communicated through skill descriptions, discovery stubs, full
+guides, repository instructions, and Orca dispatch preambles. It guides agents;
+it is not a runtime interceptor that disables other tools. Manually launched
+agents without skill support need the instruction included in their context
+(for example, Aider `/read`); installing a bridge alone does not load a policy.
+Older version-matched guides still describe their binary's syntax, but do not
+override this routing order or the user's explicit preference.
+
 ## Setup
 
 Install the agent CLI and a Node.js LTS version supported by Chrome DevTools MCP,

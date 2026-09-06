@@ -12,39 +12,62 @@ const stubPath = join(projectDir, 'skills', 'computer-use', 'SKILL.md')
 const bundledGuide = BUNDLED_SKILL_GUIDES.find((guide) => guide.name === 'computer-use')?.markdown
 
 describe('computer-use skill guidance', () => {
-  it('keeps discovery scoped to desktop control and out of the embedded browser', () => {
-    const frontmatter = /^---\n([\s\S]*?)\n---\n/u.exec(readFileSync(guidePath, 'utf8'))?.[1] ?? ''
-    const description = frontmatter.replace(/\s+/gu, ' ')
+  it.each(['computer-use', 'orca-cli', 'orchestration'])(
+    'routes Chrome before desktop fallback from the %s discovery description',
+    (name) => {
+      const guide = readFileSync(join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
+      const frontmatter = /^---\n([\s\S]*?)\n---\n/u.exec(guide)?.[1] ?? ''
+      const description = frontmatter.replace(/\s+/gu, ' ')
 
-    expect(description).toContain('OS/window-level inspection and input')
-    expect(description).toContain('external browser window')
-    expect(description).toContain("Do not use for Orca's embedded browser")
-    expect(description).toContain('page-only browser automation')
-    expect(description).toContain("`orca-cli` for Orca's embedded pages")
-    expect(description).toContain(
-      'page-automation tool such as Playwright or CDP for external pages'
-    )
-    expect(description).not.toContain('read Slack')
-    expect(description).not.toContain('get app state')
+      expect(description).toMatch(
+        /native Chrome DevTools MCP(?: first)?,? then (?:the )?orca chrome-devtools/u
+      )
+      expect(description).toContain('screenshots')
+      expect(description).toContain('Computer Use')
+      expect(description).toMatch(/(?:user's explicit|explicit user) tool choice/u)
+      expect(description).toMatch(/(?:never bypass|Never bypass) denied permissions/u)
+      expect(description).not.toContain('Playwright or CDP for external pages')
+    }
+  )
 
-    const orcaCli = readFileSync(join(projectDir, 'skill-guides', 'orca-cli.md'), 'utf8').replace(
-      /\s+/gu,
-      ' '
-    )
-    expect(orcaCli).toContain('browser embedded inside the Orca app')
-  })
-
-  it('keeps web-app targeting on the computer-use surface', () => {
-    const skill = readFileSync(guidePath, 'utf8')
+  it('starts desktop observation only after the browser routing decision', () => {
+    const skill = readFileSync(guidePath, 'utf8').replace(/\s+/gu, ' ')
 
     expect(skill).toContain('Use this skill for desktop UI through `orca computer`')
-    expect(skill).toContain('external desktop browser window that needs desktop-level control')
-    expect(skill).not.toContain('orca goto')
-    expect(skill).not.toContain('orca snapshot')
-    expect(skill).not.toContain('orca click')
-    expect(skill).not.toContain('orca fill')
-    expect(skill).not.toContain('Routing:')
+    expect(skill).toContain('After routing selects Computer Use')
+    expect(skill).toContain('A page screenshot alone is not an OS task')
+    expect(skill).toContain(
+      'Native apps, OS/window controls, browser menus, and dialogs use Computer Use directly'
+    )
+    expect(skill).toContain("Orca's embedded pages use Orca browser commands")
+    expect(skill).not.toContain(
+      'For external browser targets such as Gmail, identify the desktop browser'
+    )
   })
+
+  it.each(['computer-use', 'orca-cli', 'orchestration'])(
+    'preserves authorization, uncertain outcomes and the target in every %s instruction surface',
+    (name) => {
+      const contents = [
+        readFileSync(join(projectDir, 'skill-guides', `${name}.md`), 'utf8'),
+        readFileSync(join(projectDir, 'skills', name, 'SKILL.md'), 'utf8'),
+        BUNDLED_SKILL_GUIDES.find((guide) => guide.name === name)?.markdown
+      ]
+      for (const content of contents) {
+        expect(content).toBeDefined()
+        const policy = content.replace(/\s+/gu, ' ')
+        expect(policy).toContain('at most one corrected retry')
+        expect(policy).toContain('announce the reason before falling back')
+        expect(policy).toContain('same authorized host, browser, and profile')
+        expect(policy).toContain(
+          'Never bypass a denied permission or grant browser/OS access yourself'
+        )
+        expect(policy).toContain('if the result remains unknown, do not repeat the action')
+        expect(policy).toContain('fallback may inspect state only')
+        expect(policy).toContain("it does not override this policy or the user's explicit choice")
+      }
+    }
+  )
 
   it('warns agents to verify browser-hosted form focus before drafting text', () => {
     const skill = readFileSync(guidePath, 'utf8')

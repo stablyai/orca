@@ -1,4 +1,5 @@
 import type { OrchestrationCliCommand } from './cli-command'
+import { buildBrowserToolRoutingPolicy } from '../../../shared/browser-tool-routing-policy'
 
 export type PreambleParams = {
   taskId: string
@@ -66,6 +67,10 @@ Your task ID is: ${params.taskId}
 
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
+
+=== BROWSER TOOL ROUTING (WHEN RELEVANT) ===
+
+${buildBrowserToolRoutingPolicy(cli)}
 
 === CLI COMMANDS ===
 
