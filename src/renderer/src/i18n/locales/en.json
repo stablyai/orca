@@ -11030,6 +11030,33 @@
           "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
           "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
         },
+        "ZhipuAccountsSection": {
+          "tokenRequired": "Zhipu auth token is required.",
+          "ccSwitchImported": "Imported current cc-switch Claude provider: {{provider}}.",
+          "ccSwitchImportFailed": "cc-switch import failed.",
+          "title": "Zhipu / Z.AI",
+          "description": "Shows GLM Coding Plan quota from your Zhipu / Z.AI Anthropic-compatible token.",
+          "docsLink": "Usage plugin",
+          "loading": "Loading...",
+          "configuredCopy": "Token stored locally. Orca only uses it for Zhipu / Z.AI usage refreshes.",
+          "notConfigured": "Zhipu usage is not configured",
+          "notConfiguredCopy": "Paste the same ANTHROPIC_AUTH_TOKEN used by GLM Coding Plan tools.",
+          "refreshUsage": "Refresh usage",
+          "credentialsTitle": "Zhipu Usage Credentials",
+          "credentialsDescription": "Store a local token for GLM Coding Plan quota refreshes, or import your current cc-switch Claude provider.",
+          "baseUrl": "Base URL",
+          "authToken": "ANTHROPIC_AUTH_TOKEN",
+          "storedTokenPlaceholder": "Stored; paste a new token to replace",
+          "pasteTokenPlaceholder": "Paste token",
+          "importFromCcSwitch": "Import from cc-switch",
+          "replaceToken": "Replace token",
+          "saveToken": "Save token",
+          "clearToken": "Forget token",
+          "quotaTitle": "Quota",
+          "quotaDescription": "Same quota windows returned by the official GLM plan usage plugin.",
+          "tokensUsage": "5-hour tokens",
+          "monthlyUsage": "Monthly MCP"
+        },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
           "usagePercentageDisplayRemaining": "Remaining"

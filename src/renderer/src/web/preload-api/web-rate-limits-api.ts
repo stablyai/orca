@@ -12,8 +12,10 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
     antigravity: null,
     minimax: null,
     grok: null,
+    zhipu: null,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    zhipuCredentialsConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -31,6 +33,7 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
     fetchInactiveCodexAccounts: () => Promise.resolve(),
     refreshMiniMax: () => Promise.resolve(empty),
     refreshGrok: () => Promise.resolve(empty),
+    refreshZhipu: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
   }
 }

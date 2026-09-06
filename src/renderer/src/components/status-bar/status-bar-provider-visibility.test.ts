@@ -74,6 +74,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    zhipuCredentialsConfigured: false,
     ...overrides
   }
 }
@@ -128,6 +129,7 @@ describe('hasUsageProviderSettings', () => {
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ zhipuCredentialsConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -158,6 +160,7 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('claude', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('kimi', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('zhipu', usageSettings())).toBe(false)
   })
 
   it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
@@ -202,6 +205,17 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
+  })
+
+  it('treats zhipuCredentialsConfigured as the durable signal for Zhipu', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'zhipu',
+        usageSettings({ zhipuCredentialsConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('zhipu', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('zhipu', null)).toBe(false)
   })
 })
 
@@ -262,6 +276,7 @@ describe('getVisibleUsageProvider', () => {
   it('hides providers with no live data or durable configuration', () => {
     expect(getVisibleUsageProvider('codex', null, usageSettings())).toBe(null)
     expect(getVisibleUsageProvider('grok', undefined, usageSettings())).toBe(null)
+    expect(getVisibleUsageProvider('zhipu', undefined, usageSettings())).toBe(null)
     expect(getVisibleUsageProvider('gemini', provider('fetching'), usageSettings())).toBe(null)
   })
 
@@ -269,6 +284,20 @@ describe('getVisibleUsageProvider', () => {
     expect(
       getVisibleUsageProvider('grok', undefined, usageSettings({ grokAuthConfigured: true }))
     ).toMatchObject({ provider: 'grok', status: 'fetching' })
+  })
+
+  it('keeps Zhipu visible while the snapshot is pending when credentials are configured', () => {
+    const visible = getVisibleUsageProvider(
+      'zhipu',
+      null,
+      usageSettings({ zhipuCredentialsConfigured: true })
+    )
+    expect(visible).toMatchObject({
+      provider: 'zhipu',
+      status: 'fetching',
+      session: null,
+      weekly: null
+    })
   })
 
   it('keeps MiniMax visible while the snapshot is pending when a cookie is configured', () => {
@@ -373,7 +402,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          zhipu: null
         },
         usageSettings()
       )
@@ -391,7 +421,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          zhipu: undefined
         },
         usageSettings()
       )
@@ -409,7 +440,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' })
         },
         usageSettings()
       )
@@ -427,7 +459,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' })
         },
         usageSettings({
           codexManagedAccounts: [
@@ -456,7 +489,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          zhipu: null
         },
         null
       )
@@ -474,7 +508,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' })
         },
         usageSettings()
       )
@@ -492,9 +527,29 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' })
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+      )
+    ).toBe(false)
+  })
+
+  it('does not show the setup CTA while Zhipu credentials await a snapshot', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' }),
+          zhipu: null
+        },
+        usageSettings({ zhipuCredentialsConfigured: true })
       )
     ).toBe(false)
   })
@@ -512,7 +567,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          zhipu: provider('unavailable', { provider: 'zhipu' })
         },
         usageSettings({ antigravityUsageConfigured: true })
       )

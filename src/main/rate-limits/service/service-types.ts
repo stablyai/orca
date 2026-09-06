@@ -105,6 +105,7 @@ export type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  zhipu: ProviderRateLimits | null
 }
 
 export function normalizePollingInterval(ms: number): number {

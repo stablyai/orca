@@ -4,7 +4,8 @@ import { createWebE2EApi } from './preload-api/web-e2e-api'
 import {
   createAccountsApi,
   createGrokAccountsApi,
-  createMiniMaxCredentialsApi
+  createMiniMaxCredentialsApi,
+  createZhipuCredentialsApi
 } from './preload-api/web-agent-accounts-api'
 import { createWebAgentStatusApi } from './preload-api/web-agent-status-api'
 import { createWebAiVaultApi } from './preload-api/web-ai-vault-api'
@@ -106,6 +107,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
+    zhipuCredentials: createZhipuCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),

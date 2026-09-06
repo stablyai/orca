@@ -15,5 +15,7 @@ describe('createRateLimitSlice', () => {
     const store = createRateLimitStore()
 
     expect(store.getState().rateLimits.antigravity).toBeNull()
+    expect(store.getState().rateLimits.zhipu).toBeNull()
+    expect(store.getState().rateLimits.zhipuCredentialsConfigured).toBe(false)
   })
 })

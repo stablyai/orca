@@ -37,8 +37,10 @@ const mockStoreState = {
       error: null,
       status: 'ok'
     },
+    zhipu: null,
     minimaxCookieConfigured: false,
     grokAuthConfigured: true,
+    zhipuCredentialsConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],

@@ -164,6 +164,36 @@ describe('web MiniMax preload API', () => {
   })
 })
 
+describe('web Zhipu preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('exposes desktop-only Zhipu credential reads as unconfigured and rejects saves', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(api.zhipuCredentials.getStatus()).resolves.toEqual({
+      configured: false,
+      baseUrl: null
+    })
+    await expect(
+      api.zhipuCredentials.save({
+        baseUrl: 'https://open.bigmodel.cn/api/anthropic',
+        authToken: 'zai-token'
+      })
+    ).rejects.toThrow(/desktop app/i)
+    await expect(api.zhipuCredentials.clear()).resolves.toEqual({
+      configured: false,
+      baseUrl: null
+    })
+    await expect(api.zhipuCredentials.importFromCcSwitch()).rejects.toThrow(/desktop app/i)
+  })
+})
+
 describe('web AI Vault preload API', () => {
   beforeEach(() => {
     vi.resetModules()

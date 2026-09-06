@@ -5,6 +5,7 @@ import { fetchGrokRateLimits } from '../grok-fetcher'
 import { readGrokAuthSession } from '../grok-auth'
 import { fetchMiniMaxRateLimits } from '../minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from '../opencode-go-usage-fetcher'
+import { fetchZhipuRateLimits } from '../zhipu-fetcher'
 import { RateLimitServiceFetchPolicy } from './service-fetch-policy'
 import type {
   ClaudeRuntimeAuthPreparation,
@@ -29,8 +30,11 @@ export type FetchAllCyclePrepared = {
   opencodeGeneration: number
   miniMaxConfigChanged: boolean
   miniMaxGeneration: number
+  zhipuConfigChanged: boolean
+  zhipuGeneration: number
   claudeFetchGated: boolean
   results: [
+    PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
@@ -80,6 +84,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
+    const zhipuCredentialsResult = this.resolveZhipuCredentials()
+    const zhipuBaseUrl = zhipuCredentialsResult.credentials.baseUrl
+    const zhipuAuthToken = zhipuCredentialsResult.credentials.authToken
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
@@ -101,6 +108,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       this.minimaxFetchGeneration += 1
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
+    const currentZhipuConfigHash = `${zhipuBaseUrl}|${zhipuAuthToken}|${zhipuCredentialsResult.error ?? ''}`
+    const zhipuConfigChanged = currentZhipuConfigHash !== this.lastZhipuConfigHash
+    if (zhipuConfigChanged) {
+      this.lastZhipuConfigHash = currentZhipuConfigHash
+      this.zhipuFetchGeneration += 1
+    }
+    const zhipuGeneration = this.zhipuFetchGeneration
 
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
@@ -119,7 +133,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      zhipu: zhipuConfigChanged
+        ? this.withFetchingStatus(null, 'zhipu')
+        : this.withFetchingStatus(previousState.zhipu, 'zhipu')
     })
 
     const missingWslCodexHome =
@@ -136,40 +153,54 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-              signal
-            })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      zhipuResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
+      codexFetchGated
+        ? Promise.resolve(previousState.codex as ProviderRateLimits)
+        : (missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            signal
+          })),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(
+        cookie,
+        workspaceIdOverride || undefined,
+        this.networkProxySettingsResolver?.()
+      ),
+      this.fetchKimiWithResolvedHome(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          }),
+      zhipuCredentialsResult.error
+        ? Promise.resolve(this.getZhipuCredentialError(zhipuCredentialsResult.error))
+        : fetchZhipuRateLimits({
+            baseUrl: zhipuBaseUrl,
+            authToken: zhipuAuthToken,
+            signal
+          })
+    ])
 
     if (signal.aborted) {
       return null
@@ -189,6 +220,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      zhipuConfigChanged,
+      zhipuGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -196,7 +229,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        zhipuResult
       ],
       grokResultPromise
     }

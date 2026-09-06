@@ -22,7 +22,8 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
-  getAccountsPaneSearchEntries
+  getAccountsPaneSearchEntries,
+  getAccountsZhipuSearchEntries
 } from './accounts-search'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
@@ -36,6 +37,7 @@ import {
 } from './provider-account-visibility'
 import { Separator } from '../ui/separator'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { ZhipuAccountsSection } from './ZhipuAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -365,6 +367,9 @@ export function AccountsPane({
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsZhipuSearchEntries()) ? (
+      <ZhipuAccountsSection key="zhipu" />
     ) : null
   ].filter(Boolean)
 

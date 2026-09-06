@@ -7,6 +7,7 @@ export type RateLimitSlice = {
   fetchRateLimits: () => Promise<void>
   refreshRateLimits: () => Promise<void>
   refreshGrokRateLimits: () => Promise<void>
+  refreshZhipuRateLimits: () => Promise<void>
   refreshClaudeRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
   refreshCodexRateLimitsForTarget: (target: RateLimitRuntimeTarget) => Promise<void>
   consumeCodexRateLimitResetCredit: () => Promise<void>
@@ -25,8 +26,10 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     antigravity: null,
     minimax: null,
     grok: null,
+    zhipu: null,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    zhipuCredentialsConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -57,6 +60,15 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
       set({ rateLimits: state })
     } catch (error) {
       console.error('Failed to refresh Grok usage:', error)
+    }
+  },
+
+  refreshZhipuRateLimits: async () => {
+    try {
+      const state = await window.api.rateLimits.refreshZhipu()
+      set({ rateLimits: state })
+    } catch (error) {
+      console.error('Failed to refresh Zhipu usage:', error)
     }
   },
 

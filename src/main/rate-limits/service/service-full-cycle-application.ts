@@ -25,6 +25,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       opencodeGeneration,
       miniMaxConfigChanged,
       miniMaxGeneration,
+      zhipuConfigChanged,
+      zhipuGeneration,
       claudeFetchGated,
       results: [
         claudeResult,
@@ -32,7 +34,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        zhipuResult
       ],
       grokResultPromise
     } = prepared
@@ -125,6 +128,20 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const zhipu =
+      zhipuResult.status === 'fulfilled'
+        ? zhipuResult.value
+        : ({
+            provider: 'zhipu',
+            session: null,
+            weekly: null,
+            monthly: null,
+            updatedAt: Date.now(),
+            error:
+              zhipuResult.reason instanceof Error ? zhipuResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -148,6 +165,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyZhipu = zhipuGeneration === this.zhipuFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -163,6 +181,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.trackActiveFailureStreak('kimi', kimi)
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
+    }
+    if (shouldApplyZhipu) {
+      this.trackActiveFailureStreak('zhipu', zhipu)
     }
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
@@ -188,7 +209,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      zhipu: shouldApplyZhipu
+        ? zhipuConfigChanged
+          ? zhipu
+          : this.applyStalePolicy(zhipu, previousState.zhipu)
+        : this.state.zhipu
     })
 
     const grokResult = await grokResultPromise

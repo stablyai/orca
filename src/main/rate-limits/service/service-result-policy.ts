@@ -83,15 +83,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
 
   protected withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider:
-      | 'claude'
-      | 'codex'
-      | 'gemini'
-      | 'opencode-go'
-      | 'kimi'
-      | 'minimax'
-      | 'grok'
-      | 'antigravity'
+    provider: ActiveRateLimitProvider
   ): ProviderRateLimits {
     if (!current) {
       return {
