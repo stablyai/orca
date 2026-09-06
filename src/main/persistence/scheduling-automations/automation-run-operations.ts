@@ -94,6 +94,7 @@ export function createAutomationRun(
     workspaceId: automation.workspaceId,
     workspaceDisplayName: operations.getWorkspaceDisplayName(automation.workspaceId),
     sessionKind: 'terminal',
+    reuseSession: automation.reuseSession,
     chatSessionId: null,
     terminalSessionId: null,
     terminalPaneKey: null,

@@ -146,6 +146,8 @@ export type AutomationRun = {
    *  is deleted and its live metadata is gone. */
   workspaceDisplayName?: string | null
   sessionKind: 'terminal'
+  /** Session reuse is fixed for this run even if the automation is edited later. */
+  reuseSession?: boolean
   chatSessionId: string | null
   terminalSessionId: string | null
   /** Why: a terminal tab can later point at a different pane/PTY. Automation

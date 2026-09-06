@@ -1,3 +1,5 @@
+import type { Store } from '../persistence'
+import type { AutomationRunWriter } from './automation-run-writer'
 import type { Automation, AutomationRun, AutomationRunUsage } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
@@ -96,4 +98,42 @@ export async function collectAutomationRunUsage({
     })
   }
   return unavailable(null, 'provider_unsupported', 'This agent does not report usage to Orca yet.')
+}
+
+export async function persistAutomationRunUsage({
+  store,
+  runs,
+  run,
+  priorSessionId,
+  claudeUsage,
+  codexUsage
+}: {
+  store: Store
+  runs: AutomationRunWriter
+  run: AutomationRun
+  priorSessionId: string | null | undefined
+  claudeUsage: ClaudeUsageStore | null
+  codexUsage: CodexUsageStore | null
+}): Promise<AutomationRun> {
+  // A repeated completion must not advance the usage attribution window.
+  if (run.usage) {
+    return run
+  }
+  const usage = await collectAutomationRunUsage({
+    automation: store.listAutomations().find((entry) => entry.id === run.automationId),
+    run: priorSessionId ? { ...run, terminalSessionId: priorSessionId } : run,
+    claudeUsage,
+    codexUsage
+  })
+  // Retention can remove the final run while usage collection is in flight.
+  const current = store.listAutomationRuns(run.automationId).find((entry) => entry.id === run.id)
+  if (!current) {
+    return run
+  }
+  return runs.updateRun({
+    runId: run.id,
+    status: current.status,
+    usage,
+    error: current.error
+  })
 }

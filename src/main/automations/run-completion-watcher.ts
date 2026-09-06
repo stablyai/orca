@@ -5,6 +5,7 @@ import {
   type AutomationRunOutputSnapshot
 } from '../../shared/automations-types'
 import { RetainedRunReconciler } from './retained-run-reconciliation'
+import type { Store } from '../persistence'
 
 export type AutomationRunCompletionObservation = {
   status: 'completed' | 'dispatch_failed'
@@ -18,7 +19,7 @@ export type AutomationRunTerminalObserver = {
   resolveRunTerminal: (run: AutomationRun) => string | null
   observeCompletion: (
     handle: string,
-    options: { signal: AbortSignal }
+    options: { signal: AbortSignal; terminalPtyId?: string | null }
   ) => Promise<AutomationRunCompletionObservation>
 }
 
@@ -83,6 +84,19 @@ export class AutomationRunCompletionWatcher {
     }
   }
 
+  deferReportedCompletion(runId: string, store: Store): AutomationRun | null {
+    const run = store.listAutomationRuns().find((entry) => entry.id === runId)
+    const automation = store.listAutomations().find((entry) => entry.id === run?.automationId)
+    // Reused sessions are borrowed across turns; fresh runs own their process through exit.
+    if (!run || (run.reuseSession ?? automation?.reuseSession)) {
+      return null
+    }
+    if (!isFinalAutomationRunStatus(run.status)) {
+      this.watch(run)
+    }
+    return run
+  }
+
   private attachRetainedRun(run: AutomationRun): boolean {
     if (this.disposed) {
       return false
@@ -115,12 +129,18 @@ export class AutomationRunCompletionWatcher {
   ): Promise<void> {
     let observation: AutomationRunCompletionObservation
     try {
-      observation = await this.observer.observeCompletion(handle, { signal: controller.signal })
+      observation = await this.observer.observeCompletion(handle, {
+        signal: controller.signal,
+        terminalPtyId: run.terminalPtyId
+      })
     } catch (error) {
       if (controller.signal.aborted) {
         return
       }
       observation = { status: 'dispatch_failed', error: describeObservationError(error) }
+    }
+    if (controller.signal.aborted) {
+      return
     }
     try {
       await this.finalize(run, observation)
@@ -172,9 +192,9 @@ export class AutomationRunCompletionWatcher {
       runId: run.id,
       status: observation.status,
       workspaceId: current.workspaceId,
-      terminalSessionId: current.terminalSessionId,
-      terminalPaneKey: current.terminalPaneKey,
-      terminalPtyId: current.terminalPtyId,
+      terminalSessionId: observation.status === 'completed' ? null : current.terminalSessionId,
+      terminalPaneKey: observation.status === 'completed' ? null : current.terminalPaneKey,
+      terminalPtyId: observation.status === 'completed' ? null : current.terminalPtyId,
       outputSnapshot: observation.outputSnapshot ?? null,
       error: observation.error ?? null
     })

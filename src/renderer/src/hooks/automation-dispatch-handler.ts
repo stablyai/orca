@@ -41,6 +41,7 @@ export async function handleAutomationDispatchRequest({
     // here would arrive second and invalidate every host in the catalog.
     await window.api.automations.markDispatchResult(result)
   }
+  const reuseSession = run.reuseSession ?? automation.reuseSession
   const state = useAppStore.getState()
   const focusBeforeDispatch = {
     activeView: state.activeView,
@@ -89,6 +90,7 @@ export async function handleAutomationDispatchRequest({
     }
     const completion = createAutomationDispatchCompletion({
       run,
+      requireProcessExit: !reuseSession,
       worktree,
       precheckResult: resolved.context.precheckResult,
       markDispatchResult,
@@ -96,7 +98,7 @@ export async function handleAutomationDispatchRequest({
       finalizeTerminalOwnership
     })
     const dispatchStartedAt = Date.now()
-    if (automation.reuseSession) {
+    if (reuseSession) {
       const reusableSession = findReusableAutomationSession({
         automationId: automation.id,
         agentId: automation.agentId,
@@ -198,7 +200,7 @@ export async function handleAutomationDispatchRequest({
       throw new Error('Unable to build an agent launch plan.')
     }
     terminalOwnership = result.terminalOwnership
-    if (automation.reuseSession) {
+    if (reuseSession) {
       // Why: the first fresh launch is the seed for later reuse and must
       // survive completion under the same policy as an already-reused tab.
       releaseTerminalOwnership()
