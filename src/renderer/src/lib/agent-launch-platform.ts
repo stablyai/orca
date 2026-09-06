@@ -1,5 +1,5 @@
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import type { AppState } from '@/store'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 

@@ -29,6 +29,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'darwin' }))
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => null

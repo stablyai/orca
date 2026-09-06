@@ -22,16 +22,41 @@ import {
 } from 'node:fs'
 import { arch, platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import process from 'node:process'
-import {
-  ORCAD_VERSION,
-  ORCAD_VERSION_FILENAME,
-  orcadArtifactFilenames
-} from '../../src/shared/orcad-artifacts.ts'
 
 const ROOT = join(import.meta.dirname, '..', '..')
 const OUT_DIR = join(ROOT, 'out', 'orcad')
 const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
+const ORCAD_ARTIFACTS_TS = join(ROOT, 'src/shared/orcad-artifacts.ts')
+
+/**
+ * Why esbuild and not a direct import: the repo declares Node 24, whose type stripping
+ * loads `src/shared/orcad-artifacts.ts` natively, but Node 22 distro builds (compiled
+ * without strip-types) reject the extension. esbuild is already this script's bundler,
+ * so transforming the tiny module costs nothing and keeps the script runnable on both.
+ */
+async function loadOrcadArtifacts() {
+  const result = await build({
+    entryPoints: [ORCAD_ARTIFACTS_TS],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    write: false,
+    logLevel: 'silent'
+  })
+  const tempDir = mkdtempSync(join(tmpdir(), 'orcad-artifacts-load-'))
+  const tempModule = join(tempDir, 'orcad-artifacts.cjs')
+  writeFileSync(tempModule, result.outputFiles[0].text)
+  try {
+    return await import(pathToFileURL(tempModule).href)
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true })
+  }
+}
+
+const { ORCAD_VERSION, ORCAD_VERSION_FILENAME, orcadArtifactFilenames } = await loadOrcadArtifacts()
+
 // Why beside orcad.js: the watcher runs in a forked child so a native @parcel/watcher
 // fault crashes that child instead of the server, and `resolveWatcherProcessEntryPath`
 // looks for it in the app root. A deployment has no desktop out/main to fall back to.

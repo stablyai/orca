@@ -102,6 +102,9 @@ __orca_osc133_preexec() {
   fi
   case "\${FUNCNAME[1]:-}" in __orca_osc133_*|__orca_prompt_mark|__orca_restore_prompt_status) return 0 ;; esac
   case "$BASH_COMMAND" in __orca_osc133_precmd|__orca_osc133_prompt_done|__orca_prompt_mark) return 0 ;; esac
+  # Why BASHPID: PS0/command-substitution subshells inherit this DEBUG trap but
+  # must not emit markers or run the user's trap for the substitution's internals.
+  [[ "$BASHPID" == "$$" ]] || return 0
   __orca_run_user_debug_trap
   [[ -z "\${__orca_in_prompt_command:-}" ]] || return 0
   [[ -z "\${__orca_in_command:-}" ]] || return 0

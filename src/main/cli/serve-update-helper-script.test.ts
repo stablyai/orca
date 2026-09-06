@@ -1,0 +1,232 @@
+import { describe, expect, it } from 'vitest'
+import { buildServeUpdateHelperScript } from './serve-update-helper-script'
+
+const INPUT = {
+  spoolDir: '/var/lib/orca-server-update',
+  unitName: 'orca-serve.service',
+  appImageTargetPath: '/opt/orca/orca-linux.AppImage',
+  versionRecordPath: '/opt/orca/VERSION'
+}
+
+describe('serve update helper script', () => {
+  it('embeds spool paths and unit name quoted', () => {
+    const script = buildServeUpdateHelperScript({
+      ...INPUT,
+      spoolDir: "/var/lib/orca-server-up'date"
+    })
+    expect(script).toContain(`SPOOL_DIR='/var/lib/orca-server-up'"'"'date'`)
+    expect(script).toContain("UNIT_NAME='orca-serve.service'")
+    expect(script).toContain("APPIMAGE_TARGET='/opt/orca/orca-linux.AppImage'")
+    expect(script).toContain("VERSION_TARGET='/opt/orca/VERSION'")
+    expect(script).toContain('#!/usr/bin/env bash')
+    expect(script).toContain('systemctl stop "$UNIT_NAME"')
+    expect(script).toContain('systemctl start "$UNIT_NAME"')
+    expect(script).toContain('{phase: "accepted"')
+    expect(script).toContain('{phase: "ok"')
+    expect(script).toContain('{phase: "failed"')
+    expect(script).toContain('{phase: "rejected"')
+  })
+
+  it('writes accepted before any mutating step', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const acceptedAt = script.indexOf('{phase: "accepted"')
+    const stopAt = script.indexOf('systemctl stop "$UNIT_NAME"')
+    expect(acceptedAt).toBeGreaterThan(-1)
+    expect(stopAt).toBeGreaterThan(acceptedAt)
+  })
+
+  it('serializes concurrent runs with flock and removes the lock file risk by exec-fd', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('flock -w 30 9')
+    expect(script).toContain('exec 9>')
+  })
+
+  it('refuses downgrades and no-ops when already at the target version', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const downgradeCheck = script.indexOf('refusing downgrade')
+    const noOpCheck = script.indexOf('already at version')
+    expect(downgradeCheck).toBeGreaterThan(-1)
+    expect(noOpCheck).toBeGreaterThan(-1)
+    expect(downgradeCheck).toBeLessThan(script.indexOf('{phase: "accepted"'))
+    expect(noOpCheck).toBeLessThan(script.indexOf('{phase: "accepted"'))
+  })
+
+  it('compares versions semver-aware so a stable beats its own prereleases', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('semver_higher "$CURRENT_VERSION" "$TARGET_VERSION"')
+    // The prerelease ranking rules the helper depends on, spelled out:
+    expect(script).toContain('cpre="${cur#*-}"')
+    expect(script).toContain('tpre="${tgt#*-}"')
+    expect(script).toContain('sort -V | tail -n 1')
+  })
+
+  it('runs the semver downgrade gate as a real shell function', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    // Pin the decision table by extracting and executing the generated function.
+    const fnStart = script.indexOf('semver_higher() {')
+    const fnEnd = script.indexOf('\n}', fnStart) + 2
+    const fn = script.slice(fnStart, fnEnd)
+    const fs = require('node:fs')
+    const path = require('node:path')
+    const os = require('node:os')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'semver-gate-'))
+    const file = path.join(dir, 'semver.bash')
+    fs.writeFileSync(file, fn)
+    const cases: [string, string, 'ALLOW' | 'REJECT'][] = [
+      ['1.2.3', '1.2.3-beta.1', 'REJECT'],
+      ['1.2.3', '1.2.4', 'ALLOW'],
+      ['1.2.4', '1.2.3', 'REJECT'],
+      ['1.2.3', '1.2.4-beta.1', 'ALLOW'],
+      ['1.2.3-beta.1', '1.2.3', 'ALLOW'],
+      ['1.2.3-beta.1', '1.2.3-beta.2', 'ALLOW'],
+      ['1.2.3-beta.2', '1.2.3-beta.1', 'REJECT'],
+      ['1.2.3-rc.1', '1.2.3-rc.2', 'ALLOW'],
+      ['1.2.3-beta.1', '1.2.3-rc.1', 'ALLOW'],
+      ['2.0.0', '1.9.9', 'REJECT'],
+      ['1.10.0', '1.9.9', 'REJECT']
+    ]
+    const { execFileSync } = require('node:child_process')
+    try {
+      for (const [cur, tgt, expected] of cases) {
+        const higher = execFileSync(
+          'bash',
+          ['-c', `source '${file}' && semver_higher '${cur}' '${tgt}'`],
+          {
+            encoding: 'utf8'
+          }
+        ).trim()
+        const verdict = higher === tgt ? 'ALLOW' : 'REJECT'
+        expect(`${cur}->${tgt}:${verdict}`).toBe(`${cur}->${tgt}:${expected}`)
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('snapshots the current binary and rolls back on every post-acceptance failure', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const backup = script.indexOf('APPIMAGE_TARGET.update-backup')
+    const snapshot = script.indexOf('cp -p -- "$APPIMAGE_TARGET" "$BACKUP"')
+    const rollbackDef = script.indexOf('rollback_and_fail() {')
+    const rollbackAtStop = script.indexOf('rollback_and_fail "could not stop $UNIT_NAME"')
+    expect(backup).toBeGreaterThan(-1)
+    expect(snapshot).toBeGreaterThan(backup)
+    // Rollback function is defined before the snapshot, then invoked after every risky step.
+    expect(rollbackDef).toBeLessThan(snapshot)
+    expect(rollbackAtStop).toBeGreaterThan(snapshot)
+    // start-failure and readiness-failure both route through rollback, not bare fail.
+    expect(script).toContain('rollback_and_fail "new binary failed to start"')
+    expect(script).toContain('rollback_and_fail "new binary did not report ready')
+  })
+
+  it('verifies readiness via the new MainPID journal orca_server_ready line', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const startAt = script.indexOf('systemctl start "$UNIT_NAME"')
+    const readyAt = script.indexOf('orca_server_ready')
+    const okAt = script.indexOf('{phase: "ok"')
+    expect(readyAt).toBeGreaterThan(startAt)
+    expect(okAt).toBeGreaterThan(readyAt)
+    expect(script).toContain('journalctl -u "$UNIT_NAME" _PID="$pid"')
+    expect(script).toContain('systemctl show -p MainPID --value "$UNIT_NAME"')
+  })
+
+  it('consumes the request at every terminal verdict', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('rm -f "$REQUEST"')
+    const rejectFn = script.indexOf('reject() {')
+    const failFn = script.indexOf('fail() {')
+    expect(script.slice(rejectFn, rejectFn + 200)).toContain('rm -f "$REQUEST"')
+    expect(script.slice(failFn, failFn + 200)).toContain('rm -f "$REQUEST"')
+  })
+
+  it('hashes the decoded sha512 digest bytes against the artifact, not the digest twice', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    // The spooled sha512 is base64 of the raw digest; hashing the decoded bytes
+    // through sha512sum again would compare two different layers and never match.
+    expect(script).toContain("od -An -v -tx1 | tr -d ' \\n'")
+    expect(script).not.toContain('base64 -d 2>/dev/null | sha512sum')
+    // The decoded digest must be exactly 128 hex chars before the comparison.
+    expect(script).toContain('${#EXPECTED_SHA} -ne 128')
+  })
+
+  it('stages the artifact before hashing so the installed bytes are the hashed bytes', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const cpAt = script.indexOf('cp -- "$ARTIFACT_PATH" "$STAGING"')
+    const hashAt = script.indexOf('sha512sum -- "$STAGING"')
+    expect(cpAt).toBeGreaterThan(-1)
+    expect(hashAt).toBeGreaterThan(cpAt)
+    // The later install step must not re-copy from the (mutable) cache path.
+    const installSection = script.slice(script.indexOf('systemctl stop "$UNIT_NAME"'))
+    expect(installSection).not.toContain('cp -- "$ARTIFACT_PATH"')
+    // Cheap pre-acceptance checks run before the copy so a refused downgrade or
+    // no-op never pays the staging cost or leaves a stale .new file behind.
+    const downgradeAt = script.indexOf('refusing downgrade')
+    const noOpAt = script.indexOf('already at version')
+    expect(downgradeAt).toBeGreaterThan(-1)
+    expect(noOpAt).toBeGreaterThan(-1)
+    expect(downgradeAt).toBeLessThan(cpAt)
+    expect(noOpAt).toBeLessThan(cpAt)
+  })
+
+  it('echoes the per-attempt attemptId in accepted and ok verdicts', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain("ATTEMPT_ID=$(parse_field 'attemptId')")
+    const acceptedAt = script.indexOf('{phase: "accepted"')
+    const okAt = script.indexOf('{phase: "ok"')
+    expect(script.slice(acceptedAt, acceptedAt + 160)).toContain('attemptId')
+    expect(script.slice(okAt, okAt + 160)).toContain('attemptId')
+    expect(script).not.toContain('runtimeId')
+  })
+
+  it('binds rejected and failed verdicts to the attempt so the app can read the real reason', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const rejectedAt = script.indexOf('{phase: "rejected"')
+    const failedAt = script.indexOf('{phase: "failed"')
+    expect(rejectedAt).toBeGreaterThan(-1)
+    expect(failedAt).toBeGreaterThan(-1)
+    expect(script.slice(rejectedAt, rejectedAt + 220)).toContain('attemptId')
+    expect(script.slice(rejectedAt, rejectedAt + 220)).toContain('targetVersion')
+    expect(script.slice(failedAt, failedAt + 220)).toContain('attemptId')
+    expect(script.slice(failedAt, failedAt + 220)).toContain('targetVersion')
+  })
+
+  it('initializes the attempt binding before any reject call so set -u cannot abort pre-parse rejections', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const initAt = script.indexOf('ATTEMPT_ID=""')
+    const rootCheckAt = script.indexOf('reject "helper must run as root"')
+    expect(initAt).toBeGreaterThan(-1)
+    expect(rootCheckAt).toBeGreaterThan(initAt)
+  })
+
+  it('waits for the census continuation before stopping the unit and cancels when the request vanishes', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const acceptedAt = script.indexOf('{phase: "accepted"')
+    const waitAt = script.indexOf('wait_for_census_continuation')
+    const stopAt = script.indexOf('systemctl stop "$UNIT_NAME"')
+    expect(acceptedAt).toBeGreaterThan(-1)
+    expect(waitAt).toBeGreaterThan(acceptedAt)
+    expect(stopAt).toBeGreaterThan(waitAt)
+    // A vanished request means the app cancelled: abort instead of stopping the unit.
+    expect(script).toContain('reject "update cancelled before unit stop"')
+    // Stale continuations never authorize a later attempt.
+    expect(script).toContain('rm -f "$CENSUS_OK"')
+  })
+
+  it('writes verdicts through a mktemp path and clears the result under the lock', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('mktemp "$SPOOL_DIR/result.XXXXXXXX"')
+    const flockAt = script.indexOf('flock -w 30 9')
+    const clearAt = script.indexOf('rm -f "$RESULT"')
+    const rootAt = script.indexOf('helper must run as root')
+    expect(clearAt).toBeGreaterThan(flockAt)
+    expect(clearAt).toBeGreaterThan(rootAt)
+  })
+
+  it('fails fast with a verdict when jq or flock are missing', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('command -v jq')
+    expect(script).toContain('command -v flock')
+    expect(script).toContain('"reason":"jq-missing"')
+    expect(script).toContain('"reason":"flock-missing"')
+  })
+})

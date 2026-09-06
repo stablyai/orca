@@ -22,7 +22,7 @@ describe('runtime updater RPC methods', () => {
   const getSnapshot = vi.fn(() => snapshot)
   const check = vi.fn(() => snapshot)
   const download = vi.fn(() => snapshot)
-  const install = vi.fn(() => ({
+  const install = vi.fn(async () => ({
     accepted: true as const,
     fromVersion: '1.5.0',
     targetVersion: '1.5.1',

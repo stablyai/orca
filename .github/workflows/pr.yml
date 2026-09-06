@@ -774,6 +774,9 @@ jobs:
       - name: Verify headless serve signal shutdown
         run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
 
+      - name: Verify headless serve update flow
+        run: node config/scripts/run-headless-serve-update-docker.mjs --appimage dist/orca-linux.AppImage
+
       - name: Verify extracted launcher serve signal shutdown
         run: >-
           node config/scripts/run-headless-serve-shutdown-docker.mjs

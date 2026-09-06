@@ -534,10 +534,12 @@ describe('Subprocess: Relay entry point', () => {
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-connected-'))
       const sockPath = path.join(tmpDir, 'relay.sock')
-      relay = spawn(['--detached', '--grace-time', '1', '--sock-path', sockPath], {
-        ...process.env,
-        ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '500'
-      })
+      // Why: the pre-client window is min(--grace-time, empty-startup grace), so a tight
+      // --grace-time races the bridge's node boot under CI load (relay exits, unlinks the
+      // socket, bridge dies ENOENT). --grace-time 5 gives both windows slack; post-client
+      // discrimination lives in exit timing — a relay that failed to re-arm the configured
+      // grace after the client left is still alive at the waitForExit below.
+      relay = spawn(['--detached', '--grace-time', '5', '--sock-path', sockPath])
       await relay.sentinelReceived
 
       const bridge = spawn(['--connect', '--sock-path', sockPath])
@@ -551,10 +553,11 @@ describe('Subprocess: Relay entry point', () => {
       await new Promise((resolve) => setTimeout(resolve, 650))
       expect(relay.proc.exitCode).toBeNull()
 
-      await relay.waitForExit(2000)
+      await relay.waitForExit(10_000)
       expect(relay.proc.exitCode).toBe(0)
     },
-    10_000
+    // Why: spawns two real node subprocesses and waits out a 5s configured grace.
+    30_000
   )
 
   // Why: a relay holding zero PTYs preserves nothing, so the unlimited default must still be

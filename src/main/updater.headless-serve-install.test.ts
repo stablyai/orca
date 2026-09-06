@@ -1,4 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  SHA512,
+  resetHeadlessServeHarness,
+  setupHeadlessServeTestHarness
+} from './updater-headless-serve-test-setup'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
@@ -9,128 +14,41 @@ const {
   recordUpdaterLifecycleMock,
   requestServeUpdateHandoffMock,
   failServeUpdateHandoffMock,
+  hasServeUpdateSupervisorMock,
+  writeUpdateRequestMock,
+  clearUpdateRequestMock,
+  clearUpdateResultMock,
+  readServeUpdateResultForMock,
+  writeServeUpdateCensusContinuationMock,
+  clearServeUpdateCensusContinuationMock,
+  captureServeUpdateAppImageMock,
+  runProcessMock,
   resetHandlers
-} = vi.hoisted(() => {
-  const appHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
-  const updaterHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
-
-  const emit = (
-    handlers: Map<string, ((...args: unknown[]) => void)[]>,
-    event: string,
-    ...args: unknown[]
-  ): void => {
-    for (const handler of handlers.get(event) ?? []) {
-      handler(...args)
-    }
-  }
-
-  const appMock = {
-    isPackaged: true,
-    getVersion: vi.fn(() => '1.0.51'),
-    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-      appHandlers.set(event, [...(appHandlers.get(event) ?? []), handler])
-      return appMock
-    }),
-    emit: (event: string, ...args: unknown[]) => emit(appHandlers, event, ...args),
-    quit: vi.fn()
-  }
-
-  const autoUpdaterMock = {
-    autoDownload: false,
-    autoInstallOnAppQuit: false,
-    autoRunAppAfterInstall: true,
-    allowPrerelease: false,
-    checkForUpdates: vi.fn().mockResolvedValue(null),
-    downloadUpdate: vi.fn(),
-    quitAndInstall: vi.fn(),
-    setFeedURL: vi.fn(),
-    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-      updaterHandlers.set(event, [...(updaterHandlers.get(event) ?? []), handler])
-      return autoUpdaterMock
-    }),
-    emit: (event: string, ...args: unknown[]) => emit(updaterHandlers, event, ...args)
-  }
-
-  return {
-    appMock,
-    autoUpdaterMock,
-    nativeUpdaterMock: { on: vi.fn() },
-    killAllPtyMock: vi.fn(),
-    recordUpdaterLifecycleMock: vi.fn(),
-    requestServeUpdateHandoffMock: vi.fn(() => true),
-    failServeUpdateHandoffMock: vi.fn(),
-    resetHandlers: () => {
-      appHandlers.clear()
-      updaterHandlers.clear()
-    }
-  }
-})
-
-vi.mock('electron', () => ({
-  app: appMock,
-  BrowserWindow: { getAllWindows: vi.fn(() => []) },
-  autoUpdater: nativeUpdaterMock,
-  powerMonitor: { on: vi.fn() },
-  shell: { openExternal: vi.fn() },
-  net: { fetch: vi.fn() }
-}))
-
-vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
-vi.mock('./electron-updater-loader', () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }))
-vi.mock('./linux-update-package-type', () => ({
-  getLinuxPackageType: () => 'non-root',
-  getLinuxRootPackageType: () => null,
-  isExternallyManagedLinuxInstall: () => false
-}))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
-vi.mock('./ipc/pty', () => ({ killAllPty: killAllPtyMock }))
-vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
-vi.mock('./updater-nudge', () => ({
-  fetchNudge: vi.fn().mockResolvedValue(null),
-  shouldApplyNudge: vi.fn().mockReturnValue(false)
-}))
-vi.mock('./updater-prerelease-feed', () => ({
-  fetchNewerReleaseTagsWithReadiness: vi.fn().mockResolvedValue({
-    tags: ['v1.0.61'],
-    state: 'ready'
-  }),
-  getReleaseDownloadUrl: vi.fn()
-}))
-vi.mock('./update-install-exit-watchdog', () => ({
-  armUpdateInstallExitWatchdog: vi.fn(),
-  disarmUpdateInstallExitWatchdog: vi.fn()
-}))
-vi.mock('./updater-lifecycle-diagnostics', () => ({
-  recordUpdaterLifecycle: recordUpdaterLifecycleMock
-}))
-vi.mock('./serve-update-handoff', () => ({
-  failServeUpdateHandoff: failServeUpdateHandoffMock,
-  getServeUpdateHandoffFailure: vi.fn(() => null),
-  hasServeUpdateSupervisor: vi.fn(() => true),
-  requestServeUpdateHandoff: requestServeUpdateHandoffMock
-}))
+} = setupHeadlessServeTestHarness()
 
 warmUpdaterModule()
 
 describe('headless serve update install handoff', () => {
   beforeEach(() => {
-    vi.resetModules()
-    vi.useFakeTimers()
-    autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(null)
-    autoUpdaterMock.downloadUpdate.mockReset().mockResolvedValue([])
-    autoUpdaterMock.quitAndInstall.mockReset()
-    autoUpdaterMock.setFeedURL.mockReset()
-    autoUpdaterMock.on.mockClear()
-    autoUpdaterMock.autoInstallOnAppQuit = false
-    autoUpdaterMock.autoRunAppAfterInstall = true
-    nativeUpdaterMock.on.mockReset()
-    appMock.on.mockClear()
-    appMock.quit.mockReset()
-    killAllPtyMock.mockReset()
-    recordUpdaterLifecycleMock.mockReset()
-    requestServeUpdateHandoffMock.mockReset().mockReturnValue(true)
-    failServeUpdateHandoffMock.mockReset()
-    resetHandlers()
+    resetHeadlessServeHarness({
+      appMock,
+      autoUpdaterMock,
+      nativeUpdaterMock,
+      killAllPtyMock,
+      recordUpdaterLifecycleMock,
+      requestServeUpdateHandoffMock,
+      failServeUpdateHandoffMock,
+      hasServeUpdateSupervisorMock,
+      writeUpdateRequestMock,
+      clearUpdateRequestMock,
+      clearUpdateResultMock,
+      readServeUpdateResultForMock,
+      writeServeUpdateCensusContinuationMock,
+      clearServeUpdateCensusContinuationMock,
+      captureServeUpdateAppImageMock,
+      runProcessMock,
+      resetHandlers
+    })
   })
 
   it('defers install before disconnecting the serving owner or starting session cleanup', async () => {
@@ -270,102 +188,109 @@ describe('headless serve update install handoff', () => {
     ).toHaveLength(1)
   })
 
-  it('hands a supervised install to the serve parent before native quit and cleanup', async () => {
-    const lifecycle: string[] = []
-    const daemonSession = { alive: true }
-    const send = vi.fn()
-    const disconnectPairedClients = vi.fn(() => lifecycle.push('paired-clients-disconnected'))
-    appMock.on('will-quit', disconnectPairedClients)
-    requestServeUpdateHandoffMock.mockImplementation(() => {
-      lifecycle.push('handoff-persisted')
-      return true
-    })
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
-      return Promise.resolve(null)
-    })
-    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
-      lifecycle.push('native-quit-and-install')
-      appMock.emit('will-quit', { preventDefault: vi.fn() })
-    })
-    killAllPtyMock.mockImplementation(() => lifecycle.push('in-process-pty-cleanup'))
-
-    const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
-      await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send } } as never, {
-      getLastUpdateCheckAt: () => Date.now(),
-      installMode: 'supervised-headless-serve',
-      onBeforeQuit: () => {
-        lifecycle.push('pre-quit-checkpoint')
-      }
-    })
-    checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    downloadUpdate()
-    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
-    const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
-      ([event]) => event === 'update-downloaded'
-    )?.[1] as (() => void) | undefined
-    nativeReadyHandler?.()
-
-    quitAndInstall()
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-    quitAndInstall()
-
-    expect(requestServeUpdateHandoffMock).toHaveBeenCalledWith('1.0.61')
-    expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
-    expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(false)
-    expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledOnce()
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(true, false)
-    expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
-    expect(daemonSession).toEqual({ alive: true })
-    expect(lifecycle).toEqual([
-      'pre-quit-checkpoint',
-      'handoff-persisted',
-      'native-quit-and-install',
-      'paired-clients-disconnected',
-      'in-process-pty-cleanup'
-    ])
-  })
-
-  it('keeps the serving owner intact when the supervisor handoff cannot be persisted', async () => {
-    const send = vi.fn()
-    requestServeUpdateHandoffMock.mockReturnValue(false)
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
-      return Promise.resolve(null)
-    })
-
-    const { checkForUpdatesFromMenu, quitAndInstall, setupAutoUpdater } = await loadUpdaterModule()
-    setupAutoUpdater({ webContents: { send } } as never, {
-      getLastUpdateCheckAt: () => Date.now(),
-      installMode: 'supervised-headless-serve'
-    })
-    checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
-    const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
-      ([event]) => event === 'update-downloaded'
-    )?.[1] as (() => void) | undefined
-    nativeReadyHandler?.()
-
-    quitAndInstall()
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(requestServeUpdateHandoffMock).toHaveBeenCalledOnce()
-    expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
-    expect(killAllPtyMock).not.toHaveBeenCalled()
-    expect(send).toHaveBeenCalledWith(
-      'updater:status',
-      expect.objectContaining({
-        state: 'error',
-        message: expect.stringContaining('supervised server restart')
+  it.skipIf(process.platform !== 'darwin')(
+    'hands a supervised install to the serve parent before native quit and cleanup',
+    async () => {
+      const lifecycle: string[] = []
+      const daemonSession = { alive: true }
+      const send = vi.fn()
+      const disconnectPairedClients = vi.fn(() => lifecycle.push('paired-clients-disconnected'))
+      appMock.on('will-quit', disconnectPairedClients)
+      requestServeUpdateHandoffMock.mockImplementation(() => {
+        lifecycle.push('handoff-persisted')
+        return true
       })
-    )
-  })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+      autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+        lifecycle.push('native-quit-and-install')
+        appMock.emit('will-quit', { preventDefault: vi.fn() })
+      })
+      killAllPtyMock.mockImplementation(() => lifecycle.push('in-process-pty-cleanup'))
+
+      const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
+        await loadUpdaterModule()
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve',
+        onBeforeQuit: () => {
+          lifecycle.push('pre-quit-checkpoint')
+        }
+      })
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+      const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([event]) => event === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeReadyHandler?.()
+
+      quitAndInstall()
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+      quitAndInstall()
+
+      expect(requestServeUpdateHandoffMock).toHaveBeenCalledWith('1.0.61')
+      expect(autoUpdaterMock.autoInstallOnAppQuit).toBe(false)
+      expect(autoUpdaterMock.autoRunAppAfterInstall).toBe(false)
+      expect(autoUpdaterMock.downloadUpdate).toHaveBeenCalledOnce()
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(true, false)
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledOnce()
+      expect(daemonSession).toEqual({ alive: true })
+      expect(lifecycle).toEqual([
+        'pre-quit-checkpoint',
+        'handoff-persisted',
+        'native-quit-and-install',
+        'paired-clients-disconnected',
+        'in-process-pty-cleanup'
+      ])
+    }
+  )
+
+  it.skipIf(process.platform !== 'darwin')(
+    'keeps the serving owner intact when the supervisor handoff cannot be persisted',
+    async () => {
+      const send = vi.fn()
+      requestServeUpdateHandoffMock.mockReturnValue(false)
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+
+      const { checkForUpdatesFromMenu, quitAndInstall, setupAutoUpdater } =
+        await loadUpdaterModule()
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve'
+      })
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+      const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([event]) => event === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeReadyHandler?.()
+
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(requestServeUpdateHandoffMock).toHaveBeenCalledOnce()
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+      expect(send).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({
+          state: 'error',
+          message: expect.stringContaining('supervised server restart')
+        })
+      )
+    }
+  )
 
   it.runIf(process.platform === 'darwin')(
     'defers a pre-staged macOS update resumed from the native-ready continuation',
@@ -529,4 +454,171 @@ describe('headless serve update install handoff', () => {
     })
     expect(() => checkForRemoteServerUpdate('runtime-1')).toThrow('remote_update_manual_required')
   })
+
+  it('gates supervised-serve remote control on the Linux serve update supervisor', async () => {
+    // Why: the Linux verdict must match what installRemoteServerUpdate accepts — no
+    // supervisor means automatic upgrades would terminate the unit with no way back.
+    const { getRemoteServerUpdateSupport, setupAutoUpdater } = await loadUpdaterModule()
+
+    hasServeUpdateSupervisorMock.mockReturnValue(false)
+    setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      installMode: 'supervised-headless-serve'
+    })
+    expect(getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'supervised-headless-serve',
+      automatic: false,
+      reason: 'updater-unavailable'
+    })
+
+    hasServeUpdateSupervisorMock.mockReturnValue(true)
+    expect(getRemoteServerUpdateSupport()).toEqual({
+      installMode: 'supervised-headless-serve',
+      automatic: true,
+      reason: 'available'
+    })
+  })
+
+  it.skipIf(process.platform !== 'linux')(
+    'downloads, spools and quits only after the helper accepts the update',
+    async () => {
+      const send = vi.fn()
+      captureServeUpdateAppImageMock.mockResolvedValue({
+        ok: true,
+        artifact: {
+          artifactPath: '/downloads/orca-1.0.61.AppImage',
+          sha512: SHA512,
+          targetVersion: '1.0.61'
+        }
+      })
+      readServeUpdateResultForMock.mockReturnValue({
+        verdict: 'accepted',
+        message: ''
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+
+      const {
+        checkForUpdatesFromMenu,
+        downloadUpdate,
+        quitAndInstall,
+        setServeUpdateRuntimeId,
+        setupAutoUpdater
+      } = await loadUpdaterModule()
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve'
+      })
+      setServeUpdateRuntimeId('rt-42')
+
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
+      autoUpdaterMock.emit('update-downloaded', {
+        version: '1.0.61',
+        downloadedFile: '/downloads/orca-1.0.61.AppImage',
+        files: [{ url: 'orca-1.0.61.AppImage', sha512: SHA512 }]
+      })
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(send).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'downloaded', version: '1.0.61' })
+      )
+
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(500)
+
+      expect(captureServeUpdateAppImageMock).toHaveBeenCalledWith(
+        expect.objectContaining({ downloadedFile: '/downloads/orca-1.0.61.AppImage' })
+      )
+      expect(writeUpdateRequestMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fromVersion: '1.0.51',
+          targetVersion: '1.0.61',
+          artifactPath: '/downloads/orca-1.0.61.AppImage',
+          sha512: SHA512,
+          servingPid: process.pid,
+          unitName: 'orca-serve.service'
+        })
+      )
+      expect(readServeUpdateResultForMock).toHaveBeenCalledWith('attempt-42', '1.0.61')
+      expect(killAllPtyMock).toHaveBeenCalled()
+      expect(appMock.quit).toHaveBeenCalled()
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith('headless_serve_update_accepted', {
+        version: '1.0.61'
+      })
+      // The quit-fence census passed, so the helper was authorized to stop the unit.
+      expect(writeServeUpdateCensusContinuationMock).toHaveBeenCalled()
+    }
+  )
+
+  it.skipIf(process.platform !== 'linux')(
+    'stays alive when the helper verdict never arrives',
+    async () => {
+      const send = vi.fn()
+      captureServeUpdateAppImageMock.mockResolvedValue({
+        ok: true,
+        artifact: {
+          artifactPath: '/downloads/orca-1.0.61.AppImage',
+          sha512: SHA512,
+          targetVersion: '1.0.61'
+        }
+      })
+      readServeUpdateResultForMock.mockReturnValue(null)
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+
+      const {
+        checkForUpdatesFromMenu,
+        downloadUpdate,
+        quitAndInstall,
+        setServeUpdateRuntimeId,
+        setupAutoUpdater
+      } = await loadUpdaterModule()
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve'
+      })
+      setServeUpdateRuntimeId('rt-42')
+
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
+      autoUpdaterMock.emit('update-downloaded', {
+        version: '1.0.61',
+        downloadedFile: '/downloads/orca-1.0.61.AppImage',
+        files: [{ url: 'orca-1.0.61.AppImage', sha512: SHA512 }]
+      })
+
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+      // The helper has the full verdict window to respond.
+      await vi.advanceTimersByTimeAsync(90_000)
+
+      expect(appMock.quit).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+      expect(clearUpdateRequestMock).toHaveBeenCalled()
+      expect(send).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({
+          state: 'error',
+          message: expect.stringContaining('The server update did not complete')
+        })
+      )
+      expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
+        'headless_serve_update_not_accepted',
+        { version: '1.0.61' },
+        expect.objectContaining({ level: 'warn' })
+      )
+    }
+  )
 })

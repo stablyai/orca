@@ -34,8 +34,10 @@ export default defineConfig({
     ],
     // Why: the full suite runs heavy TS transforms plus real git/http fixtures;
     // the Vitest 5s defaults are too tight for the slowest integration cases.
+    // testTimeout matches hookTimeout: under full-suite parallelism even ordinary
+    // renderer tests breach 30s (CPU saturation delays waitFor loops), flaking them.
     hookTimeout: 60_000,
-    testTimeout: 30_000,
+    testTimeout: 60_000,
     // Why: Windows process and shell startup are slower under full-suite load;
     // macOS/Linux keep Vitest's default worker parallelism.
     ...windowsTestWorkerOptions

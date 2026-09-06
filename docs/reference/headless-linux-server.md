@@ -215,7 +215,7 @@ Type=simple
 User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --json --port 6768 --pairing-address 100.64.1.20
 StandardOutput=journal
 StandardError=journal
 KillMode=mixed
@@ -246,7 +246,7 @@ cannot succeed. Any other permanent startup fault is capped at 5 starts per
 The start limit counts operator-initiated starts too, so once it trips systemd
 refuses a plain `systemctl start` until the 5-minute window rolls over. Run
 `sudo systemctl reset-failed orca-serve.service` first to clear it — the
-[Upgrade](#upgrade-steps) and [Roll back](#roll-back) scripts already do.
+[Manual upgrade steps](#manual-upgrade-steps) and [Roll back](#roll-back) scripts already do.
 On systemd older than 230 those two directives are spelled
 `StartLimitInterval=`/`StartLimitBurst=` and belong in `[Service]`; Ubuntu
 20.04, Orca's oldest supported base, ships systemd 245.
@@ -314,7 +314,7 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --json --port 6768 --pairing-address 100.64.1.20
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
@@ -402,10 +402,20 @@ depend on an interactive shell profile.
 
 ## Upgrade
 
-`orca serve` never updates itself. In headless mode Orca wires up no auto-updater
-at all — the built-in updater only runs in the desktop GUI, and no paired mobile
-or web client can trigger it remotely. Upgrading is always a deliberate step:
-replace the AppImage and restart the service.
+There are two ways to upgrade a headless Linux server:
+
+- **One-click update** (recommended): the Orca app checks the release feed,
+  downloads the new AppImage, hands it to a root helper through a spool
+  directory, and the helper stops the service, swaps the binary, verifies the
+  new build came up, and restarts. Requires the helper installed once per host
+  (below). Live terminals and agents block the install: the update is refused
+  while any terminal is live, so no work is silently killed.
+- **Manual upgrade**: replace the AppImage yourself and restart the service.
+  Same steps as before this feature existed; see [Manual upgrade steps](#manual-upgrade-steps).
+
+`orca serve` never updates itself without the helper installed and a client
+explicitly requesting the install. No paired mobile or web client can trigger
+an update unless someone with access asks for it.
 
 Two facts make the persisted-state transition predictable:
 
@@ -419,10 +429,77 @@ Two facts make the persisted-state transition predictable:
   state into the current schema and writes it back in the current shape, so a
   forward upgrade needs no manual data step.
 
-These guarantees do not preserve live processes. The service restart kills
-every terminal and agent in its cgroup; an agent conversation may be resumable,
-but its current process and any in-flight command are gone.
+These guarantees do not preserve live processes. The one-click flow refuses to
+install while terminals are live, so nothing is killed mid-conversation; a
+manual upgrade kills every terminal and agent in the service's cgroup the
+moment you stop the unit.
 
+### One-click update
+
+The flow uses three pieces:
+
+1. **The census gate.** Before an install starts, the server enumerates every
+   terminal and agent execution host it owes coverage for. Any live terminal,
+   any failed or incomplete census, or any omitted host inside this service's
+   execution boundary blocks the install. The gate runs twice: once when the
+   client asks for the install, and once immediately before the server quits —
+   so work that started between the request and the quit still blocks it.
+2. **The spool handshake.** The server writes `request.json` (target version,
+   artifact path, sha512, serving pid, unit name) into
+   `/var/lib/orca-server-update` and waits for the helper to acknowledge before
+   quitting. The helper writes `result.json` back; a stale result from a
+   previous attempt can never be read as this one's verdict.
+3. **The root helper.** A root-owned script at
+   `/usr/lib/orca/serve-update-helper.sh` that the service user may run exactly
+   once, passwordless, via a sudoers drop-in. It re-verifies the artifact hash
+   (it is the trust anchor, not the app), refuses downgrades and no-op
+   reinstallations, snapshots the current binary, stops the unit, swaps the
+   AppImage atomically, updates `/opt/orca/VERSION`, starts the unit, and then
+   verifies readiness by watching the unit's new main PID for the
+   `orca_server_ready` journal line. If the new build fails to start or never
+   reports ready, the helper rolls back to the snapshot and brings the old
+   build back up before reporting failure.
+
+#### Install the helper
+
+On the server, run:
+
+```bash
+orca serve update-helper install | sudo bash
+```
+
+The printed script installs the helper at `/usr/lib/orca/serve-update-helper.sh`,
+writes a sudoers drop-in at `/etc/sudoers.d/orca-serve-update-helper` (validated
+with `visudo -cf` before publication, so a bad rule aborts instead of risking
+the sudoers directory), and creates the spool directory. Defaults match the
+systemd unit in this guide (`orca-serve.service`, service user `orca`,
+AppImage at `/opt/orca/orca-linux.AppImage`, version record at
+`/opt/orca/VERSION`); pass `--unit`, `--service-user`, `--appimage`,
+`--version-record`, or `--spool-dir` to change them. Re-running the script
+upgrades the helper in place.
+
+The unit must run `serve` with `--json` so the helper can verify readiness
+from the journal:
+
+```ini
+ExecStart=/opt/orca/orca-linux.AppImage serve --json --port 6768 --pairing-address 100.64.1.20
+```
+
+Without `--json` the helper cannot tell a healthy new build from a hung one and
+every install rolls back.
+
+#### What the client sees
+
+A client (desktop, web, or mobile) triggers the update from the app's update
+UI. The server refuses while terminals are live, downloads and verifies the
+new AppImage, hands it to the helper, quits, and the helper restarts it under
+systemd. Clients reconnect automatically — pairing and state survive — and the
+new version is visible in the client afterward. If the install is refused or
+fails, the server keeps running the old build and the client shows why.
+
+#### Manual census before a manual stop
+
+If you use the manual upgrade path, the census discipline still applies.
 Immediately before stopping the service, obtain a fresh census as the service's
 OS account and home. Use the installer's absolute launcher path so `sudo`'s
 `secure_path` cannot hide a per-user registration:
@@ -437,7 +514,8 @@ execution boundary. A separately paired runtime is outside that boundary; local
 execution and SSH hosts reached through this runtime are not. An affected or
 unknown omission, missing scope, failed request or lost connection is
 `unverifiable`, so defer the restart. Do not allow new work between that census
-and the stop; Orca does not yet provide an atomic census-and-stop fence.
+and the stop; the one-click flow's census gate is what makes this fence atomic,
+and the manual path has no equivalent.
 
 Rolling back is the case that needs care — see [Roll back](#roll-back).
 
@@ -451,7 +529,7 @@ Electron owns the direct binary's version flags and may report its own runtime
 version. For an AppImage service, choose a release tag explicitly and record it
 next to the binary. The steps below keep that record in `/opt/orca/VERSION`.
 
-### Upgrade steps
+### Manual upgrade steps
 
 Never download straight onto `/opt/orca/orca-linux.AppImage`. The AppImage is
 FUSE-mounted, so overwriting it in place while the service runs can crash or

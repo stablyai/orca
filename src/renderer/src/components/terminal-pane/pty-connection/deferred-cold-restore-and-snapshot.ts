@@ -5,7 +5,7 @@ import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-ou
 import { executeTerminalStartupCommandPaste } from '../terminal-startup-command-paste'
 import { getTerminalPasteSshRemotePlatform } from '../terminal-paste-ssh-platform'
 import { resolveTerminalPasteRuntime } from '../terminal-paste-runtime'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './foreground-output-budgets'

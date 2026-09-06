@@ -8,6 +8,7 @@ import {
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'darwin'
 }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'darwin' }))
 
 type ResumableAgentState = Pick<
   AppState,

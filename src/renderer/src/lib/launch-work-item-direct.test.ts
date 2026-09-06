@@ -91,6 +91,7 @@ vi.mock('@/lib/new-workspace', () => ({
   getWorkspaceSeedName: ({ explicitName }: { explicitName?: string }) => explicitName ?? '',
   isGitLabIssueUrl: vi.fn(() => false)
 }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'win32' }))
 
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),

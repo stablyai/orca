@@ -10718,7 +10718,7 @@
           "update": "Mettre à jour ce serveur",
           "title": "Mettre à jour les serveurs distants Orca",
           "description": "Consultez les serveurs jumelés et mettez à jour les installations prises en charge depuis ce client Orca.",
-          "restartWarning": "La mise à jour redémarre ces serveurs. {{value0}} onglets actifs et {{value1}} volets de terminal peuvent se déconnecter brièvement.",
+          "restartWarning": "La mise à jour redémarre ces serveurs et met fin à tous les terminaux et agents sur ceux-ci. {{value0}} onglets actifs et {{value1}} volets de terminal peuvent se déconnecter brièvement.",
           "checking": "Vérification des serveurs jumelés…",
           "empty": "Aucun serveur distant Orca jumelé.",
           "checkAgain": "Rechercher des mises à jour du serveur",
@@ -15947,7 +15947,8 @@
         "requestedVersionUnavailable": "Le programme de mise à jour du serveur n'a pas proposé la version d'Orca demandée.",
         "updateUnavailable": "Le serveur n'a pas signalé de mise à jour disponible.",
         "downloadIncomplete": "La mise à jour du serveur n'a pas fini de se télécharger.",
-        "reconnectTimeout": "Le serveur ne s'est pas reconnecté avec la version mise à jour."
+        "reconnectTimeout": "Le serveur ne s'est pas reconnecté avec la version mise à jour.",
+        "liveTerminals": "Le serveur a encore des terminaux ou des agents actifs. Fermez-les, puis réessayez la mise à jour."
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "L'espace de travail n'est pas connecté à un hôte Orca distant."

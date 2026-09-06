@@ -1543,8 +1543,8 @@
         "71a3c0f9d2": "ワークスペースを開始",
         "filesUnavailable": "変更されたファイルを読み込めませんでした。",
         "filesRetry": "再試行",
-        "77482513f8": "クローズ",
-        "2f5195c6a0": "再オープン",
+        "77482513f8": "閉じる",
+        "2f5195c6a0": "再度開く",
         "4b8ae7303f": "差分の読み込みに失敗しました。",
         "closePullRequestFailed": "PR のクローズに失敗しました",
         "reopenPullRequestFailed": "PR の再オープンに失敗しました",
@@ -3021,7 +3021,7 @@
             "4f0d9a71c2": "タブは存在しません",
             "d7d496a451": "ブラウザページは存在しません",
             "7726ce9970": "モバイルエミュレータのタブは存在しません",
-            "chooseAction": "アクションを選択してください。",
+            "chooseAction": "操作を選択してください。",
             "searchProvider": "{{value0}} で検索"
           },
           "TabBarQuickCommandsButton": {
@@ -3887,7 +3887,7 @@
           "9963dff6d3": "説明が見つかりません。",
           "995fde8337": "スキルファイルを表示できませんでした",
           "4acd6d68ec": "スキルが見つかりません",
-          "6a62a0168c": "一致する項目はありません",
+          "6a62a0168c": "一致なし",
           "08a321a984": "現在の検索条件とフィルターに一致するスキルはありません。",
           "cd7893fbc1": "スキルをスキャン中",
           "35b9a724a0": "利用可能",
@@ -3934,7 +3934,7 @@
         "sourceKind": {
           "home": "ホーム",
           "workspace": "ワークスペース",
-          "bundled": "バンドル済み",
+          "bundled": "同梱",
           "plugin": "プラグイン"
         },
         "count": {
@@ -3965,8 +3965,8 @@
           "deleteTitle": "削除するスキルを選択"
         },
         "SkillDetailDialog": {
-          "agents": "Agent",
-          "updated": "更新日",
+          "agents": "エージェント",
+          "updated": "更新済み",
           "copy": "コピー"
         },
         "SkillFreshnessNudge": {
@@ -4812,7 +4812,7 @@
           "noneFound": "Orca 以外のワークツリーは見つかりませんでした",
           "tryDifferentSearch": "別の名前またはパスをお試しください。",
           "disableSource": "ソースを無効にするとワークツリーを個別に管理できます。",
-          "appearWhenDetected": "Orca が新しいワークツリーを検出すると、ここに表示されます。",
+          "appearWhenDetected": "Orca が新規ワークツリーを検出すると、ここに表示されます。",
           "openGlobalSettings": "グローバル設定で管理",
           "globalSettingsSources": "これらのソースにはグローバル設定があり、ここで上書きできます:"
         },
@@ -9883,7 +9883,7 @@
           "update": "このサーバーを更新",
           "title": "リモート Orca サーバーを更新",
           "description": "ペアリング済みサーバーを確認し、対応するインストールをこの Orca クライアントから更新します。",
-          "restartWarning": "更新すると、これらのサーバーが再起動します。実行中のタブ {{value0}} 個とターミナルペイン {{value1}} 個が、一時的に切断される可能性があります。",
+          "restartWarning": "更新すると、これらのサーバーが再起動し、サーバー上のすべてのターミナルと Agent が終了します。実行中のタブ {{value0}} 個とターミナルペイン {{value1}} 個が、一時的に切断される可能性があります。",
           "checking": "ペアリング済みサーバーを確認しています…",
           "empty": "ペアリング済みのリモート Orca サーバーはありません。",
           "checkAgain": "サーバーの更新を確認",
@@ -9909,7 +9909,7 @@
           "restarting": "再起動中…",
           "updated": "更新済み",
           "failed": "更新に失敗しました",
-          "serviceManagerHelp": "このサーバーを開始するサービスマネージャーを通じて Orca を更新してください。",
+          "serviceManagerHelp": "このサーバーを開始するサービスマネージャーを通じて Orca を更新してください。サービスの再起動により、サーバー上のすべてのターミナルと Agent が終了します。",
           "unpackedHelp": "開発ビルドはソースチェックアウトから更新する必要があります。",
           "legacyHelp": "リモート更新を有効にするには、このサーバーを一度手動で更新してください。"
         },
@@ -13727,7 +13727,7 @@
           "search": "実行を検索…",
           "filters": "フィルター",
           "host": "ホスト",
-          "status": "ステータス",
+          "status": "状態",
           "refresh": "実行を更新",
           "successful24h": "成功 · 24時間",
           "failed24h": "失敗 · 24時間",
@@ -13735,7 +13735,7 @@
           "failed7d": "失敗 · 7日間",
           "historyUnavailableOne": "1件の自動化で実行履歴を利用できません。カウントには利用可能な履歴のみが含まれます。",
           "historyUnavailableMany": "{{count}}件の自動化で実行履歴を利用できません。カウントには利用可能な履歴のみが含まれます。",
-          "automation": "自動化",
+          "automation": "オートメーション",
           "triggered": "トリガー済み",
           "trigger": "トリガー",
           "loading": "実行を読み込み中…",
@@ -13969,7 +13969,7 @@
           "createFromBaseRef": "{{baseRef}} から作成",
           "missingWorkspace": "ワークスペースがありません",
           "runUsageSummary": "約 {{cost}} · {{tokens}} tokens",
-          "usageUnavailable": "使用量を利用できません",
+          "usageUnavailable": "使用量を取得できません",
           "noRunUsageYet": "まだ実行の使用量がありません",
           "noWorkspace": "ワークスペースなし",
           "latestSavedOutput": "最新の保存済み出力",
@@ -13977,9 +13977,9 @@
           "tableName": "名前",
           "tableProject": "プロジェクト",
           "tableHost": "ホスト",
-          "tableStatus": "ステータス",
+          "tableStatus": "状態",
           "tableActions": "操作",
-          "newAutomation": "新しい自動化",
+          "newAutomation": "新規自動化",
           "rowActions": "自動化の操作"
         },
         "CreateFromPicker": {
@@ -14110,7 +14110,7 @@
         "AutomationListSearchField": {
           "tooLong": "検索テキストが長すぎます — リストは未フィルタです",
           "label": "自動化を検索",
-          "placeholder": "検索...",
+          "placeholder": "検索…",
           "tooLongShort": "長すぎます",
           "clear": "検索をクリア"
         },
@@ -14135,8 +14135,8 @@
           "placeholder": "ホストを選択",
           "storedOn": "{authority} が保存してスケジュールします。",
           "unselected": "この自動化を保存してスケジュールするホストを選択します。",
-          "orphan": "ホストのない自動化は新しい自動化を保持できません。この自動化を作成するホストを選択してください。",
-          "unavailable": "そのホストはまだ新しい自動化を保持できません。これを作成する別のホストを選択してください。",
+          "orphan": "ホストのない自動化は新規自動化を保持できません。この自動化を作成するホストを選択してください。",
+          "unavailable": "そのホストはまだ新規自動化を保持できません。これを作成する別のホストを選択してください。",
           "stale": "このフォームを開いている間に {host} が変更されました。保存する前にもう一度選択してください。",
           "projectMismatch": "そのプロジェクトは {host} にありません。そのホスト上のプロジェクト、または別のホストを選択してください。",
           "noProjects": "{host} にはプロジェクトが設定されていません。そこに追加するか、別のホストを選択してください。",
@@ -14505,7 +14505,7 @@
         "label": "親ワークツリー",
         "noParent": "親なし",
         "description": "このワークスペースをサイドバー内の別のワークスペースの配下にネストします。ベースブランチは変更されません。",
-        "searchPlaceholder": "ワークスペースを検索...",
+        "searchPlaceholder": "ワークスペースを検索…",
         "noMatches": "一致する項目がありません。"
       }
     },
@@ -14533,7 +14533,8 @@
         "requestedVersionUnavailable": "サーバーのアップデーターは、要求した Orca のバージョンを提供しませんでした。",
         "updateUnavailable": "サーバーは、利用可能な更新を報告しませんでした。",
         "downloadIncomplete": "サーバーの更新のダウンロードが完了しませんでした。",
-        "reconnectTimeout": "サーバーは、更新後のバージョンで再接続しませんでした。"
+        "reconnectTimeout": "サーバーは、更新後のバージョンで再接続しませんでした。",
+        "liveTerminals": "サーバー上に実行中のターミナルまたは Agent があります。それらを終了してから、再度更新をお試しください。"
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "このワークスペースは、リモートの Orca ホストに接続されていません。"
@@ -14923,7 +14924,7 @@
     "migrated": {
       "title": "Agent が見つけやすくなりました",
       "description": "Agent ビューはサイドバーの専用タブになりました。アクティビティとフィルターはそのまま引き継がれます。",
-      "dismiss": "OK",
+      "dismiss": "了解",
       "action": "Agent を開く"
     },
     "new": {

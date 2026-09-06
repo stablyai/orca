@@ -35,6 +35,7 @@ import { CliInstaller } from '../cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
+import { initializeServeAutoUpdater } from './serve-updater-init'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 
@@ -154,6 +155,11 @@ async function launchServeMode(
   }
   // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  // Why before the RPC listener: a reconnecting client can call status.get in the gap and
+  // read a transient remoteUpdateSupport.reason: 'updater-unavailable'. Init is synchronous,
+  // so arming it first leaves no window. Post-whenReady is required by electron-updater;
+  // ahead of printServeReady so clients pairing at first contact see the real update verdict.
+  initializeServeAutoUpdater(runtime.getRuntimeId(), () => state.store!, runtime)
   await runtimeRpc.start().catch((error) => {
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error

@@ -5,6 +5,7 @@ import { buildAiVaultDropRepinStartup } from './ai-vault-resume-command'
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'darwin'
 }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'darwin' }))
 
 const RECORDED_HOME = '/tmp/orca/codex-accounts/aaaa/home'
 const SELECTED_HOME = '/tmp/orca/codex-accounts/bbbb/home'
