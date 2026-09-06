@@ -46,7 +46,10 @@ export const ssh2Mock = {
   connectErrorMessage: '',
   connectErrorCode: '',
   destroyErrorMessage: '',
-  connectSequence: [] as ('ready' | Error)[],
+  // Why 'silent': leaves the connect attempt pending (no ready/error emitted)
+  // so a test can drive auth events (e.g. keyboard-interactive prompts)
+  // through emitSshEvent itself.
+  connectSequence: [] as ('ready' | 'silent' | Error)[],
   execBehavior: 'callback' as 'callback' | 'pending',
   sftpBehavior: 'callback' as 'callback' | 'pending',
   notifyClientCreated: undefined as (() => void) | undefined
@@ -135,6 +138,9 @@ export function createSsh2Module(): Ssh2ModuleMock {
         }
         if (next === 'ready') {
           this.emit('ready')
+          return
+        }
+        if (next === 'silent') {
           return
         }
         if (ssh2Mock.connectBehavior === 'pending') {
