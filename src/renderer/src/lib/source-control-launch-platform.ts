@@ -1,6 +1,6 @@
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { isWslUncPath } from '../../../shared/wsl-paths'
-import { CLIENT_PLATFORM } from './new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 
 export function resolveSourceControlLaunchPlatform(args: {
