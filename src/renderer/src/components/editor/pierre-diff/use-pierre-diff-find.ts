@@ -44,6 +44,8 @@ export type PierreDiffFind = {
   editEnabled: boolean
   /** Capture-phase keydown handler for the surface container. */
   handleContainerKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void
+  /** Ends a find-only session when focus leaves the surface. */
+  handleContainerBlur: (event: React.FocusEvent<HTMLElement>) => void
   /** Pass to `editorOptions.onAttach` so the panel opens on the first press. */
   handleEditorAttach: (editor: FocusableEditor) => void
   /** Leaves a find-only session so a read-only diff stops accepting input. */
@@ -61,6 +63,13 @@ export function usePierreDiffFind({ isEditable }: { isEditable: boolean }): Pier
 
   const handleContainerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLElement>) => {
+      // Why: a find-only session must not outlive the search panel, or a
+      // read-only diff stays editable forever after a single Cmd+F.
+      if (findActive && event.key === 'Escape') {
+        pendingFindRef.current = false
+        setFindActive(false)
+        return
+      }
       if (findActive || !editorShortcutMatches('editor.find', event)) {
         return
       }
@@ -68,6 +77,18 @@ export function usePierreDiffFind({ isEditable }: { isEditable: boolean }): Pier
       event.stopPropagation()
       pendingFindRef.current = true
       setFindActive(true)
+    },
+    [findActive]
+  )
+
+  // Why: leaving the surface ends a find-only session too; the panel is gone.
+  const handleContainerBlur = useCallback(
+    (event: React.FocusEvent<HTMLElement>) => {
+      if (!findActive || event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        return
+      }
+      pendingFindRef.current = false
+      setFindActive(false)
     },
     [findActive]
   )
@@ -89,6 +110,7 @@ export function usePierreDiffFind({ isEditable }: { isEditable: boolean }): Pier
   return {
     editEnabled: isEditable || findActive,
     handleContainerKeyDown,
+    handleContainerBlur,
     handleEditorAttach,
     exitFind
   }

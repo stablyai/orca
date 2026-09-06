@@ -71,9 +71,8 @@ export function PierreDiffSurface({
   const activeGroupId = useAppStore((s) =>
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
   )
-  const { editEnabled, handleContainerKeyDown, handleEditorAttach } = usePierreDiffFind({
-    isEditable
-  })
+  const { editEnabled, handleContainerKeyDown, handleContainerBlur, handleEditorAttach } =
+    usePierreDiffFind({ isEditable })
 
   const options = useMemo(
     () => ({
@@ -104,10 +103,16 @@ export function PierreDiffSurface({
   const editorOptions = useMemo<EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>>(
     () => ({
       onAttach: handleEditorAttach,
-      // Why: 1.4 delivers a change event; the live document is on `.file`.
-      onChange: (event) => onEditChange?.(event.file)
+      // Why: Cmd+F opens edit mode even on read-only diffs, so ignore changes
+      // unless this surface can actually save. Otherwise a stray keystroke in
+      // the find panel marks a staged or branch section dirty with no save path.
+      onChange: (event) => {
+        if (isEditable) {
+          onEditChange?.(event.file)
+        }
+      }
     }),
-    [handleEditorAttach, onEditChange]
+    [handleEditorAttach, isEditable, onEditChange]
   )
   const renderAnnotation = useCallback(
     (annotation: PierreDiffCommentAnnotation) =>
@@ -141,7 +146,11 @@ export function PierreDiffSurface({
 
   return (
     // Why: ⌘F must be caught before Pierre mounts an editor, so the listener lives on the host.
-    <div className={className} onKeyDownCapture={handleContainerKeyDown}>
+    <div
+      className={className}
+      onKeyDownCapture={handleContainerKeyDown}
+      onBlur={handleContainerBlur}
+    >
       <FileDiff<PierreDiffAnnotationData>
         fileDiff={fileDiff}
         options={options}
