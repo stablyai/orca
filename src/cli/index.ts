@@ -176,7 +176,11 @@ export async function main(
       json
     })
   } catch (error) {
-    reportCliError(error, json, { commandPath: parsed.commandPath })
+    const worktreeSelector = parsed.flags.get('worktree')
+    reportCliError(error, json, {
+      commandPath: parsed.commandPath,
+      ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {})
+    })
     process.exitCode = 1
   }
 }

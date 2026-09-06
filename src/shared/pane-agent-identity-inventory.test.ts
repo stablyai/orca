@@ -402,7 +402,7 @@ const DIRECT_SINGLE_SOURCE_SURFACES: readonly {
     marker: 'resolveLeafCloseCopyKind'
   },
   {
-    path: 'src/main/runtime/orchestration/mailbox-pointer-delivery.ts',
+    path: 'src/main/runtime/orchestration/mailbox-pointer-stage.ts',
     classification: 'action-consumer',
     marker: 'isCursorAgentTitle'
   },

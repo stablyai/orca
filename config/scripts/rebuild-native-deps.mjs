@@ -567,6 +567,15 @@ function loadNativeModule(moduleName) {
     }
     return
   }
+  if (moduleName === '@vscode/windows-process-tree') {
+    // The tarball prebuilt loads under Electron too -- the addon is N-API, so
+    // a bare require proves nothing about which source it was built from.
+    const { assertWindowsProcessTreeCreationTime } = projectRequire(
+      './config/scripts/windows-process-tree-creation-time.cjs'
+    )
+    assertWindowsProcessTreeCreationTime({ module: projectRequire(moduleName) })
+    return
+  }
   projectRequire(moduleName)
 }
 

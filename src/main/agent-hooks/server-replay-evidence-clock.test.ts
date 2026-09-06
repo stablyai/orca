@@ -72,6 +72,22 @@ describe('the observation clock a relay replay must not restamp', () => {
     expect(replayed.evidenceObservedAt).toBe(T0)
   })
 
+  it('carries the observation time out of getStatusSnapshot, not just the listener', () => {
+    ingest(server, { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' })
+    vi.setSystemTime(T0 + 25 * 60 * 1000)
+    server.clearStatusEntriesForConnection(CONNECTION)
+    ingest(
+      server,
+      { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' },
+      { isReplay: true }
+    )
+
+    // The fleet projection reads this snapshot, not the listener payload.
+    const row = server.getStatusSnapshot().find((entry) => entry.paneKey === PANE)!
+    expect(row.receivedAt).toBeGreaterThan(T0 + 25 * 60 * 1000 - 1)
+    expect(row.evidenceObservedAt).toBe(T0)
+  })
+
   it('lets a live event restamp the observation time after a replay', () => {
     ingest(server, { hook_event_name: 'UserPromptSubmit', prompt: 'do the thing' })
     vi.setSystemTime(T0 + 25 * 60 * 1000)

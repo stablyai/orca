@@ -1,6 +1,7 @@
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
+import { formatSkillsCommandFlagHelp } from './skills-command-flag-help'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
 
@@ -72,8 +73,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
-  if (command === 'skills install' && flag === 'agent') {
-    return '--agent <names>        Comma-separated install targets; default is detected agents'
+  const skillsHelp = formatSkillsCommandFlagHelp(command, flag)
+  if (skillsHelp) {
+    return skillsHelp
   }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
@@ -105,8 +107,14 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }
+  if (command === 'orchestration worker-list' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque page cursor copied from page.nextCursor'
+  }
   if (command === 'orchestration worker-list' && flag === 'terminal-state') {
     return '--terminal-state <state> Terminal accounting filter: active, reclaimable, retained, release_pending, release_unknown, or released'
+  }
+  if (command === 'orchestration worker-list' && flag === 'include-remote') {
+    return '--include-remote      Include connected-server worker observations'
   }
   if (command === 'linear list-issues' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'

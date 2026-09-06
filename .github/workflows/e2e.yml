@@ -227,6 +227,11 @@ jobs:
           mapfile -t TEST_FILES < <(jq -r '.[] | select(
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
             . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
+            . != "tests/e2e/local-ssh-browser-routing.spec.ts" and
+            . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
+            . != "tests/e2e/ssh-localhost.spec.ts" and
+            . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
+            . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
             . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
           )' <<<"$TEST_FILES_JSON")
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
@@ -262,12 +267,15 @@ jobs:
     needs: [build, prepare-native-cache]
     # effect of one route listing a startup-readiness spec — pruning that spec would have
     # silently retired the whole lane. The signal is now derived from the SSH routes directly.
-    # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
+    # The explicit spec clauses stay for their honest purpose: changed-e2e hands these specs to this
     # lane, so editing one must still run it here.
     if: >-
       inputs.test_files == '' ||
       inputs.ssh_source_changed == 'true' ||
+      contains(inputs.test_files, 'tests/e2e/local-ssh-browser-routing.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
     runs-on: ubuntu-latest
     # Why 60: this lane now also runs the remaining Docker-SSH specs serially. They average
@@ -346,5 +354,89 @@ jobs:
         with:
           name: playwright-traces-ssh-docker-watcher-isolation
           path: e2e-traces/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  ssh-browser-network-route:
+    name: ssh browser network route
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Install SSH client
+        run: sudo apt-get update && sudo apt-get install -y openssh-client
+      - name: Run Docker SSH browser network route journeys
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_RUN_DOCKER_SSH_BROWSER_E2E: '1'
+        run: node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts
+
+  ssh-localhost:
+    name: localhost SSH terminal and hooks
+    needs: [build, prepare-native-cache]
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-localhost.spec.ts')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Install SSH server and headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client openssh-server python3 ripgrep xvfb zsh openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - uses: actions/download-artifact@v8
+        with:
+          name: e2e-build-out
+          path: out/
+      - name: Start isolated localhost SSH server
+        shell: bash
+        run: |
+          # Bare shells install Pi extensions only for an existing agent home.
+          mkdir -p "$HOME/.pi/agent"
+          fixture="$RUNNER_TEMP/orca-localhost-sshd"
+          mkdir -p "$fixture"
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/host_key"
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/client_key"
+          cat > "$fixture/sshd_config" <<EOF
+          Port 22222
+          ListenAddress 127.0.0.1
+          HostKey $fixture/host_key
+          PidFile $fixture/sshd.pid
+          AuthorizedKeysFile $fixture/client_key.pub
+          StrictModes no
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          UsePAM yes
+          AllowUsers $(id -un)
+          Subsystem sftp internal-sftp
+          EOF
+          sudo mkdir -p /run/sshd
+          sudo /usr/sbin/sshd -f "$fixture/sshd_config" -E "$fixture/sshd.log"
+          ssh -i "$fixture/client_key" -p 22222 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 127.0.0.1 true || { sudo cat "$fixture/sshd.log"; exit 1; }
+          {
+            echo "ORCA_E2E_SSH_PORT=22222"
+            echo "ORCA_E2E_SSH_USER=$(id -un)"
+            echo "ORCA_E2E_SSH_IDENTITY_FILE=$fixture/client_key"
+          } >> "$GITHUB_ENV"
+      - name: Run localhost SSH terminal and hook journey
+        env:
+          SKIP_BUILD: '1'
+          ORCA_E2E_SSH_LOCALHOST: '1'
+          ORCA_FEATURE_REMOTE_AGENT_HOOKS: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: localhost-ssh-traces
+          path: test-results/
           retention-days: 7
           if-no-files-found: ignore

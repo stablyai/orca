@@ -311,6 +311,24 @@ describe('NativeChatToolRun', () => {
     expect(screen.getByText('shell sleep 1')).toBeInTheDocument()
   })
 
+  it('never animates a settled tool row with its completion check', () => {
+    const { container } = render(
+      <NativeChatToolRun
+        blocks={[
+          { type: 'tool-call', name: 'shell', input: { command: 'pnpm test' }, state: 'completed' },
+          { type: 'tool-result', output: 'passed' }
+        ]}
+        expandSignal={false}
+        activeTurnIsWorking
+      />
+    )
+
+    const settledRow = screen.getByText('shell pnpm test').closest('button')
+    expect(settledRow?.querySelector('.lucide-check')).toBeInTheDocument()
+    expect(settledRow?.querySelector('.animate-pulse')).toBeNull()
+    expect(container.querySelector('.animate-pulse')).toBeNull()
+  })
+
   it('keeps failed tool runs visually neutral while collapsed', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'false' }, state: 'failed' },

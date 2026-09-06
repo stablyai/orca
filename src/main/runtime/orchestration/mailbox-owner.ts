@@ -41,14 +41,18 @@ export class OrchestrationMailboxOwner {
   resolve(
     leaf: OrchestrationMailboxLeaf,
     requestedMailbox?: string,
-    options: { requireRequestedMail?: boolean; routeDirectMail?: boolean } = {}
+    options: {
+      requireRequestedMail?: boolean
+      routeDirectMail?: boolean
+      terminalHandle?: string
+    } = {}
   ): string | null {
     const db = this.deps.getDb()
     if (!db) {
       return null
     }
     const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    const terminalHandle = this.deps.getTerminalHandleForLeafKey(leafKey)
+    const terminalHandle = options.terminalHandle ?? this.deps.getTerminalHandleForLeafKey(leafKey)
     if (!terminalHandle) {
       return null
     }

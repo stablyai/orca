@@ -145,19 +145,21 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   }
 
   protected scheduleRestoredMessageRepoints(): void {
-    let handles: string[]
+    let handles: Set<string>
     try {
-      handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+      const db = this._orchestrationDb
+      // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
+      handles = new Set([
+        ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
+        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
+      ])
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)
       return
     }
     for (const handle of handles) {
       try {
-        if (handle.startsWith('dispatch:')) {
-          continue
-        }
-        if (handle.startsWith('run:')) {
+        if (handle.startsWith('run:') || handle.startsWith('dispatch:')) {
           this.mailPointerRepointScheduler.schedule(handle)
           continue
         }

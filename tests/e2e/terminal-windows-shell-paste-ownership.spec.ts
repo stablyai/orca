@@ -423,10 +423,6 @@ test.describe('Windows terminal shell paste ownership', () => {
     const wslDistro = await configureActiveProjectWslRuntime(orcaPage)
     test.skip(!wslDistro, 'No WSL distro is available on this Windows host')
     const tabId = await createWindowsProjectRuntimeTerminalTab(orcaPage, 'wsl.exe')
-    await updateWindowsDefaultShellSetting(orcaPage, 'cmd.exe')
-    await expect(
-      orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"] [data-shell-icon]`)
-    ).toHaveAttribute('data-shell-icon', 'wsl.exe')
     await waitForActiveTerminalManager(orcaPage, 30_000)
     await installTerminalPtyWriteSpy(electronApp)
 
@@ -453,6 +449,13 @@ test.describe('Windows terminal shell paste ownership', () => {
       )
       scriptStarted = true
       await waitForTerminalOutput(orcaPage, `PASTE_READY_${runId}`, 10_000)
+
+      // Exercise a live WSL process across the settings change.
+      await updateWindowsDefaultShellSetting(orcaPage, 'cmd.exe')
+      await expect(
+        orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"] [data-shell-icon]`)
+      ).toHaveAttribute('data-shell-icon', 'wsl.exe')
+      expect(await waitForActivePanePtyId(orcaPage)).toBe(ptyId)
 
       await clearTerminalPtyWriteLog(electronApp)
       await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), payload)
