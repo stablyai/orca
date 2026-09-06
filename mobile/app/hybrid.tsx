@@ -4,7 +4,6 @@ import * as ExpoCrypto from 'expo-crypto'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
-  MOBILE_WEB_SHELL_FEATURES,
   parseMobileWebBridgePageMessage,
   type MobileWebBridgeShellMessage,
   type MobileWebResumeRoute
@@ -15,7 +14,7 @@ import {
   type MobileWebBrokerPageIdentity
 } from '../src/mobile-web/use-mobile-web-capability-broker'
 import { useMobileWebPageDocument } from '../src/mobile-web/use-mobile-web-page-document'
-import { MOBILE_WEB_PRODUCTION_GRANTS } from '../src/mobile-web/mobile-web-production-grants'
+import { mobileWebShellInitMessage } from '../src/mobile-web/mobile-web-shell-init-message'
 import { MobileWebHealthDeadline } from '../src/mobile-web/mobile-web-health-deadline'
 import { useMobileWebAlertSafePackageSession } from '../src/mobile-web/use-mobile-web-alert-safe-package-session'
 import { createMobileWebNativeCapabilityAuthority } from '../src/mobile-web/mobile-web-native-capability-authority'
@@ -248,19 +247,17 @@ export default function HybridScreen() {
         void onHealthTimeout(sessionId)
       }
     })
-    await postToWeb({
-      version: MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
-      type: 'init',
-      shellSessionId: current.sessionId,
-      buildId: current.buildId,
-      connection: mobileWebBridgeConnectionState(state),
-      hostDisplayName: hostName,
-      reconnectAttempts: reconnects,
-      lastConnectedAt: lastConnected,
-      resumeRoute: resumeRoute.current(),
-      grants: [...MOBILE_WEB_PRODUCTION_GRANTS],
-      shellFeatures: [...MOBILE_WEB_SHELL_FEATURES]
-    })
+    await postToWeb(
+      mobileWebShellInitMessage({
+        shellSessionId: current.sessionId,
+        buildId: current.buildId,
+        state,
+        hostDisplayName: hostName,
+        reconnectAttempts: reconnects,
+        lastConnectedAt: lastConnected,
+        resumeRoute: resumeRoute.current()
+      })
+    )
   }, [hostName, lastConnected, onHealthTimeout, postToWeb, reconnects, resumeRoute, session, state])
   useEffect(() => {
     postInitRef.current = postInit
