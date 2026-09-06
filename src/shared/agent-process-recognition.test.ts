@@ -191,6 +191,34 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('qwen')).toBe(true)
   })
 
+  it('recognizes Qwen Code launched through Node on Windows', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`"C:\Users\dev\AppData\Local\qwen-code\qwen-code\node\node.exe" "C:\Users\dev\AppData\Local\qwen-code\qwen-code\lib\cli-entry.js" --approval-mode yolo`
+      )
+    ).toEqual({ agent: 'qwen-code', processName: 'qwen' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@qwen-code\qwen-code\cli-entry.js`
+      )
+    ).toEqual({ agent: 'qwen-code', processName: 'qwen' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\@qwen-code\qwen-code\scripts\cli-entry.js`
+      )
+    ).toEqual({ agent: 'qwen-code', processName: 'qwen' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\tools\unrelated\qwen-code\qwen-code\lib\cli-entry.js`
+      )
+    ).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\tools\unrelated\AppData\Local\qwen-code\qwen-code\lib\cli-entry.js`
+      )
+    ).toBeNull()
+  })
+
   it('recognizes agent CLIs launched through interpreter wrappers', () => {
     expect(
       recognizeAgentProcessFromCommandLine('node /Users/dev/.nvm/versions/node/bin/codex')
