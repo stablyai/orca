@@ -5,7 +5,11 @@ import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
-import { rebuildWindowsProcessTreeForNode } from './windows-process-tree-gyp-rebuild.mjs'
+import {
+  rebuildWindowsProcessTreeForNode,
+  inspectWindowsProcessTreeAddon,
+  windowsProcessTreeAddonPath
+} from './windows-process-tree-gyp-rebuild.mjs'
 import { assertWindowsProcessTreeIdentity } from './windows-process-tree-capability.cjs'
 
 const require = createRequire(import.meta.url)
@@ -258,6 +262,17 @@ async function collectNativeModuleFailures() {
 
 async function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
+    // A bare require loads the .node addon on win32, so it catches an ABI
+    // mismatch on its own. What it cannot catch is *which* addon loaded: the
+    // published tarball ships a prebuilt built from unpatched source that is
+    // node-addon-api, so it requires cleanly and then reads every process's
+    // command line out of its address space. Check the binary, not the load.
+    if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath()) === 'unpatched') {
+      throw new Error(
+        'the loaded addon still calls ReadProcessMemory, so it was not built from the patched ' +
+          'source. Rebuild it (pnpm run rebuild:electron) rather than using the published prebuild.'
+      )
+    }
     await assertWindowsProcessTreeIdentity(require(moduleName))
     return
   }

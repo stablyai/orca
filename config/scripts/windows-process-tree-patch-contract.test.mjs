@@ -29,6 +29,7 @@ describe('Windows process-tree patch contract', () => {
       'utf8'
     )
     expect(patch).toContain('CREATIONTIME = 4')
+    expect(patch).toContain('exports.Set("supportsCreationTime", Napi::Boolean::New(env, true))')
     expect(patch).toContain('PROCESS_QUERY_LIMITED_INFORMATION')
     expect(patch).toContain('GetProcessTimes(hProcess, &creationTime')
     expect(patch).toContain('116444736000000000ULL')

@@ -23,7 +23,10 @@ import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/age
 import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   loadAgentSessionWireBuild,
@@ -41,6 +44,7 @@ const WORKSPACE = 'workspace-1'
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 const NOW = 1_800_000_000_000
 const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
+const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 
 /** Every method the structured surface publishes: the host method it must reach,
  *  and the result it must hand back. A gate that hides one method and leaks
@@ -107,6 +111,12 @@ const STRUCTURED_CALLS: {
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
   { method: 'agentSession.subscribe', hostMethod: 'subscribe' },
+  // The status feed opens with a snapshot of every session, so its first reply is the contract.
+  {
+    method: STATUS_FEED_METHOD,
+    hostMethod: 'subscribeStatus',
+    result: { type: 'snapshot', sessions: [] }
+  },
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.
   { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } }
@@ -320,6 +330,10 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     subscribe: vi.fn(() => () => undefined),
+    subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
+      subscriber.emit({ type: 'snapshot', sessions: [] })
+      return () => undefined
+    }),
     unsubscribe: vi.fn()
   }
 }
@@ -443,6 +457,14 @@ describe('cross-version structured agent sessions', () => {
       expect(baseline.capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)).toBe(
         baselineStructuredMethods().length > 0
       )
+      // The status feed is additive to a surface that already shipped, so it carries its own
+      // capability or a client cannot tell "host too old" from "the call failed" — and it
+      // would relay-retry a method_not_found forever instead of degrading once.
+      for (const build of [current, baseline]) {
+        expect(build.capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY)).toBe(
+          build.methodNames.includes(STATUS_FEED_METHOD)
+        )
+      }
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)

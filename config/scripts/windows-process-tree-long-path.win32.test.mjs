@@ -21,7 +21,8 @@ import { assertWindowsProcessTreeArchitecture } from './windows-process-tree-gyp
 import {
   writeFakeLoadableNodePty,
   writeFakeWindowsRegistry,
-  writeFakeNodePtyConptyPayload
+  writeFakeNodePtyConptyPayload,
+  writeWindowsProcessTreePatchFile
 } from './rebuild-native-deps-test-fixtures.mjs'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
 
@@ -45,6 +46,7 @@ describe.skipIf(!enabled)('Windows native rebuild from long pnpm physical paths'
           copyScriptWithLocalModules(join(import.meta.dirname, name), scripts)
         }
         copyWindowsProcessTreeBuildScripts(project)
+        writeWindowsProcessTreePatchFile(project)
         copyFileSync(
           join(import.meta.dirname, 'node-pty-job-ownership.cjs'),
           join(scripts, 'node-pty-job-ownership.cjs')
@@ -108,6 +110,10 @@ describe.skipIf(!enabled)('Windows native rebuild from long pnpm physical paths'
             arch
           )
         }
+        run(project, 'windows-process-tree-capability.cjs', [
+          join(project, '.build/windows-process-tree/x64', RELAY_WINDOWS_PROCESS_TREE_FILENAME),
+          '--addon'
+        ])
         // Force the default Electron path to build, even when Node's N-API binary can load.
         rmSync(join(physical, 'build'), { recursive: true })
         run(project, 'ensure-native-runtime.mjs', ['--runtime=electron'])
@@ -138,6 +144,7 @@ function run(project, script, args, executable = process.execPath) {
     env: {
       ...process.env,
       ORCA_STRICT_NATIVE_REBUILD: '1',
+      ORCA_BACKGROUND_LAUNCH: '1',
       ELECTRON_RUN_AS_NODE: '1'
     }
   })

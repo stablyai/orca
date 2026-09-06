@@ -30,6 +30,7 @@ import {
   settleClaudeExitedSession
 } from './claude-structured-session-close'
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 export type {
@@ -39,6 +40,11 @@ export type {
 } from './claude-structured-session-state'
 
 const DISPATCH_ACK_TIMEOUT_MS = 10_000
+
+function backgroundTaskState(session: ClaudeSession): AgentSessionBackgroundTaskState | null {
+  const state = session.backgroundTasks.state
+  return state ? { ...state, supportsTaskStop: true } : null
+}
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
@@ -192,7 +198,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     session?.translator?.handle(event)
     this.deps.onEvent?.(event)
     if (backgroundTasksChanged) {
-      this.deps.onBackgroundTasksChanged?.(event.sessionId, session?.backgroundTasks.state ?? null)
+      this.deps.onBackgroundTasksChanged?.(
+        event.sessionId,
+        session ? backgroundTaskState(session) : null
+      )
     }
   }
 
@@ -233,18 +242,25 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'] = (input) => {
     const session = this.session(input.sessionId)
     const acquisitionGeneration = session.acquisitionGeneration
-    return stopClaudeBackgroundTasks(session, this.deps.requestTimeoutMs, () =>
-      Boolean(
-        this.sessions.get(input.sessionId) === session &&
-        session.fence === input.fence &&
-        session.acquisitionGeneration === acquisitionGeneration &&
-        session.backgroundTasks.state
-      )
+    return stopClaudeBackgroundTasks(
+      session,
+      this.deps.requestTimeoutMs,
+      () =>
+        Boolean(
+          this.sessions.get(input.sessionId) === session &&
+          session.fence === input.fence &&
+          session.acquisitionGeneration === acquisitionGeneration &&
+          session.backgroundTasks.state
+        ),
+      input.taskId
     )
   }
   backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
     sessionId
-  ) => this.sessions.get(sessionId)?.backgroundTasks.state
+  ) => {
+    const session = this.sessions.get(sessionId)
+    return session ? backgroundTaskState(session) : undefined
+  }
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     answerClaudePrompt(this.session(input.sessionId), input)
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>

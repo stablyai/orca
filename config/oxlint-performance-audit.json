@@ -1,0 +1,35 @@
+{
+  "$schema": "../node_modules/oxlint/configuration_schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "jsPlugins": [
+    {
+      "name": "app-store-performance",
+      "specifier": "../config/oxlint-plugins/app-store-performance.mjs"
+    },
+    {
+      "name": "quadratic-buffer-concat",
+      "specifier": "../config/oxlint-plugins/quadratic-buffer-concat.mjs"
+    },
+    {
+      "name": "sort-comparator-performance",
+      "specifier": "../config/oxlint-plugins/sort-comparator-performance.mjs"
+    }
+  ],
+  "rules": {
+    "app-store-performance/require-selector": "warn",
+    "app-store-performance/no-identity-selector": "warn",
+    "app-store-performance/no-fresh-selector-result": "warn",
+    "quadratic-buffer-concat/no-loop-carried-concat": "warn",
+    "sort-comparator-performance/no-repeated-collator": "warn"
+  },
+  "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "**/*.test.*", "**/*.spec.*"]
+}

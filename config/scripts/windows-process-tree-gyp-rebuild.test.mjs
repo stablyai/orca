@@ -10,8 +10,11 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { withWindowsProcessTreeBuild } from './windows-process-tree-gyp-rebuild.mjs'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import {
+  withWindowsProcessTreeBuild,
+  inspectWindowsProcessTreeAddon
+} from './windows-process-tree-gyp-rebuild.mjs'
 import {
   writeWindowsProcessTreeBinary,
   writeWindowsProcessTreeSource
@@ -74,12 +77,19 @@ describe('windows-process-tree private build directory', () => {
     const binding =
       '{"dependencies": [\n"../../node-addon-api/node_addon_api.gyp:node_addon_api_except",\n], "include_dirs": [], "VCCLCompilerTool": {}}'
     writeFileSync(join(options.packageDir, 'binding.gyp'), binding)
+    const processPath = join(options.packageDir, 'src/process.cc')
+    const originalProcess = `${readFileSync(processPath, 'utf8')}\nOpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)`
+    writeFileSync(processPath, originalProcess)
     await withWindowsProcessTreeBuild(options, async (buildDir) => {
       expect(readFileSync(join(buildDir, 'binding.gyp'), 'utf8')).not.toContain(
         'node_addon_api.gyp'
       )
+      expect(readFileSync(join(buildDir, 'src/process.cc'), 'utf8')).not.toContain(
+        'PROCESS_VM_READ'
+      )
       writeWindowsProcessTreeBinary(buildDir)
     })
+    expect(readFileSync(processPath, 'utf8')).toBe(originalProcess)
     expect(readFileSync(join(options.packageDir, 'binding.gyp'), 'utf8')).toBe(binding)
   })
   it.each(['compiler', 'missing', 'architecture'])(
@@ -152,5 +162,42 @@ describe('windows-process-tree private build directory', () => {
     ).rejects.toThrow()
     expect(readFileSync(join(destination, 'preserve'), 'utf8')).toBe('existing')
     expect(readdirSync(options.root).filter((entry) => entry.startsWith('.wpt-'))).toEqual([])
+  })
+})
+
+describe('inspecting a compiled windows-process-tree addon', () => {
+  let dir
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-windows-process-tree-addon-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('reports a binary that still imports ReadProcessMemory as unpatched', () => {
+    const addonPath = join(dir, 'windows_process_tree.node')
+    writeFileSync(addonPath, Buffer.from('MZ\0\0KERNEL32.dll\0ReadProcessMemory\0', 'binary'))
+    expect(inspectWindowsProcessTreeAddon(addonPath)).toBe('unpatched')
+  })
+
+  it('reports a binary without the import as clean', () => {
+    const addonPath = join(dir, 'windows_process_tree.node')
+    writeFileSync(addonPath, Buffer.from('MZ\0\0ntdll.dll\0NtQueryInformationProcess\0', 'binary'))
+    expect(inspectWindowsProcessTreeAddon(addonPath)).toBe('clean')
+  })
+
+  // The whole point of the tri-state: absence is not evidence of safety, and a
+  // boolean made "there is no binary" indistinguishable from "checked, clean".
+  it('reports an absent binary as missing rather than clean', () => {
+    expect(inspectWindowsProcessTreeAddon(join(dir, 'windows_process_tree.node'))).toBe('missing')
+  })
+
+  it('inspects whatever path it is handed, including a relay-staged addon', () => {
+    // The relay loads `./windows-process-tree.node` beside its bundle, which is
+    // nowhere near a node_modules package directory.
+    const staged = join(dir, 'windows-process-tree.node')
+    writeFileSync(staged, Buffer.from('MZ\0\0ReadProcessMemory\0', 'binary'))
+    expect(inspectWindowsProcessTreeAddon(staged)).toBe('unpatched')
   })
 })

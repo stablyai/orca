@@ -48,6 +48,7 @@ async function prepareSource(packageDir, buildDir) {
       recursive: true
     })
   }
+  await ensureWindowsProcessTreeCommandLinePatch(buildDir)
   // Repair legacy build hunks only in the private copy, never pnpm's hardlinked source.
   const bindingPath = join(buildDir, 'binding.gyp')
   let binding = readFileSync(bindingPath, 'utf8')
@@ -68,7 +69,12 @@ async function prepareSource(packageDir, buildDir) {
   )
   writeFileSync(bindingPath, binding)
   const processPath = join(buildDir, 'src', 'process.cc')
-  const source = readFileSync(processPath, 'utf8').replace(/process_count < 1024 && /, '')
+  const source = readFileSync(processPath, 'utf8')
+    .replace(/process_count < 1024 && /, '')
+    .replaceAll(
+      'OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)',
+      'OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)'
+    )
   writeFileSync(processPath, source)
   const header = readFileSync(join(buildDir, 'src', 'process.h'), 'utf8')
   const worker = readFileSync(join(buildDir, 'src', 'process_worker.cc'), 'utf8')
@@ -80,6 +86,8 @@ async function prepareSource(packageDir, buildDir) {
     !binding.includes('deps/node-addon-api') ||
     !binding.includes('NAPI_CPP_EXCEPTIONS') ||
     source.includes('process_count < 1024') ||
+    source.includes('OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ') ||
+    !readFileSync(join(buildDir, 'src/addon.cc'), 'utf8').includes('"supportsCreationTime"') ||
     !source.includes('GetProcessTimes(hProcess, &creationTime') ||
     !header.includes('CREATIONTIME = 4') ||
     !worker.includes('object.Set("creationTimeMs"') ||
@@ -115,7 +123,7 @@ export async function withWindowsProcessTreeBuild(
   },
   build
 ) {
-  if (!(arch in PE_MACHINE)) {
+  if (!Object.hasOwn(PE_MACHINE, arch)) {
     throw new Error(`Unsupported windows-process-tree architecture: ${arch}`)
   }
   const buildDir = realpathSync(mkdtempSync(join(tempRoot, 'orca-wpt-')))
@@ -141,7 +149,7 @@ export async function withWindowsProcessTreeBuild(
     console.log(`[windows-process-tree] building ${arch} in ${buildDir}`)
     await build(buildDir)
     const binaryPath = join(buildDir, 'build', 'Release', BINARY)
-    assertWindowsProcessTreeArchitecture(binaryPath, arch)
+    assertPatchedWindowsProcessTreeBinary(binaryPath, arch)
     const destination = outFile ?? join(packageDir, 'build', 'Release', BINARY)
     mkdirSync(dirname(destination), { recursive: true })
     const publishDir = mkdtempSync(join(dirname(destination), '.wpt-'))
@@ -212,6 +220,7 @@ export async function probeWindowsProcessTreeBuild(
   executable = process.execPath,
   electron = false
 ) {
+  assertPatchedWindowsProcessTreeBinary(windowsProcessTreeAddonPath(buildDir), process.arch)
   await runWindowsProcessTreeBuildProcess(
     executable,
     [join(ROOT, 'config', 'scripts', 'windows-process-tree-capability.cjs'), buildDir],
@@ -240,4 +249,60 @@ export async function rebuildWindowsProcessTreeForNode(options = {}) {
       await probeWindowsProcessTreeBuild(buildDir)
     }
   })
+}
+export function windowsProcessTreeAddonPath(packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR) {
+  return join(packageDir, 'build', 'Release', BINARY)
+}
+
+export function inspectWindowsProcessTreeAddon(addonPath) {
+  if (!existsSync(addonPath)) {
+    return 'missing'
+  }
+  return readFileSync(addonPath).includes('ReadProcessMemory') ? 'unpatched' : 'clean'
+}
+
+function assertPatchedWindowsProcessTreeBinary(addonPath, arch) {
+  const state = inspectWindowsProcessTreeAddon(addonPath)
+  if (state !== 'clean') {
+    throw new Error(
+      state === 'missing'
+        ? `The rebuild reported success but ${addonPath} is not there.`
+        : `${addonPath} still imports ReadProcessMemory; refusing an unpatched command-line reader.`
+    )
+  }
+  assertWindowsProcessTreeArchitecture(addonPath, arch)
+}
+
+// Called only on the private build copy; preserve installed source and output on failure.
+export async function ensureWindowsProcessTreeCommandLinePatch(buildDir) {
+  const source = join(buildDir, 'src', 'process_commandline.cc')
+  if (!existsSync(source)) {
+    throw new Error(`${source} is missing; run pnpm install.`)
+  }
+  if (readFileSync(source, 'utf8').includes('kProcessCommandLineInformation')) {
+    return false
+  }
+  try {
+    await runWindowsProcessTreeBuildProcess(
+      'git',
+      [
+        '-c',
+        'core.autocrlf=input',
+        'apply',
+        '--include=src/process_commandline.cc',
+        join(ROOT, 'config/patches/@vscode__windows-process-tree@0.8.0.patch')
+      ],
+      { cwd: buildDir, env: { ...process.env, GIT_DIR: join(buildDir, '.orca-no-such-git-dir') } }
+    )
+  } catch (error) {
+    throw new Error(
+      `src/process_commandline.cc still reads the PEB, and repairing it failed: ${error.message}`
+    )
+  }
+  if (!readFileSync(source, 'utf8').includes('kProcessCommandLineInformation')) {
+    throw new Error(
+      'src/process_commandline.cc still reads the PEB after repair; run pnpm install.'
+    )
+  }
+  return true
 }

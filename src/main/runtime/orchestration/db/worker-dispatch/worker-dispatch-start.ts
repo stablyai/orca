@@ -6,6 +6,7 @@ import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import type { DispatchCreator } from '../dispatch-depth'
+import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -60,7 +61,7 @@ export function createStartingWorkerDispatch(
     }
     const task = this.getTask(params.taskId)
     if (!task) {
-      throw new OrchestrationError('task_not_found', `Task ${params.taskId} was not found.`)
+      throw taskNotFoundError(`Task ${params.taskId} was not found.`, { taskId: params.taskId })
     }
     if (params.retryOf) {
       const prior = this.getDispatchContextById(params.retryOf)
@@ -74,15 +75,18 @@ export function createStartingWorkerDispatch(
         !['failed', 'stopped', 'abandoned'].includes(priorWorker.state) ||
         !['failed', 'blocked'].includes(task.status)
       ) {
-        throw new OrchestrationError(
-          'task_not_startable',
-          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`
+        throw taskNotStartableError(
+          this,
+          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`,
+          task,
+          params.retryOf
         )
       }
     } else if (task.status !== 'ready') {
-      throw new OrchestrationError(
-        'task_not_startable',
-        `Task ${task.id} is ${task.status}; only a ready Task can start.`
+      throw taskNotStartableError(
+        this,
+        `Task ${task.id} is ${task.status}; only a ready Task can start.`,
+        task
       )
     }
 

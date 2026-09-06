@@ -36,6 +36,8 @@ export function writeWindowsProcessTreeSource(packageDir) {
     '{"include_dirs": ["deps/node-addon-api"], "defines": ["NAPI_CPP_EXCEPTIONS"], "VCCLCompilerTool": {"ExceptionHandling": 1}}'
   )
   writeFileSync(join(packageDir, 'src/process.cc'), 'GetProcessTimes(hProcess, &creationTime')
+  writeFileSync(join(packageDir, 'src/process_commandline.cc'), '// kProcessCommandLineInformation')
+  writeFileSync(join(packageDir, 'src/addon.cc'), '// "supportsCreationTime"')
   writeFileSync(join(packageDir, 'src/process.h'), 'CREATIONTIME = 4')
   writeFileSync(join(packageDir, 'src/process_worker.cc'), 'object.Set("creationTimeMs"')
   writeFileSync(

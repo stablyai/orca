@@ -16161,7 +16161,8 @@
           "search": "Search",
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
-          "activityOptions": "Activity options"
+          "activityOptions": "Activity options",
+          "threadListOptionsFiltered": "Thread list options, filters active"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16178,8 +16179,7 @@
           "dc708f3eff": "Close agents"
         },
         "ActivityScopeFilterControls": {
-          "clearHostFilter": "Show all hosts",
-          "clearProjectFilter": "Show all projects",
+          "resetScope": "Show all hosts and projects",
           "hiddenCount": "{{value0}} hidden"
         },
         "ActivityThreadHoverCard": {
@@ -16188,6 +16188,9 @@
           "workspace": "Workspace",
           "copyPath": "Copy path",
           "jumpToWorkspace": "Jump to workspace"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "Clear notification"
         }
       },
       "confirmation": {
@@ -16989,6 +16992,8 @@
       "backgroundTasks": {
         "monitoring": "Monitoring background tasks",
         "stop": "Stop",
+        "stopTask": "Stop {{value0}}",
+        "stopAll": "Stop background tasks",
         "agent": "Background agent",
         "workflow": "Background workflow",
         "command": "Background command",

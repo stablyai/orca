@@ -112,4 +112,52 @@ describe('provider frame classification catalog', () => {
     // An item type nobody has dispositioned still falls through visibly.
     expect(classifyProviderFrame('codex', 'item:futureThing', {})).toBe('timeline-substantive')
   })
+
+  it('chromes the one unmodelled codex item type that carries no content', () => {
+    expect(classifyProviderFrame('codex', 'item:sleep', { id: 's', durationMs: 20_000 })).toBe(
+      'status-chrome'
+    )
+    // Payload inspection still outranks the item catalog, so chroming a type
+    // cannot swallow one that reports a failure.
+    expect(classifyProviderFrame('codex', 'item:sleep', { id: 's', status: 'failed' })).toBe(
+      'error-surface'
+    )
+  })
+
+  it('keeps subagent items visible — the only evidence a spawned agent is working', () => {
+    expect(
+      classifyProviderFrame('codex', 'item:subAgentActivity', {
+        id: 'a-1',
+        kind: 'started',
+        agentThreadId: 'thread-child',
+        agentPath: '/root/list_directory'
+      })
+    ).toBe('timeline-substantive')
+    expect(
+      classifyProviderFrame('codex', 'item:collabAgentToolCall', {
+        id: 'c-1',
+        tool: 'spawn',
+        status: 'inProgress',
+        senderThreadId: 'thread-root',
+        receiverThreadIds: ['thread-child'],
+        agentsStates: {}
+      })
+    ).toBe('timeline-substantive')
+  })
+
+  it('leaves content-bearing codex item types on the visible fallback', () => {
+    // Each carries text or a path a user would want: review output, the image
+    // the agent looked at or generated, injected hook prompt text.
+    for (const type of [
+      'imageView',
+      'imageGeneration',
+      'enteredReviewMode',
+      'exitedReviewMode',
+      'hookPrompt'
+    ]) {
+      expect(classifyProviderFrame('codex', `item:${type}`, { id: 'i' }), type).toBe(
+        'timeline-substantive'
+      )
+    }
+  })
 })

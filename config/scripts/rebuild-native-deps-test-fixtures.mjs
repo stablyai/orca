@@ -1,11 +1,19 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   copyWindowsProcessTreeBuildScripts,
-  writeWindowsProcessTreeSource
+  writeWindowsProcessTreeSource,
+  writeWindowsProcessTreeBinary
 } from './windows-process-tree-build-fixtures.mjs'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
@@ -19,6 +27,68 @@ const sourceNodePtyJobOwnershipPath = fileURLToPath(
 const sourceWindowsProcessTreeGypRebuildPath = fileURLToPath(
   new URL('./windows-process-tree-gyp-rebuild.mjs', import.meta.url)
 )
+const sourceWindowsProcessTreePatchPath = fileURLToPath(
+  new URL('../patches/@vscode__windows-process-tree@0.8.0.patch', import.meta.url)
+)
+
+/**
+ * The command-line reader as it is *before* the patch, taken from the patch's
+ * own pre-image so no upstream copy has to be vendored.
+ *
+ * Written back as **CRLF**, which is what `@vscode/windows-process-tree@0.8.0`
+ * actually ships: all 67 pre-image lines of this file carried a CR before the
+ * patch was normalized to LF. Rebuilding it with the patch's current newline
+ * instead would make fixture and patch agree by construction, on any encoding —
+ * which is exactly how a repair that cannot apply to the real package passed
+ * this suite.
+ */
+function unpatchedWindowsProcessTreeCommandLineSource() {
+  const lines = readFileSync(sourceWindowsProcessTreePatchPath, 'utf8').split('\n')
+  const start = lines.findIndex((line) =>
+    line.startsWith('diff --git a/src/process_commandline.cc ')
+  )
+  const rest = lines.slice(start + 1)
+  const end = rest.findIndex((line) => line.startsWith('diff --git '))
+  const preImage = (end === -1 ? rest : rest.slice(0, end))
+    .filter((line) => line.startsWith(' ') || line.startsWith('-'))
+    .filter((line) => !line.startsWith('---'))
+    .map((line) => line.slice(1).replace(/\r$/, ''))
+    .join('\r\n')
+  // Splitting drops the file's own trailing newline as an empty element, and
+  // `git apply` needs the bytes exact.
+  return `${preImage}\r\n`
+}
+
+/**
+ * Pin `core.autocrlf` for a spawned repair, whatever the host is set to.
+ *
+ * The repair blinds git to the surrounding repo with `GIT_DIR`, so the value it
+ * sees comes from global/system config — on a Git for Windows box that is
+ * whichever line-ending option the installer wrote, and `false` (Git's built-in
+ * default, "checkout as-is") is the one the repair used to fail under. A global
+ * config in a temp HOME outranks the system file, so this is deterministic
+ * rather than whatever the developer happens to have.
+ */
+export function gitLineEndingEnv(autocrlf) {
+  const home = mkdtempSync(join(tmpdir(), `orca-git-home-${autocrlf}-`))
+  writeFileSync(join(home, '.gitconfig'), `[core]\n\tautocrlf = ${autocrlf}\n`)
+  return { HOME: home, USERPROFILE: home }
+}
+
+/** Production always runs the repair from inside a work tree; `git apply` behaves differently there. */
+export function initGitWorkTree(projectDir) {
+  for (const args of [['init'], ['config', 'user.email', 'a@b.c'], ['config', 'user.name', 't']]) {
+    spawnSync('git', args, { cwd: projectDir, encoding: 'utf8' })
+  }
+}
+
+export function writeWindowsProcessTreePatchFile(projectDir) {
+  mkdirSync(join(projectDir, 'config', 'patches'), { recursive: true })
+  copyFileSync(
+    sourceWindowsProcessTreePatchPath,
+    join(projectDir, 'config', 'patches', '@vscode__windows-process-tree@0.8.0.patch')
+  )
+}
 
 export function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-rebuild-native-deps-'))
@@ -149,7 +219,7 @@ if (${JSON.stringify(createExecutable)}) {
   )
 }
 
-export function writeFakeElectronRebuild(projectDir, { logPathEnv = null } = {}) {
+export function writeFakeElectronRebuild(projectDir, { logPathEnv = null, addon = 'clean' } = {}) {
   const rebuildDir = join(projectDir, 'node_modules', '@electron', 'rebuild')
   mkdirSync(rebuildDir, { recursive: true })
   writeFileSync(join(rebuildDir, 'package.json'), JSON.stringify({ type: 'module' }))
@@ -160,14 +230,15 @@ import { appendFileSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 export async function rebuild(options) {
-  if (options.buildPath !== process.cwd()) {
+  if (options.buildPath !== process.cwd() && ${JSON.stringify(addon)} !== 'none') {
     const binary = Buffer.alloc(128)
     binary.write('MZ')
     binary.writeUInt32LE(64, 0x3c)
     binary.write('PE\\0\\0', 64)
     binary.writeUInt16LE(options.arch === 'arm64' ? 0xaa64 : 0x8664, 68)
     mkdirSync(join(options.buildPath, 'build/Release'), { recursive: true })
-    writeFileSync(join(options.buildPath, 'build/Release/windows_process_tree.node'), binary)
+    writeFileSync(join(options.buildPath, 'build/Release/windows_process_tree.node'), ${JSON.stringify(addon)} === 'unpatched' ? Buffer.concat([binary, Buffer.from('ReadProcessMemory')]) : binary)
+    if (!readFileSync(join(options.buildPath, 'src/process_commandline.cc'), 'utf8').includes('kProcessCommandLineInformation')) throw new Error('command-line source not patched in stage')
     if (readFileSync(join(options.buildPath, 'deps/node-addon-api/napi.h'), 'utf8') !== '// napi.h\\n') throw new Error('headers not staged')
   }
   const logPath = process.env[${JSON.stringify(logPathEnv)}]
@@ -284,11 +355,31 @@ export function writeFakeWindowsRegistry(projectDir) {
 }
 
 export function writeFakeWindowsProcessTree(projectDir) {
-  writeWindowsProcessTreeSource(join(projectDir, 'node_modules/@vscode/windows-process-tree'))
+  const packageDir = join(projectDir, 'node_modules/@vscode/windows-process-tree')
+  writeWindowsProcessTreeSource(packageDir)
+  writeWindowsProcessTreeBinary(packageDir, process.arch)
 }
 
-export function writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir) {
-  writeFakeWindowsProcessTree(projectDir)
+export function writeFakeWindowsProcessTreeWithNodeAddonApi(
+  projectDir,
+  { commandLinePatchApplied = true } = {}
+) {
+  const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
+  writeWindowsProcessTreeSource(processTreeDir)
+  const nodeAddonApiDir = join(processTreeDir, 'node_modules', 'node-addon-api')
+  mkdirSync(nodeAddonApiDir, { recursive: true })
+
+  mkdirSync(join(processTreeDir, 'src'), { recursive: true })
+  writeFileSync(
+    join(processTreeDir, 'src', 'process_commandline.cc'),
+    commandLinePatchApplied
+      ? '// kProcessCommandLineInformation = 60\n'
+      : unpatchedWindowsProcessTreeCommandLineSource()
+  )
+  writeFileSync(join(nodeAddonApiDir, 'package.json'), '{"name":"node-addon-api"}\n')
+  writeFileSync(join(nodeAddonApiDir, 'napi.h'), '// napi.h\n')
+  writeFileSync(join(nodeAddonApiDir, 'napi-inl.h'), '// napi-inl.h\n')
+  writeFileSync(join(nodeAddonApiDir, 'napi-inl.deprecated.h'), '// napi-inl.deprecated.h\n')
 }
 
 export function writeNodePtyPatchFile(projectDir) {

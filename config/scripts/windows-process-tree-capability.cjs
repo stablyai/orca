@@ -45,7 +45,17 @@ module.exports = { assertWindowsProcessTreeIdentity }
 
 if (require.main === module) {
   Promise.resolve()
-    .then(() => assertWindowsProcessTreeIdentity(require(resolve(process.argv[2]))))
+    .then(() => {
+      const processTree = require(resolve(process.argv[2]))
+      return assertWindowsProcessTreeIdentity(
+        process.argv.includes('--addon')
+          ? {
+              ProcessDataFlag: processTree.supportsCreationTime === true ? { CreationTime: 4 } : {},
+              getProcessList: (_pid, callback, flags) => processTree.getProcessList(callback, flags)
+            }
+          : processTree
+      )
+    })
     .then(
       (creationTimeMs) => {
         console.log(

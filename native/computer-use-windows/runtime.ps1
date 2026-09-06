@@ -1,9 +1,15 @@
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$OperationPath
+    [Parameter(Position = 0)]
+    [string]$OperationPath,
+    # Serve mode keeps one process alive so the Add-Type P/Invoke assembly below
+    # is emitted once per session instead of once per operation.
+    [switch]$Serve
 )
 
 $ErrorActionPreference = "Stop"
+# Progress records render to the host, which in serve mode is a pipe carrying
+# one JSON response per line; a stray record would desynchronise the stream.
+$ProgressPreference = "SilentlyContinue"
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 [Console]::InputEncoding = $utf8NoBom
 [Console]::OutputEncoding = $utf8NoBom
@@ -1313,9 +1319,56 @@ function Invoke-OrcaOperation($Operation) {
     [pscustomobject]@{ ok = $true; action = $action; snapshot = $snapshot }
 }
 
-try {
-    $operation = Read-OrcaOperation $OperationPath
-    Write-OrcaJson (Invoke-OrcaOperation $operation)
-} catch {
-    Write-OrcaJson ([pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message })
+function Invoke-OrcaServeLoop {
+    # Announced before the first read, and after every Add-Type above: a caller
+    # that never sees this line knows the helper cannot have read a request, let
+    # alone synthesized a click, so replaying it is provably safe. Inferring that
+    # from a missing response instead would replay operations that did run.
+    [Console]::Out.WriteLine('{"ready":true}')
+    [Console]::Out.Flush()
+    # One NDJSON request per line in, one response per line out, until stdin closes.
+    # Responses carry base64 screenshots and routinely exceed a megabyte; ReadLine
+    # and the console writer are both length-bounded only by memory.
+    while ($true) {
+        $line = [Console]::In.ReadLine()
+        if ($null -eq $line) { break }
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        $requestId = $null
+        try {
+            $operation = $line | ConvertFrom-Json
+            $requestId = $operation.requestId
+            $response = Invoke-OrcaOperation $operation
+        } catch {
+            $response = [pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message }
+            # ConvertFrom-Json throws before the id is read, so recover it from the
+            # raw line. An error the caller can match is delivered to the request
+            # that caused it; an unmatched one only trips the caller's desync
+            # guard, which kills this helper, charges a failure toward its cooldown
+            # and discards the message below - so a malformed request would be
+            # reported as a broken stream and its real cause never surface.
+            if ($null -eq $requestId -and $line -match '"requestId"\s*:\s*(\d+)') {
+                $requestId = [long]$Matches[1]
+            }
+        }
+        # Echoed so the caller can prove which request a line answers; a reply it
+        # cannot match is a desynchronised stream, not a usable response.
+        if ($null -ne $requestId) {
+            $response | Add-Member -NotePropertyName requestId -NotePropertyValue $requestId -Force
+        }
+        [Console]::Out.WriteLine((ConvertTo-Json $response -Depth 100 -Compress))
+        [Console]::Out.Flush()
+    }
+}
+
+if ($Serve) {
+    Invoke-OrcaServeLoop
+} elseif ([string]::IsNullOrWhiteSpace($OperationPath)) {
+    Write-OrcaJson ([pscustomobject]@{ ok = $false; error = "runtime.ps1 requires an operation path or -Serve" })
+} else {
+    try {
+        $operation = Read-OrcaOperation $OperationPath
+        Write-OrcaJson (Invoke-OrcaOperation $operation)
+    } catch {
+        Write-OrcaJson ([pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message })
+    }
 }
