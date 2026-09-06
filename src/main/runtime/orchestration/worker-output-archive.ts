@@ -1,24 +1,21 @@
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
+import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
+import type {
+  WorkerTerminalArchiveRow,
+  WorkerTerminalArchiveStatus
+} from './worker-terminal-ownership'
 import {
   MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT,
   redactWorkerTerminalLines
 } from './worker-transcript-payload'
 import { readWorkerTranscript } from './worker-transcript-read'
+import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
+import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
 
 // Bound the durable copy of raw terminal output; the tail end is the evidence that matters.
 const TERMINAL_ARCHIVE_MAX_CHARS = 262_144
-
-export type WorkerTranscriptPinArchive = {
-  agent: AgentType
-  providerSessionKey: string
-  providerSessionId: string
-  transcriptPath: string | null
-  processIncarnation: string
-  observedAfter: number
-  endOffset?: number
-}
 
 export type WorkerTranscriptSnapshotArchive = {
   version: 2
@@ -26,6 +23,7 @@ export type WorkerTranscriptSnapshotArchive = {
   processIncarnation: string
   messages: NativeChatMessage[]
   limited: boolean
+  clipping?: string[]
   warnings: string[]
 }
 
@@ -35,6 +33,9 @@ export type WorkerTerminalTailArchive = {
   truncated: boolean
   terminalStatus: string
   warnings: string[]
+  /** Transcript-first attempt provenance preserved across release handoff. */
+  fallbackReason?: OrchestrationWorkerReadFallbackReason
+  clipping?: string[]
 }
 
 export type WorkerOutputArchiveCapture =
@@ -44,6 +45,22 @@ export type WorkerOutputArchiveCapture =
       status: 'captured'
     }
   | { kind: 'terminal_tail'; content: WorkerTerminalTailArchive; status: 'captured' | 'empty' }
+
+export function summarizeWorkerOutputArchive(archive: WorkerTerminalArchiveRow): {
+  source: 'transcript' | 'terminal'
+  status: Extract<WorkerTerminalArchiveStatus, 'captured' | 'empty'>
+} {
+  if (archive.kind === 'transcript_pin') {
+    return { source: 'transcript', status: 'captured' }
+  }
+  const content = JSON.parse(archive.content) as WorkerTerminalTailArchive
+  const empty =
+    content.lines.every((line) => line.trim() === '') && (content.draft?.trim() ?? '') === ''
+  return {
+    source: 'terminal',
+    status: empty ? 'empty' : 'captured'
+  }
+}
 
 // Freezes an inspectable output source before the live PTY is closed. Prefers the exact
 // hook-reported provider transcript; falls back to bounded redacted terminal output. Throws
@@ -55,25 +72,45 @@ export async function captureWorkerOutputArchive(args: {
   attachedAtMs: number
 }): Promise<WorkerOutputArchiveCapture> {
   const session = args.runtime.getExactWorkerProviderSession(args.terminalHandle, args.attachedAtMs)
+  let transcriptFallbackReason: OrchestrationWorkerReadFallbackReason = 'session_not_reported'
   if (session) {
-    const snapshot = await readWorkerTranscript({
-      agent: session.agent,
-      sessionId: session.providerSession.id,
-      transcriptPath: session.providerSession.transcriptPath,
-      limit: MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT
-    }).catch(() => null)
-    if (snapshot?.ok && snapshot.messages.length > 0) {
-      return {
-        kind: 'transcript_pin',
-        status: 'captured',
-        content: {
-          version: 2,
-          agent: session.agent,
-          processIncarnation: session.processIncarnation,
-          messages: snapshot.messages,
-          limited: snapshot.limited,
-          warnings: snapshot.warnings
+    transcriptFallbackReason = 'transcript_unreadable'
+    const isWslSession = isWslHookRelayConnectionId(session.connectionId)
+    const remoteConnectionId = session.connectionId && !isWslSession ? session.connectionId : null
+    const remoteFilesystemProvider = remoteConnectionId
+      ? getSshFilesystemProvider(remoteConnectionId)
+      : undefined
+    if ((isWslSession && !session.wslDistro) || (remoteConnectionId && !remoteFilesystemProvider)) {
+      transcriptFallbackReason = 'remote_capability_unavailable'
+    } else {
+      const snapshot = await readWorkerTranscript({
+        agent: session.agent,
+        sessionId: session.providerSession.id,
+        transcriptPath: session.providerSession.transcriptPath,
+        wslDistro: session.wslDistro,
+        limit: MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT,
+        filesystemProvider: remoteFilesystemProvider
+      }).catch(() => null)
+      if (snapshot?.ok && snapshot.messages.length > 0) {
+        return {
+          kind: 'transcript_pin',
+          status: 'captured',
+          content: {
+            version: 2,
+            agent: session.agent,
+            processIncarnation: session.processIncarnation,
+            messages: snapshot.messages,
+            limited: snapshot.limited,
+            clipping: snapshot.clipping,
+            warnings: snapshot.warnings
+          }
         }
+      }
+      if (snapshot?.ok) {
+        transcriptFallbackReason = snapshot.limited ? 'transcript_unreadable' : 'transcript_empty'
+      } else if (snapshot) {
+        transcriptFallbackReason =
+          snapshot.reason === 'source_changed' ? 'transcript_unreadable' : snapshot.reason
       }
     }
   }
@@ -109,7 +146,12 @@ export async function captureWorkerOutputArchive(args: {
             ...redacted.warnings,
             'The live terminal buffer was empty at release; structured transcript output was unavailable.'
           ]
-        : redacted.warnings
+        : redacted.warnings,
+      fallbackReason: transcriptFallbackReason,
+      clipping: [
+        'terminal_fallback',
+        ...(bounded.truncated || terminal.truncated ? ['terminal_buffer'] : [])
+      ]
     }
   }
 }

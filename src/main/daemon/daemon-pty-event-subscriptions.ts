@@ -61,7 +61,12 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
   protected emitWriteUnavailable(id: string): void {
     // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
     for (const listener of [...this.writeUnavailableListeners]) {
-      listener({ id })
+      try {
+        listener({ id })
+      } catch (error) {
+        // Renderer notification failure must not cancel recovery or erase write evidence.
+        console.warn('[daemon] Write unavailable listener failed:', error)
+      }
     }
   }
 

@@ -133,10 +133,13 @@ export type GitHubProjectFieldValue =
       title: string
       startDate: string
       duration: number
+      /** Owning field's display name. Optional for wire compat — older hosts
+       *  don't send it; used when the field is hidden from the view config. */
+      fieldName?: string
     }
   | { kind: 'text'; fieldId: string; text: string }
   | { kind: 'number'; fieldId: string; number: number }
-  | { kind: 'date'; fieldId: string; date: string }
+  | { kind: 'date'; fieldId: string; date: string; fieldName?: string }
   | { kind: 'labels'; fieldId: string; labels: GitHubProjectLabel[] }
   | { kind: 'users'; fieldId: string; users: GitHubProjectUser[] }
 

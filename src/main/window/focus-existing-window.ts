@@ -1,5 +1,9 @@
 import type { App, BrowserWindow } from 'electron'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 
 type FocusTimer = (callback: () => void, ms: number) => unknown
 
@@ -34,7 +38,7 @@ function safelyFocusApp(app: Pick<App, 'focus'>): void {
 }
 
 export function safelyRevealWindow(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
+  if (window.isDestroyed() || isWindowlessLaunch()) {
     return
   }
   if (window.isMinimized()) {

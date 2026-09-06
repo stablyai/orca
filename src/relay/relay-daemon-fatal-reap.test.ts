@@ -79,6 +79,7 @@ vi.mock('./relay-reconnect-listener', () => ({
     readonly hasAcceptedClient = false
     readonly acceptedConnections = 0
     async start(): Promise<void> {}
+    setEndpointCredential(): void {}
   }
 }))
 
@@ -159,16 +160,13 @@ describe('relay daemon fatal PTY reap', () => {
     }))
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 
-    await runRelayDaemon(
-      {
-        graceTimeMs: 0,
-        connectMode: false,
-        detached: false,
-        cliMode: false,
-        sockPath: 'relay-test-socket'
-      },
-      undefined
-    )
+    await runRelayDaemon({
+      graceTimeMs: 0,
+      connectMode: false,
+      detached: false,
+      cliMode: false,
+      sockPath: 'relay-test-socket'
+    })
     const dispatcher = daemonMocks.dispatcher as ReturnType<typeof createMockDispatcher>
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.spawn', {})
@@ -198,16 +196,13 @@ describe('relay daemon fatal PTY reap', () => {
       .mockReturnValueOnce(createMockPty(11, 101, firstKill))
       .mockReturnValueOnce(createMockPty(22, 202, secondKill))
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
-    await runRelayDaemon(
-      {
-        graceTimeMs: 0,
-        connectMode: false,
-        detached: false,
-        cliMode: false,
-        sockPath: 'relay-test-socket'
-      },
-      undefined
-    )
+    await runRelayDaemon({
+      graceTimeMs: 0,
+      connectMode: false,
+      detached: false,
+      cliMode: false,
+      sockPath: 'relay-test-socket'
+    })
     const dispatcher = daemonMocks.dispatcher as ReturnType<typeof createMockDispatcher>
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.spawn', {})

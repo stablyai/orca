@@ -1,4 +1,5 @@
 import { expect, vi } from 'vitest'
+import type { DesktopScriptRuntimeHost } from './desktop-script-runtime-host'
 
 const { execFileMock, operationFiles, mkdtempMock, rmMock, writeFileMock } = vi.hoisted(() => {
   const files = new Map<string, string>()
@@ -23,12 +24,14 @@ vi.mock('fs/promises', () => ({
   writeFile: writeFileMock
 }))
 
+/** Builds a client on the one-shot bridge; pass a host to exercise serve mode. */
 export async function createDesktopScriptProviderClient(
   platform: 'linux' | 'windows',
-  executablePath: string
+  executablePath: string,
+  runtimeHost: DesktopScriptRuntimeHost | null = null
 ) {
   const { DesktopScriptProviderClient } = await import('./desktop-script-provider-client')
-  return new DesktopScriptProviderClient(platform, executablePath)
+  return new DesktopScriptProviderClient(platform, executablePath, runtimeHost)
 }
 
 export function resetDesktopScriptProviderTestHarness(): void {
@@ -75,6 +78,19 @@ export function mockBridgeResponse(
     done(null, JSON.stringify(response), '')
     return null as never
   })
+}
+
+export function mockBridgeProcessFailure(streams: string | { stdout?: string; stderr?: string }) {
+  const { stdout = '', stderr = '' } = typeof streams === 'string' ? { stderr: streams } : streams
+  execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+    const done = callback as (error: Error | null, stdout: string, stderr: string) => void
+    done(new Error('Command failed'), stdout, stderr)
+    return null as never
+  })
+}
+
+export function bridgeProcessArgs(call: number): string[] {
+  return (execFileMock.mock.calls[call]?.[1] ?? []) as string[]
 }
 
 export function sampleBridgeSnapshot(name: string, value: string) {

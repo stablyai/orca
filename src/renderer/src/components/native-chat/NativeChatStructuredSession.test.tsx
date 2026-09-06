@@ -29,8 +29,9 @@ const mocks = vi.hoisted(() => ({
   pasteFromClipboard: vi.fn(),
   submissions: [] as unknown[],
   monitoringBackgroundTasks: false,
+  supportsBackgroundTaskStop: false,
   backgroundTasks: [] as AgentSessionBackgroundTask[],
-  stopBackgroundTasks: vi.fn()
+  stopBackgroundTask: vi.fn()
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -75,10 +76,11 @@ vi.mock('./use-structured-agent-session', async () => {
         retry: outbox.retry,
         isWorking: false,
         isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
+        supportsBackgroundTaskStop: mocks.supportsBackgroundTaskStop,
         backgroundTasks: mocks.backgroundTasks,
         turnId: null,
         cancel: vi.fn(),
-        stopBackgroundTasks: mocks.stopBackgroundTasks,
+        stopBackgroundTask: (taskId?: string) => mocks.stopBackgroundTask(props.sessionId, taskId),
         respond: mocks.respond,
         optionSnapshot: [
           {
@@ -166,7 +168,8 @@ describe('NativeChatStructuredSession', () => {
     mocks.pasteFromClipboard.mockReset()
     mocks.submissions = []
     mocks.monitoringBackgroundTasks = false
-    mocks.stopBackgroundTasks.mockReset()
+    mocks.supportsBackgroundTaskStop = false
+    mocks.stopBackgroundTask.mockReset()
     mocks.backgroundTasks = []
   })
 
@@ -225,11 +228,12 @@ describe('NativeChatStructuredSession', () => {
 
   it('places background monitoring above the usable composer and stops without an active turn', async () => {
     mocks.monitoringBackgroundTasks = true
+    mocks.supportsBackgroundTaskStop = true
     mocks.backgroundTasks = [
       { id: 'task-command', kind: 'command', description: 'sleep 180' },
       { id: 'task-agent', kind: 'agent' }
     ]
-    mocks.stopBackgroundTasks.mockResolvedValue({ cancelled: true })
+    mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
 
     render(
       <NativeChatStructuredSession
@@ -251,6 +255,7 @@ describe('NativeChatStructuredSession', () => {
     expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(mocks.composerProps?.isWorking).toBe(false)
     expect(screen.queryByRole('list', { name: 'Running background tasks' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Stop / })).toBeNull()
 
     const disclosure = screen.getByRole('button', { name: 'Monitoring background tasks' })
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
@@ -260,8 +265,130 @@ describe('NativeChatStructuredSession', () => {
     expect(screen.getByText('sleep 180')).toBeTruthy()
     expect(screen.getByText('Background agent')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
-    await waitFor(() => expect(mocks.stopBackgroundTasks).toHaveBeenCalledOnce())
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sleep 180' }))
+    await waitFor(() =>
+      expect(mocks.stopBackgroundTask).toHaveBeenCalledWith('session-background', 'task-command')
+    )
+  })
+
+  it('tracks concurrent task stops independently and clears each pending result', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.supportsBackgroundTaskStop = true
+    mocks.backgroundTasks = [
+      { id: 'task-one', kind: 'command', description: 'First task' },
+      { id: 'task-two', kind: 'command', description: 'Second task' }
+    ]
+    let finishFirst!: (value: unknown) => void
+    let finishSecond!: (value: unknown) => void
+    mocks.stopBackgroundTask.mockImplementation(
+      (_sessionId: string, taskId: string) =>
+        new Promise((resolve) => {
+          if (taskId === 'task-one') {
+            finishFirst = resolve
+          } else {
+            finishSecond = resolve
+          }
+        })
+    )
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-concurrent-background"
+        sessionId="session-concurrent-background"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    const firstStop = screen.getByRole('button', { name: 'Stop First task' })
+    const secondStop = screen.getByRole('button', { name: 'Stop Second task' })
+
+    fireEvent.click(firstStop)
+    fireEvent.click(secondStop)
+    expect((firstStop as HTMLButtonElement).disabled).toBe(true)
+    expect((secondStop as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => finishFirst({ cancelled: true }))
+    await waitFor(() => expect((firstStop as HTMLButtonElement).disabled).toBe(false))
+    expect((secondStop as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => finishSecond(null))
+    await waitFor(() => expect((secondStop as HTMLButtonElement).disabled).toBe(false))
+  })
+
+  it('keeps a stale session stop result from clearing the current session pending state', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.supportsBackgroundTaskStop = true
+    mocks.backgroundTasks = [{ id: 'task-one', kind: 'command', description: 'Shared task' }]
+    let finishOld!: (value: unknown) => void
+    let finishCurrent!: (value: unknown) => void
+    mocks.stopBackgroundTask.mockImplementation(
+      (sessionId: string) =>
+        new Promise((resolve) => {
+          if (sessionId === 'session-old') {
+            finishOld = resolve
+          } else {
+            finishCurrent = resolve
+          }
+        })
+    )
+    const { rerender } = render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-stale-background"
+        sessionId="session-old"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Shared task' }))
+
+    rerender(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-stale-background"
+        sessionId="session-current"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    const currentStop = screen.getByRole('button', { name: 'Stop Shared task' })
+    expect((currentStop as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(currentStop)
+    expect((currentStop as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => finishOld({ cancelled: true }))
+    expect((currentStop as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => finishCurrent({ cancelled: true }))
+    await waitFor(() => expect((currentStop as HTMLButtonElement).disabled).toBe(false))
+  })
+
+  it('keeps the expanded all-task stop fallback for a taskless older host', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-taskless-background"
+        sessionId="session-taskless-background"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Stop background tasks' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    expect(screen.getByText('Task details are unavailable for this session.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop background tasks' }))
+
+    await waitFor(() =>
+      expect(mocks.stopBackgroundTask).toHaveBeenCalledWith(
+        'session-taskless-background',
+        undefined
+      )
+    )
   })
 
   it('routes a bare model command to the native option picker', async () => {

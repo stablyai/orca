@@ -46,6 +46,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     adoptStablePane,
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
     write: (ptyId, data) => writePtyFromRuntimeController(deps, ptyId, data),
+    writeWithSettlement: (ptyId, data) =>
+      writePtyFromRuntimeController(deps, ptyId, data, { waitForSettlement: true }),
     writeAgentSessionProof: (ptyId, data, authority) =>
       writePtyAgentSessionProofFromRuntimeController(ptyId, data, authority),
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),

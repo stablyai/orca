@@ -120,4 +120,32 @@ describe('message batch atomicity', () => {
         .all()
     ).toEqual([{ id: 'outer' }])
   })
+
+  it('preserves an outer transaction when a worker_done commit rolls back', () => {
+    db = new OrchestrationDb(':memory:')
+    const sqlite = (db as unknown as { db: Database.Database }).db
+    sqlite.exec(`
+      BEGIN IMMEDIATE;
+      INSERT INTO messages (id, from_handle, to_handle, subject)
+      VALUES ('outer', 'sender', 'recipient', 'outer change');
+    `)
+
+    expect(() =>
+      db?.commitWorkerDoneMessageMutation(() => {
+        db?.insertMessage({
+          id: 'inner',
+          from: 'worker',
+          to: 'coordinator',
+          subject: 'Done',
+          type: 'worker_done'
+        })
+        throw new Error('injected failure')
+      })
+    ).toThrow('injected failure')
+    sqlite.exec('COMMIT')
+
+    expect(sqlite.prepare("SELECT id FROM messages WHERE id IN ('outer', 'inner')").all()).toEqual([
+      { id: 'outer' }
+    ])
+  })
 })

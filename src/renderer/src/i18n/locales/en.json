@@ -963,7 +963,9 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "The structured agent session is not available yet. Retry in a moment."
+        "unavailable": "The structured agent session is not available yet. Retry in a moment.",
+        "gone": "This chat is no longer on this host, so it cannot be reopened here.",
+        "hostCannotOpen": "This chat can't be reopened until Orca is updated."
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
@@ -2559,6 +2561,30 @@
                 "7c302f8174": "Untitled"
               }
             }
+          },
+          "ProjectRoadmap": {
+            "be52f7b6db": "This roadmap view has no date or iteration field to place items on, so Orca is listing them instead.",
+            "6405e036e0": "Month",
+            "f2b1cabef7": "Quarter",
+            "b6afc6fe45": "Year",
+            "343888b143": "Placed by {{value0}}",
+            "6a088a5da1": "{{value0}} without dates",
+            "86eebd6020": "Today",
+            "0bb1c1bc07": "Timeline zoom",
+            "e304235879": "Item",
+            "e077c79083": "No dates"
+          },
+          "ProjectRoadmapBar": {
+            "cd68ccc17a": "{{value0}} — {{value1}}",
+            "7d1220d979": "Restricted item"
+          },
+          "ProjectPickerPanels": {
+            "04ec212ccb": "Roadmap",
+            "9fe1ac868c": "Unsupported"
+          },
+          "ProjectViewStates": {
+            "ac83c45672": "Switch to a Table or Roadmap view to work with this project in Orca.",
+            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet."
           }
         },
         "GitHubMarkdownComposer": {
@@ -16161,7 +16187,8 @@
           "search": "Search",
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
-          "activityOptions": "Activity options"
+          "activityOptions": "Activity options",
+          "threadListOptionsFiltered": "Thread list options, filters active"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16178,8 +16205,7 @@
           "dc708f3eff": "Close agents"
         },
         "ActivityScopeFilterControls": {
-          "clearHostFilter": "Show all hosts",
-          "clearProjectFilter": "Show all projects",
+          "resetScope": "Show all hosts and projects",
           "hiddenCount": "{{value0}} hidden"
         },
         "ActivityThreadHoverCard": {
@@ -16188,6 +16214,9 @@
           "workspace": "Workspace",
           "copyPath": "Copy path",
           "jumpToWorkspace": "Jump to workspace"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "Clear notification"
         }
       },
       "confirmation": {
@@ -16989,6 +17018,8 @@
       "backgroundTasks": {
         "monitoring": "Monitoring background tasks",
         "stop": "Stop",
+        "stopTask": "Stop {{value0}}",
+        "stopAll": "Stop background tasks",
         "agent": "Background agent",
         "workflow": "Background workflow",
         "command": "Background command",

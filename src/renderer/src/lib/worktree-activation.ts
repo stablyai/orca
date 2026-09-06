@@ -30,7 +30,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queue'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
+import {
+  ensureWorktreeHasInitialTerminal,
+  reseedGatedEmptyWorkspace
+} from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 
@@ -79,6 +82,7 @@ export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
+    revealInSidebar?: boolean
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
@@ -146,12 +150,8 @@ export function activateAndRevealFolderWorkspace(
   }
   if (shouldGateAgentActivation) {
     void gateWorktreeAgentActivation(workspaceKey).then((outcome) => {
-      if (
-        outcome === 'empty' &&
-        opts?.providesInitialSurface !== true &&
-        useAppStore.getState().activeWorktreeId === workspaceKey
-      ) {
-        ensureFolderWorkspaceInitialTerminal(folderWorkspace)
+      if (outcome === 'empty') {
+        reseedGatedEmptyWorkspace(workspaceKey, opts?.providesInitialSurface)
       }
     })
   }
@@ -163,10 +163,11 @@ export function activateAndRevealFolderWorkspace(
         opts?.providesInitialSurface
       )
 
-  if (opts?.sidebarRevealBehavior) {
-    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
-  } else {
-    state.revealWorktreeInSidebar(workspaceKey)
+  if (opts?.revealInSidebar !== false) {
+    state.revealWorktreeInSidebar(
+      workspaceKey,
+      opts?.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : undefined
+    )
   }
 
   return { primaryTabId }
@@ -264,13 +265,8 @@ export function activateAndRevealWorktree(
   }
   if (shouldGateAgentActivation) {
     void gateWorktreeAgentActivation(worktreeId).then((outcome) => {
-      const currentState = useAppStore.getState()
-      if (
-        outcome === 'empty' &&
-        opts?.providesInitialSurface !== true &&
-        currentState.activeWorktreeId === worktreeId
-      ) {
-        ensureWorktreeHasInitialTerminal(currentState, worktreeId)
+      if (outcome === 'empty') {
+        reseedGatedEmptyWorkspace(worktreeId, opts?.providesInitialSurface)
       }
     })
   }
@@ -346,8 +342,8 @@ export function activateAndRevealWorkspace(
   opts?: {
     executionHostId?: ExecutionHostId
     providesInitialSurface?: boolean
-    /** Worktree-only: folder workspaces are never filter-hidden, so these are dropped there. */
     revealInSidebar?: boolean
+    /** Worktree-only: folder workspaces are never filter-hidden. */
     clearSidebarFilters?: boolean
   }
 ): ActivateAndRevealResult | false {
@@ -355,8 +351,7 @@ export function activateAndRevealWorkspace(
   if (workspaceScope?.type !== 'folder') {
     return activateAndRevealWorktree(workspaceId, opts)
   }
-  const { revealInSidebar: _reveal, clearSidebarFilters: _clear, ...folderOpts } = opts ?? {}
-  return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, folderOpts)
+  return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
 }
 
 // Why: break the import cycle — nav-history slice (under @/store) can't import activation directly, so register the activator here.
