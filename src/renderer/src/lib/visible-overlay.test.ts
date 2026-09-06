@@ -30,6 +30,16 @@ describe('hasVisibleOverlay', () => {
     expect(hasVisibleOverlay()).toBe(false)
   })
 
+  it('ignores the persistent workspace list while preserving its nested popups', () => {
+    mount('<div role="listbox" data-worktree-sidebar></div>')
+
+    expect(hasVisibleOverlay()).toBe(false)
+
+    document.querySelector('[data-worktree-sidebar]')!.innerHTML = '<div role="menu"></div>'
+
+    expect(hasVisibleOverlay()).toBe(true)
+  })
+
   it('ignores a display:none overlay', () => {
     mount('<div role="dialog" style="display: none"></div>')
 
