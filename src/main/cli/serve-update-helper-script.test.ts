@@ -51,6 +51,58 @@ describe('serve update helper script', () => {
     expect(noOpCheck).toBeLessThan(script.indexOf('{phase: "accepted"'))
   })
 
+  it('compares versions semver-aware so a stable beats its own prereleases', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('semver_higher "$CURRENT_VERSION" "$TARGET_VERSION"')
+    // The prerelease ranking rules the helper depends on, spelled out:
+    expect(script).toContain('cpre="${cur#*-}"')
+    expect(script).toContain('tpre="${tgt#*-}"')
+    expect(script).toContain('sort -V | tail -n 1')
+  })
+
+  it('runs the semver downgrade gate as a real shell function', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    // Pin the decision table by extracting and executing the generated function.
+    const fnStart = script.indexOf('semver_higher() {')
+    const fnEnd = script.indexOf('\n}', fnStart) + 2
+    const fn = script.slice(fnStart, fnEnd)
+    const fs = require('node:fs')
+    const path = require('node:path')
+    const os = require('node:os')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'semver-gate-'))
+    const file = path.join(dir, 'semver.bash')
+    fs.writeFileSync(file, fn)
+    const cases: [string, string, 'ALLOW' | 'REJECT'][] = [
+      ['1.2.3', '1.2.3-beta.1', 'REJECT'],
+      ['1.2.3', '1.2.4', 'ALLOW'],
+      ['1.2.4', '1.2.3', 'REJECT'],
+      ['1.2.3', '1.2.4-beta.1', 'ALLOW'],
+      ['1.2.3-beta.1', '1.2.3', 'ALLOW'],
+      ['1.2.3-beta.1', '1.2.3-beta.2', 'ALLOW'],
+      ['1.2.3-beta.2', '1.2.3-beta.1', 'REJECT'],
+      ['1.2.3-rc.1', '1.2.3-rc.2', 'ALLOW'],
+      ['1.2.3-beta.1', '1.2.3-rc.1', 'ALLOW'],
+      ['2.0.0', '1.9.9', 'REJECT'],
+      ['1.10.0', '1.9.9', 'REJECT']
+    ]
+    const { execFileSync } = require('node:child_process')
+    try {
+      for (const [cur, tgt, expected] of cases) {
+        const higher = execFileSync(
+          'bash',
+          ['-c', `source '${file}' && semver_higher '${cur}' '${tgt}'`],
+          {
+            encoding: 'utf8'
+          }
+        ).trim()
+        const verdict = higher === tgt ? 'ALLOW' : 'REJECT'
+        expect(`${cur}->${tgt}:${verdict}`).toBe(`${cur}->${tgt}:${expected}`)
+      }
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('snapshots the current binary and rolls back on every post-acceptance failure', () => {
     const script = buildServeUpdateHelperScript(INPUT)
     const backup = script.indexOf('APPIMAGE_TARGET.update-backup')

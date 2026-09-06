@@ -12,7 +12,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { lock } from 'proper-lockfile'
 import { afterEach, describe, expect, it } from 'vitest'
 import { forceTerminateProcessTree } from '../../../src/shared/child-process/process-tree-termination'
@@ -143,7 +143,7 @@ async function compiledHarnessModuleUrl(): Promise<string> {
   mkdirSync(compileDir, { recursive: true })
   const harnessPath = join(compileDir, 'release-checkout-compiled.mjs')
   writeFileSync(harnessPath, result.outputFiles[0]!.text)
-  compiledHarnessUrl = new URL(`file://${harnessPath}`).href
+  compiledHarnessUrl = pathToFileURL(harnessPath).href
   return compiledHarnessUrl
 }
 
