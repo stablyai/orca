@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type { NativeChatComposerFollowUp } from './use-native-chat-composer-omp-rpc-send'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
@@ -25,6 +26,7 @@ export type NativeChatComposerActionsProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  followUp?: NativeChatComposerFollowUp | null
 }
 
 export function NativeChatComposerActions({
@@ -42,7 +44,8 @@ export function NativeChatComposerActions({
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  sessionOptionsPickerRequest,
+  followUp = null
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
     // A double-click commonly lands after the first send has started and the button has
@@ -134,6 +137,17 @@ export function NativeChatComposerActions({
             {dictationLabel}
           </TooltipContent>
         </Tooltip>
+        {followUp ? (
+          <Button
+            type="button"
+            variant={followUp.active ? 'secondary' : 'ghost'}
+            size="sm"
+            aria-pressed={followUp.active}
+            onClick={followUp.onToggle}
+          >
+            {translate('components.native-chat.composer.followUp', 'Follow up')}
+          </Button>
+        ) : null}
         <Button
           type="button"
           data-native-chat-critical-action={isWorking ? 'stop' : undefined}

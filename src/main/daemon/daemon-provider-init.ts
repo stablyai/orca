@@ -128,12 +128,10 @@ export async function initDaemonPtyProvider(
             probeCurrentDaemonSpawn: async () =>
               (await checkDaemonHealth(info.socketPath, info.tokenPath)) === 'healthy'
           })
-        : legacyAdapters.length > 0
-          ? new DaemonPtyRouter({
-              current: newAdapter,
-              legacy: legacyAdapters
-            })
-          : newAdapter
+        : new DaemonPtyRouter({
+            current: newAdapter,
+            legacy: legacyAdapters
+          })
     if (routedAdapter instanceof DegradedDaemonPtyProvider) {
       // Why: preserved daemon can't create fresh terminals; discover its live session ids so only they route to it (fresh panes fall back locally).
       await routedAdapter.discoverDaemonSessions()

@@ -6,6 +6,7 @@ import type { RpcContext } from '../core'
 // one oversized tool-result block; the test then asserts clip behavior per client.
 const OVERSIZED = 'x'.repeat(5000)
 const cachedResult = vi.hoisted(() => ({
+  preserveTailWindow: false,
   value: {
     messages: [] as NativeChatMessage[],
     // Optional so truncation-gating fixtures can omit it; lifecycle tests set it explicitly.
@@ -68,7 +69,7 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
     tailRead.signal = signal
     const messages = cachedResult.value.messages
     return Promise.resolve({
-      messages: messages.slice(-limit),
+      messages: cachedResult.preserveTailWindow ? messages : messages.slice(-limit),
       hasMore: messages.length > limit,
       beforeOffset: 123,
       ...(cachedResult.value.lifecycle ? { lifecycle: cachedResult.value.lifecycle } : {})
@@ -413,6 +414,27 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(messages.at(-1)?.id).toBe('m-59')
     expect(messages[0].id).toBe('m-20')
     expect(result).toMatchObject({ hasMore: true, beforeOffset: 123 })
+  })
+
+  it('preserves every message the tail reader kept from one source record', async () => {
+    cachedResult.preserveTailWindow = true
+    cachedResult.value = {
+      messages: [
+        { ...makeTextMessage('reasoning'), id: 'reasoning' },
+        { ...makeTextMessage('answer'), id: 'answer' },
+        { ...makeTextMessage('user'), id: 'user' }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'omp', sessionId: 's', limit: 2 },
+      ctxWith('runtime')
+    )
+    expect((result as { messages: NativeChatMessage[] }).messages.map((message) => message.id)).toEqual([
+      'reasoning',
+      'answer',
+      'user'
+    ])
+    cachedResult.preserveTailWindow = false
   })
 })
 

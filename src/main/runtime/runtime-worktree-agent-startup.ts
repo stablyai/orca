@@ -13,6 +13,7 @@ import {
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import {
+  markClaudeProjectTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
@@ -192,7 +193,9 @@ export async function markLocalWorktreeTrusted(
     return
   }
   try {
-    if (preset === 'cursor') {
+    if (preset === 'claude') {
+      markClaudeProjectTrusted(workspacePath)
+    } else if (preset === 'cursor') {
       markCursorWorkspaceTrusted(workspacePath)
     } else if (preset === 'copilot') {
       markCopilotFolderTrusted(workspacePath)

@@ -330,6 +330,17 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionSpawn {
     }
   }
 
+  async getSlavePath(id: string): Promise<string | undefined> {
+    try {
+      const result = await this.client.request<{ slavePath: string | null }>('getSlavePath', {
+        sessionId: id
+      })
+      return result.slavePath ?? undefined
+    } catch {
+      return undefined
+    }
+  }
+
   async getInitialCwd(id: string): Promise<string> {
     return this.initialCwds.get(id) ?? ''
   }

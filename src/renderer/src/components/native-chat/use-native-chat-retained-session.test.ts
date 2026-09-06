@@ -37,6 +37,7 @@ function session(
     messages,
     status: readPhase === 'loading' ? 'loading' : 'ready',
     hasMore: false,
+    omitsOlderRecords: false,
     loadingEarlier: false,
     loadEarlier: vi.fn(),
     readPhase

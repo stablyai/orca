@@ -82,6 +82,13 @@ export type AgentSessionOwnerBinding = {
   surface: AgentSessionSurfaceBinding
 }
 
+export type AgentSessionRpcOwnerBinding = {
+  claim: AgentSessionExecutionClaim
+  generation: string
+  phase: 'reserved' | 'live'
+  ownerKind: 'omp-rpc'
+}
+
 export type AgentSessionClaimedSpawnResult = {
   disposition: 'created' | 'adopted'
   owner: AgentSessionOwnerBinding
@@ -192,6 +199,21 @@ export function isAgentSessionOwnerBinding(value: unknown): value is AgentSessio
     (owner.phase === 'reserved' || owner.phase === 'live') &&
     isBoundedWireString(owner.ptyId, 4096) &&
     isAgentSessionSurfaceBinding(owner.surface)
+  )
+}
+
+export function isAgentSessionRpcOwnerBinding(
+  value: unknown
+): value is AgentSessionRpcOwnerBinding {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const owner = value as Partial<AgentSessionRpcOwnerBinding>
+  return (
+    isAgentSessionExecutionClaim(owner.claim) &&
+    isBoundedWireString(owner.generation, 128) &&
+    (owner.phase === 'reserved' || owner.phase === 'live') &&
+    owner.ownerKind === 'omp-rpc'
   )
 }
 

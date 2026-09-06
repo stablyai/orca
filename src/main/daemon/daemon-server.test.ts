@@ -854,7 +854,9 @@ describe('DaemonServer', () => {
       }) as unknown as Socket['write'])
       const dispose = vi.spyOn(daemon.host, 'dispose')
 
-      await expect(c.request('shutdown', { killSessions: false })).resolves.toEqual({})
+      await expect(c.request('shutdown', { killSessions: false })).resolves.toEqual({
+        physicalPtyExitVerified: true
+      })
       expect(dispose).not.toHaveBeenCalled()
       expect(onRpcShutdown).not.toHaveBeenCalled()
       expect(existsSync(tokenPath)).toBe(true)
@@ -922,7 +924,9 @@ describe('DaemonServer', () => {
       )
 
       const c = await connectClient()
-      await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
+      await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({
+        physicalPtyExitVerified: false
+      })
 
       await waitFor(() => daemon.lifecycle.server === null)
       // Why not existsSync: the dead entry remains for the next publisher to replace.

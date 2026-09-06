@@ -1,5 +1,4 @@
 import { extname } from 'node:path'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
 import {
   needsWslHostResolution,
   toHostReadableTranscriptPath,
@@ -11,7 +10,7 @@ import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
-import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { nativeChatLineDecoderForAgent, type NativeChatLineDecoder } from './transcript-tail-reader'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import { observeRunningWslDistros } from './wsl-transcript-running-observer'
 
@@ -26,7 +25,7 @@ export type {
  *  is unresolved; native-watch failure degrades to reconciliation-only mode. */
 async function attemptInstall(
   args: SubscribeNativeChatTranscriptArgs,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decode: NativeChatLineDecoder,
   signal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription | null> {
   const filePath =
@@ -74,7 +73,7 @@ function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | 
  */
 function subscribeViaResolvePoll(
   args: SubscribeNativeChatTranscriptArgs,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: NativeChatLineDecoder
 ): NativeChatTranscriptSubscription {
   let closed = false
   let installed: NativeChatTranscriptSubscription | null = null

@@ -14,6 +14,7 @@ import {
   nativeChatLeafOwnsTabWideEvidence,
   resolveNativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
+import { resolveEffectiveChatPanePtyId } from '../native-chat/native-chat-effective-pty-id'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 import { useAppStore } from '@/store'
@@ -40,7 +41,9 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     toggleNativeChatForLeaf,
     paneTitles,
     paneTransportsRef,
+    resolveChatLeafHostCanRender,
     resolveTitleAgentForLeaf,
+    savedLayout,
     setTerminalError,
     setTerminalErrorsByPaneId,
     settings,
@@ -125,7 +128,8 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
         activeLeafId,
         chatLeafStillMounted,
         activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-        structuredSessionId
+        structuredSessionId,
+        hostCanRenderTranscript: chatLeafId ? resolveChatLeafHostCanRender(chatLeafId) : undefined
       })
     )
   }, [
@@ -135,14 +139,22 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     chatLeafStillMounted,
     applyNativeChatLeafRoute,
     isChatEligibleForLeaf,
+    resolveChatLeafHostCanRender,
     structuredSessionId
   ])
   const chatPane =
     isChatViewMode && chatLeafId
       ? (managedPanes.find((pane) => pane.leafId === chatLeafId) ?? null)
       : null
+  // Wave 11: prefer the transport's own live binding (the ordinary,
+  // most-authoritative case) but fall back to the store's layout binding —
+  // Decision 1's RPC hand-back/restore rebinds only the store, never the
+  // transport, which otherwise stays stuck null forever after its own kill.
   const chatPanePtyId = chatPane
-    ? (paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null)
+    ? resolveEffectiveChatPanePtyId(
+        paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null,
+        savedLayout.ptyIdsByLeafId?.[chatPane.leafId]
+      )
     : null
   const chatPaneResolvedAgent = chatPane ? resolveTitleAgentForLeaf(chatPane.leafId) : null
   const chatPaneLaunchAgent = nativeChatLaunchAgentForLeaf({

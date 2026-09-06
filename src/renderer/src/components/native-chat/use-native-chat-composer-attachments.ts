@@ -90,14 +90,28 @@ export function useNativeChatComposerAttachments({
     )
   }, [allowWithoutTarget, resolveTarget])
 
+  // Why two notices: "no live terminal" and "remote session" are different
+  // dead ends for the user — the first clears by starting a pane, the second
+  // never clears locally. Distinguished here rather than at one call site so
+  // every caller of the shared guard reports the accurate reason.
   const noteAttachmentTargetBlocked = useCallback(() => {
+    const target = resolveTarget()
+    if (!target && !allowWithoutTarget) {
+      setNotice(
+        translate(
+          'components.native-chat.composer.attachmentsRequirePty',
+          'Image attachments need a live terminal.'
+        )
+      )
+      return
+    }
     setNotice(
       translate(
         'components.native-chat.composer.localAttachmentUnsupported',
         'Local attachments are not available for remote sessions.'
       )
     )
-  }, [setNotice])
+  }, [allowWithoutTarget, resolveTarget, setNotice])
 
   const appendImageAttachments = useCallback(
     (paths: { path: string; connectionId?: string | null }[]) => {

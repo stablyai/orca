@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveNativeChatStreamingText,
+  nativeChatOverlayLeadsTranscriptContent,
+  nativeChatOverlayLeadsTranscriptReasoning,
   nativeChatStreamingMessage,
   NATIVE_CHAT_STREAMING_ID
 } from './native-chat-streaming'
@@ -20,8 +22,31 @@ const user = (text: string): NativeChatMessage => ({
   timestamp: null,
   source: 'transcript'
 })
+const reasoning = (text: string): NativeChatMessage => ({
+  id: `r-${text.length}`,
+  role: 'reasoning',
+  blocks: [{ type: 'text', text }],
+  timestamp: null,
+  source: 'transcript'
+})
+const tool = (): NativeChatMessage => ({
+  id: 'tool-1',
+  role: 'tool',
+  blocks: [],
+  timestamp: null,
+  source: 'transcript'
+})
 
 describe('deriveNativeChatStreamingText', () => {
+  it('drops an overlay already covered by assistant text before a tool result', () => {
+    expect(
+      nativeChatOverlayLeadsTranscriptContent({
+        messages: [assistant('Checking the workspace'), tool()],
+        overlayText: 'Checking...'
+      })
+    ).toBe(false)
+  })
+
   it('returns null when not working (stale preview never shows)', () => {
     expect(
       deriveNativeChatStreamingText({ messages: [], previewText: 'Hello there', working: false })
@@ -117,6 +142,53 @@ describe('deriveNativeChatStreamingText', () => {
         working: true
       })
     ).toBe('Partial answer that is now much longer than before')
+  })
+})
+
+describe('nativeChatOverlayLeadsTranscriptReasoning', () => {
+  it('leads an empty transcript', () => {
+    expect(
+      nativeChatOverlayLeadsTranscriptReasoning({ messages: [], overlayText: 'thinking hard' })
+    ).toBe(true)
+  })
+
+  it('does not lead against the transcript assistant answer — only its reasoning row counts', () => {
+    // Root cause: comparing thinking prose against assistant prose never
+    // matches, so it always "leads" and never retires. Even though the
+    // assistant row is present here, absence of a reasoning row means still
+    // leading (the overlay must keep showing, not falsely retire against
+    // unrelated prose).
+    expect(
+      nativeChatOverlayLeadsTranscriptReasoning({
+        messages: [assistant('thinking hard about the answer')],
+        overlayText: 'thinking hard'
+      })
+    ).toBe(true)
+  })
+
+  it('drops once the transcript reasoning row contains the overlay text, reasoning row not last', () => {
+    // Transcript order for a settled turn: reasoning row, then the reply —
+    // the reasoning row is never the literal last message.
+    expect(
+      nativeChatOverlayLeadsTranscriptReasoning({
+        messages: [reasoning('thinking hard about it'), assistant('the answer')],
+        overlayText: 'thinking hard'
+      })
+    ).toBe(false)
+  })
+
+  it('does not match a stale reasoning row from a prior turn once a new turn boundary lands', () => {
+    const optimisticEcho = { ...user('new question'), id: 'pending:1', source: 'scrape' as const }
+    expect(
+      nativeChatOverlayLeadsTranscriptReasoning({
+        messages: [
+          reasoning('a long stale reasoning paragraph from the previous turn'),
+          assistant('previous answer'),
+          optimisticEcho
+        ],
+        overlayText: 'ab'
+      })
+    ).toBe(true)
   })
 })
 

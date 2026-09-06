@@ -45,6 +45,7 @@ export function activateLocalPtySession(args: {
   proc: pty.IPty
   reportsChildExitStatus: boolean
   spawnedWslDistro: string | null | undefined
+  onPhysicalExit?: () => void
 }): PtySpawnResult {
   const { id, incarnationId, spawn, getOptions, plan, env, proc, spawnedWslDistro } = args
   createPtyPhysicalExit(id)
@@ -67,7 +68,10 @@ export function activateLocalPtySession(args: {
   }
   ptyAgentForegroundContextPaths.set(
     id,
-    getAgentForegroundContextPaths({ cwd: spawn.cwd, worktreeId: spawn.worktreeId })
+    getAgentForegroundContextPaths({
+      cwd: spawn.cwd,
+      worktreeId: spawn.worktreeId
+    })
   )
   ptyLoadGeneration.set(id, getLoadGeneration())
   ptyIncarnations.set(id, incarnationId)
@@ -134,6 +138,7 @@ export function activateLocalPtySession(args: {
     })
     const wasTerminationRequested = ptyTerminationMode.has(id)
     ptyPhysicalExits.get(id)?.markExited()
+    args.onPhysicalExit?.()
     // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
     if (process.platform !== 'win32') {
       ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}

@@ -3645,7 +3645,9 @@
   "components": {
     "native-chat": {
       "composer": {
-        "effort": "Effort"
+        "effort": "Effort",
+        "ompRpcCommandSendFailed": "Command {{command}} could not be sent to the agent.",
+        "ompRpcCommandSendSuperseded": "Command {{command}} was not sent: the pane's agent session was replaced first."
       },
       "question": {
         "other": "Other…"

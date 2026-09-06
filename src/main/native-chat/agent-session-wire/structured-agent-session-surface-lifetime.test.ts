@@ -147,7 +147,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
-  await rm(root, { recursive: true, force: true })
+  await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
 })
 
 describe('a chat that closes', () => {

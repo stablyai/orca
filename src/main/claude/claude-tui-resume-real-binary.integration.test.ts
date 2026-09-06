@@ -7,6 +7,7 @@ import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { markClaudeProjectTrusted } from '../agent-trust-presets'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { readStructuredTuiProcessIdentity } from '../runtime/structured-tui-process-identity'
 import { getSpawnArgsForWindows } from '../win32-utils'
@@ -218,6 +219,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
       transcripts.push(transcriptPath)
       expect(started.session_id).toBe(providerSessionId)
       await adapter.closeAll()
+      markClaudeProjectTrusted(process.cwd())
 
       const record = {
         sessionId: 'orca-real-claude-resume',

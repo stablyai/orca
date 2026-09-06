@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { ompAdvisorNotesText, ompAdvisorTurnId } from '../../../../shared/omp-advisor-notes'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
+import { OMP_RPC_ADVISOR_ID_PREFIX } from './omp-rpc-turn-overlay'
 
 function msg(
   overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>
@@ -411,5 +413,70 @@ describe('assembleNativeChatSession', () => {
     })
     expect(session.status).toBe('error')
     expect(session.error).toBe('transcript unreadable')
+  })
+})
+
+// An OMP advisor note reaches the pane twice: live, off the RPC
+// `message_end` frame, and again as the transcript's own
+// `customType:'advisor'` entry. Neither carrier supplies an id the other
+// shares, so `ompAdvisorTurnId` is the identity that collapses them.
+describe('assembleNativeChatSession — OMP advisor cards', () => {
+  const notes = [
+    { note: 'Watch the coupling.', severity: 'concern' as const, advisor: 'Architecture' }
+  ]
+  const advisorTurnId = ompAdvisorTurnId(notes, 1_700_000_000_000) as string
+  const advisorText = ompAdvisorNotesText(notes)
+
+  it('collapses the live RPC advisor row onto its transcript copy', () => {
+    const overlay = msg({
+      id: `${OMP_RPC_ADVISOR_ID_PREFIX}live`,
+      role: 'system',
+      source: 'rpc',
+      turnId: advisorTurnId,
+      blocks: [{ type: 'text', text: advisorText }],
+      timestamp: 1_700_000_000_000
+    })
+    const transcript = msg({
+      id: 'rec-adv',
+      role: 'system',
+      source: 'transcript',
+      turnId: advisorTurnId,
+      blocks: [{ type: 'text', text: advisorText }],
+      timestamp: 1_700_000_000_000
+    })
+
+    const session = assembleNativeChatSession({
+      sources: { transcript: [transcript], rpc: [overlay] },
+      sessionId: 's1',
+      agent: 'omp'
+    })
+
+    expect(session.messages).toHaveLength(1)
+    expect(session.messages[0].id).toBe('rec-adv')
+    expect(session.messages[0].source).toBe('transcript')
+  })
+
+  it('keeps two advisors raising the same text as separate rows', () => {
+    const fixerNotes = [
+      { note: 'Watch the coupling.', severity: 'concern' as const, advisor: 'Fixer' }
+    ]
+    const rows = [notes, fixerNotes].map((batch, index) =>
+      msg({
+        id: `rec-adv-${index}`,
+        role: 'system',
+        source: 'transcript',
+        turnId: ompAdvisorTurnId(batch, 1_700_000_000_000 + index) as string,
+        blocks: [{ type: 'text', text: ompAdvisorNotesText(batch) }],
+        timestamp: 1_700_000_000_000 + index
+      })
+    )
+
+    const session = assembleNativeChatSession({
+      sources: { transcript: rows },
+      sessionId: 's1',
+      agent: 'omp'
+    })
+
+    expect(session.messages.map((message) => message.id)).toEqual(['rec-adv-0', 'rec-adv-1'])
   })
 })

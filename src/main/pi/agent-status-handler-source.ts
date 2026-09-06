@@ -3,19 +3,18 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
-  const sessionStartHandler =
-    kind !== 'omp'
-      ? [
-          "  pi.on('session_start', (event, ctx) => {",
-          '    updateSessionMetadata(ctx)',
-          '    // Why: /reload re-registers the active session, but it is not a',
-          '    // turn boundary and must not clear the visible status or unread state.',
-          "    if (event.reason === 'reload') return",
-          "    post('session_start')",
-          '  })',
-          ''
-        ]
-      : []
+  // Why: session_start is the only event every Pi-compatible agent fires at TUI
+  // boot, so it is what registers a resumed-but-idle pane's resume identity.
+  const sessionStartHandler = [
+    "  pi.on('session_start', (event, ctx) => {",
+    '    updateSessionMetadata(ctx)',
+    '    // Why: /reload re-registers the active session, but it is not a',
+    '    // turn boundary and must not clear the visible status or unread state.',
+    "    if (event.reason === 'reload') return",
+    "    post('session_start')",
+    '  })',
+    ''
+  ]
 
   // Why: OMP can switch sessions in-process, so each latest-only post needs fresh identity.
   const ctxParam = ', ctx'

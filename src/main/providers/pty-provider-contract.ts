@@ -137,6 +137,11 @@ export type IPtyProvider = {
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
   hasPty?: (id: string) => boolean
+  /** Read-only PTY slave/tty device path lookup, local providers only (daemon/SSH
+   *  providers and Windows have no such field). Used to derive OMP's own
+   *  terminal-id (docs/omp-rpc-chat-adapter-plan.md, Part A session-identity
+   *  resolution) — never anything liveness- or write-critical. */
+  getSlavePath?: (id: string) => string | undefined | Promise<string | undefined>
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
   write(id: string, data: string): boolean | void

@@ -4,19 +4,21 @@ import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/native-chat-runtime-contract'
+import { nativeChatBridgeHasMore } from '@/components/native-chat/native-chat-pagination'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { getClientForEnvironment, requireActiveEnvironmentOrNull } from './web-runtime-session'
 
 export function createWebNativeChatApi(): NativeChatApi {
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) =>
+    readSession: async (agent, sessionId, limit, transcriptPath, beforeOffset) =>
       parseRuntimeNativeChatReadSessionResult(
         await callRuntimeResult<unknown>('nativeChat.readSession', {
           agent,
           sessionId,
           limit,
-          transcriptPath
+          transcriptPath,
+          beforeOffset
         })
       ),
     subscribe: (args, onFrame) => {
@@ -82,6 +84,12 @@ export function createWebNativeChatApi(): NativeChatApi {
                   result?.type === 'replacement') &&
                 Array.isArray(result.messages)
               ) {
+                // Every window-bearing frame resolves hasMore the same way, whatever its position in the stream (SA-013).
+                const historyWindow = nativeChatBridgeHasMore(
+                  result.hasMore,
+                  result.messages.length,
+                  args.limit
+                )
                 if (!receivedInitial) {
                   if (!pending) {
                     receivedInitial = true
@@ -89,7 +97,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                   onFrame({
                     type: 'snapshot',
                     messages: result.messages,
-                    hasMore: result.hasMore ?? result.messages.length >= (args.limit ?? 300),
+                    ...historyWindow,
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
                     ...(pending ? { pending: true } : {})
@@ -98,7 +106,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                   onFrame({
                     type: 'snapshot',
                     messages: result.messages,
-                    hasMore: result.hasMore ?? false,
+                    ...historyWindow,
                     ...(result.error ? { error: result.error } : {}),
                     ...(lifecycle ? { lifecycle } : {}),
                     ...(pending ? { pending: true } : {})
@@ -109,7 +117,7 @@ export function createWebNativeChatApi(): NativeChatApi {
                       ? {
                           type: 'replacement',
                           messages: result.messages,
-                          hasMore: result.hasMore ?? false,
+                          ...historyWindow,
                           ...(lifecycle ? { lifecycle } : {})
                         }
                       : {

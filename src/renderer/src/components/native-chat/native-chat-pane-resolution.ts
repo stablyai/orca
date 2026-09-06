@@ -58,3 +58,29 @@ export function resolveNativeChatSession(
     paneKey: input.paneKey
   }
 }
+
+/** Bug 1 fix (wave 7): `resolveNativeChatSession`'s own `sessionId` comes
+ *  from the agent-status hook chain (`agentStatusEntry.providerSession.id`),
+ *  which never delivers for omp panes (open item 2) — it stays null forever,
+ *  so a transcript read keyed on it alone can never find anything, even
+ *  after a completed turn. Prefer the wave-4 resolved OMP identity instead
+ *  (Decision 2's on-disk resolver, published once known by the
+ *  TerminalPane-anchored RPC ownership hook and kept sticky across the
+ *  pane's later ptyId churn — `ompRpcChatOwnershipByPaneKey`); fall back to
+ *  the hook value when no resolved identity exists yet, which keeps every
+ *  non-omp agent's existing behavior unchanged.
+ *
+ *  `publishedOmpSessionId` outranks both: it is `session.sessionId` as the RPC
+ *  child that owns the pane published it on `session_info_update`, so it is
+ *  ground truth about which session the pane is in. The on-disk resolver above
+ *  degrades to an mtime guess whenever no breadcrumb is available, and in a cwd
+ *  holding several sessions that guess can name the wrong transcript. Null
+ *  until a builtin republishes the session, so it never displaces a resolved
+ *  identity with "unknown". */
+export function resolveEffectiveNativeChatSessionId(
+  hookSessionId: string | null,
+  resolvedOmpSessionId: string | null,
+  publishedOmpSessionId: string | null = null
+): string | null {
+  return publishedOmpSessionId ?? resolvedOmpSessionId ?? hookSessionId
+}

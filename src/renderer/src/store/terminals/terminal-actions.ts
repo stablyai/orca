@@ -185,6 +185,14 @@ export type TerminalActions = {
   dismissCodexRestartNotices: (ptyIds: string[]) => void
   reopenCodexRestartPrompt: (ptyId: string) => void
   replaceTerminalLayoutPanePtyId: (tabId: string, leafId: string, ptyId: string) => void
+  /** Deletes a leaf's stale `ptyIdsByLeafId` entry — guarded on `ptyId`
+   *  still matching, so it can never clobber a newer binding a race
+   *  already wrote. Unlike `clearExitedPanePtyLayoutBinding` (the
+   *  crash-exit path, which also repairs `activeLeafId` off a now-dead
+   *  focused pane), this is for an intentional, in-place ownership
+   *  handoff (Decision 1's RPC acquire kill) where the leaf keeps focus —
+   *  no active-leaf repair. */
+  clearTerminalLayoutPanePtyId: (tabId: string, leafId: string, ptyId: string) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
   setTabCanExpandPane: (tabId: string, canExpand: boolean) => void
   setTabLayout: (tabId: string, layout: TerminalLayoutSnapshot | null) => void

@@ -16,8 +16,8 @@ export function normalizePiCompatibleEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType !== 'omp' && eventName === 'session_start') {
-    // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
+  if (eventName === 'session_start') {
+    // Why: session_start fires on TUI open/resume for every Pi-compatible agent; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
   }

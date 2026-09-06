@@ -179,6 +179,17 @@ function TranscriptImagePreview({
   )
 }
 
+/** Marks a reasoning row as the agent thinking aloud rather than replying.
+ *  The row itself is already italic/quieted by MessageRow; this names it so a
+ *  long thinking block is not mistaken for the answer. */
+export function NativeChatReasoningLabel(): React.JSX.Element {
+  return (
+    <div className="mb-1 text-[11px] font-semibold not-italic uppercase tracking-[0.05em] text-muted-foreground/70">
+      {translate('components.native-chat.reasoningLabel', 'Reasoning')}
+    </div>
+  )
+}
+
 export function NativeChatImageAttachments({
   blocks,
   runtimeContext,

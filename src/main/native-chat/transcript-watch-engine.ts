@@ -1,4 +1,4 @@
-import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
+import type { NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import {
   boundaryFingerprint,
   readTranscriptFileVersion,
@@ -31,7 +31,7 @@ import { trackActiveNativeChatWatcher } from './transcript-watcher-count'
 /** Install a live tail, or return null when the resolved file is not readable yet. */
 export async function installTranscriptWatcher(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  decode: Parameters<typeof readNativeChatTranscriptTailFile>[2],
   args: SubscribeNativeChatTranscriptArgs,
   signal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription | null> {

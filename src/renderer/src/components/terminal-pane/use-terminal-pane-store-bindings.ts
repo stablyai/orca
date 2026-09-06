@@ -4,9 +4,9 @@ import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-prefer
 import { isWindowsUserAgent } from './pane-helpers'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
-import type { TerminalPaneChatController } from './use-terminal-pane-chat-state'
+import type { TerminalPaneChatHostRenderController } from './use-terminal-pane-chat-host-render'
 
-export function useTerminalPaneStoreBindings(controller: TerminalPaneChatController) {
+export function useTerminalPaneStoreBindings(controller: TerminalPaneChatHostRenderController) {
   const { expectedLayoutLeafIds, isVisible, restoredLayout, tabId } = controller
   const {
     clearRuntimePaneTitle,
@@ -84,5 +84,5 @@ export function useTerminalPaneStoreBindings(controller: TerminalPaneChatControl
   }
 }
 
-export type TerminalPaneStoreController = TerminalPaneChatController &
+export type TerminalPaneStoreController = TerminalPaneChatHostRenderController &
   ReturnType<typeof useTerminalPaneStoreBindings>

@@ -64,6 +64,8 @@ const {
   registerWorkspacePortHandlersMock,
   registerLocalhostWorktreeLabelHandlersMock,
   registerNativeChatHandlersMock,
+  registerOmpRpcHandlersMock,
+  registerOmpRpcChatHandlersMock,
   registerEmulatorFrameStreamHandlersMock,
   registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
@@ -130,6 +132,8 @@ const {
   registerWorkspacePortHandlersMock: vi.fn(),
   registerLocalhostWorktreeLabelHandlersMock: vi.fn(),
   registerNativeChatHandlersMock: vi.fn(),
+  registerOmpRpcHandlersMock: vi.fn(),
+  registerOmpRpcChatHandlersMock: vi.fn(),
   registerEmulatorFrameStreamHandlersMock: vi.fn(),
   registerEmulatorVideoStreamHandlersMock: vi.fn()
 }))
@@ -385,6 +389,14 @@ vi.mock('../hosted-review', () => ({
 
 vi.mock('../native-chat', () => ({
   registerNativeChatHandlers: registerNativeChatHandlersMock
+}))
+
+vi.mock('../omp-rpc', () => ({
+  registerOmpRpcHandlers: registerOmpRpcHandlersMock
+}))
+
+vi.mock('../omp-rpc-chat', () => ({
+  registerOmpRpcChatHandlers: registerOmpRpcChatHandlersMock
 }))
 
 import { registerCoreHandlers } from './register-core-handlers'

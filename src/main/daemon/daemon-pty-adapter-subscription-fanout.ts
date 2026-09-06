@@ -10,7 +10,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
 
   constructor(
     private readonly adapters: readonly DaemonPtyAdapter[],
-    onAdapterExit: (id: string) => void,
+    onAdapterExit: (payload: DaemonPtyRouterExitEvent) => void,
     onAdapterIdentityChanged?: (adapter: DaemonPtyAdapter) => void
   ) {
     for (const adapter of adapters) {
@@ -21,7 +21,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
           }
         }),
         adapter.onExit((payload) => {
-          onAdapterExit(payload.id)
+          onAdapterExit(payload)
           for (const listener of this.exitListeners) {
             listener(payload)
           }

@@ -80,7 +80,7 @@ export async function readNativeChatTranscript(
 
 async function readTranscript(
   filePath: string,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: (line: string, fallbackId: string) => NativeChatMessage | NativeChatMessage[] | null
 ): Promise<NativeChatMessage[]> {
   const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
   const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)

@@ -26,13 +26,23 @@ export type NativeChatReadSessionArgs = {
   /** Authoritative transcript path from the agent hook (providerSession), used to
    *  locate the file when the session id no longer names it (recent Claude Code). */
   transcriptPath?: string
+  /** Read the window ending before this byte offset instead of the live tail.
+   *  The renderer's continuation cursor once growing `limit` stops making
+   *  progress (XLR-R1-001). */
+  beforeOffset?: number
 }
 
 // Why: render and parse only the recent window so long transcripts do not stall
 // either the main process or the message list. Pagination raises this limit.
 const DESKTOP_READ_WINDOW = 300
 
-async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
+async function readSession(
+  args: NativeChatReadSessionArgs
+  // `hasMore` is the host's own count past the window, which the renderer grades
+  // its load-earlier verdict from (XLR-R3-003); the tail reader has always
+  // returned it, so declaring it just stops the local path from looking like the
+  // legacy host that omits it.
+): Promise<ReadTranscriptResult & { hasMore?: boolean; beforeOffset?: number }> {
   const { agent, sessionId } = args
   // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
@@ -40,7 +50,8 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
     agent,
     sessionId,
     transcriptPath: args.transcriptPath,
-    limit
+    limit,
+    beforeOffset: args.beforeOffset
   })
 }
 

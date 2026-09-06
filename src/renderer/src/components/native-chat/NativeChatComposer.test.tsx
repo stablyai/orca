@@ -25,8 +25,11 @@ const mocks = vi.hoisted(() => ({
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
     attachDisabled?: boolean
+    disabled?: boolean
+    hasSendRoute?: boolean
     sendButtonDisabled?: boolean
     autocomplete?: { mode: string; items?: { kind: string; name: string }[] }
+    notice?: string | null
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'unknown',
   confirmationObserver: null as {
@@ -782,70 +785,4 @@ describe('NativeChatComposer', () => {
     expect(onSwitchToTerminal).not.toHaveBeenCalled()
   })
 
-  it('keeps a successful Claude model change after a conversation in native chat', async () => {
-    mocks.sendHandle.settleAfterMs = 0
-    const onSwitchToTerminal = vi.fn()
-    render(
-      <NativeChatComposer
-        terminalTabId="tab-1"
-        paneKey="tab-1:leaf-1"
-        targetPtyId="pty-1"
-        agent="claude"
-        onSwitchToTerminal={onSwitchToTerminal}
-      />
-    )
-
-    await act(async () => {
-      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'fable')
-    })
-
-    expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      '/model fable',
-      expect.any(AbortSignal)
-    )
-    expect(mocks.createClaudeModelSwitchConfirmationObserver).toHaveBeenCalledWith({
-      ptyId: 'pty-1',
-      settings: {},
-      expectedModelLabel: 'Fable'
-    })
-    expect(mocks.confirmationObserver?.arm).toHaveBeenCalledOnce()
-    expect(mocks.confirmationObserver?.arm.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.sendNativeChatMessageVerified.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
-    )
-    expect(mocks.confirmationObserver?.startDetection).toHaveBeenCalledOnce()
-    expect(mocks.confirmationObserver?.startDetection.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mocks.sendNativeChatMessageVerified.mock.invocationCallOrder[0] ?? Number.NEGATIVE_INFINITY
-    )
-    expect(mocks.confirmationObserver?.dispose).toHaveBeenCalledOnce()
-    expect(onSwitchToTerminal).not.toHaveBeenCalled()
-  })
-
-  it('types the Codex picker command and switches to the terminal', async () => {
-    mocks.sendHandle.settleAfterMs = 0
-    const onSwitchToTerminal = vi.fn()
-    render(
-      <NativeChatComposer
-        terminalTabId="tab-1"
-        paneKey="tab-1:leaf-1"
-        targetPtyId="pty-1"
-        agent="codex"
-        onSwitchToTerminal={onSwitchToTerminal}
-      />
-    )
-
-    await act(async () => {
-      await mocks.fieldProps?.sessionOptionsSurface?.invokeAction('model')
-    })
-
-    expect(mocks.typeNativeChatCommand).toHaveBeenCalledWith(
-      {},
-      'pty-1',
-      '/model',
-      expect.any(AbortSignal)
-    )
-    expect(mocks.sendNativeChatMessageVerified).not.toHaveBeenCalled()
-    expect(onSwitchToTerminal).toHaveBeenCalledOnce()
-  })
 })

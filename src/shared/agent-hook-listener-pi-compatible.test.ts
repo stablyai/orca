@@ -470,6 +470,53 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.prompt).toBe('')
   })
 
+  it('clears OMP turn cache and emits only resume identity on session_start', () => {
+    const start = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'before_agent_start', prompt: 'stale turn' }
+      },
+      'production'
+    )
+    expect(start?.payload.prompt).toBe('stale turn')
+
+    const sessionStart = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'session_start', session_id: 'omp-session-2' }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: { key: 'session_id', id: 'omp-session-2' },
+      payload: { state: 'done', prompt: '', agentType: 'omp' }
+    })
+
+    const next = normalizeHookPayload(
+      state,
+      'omp',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'tool_call', tool_name: 'bash' } },
+      'production'
+    )
+    expect(next?.payload.prompt).toBe('')
+  })
+
+  it('drops an OMP session_start that carries no resume identity', () => {
+    expect(
+      normalizeHookPayload(
+        state,
+        'omp',
+        { paneKey: PANE_KEY, payload: { hook_event_name: 'session_start' } },
+        'production'
+      )
+    ).toBeNull()
+  })
+
   it('normalizes Prime status and session identity without Pi-only ask-user behavior', () => {
     const tool = normalizeHookPayload(
       state,

@@ -4,6 +4,7 @@
 // optimistic-send pruning in native-chat-pending.ts, which is a separate rule.
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import { translate } from '@/i18n/i18n'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 /** A locally-recorded slash command (e.g. `/clear`). Slash commands dispatch to
@@ -14,6 +15,23 @@ export type NativeChatCommandMarker = {
   /** The command as typed, e.g. `/clear`. */
   command: string
   sentAt: number
+  /** Rendered output for commands Orca ran itself over RPC (OMP `/usage`).
+   *  Absent for the PTY dispatch path, whose output lands in the TUI. */
+  outputText?: string
+  /** The collector hit its byte cap; rendered as a note under the output. */
+  outputTruncated?: boolean
+  /** False when the command completed WITHOUT invoking the model. Only set on
+   *  the RPC path, where the result frame states it; the marker then shows a
+   *  completion note instead of implying an agent turn. */
+  agentInvoked?: boolean
+}
+
+/** Extra detail recorded for a command Orca executed over RPC rather than by
+ *  typing into the PTY. */
+export type NativeChatCommandMarkerOutcome = {
+  outputText: string
+  agentInvoked: boolean
+  truncated?: boolean
 }
 
 export type NativeChatCommandMarkerScope = {
@@ -39,7 +57,8 @@ export function readCommandMarkerCache(
 export function appendCommandMarkerCache(
   scope: NativeChatCommandMarkerScope,
   command: string,
-  sentAt = Date.now()
+  sentAt = Date.now(),
+  outcome?: NativeChatCommandMarkerOutcome
 ): NativeChatCommandMarker[] {
   commandMarkerCounter += 1
   const key = commandMarkerScopeKey(scope)
@@ -47,7 +66,18 @@ export function appendCommandMarkerCache(
   // are not transcript turns, so their local feedback needs a pane-scoped cache.
   const next = [
     ...(commandMarkerCache.get(key) ?? []),
-    { id: `${sentAt}-${commandMarkerCounter}`, command, sentAt }
+    {
+      id: `${sentAt}-${commandMarkerCounter}`,
+      command,
+      sentAt,
+      ...(outcome
+        ? {
+            outputText: outcome.outputText,
+            ...(outcome.truncated ? { outputTruncated: true } : {}),
+            agentInvoked: outcome.agentInvoked
+          }
+        : {})
+    }
   ].slice(-COMMAND_MARKER_LIMIT)
   // Why: the per-key array is capped at 8, but the KEY (paneKey\0agent\0sessionId,
   // sessionId changes on every /clear) is ephemeral and was never evicted, so it
@@ -92,17 +122,49 @@ export function applyCommandMarkerBoundaries(
 
 /** Render command markers as compact `system` messages. The `system` role draws
  *  as a muted aside (not a user bubble); the text avoids the harness noise
- *  prefixes so stripNoiseMessages keeps it. */
+ *  prefixes so stripNoiseMessages keeps it. Output captured over RPC rides the
+ *  same text block, so the message list's markdown renderer formats its fenced
+ *  code exactly like agent prose. */
 export function commandMarkersAsMessages(
   markers: readonly NativeChatCommandMarker[]
 ): NativeChatMessage[] {
   return markers.map((marker) => ({
     id: `command:${marker.id}`,
     role: 'system' as const,
-    blocks: [{ type: 'text' as const, text: `Ran ${marker.command}` }],
+    blocks: [{ type: 'text' as const, text: commandMarkerText(marker) }],
     timestamp: marker.sentAt,
     source: 'scrape' as const
   }))
+}
+
+/** Why translate here, not at append: markers are cached per pane and outlive
+ *  a locale switch, so the text is the render-time projection of the marker. */
+function commandMarkerText(marker: NativeChatCommandMarker): string {
+  const parts = [
+    translate('components.native-chat.commandMarker.ran', 'Ran {{command}}', {
+      command: marker.command
+    })
+  ]
+  if (marker.outputText?.trim()) {
+    parts.push(marker.outputText.trim())
+  }
+  if (marker.outputTruncated) {
+    parts.push(
+      translate('components.native-chat.commandMarker.outputTruncated', '_Output truncated._')
+    )
+  }
+  // Why: `agentInvoked:false` is the wire's own statement that no model turn
+  // happened, so the marker says so explicitly rather than letting the output
+  // read as an assistant reply.
+  if (marker.agentInvoked === false) {
+    parts.push(
+      translate(
+        'components.native-chat.commandMarker.localCommandNote',
+        'Local command — agent not invoked'
+      )
+    )
+  }
+  return parts.join('\n\n')
 }
 
 /** True when a message id was minted for a slash-command marker. */

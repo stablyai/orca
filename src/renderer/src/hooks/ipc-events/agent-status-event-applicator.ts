@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/agent-status-identity'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
 import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { track } from '@/lib/telemetry'
@@ -142,13 +143,14 @@ export function createAgentStatusEventApplicator(args: {
       return 'dropped'
     }
     if (data.providerSessionOnly) {
-      if (!data.providerSession || data.agentType !== 'pi') {
+      // Why: every Pi-compatible kind reports resume identity through this row, not Pi alone.
+      if (!data.providerSession || !isPiCompatibleAgentType(data.agentType)) {
         return 'dropped'
       }
       const providerSessionUpdate: AgentStatusBatchUpdate = {
         kind: 'providerSession',
         paneKey,
-        agent: 'pi',
+        agent: data.agentType,
         providerSession: data.providerSession,
         timing: { updatedAt: data.receivedAt },
         routing: {

@@ -15,7 +15,7 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // chat-state (can-toggle, toggle-for-leaf, toggle-active) and the context-menu
 // toggle in projection (208 hooks, still 8 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  '983ad067c9feca82c5435eb1b865674344489c368ec2007dc7bb40c81aef037c'
+  '610caafee53a26f2bb2e87d278dce514e289f310526fd21e2dd09e8e97800159'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))

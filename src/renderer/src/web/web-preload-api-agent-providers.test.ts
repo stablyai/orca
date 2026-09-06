@@ -137,11 +137,76 @@ describe('web native chat preload API', () => {
     deliver({ type: 'snapshot', messages: [message] })
 
     // Dropping `pending` would settle an empty read as the session's history.
-    // hasMore proves the pending frame did not consume the initial slot — only
-    // the initial branch infers a filled window from the limit.
+    // The labelled hasMore proves the pending frame did not consume the initial
+    // slot; the inference is labelled (SA-011) so downstream never grades this
+    // bridge's guess as the host having counted past the limit.
     expect(frames).toEqual([
       { type: 'snapshot', messages: [], hasMore: false, pending: true },
-      { type: 'snapshot', messages: [message], hasMore: true }
+      { type: 'snapshot', messages: [message], hasMore: true, hasMoreInferred: true }
+    ])
+  })
+
+  // SA-013: the omitting-runtime inference belongs to every frame that carries
+  // `hasMore`, not just the first. A post-initial replacement defaulted to false
+  // reports the transcript head the host never measured.
+  it('infers and labels hasMore on post-initial snapshot and replacement frames', async () => {
+    const older = {
+      id: 'a-1',
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: 'older' }],
+      timestamp: 7,
+      source: 'transcript' as const
+    }
+    const newer = {
+      id: 'a-2',
+      role: 'assistant' as const,
+      blocks: [{ type: 'text' as const, text: 'newer' }],
+      timestamp: 8,
+      source: 'transcript' as const
+    }
+    let deliver: (result: unknown) => void = () => {}
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        subscribe(
+          _method: string,
+          _params: unknown,
+          callbacks: { onResponse: (response: RuntimeRpcResponse<unknown>) => void }
+        ): Promise<{ unsubscribe: () => void }> {
+          deliver = (result) =>
+            callbacks.onResponse({
+              id: 'stream-1',
+              ok: true,
+              result,
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const frames: unknown[] = []
+    globals.window.api.nativeChat.subscribe(
+      { subscriptionId: 'sub-1', agent: 'claude', sessionId: 'session-1', limit: 2 },
+      (frame) => frames.push(frame)
+    )
+    await Promise.resolve()
+
+    // Settle the initial read, then reconnect-snapshot and inode-replacement
+    // frames from a runtime too old to send hasMore, each exactly filling the window.
+    deliver({ type: 'snapshot', messages: [older], hasMore: false })
+    deliver({ type: 'snapshot', messages: [older, newer] })
+    deliver({ type: 'replacement', messages: [older, newer] })
+
+    expect(frames).toEqual([
+      { type: 'snapshot', messages: [older], hasMore: false },
+      { type: 'snapshot', messages: [older, newer], hasMore: true, hasMoreInferred: true },
+      { type: 'replacement', messages: [older, newer], hasMore: true, hasMoreInferred: true }
     ])
   })
 })

@@ -9,34 +9,23 @@ import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatC
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import { NativeChatExtensionUiCard } from './NativeChatExtensionUiCard'
+import { useNativeChatOmpRpcIntegration } from './use-native-chat-omp-rpc-integration'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import {
   shouldClearNativeChatWorkingSuppression,
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
-import {
-  appendPendingSendCache,
-  launchPromptAsMessage,
-  pendingSendsAsMessages,
-  nextNativeChatPendingSendId,
-  prunePendingSends,
-  readPendingSendCache,
-  shouldPruneLaunchPrompt,
-  writePendingSendCache,
-  type NativeChatPendingSend
-} from './native-chat-pending'
+import { shouldPruneLaunchPrompt } from './native-chat-pending'
+import { useNativeChatPendingSends } from './use-native-chat-pending-sends'
 import {
   appendCommandMarkerCache,
-  applyCommandMarkerBoundaries,
-  commandMarkersAsMessages,
   readCommandMarkerCache,
-  type NativeChatCommandMarker
+  type NativeChatCommandMarker,
+  type NativeChatCommandMarkerOutcome
 } from './native-chat-command-marker'
-import {
-  deriveNativeChatStreamingText,
-  nativeChatStreamingMessage
-} from '../../../../shared/native-chat-streaming'
+import { useNativeChatMessageListSession } from './use-native-chat-message-list-session'
 import {
   shouldFocusNativeChatComposerFromEditingKey,
   shouldFocusNativeChatPaneFromPointerTarget,
@@ -47,6 +36,7 @@ import {
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
+import { resolveEffectiveNativeChatSessionId } from './native-chat-pane-resolution'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
@@ -77,14 +67,52 @@ export function NativeChatResolvedView({
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
   const keybindings = useAppStore((s) => s.keybindings)
+  const resolvedOmpSessionId = useAppStore(
+    (s) => s.ompRpcChatOwnershipByPaneKey[paneKey]?.resolvedSessionId ?? null
+  )
+  // The id OMP itself published on `session_info_update` — ground truth about
+  // which session the owning RPC child is in, so it outranks the on-disk guess.
+  const publishedOmpSessionId = useAppStore(
+    (s) => s.ompRpcChatOwnershipByPaneKey[paneKey]?.turnState?.sessionInfo?.sessionId ?? null
+  )
+  const effectiveSessionId = resolveEffectiveNativeChatSessionId(
+    sessionId,
+    resolvedOmpSessionId,
+    publishedOmpSessionId
+  )
   const session = useNativeChatRetainedSession({
     paneKey,
     agent,
-    sessionId,
+    sessionId: effectiveSessionId,
     transcriptPath,
     runtimeEnvironmentId,
     enabled: isVisible
   })
+  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  // What `session.messages` proves about older history. Deliberately NOT
+  // `session.hasMore`, which stays optimistic for the load-earlier affordance
+  // and reports true for a window that merely filled its limit (SA-008);
+  // `omitsOlderRecords` is the narrower verdict backed by a host measurement,
+  // so no consumer may read the oldest row as a horizon without one (SA-007).
+  const transcriptWindow = useMemo(
+    () => ({
+      settled: session.readPhase === 'ready',
+      omitsOlderRecords: session.omitsOlderRecords
+    }),
+    [session.readPhase, session.omitsOlderRecords]
+  )
+  const ompRpc = useNativeChatOmpRpcIntegration({
+    paneKey,
+    transcriptMessages: session.messages,
+    transcriptWindow,
+    hookPreview
+  })
+  const sessionWithOmpRpcStatus = useMemo<typeof session>(() => {
+    if (!ompRpc.statusOverride || session.status === ompRpc.statusOverride) {
+      return session
+    }
+    return { ...session, status: ompRpc.statusOverride }
+  }, [session, ompRpc.statusOverride])
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
@@ -100,10 +128,9 @@ export function NativeChatResolvedView({
   })
   // The live-session merge reconciles hooks with replayable transcript turn
   // boundaries; all working consumers must use that one lifecycle decision.
-  const liveWorking = session.status === 'working'
-  // The agent's in-progress reply preview (hook), shown as a live streaming
-  // bubble while it works — before the completed turn flushes to the transcript.
-  const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
+  // For an RPC-owned pane that decision arrives on the RPC turn stream, so it
+  // is read off the RPC-merged status rather than the raw transcript session.
+  const liveWorking = sessionWithOmpRpcStatus.status === 'working'
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
   const hookPreviewIsToolOutput = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessageIsToolOutput === true
@@ -149,24 +176,24 @@ export function NativeChatResolvedView({
   // immediately and pruned once its real user turn lands in the transcript, so
   // the message never vanishes between send and transcript catch-up.
   const commandMarkerScope = useMemo(
-    () => ({ paneKey, agent, sessionId }),
-    [paneKey, agent, sessionId]
+    () => ({ paneKey, agent, sessionId: effectiveSessionId }),
+    [paneKey, agent, effectiveSessionId]
   )
   const pendingScope = useMemo(() => ({ paneKey, agent }), [paneKey, agent])
-  const [pending, setPending] = useState<NativeChatPendingSend[]>(() =>
-    readPendingSendCache(pendingScope)
-  )
+  // The echo queue is pane-owned rather than view-owned: a send outlives this
+  // view, and its retraction has to reach whichever view is mounted when the
+  // send finally fails.
+  const pendingSends = useNativeChatPendingSends({
+    scope: pendingScope,
+    messages: session.messages
+  })
+  const pending = pendingSends.pending
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
   const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
     readCommandMarkerCache(commandMarkerScope)
   )
-  // Reset the optimistic queue only when the pane/agent changes. A fresh launch
-  // often learns its provider session id after the first send; clearing pending
-  // on that transition briefly flashes the empty state before the transcript
-  // user turn lands.
   useEffect(() => {
-    setPending(readPendingSendCache(pendingScope))
     setWorkingInterrupted(false)
   }, [pendingScope])
   // Command markers are session-scoped because slash commands like /clear are
@@ -175,114 +202,43 @@ export function NativeChatResolvedView({
     setCommandMarkers(readCommandMarkerCache(commandMarkerScope))
     setWorkingInterrupted(false)
   }, [commandMarkerScope])
-  // Prune echoes whose real user turn is now in the transcript.
-  useEffect(() => {
-    setPending((prev) =>
-      writePendingSendCache(pendingScope, prunePendingSends(prev, session.messages))
-    )
-  }, [session.messages, pendingScope])
   useEffect(() => {
     if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
       return
     }
     clearNativeChatLaunchPrompt(terminalTabId)
   }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
+  const issuePendingSend = pendingSends.issue
+  const clearPendingSends = pendingSends.clearAll
   const onOptimisticSend = useCallback(
     (text: string, imagePaths?: string[]) => {
       setWorkingInterrupted(false)
-      const sentAt = Date.now()
-      const boundary = session.messages.at(-1)
-      const entry: NativeChatPendingSend = {
-        id: nextNativeChatPendingSendId(sentAt),
-        text,
-        sentAt,
-        afterMessageId: boundary?.id ?? null,
-        afterMessageTimestamp: boundary?.timestamp ?? null,
-        ...(imagePaths ? { imagePaths } : {})
-      }
-      setPending(appendPendingSendCache(pendingScope, entry))
-      return entry.id
+      return issuePendingSend(text, imagePaths)
     },
-    [pendingScope, session.messages]
+    [issuePendingSend]
   )
-  const onOptimisticSendCanceled = useCallback(
-    (pendingId: string) => {
-      // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
-      // must not come back from the pane cache as a prompt that was delivered.
-      const next = readPendingSendCache(pendingScope).filter((entry) => entry.id !== pendingId)
-      setPending(writePendingSendCache(pendingScope, next))
-    },
-    [pendingScope]
-  )
+  // Why: detach/interrupt cancels the delayed Enter, and a failed RPC send
+  // never reached the agent, so the echo must not come back from the pane cache
+  // as a prompt that was delivered.
+  const onOptimisticSendCanceled = pendingSends.retract
   const onSlashCommand = useCallback(
-    (command: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
+    (command: string, outcome?: NativeChatCommandMarkerOutcome) => {
+      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command, Date.now(), outcome))
     },
     [commandMarkerScope]
   )
 
-  const launchPromptMessage = useMemo(
-    () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
-    [paneLaunchPrompt, session.messages]
-  )
-  const sessionWithLaunchPrompt = useMemo<typeof session>(() => {
-    if (!launchPromptMessage) {
-      return session
-    }
-    return { ...session, messages: [...session.messages, launchPromptMessage] }
-  }, [launchPromptMessage, session])
-
-  const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
-    const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
-    return messages === sessionWithLaunchPrompt.messages
-      ? sessionWithLaunchPrompt
-      : { ...sessionWithLaunchPrompt, messages }
-  }, [sessionWithLaunchPrompt, commandMarkers])
-  const failedLaunchPromptMessageIds = useMemo(() => {
-    const id = paneLaunchPrompt?.failed ? launchPromptMessage?.id : null
-    if (!id || !sessionAfterCommandBoundaries.messages.some((message) => message.id === id)) {
-      return undefined
-    }
-    return new Set([id])
-  }, [paneLaunchPrompt?.failed, launchPromptMessage?.id, sessionAfterCommandBoundaries.messages])
-
-  // The streaming preview bubble (if any) sits after the transcript but before
-  // the optimistic user echoes — same order mobile uses.
-  const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
-    [pending, sessionAfterCommandBoundaries.messages]
-  )
-  const streamingText = useMemo(() => {
-    return deriveNativeChatStreamingText({
-      messages:
-        pendingMessages.length > 0
-          ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
-          : sessionAfterCommandBoundaries.messages,
-      previewText: hookPreview,
-      working: liveWorking,
-      previewIsToolOutput: hookPreviewIsToolOutput
+  const { sessionAfterCommandBoundaries, sessionWithPending, failedLaunchPromptMessageIds } =
+    useNativeChatMessageListSession({
+      session: sessionWithOmpRpcStatus,
+      paneLaunchPrompt,
+      commandMarkers,
+      pending,
+      liveWorking,
+      hookPreview: ompRpc.effectiveHookPreview,
+      hookPreviewIsToolOutput,
+      overlayMessages: ompRpc.overlayMessages
     })
-  }, [
-    sessionAfterCommandBoundaries.messages,
-    pendingMessages,
-    hookPreview,
-    liveWorking,
-    hookPreviewIsToolOutput
-  ])
-  const sessionWithPending = useMemo<typeof session>(() => {
-    if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
-      return sessionAfterCommandBoundaries
-    }
-    return {
-      ...sessionAfterCommandBoundaries,
-      messages: [
-        ...sessionAfterCommandBoundaries.messages,
-        ...commandMarkersAsMessages(commandMarkers),
-        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingMessages
-      ]
-    }
-  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.
@@ -318,9 +274,13 @@ export function NativeChatResolvedView({
     // Why: Stop after a submitted turn drops the delayed-write handle once it
     // settles, so cancelPendingSends no longer sees the optimistic id. Clear
     // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
-    setPending(writePendingSendCache(pendingScope, []))
+    clearPendingSends()
+    if (ompRpc.isRpcOwned) {
+      void ompRpc.abortChat()
+      return
+    }
     interactiveSend.cancel()
-  }, [interactiveSend, pendingScope])
+  }, [clearPendingSends, interactiveSend, ompRpc])
   const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
@@ -403,19 +363,31 @@ export function NativeChatResolvedView({
       {/* Live interactive prompt (question / approval) is the bottom input region
           (mobile parity). A question card supplies its own answer input, so it
           fully replaces the composer while active — no stray "Send a message". */}
-      <NativeChatInteractiveCard
-        paneKey={paneKey}
-        send={interactiveSend}
-        canSend={canSend}
-        messages={sessionAfterCommandBoundaries.messages}
-        transcriptSettled={session.readPhase === 'ready'}
-        onShowingQuestionChange={setQuestionActive}
-        answerInputRef={questionAnswerInputRef}
-      />
+      {ompRpc.isRpcOwned ? (
+        ompRpc.pendingExtensionUiRequest ? (
+          <NativeChatExtensionUiCard
+            // Why the key: the queue promotes the next request into the same
+            // slot, and an input/editor card's draft must not carry over to it.
+            key={ompRpc.pendingExtensionUiRequest.id}
+            request={ompRpc.pendingExtensionUiRequest}
+            onAnswer={ompRpc.answerExtensionUi}
+          />
+        ) : null
+      ) : (
+        <NativeChatInteractiveCard
+          paneKey={paneKey}
+          send={interactiveSend}
+          canSend={canSend}
+          messages={sessionAfterCommandBoundaries.messages}
+          transcriptSettled={session.readPhase === 'ready'}
+          onShowingQuestionChange={setQuestionActive}
+          answerInputRef={questionAnswerInputRef}
+        />
+      )}
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}
-      {questionActive ? null : (
+      {questionActive || (ompRpc.isRpcOwned && ompRpc.pendingExtensionUiRequest !== null) ? null : (
         <NativeChatComposer
           ref={composerRef}
           terminalTabId={terminalTabId}
@@ -431,6 +403,23 @@ export function NativeChatResolvedView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft }}
+          ompRpcChat={{
+            isOwned: ompRpc.isRpcOwned,
+            isTurnWorking: ompRpc.isRpcTurnWorking,
+            send: ompRpc.sendChat,
+            onCommandDispatched: ompRpc.onCommandDispatched,
+            onCommandAgentInvoked: ompRpc.onCommandAgentInvoked,
+            commandFailureMessage: ompRpc.commandFailureMessage,
+            commandFailureSuperseded: ompRpc.commandFailureSuperseded,
+            commandFailureId: ompRpc.commandFailureId,
+            clearCommandFailure: ompRpc.clearCommandFailure,
+            reportCommandFailure: ompRpc.reportCommandFailure,
+            reportMessageFailure: ompRpc.reportMessageFailure,
+            executableCommands: ompRpc.rpcExecutableCommands,
+            commands: ompRpc.rpcCommands,
+            sessionGeneration: ompRpc.sessionGeneration,
+            commandQueueKey: ompRpc.commandQueueKey
+          }}
         />
       )}
       {contextMenu.menu}

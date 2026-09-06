@@ -55,6 +55,36 @@ describe('markRemoteAgentWorkspaceTrusted', () => {
     )
   })
 
+  it('preserves remote Claude settings while recording workspace trust acceptance', async () => {
+    const writeFile = vi.fn(async (_filePath: string, _content: string) => undefined)
+    const fsProvider = makeFsProvider({
+      readFile: vi.fn(async () => ({
+        content: JSON.stringify({ theme: 'dark', projects: { '/other': { allowedTools: ['Read'] } } }),
+        isBinary: false
+      })),
+      writeFile
+    })
+    mocks.getSshFilesystemProvider.mockReturnValue(fsProvider)
+
+    await markRemoteAgentWorkspaceTrusted({
+      preset: 'claude',
+      connectionId: 'ssh-1',
+      workspacePath: '/repo/worktree'
+    })
+
+    expect(fsProvider.writeFile).toHaveBeenCalledWith(
+      '/home/u/.claude.json',
+      expect.stringContaining('"/real/repo/worktree"')
+    )
+    expect(JSON.parse(writeFile.mock.calls[0]?.[1] as string)).toEqual({
+      theme: 'dark',
+      projects: {
+        '/other': { allowedTools: ['Read'] },
+        '/real/repo/worktree': { hasTrustDialogAccepted: true }
+      }
+    })
+  })
+
   it('writes Codex trust when the remote home is a Windows absolute path', async () => {
     const fsProvider = makeFsProvider({
       realpath: vi.fn(async () => 'C:/Users/alice/platform')

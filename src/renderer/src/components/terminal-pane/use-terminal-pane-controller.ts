@@ -2,6 +2,7 @@ import type { TerminalPaneHandle, TerminalPaneProps } from './terminal-pane-type
 import { useTerminalPaneFoundation } from './use-terminal-pane-foundation'
 import { useTerminalPaneTitleState } from './use-terminal-pane-title-state'
 import { useTerminalPaneChatState } from './use-terminal-pane-chat-state'
+import { useTerminalPaneChatHostRender } from './use-terminal-pane-chat-host-render'
 import { useTerminalPaneStoreBindings } from './use-terminal-pane-store-bindings'
 import { useTerminalPaneStartupActions } from './use-terminal-pane-startup-actions'
 import { useTerminalPaneLayoutPersistence } from './use-terminal-pane-layout-persistence'
@@ -15,14 +16,20 @@ import { useTerminalPaneTitleEffects } from './use-terminal-pane-title-effects'
 import { useTerminalPaneContextActions } from './use-terminal-pane-context-actions'
 import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'
 import { useTerminalPaneProjection } from './use-terminal-pane-projection'
+import { useOmpRpcChatHandbackListener } from '../native-chat/use-omp-rpc-chat-handback-listener'
 
 export function useTerminalPaneController(
   props: TerminalPaneProps,
   ref: React.ForwardedRef<TerminalPaneHandle>
 ) {
   const foundation = useTerminalPaneFoundation(props, ref)
+  // Critical B (wave 5): this hook, not the (un)mountable NativeChatView's own
+  // chat-session hook, owns the actual PTY respawn on hand-back — see
+  // use-omp-rpc-chat-handback-listener.ts.
+  useOmpRpcChatHandbackListener(foundation.tabId)
   const title = Object.assign(foundation, useTerminalPaneTitleState(foundation))
-  const chat = Object.assign(title, useTerminalPaneChatState(title))
+  const chatState = Object.assign(title, useTerminalPaneChatState(title))
+  const chat = Object.assign(chatState, useTerminalPaneChatHostRender(chatState))
   const store = Object.assign(chat, useTerminalPaneStoreBindings(chat))
   const startup = Object.assign(store, useTerminalPaneStartupActions(store))
   const layout = Object.assign(startup, useTerminalPaneLayoutPersistence(startup))
@@ -35,7 +42,8 @@ export function useTerminalPaneController(
   useTerminalPaneTitleEffects(reconciliation)
   const context = Object.assign(reconciliation, useTerminalPaneContextActions(reconciliation))
   const mobile = Object.assign(context, useTerminalPaneMobileActions(context))
-  return Object.assign(mobile, useTerminalPaneProjection(mobile))
+  const projection = Object.assign(mobile, useTerminalPaneProjection(mobile))
+  return projection
 }
 
 export type TerminalPaneController = ReturnType<typeof useTerminalPaneController>

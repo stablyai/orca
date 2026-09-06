@@ -1,14 +1,15 @@
 import { ipcMain } from 'electron'
 import {
-  type AgentTrustPreset,
+  markClaudeProjectTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted
 } from '../agent-trust-presets'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
+import type { AgentTrustPreset } from '../../shared/agent-trust-preset'
 
 /**
- * Why: cursor-agent, GitHub Copilot CLI, and Codex gate first-launch in an
+ * Why: Claude Code, cursor-agent, GitHub Copilot CLI, and Codex gate first-launch in an
  * unfamiliar directory behind a "Do you trust this folder?" menu that consumes
  * keystrokes (numbered options / single-letter shortcuts). Orca's draft-URL
  * paste flow needs the input box, not the menu, so before Orca spawns the
@@ -37,6 +38,8 @@ export function registerAgentTrustHandlers(): void {
             connectionId,
             workspacePath: args.workspacePath
           })
+        } else if (args.preset === 'claude') {
+          markClaudeProjectTrusted(args.workspacePath)
         } else if (args.preset === 'cursor') {
           markCursorWorkspaceTrusted(args.workspacePath)
         } else if (args.preset === 'copilot') {

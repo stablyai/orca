@@ -4,8 +4,15 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
+import type {
+  OmpRpcChatSendBehavior,
+  OmpRpcChatSendResult
+} from '../../../../shared/omp-rpc-chat-ipc-contract'
+import type { OmpRpcSlashCommand } from '../../../../shared/omp-rpc-protocol'
+import type { OmpRpcChatPaneConsumedFailure } from '../../store/slices/omp-rpc-chat-pane-failure-notice'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { OmpRpcExecutableCommands } from './omp-rpc-command-catalog'
 
 export type NativeChatOptionPickerRequest = {
   id: string
@@ -21,6 +28,54 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   onError: (message: string | null) => void
   runtime: 'local' | 'remote'
+}
+export type NativeChatComposerOmpRpcBinding = {
+  isOwned: boolean
+  isTurnWorking: boolean
+  send: (args: {
+    message: string
+    behavior: OmpRpcChatSendBehavior
+    /** The wire `id` a command send is correlated under, so its later
+     *  `prompt_result` frame can be attributed to that run alone. */
+    requestId?: string
+    /** The generation the send was dispatched on, checked against the live
+     *  session so a queued command cannot land in one that replaced it. */
+    expectedGeneration?: number
+    /** Run only once the transport's own gates admit the send. */
+    onAuthorized?: () => void
+  }) => Promise<OmpRpcChatSendResult>
+  /** Retires the previous slash command's captured output before the next
+   *  one's frames arrive, under the id correlating that run. Absent for a pane
+   *  with no RPC session. */
+  onCommandDispatched?: (commandRunId: string) => void
+  /** Suppresses that captured output once the command's own response reports
+   *  it started an agent turn, unless a later run already owns the slot. */
+  onCommandAgentInvoked?: (commandRunId: string) => void
+  /** Pane-owned failure feedback for a command whose dispatch outlived the
+   *  composing surface. Read and cleared by whichever composer remounts. */
+  commandFailureMessage?: string | null
+  /** That notice describes an already-replaced session, so it yields to a live
+   *  one this composer is showing rather than relabelling it. */
+  commandFailureSuperseded?: boolean
+  /** Distinguishes one notice occurrence from the next, including a repeat
+   *  failure whose wording is identical. */
+  commandFailureId?: number | null
+  clearCommandFailure?: (consumed: OmpRpcChatPaneConsumedFailure) => void
+  reportCommandFailure?: (command: string, expectedGeneration?: number) => void
+  /** Same, for an ordinary message whose send outlived the composer. */
+  reportMessageFailure?: (expectedGeneration: number) => void
+  /** What the owning session will actually dispatch, from OMP's published RPC
+   *  catalog. Null while no catalog has arrived, which is not permission to
+   *  send — the session route needs positive proof. */
+  executableCommands?: OmpRpcExecutableCommands | null
+  /** The owning session's published catalog, which outranks the cwd-cached
+   *  probe snapshot for the `/` menu (see `selectOmpRpcLiveCommands`). */
+  commands?: readonly OmpRpcSlashCommand[] | null
+  /** Identifies the RPC session bound to the pane, so a completion that
+   *  outlives a rebind can be discarded. */
+  sessionGeneration?: number
+  /** Stable pane-plus-generation identity for the RPC command queue. */
+  commandQueueKey?: string
 }
 
 export type NativeChatComposerProps = {
@@ -51,6 +106,8 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
+  /** Session-scoped OMP RPC transport; absent keeps the PTY path unchanged. */
+  ompRpcChat?: NativeChatComposerOmpRpcBinding
 }
 
 /** Launch context prefilled into the TUI input as an unsent draft, plus the two

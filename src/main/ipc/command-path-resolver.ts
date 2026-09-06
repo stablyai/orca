@@ -64,12 +64,12 @@ async function isExecutableFile(candidate: string, isWin: boolean): Promise<bool
  * counts matches which resolve to an ABSOLUTE path (so relative PATH entries
  * and relative command paths stay not-found, exactly as before).
  */
-export async function isCommandOnLocalPath(
+export async function resolveCommandOnLocalPath(
   command: string,
   options: ResolveCommandOptions = {}
-): Promise<boolean> {
+): Promise<string | null> {
   if (!command) {
-    return false
+    return null
   }
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
@@ -98,9 +98,16 @@ export async function isCommandOnLocalPath(
         continue
       }
       if (await isExecutableFile(candidate, isWin)) {
-        return true
+        return candidate
       }
     }
   }
-  return false
+  return null
+}
+
+export async function isCommandOnLocalPath(
+  command: string,
+  options: ResolveCommandOptions = {}
+): Promise<boolean> {
+  return (await resolveCommandOnLocalPath(command, options)) !== null
 }

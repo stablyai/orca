@@ -5,13 +5,12 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 import { runExclusivelyForCodexTrustConfig } from './codex/codex-trust-config-mutation-queue'
-
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+export type { AgentTrustPreset } from '../shared/agent-trust-preset'
 
 /**
- * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
- * Codex so the agent's "Do you trust this folder?" menu does not fire on
- * first launch.
+ * Pre-mark a workspace as trusted for Claude Code, cursor-agent, GitHub
+ * Copilot CLI, or Codex so the agent's "Do you trust this folder?" menu does
+ * not fire on first launch.
  *
  * Why: Orca's "drop URL into agent input as a draft" flow injects the URL
  * via bracketed-paste once the TUI is up. If the trust menu intercepts the
@@ -98,6 +97,41 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })
   }
+  writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+/**
+ * Claude reads `projects[realpath].hasTrustDialogAccepted` before loading
+ * project settings and hooks.
+ */
+export function markClaudeProjectTrusted(workspacePath: string): void {
+  const workspace = canonicalize(workspacePath)
+  const configDir = process.env.CLAUDE_CONFIG_DIR?.trim() || homedir()
+  const configPath = join(configDir, '.claude.json')
+  let config: Record<string, unknown> = {}
+  try {
+    if (existsSync(configPath)) {
+      const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return
+      }
+      config = parsed as Record<string, unknown>
+    }
+  } catch {
+    // Why: malformed CLI state is the user's to repair, not ours to overwrite.
+    return
+  }
+  const projects =
+    config.projects && typeof config.projects === 'object' && !Array.isArray(config.projects)
+      ? (config.projects as Record<string, unknown>)
+      : {}
+  const current = projects[workspace]
+  projects[workspace] = {
+    ...(current && typeof current === 'object' && !Array.isArray(current) ? current : {}),
+    hasTrustDialogAccepted: true
+  }
+  config.projects = projects
+  mkdirSync(dirname(configPath), { recursive: true })
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
 }
 

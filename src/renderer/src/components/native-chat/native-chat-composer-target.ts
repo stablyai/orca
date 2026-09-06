@@ -11,8 +11,12 @@ export type NativeChatResolvedTarget = {
  *  pathological clipboard can't stall the round-trip. */
 export const NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES = 16 * 1024 * 1024
 
-export function nativeChatComposerPlaceholder(hasPty: boolean, canSend: boolean): string {
-  if (!hasPty) {
+/** A PTY is one possible send route, not a precondition for the composer —
+ *  an RPC-owned pane (D1) can send with no PTY at all. `hasSendRoute` is
+ *  `true` whenever either exists; only its absence, or the multi-device
+ *  input lock (`canSend`), reads as "nothing can be typed here". */
+export function nativeChatComposerPlaceholder(hasSendRoute: boolean, canSend: boolean): string {
+  if (!hasSendRoute) {
     return translate(
       'components.native-chat.composer.noPty',
       'No live terminal — toggle back to reconnect.'

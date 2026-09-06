@@ -16,6 +16,7 @@ import {
 import { awaitCancelableLocalPtySpawn, reattachLocalPty } from './local-pty-spawn-state'
 import { spawnShellWithFallback } from './local-pty-utils'
 import { updateHistoryEnvForFallback, type HistoryInjectionResult } from '../terminal-history'
+import { localOmpRpcSessionWriteFence } from '../omp-rpc/omp-rpc-local-session-write-fence'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 
 export async function spawnLocalPty(
@@ -43,6 +44,7 @@ export async function spawnLocalPty(
     planResult instanceof DeferredLocalPtyLaunchPlan
       ? planResult.finish(await planResult.availability)
       : planResult
+  localOmpRpcSessionWriteFence.assertPtySpawnAllowed(args.command, plan.effectiveCwd)
   const envResult = buildLocalPtySpawnEnvironment({
     id,
     spawn: args,
@@ -68,7 +70,14 @@ export async function spawnLocalPty(
   if (concurrentWinner) {
     return concurrentWinner
   }
-  const spawnResult = spawnShellWithFallback({
+  const ptyFenceOwner = `local-pty:${id}`
+  const fencedSessionFilePath = localOmpRpcSessionWriteFence.reservePtySpawn(
+    args.command,
+    plan.effectiveCwd,
+    ptyFenceOwner
+  )
+  try {
+    const spawnResult = spawnShellWithFallback({
     shellPath: plan.shellPath,
     shellArgs: plan.shellArgs,
     cols: args.cols,
@@ -85,30 +94,30 @@ export async function spawnLocalPty(
           updateHistoryEnvForFallback(env, fallbackShell, historyResult as HistoryInjectionResult)
       : undefined,
     windowsFallbackAttempts: plan.windowsFallbackAttempts
-  })
-  args.onPtySpawnCommitted?.()
-  plan.shellPath = spawnResult.shellPath
+    })
+    args.onPtySpawnCommitted?.()
+    plan.shellPath = spawnResult.shellPath
   // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.
-  if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
-    plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
-  }
-  if (args.command && plan.getFallbackShellReadyConfig) {
-    plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
-  }
+    if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
+      plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
+    }
+    if (args.command && plan.getFallbackShellReadyConfig) {
+      plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
+    }
 
-  if (process.platform !== 'win32') {
-    finalEnv.SHELL = plan.shellPath
-  }
+    if (process.platform !== 'win32') {
+      finalEnv.SHELL = plan.shellPath
+    }
 
-  const proc = spawnResult.process
-  const spawnedShellIsWsl =
-    process.platform === 'win32' && pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
-  const spawnedWslDistro = spawnedShellIsWsl
-    ? (plan.launchWslDistro ?? undefined)
-    : process.platform === 'win32'
-      ? null
-      : undefined
-  return activateLocalPtySession({
+    const proc = spawnResult.process
+    const spawnedShellIsWsl =
+      process.platform === 'win32' && pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
+    const spawnedWslDistro = spawnedShellIsWsl
+      ? (plan.launchWslDistro ?? undefined)
+      : process.platform === 'win32'
+        ? null
+        : undefined
+    return activateLocalPtySession({
     id,
     incarnationId,
     spawn: args,
@@ -117,6 +126,18 @@ export async function spawnLocalPty(
     env: finalEnv,
     proc,
     reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
-    spawnedWslDistro
-  })
+      spawnedWslDistro,
+      ...(fencedSessionFilePath
+        ? {
+            onPhysicalExit: () =>
+              localOmpRpcSessionWriteFence.release(fencedSessionFilePath, ptyFenceOwner)
+          }
+        : {})
+    })
+  } catch (error) {
+    if (fencedSessionFilePath) {
+      localOmpRpcSessionWriteFence.release(fencedSessionFilePath, ptyFenceOwner)
+    }
+    throw error
+  }
 }

@@ -1,5 +1,6 @@
 import type * as pty from 'node-pty'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
 import {
   confirmLocalPtyForegroundProcess,
   confirmLocalPtyShellForeground,
@@ -69,6 +70,9 @@ export class LocalPtyProvider implements IPtyProvider {
   async attach(_id: string): Promise<void> {}
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
+  }
+  getSlavePath(id: string): string | undefined {
+    return readPtySlavePath(ptyProcesses.get(id))
   }
   write(id: string, data: string): boolean {
     return writeLocalPty(id, data)

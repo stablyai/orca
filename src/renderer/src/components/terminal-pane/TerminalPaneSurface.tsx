@@ -15,6 +15,7 @@ import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
+import { TerminalPaneOmpRpcOwnershipMount } from './use-terminal-pane-omp-rpc-ownership'
 import {
   TerminalPaneCodexRestartPortals,
   TerminalPaneMobileDriverPortals,
@@ -112,6 +113,7 @@ export function TerminalPaneSurface({
 
   return (
     <>
+      <TerminalPaneOmpRpcOwnershipMount controller={controller} />
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"

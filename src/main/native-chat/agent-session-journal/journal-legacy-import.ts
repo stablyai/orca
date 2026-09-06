@@ -197,16 +197,29 @@ async function decodeWithIdentities(input: {
       const trackedIdentity = tracker.identify(line, lineIndex)
       lineIndex += 1
       const message = decode(line, fallbackId)
-      if (message) {
+      const decodedMessages = Array.isArray(message) ? message : message ? [message] : []
+      for (const [messageIndex, decodedMessage] of decodedMessages.entries()) {
         identities.push(
           input.decodedMessageIdentities
             ? {
                 provider: 'legacy',
                 agent: input.agent,
                 sessionId: input.sessionId,
-                recordId: message.id
+                recordId: decodedMessage.id
               }
-            : trackedIdentity
+            : decodedMessages.length === 1
+              ? trackedIdentity
+              : trackedIdentity.provider === 'legacy'
+                ? {
+                    ...trackedIdentity,
+                    recordId: `${trackedIdentity.recordId}:${messageIndex}`
+                  }
+                : {
+                    provider: 'legacy',
+                    agent: input.agent,
+                    sessionId: input.sessionId,
+                    recordId: `${decodedMessage.id}:${messageIndex}`
+                  }
         )
       }
       return message

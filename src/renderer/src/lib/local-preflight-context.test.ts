@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
@@ -54,6 +55,29 @@ function makeState(args: {
 }
 
 describe('local preflight context', () => {
+  it('resolves a local WSL folder workspace without requiring a repository worktree', () => {
+    const folderWorkspaceId = 'folder-1'
+    const state = {
+      activeWorktreeId: folderWorkspaceKey(folderWorkspaceId),
+      folderWorkspaces: [
+        {
+          id: folderWorkspaceId,
+          projectGroupId: 'group-1',
+          folderPath: String.raw`\\wsl.localhost\Ubuntu\home\rahul\folder`
+        }
+      ],
+      projectGroups: [{ id: 'group-1', connectionId: null, executionHostId: 'local' }],
+      projects: [],
+      repos: [],
+      settings: { localWindowsRuntimeDefault: { kind: 'windows-host' } },
+      worktreesByRepo: {}
+    } as unknown as AppState
+
+    expect(
+      getLocalProjectExecutionRuntimeContext(state, folderWorkspaceKey(folderWorkspaceId), 'win32')
+    ).toMatchObject({ runtime: { kind: 'wsl', distro: 'Ubuntu', projectId: folderWorkspaceId } })
+  })
+
   it('extracts WSL distro names from supported UNC forms', () => {
     expect(getWslDistroFromPath(String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`)).toBe('Ubuntu')
     expect(getWslDistroFromPath(String.raw`\\wsl$\Debian\home\alice\repo`)).toBe('Debian')

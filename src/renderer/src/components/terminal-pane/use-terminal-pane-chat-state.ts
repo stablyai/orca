@@ -13,7 +13,6 @@ import { selectUnifiedTerminalTabChatFields } from './terminal-unified-tab-looku
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import {
   nativeChatLaunchAgentForLeaf,
-  resolveNativeChatLeafRoute,
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
 import type { TerminalPaneTitleController } from './use-terminal-pane-title-state'
@@ -23,7 +22,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     chatLeafId,
     managerRef,
     nativeChatTranscriptIsLocalReadable,
-    onAgentExitedRef,
     paneCount,
     setChatLeafId,
     setTabWideAgentHintLeafId,
@@ -176,38 +174,6 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [chatLeafId, setTabViewMode, unifiedTabId]
   )
-  const handleConfirmedAgentExit = useCallback(
-    (leafId: string): void => {
-      if (leafId !== chatLeafId) {
-        return
-      }
-      const panes = managerRef.current?.getPanes() ?? []
-      const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
-      applyNativeChatLeafRoute(
-        resolveNativeChatLeafRoute({
-          isChatViewMode,
-          chatLeafId,
-          activeLeafId,
-          chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
-          activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true,
-          structuredSessionId
-        })
-      )
-    },
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [
-      applyNativeChatLeafRoute,
-      chatLeafId,
-      isChatEligibleForLeaf,
-      isChatViewMode,
-      structuredSessionId
-    ]
-  )
-  useEffect(() => {
-    onAgentExitedRef.current = handleConfirmedAgentExit
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-  }, [handleConfirmedAgentExit])
   const canToggleChatForLeaf = useCallback(
     (leafId: string | null): boolean => {
       // A structured session renders its own transcript with no TUI beneath it,

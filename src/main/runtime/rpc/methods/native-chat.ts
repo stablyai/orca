@@ -1,8 +1,10 @@
 import { z } from 'zod'
-import type {
-  NativeChatBlock,
-  NativeChatMessage,
-  AgentType
+import {
+  NATIVE_CHAT_REMOTE_DEFAULT_WINDOW,
+  NATIVE_CHAT_REMOTE_MAX_WINDOW,
+  type NativeChatBlock,
+  type NativeChatMessage,
+  type AgentType
 } from '../../../../shared/native-chat-types'
 import {
   readNativeChatTranscriptTail,
@@ -32,12 +34,15 @@ const NativeChatSession = z.object({
   // fast first paint and raise it to page older history in as the user scrolls.
   // Clamp (don't reject) a limit past the max window so a client paging beyond it
   // gets the capped tail and pagination stops cleanly — a hard `.max` rejection
-  // would fail the read and stall "load earlier" at the boundary.
+  // would fail the read and stall "load earlier" at the boundary. The ceiling is
+  // the SHARED wire constant, not a local one (XLR-049): older runtimes still
+  // reject past it, so the renderer grows its own limit only up to the same
+  // value and no read depends on this clamp existing.
   limit: z
     .number()
     .int()
     .positive()
-    .transform((value) => Math.min(value, MOBILE_NATIVE_CHAT_MAX_WINDOW))
+    .transform((value) => Math.min(value, NATIVE_CHAT_REMOTE_MAX_WINDOW))
     .optional(),
   // Optional client-supplied cleanup token. When present, the subscribe handler
   // keys the fs-watcher cleanup under it so registration and unsubscribe derive
@@ -59,15 +64,15 @@ const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
 })
 
-// Why: a long agent session can hold thousands of turns (with full tool I/O).
-// Shipping all of them over the paired connection and rendering them at once
-// freezes the mobile app, so the runtime RPC windows to the most recent slice —
-// the conversation tail is what the chat view shows first. The desktop IPC path
-// is unaffected (it reads locally with a virtualized list).
-// Small first page for a fast initial paint; the client raises `limit` to load
-// older history as the user scrolls back.
-const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
-const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
+// Why the reads below are windowed at all: a long agent session can hold
+// thousands of turns (with full tool I/O). Shipping all of them over the paired
+// connection and rendering them at once freezes the mobile app, so the runtime
+// RPC returns the most recent slice — the conversation tail is what the chat
+// view shows first. The desktop IPC path is unaffected (it reads locally with a
+// virtualized list). Both bounds — the default window an omitted `limit` gets
+// and the ceiling a supplied one is clamped to — are imported wire constants,
+// because the client bridges have to grade an exact fill against the very same
+// values (SA-014, XLR-049).
 // Why: a single tool result (a big file read, a long diff) can be hundreds of KB.
 // The mobile view only previews tool block bodies, so truncate them on the wire
 // to keep the payload small; the marker tells the user content was clipped.
@@ -186,9 +191,9 @@ function sanitizeAppendForClient(
  *  alike. Char-clipping (the mobile-only payload diet) is applied separately. */
 function windowTranscript(
   messages: readonly NativeChatMessage[],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+  limit = NATIVE_CHAT_REMOTE_DEFAULT_WINDOW
 ): NativeChatMessage[] {
-  const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
+  const window = Math.min(Math.max(limit, 1), NATIVE_CHAT_REMOTE_MAX_WINDOW)
   return messages.length > window ? messages.slice(-window) : messages.slice()
 }
 
@@ -198,7 +203,7 @@ function windowTranscript(
 function windowForClient(
   messages: readonly NativeChatMessage[],
   clientKind: RpcContext['clientKind'],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+  limit = NATIVE_CHAT_REMOTE_DEFAULT_WINDOW
 ): NativeChatMessage[] {
   const windowed = windowTranscript(messages, limit)
   return windowed.map((message) => sanitizeMessage(message, clientKind))
@@ -209,7 +214,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     name: 'nativeChat.readSession',
     params: NativeChatSession,
     handler: async (params, { clientKind, signal }) => {
-      const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const limit = params.limit ?? NATIVE_CHAT_REMOTE_DEFAULT_WINDOW
       const result = await readNativeChatTranscriptTail(
         {
           agent: params.agent,
@@ -222,7 +227,9 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       )
       return 'messages' in result
         ? {
-            messages: windowForClient(result.messages, clientKind, limit),
+            // The tail reader already applied the page boundary and may have
+            // deliberately retained siblings decoded from one source record.
+            messages: sanitizeAppendForClient(result.messages, clientKind),
             hasMore: result.hasMore,
             beforeOffset: result.beforeOffset,
             ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
@@ -249,7 +256,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       // unsubscribe (no wire break).
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
-      const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const limit = params.limit ?? NATIVE_CHAT_REMOTE_DEFAULT_WINDOW
       const cleanup = (): void => {
         if (closed) {
           return

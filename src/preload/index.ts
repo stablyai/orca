@@ -73,6 +73,8 @@ import { codexUsageApi } from './api/codex-usage-bridge'
 import { openCodeUsageApi } from './api/open-code-usage-bridge'
 import { aiVaultApi } from './api/ai-vault-bridge'
 import { nativeChatApi } from './api/native-chat-bridge'
+import { ompRpcApi } from './api/omp-rpc-bridge'
+import { ompRpcChatApi } from './api/omp-rpc-chat-bridge'
 import { runtimeApi } from './api/runtime-bridge'
 import { runtimeEnvironmentsApi } from './api/runtime-environments-bridge'
 import { rateLimitsApi } from './api/rate-limits-bridge'
@@ -171,6 +173,8 @@ const api = {
   openCodeUsage: openCodeUsageApi,
   aiVault: aiVaultApi,
   nativeChat: nativeChatApi,
+  ompRpc: ompRpcApi,
+  ompRpcChat: ompRpcChatApi,
   runtime: runtimeApi,
   runtimeEnvironments: runtimeEnvironmentsApi,
   rateLimits: rateLimitsApi,

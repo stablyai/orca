@@ -38,8 +38,12 @@ vi.mock('node:os', async () => {
   }
 })
 
-const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTrusted } =
-  await import('./agent-trust-presets')
+const {
+  markClaudeProjectTrusted,
+  markCodexProjectTrusted,
+  markCopilotFolderTrusted,
+  markCursorWorkspaceTrusted
+} = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('./codex/codex-trust-config-mutation-queue')
 
@@ -132,6 +136,30 @@ describe('markCopilotFolderTrusted', () => {
       )
       expect(parsed.firstLaunchAt).toBe('2026-01-01T00:00:00.000Z')
       expect(parsed.trustedFolders).toHaveLength(1)
+    } finally {
+      rmSync(workspace, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('markClaudeProjectTrusted', () => {
+  it('preserves global settings while recording the canonical workspace trust acceptance', () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-claude-ws-'))
+    try {
+      const configPath = join(testState.fakeHomeDir, '.claude.json')
+      writeFileSync(
+        configPath,
+        JSON.stringify({ theme: 'dark', projects: { '/other': { allowedTools: ['Read'] } } })
+      )
+
+      markClaudeProjectTrusted(workspace)
+
+      const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
+      expect(parsed.theme).toBe('dark')
+      expect(parsed.projects['/other']).toEqual({ allowedTools: ['Read'] })
+      expect(parsed.projects[realpathSync.native(workspace)]).toEqual({
+        hasTrustDialogAccepted: true
+      })
     } finally {
       rmSync(workspace, { recursive: true, force: true })
     }

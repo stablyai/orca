@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { useAppStore } from '@/store'
-import { NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
+import { NATIVE_CHAT_INITIAL_LIMIT, nextNativeChatLimit } from './native-chat-pagination'
 
 // Mock the session transport so the hook's IO is observable and controllable
 // per owner id. Each distinct owner gets its own read/subscribe/unsubscribe mocks.
@@ -752,5 +752,127 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     expect(latest?.status).not.toBe('error')
     expect(latest?.error).toBeUndefined()
     expect(latest?.messages.map((m) => m.id)).toContain('a-late')
+  })
+  // SA-008: `hasMore` answers the Load-earlier affordance, where an over-eager
+  // true costs one wasted read. `omitsOlderRecords` answers an irreversible
+  // question — may a consumer read the window's oldest row as a horizon and
+  // retire an advisor card behind it? — so it may only come from a host frame
+  // that strictly observed a record behind the window, never from a locally
+  // derived read that merely filled its requested limit.
+  describe('older-record omission proof', () => {
+    const exactlyFull = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
+      assistant(`m-${n}`, 't')
+    )
+
+    it('keeps the affordance but proves nothing when a seed read exactly fills its window', async () => {
+      const transport = getMockTransport('env-1', { autoSnapshot: false })
+      transport.readSession.mockResolvedValue({ messages: exactlyFull })
+
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+
+      // A transcript holding exactly NATIVE_CHAT_INITIAL_LIMIT records returns
+      // this identical shape, so the window may reach the transcript head.
+      expect(latest?.readPhase).toBe('ready')
+      expect(latest?.hasMore).toBe(true)
+      expect(latest?.omitsOlderRecords).toBe(false)
+    })
+
+    it('proves omission from a host snapshot that measured a record behind the window', async () => {
+      const transport = getMockTransport('env-1', { autoSnapshot: false })
+
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      await act(async () => {
+        transport.emit({ type: 'snapshot', messages: exactlyFull, hasMore: true })
+      })
+
+      expect(latest?.hasMore).toBe(true)
+      expect(latest?.omitsOlderRecords).toBe(true)
+    })
+
+    it('refuses the proof when the client synthesized the frame hasMore (SA-011)', async () => {
+      const transport = getMockTransport('env-1', { autoSnapshot: false })
+
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      // An older remote runtime omits hasMore and the transport infers it from
+      // the exact fill; that is a count, not the host counting past the limit,
+      // so it may not retire an advisor card behind the window.
+      await act(async () => {
+        transport.emit({
+          type: 'snapshot',
+          messages: exactlyFull,
+          hasMore: true,
+          hasMoreInferred: true
+        })
+      })
+
+      expect(latest?.hasMore).toBe(true)
+      expect(latest?.omitsOlderRecords).toBe(false)
+    })
+
+    it('withdraws the proof once an authoritative frame reaches the transcript head', async () => {
+      const transport = getMockTransport('env-1', { autoSnapshot: false })
+
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      await act(async () => {
+        transport.emit({ type: 'snapshot', messages: exactlyFull, hasMore: true })
+      })
+      await act(async () => {
+        transport.emit({ type: 'replacement', messages: exactlyFull, hasMore: false })
+      })
+
+      expect(latest?.omitsOlderRecords).toBe(false)
+    })
+
+    it('withdraws the proof after load-earlier re-derives the verdict at a wider limit', async () => {
+      const transport = getMockTransport('env-1', { autoSnapshot: false })
+
+      await render({
+        paneKey: PANE,
+        agent: AGENT,
+        sessionId: SESSION,
+        runtimeEnvironmentId: 'env-1'
+      })
+      await act(async () => {
+        transport.emit({ type: 'snapshot', messages: exactlyFull, hasMore: true })
+      })
+      expect(latest?.omitsOlderRecords).toBe(true)
+
+      // The older page is read through `readSession`, which carries no host
+      // measurement: the earlier proof was about the narrower window and says
+      // nothing about the wider one, so the pane falls back to unproven.
+      const wider = Array.from({ length: nextNativeChatLimit(NATIVE_CHAT_INITIAL_LIMIT) }, (
+        _unused,
+        n
+      ) => assistant(`w-${n}`, 't'))
+      transport.readSession.mockResolvedValueOnce({ messages: wider })
+      await act(async () => {
+        latest?.loadEarlier()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(latest?.hasMore).toBe(true)
+      expect(latest?.omitsOlderRecords).toBe(false)
+    })
   })
 })

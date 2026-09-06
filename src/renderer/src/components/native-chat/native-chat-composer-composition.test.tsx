@@ -37,7 +37,7 @@ function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
     textareaRef: createRef<HTMLTextAreaElement>(),
     draft: '',
     disabled: false,
-    hasPty: true,
+    hasSendRoute: true,
     canSend: true,
     autocomplete: { mode: 'none' },
     activeSuggestion: 0,
