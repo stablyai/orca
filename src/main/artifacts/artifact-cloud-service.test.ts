@@ -43,7 +43,11 @@ const cloudB: OrcaProfileCloudSummary = {
   linkedAt: 2
 }
 
-function createResponse(slug = 'artifact-a', expiresAt = '2026-09-06T00:00:00.000Z'): Response {
+// Why computed default: a hardcoded default expires (this one lapsed at UTC midnight on
+// 2026-09-06) and pruneRecords silently dropped every record, failing the suite as a time bomb.
+const FIXTURE_DEFAULT_EXPIRES_AT = () => new Date(Date.now() + 86_400_000).toISOString()
+
+function createResponse(slug = 'artifact-a', expiresAt = FIXTURE_DEFAULT_EXPIRES_AT()): Response {
   return new Response(
     JSON.stringify({
       artifact: {
@@ -455,7 +459,7 @@ describe('ArtifactCloudService record authorization', () => {
     let resolveUpdate: ((response: Response) => void) | undefined
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(createResponse('artifact-a', '2026-09-06T00:00:00.000Z'))
+      .mockResolvedValueOnce(createResponse('artifact-a', '2027-09-06T00:00:00.000Z'))
       .mockImplementationOnce(
         () =>
           new Promise<Response>((resolve) => {
@@ -470,7 +474,7 @@ describe('ArtifactCloudService record authorization', () => {
     const update = service.update(writeRequest)
     await vi.waitFor(() => expect(resolveUpdate).toBeTypeOf('function'))
     vi.setSystemTime('2026-09-07T00:00:00.000Z')
-    resolveUpdate?.(createResponse('artifact-a', '2026-10-06T00:00:00.000Z'))
+    resolveUpdate?.(createResponse('artifact-a', '2027-10-06T00:00:00.000Z'))
     await update
     await expect(
       service.unshare({ sourceKey: writeRequest.sourceKey, apiUrl, authToken: 'token-a' })

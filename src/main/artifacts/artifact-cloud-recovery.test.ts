@@ -325,6 +325,10 @@ function jsonResponse(body: object, status: number): Response {
   })
 }
 
+// Why computed: a hardcoded date expires (this one lapsed at UTC midnight on 2026-09-06) and
+// pruneRecords silently dropped every record, failing the suite as a time bomb.
+const fixtureExpiresAt = new Date(Date.now() + 86_400_000).toISOString()
+
 function createResponseBody(slug: string): object {
   return {
     artifact: {
@@ -336,7 +340,7 @@ function createResponseBody(slug: string): object {
       renderedContentType: 'text/html',
       createdAt: '2026-08-06T00:00:00.000Z',
       updatedAt: '2026-08-06T00:00:00.000Z',
-      expiresAt: '2026-09-06T00:00:00.000Z',
+      expiresAt: fixtureExpiresAt,
       byteSize: 17,
       deletedAt: null
     },
