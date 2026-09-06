@@ -21,15 +21,15 @@ describe('serve update helper script', () => {
     expect(script).toContain('#!/usr/bin/env bash')
     expect(script).toContain('systemctl stop "$UNIT_NAME"')
     expect(script).toContain('systemctl start "$UNIT_NAME"')
-    expect(script).toContain('"phase":"accepted"')
-    expect(script).toContain('"phase":"ok"')
-    expect(script).toContain('"phase":"failed"')
-    expect(script).toContain('"phase":"rejected"')
+    expect(script).toContain('{phase: "accepted"')
+    expect(script).toContain('{phase: "ok"')
+    expect(script).toContain('{phase: "failed"')
+    expect(script).toContain('{phase: "rejected"')
   })
 
   it('writes accepted before any mutating step', () => {
     const script = buildServeUpdateHelperScript(INPUT)
-    const acceptedAt = script.indexOf('"phase":"accepted"')
+    const acceptedAt = script.indexOf('{phase: "accepted"')
     const stopAt = script.indexOf('systemctl stop "$UNIT_NAME"')
     expect(acceptedAt).toBeGreaterThan(-1)
     expect(stopAt).toBeGreaterThan(acceptedAt)
@@ -47,8 +47,8 @@ describe('serve update helper script', () => {
     const noOpCheck = script.indexOf('already at version')
     expect(downgradeCheck).toBeGreaterThan(-1)
     expect(noOpCheck).toBeGreaterThan(-1)
-    expect(downgradeCheck).toBeLessThan(script.indexOf('"phase":"accepted"'))
-    expect(noOpCheck).toBeLessThan(script.indexOf('"phase":"accepted"'))
+    expect(downgradeCheck).toBeLessThan(script.indexOf('{phase: "accepted"'))
+    expect(noOpCheck).toBeLessThan(script.indexOf('{phase: "accepted"'))
   })
 
   it('snapshots the current binary and rolls back on every post-acceptance failure', () => {
@@ -71,7 +71,7 @@ describe('serve update helper script', () => {
     const script = buildServeUpdateHelperScript(INPUT)
     const startAt = script.indexOf('systemctl start "$UNIT_NAME"')
     const readyAt = script.indexOf('orca_server_ready')
-    const okAt = script.indexOf('"phase":"ok"')
+    const okAt = script.indexOf('{phase: "ok"')
     expect(readyAt).toBeGreaterThan(startAt)
     expect(okAt).toBeGreaterThan(readyAt)
     expect(script).toContain('journalctl -u "$UNIT_NAME" _PID="$pid"')
@@ -97,11 +97,22 @@ describe('serve update helper script', () => {
     expect(script).toContain('${#EXPECTED_SHA} -ne 128')
   })
 
+  it('stages the artifact before hashing so the installed bytes are the hashed bytes', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const cpAt = script.indexOf('cp -- "$ARTIFACT_PATH" "$STAGING"')
+    const hashAt = script.indexOf('sha512sum -- "$STAGING"')
+    expect(cpAt).toBeGreaterThan(-1)
+    expect(hashAt).toBeGreaterThan(cpAt)
+    // The later install step must not re-copy from the (mutable) cache path.
+    const installSection = script.slice(script.indexOf('systemctl stop "$UNIT_NAME"'))
+    expect(installSection).not.toContain('cp -- "$ARTIFACT_PATH"')
+  })
+
   it('echoes the per-attempt attemptId in accepted and ok verdicts', () => {
     const script = buildServeUpdateHelperScript(INPUT)
     expect(script).toContain("ATTEMPT_ID=$(parse_field 'attemptId')")
-    const acceptedAt = script.indexOf('"phase":"accepted"')
-    const okAt = script.indexOf('"phase":"ok"')
+    const acceptedAt = script.indexOf('{phase: "accepted"')
+    const okAt = script.indexOf('{phase: "ok"')
     expect(script.slice(acceptedAt, acceptedAt + 160)).toContain('attemptId')
     expect(script.slice(okAt, okAt + 160)).toContain('attemptId')
     expect(script).not.toContain('runtimeId')
@@ -109,8 +120,8 @@ describe('serve update helper script', () => {
 
   it('binds rejected and failed verdicts to the attempt so the app can read the real reason', () => {
     const script = buildServeUpdateHelperScript(INPUT)
-    const rejectedAt = script.indexOf('"phase":"rejected"')
-    const failedAt = script.indexOf('"phase":"failed"')
+    const rejectedAt = script.indexOf('{phase: "rejected"')
+    const failedAt = script.indexOf('{phase: "failed"')
     expect(rejectedAt).toBeGreaterThan(-1)
     expect(failedAt).toBeGreaterThan(-1)
     expect(script.slice(rejectedAt, rejectedAt + 220)).toContain('attemptId')

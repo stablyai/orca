@@ -215,7 +215,7 @@ Type=simple
 User=orca
 WorkingDirectory=/home/orca
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --json --port 6768 --pairing-address 100.64.1.20
 StandardOutput=journal
 StandardError=journal
 KillMode=mixed
@@ -314,7 +314,7 @@ User=orca
 WorkingDirectory=/home/orca
 Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
-ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
+ExecStart=/opt/orca/orca-linux.AppImage serve --json --port 6768 --pairing-address 100.64.1.20
 Restart=on-failure
 RestartPreventExitStatus=3
 RestartSec=5
