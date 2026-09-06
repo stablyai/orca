@@ -1,4 +1,7 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsRemovedResult,
+  RuntimeMobileSessionTabsResult
+} from '../../../../shared/runtime-types'
 import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner'
 import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
 import {
@@ -25,6 +28,13 @@ import { projectLocalStructuredSessionTabs } from './snapshot-projection'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 
 export const LOCAL_STRUCTURED_SESSION_OWNER = 'local-structured-session'
+
+/** The host saying it no longer publishes this worktree at all, rather than publishing an empty one. */
+function isWorktreeRetraction(
+  snapshot: RuntimeMobileSessionTabsResult
+): snapshot is RuntimeMobileSessionTabsRemovedResult {
+  return (snapshot as Partial<RuntimeMobileSessionTabsRemovedResult>).removed === true
+}
 
 export function applyStructuredSessionTabSnapshots(
   snapshots: readonly RuntimeMobileSessionTabsResult[],
@@ -104,7 +114,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       }
     )
     next = patch === next ? next : ({ ...next, ...patch } as State)
-    if (snapshot.removed === true) {
+    if (isWorktreeRetraction(snapshot)) {
       // A retraction was applied above — the mirrored rows must go — but it is not a publication
       // to fence later frames against. Recording it would retire the renderer's own epoch, which
       // is one string for the whole process lifetime, and every republication afterwards would be
