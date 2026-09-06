@@ -35,19 +35,34 @@ function respread(map: AppState['agentStatusByPaneKey']): AppState['agentStatusB
   return { ...map }
 }
 
-function countJoins(run: () => string): { result: string; joins: number } {
-  const original = Array.prototype.join
+function countJoins(run: () => string): {
+  result: string
+  joins: number
+  sorts: number
+} {
+  const originalJoin = Array.prototype.join
+  const originalSort = Array.prototype.sort
   let joins = 0
-  const spy = vi
-    .spyOn(Array.prototype, 'join')
-    .mockImplementation(function (this: unknown[], separator?: string) {
-      joins += 1
-      return original.call(this, separator)
-    })
+  let sorts = 0
+  const joinSpy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
+    this: unknown[],
+    separator?: string
+  ) {
+    joins += 1
+    return originalJoin.call(this, separator)
+  })
+  const sortSpy = vi.spyOn(Array.prototype, 'sort').mockImplementation(function (
+    this: unknown[],
+    compare?: (a: unknown, b: unknown) => number
+  ) {
+    sorts += 1
+    return originalSort.call(this, compare)
+  })
   try {
-    return { result: run(), joins }
+    return { result: run(), joins, sorts }
   } finally {
-    spy.mockRestore()
+    joinSpy.mockRestore()
+    sortSpy.mockRestore()
   }
 }
 
@@ -62,12 +77,28 @@ describe('agent-status projection join short circuit', () => {
     const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
 
     // A new map identity with identical entry references — the common ping shape.
-    const { result, joins } = countJoins(() =>
+    const { result, joins, sorts } = countJoins(() =>
       buildRuntimeMobileAgentStatusProjectionForTests(respread(map))
     )
 
     expect(result).toBe(first)
     expect(joins).toBe(0)
+    expect(sorts).toBe(0)
+  })
+
+  it('caches the new map identity on the short-circuit path', () => {
+    resetRuntimeMobileAgentStatusProjectionCacheForTests()
+    const map = mapOf([0, 1])
+    buildRuntimeMobileAgentStatusProjectionForTests(map)
+    const again = respread(map)
+    buildRuntimeMobileAgentStatusProjectionForTests(again)
+
+    // A repeat call with the same identity must hit the identity early-out, not re-walk the keys.
+    const { joins, sorts } = countJoins(() =>
+      buildRuntimeMobileAgentStatusProjectionForTests(again)
+    )
+    expect(joins).toBe(0)
+    expect(sorts).toBe(0)
   })
 
   it('still rebuilds when an entry changes', () => {
@@ -95,7 +126,9 @@ describe('agent-status projection join short circuit', () => {
 
     expect(result).not.toBe(first)
     expect(result).toBe(
-      buildRuntimeMobileAgentStatusProjectionForTests({ 'tab-0:leaf-0': map['tab-0:leaf-0'] })
+      buildRuntimeMobileAgentStatusProjectionForTests({
+        'tab-0:leaf-0': map['tab-0:leaf-0']
+      })
     )
   })
 
