@@ -549,8 +549,32 @@ test('routes HUB desktop, web, and two paired desktops through HUB-owned SSH', a
     )
 
     const webOffer = await createRuntimeDesktopPairingOffer(orcaPage)
+    electronApp.on('window', (page) => {
+      page.on('pageerror', (error) => console.log('[nested-web-pageerror]', error.message))
+      page.on('console', (message) => {
+        if (message.type() === 'error' || message.type() === 'warning') {
+          console.log('[nested-web-console]', message.text().slice(0, 2000))
+        }
+      })
+    })
     webClient = await launchPairedWebClient(electronApp, webOffer)
+    try {
     await assertWebTerminal(webClient.page, hubLocalWorktreeId, `HUB_WEB_LOCAL_${Date.now()}`)
+    } catch (error) {
+      await testInfo.attach('paired-web-activation-failure', {
+        body: await webClient.page.screenshot(), contentType: 'image/png'
+      })
+      console.log('[nested-web-surface]', JSON.stringify(await webClient.page.evaluate(() => ({
+        title: document.title,
+        path: location.pathname,
+        text: document.body.innerText.slice(0, 5000),
+        rows: Array.from(document.querySelectorAll('[data-worktree-id]')).map((row) => ({
+          id: row.getAttribute('data-worktree-id'), attrs: Array.from(row.attributes).filter((a) => a.name.startsWith('data-')).map((a) => [a.name, a.value])
+        })),
+        storeWorktrees: Object.values(window.__store?.getState().worktreesByRepo ?? {}).flat().map((w) => ({id:w.id, hostId:w.hostId, runtimeOwnerEnvironmentId:w.runtimeOwnerEnvironmentId}))
+      }))))
+      throw error
+    }
     await assertPairedWebLocalFilesystemMutations(webClient.page, hubLocalWorktreeId)
     await assertWebTerminal(webClient.page, hubSshWorktreeId, `HUB_WEB_SSH_${Date.now()}`)
     await assertPairedWebSshFilesystemMutations(webClient.page, hubSshWorktreeId, sshTarget)
