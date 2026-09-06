@@ -89,10 +89,53 @@ test.describe('Tabs', () => {
     await waitForStartupWorktreeRefresh(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+    await orcaPage.evaluate(() => {
+      const diagnosticWindow = window as unknown as { __deflakeMenuEvents: unknown[] }
+      const events: unknown[] = []
+      diagnosticWindow.__deflakeMenuEvents = events
+      const describe = (target: EventTarget | null): string =>
+        target === window
+          ? 'window'
+          : target instanceof Element
+            ? target.outerHTML.slice(0, 350)
+            : String(target)
+      const record = (kind: string, target: EventTarget | null, stack?: string): void => {
+        if (events.length < 150)
+          events.push({
+            kind,
+            target: describe(target),
+            active: describe(document.activeElement),
+            time: performance.now(),
+            hasFocus: document.hasFocus(),
+            stack
+          })
+      }
+      for (const type of ['focus', 'blur', 'focusin', 'focusout', 'pointerdown']) {
+        window.addEventListener(type, (event) => record(type, event.target), true)
+      }
+      const focus = HTMLElement.prototype.focus
+      HTMLElement.prototype.focus = function (...args) {
+        record('focus-call', this, new Error().stack)
+        return focus.apply(this, args)
+      }
+    })
     const initialTabId = (await getActiveTabId(orcaPage))!
     await expect(tabLocator(orcaPage, initialTabId)).toBeVisible()
     // Initial terminal focus must settle before opening a menu that focus can dismiss.
     await expect.poll(() => getFocusedTerminalTabId(orcaPage)).toBe(initialTabId)
+  })
+
+  test.afterEach(async ({ orcaPage }, testInfo) => {
+    if (testInfo.status !== testInfo.expectedStatus) {
+      console.log(
+        '[deflake-menu-events]',
+        JSON.stringify(
+          await orcaPage.evaluate(
+            () => (window as unknown as { __deflakeMenuEvents: unknown[] }).__deflakeMenuEvents
+          )
+        )
+      )
+    }
   })
 
   /**
