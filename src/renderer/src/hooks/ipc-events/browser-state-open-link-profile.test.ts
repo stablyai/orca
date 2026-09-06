@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createBrowserTabMock, storeState } = vi.hoisted(() => ({
+const { createBrowserTabMock, requestBrowserFocusMock, storeState } = vi.hoisted(() => ({
   createBrowserTabMock: vi.fn(),
+  requestBrowserFocusMock: vi.fn(),
   storeState: {
     value: {} as Record<string, unknown>
   }
@@ -15,6 +16,9 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 }))
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
   rememberLiveBrowserUrl: vi.fn()
+}))
+vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
+  requestBrowserFocus: requestBrowserFocusMock
 }))
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
@@ -63,7 +67,8 @@ function captureOpenLinkHandler(): (event: {
 
 describe('link-opened Orca tabs', () => {
   beforeEach(() => {
-    createBrowserTabMock.mockReset()
+    createBrowserTabMock.mockReset().mockReturnValue({ activePageId: 'page-2' })
+    requestBrowserFocusMock.mockReset()
   })
 
   it('inherits the opener tab session so an isolated profile cannot leak into the default one', () => {
@@ -110,7 +115,33 @@ describe('link-opened Orca tabs', () => {
     expect('sessionProfileId' in options).toBe(false)
   })
 
-  it('creates modifier-click links in the background', () => {
+  it.each([true, undefined])('focuses an activated link when activate is %s', (activate) => {
+    storeState.value = {
+      browserPagesByWorkspace: {
+        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
+      },
+      browserTabsByWorktree: {},
+      createBrowserTab: createBrowserTabMock
+    }
+
+    captureOpenLinkHandler()({
+      browserPageId: 'page-1',
+      url: 'https://docs.example.com/foreground',
+      activate
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'worktree-1',
+      'https://docs.example.com/foreground',
+      expect.objectContaining({ activate: true })
+    )
+    expect(requestBrowserFocusMock).toHaveBeenCalledExactlyOnceWith({
+      pageId: 'page-2',
+      target: 'webview'
+    })
+  })
+
+  it('creates background links without requesting keyboard focus', () => {
     storeState.value = {
       browserPagesByWorkspace: {
         'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
@@ -130,5 +161,6 @@ describe('link-opened Orca tabs', () => {
       'https://docs.example.com/background',
       expect.objectContaining({ activate: false })
     )
+    expect(requestBrowserFocusMock).not.toHaveBeenCalled()
   })
 })

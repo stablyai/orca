@@ -1,3 +1,4 @@
+import { peekBrowserFocusRequest, requestBrowserFocus } from './browser-focus'
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import {
   clearBrowserPageViewportPresetSize,
@@ -162,6 +163,10 @@ export function registerPersistentWebview(
   }
   const onRendererReady = (): void => {
     rendererRecoveryPendingPageIds.delete(browserTabId)
+    // A new guest can attach after the chrome's short focus retry has finished.
+    if (peekBrowserFocusRequest(browserTabId) === 'webview') {
+      requestBrowserFocus({ pageId: browserTabId, target: 'webview' })
+    }
   }
   const onGuestDestroyed = (): void => {
     // Why: 'destroyed' also fires after an intentional webview.remove(); only a

@@ -1,9 +1,13 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
-import { useRef } from 'react'
+import { StrictMode, useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { requestBrowserFocus } from '../host-guest/browser-focus'
+import {
+  consumeBrowserFocusRequest,
+  peekBrowserFocusRequest,
+  requestBrowserFocus
+} from '../host-guest/browser-focus'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { useElementGuestFocus } from './browser-page-guest-focus'
 import { useBrowserPageChromeFocus } from './use-browser-page-chrome-focus'
@@ -145,6 +149,7 @@ describe('useBrowserPageChromeFocus', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+    consumeBrowserFocusRequest(PAGE_ID)
   })
 
   it('opens a new blank tab in the address bar with its text selected', () => {
@@ -316,6 +321,97 @@ describe('useBrowserPageChromeFocus', () => {
     renderChrome()
 
     expect(document.activeElement).toBe(guest())
+  })
+
+  it.each([0, 1])(
+    'does not replay a pending guest request when the pane becomes inactive after %i frames',
+    (frames) => {
+      act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+      const view = render(<ChromeHarness hasGuest={false} />)
+      act(() => flushFrames(frames))
+
+      view.rerender(<ChromeHarness isActive={false} hasGuest={false} />)
+      expect(peekBrowserFocusRequest(PAGE_ID)).toBeNull()
+      act(() => addressBar().focus())
+      view.rerender(<ChromeHarness />)
+      act(() => flushFrames())
+
+      expect(document.activeElement).toBe(addressBar())
+    }
+  )
+
+  it.each([0, 8])(
+    'keeps focus in another split when the guest attaches after %i frames',
+    (frames) => {
+      act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+      const view = render(<ChromeHarness hasGuest={false} />)
+      const outside = render(<input data-testid="outside" />).getByTestId('outside')
+      act(() => flushFrames(frames))
+
+      view.rerender(<ChromeHarness hasGuest={false} chromeShortcutScope="inactive" />)
+      act(() => outside.focus())
+      expect(peekBrowserFocusRequest(PAGE_ID)).toBeNull()
+      view.rerender(<ChromeHarness chromeShortcutScope="inactive" />)
+      act(() => {
+        if (peekBrowserFocusRequest(PAGE_ID) === 'webview') {
+          requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' })
+        }
+      })
+
+      expect(document.activeElement).toBe(outside)
+    }
+  )
+
+  it('retains a request for a guest that attaches after the frame retries finish', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+    const view = render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames())
+    expect(peekBrowserFocusRequest(PAGE_ID)).toBe('webview')
+
+    view.rerender(<ChromeHarness />)
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    expect(document.activeElement).toBe(guest())
+    expect(peekBrowserFocusRequest(PAGE_ID)).toBeNull()
+  })
+
+  it.each(['pointer', 'address-bar'])('cancels a waiting guest request after %s input', (input) => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+    render(<ChromeHarness hasGuest={false} />)
+    act(() => flushFrames())
+
+    if (input === 'pointer') {
+      act(() => window.dispatchEvent(new Event('pointerdown')))
+    } else {
+      act(() => focusAddressBarFromIpc?.())
+    }
+
+    expect(peekBrowserFocusRequest(PAGE_ID)).toBeNull()
+  })
+
+  it('preserves a guest request through StrictMode effect replay', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+    render(
+      <StrictMode>
+        <ChromeHarness />
+      </StrictMode>
+    )
+    act(() => flushFrames())
+
+    expect(document.activeElement).toBe(guest())
+  })
+
+  it('preserves a delayed guest request through StrictMode effect replay', () => {
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+    const view = render(<ChromeHarness hasGuest={false} />, { wrapper: StrictMode })
+    act(() => flushFrames())
+    expect(peekBrowserFocusRequest(PAGE_ID)).toBe('webview')
+
+    view.rerender(<ChromeHarness />)
+    act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'webview' }))
+
+    expect(document.activeElement).toBe(guest())
+    expect(peekBrowserFocusRequest(PAGE_ID)).toBeNull()
   })
 
   it('ignores a durable request queued for a different page', () => {
