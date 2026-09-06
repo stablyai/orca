@@ -1,9 +1,24 @@
+import { insertUnifiedTabAfterAnchor } from '../lib/unified-tab-anchor-insertion'
 import { useAppStore } from '../store'
 import {
   forgetWebSessionTerminalPlacement,
   webTerminalPlacementParentTabId
 } from './web-session-terminal-placement'
-import { toHostSessionTabId, toWebTerminalSurfaceTabId } from './web-terminal-surface-id'
+import {
+  isWebTerminalSurfaceTabId,
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
+} from './web-terminal-surface-id'
+
+/** Snapshots key mirrored terminals by the parent tab, so an unknown `parent::leaf` anchor resolves to its parent. */
+function anchorUnifiedTabId(worktreeId: string, afterTabId: string): string {
+  const known = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).some(
+    (tab) => tab.id === afterTabId
+  )
+  return known || !isWebTerminalSurfaceTabId(afterTabId)
+    ? afterTabId
+    : toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(toHostSessionTabId(afterTabId)))
+}
 
 /** Settle the placement once the mirrored tab exists (bounded poll), then consume the record. */
 export async function settleWebRuntimeTerminalPlacement(
@@ -23,21 +38,25 @@ export async function settleWebRuntimeTerminalPlacement(
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
     const tab = findTab()
-    const state = useAppStore.getState()
+    if (!tab) {
+      return
+    }
     const anchorId = placement.afterTabId
-      ? ((state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-          (item) => item.id === placement.afterTabId
-        )?.id ??
-        toWebTerminalSurfaceTabId(
-          webTerminalPlacementParentTabId(toHostSessionTabId(placement.afterTabId))
-        ))
+      ? anchorUnifiedTabId(worktreeId, placement.afterTabId)
       : undefined
-    const targetGroup = (state.groupsByWorktree[worktreeId] ?? []).find((group) =>
-      placement.groupId
-        ? group.id === placement.groupId
-        : anchorId && group.tabOrder.includes(anchorId)
-    )
-    if (tab && targetGroup && tab.groupId !== targetGroup.id) {
+    const state = useAppStore.getState()
+    const groups = state.groupsByWorktree[worktreeId] ?? []
+    // Why: the requested group can be closed while the mirrored tab is still in flight; the
+    // anchor's own group still expresses where the caller asked for this terminal.
+    const targetGroup =
+      groups.find((group) => group.id === placement.groupId) ??
+      (anchorId === undefined
+        ? undefined
+        : groups.find((group) => group.tabOrder.includes(anchorId)))
+    if (!targetGroup) {
+      return
+    }
+    if (tab.groupId !== targetGroup.id) {
       // Why: a snapshot can adopt the tab before the record exists (the publication races the
       // RPC response); repair through the same client-owned move a user drag takes.
       state.moveUnifiedTabToGroup(unifiedTabId, targetGroup.id, {
@@ -45,15 +64,9 @@ export async function settleWebRuntimeTerminalPlacement(
         recordInteraction: false
       })
     }
-    if (tab && targetGroup && anchorId && anchorId !== unifiedTabId) {
-      const current = useAppStore.getState()
-      const group = current.groupsByWorktree[worktreeId]?.find((item) => item.id === targetGroup.id)
-      if (group?.tabOrder.includes(unifiedTabId) && group.tabOrder.includes(anchorId)) {
-        const order = group.tabOrder.filter((id) => id !== unifiedTabId)
-        order.splice(order.indexOf(anchorId) + 1, 0, unifiedTabId)
-        // The create caller owns this insertion; subsequent host snapshots preserve client order.
-        current.reorderUnifiedTabs(group.id, order, { recordInteraction: false })
-      }
+    if (anchorId) {
+      // The create caller owns this insertion; subsequent host snapshots preserve client order.
+      insertUnifiedTabAfterAnchor(worktreeId, unifiedTabId, anchorId)
     }
   } finally {
     forgetWebSessionTerminalPlacement({ environmentId, worktreeId, hostTabId })

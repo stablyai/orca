@@ -142,7 +142,12 @@ describe('createWebRuntimeSessionTerminal', () => {
       predecessor: 'web-terminal-host-tab-1',
       afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1'
     },
-    { agent: undefined, predecessor: 'local-browser-tab', afterTabId: 'local-browser-tab' }
+    { agent: undefined, predecessor: 'local-browser-tab', afterTabId: 'local-browser-tab' },
+    {
+      agent: undefined,
+      predecessor: 'web-terminal-host-tab-1%3A%3Aleaf-1',
+      afterTabId: 'web-terminal-host-tab-1%3A%3Aleaf-1'
+    }
   ])(
     'settles after $afterTabId for $agent creation without activating it',
     async ({ agent, predecessor, afterTabId }) => {
