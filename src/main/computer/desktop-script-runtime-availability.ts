@@ -43,6 +43,18 @@ export class RuntimeHostAvailability {
   private consecutiveSuccesses = 0
   /** Null, not 0, for "no cooldown": `performance.now()` legitimately returns 0. */
   private cooldownStartedAtMs: number | null = null
+  /**
+   * Set while the escalated policy has yet to start a helper, so a wrong
+   * diagnosis can be taken back.
+   *
+   * Why it can be wrong: AppLocker and WDAC constrained language mode raise
+   * PSSecurityException under the same SecurityError category a policy block
+   * uses, but they refuse the script at parse time, which `Bypass` cannot lift.
+   * Latching there would spend the session putting the most heavily weighted
+   * MDE token on every command line, on exactly the hardened hosts watching
+   * for it.
+   */
+  private fallbackPolicyUnproven = false
 
   constructor(
     private readonly cooldownMs: number,
@@ -81,11 +93,38 @@ export class RuntimeHostAvailability {
   escalateExecutionPolicy(): void {
     this.retryUnderFallbackPolicy = false
     this.policy = FALLBACK_WINDOWS_EXECUTION_POLICY
-    // Sticky for the session: a genuinely Restricted machine would otherwise pay
-    // a guaranteed failed spawn per operation. Only a helper that produced no
+    this.fallbackPolicyUnproven = true
+    // Sticky once proven: a genuinely Restricted machine would otherwise pay a
+    // guaranteed failed spawn per operation. Only a helper that produced no
     // output at all can reach here, so a snapshot cannot talk the host into it.
     this.warn(
-      `runtime host start blocked at ${PREFERRED_WINDOWS_EXECUTION_POLICY}; using ${FALLBACK_WINDOWS_EXECUTION_POLICY} for the rest of this session`
+      `runtime host start blocked at ${PREFERRED_WINDOWS_EXECUTION_POLICY}; trying ${FALLBACK_WINDOWS_EXECUTION_POLICY}`
+    )
+  }
+
+  /** A helper started under the current policy, so the policy is the right one. */
+  confirmExecutionPolicy(): void {
+    this.fallbackPolicyUnproven = false
+  }
+
+  /**
+   * Undo an escalation the fallback never justified.
+   *
+   * The escalation is a diagnosis, and a fallback that cannot start a helper
+   * either disproves it: the policy was not what stopped the first attempt. Go
+   * back rather than latch, so a re-probe can escalate again later if the real
+   * cause clears. Re-probing costs one spawn per outage, which the failure
+   * count and its cooldown already bound, and never latching is the whole point
+   * of this class.
+   */
+  abandonUnprovenFallback(): void {
+    if (!this.fallbackPolicyUnproven) {
+      return
+    }
+    this.fallbackPolicyUnproven = false
+    this.policy = PREFERRED_WINDOWS_EXECUTION_POLICY
+    this.warn(
+      `${FALLBACK_WINDOWS_EXECUTION_POLICY} did not start a helper either, so the execution policy was not the cause; returning to ${PREFERRED_WINDOWS_EXECUTION_POLICY}`
     )
   }
 
@@ -101,6 +140,7 @@ export class RuntimeHostAvailability {
 
   recordSuccess(): void {
     this.consecutiveSuccesses++
+    this.fallbackPolicyUnproven = false
     // Why a clean run and not a single reply: a helper that answers one
     // operation and dies on the next would otherwise reset the count forever,
     // and respawn once per operation — the exact burst the host removes.
@@ -115,6 +155,9 @@ export class RuntimeHostAvailability {
   }
 
   enterCooldown(): void {
+    // An escalation that never started a helper must not outlive the outage it
+    // was guessed from; the next one re-diagnoses from the preferred policy.
+    this.abandonUnprovenFallback()
     const failures = this.consecutiveFailures
     this.cooldownStartedAtMs = this.now()
     // The wait is the penalty; leaving the count at the limit would charge twice

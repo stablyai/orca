@@ -135,6 +135,11 @@ export class DesktopScriptRuntimeHost {
           this.availability.escalateExecutionPolicy()
           continue
         }
+        // Only this error proves no helper started, which is what disproves the
+        // escalation; a helper that started and then died proves the opposite.
+        if (isRuntimeHostUnavailable(error)) {
+          this.availability.abandonUnprovenFallback()
+        }
         // A helper that answered and then died is a crash, not a bad start: the
         // caller sees it and the next operation gets a fresh process — unless it
         // keeps happening, which is thrash the one-shot bridge should absorb.
@@ -259,6 +264,7 @@ export class DesktopScriptRuntimeHost {
     if (parsed.ready === true && parsed.requestId === undefined) {
       this.childReady = true
       this.readyProtocolConfirmed = true
+      this.availability.confirmExecutionPolicy()
       return
     }
     const pending = this.pending
@@ -290,7 +296,12 @@ export class DesktopScriptRuntimeHost {
     this.availability.recordFailure()
     if (!started && this.availability.atPreferredPolicy && isExecutionPolicyBlocked(detail)) {
       this.availability.requestPolicyRetry()
-      this.rejectPending(new RuntimeClientError('accessibility_error', detail))
+      // Unavailable rather than a generic error, because this can now be the
+      // final attempt: reverting an unproven escalation puts the host back on
+      // the preferred policy, so a later attempt can land here again. Only this
+      // code routes the operation to the one-shot bridge, which carries its own
+      // policy fallback; anything else fails the operation outright.
+      this.rejectPending(this.unavailableError(detail))
       return
     }
     if (!started) {

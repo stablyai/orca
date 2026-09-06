@@ -599,14 +599,47 @@ describe('DesktopScriptRuntimeHost', () => {
     expect(specs[1].args).toContain('Bypass')
     children[1].respond({ ok: true, capabilities: {} })
     await expect(promise).resolves.toMatchObject({ ok: true })
-    expect(warnings.some((line) => /Bypass for the rest of this session/.test(line))).toBe(true)
+    expect(warnings.some((line) => /trying Bypass/.test(line))).toBe(true)
 
-    // The fallback is remembered for the session rather than re-probed per call.
+    // A helper started under Bypass, so the diagnosis is proven and the fallback
+    // is remembered for the session rather than re-probed per call.
     const next = host.request({ tool: 'handshake' })
     await settle()
     expect(children).toHaveLength(2)
     children[1].respond({ ok: true, capabilities: {} })
     await next
+    expect(warnings.some((line) => /returning to RemoteSigned/.test(line))).toBe(false)
+    host.dispose()
+  })
+
+  it('returns to RemoteSigned when Bypass does not start a helper either', async () => {
+    let clock = 1_000
+    const { host, children, specs, warnings } = createHost({ cooldownMs: 60_000, now: () => clock })
+
+    // What AppLocker and WDAC constrained language mode look like: the same
+    // SecurityError category, but the block is at script load, so Bypass cannot
+    // lift it and the escalation was a misdiagnosis.
+    const promise = host.request({ tool: 'handshake' })
+    await settle()
+    await failEveryStart(children, POLICY_ERROR)
+    await expect(promise).rejects.toSatisfy(isRuntimeHostUnavailable)
+
+    expect(specs[1].args).toContain('Bypass')
+    expect(warnings.some((line) => /returning to RemoteSigned/.test(line))).toBe(true)
+    // The revert lands inside the outage, not just at its end: every attempt
+    // after the fallback is disproved is back on the preferred policy, so the
+    // misdiagnosis costs one Bypass command line rather than one per attempt.
+    expect(specs).toHaveLength(3)
+    expect(specs[2].args).not.toContain('Bypass')
+
+    // Latching here would put the most heavily weighted MDE token on every
+    // later command line, on exactly the hardened host that is watching.
+    clock += 61_000
+    const recovered = host.request({ tool: 'handshake' })
+    await settle()
+    expect(specs.at(-1)?.args).not.toContain('Bypass')
+    children.at(-1)?.respond({ ok: true, capabilities: {} })
+    await expect(recovered).resolves.toMatchObject({ ok: true })
     host.dispose()
   })
 
