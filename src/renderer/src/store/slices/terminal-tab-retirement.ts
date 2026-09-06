@@ -9,6 +9,7 @@ import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type TerminalTabCloseReason = 'user' | 'cleanup' | 'pty-exit'
 
@@ -82,8 +83,11 @@ function collectPtyIdsForTab(
 
 function collectLiveTerminalTabs(
   state: TerminalTabRetirementState
-): Map<string, { worktreeId: string; rowPtyId: string | null }> {
-  const liveTabs = new Map<string, { worktreeId: string; rowPtyId: string | null }>()
+): Map<string, { worktreeId: string; rowPtyId: string | null; executionHostId?: ExecutionHostId }> {
+  const liveTabs = new Map<
+    string,
+    { worktreeId: string; rowPtyId: string | null; executionHostId?: ExecutionHostId }
+  >()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       liveTabs.set(tab.id, { worktreeId, rowPtyId: tab.ptyId })
@@ -91,8 +95,15 @@ function collectLiveTerminalTabs(
   }
   for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
     for (const tab of tabs) {
-      if (tab.contentType === 'terminal' && !liveTabs.has(tab.entityId)) {
-        liveTabs.set(tab.entityId, { worktreeId, rowPtyId: null })
+      if (tab.contentType === 'terminal') {
+        const owner = liveTabs.get(tab.entityId)
+        if (!owner || owner.worktreeId === worktreeId) {
+          liveTabs.set(tab.entityId, {
+            worktreeId,
+            rowPtyId: owner?.rowPtyId ?? null,
+            executionHostId: tab.executionHostId
+          })
+        }
       }
     }
   }
@@ -176,7 +187,12 @@ export function buildTerminalTabRetirementPlans(
     const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
     const cleanupOnlyPtyIds: string[] = []
     const unroutablePtyIds: string[] = []
-    const providerOwnership = resolveTerminalHostOwnership(state, worktreeId, 'teardown')
+    const providerOwnership = resolveTerminalHostOwnership(
+      state,
+      worktreeId,
+      'teardown',
+      owner?.executionHostId
+    )
 
     for (const ptyId of ptyIds) {
       const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)

@@ -16,6 +16,7 @@ import {
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree
 } from '@/lib/worktree-runtime-owner'
+import { resolveWorktreeOperationRouteForHost } from '@/lib/worktree-operation-route'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
@@ -26,7 +27,7 @@ import {
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -118,6 +119,7 @@ function launchAgentInNewTabInternal(
     activate = true
   } = args
   const store = useAppStore.getState()
+  const selectedHost = parseExecutionHostId(executionHostId)
   // Why the host-qualified lookups when a host was picked: a bare-id `find` answers with
   // whichever publication comes first, and the repo behind it decides the launch platform
   // and whether the command is built for a remote shell at all.
@@ -167,8 +169,14 @@ function launchAgentInNewTabInternal(
     agent,
     promptDelivery: viewModePromptDelivery,
     launchDraftText: trimmedPrompt,
-    nativeChatTranscriptIsLocalReadable:
-      isNativeChatTranscriptLocalReadable(worktreeSshConnectionId)
+    // A picked host answers for itself; only an unqualified launch asks the workspace.
+    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+      selectedHost
+        ? selectedHost.kind === 'ssh'
+          ? selectedHost.targetId
+          : null
+        : worktreeSshConnectionId
+    )
   }
   const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
   const startupPlanBase = {
@@ -193,7 +201,10 @@ function launchAgentInNewTabInternal(
     return null
   }
 
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+  const runtimeEnvironmentId = executionHostId
+    ? (resolveWorktreeOperationRouteForHost(store, worktreeId, executionHostId)
+        ?.runtimeEnvironmentId ?? null)
+    : getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     const webHostDelivery = launchAgentInWebHostTab({
       agent,
@@ -234,7 +245,7 @@ function launchAgentInNewTabInternal(
     : resolveAgentLaunchRoute({
         agent,
         settings: store.settings,
-        executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
+        executionHostId: executionHostId ?? getExecutionHostIdForWorktree(store, worktreeId),
         platform: CLIENT_PLATFORM,
         hostCapabilities: readLocalRuntimeCapabilities(),
         workspaceKind,

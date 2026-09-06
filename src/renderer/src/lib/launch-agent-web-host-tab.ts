@@ -12,11 +12,32 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { resolveTerminalHostOwnership } from './terminal-worktree-route'
 
-function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
+function removeStaleLocalAgentTabsForWebHostLaunch(
+  worktreeId: string,
+  environmentId: string | null
+): void {
   const state = useAppStore.getState()
+  const tabHosts = new Map(
+    (state.unifiedTabsByWorktree?.[worktreeId] ?? [])
+      .filter((tab) => tab.contentType === 'terminal')
+      .map((tab) => [tab.entityId, tab.executionHostId])
+  )
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
+    if (!tab.launchAgent || isWebTerminalSurfaceTabId(tab.id)) {
+      continue
+    }
+    // A retained PTY binding is not evidence of a stale row, even if contact was lost.
+    if (
+      tab.ptyId ||
+      state.ptyIdsByTabId[tab.id]?.length ||
+      Object.values(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).some(Boolean)
+    ) {
+      continue
+    }
+    const owner = resolveTerminalHostOwnership(state, worktreeId, 'teardown', tabHosts.get(tab.id))
+    if (owner.kind === 'runtime' && owner.runtimeEnvironmentId === environmentId) {
       // Why: pruning a stale local agent tab is a system close — keep it out of
       // the Cmd+Shift+T reopen stack.
       state.closeTab(tab.id, { reason: 'cleanup' })
@@ -69,12 +90,16 @@ export function launchAgentInWebHostTab(args: {
   const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
   const structuredPromptDelivery: AgentPromptDelivery =
     promptDelivery === 'draft' ? 'draft' : 'auto-submit'
-  removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+  const pruneLegacyTabs = (): void => {
+    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId, environmentId)
+  }
+  pruneLegacyTabs()
   const launch = {
     worktreeId,
     environmentId,
     targetGroupId: groupId,
     activate,
+    ...(activate ? {} : { selectWorktree: false }),
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
@@ -106,7 +131,7 @@ export function launchAgentInWebHostTab(args: {
   }): { delivered: boolean; failureNotified: boolean } => {
     // Why: created means the host accepted the launch, not that a local tab
     // exists; keep pruning stale local rows until the snapshot mirrors.
-    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+    pruneLegacyTabs()
     if (outcome.status === 'failed') {
       toast.error(
         outcome.message ||

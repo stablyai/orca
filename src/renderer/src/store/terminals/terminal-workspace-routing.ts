@@ -89,9 +89,7 @@ export function getRemoteConnectionIdForWorktree(
   state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
   worktreeId: string,
   /**
-   * The host the caller picked from a surface listing one row per host. Only a REMOTE
-   * pick is taken as given: `local` in a workspace catalog means "nothing named a host",
-   * which is exactly what the repo lookup below answers.
+   * Explicit selections, including local, outrank a same-id workspace on another host.
    */
   pickedExecutionHostId?: ExecutionHostId
 ): string | null {
@@ -99,7 +97,7 @@ export function getRemoteConnectionIdForWorktree(
   if (picked?.kind === 'ssh') {
     return picked.targetId
   }
-  if (picked?.kind === 'runtime') {
+  if (picked?.kind === 'runtime' || picked?.kind === 'local') {
     return null
   }
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
