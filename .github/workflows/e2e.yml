@@ -27,6 +27,10 @@ on:
         description: Ref to check out (defaults to the workflow ref)
         required: false
         type: string
+      test_files:
+        description: JSON array of specs to run; empty runs the full suite
+        required: false
+        type: string
   schedule:
     # Why: GitHub cron uses UTC; these slots map to 10am and 3pm
     # America/Phoenix for the default-branch E2E run.
