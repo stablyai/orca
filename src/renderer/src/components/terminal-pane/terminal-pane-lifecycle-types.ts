@@ -44,6 +44,7 @@ export type UseTerminalPaneLifecycleDeps = {
   issueCommandSplit?: TerminalPaneIssueCommandSplit | null
   isActive: boolean
   isVisible: boolean
+  coldRestorePaneKeys?: ReadonlySet<string>
   systemPrefersDark: boolean
   settings: GlobalSettings | null | undefined
   settingsRef: React.RefObject<GlobalSettings | null | undefined>

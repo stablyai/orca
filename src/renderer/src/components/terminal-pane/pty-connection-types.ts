@@ -67,6 +67,8 @@ export type PtyConnectionDeps = {
   startup?: PtyPaneStartup
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
+  /** Mount-time mail scope; sleeping siblings outside this set remain inert. */
+  coldRestorePaneKeys?: ReadonlySet<string>
   /** Park intent sampled at render time, before the host disposes the tab's
    *  watchers; consumed once the restored layout has been replayed. */
   mountFollowsTerminalPark: boolean

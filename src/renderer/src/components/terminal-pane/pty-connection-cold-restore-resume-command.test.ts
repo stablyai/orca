@@ -13,7 +13,10 @@ import {
   type MockTransport
 } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
+import {
+  createCompletedCodexRetainedAgent,
+  createInitialStoreState
+} from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
@@ -282,6 +285,14 @@ describe('connectPanePty', () => {
           ...mockStoreState.settings,
           agentCmdOverrides: {}
         },
+        retainedAgentsByPaneKey: {
+          [paneKey]: createCompletedCodexRetainedAgent({
+            paneKey,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            ptyId: 'restored-session'
+          })
+        },
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
             paneKey,
@@ -333,6 +344,21 @@ describe('connectPanePty', () => {
       expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalledWith(2, 'restored-session')
       expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-resume-pty')
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
+        paneKey,
+        expect.objectContaining({
+          state: 'done',
+          agentType: 'codex',
+          prompt: 'finish the task'
+        }),
+        undefined,
+        { stateStartedAt: 1 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        expect.objectContaining({
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+        })
+      )
       expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledWith(paneKey, 1)
     } finally {
       globalThis.setTimeout = originalSetTimeout

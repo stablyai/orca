@@ -5,9 +5,16 @@ export type OrchestrationMailboxDeliveryFlight = {
   stagedMessageIds: string[]
 }
 
+export type OrchestrationStatuslessIdleProof = {
+  ptyId: string
+  terminalHandle: string
+  processIncarnation: string
+}
+
 export type ParkedOrchestrationMailboxDelivery = {
   leaf: OrchestrationMailboxLeaf
   reservedTypes?: ReadonlySet<string>
+  statuslessIdleProof?: OrchestrationStatuslessIdleProof
 }
 
 export class OrchestrationMailboxPointerState {
@@ -54,7 +61,8 @@ export class OrchestrationMailboxPointerState {
     ptyId: string,
     mailboxHandle: string,
     leaf: OrchestrationMailboxLeaf,
-    reservedTypes?: ReadonlySet<string>
+    reservedTypes?: ReadonlySet<string>,
+    statuslessIdleProof?: OrchestrationStatuslessIdleProof
   ): void {
     const parked = this.parkedDeliveriesByPtyId.get(ptyId) ?? new Map()
     const priorEntry = parked.get(mailboxHandle)
@@ -66,7 +74,11 @@ export class OrchestrationMailboxPointerState {
     } else if (prior && current) {
       merged = new Set([...prior, ...current])
     }
-    parked.set(mailboxHandle, { leaf, reservedTypes: merged })
+    parked.set(mailboxHandle, {
+      leaf,
+      reservedTypes: merged,
+      statuslessIdleProof
+    })
     this.parkedDeliveriesByPtyId.set(ptyId, parked)
   }
 

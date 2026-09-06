@@ -92,6 +92,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
   }
 
   return {
+    paneKey: session.cacheKey,
     syncProcessTracking() {
       session.agentCompletionCoordinator.startProcessTracking()
       // Why: the hidden-delivery gate must follow every pane visibility flip.

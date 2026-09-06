@@ -34,6 +34,14 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /**
+   * The pane's process is gone but a sleeping-agent resume record can bring it
+   * back. Deliberately NOT part of the execution-host liveness vocabulary
+   * (`live`/`unverifiable`/`exited`, see docs/reference/ssh-execution-boundary.md):
+   * `connected: false` already states the process exited, and this says only that
+   * the pane is resumable. Absent from hosts that predate the field.
+   */
+  resumable?: boolean
 }
 
 export type RuntimeTerminalVisualTerminalNode = {

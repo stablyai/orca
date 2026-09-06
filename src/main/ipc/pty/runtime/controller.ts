@@ -24,6 +24,7 @@ import {
   probePtyLivenessFromRuntimeController,
   resizePtyFromRuntimeController,
   serializeProviderBufferFromRuntimeController,
+  supportsForegroundProcessConfirmationFromRuntimeController,
   waitForRendererSerializerFromRuntimeController,
   writePtyAgentSessionProofFromRuntimeController,
   writePtyFromRuntimeController
@@ -62,6 +63,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
     inspectProcess: (ptyId, options) => inspectProcessFromRuntimeController(ptyId, options),
     confirmForegroundProcess: (ptyId) => confirmForegroundProcessFromRuntimeController(ptyId),
+    supportsForegroundProcessConfirmation: (ptyId) =>
+      supportsForegroundProcessConfirmationFromRuntimeController(ptyId),
     confirmShellForeground: (ptyId) => confirmShellForegroundFromRuntimeController(ptyId),
     getCwd: (ptyId) => getCwdFromRuntimeController(ptyId),
     hasChildProcesses: (ptyId) => hasChildProcessesFromRuntimeController(ptyId),

@@ -292,7 +292,10 @@ export function createReattachPayloadHandlers(
         } else if (preparedStartup?.hasSleepingRecord) {
           session.showSessionRestoredBanner()
         }
-        session.clearSleepingRecordAfterColdRestoreSpawn(preparedStartup)
+        session.clearSleepingRecordAfterColdRestoreSpawn(
+          preparedStartup,
+          ctx.connectResult.agentResumeUnavailable !== true
+        )
       }
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
       session.writeReplayData(POST_REPLAY_MODE_RESET)

@@ -53,7 +53,8 @@ export async function publishLegacyBinaryInitialSnapshot(
   const mountRequested =
     missingHeadlessStateBeforeMobileFit &&
     serialized?.source !== 'renderer' &&
-    (rendererMountRequestedBeforePty || runtime.requestRendererTerminalTabMount(params.terminal))
+    (rendererMountRequestedBeforePty ||
+      runtime.requestRendererTerminalTabMount(params.terminal, 'client-subscribe'))
   if (missingHeadlessStateBeforeMobileFit && mountRequested) {
     // Why: an idle legacy PTY emits no later byte, so wait for a settle proving this remount completed before replaying its screen.
     const mountWaitController = new AbortController()

@@ -88,6 +88,23 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // Why: renderer reloads can briefly republish the same leaf with no ptyId;
     // keep live CLI handles usable while the UI graph rebuilds.
     const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
+    const incomingPtyOwnerByPtyId = new Map<string, string | null>()
+    for (const leaf of lifecycleLeaves) {
+      const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+      const existing = this.leaves.get(leafKey)
+      const ptyId =
+        preserveLivePtysDuringReload && leaf.ptyId === null && existing?.ptyId
+          ? existing.ptyId
+          : leaf.ptyId
+      if (!ptyId) {
+        continue
+      }
+      const priorOwner = incomingPtyOwnerByPtyId.get(ptyId)
+      incomingPtyOwnerByPtyId.set(
+        ptyId,
+        priorOwner === undefined || priorOwner === leafKey ? leafKey : null
+      )
+    }
     for (const leaf of lifecycleLeaves) {
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
@@ -145,8 +162,28 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
         // Why: mobile can subscribe while the pane is waiting for its first PTY.
         // Keep that handle usable after the recovery mount binds it.
         const adoptedFirstPty =
-          existing.ptyId === null && this.adoptFirstPtyForLeafHandle(leafKey, ptyId, ptyGeneration)
+          existing.ptyId === null &&
+          this.adoptFirstPtyForLeafHandle(
+            leafKey,
+            ptyId,
+            ptyGeneration,
+            ptyId ? (incomingPtyOwnerByPtyId.get(ptyId) ?? null) : null
+          )
         if (!adoptedFirstPty) {
+          this.invalidateLeafHandle(leafKey)
+        }
+      } else if (!existing && ptyId) {
+        // Why: a slept pane's handle is minted from its resume record with no leaf
+        // behind it. Adopt the PTY the wake produced so the handle a sender
+        // addressed keeps resolving instead of being orphaned by a remint.
+        if (
+          !this.adoptFirstPtyForLeafHandle(
+            leafKey,
+            ptyId,
+            ptyGeneration,
+            incomingPtyOwnerByPtyId.get(ptyId) ?? null
+          )
+        ) {
           this.invalidateLeafHandle(leafKey)
         }
       }
@@ -266,19 +303,32 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
-      const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+      const previousLeaf = previousLeaves.get(leafKey)
+      const becameWritable =
+        leaf.writable &&
+        (!graphWasReady || previousLeaf?.ptyId !== leaf.ptyId || !previousLeaf.writable)
       if (
         this._orchestrationDb &&
         leaf.lastAgentStatus === 'idle' &&
         leaf.lastAgentStatusObservedLive &&
-        leaf.writable &&
-        (!graphWasReady ||
-          previousLeaf?.ptyId !== leaf.ptyId ||
-          !previousLeaf.writable ||
-          previousLeaf.lastAgentStatus !== 'idle' ||
-          !previousLeaf.lastAgentStatusObservedLive)
+        (becameWritable ||
+          previousLeaf?.lastAgentStatus !== 'idle' ||
+          !previousLeaf?.lastAgentStatusObservedLive)
       ) {
         this.deliverPendingMessagesForLeaf(leaf)
+      } else if (
+        this._orchestrationDb &&
+        becameWritable &&
+        leaf.ptyId &&
+        this.ptysById.get(leaf.ptyId)?.launchAgent === 'codex' &&
+        leaf.lastAgentStatus === null
+      ) {
+        // Why: Codex reattach has no status edge, so the writable transition starts its bounded idle proof.
+        const handle = this.handleByLeafKey.get(leafKey)
+        if (handle) {
+          this.deliverPendingMessagesForHandle(handle)
+        }
       }
     }
 

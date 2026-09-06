@@ -47,6 +47,90 @@ function seedRuntime(seeds: HandleSeed[]): {
 }
 
 describe('mobile terminal subscribe tab mount', () => {
+  it('includes stable pane identity when requesting a real pane mount', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const { runtime, send } = seedRuntime([])
+    const internals = runtime as unknown as RuntimeInternals
+    internals.handles.set('h1', {
+      handle: 'h1',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      ptyId: null,
+      runtimeId: 'rt-test',
+      rendererGraphEpoch: 1,
+      leafId,
+      ptyGeneration: 1
+    })
+
+    runtime.requestRendererTerminalTabMount('h1')
+
+    expect(send).toHaveBeenCalledWith('terminal:requestTabMount', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      paneKey: `tab-1:${leafId}`
+    })
+  })
+
+  it('never adopts a first PTY that the incoming graph assigns to two leaves', async () => {
+    const targetLeafId = '11111111-1111-4111-8111-111111111111'
+    const ownerLeafId = '22222222-2222-4222-8222-222222222222'
+    const runtime = new OrcaRuntimeService()
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          title: 'Terminal',
+          activeLeafId: targetLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          leafId: targetLeafId,
+          paneRuntimeId: 1,
+          ptyId: null
+        }
+      ]
+    })
+    const internals = runtime as unknown as RuntimeInternals
+    const pendingLeaf = internals.leaves.values().next().value
+    const pendingHandle = internals.issueHandle(pendingLeaf)
+
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          title: 'Terminal',
+          activeLeafId: ownerLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          leafId: targetLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-shared'
+        },
+        {
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          leafId: ownerLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'pty-shared'
+        }
+      ]
+    })
+
+    await expect(runtime.readTerminal(pendingHandle)).rejects.toThrow('terminal_handle_stale')
+  })
+
   it('keeps a waiting real-tab handle usable when the mount binds its first PTY', async () => {
     const runtime = new OrcaRuntimeService()
     const syncGraph = (ptyId: string | null): void => {

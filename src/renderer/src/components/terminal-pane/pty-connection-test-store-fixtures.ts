@@ -1,7 +1,43 @@
 import { vi } from 'vitest'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status-contract'
 import { LEAF_1 } from './pty-connection-test-pane-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
+
+export function createCompletedCodexRetainedAgent(args: {
+  paneKey: string
+  tabId: string
+  worktreeId: string
+  ptyId: string
+}): RetainedAgentEntry {
+  return {
+    entry: {
+      paneKey: args.paneKey,
+      tabId: args.tabId,
+      worktreeId: args.worktreeId,
+      state: 'done',
+      prompt: 'finish the task',
+      updatedAt: 1,
+      stateStartedAt: 1,
+      stateHistory: [],
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session-1' }
+    },
+    worktreeId: args.worktreeId,
+    tab: {
+      id: args.tabId,
+      ptyId: args.ptyId,
+      worktreeId: args.worktreeId,
+      title: 'Codex',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    },
+    agentType: 'codex',
+    startedAt: 1
+  }
+}
 
 export function createInitialStoreState(getState: () => StoreState): StoreState {
   return {

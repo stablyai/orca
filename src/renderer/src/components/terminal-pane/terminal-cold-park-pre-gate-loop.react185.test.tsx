@@ -14,6 +14,10 @@ const harness = vi.hoisted(() => ({
   coverageCalls: 0,
   syncCalls: 0,
   slotRenders: 0,
+  slotProps: [] as {
+    terminalTabId: string
+    coldRestorePaneKeys?: ReadonlySet<string>
+  }[],
   renderedParkedSets: [] as string[][]
 }))
 
@@ -55,8 +59,15 @@ vi.mock('../native-chat/use-native-chat-toggle-shortcut', () => ({
 }))
 
 vi.mock('./TerminalOverlaySlot', () => ({
-  TerminalOverlaySlot: () => {
+  TerminalOverlaySlot: (props: {
+    terminalTabId: string
+    coldRestorePaneKeys?: ReadonlySet<string>
+  }) => {
     harness.slotRenders += 1
+    harness.slotProps.push({
+      terminalTabId: props.terminalTabId,
+      coldRestorePaneKeys: props.coldRestorePaneKeys
+    })
     return null
   }
 }))
@@ -152,7 +163,11 @@ function unifiedTerminalTab(id: string): Tab {
   }
 }
 
-function renderProductionLayer(root: Root, coldParkTerminalPanes = true): unknown {
+function renderProductionLayer(
+  root: Root,
+  coldParkTerminalPanes = true,
+  backgroundMountColdRestorePaneKeys?: ReadonlyMap<string, ReadonlySet<string>>
+): unknown {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   let thrown: unknown = null
   try {
@@ -164,6 +179,7 @@ function renderProductionLayer(root: Root, coldParkTerminalPanes = true): unknow
             worktreePath="cold-park-pre-gate"
             isWorktreeActive={false}
             coldParkTerminalPanes={coldParkTerminalPanes}
+            backgroundMountColdRestorePaneKeys={backgroundMountColdRestorePaneKeys}
           />
         </StrictMode>
       )
@@ -184,6 +200,7 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
     harness.coverageCalls = 0
     harness.syncCalls = 0
     harness.slotRenders = 0
+    harness.slotProps.length = 0
     harness.renderedParkedSets.length = 0
     const tabs = TAB_IDS.map(terminalTab)
     const unifiedTabs = TAB_IDS.map(unifiedTerminalTab)
@@ -326,6 +343,28 @@ describe('TerminalPaneOverlayLayer cold-park pre-gate loop', () => {
 
     expect(renderProductionLayer(root)).toBeNull()
     expect(harness.renderedParkedSets.at(-1)).toEqual([...TAB_IDS])
+  })
+
+  it('passes mail-scoped cold restore leaves to the matching grouped terminal tab', () => {
+    root = createRoot(container)
+    const paneKeys = new Set(['pane-addressed'])
+    const thrown = renderProductionLayer(root, false, new Map([[TAB_IDS[1], paneKeys] as const]))
+
+    expect(thrown).toBeNull()
+    const firstTabRenders = harness.slotProps.filter(
+      ({ terminalTabId }) => terminalTabId === TAB_IDS[0]
+    )
+    const addressedTabRenders = harness.slotProps.filter(
+      ({ terminalTabId }) => terminalTabId === TAB_IDS[1]
+    )
+    expect(firstTabRenders.length).toBeGreaterThan(0)
+    expect(
+      firstTabRenders.every(({ coldRestorePaneKeys }) => coldRestorePaneKeys === undefined)
+    ).toBe(true)
+    expect(addressedTabRenders.length).toBeGreaterThan(0)
+    expect(
+      addressedTabRenders.every(({ coldRestorePaneKeys }) => coldRestorePaneKeys === paneKeys)
+    ).toBe(true)
   })
 
   it('settles equivalent publications after memo cache discard', () => {

@@ -283,6 +283,16 @@ class InMemoryOrchestrationMessages {
     ]
   }
 
+  getUnreadDirectMessageTypes(toHandle: string): MessageType[] {
+    return [
+      ...new Set(
+        this.messages
+          .filter((message) => message.to_handle === toHandle && message.read === 0)
+          .map((message) => message.type)
+      )
+    ].sort()
+  }
+
   setActiveCoordinatorRun(run: { coordinator_handle: string } | null): void {
     this.activeCoordinatorRun = run
   }

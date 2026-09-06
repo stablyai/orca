@@ -7,6 +7,7 @@ import {
 import { useActiveTerminalRepair } from './terminal/use-active-terminal-repair'
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
+  applyBackgroundMountColdRestorePaneRestriction,
   applyBackgroundMountTabRestriction,
   revealActivationDeferredTabs,
   takeAllPendingBackgroundTerminalWorktreeMounts,
@@ -66,6 +67,9 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   >(() => new Set())
   const forceParkedCaptureDoneRef = useRef(new Set<string>())
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
+  const backgroundMountColdRestorePaneKeysRef = useRef(
+    new Map<string, ReadonlyMap<string, ReadonlySet<string>>>()
+  )
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const lastActivationWorktreeIdRef = useRef<string | null>(null)
 
@@ -74,6 +78,10 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
     const applyBackgroundMount = (detail: BackgroundMountTerminalWorktreeDetail): void => {
       const worktreeId = detail.worktreeId
+      applyBackgroundMountColdRestorePaneRestriction(
+        backgroundMountColdRestorePaneKeysRef.current,
+        detail
+      )
       applyBackgroundMountTabRestriction(
         backgroundMountTabIdsByWorktreeRef.current,
         mountedWorktreeIdsRef.current,
@@ -162,6 +170,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     setEvictionExemptTerminalTabIds,
     forceParkedCaptureDoneRef,
     backgroundMountTabIdsByWorktreeRef,
+    backgroundMountColdRestorePaneKeysRef,
     activationDeferredMountTabIdsByWorktreeRef,
     lastActivationWorktreeIdRef
   }

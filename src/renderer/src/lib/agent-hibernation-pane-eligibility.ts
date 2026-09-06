@@ -9,6 +9,7 @@ import {
   isLiveResumeAnchorForCompletedAgent
 } from './live-resume-anchor-record'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
+import { isSupervisingUnsettledDispatch } from './agent-hibernation-supervised-runs'
 
 export type EligiblePane = {
   paneKey: string
@@ -66,6 +67,7 @@ export function getEligiblePane(args: {
   ptyBindingFirstSeenAtByPaneKey: Record<string, number | undefined>
   boundaryResolvedAtByPaneKey: Record<string, number | undefined>
   mobileLockedPtyIds: Set<string>
+  supervisorLeafIdsWithUnsettledDispatch: ReadonlySet<string>
   now: number
   idleMs: number
 }): EligiblePane | null {
@@ -79,7 +81,8 @@ export function getEligiblePane(args: {
     foregroundTerminalLastSeenAtByTabId,
     ptyBindingFirstSeenAtByPaneKey,
     boundaryResolvedAtByPaneKey,
-    mobileLockedPtyIds
+    mobileLockedPtyIds,
+    supervisorLeafIdsWithUnsettledDispatch
   } = args
   const sleepingRecord = sleepingAgentSessionsByPaneKey[entry.paneKey]
   // Why: a completed turn leaves the TUI alive and resumable, so every resumable
@@ -95,6 +98,9 @@ export function getEligiblePane(args: {
     entry.interrupted === true ||
     Boolean(entry.subagents?.length) ||
     hasUnsettledOrUnknownDispatch(entry) ||
+    // Why: this pane supervises a worker that has not reported back. Sleeping it
+    // is what the wake path exists to recover from; don't create the case.
+    isSupervisingUnsettledDispatch(entry.paneKey, supervisorLeafIdsWithUnsettledDispatch) ||
     (sleepingRecord && !hasOnlyLiveResumeAnchor) ||
     // Why: a fenced worker must never be auto-relaunched; killing it would also
     // erase the fence, since the capture does not copy it.

@@ -2,6 +2,7 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
+  getFreshPtyProcessTableSnapshot,
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot
 } from '../../shared/process-table-snapshot-reader'
@@ -149,7 +150,7 @@ export async function resolveAgentForegroundProcessWithAvailability(
 
   try {
     const rows = options.fresh
-      ? await getFreshProcessTableSnapshot()
+      ? await getFreshPtyProcessTableSnapshot(shellPid)
       : await getProcessTableSnapshot()
     if (options.fresh && !getProcessTableIndex(rows).byPid.has(shellPid)) {
       return { available: false, processName: fallbackProcess }

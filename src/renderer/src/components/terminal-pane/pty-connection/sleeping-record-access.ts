@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import type { PtyConnectResult } from '../pty-transport'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { parseLegacyNumericPaneKey } from '../../../../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../../shared/stable-pane-id'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import {
   agentProviderSessionsEqual,
@@ -26,6 +26,33 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     const stableRecord = state.sleepingAgentSessionsByPaneKey[session.cacheKey]
     if (stableRecord) {
       return { paneKey: session.cacheKey, record: stableRecord }
+    }
+    const currentStablePane = parsePaneKey(session.cacheKey)
+    if (currentStablePane) {
+      const stableMatches = Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
+        ([paneKey, record]) => {
+          const candidate = parsePaneKey(paneKey)
+          return (
+            candidate?.leafId === currentStablePane.leafId &&
+            record.worktreeId === session.deps.worktreeId &&
+            (!record.tabId || record.tabId === candidate.tabId)
+          )
+        }
+      )
+      const providerSessionKeys = new Set(
+        stableMatches.map(([, record]) => getProviderSessionClaimKey(record))
+      )
+      if (providerSessionKeys.size === 1) {
+        const selected = stableMatches
+          .slice()
+          .sort(([, a], [, b]) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)[0]
+        if (selected) {
+          const [paneKey, record] = selected
+          return { paneKey, record }
+        }
+      } else if (stableMatches.length > 0) {
+        return null
+      }
     }
     const legacyMatches = Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
       ([paneKey, record]) => {

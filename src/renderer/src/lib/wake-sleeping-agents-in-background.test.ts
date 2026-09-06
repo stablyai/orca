@@ -33,7 +33,18 @@ vi.mock('./sleeping-agent-pane-ownership', () => ({
     `${record.worktreeId}\0${record.agent ?? 'agent'}\0${record.providerSession?.key ?? 'session_id'}\0${record.providerSession?.id ?? 'session'}`
 }))
 
-let sleepingRecords: Record<string, { worktreeId: string; paneKey: string; tabId?: string }> = {}
+let sleepingRecords: Record<
+  string,
+  {
+    worktreeId: string
+    paneKey: string
+    tabId?: string
+    origin?: string
+    state?: string
+    restoreOnTabOpenOnly?: boolean
+    interrupted?: boolean
+  }
+> = {}
 let terminalTabsByWorktree: Record<string, { id: string }[]> = {}
 const clearSleepingAgentSessionsByPaneKey = vi.fn((paneKeys: readonly string[]) => {
   for (const paneKey of paneKeys) {
@@ -52,6 +63,7 @@ vi.mock('@/store', () => ({
 
 import {
   createBackgroundSleepingAgentWakeDispatcher,
+  wakeMountedSleptPaneInPlace,
   wakeSleepingAgentsForWorktreeInBackground
 } from './wake-sleeping-agents-in-background'
 
@@ -410,5 +422,65 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     expect(rec.events).toEqual([])
     expect(resumeSpy).not.toHaveBeenCalled()
     expect(isPassiveSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('wakeMountedSleptPaneInPlace', () => {
+  const autoSleptRecord = {
+    worktreeId: 'wt-1',
+    paneKey: 'tab-a:leaf-1',
+    tabId: 'tab-a',
+    origin: 'worktree-sleep',
+    state: 'done'
+  }
+
+  it('dispatches a tab-scoped in-place wake for an auto-slept pane', () => {
+    sleepingRecords = { k1: autoSleptRecord }
+    const rec = recordEvents()
+
+    expect(wakeMountedSleptPaneInPlace('wt-1', 'tab-a')).toBe(true)
+
+    rec.stop()
+    expect(rec.events).toEqual(['wake:wt-1'])
+    expect(rec.wakeDetails[0]?.tabId).toBe('tab-a')
+    expect(rec.wakeDetails[0]?.wokenClaimKeys).toBeInstanceOf(Set)
+  })
+
+  it('matches a reminted tab by stable leaf identity and preserves the pane target', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    sleepingRecords = {
+      k1: {
+        ...autoSleptRecord,
+        paneKey: `tab-obsolete:${leafId}`,
+        tabId: 'tab-obsolete'
+      }
+    }
+    const rec = recordEvents()
+    const paneKey = `tab-reminted:${leafId}`
+
+    expect(wakeMountedSleptPaneInPlace('wt-1', 'tab-reminted', paneKey)).toBe(true)
+
+    rec.stop()
+    expect(rec.wakeDetails[0]).toMatchObject({ tabId: 'tab-reminted', paneKey })
+  })
+
+  it('never wakes a pane the user slept deliberately', () => {
+    sleepingRecords = { k1: { ...autoSleptRecord, restoreOnTabOpenOnly: true } }
+    const rec = recordEvents()
+
+    expect(wakeMountedSleptPaneInPlace('wt-1', 'tab-a')).toBe(false)
+
+    rec.stop()
+    expect(rec.events).toEqual([])
+  })
+
+  it('does nothing for a tab with no sleeping record', () => {
+    sleepingRecords = { k1: { ...autoSleptRecord, tabId: 'tab-other', paneKey: 'tab-other:leaf' } }
+    const rec = recordEvents()
+
+    expect(wakeMountedSleptPaneInPlace('wt-1', 'tab-a')).toBe(false)
+
+    rec.stop()
+    expect(rec.events).toEqual([])
   })
 })

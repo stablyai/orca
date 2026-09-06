@@ -10,7 +10,8 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
 import type { RuntimeTerminalSummary, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
-import { parseRuntimeWorktreeId } from './runtime-worktree-path-identity'
+import { parseRuntimeWorktreeId, runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { collectResumableSleptPanes, type ResumableSleptPane } from './resumable-slept-pane-listing'
 import { findRuntimeWorktreeSummaryByPath } from './runtime-worktree-summary-paths'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { getLatestLeafTitle } from './runtime-worktree-status-projection'
@@ -113,6 +114,58 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     }
     missingRuntimeWorktreeIds.add(runtimeWorktreeId)
     return null
+  }
+
+  protected listResumableSleptPanes(targetWorktreeId: string | null): ResumableSleptPane[] {
+    return collectResumableSleptPanes(this.workspaceSessions.listSessions(), {
+      targetWorktreeId,
+      matchesTargetWorktree: runtimeWorktreeIdsEqual
+    })
+  }
+
+  /** Why not `issueHandle` directly: minting from a synthetic leaf would clobber a
+   *  live leaf's handle if one exists for this pane; hand back that leaf's handle. */
+  protected issueResumableSleptPaneHandle(pane: ResumableSleptPane): string {
+    const existingLeaf = this.leaves.get(this.getLeafKey(pane.tabId, pane.leafId))
+    return this.issueHandle(
+      existingLeaf ?? {
+        tabId: pane.tabId,
+        leafId: pane.leafId,
+        worktreeId: pane.worktreeId,
+        ptyId: null,
+        ptyGeneration: 0
+      }
+    )
+  }
+
+  /** A pane whose process exited and whose resume record can bring it back.
+   *  `connected: false` keeps its execution-host meaning; `resumable` carries the
+   *  new fact, so nothing reading liveness changes (ssh-execution-boundary.md). */
+  protected buildSleptPaneTerminalSummary(
+    pane: ResumableSleptPane,
+    worktreesById: Map<string, ResolvedWorktree>,
+    resolvedWorktree?: ResolvedWorktree
+  ): RuntimeTerminalSummary {
+    const worktree = resolvedWorktree ?? worktreesById.get(pane.worktreeId)
+    return {
+      handle: this.issueResumableSleptPaneHandle(pane),
+      ptyId: null,
+      incarnationId: null,
+      orphaned: false,
+      worktreeId: pane.worktreeId,
+      worktreePath: worktree?.path ?? '',
+      branch: worktree?.branch ?? '',
+      tabId: pane.tabId,
+      leafId: pane.leafId,
+      title: pane.title ?? this.tabs.get(pane.tabId)?.title ?? null,
+      connected: false,
+      writable: false,
+      lastOutputAt: pane.lastOutputAt,
+      preview: '',
+      resumable: true,
+      agentIdentity: pane.agent,
+      ...this.terminalExecutionHostField(null, pane.worktreeId)
+    }
   }
 
   protected buildTerminalSummary(

@@ -44,6 +44,7 @@ export function createTerminalPanePtyDeps(args: {
     worktreeId: deps.worktreeId,
     cwd: startupCwd,
     startup: startupWithSetupSplitWait,
+    coldRestorePaneKeys: deps.coldRestorePaneKeys,
     mountFollowsTerminalPark,
     paneTransportsRef: deps.paneTransportsRef,
     paneMode2031Ref: deps.paneMode2031Ref,

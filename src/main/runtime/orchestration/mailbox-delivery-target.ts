@@ -22,15 +22,17 @@ export class OrchestrationMailboxDeliveryTarget {
     const db = this.deps.getDb()
     const runId = handle.startsWith('run:') ? handle.slice('run:'.length) : ''
     const dispatchId = handle.startsWith('dispatch:') ? handle.slice('dispatch:'.length) : ''
+    const run = runId ? db?.getRun(runId) : undefined
     const dispatch = dispatchId ? db?.getDispatchContextById?.(dispatchId) : undefined
     const remote =
       dispatchId && !dispatch ? db?.getRemoteDispatchAttachment?.(dispatchId) : undefined
-    const paneKey = dispatch?.assignee_pane_key ?? remote?.pane_key
+    const paneKey = run?.coordinator_pane_key ?? dispatch?.assignee_pane_key ?? remote?.pane_key
+    const paneHandle = paneKey ? this.deps.getTerminalHandleForPaneKey(paneKey) : null
     const ownerHandle = runId
-      ? db?.getRun(runId)?.coordinator_handle
-      : ((paneKey ? this.deps.getTerminalHandleForPaneKey(paneKey) : null) ??
-        dispatch?.assignee_handle ??
-        remote?.terminal_handle)
+      ? paneHandle && this.deps.hasTerminalHandle(paneHandle)
+        ? paneHandle
+        : run?.coordinator_handle
+      : (paneHandle ?? dispatch?.assignee_handle ?? remote?.terminal_handle)
     return ownerHandle && this.deps.hasTerminalHandle(ownerHandle) ? ownerHandle : null
   }
 

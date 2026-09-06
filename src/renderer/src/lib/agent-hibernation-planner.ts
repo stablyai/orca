@@ -1,5 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { getSupervisorLeafIdsWithUnsettledDispatch } from './agent-hibernation-supervised-runs'
 import {
   getEligiblePane,
   getEntryTabId,
@@ -110,6 +111,9 @@ export function planAgentHibernationCandidates(
     snapshot.runtimeLivenessRequiredWorktreeIds ?? []
   )
   const agentEntriesByTabId = getAgentEntriesByTabId(snapshot.agentStatusByPaneKey)
+  const supervisorLeafIdsWithUnsettledDispatch = getSupervisorLeafIdsWithUnsettledDispatch(
+    snapshot.agentStatusByPaneKey
+  )
   const candidates: AgentHibernationCandidate[] = []
   for (const [worktreeId, tabs] of Object.entries(snapshot.tabsByWorktree)) {
     // Why: the tab on screen is `foregroundTerminalTabIds` below, and a tab just left is held by
@@ -151,6 +155,7 @@ export function planAgentHibernationCandidates(
           ptyBindingFirstSeenAtByPaneKey: snapshot.ptyBindingFirstSeenAtByPaneKey ?? {},
           boundaryResolvedAtByPaneKey: snapshot.boundaryResolvedAtByPaneKey ?? {},
           mobileLockedPtyIds,
+          supervisorLeafIdsWithUnsettledDispatch,
           now: snapshot.now,
           idleMs
         })

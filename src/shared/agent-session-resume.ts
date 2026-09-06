@@ -73,6 +73,31 @@ export type SleepingAgentSessionRecord = {
   restoreOnTabOpenOnly?: boolean
 }
 
+// Why: `live`/legacy rows are provisional checkpoints a fresh capture supersedes; an explicit
+// sleep or quit capture is the pane's only resume handle once its live row is gone.
+export function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
+  return record.origin === 'worktree-sleep' || record.origin === 'quit'
+}
+
+/**
+ * Whether a background actor — inbound orchestration mail — may respawn this
+ * slept pane without anyone asking.
+ *
+ * Fail-closed on purpose: only an idle-agent-sleep capture (a finished turn the
+ * runtime parked on its own) is ours to undo. `restoreOnTabOpenOnly` marks the
+ * explicit user sleep (#11598); `origin` alone cannot separate the two because
+ * automatic hibernation writes 'worktree-sleep' as well.
+ */
+export function mayBackgroundWakeSleepingAgentSession(record: SleepingAgentSessionRecord): boolean {
+  return (
+    record.origin === 'worktree-sleep' &&
+    record.state === 'done' &&
+    record.restoreOnTabOpenOnly !== true &&
+    record.interrupted !== true &&
+    record.automaticResumeBlockedBy === undefined
+  )
+}
+
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
 const PROVIDER_SESSION_ID_MAX_LENGTH = 512
 

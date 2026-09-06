@@ -43,6 +43,7 @@ type TerminalOverlaySlotProps = {
   isVisible: boolean
   isActive: boolean
   activityTerminalPortal: ActivityTerminalPortalTarget | null
+  coldRestorePaneKeys: ReadonlySet<string> | undefined
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   leaveWorktreeIfEmpty: () => void
@@ -59,6 +60,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   isVisible,
   isActive,
   activityTerminalPortal,
+  coldRestorePaneKeys,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
   leaveWorktreeIfEmpty
@@ -228,6 +230,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
       isVisible={isVisible || activityTerminalPortal !== null}
       isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
+      coldRestorePaneKeys={coldRestorePaneKeys}
       onPtyExit={(ptyId, exitCode) => {
         if (consumeSuppressedPtyExit(ptyId)) {
           return

@@ -18,6 +18,7 @@ import { bindReplayDataDrain } from './replay-data-drain'
 import { bindStartFreshSpawn } from './fresh-spawn-start'
 
 import { bindFreshSpawnFollowReset } from './fresh-spawn-follow-reset'
+import { restoreCompletedAgentStatusAfterColdResume } from './hibernated-agent-status-resume'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -36,13 +37,21 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     return true
   }
   session.clearSleepingRecordAfterColdRestoreSpawn = (
-    startup: ColdRestoreAgentResumeStartup | null
+    startup: ColdRestoreAgentResumeStartup | null,
+    resumeConfirmed = true
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      session.clearSleepingRecordProviderDuplicates(
-        useAppStore.getState(),
-        startup.sleepingRecordEntry
-      )
+      const state = useAppStore.getState()
+      session.clearSleepingRecordProviderDuplicates(state, startup.sleepingRecordEntry)
+      if (resumeConfirmed) {
+        restoreCompletedAgentStatusAfterColdResume({
+          leafId: session.pane.leafId,
+          paneKey: session.cacheKey,
+          tabId: session.deps.tabId,
+          state,
+          startup
+        })
+      }
     }
   }
   session.mergeStartupEnvWithPaneIdentity = (

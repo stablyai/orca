@@ -256,6 +256,8 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       ...(cwdChanged && cwd !== null ? { cwd } : {}),
       ...(sourceRanges && sourceRanges.length > 0 ? { sourceRanges } : {})
     }))
+    // A resumed agent can publish its restored screen before it owns the PTY foreground.
+    this.orchestrationMailboxPointerDelivery.redriveAfterPtyOutput(ptyId)
     return outputSequence
   }
 }

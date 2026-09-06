@@ -98,6 +98,7 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
       if (restoresPublishedInventory) {
         this.markSessionTabsInventoryPublished()
       }
+      this.retrySleepingPaneWakesWhenGraphReady(windowId)
       return true
     }
     this.graphReloadLifecycle.begin(windowId)
@@ -116,6 +117,7 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     this.graphStatus = 'ready'
     this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
+    this.retrySleepingPaneWakesWhenGraphReady(windowId)
   }
 
   markGraphReloadFailed(

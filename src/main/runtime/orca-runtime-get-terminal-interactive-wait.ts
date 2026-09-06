@@ -132,6 +132,52 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
   }
 
+  protected async proveStatuslessCodexIdle(
+    handle: string,
+    expectedPtyId: string
+  ): Promise<string | null> {
+    const before = this.getStatuslessCodexIdleProofCandidate(handle, expectedPtyId)
+    if (!before) {
+      return null
+    }
+    let wait
+    try {
+      wait = await this.waitForTerminal(handle, { condition: 'tui-idle' })
+    } catch {
+      return null
+    }
+    if (!wait.satisfied || wait.status !== 'running') {
+      return null
+    }
+    const after = this.getStatuslessCodexIdleProofCandidate(handle, expectedPtyId)
+    return after?.processIncarnation === before.processIncarnation ? after.processIncarnation : null
+  }
+
+  private getStatuslessCodexIdleProofCandidate(
+    handle: string,
+    expectedPtyId: string
+  ): { processIncarnation: string } | null {
+    try {
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      const pty = this.ptysById.get(expectedPtyId)
+      if (
+        leaf.ptyId !== expectedPtyId ||
+        !leaf.connected ||
+        !leaf.writable ||
+        leaf.lastAgentStatus !== null ||
+        !pty?.connected ||
+        pty.launchAgent !== 'codex' ||
+        pty.lastAgentStatus !== null
+      ) {
+        return null
+      }
+      const processIncarnation = this.getTerminalProcessIncarnation(handle)
+      return processIncarnation ? { processIncarnation } : null
+    } catch {
+      return null
+    }
+  }
+
   getExactWorkerProviderSession(
     handle: string,
     observedAfter: number

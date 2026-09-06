@@ -6,10 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let terminalPaneRenderCount = 0
-let terminalPaneProps: { onPtyExit?: (ptyId: string, exitCode?: number) => void } | null = null
+let terminalPaneProps: {
+  coldRestorePaneKeys?: ReadonlySet<string>
+  onPtyExit?: (ptyId: string, exitCode?: number) => void
+} | null = null
 const markUnverifiedPtyLoss = vi.fn()
 vi.mock('./TerminalPane', () => ({
-  default: (props: { onPtyExit?: (ptyId: string, exitCode?: number) => void }) => {
+  default: (props: {
+    coldRestorePaneKeys?: ReadonlySet<string>
+    onPtyExit?: (ptyId: string, exitCode?: number) => void
+  }) => {
     terminalPaneProps = props
     terminalPaneRenderCount += 1
     return null
@@ -63,7 +69,7 @@ class CapturingResizeObserver {
   disconnect(): void {}
 }
 
-function renderSlot(): void {
+function renderSlot(coldRestorePaneKeys?: ReadonlySet<string>): void {
   root = createRoot(container)
   act(() => {
     root.render(
@@ -78,6 +84,7 @@ function renderSlot(): void {
         isVisible
         isActive
         activityTerminalPortal={null}
+        coldRestorePaneKeys={coldRestorePaneKeys}
         onFocusOwningGroup={vi.fn()}
         consumeSuppressedPtyExit={() => false}
         leaveWorktreeIfEmpty={vi.fn()}
@@ -116,6 +123,14 @@ afterEach(() => {
 })
 
 describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', () => {
+  it('passes the grouped-tab cold restore scope to TerminalPane', () => {
+    const paneKeys = new Set(['tab-react185:11111111-1111-4111-8111-111111111111'])
+
+    renderSlot(paneKeys)
+
+    expect(terminalPaneProps?.coldRestorePaneKeys).toBe(paneKeys)
+  })
+
   it('keeps the tab when the host reports an unverified PTY loss', () => {
     renderSlot()
 

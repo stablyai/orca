@@ -10,6 +10,7 @@ import { toProcessExitStartup } from './process-exit-startup'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
+import { deferUnaddressedMailScopedColdRestore } from './deferred-mail-scoped-cold-restore'
 import { runDeferredSessionReattachChoice } from './deferred-session-reattach-choice'
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
 
@@ -17,6 +18,11 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
   const isCurrentPaneTransport = (): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+
+  // Restore the split layout without reviving sleeping siblings that did not receive mail.
+  if (deferUnaddressedMailScopedColdRestore(session)) {
+    return
+  }
 
   // Why: trigger the deferred SSH connect per-tab (not per-target) so multiple tabs for one target reattach independently.
   // Must run before session-id resolution: the SSH provider isn't registered until connect succeeds.

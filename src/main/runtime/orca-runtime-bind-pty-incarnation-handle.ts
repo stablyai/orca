@@ -161,11 +161,20 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
   protected adoptFirstPtyForLeafHandle(
     leafKey: string,
     ptyId: string | null,
-    ptyGeneration: number
+    ptyGeneration: number,
+    incomingOwnerLeafKey: string | null
   ): boolean {
     const handle = this.handleByLeafKey.get(leafKey)
     const record = handle ? this.handles.get(handle) : null
-    if (!handle || !record || record.ptyId !== null || ptyId === null) {
+    // A malformed graph may name the same PTY on multiple leaves. Never let a
+    // pending leaf handle become an alias for an ambiguously owned process.
+    if (
+      !handle ||
+      !record ||
+      record.ptyId !== null ||
+      ptyId === null ||
+      incomingOwnerLeafKey !== leafKey
+    ) {
       return false
     }
     this.handles.set(handle, { ...record, ptyId, ptyGeneration })

@@ -133,6 +133,14 @@ export async function confirmForegroundProcessFromRuntimeController(ptyId: strin
   }
 }
 
+export function supportsForegroundProcessConfirmationFromRuntimeController(ptyId: string): boolean {
+  try {
+    return getProviderForPty(ptyId).confirmForegroundProcess !== undefined
+  } catch {
+    return false
+  }
+}
+
 export async function confirmShellForegroundFromRuntimeController(ptyId: string) {
   try {
     return (await getProviderForPty(ptyId).confirmShellForeground?.(ptyId)) ?? false

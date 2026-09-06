@@ -36,6 +36,7 @@ export function useTerminalPaneFoundation(
     isVisible = true,
     isWorktreeActive = isVisible,
     isolatedPaneKey = null,
+    coldRestorePaneKeys,
     showSplitButton = true,
     onPtyExit,
     onCloseTab
@@ -158,6 +159,7 @@ export function useTerminalPaneFoundation(
     isVisible,
     isWorktreeActive,
     isolatedPaneKey,
+    coldRestorePaneKeys,
     showSplitButton,
     onPtyExit,
     onCloseTab,

@@ -70,8 +70,10 @@ describe('registerPtyHandlers', () => {
     registerPtyHandlers(mainWindow as never, runtime as never)
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+      supportsForegroundProcessConfirmation: (ptyId: string) => boolean
     }
 
+    expect(controller.supportsForegroundProcessConfirmation('remote-pty')).toBe(true)
     await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
     expect(confirmForegroundProcess).toHaveBeenCalledOnce()
     expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
@@ -155,8 +157,11 @@ describe('registerPtyHandlers', () => {
     registerPtyHandlers(mainWindow as never, runtime as never)
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+      supportsForegroundProcessConfirmation: (ptyId: string) => boolean
     }
 
+    expect(controller.supportsForegroundProcessConfirmation('unsupported-pty')).toBe(false)
+    expect(controller.supportsForegroundProcessConfirmation('missing-pty')).toBe(false)
     await expect(controller.confirmForegroundProcess('unsupported-pty')).resolves.toBeNull()
     await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
     deletePtyOwnership('unsupported-pty')

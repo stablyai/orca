@@ -30,7 +30,10 @@ export const TERMINAL_SUBSCRIBE_METHODS: RpcAnyMethod[] = [
       }
 
       if (!leaf?.ptyId && params.client) {
-        rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(params.terminal)
+        rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(
+          params.terminal,
+          'client-subscribe'
+        )
         try {
           const ptyId = await runtime.waitForLeafPtyId(params.terminal, 10_000, signal)
           leaf = { ptyId }

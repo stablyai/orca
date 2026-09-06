@@ -84,6 +84,7 @@ describe('workspace surface ids', () => {
       activeWorktreeDeferralHostId: null,
       activityTerminalPortals: [],
       backgroundMountTabIdsByWorktreeRef: { current: new Map() },
+      backgroundMountColdRestorePaneKeysRef: { current: new Map() },
       groupsByWorktree: {},
       hydrationSucceeded: false,
       lastActivationWorktreeIdRef: { current: null },
