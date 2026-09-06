@@ -1,9 +1,19 @@
+import { readWindowsProcessTableFresh } from '../../../src/main/windows/windows-process-table'
 import type { ChildProcess } from 'node:child_process'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { cleanupE2ECrashpad } from './electron-crashpad-cleanup'
 import type { ElectronApplication } from '@stablyai/playwright-test'
+
+
+async function reportShutdownTree(label: string, rootPid?: number): Promise<void> {
+  if (process.platform !== 'win32') return
+  const rows = await readWindowsProcessTableFresh()
+  const selected = rows.filter((row) => /golden-stub|terminal-host|orca.*daemon/i.test(row.command) || row.pid === rootPid)
+  const parents = new Set(selected.map((row) => row.ppid))
+  console.error('SHUTDOWN_TREE', label, rootPid, JSON.stringify(rows.filter((row) => selected.includes(row) || parents.has(row.pid))))
+}
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
 const PROCESS_EXIT_TIMEOUT_MS = 5_000
@@ -184,6 +194,7 @@ export async function forceQuitElectronAppForE2E(app: ElectronApplication): Prom
 
 export async function closeElectronAppForE2E(app: ElectronApplication): Promise<void> {
   const proc = app.process()
+  await reportShutdownTree('before-app-close', proc.pid)
   const releasePipes = (): void => releaseExitedProcessPipes(proc)
   proc.once('exit', releasePipes)
   releasePipes()
@@ -236,8 +247,12 @@ export async function cleanupE2EDaemons(userDataDir: string): Promise<void> {
   // Why: app quit intentionally leaves daemon PTYs alive for warm reattach.
   // E2E temp profiles are deleted after each test, so their detached daemons
   // must be stopped explicitly or CI accumulates orphan Electron/shell trees.
-  for (const pid of readDaemonPidFiles(userDataDir)) {
+  const daemonPids = readDaemonPidFiles(userDataDir)
+  console.error('DAEMON_PID_FILES', userDataDir, daemonPids)
+  await reportShutdownTree('before-daemon-cleanup')
+  for (const pid of daemonPids) {
     await forceKillPidTree(pid)
   }
+  await reportShutdownTree('after-daemon-cleanup')
   cleanupE2ECrashpad(userDataDir)
 }
