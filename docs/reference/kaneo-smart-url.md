@@ -3,8 +3,9 @@
 Orca can resolve a pasted Kaneo task URL in the **Smart** field of Create worktree
 or Create folder workspace. Select the task result to use its title as the
 workspace name and keep a link to the task. When starting an agent, Orca includes
-the fetched title and description as bounded, explicitly marked source context.
-User-written instructions and names remain separate from the imported task.
+only the task URL alongside your own instructions and attachments. The task title
+is used for workspace naming and sidebar details; its description is not pasted
+into the agent.
 
 ## Connect
 
@@ -57,13 +58,13 @@ version bump is needed; existing providers and methods are unchanged.
 
 This integration reads tasks; it does not browse boards, update task state, add
 comments, or change Kaneo itself. The selected title, URL, and number persist in
-workspace metadata. Description context is captured for initial agent launch,
-not synchronized as a live issue cache.
+workspace metadata. Task descriptions are not copied into workspace drafts or agent prompts,
+including when resuming a draft saved by an earlier version of this integration.
 
 The client verifies task/project/workspace identity using the task endpoint and a
 project list scoped to the workspace. It bounds response sizes and request time,
 cancels superseded lookups, and ignores stale results across input and runtime
-changes. Task prose uses Orca's existing untrusted-context wrapper.
+changes.
 
 Provider contracts are documented in [Kaneo's API reference](https://kaneo.app/docs/api-reference/introduction)
 and [authentication guide](https://kaneo.app/docs/api-reference/authentication).

@@ -176,10 +176,6 @@ export function getLinkedWorkItemPromptContext(
       ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
       : { linkedUrls: [], linkedContextBlocks: [] }
   }
-  if (linkedWorkItem?.provider === 'kaneo') {
-    const block = buildContainedLinkedContextBlock(linkedWorkItem.linkedContext)
-    return { linkedUrls: [linkedWorkItem.url], linkedContextBlocks: block ? [block] : [] }
-  }
   const linkedUrl = linkedWorkItem?.url?.trim()
   return linkedUrl
     ? { linkedUrls: [linkedUrl], linkedContextBlocks: [] }
@@ -235,13 +231,6 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       })
     : null
   const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
-  if (linkedWorkItem?.provider === 'kaneo') {
-    const block = buildContainedLinkedContextBlock(linkedWorkItem.linkedContext)
-    return {
-      prompt: '',
-      draftPrompt: [trimmedNote, linkedWorkItem.url, block].filter(Boolean).join('\n\n')
-    }
-  }
   const linkedUrl = linkedWorkItem?.url?.trim() || null
   const draftPrompt = linearDraft
     ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')

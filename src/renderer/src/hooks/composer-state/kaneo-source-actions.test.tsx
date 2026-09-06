@@ -31,58 +31,57 @@ const task: KaneoTask = {
 }
 
 describe('selecting a Kaneo workspace source', () => {
-  it.each([false, true])('keeps link and launch context for folder=%s', (folder) => {
-    const setters = Object.fromEntries(
-      [
-        'setBaseBranch',
-        'setCompareBaseRef',
-        'setPushTarget',
-        'setLinkedIssue',
-        'setLinkedPR',
-        'setLinkedGitLabIssue',
-        'setLinkedGitLabMR',
-        'setLinkedTaskSourceContext',
-        'setLinkedWorkItem',
-        'setBranchNameOverride',
-        'setBranchNameOverridePreservesNameEdits',
-        'setForkPushWarning',
-        'setName',
-        'setNote'
-      ].map((name) => [name, vi.fn()])
-    )
-    const input = {
-      ...setters,
-      isProjectGroupTarget: folder,
-      name: task.url,
-      linkedWorkItem: null,
-      lastAutoNameRef: { current: '' },
-      branchAutoNameRef: { current: 'old-branch' },
-      lastAutoNoteRef: { current: '' },
-      noteRef: { current: 'User instructions' },
-      smartGitHubPrStartPointSelectionRef: { current: null }
-    }
-    const { result, rerender } = renderHook(
-      ({ name }) => useIssueSourceActions({ ...input, name } as never),
-      { initialProps: { name: task.url } }
-    )
-    act(() => result.current.handleSmartKaneoTaskSelect(task))
-    expect(setters.setLinkedWorkItem).toHaveBeenCalledWith(
-      expect.objectContaining({
+  it.each([false, true])(
+    'keeps task identity without copying task prose for folder=%s',
+    (folder) => {
+      const setters = Object.fromEntries(
+        [
+          'setBaseBranch',
+          'setCompareBaseRef',
+          'setPushTarget',
+          'setLinkedIssue',
+          'setLinkedPR',
+          'setLinkedGitLabIssue',
+          'setLinkedGitLabMR',
+          'setLinkedTaskSourceContext',
+          'setLinkedWorkItem',
+          'setBranchNameOverride',
+          'setBranchNameOverridePreservesNameEdits',
+          'setForkPushWarning',
+          'setName',
+          'setNote'
+        ].map((name) => [name, vi.fn()])
+      )
+      const input = {
+        ...setters,
+        isProjectGroupTarget: folder,
+        name: task.url,
+        linkedWorkItem: null,
+        lastAutoNameRef: { current: '' },
+        branchAutoNameRef: { current: 'old-branch' },
+        lastAutoNoteRef: { current: '' },
+        noteRef: { current: 'User instructions' },
+        smartGitHubPrStartPointSelectionRef: { current: null }
+      }
+      const { result, rerender } = renderHook(
+        ({ name }) => useIssueSourceActions({ ...input, name } as never),
+        { initialProps: { name: task.url } }
+      )
+      act(() => result.current.handleSmartKaneoTaskSelect(task))
+      expect(setters.setLinkedWorkItem).toHaveBeenCalledWith({
         provider: 'kaneo',
+        type: 'issue',
+        number: task.number,
         url: task.url,
-        title: task.title,
-        linkedContext: expect.objectContaining({
-          provider: 'kaneo',
-          renderedText: expect.stringContaining(task.description)
-        })
+        title: task.title
       })
-    )
-    expect(setters.setName).toHaveBeenCalledWith('fix-booking')
-    expect(setters.setBranchNameOverride).toHaveBeenCalledWith(undefined)
-    expect(setters.setNote).not.toHaveBeenCalled()
-    setters.setName.mockClear()
-    rerender({ name: 'My deliberate workspace name' })
-    act(() => result.current.handleSmartKaneoTaskSelect(task))
-    expect(setters.setName).not.toHaveBeenCalled()
-  })
+      expect(setters.setName).toHaveBeenCalledWith('fix-booking')
+      expect(setters.setBranchNameOverride).toHaveBeenCalledWith(undefined)
+      expect(setters.setNote).not.toHaveBeenCalled()
+      setters.setName.mockClear()
+      rerender({ name: 'My deliberate workspace name' })
+      act(() => result.current.handleSmartKaneoTaskSelect(task))
+      expect(setters.setName).not.toHaveBeenCalled()
+    }
+  )
 })
