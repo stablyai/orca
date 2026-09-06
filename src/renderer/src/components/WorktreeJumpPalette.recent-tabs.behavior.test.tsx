@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   LEAF_ID,
@@ -177,9 +178,20 @@ function getRenderedRowIds(): string[] {
 }
 
 function getTabRowIds(): string[] {
-  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item^="workspace-tab:"]')]
+  return [
+    ...testContainer.querySelectorAll<HTMLElement>(
+      `[data-command-item^="${encodePaletteIdentity(['workspace-tab'])}"]`
+    )
+  ]
     .map((node) => node.dataset.commandItem ?? '')
-    .map((id) => id.replace('workspace-tab:', ''))
+    .map(
+      (id) =>
+        Object.values(useAppStore.getState().unifiedTabsByWorktree)
+          .flat()
+          .find(
+            (tab) => encodePaletteIdentity(['workspace-tab', '', tab.worktreeId, tab.id]) === id
+          )?.id ?? ''
+    )
 }
 
 describe('WorktreeJumpPalette recent chats & terminals', () => {
@@ -417,7 +429,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
     expect(getTabRowIds()).not.toContain('tab-beta')
     const alphaRow = testContainer.querySelector<HTMLElement>(
-      '[data-command-item="workspace-tab:tab-alpha"]'
+      `[data-command-item="${encodePaletteIdentity(['workspace-tab', '', 'wt-alpha', 'tab-alpha'])}"]`
     )
     expect(alphaRow?.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Working')
   })

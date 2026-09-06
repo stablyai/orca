@@ -32,10 +32,12 @@ export function PaletteRowShortcutBadge({
 
 export function HighlightedText({
   text,
-  matchRanges
+  matchRanges,
+  highlightClassName = 'font-semibold text-foreground'
 }: {
   text: string
   matchRanges?: readonly MatchRange[] | null
+  highlightClassName?: string
 }): React.JSX.Element {
   const ranges = (matchRanges ?? []).filter(
     (range) => range.start < range.end && range.start < text.length
@@ -53,7 +55,7 @@ export function HighlightedText({
     }
     if (end > start) {
       parts.push(
-        <span className="font-semibold text-foreground" key={`${start}-${end}`}>
+        <span className={highlightClassName} key={`${start}-${end}`}>
           {text.slice(start, end)}
         </span>
       )
@@ -97,7 +99,7 @@ export function PaletteOpenTabPrimaryLine({
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       <span
         data-slot="palette-open-tab-title"
-        className="min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
+        className="min-w-0 flex-auto truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
       >
         <HighlightedText text={title} matchRanges={titleRanges} />
       </span>
@@ -135,7 +137,11 @@ export function PaletteOpenTabPrimaryLine({
           <TooltipContent side="top" sideOffset={4} align="start" className="max-w-96 space-y-1">
             {additionalSecondaryMatches.map((match) => (
               <div className="break-all" key={match.text}>
-                <HighlightedText text={match.text} matchRanges={match.ranges} />
+                <HighlightedText
+                  text={match.text}
+                  matchRanges={match.ranges}
+                  highlightClassName="font-semibold text-inherit"
+                />
               </div>
             ))}
           </TooltipContent>
