@@ -17,6 +17,7 @@ export type ClaudeMessageEnvelope = {
   /** Messages API id shared by every frame of one streamed assistant message. */
   messageId: string | null
   parentToolUseId: string | null
+  isInjectedUserTurn?: boolean
 }
 
 export type ClaudeToolUse = { id: string; name: string; input: unknown }
@@ -42,12 +43,16 @@ export function readClaudeMessageEnvelope(
   const sessionId = claudeText(frame.session_id)
   const uuid = claudeText(frame.uuid)
   const role = message?.role
+  const isInjectedUserTurn =
+    frame.type === 'user' &&
+    (frame.isMeta === true || frame.isSynthetic === true || frame.isCompactSummary === true)
   return sessionId && uuid && (role === 'assistant' || role === 'user')
     ? {
         sessionId,
         uuid,
         role,
         content: messageContent(message?.content),
+        isInjectedUserTurn,
         messageId: claudeText(message?.id),
         parentToolUseId: claudeText(frame.parent_tool_use_id)
       }
@@ -93,6 +98,9 @@ export function claudeMessageBody(envelope: ClaudeMessageEnvelope): AgentJournal
 }
 
 export function claudeHasReplayContent(envelope: ClaudeMessageEnvelope): boolean {
+  if (envelope.isInjectedUserTurn) {
+    return false
+  }
   return envelope.content.some((value) => {
     const part = claudeRecord(value)
     return part !== null && part.type !== 'tool_result'

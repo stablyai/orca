@@ -49,6 +49,28 @@ function userReplayFrame(uuid: string, text: string): Record<string, unknown> {
 }
 
 describe('Claude structured dispatch image limits', () => {
+  it.each(['isMeta', 'isSynthetic', 'isCompactSummary'])(
+    'does not acknowledge a dispatch with %s context even when the client uuid matches',
+    async (flag) => {
+      const session = sessionFor()
+      const dispatched = dispatchClaudeTurn(
+        session,
+        { clientMessageId: 'client-1', body: userMessage([{ type: 'text', text: '/example' }]) },
+        1000
+      )
+      await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+      const sentUuid = session.dispatchWaiters[0]!.sentUuid
+      const replay = userReplayFrame(sentUuid, '/example')
+      expect(resolveClaudeReplayWaiter(session, { ...replay, [flag]: true })).toBe(false)
+      expect(session.dispatchWaiters).toHaveLength(1)
+      expect(resolveClaudeReplayWaiter(session, replay)).toBe(true)
+      await expect(dispatched).resolves.toMatchObject({
+        state: 'accepted',
+        providerIdentity: { uuid: sentUuid }
+      })
+    }
+  )
+
   it('recovers the active identity when a timed-out replay arrives late', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(

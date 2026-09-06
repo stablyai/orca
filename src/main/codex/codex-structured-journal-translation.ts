@@ -64,7 +64,7 @@ export function createCodexJournalTranslator(
         currentTurnIds: activeTurns.byThread,
         ordinals: items.ordinals,
         handleItem: (event) => {
-          const translated = items.handle(event)
+          const translated = items.handle(event, 'history')
           return translated.handled
             ? translated.admission
             : { accepted: false, reason: 'untranslated' }

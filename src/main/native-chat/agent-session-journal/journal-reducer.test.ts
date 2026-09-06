@@ -207,10 +207,45 @@ describe('submission and dispatch state machine', () => {
     const items = renderJournalState(state).items
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
-    // The echo updates content in place; the bubble keeps its original slot.
+    // The echo advances the revision; the submitted bubble keeps its original slot.
     expect(items[0]?.sequence).toBe(1)
     expect(items[0]?.revision).toBe(1)
   })
+
+  it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
+    'preserves submitted text and attachments when %s is restored',
+    (providerItemId) => {
+      const body: AgentJournalMessageItem = {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: '/example-skill inspect this' },
+          { type: 'image-ref', path: '/tmp/original.png' }
+        ]
+      }
+      const state = fold([
+        { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+        {
+          kind: 'dispatch',
+          clientMessageId: 'cm_1',
+          state: 'accepted',
+          providerItemId,
+          reason: null,
+          ...base(2)
+        },
+        {
+          kind: 'item',
+          itemId: providerItemId,
+          revision: 1,
+          body: userText('# Expanded skill instructions'),
+          ...base(3)
+        }
+      ])
+      expect(renderJournalState(state).items).toEqual([
+        expect.objectContaining({ itemId: agentJournalSubmissionKey('cm_1'), body, revision: 1 })
+      ])
+    }
+  )
 
   it('adopts a provider echo that arrives before dispatch settles', () => {
     const body = userText('early echo')

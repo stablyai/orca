@@ -157,7 +157,7 @@ describe('codex journal translation', () => {
 
     translator.handle(TURN_STARTED)
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-0', text: 'hi' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-0', text: 'hi' } })
     )
 
     expect(tap.publishes()).toBe(1)
@@ -520,7 +520,7 @@ describe('codex journal translation', () => {
     expect(timeline).toEqual([])
   })
 
-  it('projects only user and assistant content for a complete turn with hooks', () => {
+  it('projects assistant content without provider user echoes for a complete turn with hooks', () => {
     const { translator, tap } = translatorWith()
 
     translator.handle(notification('thread/started', { thread: { id: THREAD_ID } }))
@@ -552,7 +552,6 @@ describe('codex journal translation', () => {
       }))
     )
     expect(timeline.map(({ role, blocks }) => ({ role, blocks }))).toEqual([
-      { role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       { role: 'assistant', blocks: [{ type: 'text', text: 'hello' }] }
     ])
   })

@@ -652,7 +652,7 @@ describe('codex journal translation', () => {
 
     translator.handle(TURN_STARTED)
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-0', text: 'one' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-0', text: 'one' } })
     )
     translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
     translator.handle(
@@ -662,7 +662,7 @@ describe('codex journal translation', () => {
     )
     translator.handle(notification('turn/started', { turn: { id: 'turn-2' } }))
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-2', text: 'two' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-2', text: 'two' } })
     )
 
     expect(tap.rows.map((row) => row.key)).toEqual([
@@ -679,7 +679,7 @@ describe('codex journal translation', () => {
     translator.handle(
       notification('item/completed', {
         turnId: 'turn-9',
-        item: { type: 'userMessage', id: 'item-0', text: 'late' }
+        item: { type: 'agentMessage', id: 'item-0', text: 'late' }
       })
     )
 
