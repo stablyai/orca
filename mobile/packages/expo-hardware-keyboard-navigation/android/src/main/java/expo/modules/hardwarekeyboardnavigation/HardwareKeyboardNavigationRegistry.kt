@@ -1,6 +1,9 @@
 package expo.modules.hardwarekeyboardnavigation
 
 import android.view.KeyEvent
+import android.view.Window
+import android.widget.TextView
+import android.view.inputmethod.BaseInputConnection
 import java.lang.ref.WeakReference
 
 data class HardwareKeyboardCommand(
@@ -37,6 +40,12 @@ object HardwareKeyboardNavigationRegistry {
 
   fun clearCapturedKeys() {
     capturedKeys.clear()
+  }
+
+  fun dispatch(event: KeyEvent, window: Window): Boolean {
+    val text = (window.currentFocus as? TextView)?.editableText
+    val composing = text != null && BaseInputConnection.getComposingSpanStart(text) >= 0
+    return dispatch(event, canStartCapture = !composing)
   }
 
   fun dispatch(event: KeyEvent, canStartCapture: Boolean = true): Boolean {
