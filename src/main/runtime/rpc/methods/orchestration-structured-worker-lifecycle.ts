@@ -16,7 +16,10 @@ import {
   buildStructuredJournalArchive,
   type WorkerStructuredJournalArchive
 } from '../../orchestration/structured-worker-journal-archive'
-import { readStructuredJournalPage } from '../../orchestration/structured-worker-journal-page'
+import {
+  readStructuredJournalPage,
+  type StructuredJournalPage
+} from '../../orchestration/structured-worker-journal-page'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
@@ -26,7 +29,10 @@ import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
 } from '../../orchestration/worker-transcript-payload'
-import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
+import {
+  projectStructuredItemToNativeChat,
+  projectStructuredItemsToNativeChat
+} from '../../../../shared/structured-agent-session-projection'
 import {
   observeStructuredWorker,
   resolveStructuredWorkerIdentity,
@@ -133,24 +139,20 @@ export function readStructuredWorkerJournal(args: {
       `The transcript for Dispatch ${args.dispatchId} could not be read; its session is not attached.`
     )
   }
-  // The oldest item on the page anchors the identity, because the cursor position is an index
-  // into THIS tail window. Once the journal outgrows the window it slides, and a stale index
-  // silently resumes past the items it skipped; changing the identity turns that into the
-  // `source_changed` the contract already defines.
-  const sourceIdentity = createWorkerOutputSourceIdentity([
-    'structured-journal',
-    args.identity.processIncarnation,
-    args.identity.paneKey,
-    page.items[0]?.itemId ?? ''
-  ])
+  const bounded = boundWorkerTranscriptMessages(projectStructuredItemsToNativeChat(page.items))
+  // Identity of the PREFIX the caller already holds — see `structuredJournalPrefixIdentity`.
+  const identityAt = (position: number): string =>
+    structuredJournalPrefixIdentity({ identity: args.identity, page, position })
   const cursor = decodeWorkerOutputCursor(args.cursor, args.dispatchId)
-  if (cursor && (cursor.source !== 'transcript' || cursor.sourceIdentity !== sourceIdentity)) {
+  if (
+    cursor &&
+    (cursor.source !== 'transcript' || cursor.sourceIdentity !== identityAt(cursor.position))
+  ) {
     throw new OrchestrationError(
       'source_changed',
       'The worker output source changed. Start a fresh worker-read without the old cursor.'
     )
   }
-  const bounded = boundWorkerTranscriptMessages(projectStructuredItemsToNativeChat(page.items))
   return pageMessages({
     messages: bounded.messages,
     warnings: [
@@ -161,12 +163,53 @@ export function readStructuredWorkerJournal(args: {
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     agent: args.agent,
-    sourceIdentity,
+    identityAt,
     start: cursor?.position ?? 0,
     limit: args.limit,
     archived: false,
     liveness: args.liveness
   })
+}
+
+/**
+ * The cursor's `source_changed` anchor: the window's oldest item, plus every item whose projected
+ * message sits BELOW `position`, by id AND revision.
+ *
+ * The journal is a reduced, MUTABLE timeline, so a message index over it is not self-validating and
+ * the old oldest-item-only fingerprint could not see the normal case. A `running` tool item gains
+ * its `[tool result]` at its original sequence once later items exist, the delta coalescer revises a
+ * message in place, settlement can rewrite an item smaller, and a pending approval projects to null
+ * until it resolves and then appears in the MIDDLE of the array. Under a stable oldest item that
+ * fingerprint stayed valid through all of it: a caller could be handed `hel`, resume past it and
+ * never receive the revision to `hello world` (omission), or have a resolved approval insert ahead
+ * of its saved index and re-read what it already had (duplication) — both returning ok.
+ *
+ * Scoped to the prefix rather than the whole page ON PURPOSE. Fingerprinting every item would flip
+ * the identity every 60ms with the coalescer window during an active turn, making the cursor
+ * unusable exactly while the worker is working — a useless verb in place of a silent bug. Tail
+ * growth the caller has not read yet cannot invalidate; a change to what it already holds does.
+ * Position-dependence is safe because `p` rides in the same opaque payload as the identity.
+ *
+ * The oldest item stays in the anchor as the window-slide detector: a slide shifts every index.
+ */
+function structuredJournalPrefixIdentity(args: {
+  identity: StructuredWorkerIdentity
+  page: StructuredJournalPage
+  position: number
+}): string {
+  // Items that project to a message, in message order. `projectStructuredItemsToNativeChat` keeps
+  // order and drops the rest, and `boundWorkerTranscriptMessages` returns a PREFIX of that, so
+  // message index i is item i here for every index a cursor can name.
+  const projected = args.page.items.filter(
+    (item) => projectStructuredItemToNativeChat(item) !== null
+  )
+  return createWorkerOutputSourceIdentity([
+    'structured-journal',
+    args.identity.processIncarnation,
+    args.identity.paneKey,
+    args.page.items[0]?.itemId ?? '',
+    ...projected.slice(0, args.position).flatMap((item) => [item.itemId, String(item.revision)])
+  ])
 }
 
 /** Freezes the journal before the session is closed, so a released worker is still readable. */
@@ -244,7 +287,9 @@ export function readArchivedStructuredJournal(args: {
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     agent: args.archive.agent,
-    sourceIdentity,
+    // Constant on purpose: the archive is FROZEN before the close, so no item can be revised under
+    // a caller and there is no prefix to fingerprint.
+    identityAt: () => sourceIdentity,
     start: cursor?.position ?? 0,
     limit: args.limit,
     archived: true,
@@ -263,7 +308,8 @@ function pageMessages(input: {
   dispatchId: string
   workerState: string
   agent: AgentType
-  sourceIdentity: string
+  /** Identity of the prefix below a position; the returned cursor is stamped with its own end. */
+  identityAt: (position: number) => string
   start: number
   limit: number | undefined
   archived: boolean
@@ -271,16 +317,14 @@ function pageMessages(input: {
 }): OrchestrationWorkerReadTranscriptResult {
   const start = Math.min(input.start, input.messages.length)
   const end = Math.min(start + clampWorkerTranscriptLimit(input.limit), input.messages.length)
-  const nextCursor = encodeWorkerOutputCursor(
-    input.dispatchId,
-    'transcript',
-    input.sourceIdentity,
-    end
-  )
+  // Stamped with the identity of everything up to `end`, which is exactly what the next read
+  // recomputes and compares — so a later in-place revision below it is caught.
+  const sourceIdentity = input.identityAt(end)
+  const nextCursor = encodeWorkerOutputCursor(input.dispatchId, 'transcript', sourceIdentity, end)
   return {
     dispatchId: input.dispatchId,
     source: 'transcript',
-    sourceIdentity: input.sourceIdentity,
+    sourceIdentity,
     provider: input.agent,
     transcript: {
       messages: input.messages.slice(start, end),
