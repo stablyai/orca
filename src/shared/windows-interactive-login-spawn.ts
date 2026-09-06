@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, win32 } from 'node:path'
+import { join } from 'node:path'
 import { getSpawnArgsForWindows, wrapWindowsStartWait } from './windows-batch-spawn'
+import { getWindowsPowerShellHost } from './windows-powershell-host'
 
 export type WindowsHostInteractiveLoginSpawn = {
   command: string
@@ -12,6 +13,12 @@ export type WindowsHostInteractiveLoginSpawn = {
   cleanup: () => void
   getTerminationPid: () => number | null
   waitForTerminationPid: () => Promise<number | null>
+  /**
+   * Whether the PowerShell payload ever wrote its PID. `start /wait` does not
+   * relay the child's exit code, so this is the only proof the login script ran
+   * at all — without it a host that never started reads as a clean success.
+   */
+  hasRelayedPid: () => boolean
 }
 
 const PID_RELAY_WAIT_TIMEOUT_MS = 2_000
@@ -66,19 +73,13 @@ function waitForPidFile(pidFilePath: string): Promise<number | null> {
 
 export function buildWindowsHostInteractiveLoginSpawn(
   command: string,
-  args: string[]
+  args: string[],
+  powerShellHost: string = getWindowsPowerShellHost()
 ): WindowsHostInteractiveLoginSpawn {
   const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, args)
   const pidFilePath = join(tmpdir(), `orca-interactive-login-${randomUUID()}.pid`)
-  const powershell = win32.join(
-    process.env.SystemRoot ?? 'C:\\Windows',
-    'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe'
-  )
   const script = buildPidRelayScript(spawnCmd, spawnArgs, pidFilePath)
-  const wrapped = wrapWindowsStartWait(powershell, [
+  const wrapped = wrapWindowsStartWait(powerShellHost, [
     '-NoLogo',
     '-NoProfile',
     '-ExecutionPolicy',
@@ -86,13 +87,29 @@ export function buildWindowsHostInteractiveLoginSpawn(
     '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')
   ])
+  // Why remember it: cleanup deletes the relay file, and callers check whether
+  // the script ran only after settling, which is past that deletion.
+  let relayedPid: number | null = null
+  const capturePid = (): number | null => (relayedPid ??= readPidFile(pidFilePath))
   return {
     command: wrapped.spawnCmd,
     args: wrapped.spawnArgs,
     stdio: 'ignore',
     windowsHide: true,
-    cleanup: () => rmSync(pidFilePath, { force: true }),
-    getTerminationPid: () => readPidFile(pidFilePath),
-    waitForTerminationPid: () => waitForPidFile(pidFilePath)
+    cleanup: () => {
+      capturePid()
+      rmSync(pidFilePath, { force: true })
+    },
+    getTerminationPid: () => capturePid(),
+    waitForTerminationPid: async () => {
+      // Why check first: after cleanup the relay file is gone, so waiting would
+      // burn the timeout and then discard a PID we already hold.
+      if (relayedPid !== null) {
+        return relayedPid
+      }
+      relayedPid = await waitForPidFile(pidFilePath)
+      return relayedPid
+    },
+    hasRelayedPid: () => capturePid() !== null
   }
 }

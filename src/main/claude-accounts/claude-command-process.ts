@@ -4,6 +4,8 @@ import {
   buildWindowsHostInteractiveLoginSpawn,
   type WindowsHostInteractiveLoginSpawn
 } from '../../shared/windows-interactive-login-spawn'
+import { warmWindowsPowerShellHostCache } from '../../shared/windows-powershell-host'
+import { recordLoginConsoleStartIfMissed } from '../crash-reporting/login-console-start-breadcrumb'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
 import { terminateClaudeProcess } from './claude-login-process-termination'
@@ -28,19 +30,25 @@ function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
 
-export function runClaudeCommandProcess(
+export async function runClaudeCommandProcess(
   args: string[],
   configDir: ClaudeCommandConfig,
   timeoutMs: number,
   options?: ClaudeCommandOptions
 ): Promise<string> {
+  const isWindowsHostInteractiveLogin =
+    process.platform === 'win32' &&
+    configDir.linuxPath === null &&
+    configDir.wslDistro === null &&
+    args[0] === 'auth' &&
+    args[1] === 'login'
+  if (isWindowsHostInteractiveLogin) {
+    // Why here and not at spawn time: resolving the host runs PowerShell, and
+    // the console builder is synchronous — probing there would block the main
+    // process for as long as the slowest candidate takes to start.
+    await warmWindowsPowerShellHostCache()
+  }
   return new Promise((resolvePromise, rejectPromise) => {
-    const isWindowsHostInteractiveLogin =
-      process.platform === 'win32' &&
-      configDir.linuxPath === null &&
-      configDir.wslDistro === null &&
-      args[0] === 'auth' &&
-      args[1] === 'login'
     // Why lazy: the WSL branch runs `claude` inside the distro, so resolving a
     // host binary there would be wasted filesystem probing for a path never used.
     let cachedHostClaudeCommand: string | null = null
@@ -150,6 +158,14 @@ export function runClaudeCommandProcess(
       }
       settle(() => {
         if (code === 0 || options?.allowFailure) {
+          if (recordLoginConsoleStartIfMissed(interactiveLogin, 'claude')) {
+            rejectPromise(
+              new Error(
+                'PowerShell could not start the Claude sign-in console. Check that PowerShell 7 is available and try again.'
+              )
+            )
+            return
+          }
           resolvePromise(output)
           return
         }

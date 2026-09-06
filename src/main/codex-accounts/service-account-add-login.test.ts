@@ -31,6 +31,32 @@ vi.mock('node:os', async () => {
   }
 })
 
+// Why: the login path now waits for a PowerShell host to be resolved, and that
+// resolution spawns real processes. Pin it so these tests keep testing the login.
+vi.mock('../../shared/windows-powershell-host', () => ({
+  warmWindowsPowerShellHostCache: () =>
+    Promise.resolve('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'),
+  getWindowsPowerShellHost: () => 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  setWindowsPowerShellHostResolutionObserver: () => {}
+}))
+
+// Why: on a Windows host the login runs behind a console wrapper whose payload
+// relays its PID, and a login that never relays one is now reported as a failed
+// sign-in. These tests drive a fake child that writes no PID file, so pin a
+// wrapper that did start — the subject here is the config seeding, not the host.
+vi.mock('../../shared/windows-interactive-login-spawn', () => ({
+  buildWindowsHostInteractiveLoginSpawn: (command: string, args: string[]) => ({
+    command,
+    args,
+    stdio: 'ignore' as const,
+    windowsHide: true,
+    cleanup: () => {},
+    getTerminationPid: () => null,
+    waitForTerminationPid: () => Promise.resolve(null),
+    hasRelayedPid: () => true
+  })
+}))
+
 describe('CodexAccountService config sync', () => {
   registerCodexAccountsTestHomes()
 

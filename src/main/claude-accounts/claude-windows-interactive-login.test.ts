@@ -13,12 +13,21 @@ vi.mock('../codex-cli/command', () => ({
   resolveClaudeCommand: vi.fn(() => 'C:\\Tools\\claude.cmd')
 }))
 
+// Why: the login path now waits for a PowerShell host to be resolved, and that
+// resolution spawns real processes. Pin it so these tests keep testing the login.
+vi.mock('../../shared/windows-powershell-host', () => ({
+  warmWindowsPowerShellHostCache: () =>
+    Promise.resolve('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'),
+  getWindowsPowerShellHost: () => 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  setWindowsPowerShellHostResolutionObserver: () => {}
+}))
+
 describe('Claude Windows host interactive login', () => {
   afterEach(() => {
     restorePlatform()
   })
 
-  it('resolves a Windows auth login whose child has no piped streams', async () => {
+  it.each([true, false])('requires proof of console startup: relayedPid=%s', async (relayedPid) => {
     setPlatform('win32')
     vi.resetModules()
     const child = new EventEmitter() as EventEmitter & {
@@ -49,7 +58,8 @@ describe('Claude Windows host interactive login', () => {
         '--claudeai'
       ],
       stdio: 'ignore' as const,
-      windowsHide: true
+      windowsHide: true,
+      hasRelayedPid: () => relayedPid
     }))
     vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
     vi.doMock('../../shared/windows-interactive-login-spawn', () => ({
@@ -63,7 +73,7 @@ describe('Claude Windows host interactive login', () => {
         createService() as never,
         createService() as never
       )
-      await (
+      const login = (
         service as unknown as {
           runClaudeCommand(
             args: string[],
@@ -76,6 +86,9 @@ describe('Claude Windows host interactive login', () => {
         { windowsPath: 'C:\\tmp\\claude-auth', linuxPath: null, wslDistro: null },
         1000
       )
+      await (relayedPid
+        ? expect(login).resolves.toBe('')
+        : expect(login).rejects.toThrow('PowerShell could not start the Claude sign-in console'))
 
       expect(buildInteractiveLoginSpawn).toHaveBeenCalledWith('C:\\Tools\\claude.cmd', [
         'auth',

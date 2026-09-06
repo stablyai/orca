@@ -1,6 +1,22 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as LoginSpawn from '../../shared/windows-interactive-login-spawn'
+
+vi.mock('../../shared/windows-interactive-login-spawn', async () => {
+  const actual = await vi.importActual<typeof LoginSpawn>(
+    '../../shared/windows-interactive-login-spawn'
+  )
+  return {
+    ...actual,
+    buildWindowsHostInteractiveLoginSpawn: (
+      ...args: Parameters<typeof actual.buildWindowsHostInteractiveLoginSpawn>
+    ) => ({
+      ...actual.buildWindowsHostInteractiveLoginSpawn(...args),
+      hasRelayedPid: () => true
+    })
+  }
+})
 
 const processMocks = vi.hoisted(() => ({
   spawn: vi.fn()
@@ -17,6 +33,15 @@ vi.mock('electron', () => ({
 
 vi.mock('../codex-cli/command', () => ({
   resolveClaudeCommand: () => 'claude.exe'
+}))
+
+// Why: the login path now waits for a PowerShell host to be resolved, and that
+// resolution spawns real processes. Pin it so this stays a test about settling.
+vi.mock('../../shared/windows-powershell-host', () => ({
+  warmWindowsPowerShellHostCache: () =>
+    Promise.resolve('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'),
+  getWindowsPowerShellHost: () => 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+  setWindowsPowerShellHostResolutionObserver: () => {}
 }))
 
 vi.mock('./keychain', () => ({
@@ -113,6 +138,9 @@ describe('native Windows Claude login completion oracle', () => {
         completions += 1
       })
 
+    // Why: the native Windows login resolves a PowerShell host before it
+    // spawns, so the child has no listeners until that promise settles.
+    await flushPromiseCallbacks()
     child.emit('exit', 0)
     await flushPromiseCallbacks()
 
