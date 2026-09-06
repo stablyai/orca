@@ -8,6 +8,9 @@ overrides:
   xcode>uuid: 11.1.1
 
 patchedDependencies:
+  '@xterm/addon-webgl@0.20.0-beta.299':
+    hash: 94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e
+    path: patches/@xterm__addon-webgl@0.20.0-beta.299.patch
   react-native-webview@13.16.2:
     hash: de6761dfa76a5491a23e49f1262566a8831cab26736a336fdffc5d4e7d05ff27
     path: patches/react-native-webview@13.16.2.patch
@@ -33,7 +36,7 @@ importers:
         version: 0.10.0-beta.300(@xterm/xterm@6.1.0-beta.303)
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.299
-        version: 0.20.0-beta.299(@xterm/xterm@6.1.0-beta.303)
+        version: 0.20.0-beta.299(patch_hash=94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e)(@xterm/xterm@6.1.0-beta.303)
       '@xterm/xterm':
         specifier: 6.1.0-beta.303
         version: 6.1.0-beta.303
@@ -10582,7 +10585,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.303
 
-  '@xterm/addon-webgl@0.20.0-beta.299(@xterm/xterm@6.1.0-beta.303)':
+  '@xterm/addon-webgl@0.20.0-beta.299(patch_hash=94687e89a0115e6e6aa102837f986debdc029c091527ee5eb4a4e17ceaf9473e)(@xterm/xterm@6.1.0-beta.303)':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.303
 
