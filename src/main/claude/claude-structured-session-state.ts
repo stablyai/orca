@@ -60,6 +60,15 @@ export type ClaudeStructuredSessionAdapterDeps = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
+  /** A replay that lands after its dispatch timed out proves the message reached Claude, so the
+   *  submission the host already recorded `unknown` can still be settled `accepted`. */
+  onLateDispatchAccepted?: (input: {
+    sessionId: string
+    clientMessageId: string
+    uuid: string
+    /** Claude's own session id — the journal identity is provider-scoped, not Orca-scoped. */
+    providerSessionId: string
+  }) => void
   openConnection?: typeof openClaudeStreamJsonConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -87,6 +96,8 @@ export type ClaudeDispatchWaiter = {
   resolve: (uuid: string | null) => void
   timer: ReturnType<typeof setTimeout>
   acceptsResult: boolean
+  /** The submission this dispatch belongs to, so a late replay can settle its journal row. */
+  clientMessageId: string
   /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
   sentUuid: string
   /** Sequence used to fence a late identity from a newer dispatch. */
@@ -100,6 +111,8 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
+  /** Set by the adapter; see `onLateDispatchAccepted` on the adapter deps. */
+  onLateDispatchAccepted?: (input: { clientMessageId: string; uuid: string }) => void
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Durable transcript files live under this account's `projects` directory. */

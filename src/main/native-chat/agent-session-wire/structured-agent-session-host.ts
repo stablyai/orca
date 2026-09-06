@@ -1,6 +1,7 @@
 // Structured agent-session host: where the lease, journal, and provider adapter meet.
 // Mutations share one durable admission path and serialize per session.
 
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type * as SessionWire from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
@@ -336,6 +337,37 @@ export class StructuredAgentSessionHost {
     state
   ) => this.backgroundTasks.publish(sessionId, state)
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
+
+  /** A provider replay that arrived after its dispatch timed out. The send already recorded
+   *  `unknown`, which is terminal for the outbox — the client shows "delivery is unconfirmed"
+   *  forever and its Retry redelivers a message the agent already has. The replay proves
+   *  delivery, so settle the submission the host was unsure about. */
+  settleLateDispatch = (input: {
+    sessionId: string
+    clientMessageId: string
+    providerIdentity: AgentJournalItemIdentity
+  }): Promise<void> =>
+    this.serialize(input.sessionId, async () => {
+      const session = this.sessions.get(input.sessionId)
+      if (!session) {
+        return
+      }
+      // Only an `unknown` row is ours to move; anything else is already the truth.
+      const submission = session.journal
+        .submissions()
+        .find((entry) => entry.clientMessageId === input.clientMessageId)
+      if (submission?.dispatchState !== 'unknown') {
+        return
+      }
+      await session.journal.resolveDispatch({
+        clientMessageId: input.clientMessageId,
+        state: 'accepted',
+        providerIdentity: input.providerIdentity,
+        fence: session.fence,
+        recovered: true
+      })
+      this.subscribers.publish(input.sessionId, session.journal)
+    })
 
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
   subscribeStatus = (

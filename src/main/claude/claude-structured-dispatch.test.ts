@@ -65,6 +65,49 @@ describe('Claude structured dispatch image limits', () => {
     expect(session.activeTurnSequence).toBe(session.dispatchSequence)
   })
 
+  it('reports the settled submission when a timed-out replay arrives late', async () => {
+    const session = sessionFor()
+    const accepted: { clientMessageId: string; uuid: string }[] = []
+    session.onLateDispatchAccepted = (input) => accepted.push(input)
+    const dispatched = dispatchClaudeTurn(
+      session,
+      { clientMessageId: 'client-1', body: userMessage([{ type: 'text', text: 'one' }]) },
+      500
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
+    // The send gave up waiting, so the host has already recorded this submission `unknown`.
+    await expect(dispatched).resolves.toMatchObject({ state: 'unknown' })
+
+    resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))
+
+    expect(accepted).toEqual([{ clientMessageId: 'client-1', uuid: sentUuid }])
+  })
+
+  it('reports a late replay even after a newer dispatch has started', async () => {
+    const session = sessionFor()
+    const accepted: { clientMessageId: string; uuid: string }[] = []
+    session.onLateDispatchAccepted = (input) => accepted.push(input)
+    const first = dispatchClaudeTurn(
+      session,
+      { clientMessageId: 'client-1', body: userMessage([{ type: 'text', text: 'one' }]) },
+      500
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    const firstUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
+    await expect(first).resolves.toMatchObject({ state: 'unknown' })
+    dispatchClaudeTurn(
+      session,
+      { clientMessageId: 'client-2', body: userMessage([{ type: 'text', text: 'two' }]) },
+      100
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+
+    // Turn identity must stay with dispatch B, but message A still provably landed.
+    expect(resolveClaudeReplayWaiter(session, userReplayFrame(firstUuid!, 'one'))).toBe(false)
+    expect(accepted).toEqual([{ clientMessageId: 'client-1', uuid: firstUuid }])
+  })
+
   it('never lets a late replay for dispatch A resolve dispatch B', async () => {
     const session = sessionFor()
     const first = dispatchClaudeTurn(

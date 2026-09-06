@@ -260,6 +260,17 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       },
       onBackgroundTasksChanged: (sessionId, state) =>
         host?.publishBackgroundTaskState(sessionId, state),
+      onLateDispatchAccepted: ({ sessionId, clientMessageId, uuid, providerSessionId }) => {
+        void host
+          ?.settleLateDispatch({
+            sessionId,
+            clientMessageId,
+            providerIdentity: { provider: 'claude', sessionId: providerSessionId, uuid }
+          })
+          .catch((error) =>
+            deps.onError?.({ scope: `structured-agent-session-late-dispatch:${sessionId}`, error })
+          )
+      },
       ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
     })
