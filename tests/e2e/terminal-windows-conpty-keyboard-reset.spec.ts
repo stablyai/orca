@@ -54,8 +54,12 @@ test('resets standard keyboard bytes after a protocol-mode agent exits on ConPTY
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
-  await configureGoldenStubAgent(orcaPage, { agentArgs: '--keyboard-protocol' })
-  await launchGoldenStubAgentFromNewTab(orcaPage)
+  // Grok is the supported native ConPTY exception to Kitty protocol withholding.
+  await configureGoldenStubAgent(orcaPage, {
+    agent: 'grok',
+    agentArgs: '--keyboard-protocol --grok'
+  })
+  await launchGoldenStubAgentFromNewTab(orcaPage, /^Grok(?:\s|$)/i)
 
   const ptyId = await waitForActivePanePtyId(orcaPage)
   await expect.poll(() => getKittyKeyboardFlags(orcaPage), { timeout: 10_000 }).toBe(1)
