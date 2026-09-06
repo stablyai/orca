@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
+import { evaluateDueAutomations } from './evaluate-due-automations'
 import {
   isFinalAutomationRunStatus,
   type Automation,
@@ -231,13 +232,12 @@ export class AutomationService {
     }
     this.evaluating = true
     try {
-      const now = Date.now()
-      for (const automation of this.store.listAutomations()) {
-        if (!automation.enabled || automation.nextRunAt > now) {
-          continue
-        }
-        await this.evaluateAutomation(automation, now)
-      }
+      await evaluateDueAutomations(
+        this.store,
+        this.runs,
+        (automation, now) => this.evaluateAutomation(automation, now),
+        this.publish
+      )
     } finally {
       this.evaluating = false
     }
