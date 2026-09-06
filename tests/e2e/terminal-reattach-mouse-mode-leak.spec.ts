@@ -47,6 +47,7 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 test.describe.configure({ mode: 'serial' })
 
 test.describe('reattach mouse-mode leak', () => {
+  test.afterEach(async ({}, testInfo) => console.info('[mouse-skip-annotations] '+JSON.stringify(testInfo.annotations)))
   test('warm reattach disarms mouse modes a killed TUI left armed', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
     // Why: arms the leak with a POSIX `printf` builtin; the reset logic under
@@ -246,6 +247,10 @@ test.describe('reattach mouse-mode leak', () => {
 
           return {
             afterReattach,
+            requireAlt: pane.terminal.options.mouseEventsRequireAlt,
+            connected: pane.terminal.element.isConnected,
+            modeAfterArm: pane.terminal.modes.mouseTrackingMode,
+            screenRect: screen.getBoundingClientRect().toJSON(),
             classAfterArm,
             armedReports,
             // Whether the reattached pane dynamically bound xterm mouse reporting
@@ -257,6 +262,7 @@ test.describe('reattach mouse-mode leak', () => {
         }
       })
 
+      console.info('[mouse-reattach-probe] '+JSON.stringify(probe))
       // Post-reattach the pane is fully disarmed.
       expect(probe.afterReattach.mode).toBe('none')
       expect(probe.afterReattach.hasEnableMouseClass).toBe(false)
