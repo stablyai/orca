@@ -227,6 +227,7 @@ jobs:
           mapfile -t TEST_FILES < <(jq -r '.[] | select(
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
             . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
+            . != "tests/e2e/ssh-docker-relay-perf.spec.ts" and
             . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
           )' <<<"$TEST_FILES_JSON")
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
@@ -262,12 +263,13 @@ jobs:
     needs: [build, prepare-native-cache]
     # effect of one route listing a startup-readiness spec — pruning that spec would have
     # silently retired the whole lane. The signal is now derived from the SSH routes directly.
-    # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
+    # The explicit spec clauses stay for their honest purpose: changed-e2e hands these specs to this
     # lane, so editing one must still run it here.
     if: >-
       inputs.test_files == '' ||
       inputs.ssh_source_changed == 'true' ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-docker-relay-perf.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
     runs-on: ubuntu-latest
     # Why 60: this lane now also runs the remaining Docker-SSH specs serially. They average
