@@ -8,6 +8,7 @@ import {
   getServeUpdateAttemptId,
   getServeUpdateUnitName,
   readServeUpdateResultFor,
+  writeServeUpdateCensusContinuation,
   writeUpdateRequest
 } from '../serve-update-spool'
 import type { ServeUpdateVerdict } from '../../shared/serve-update-spool'
@@ -230,6 +231,9 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
     }
     // Why before quit: the helper needs the unit stop to look like a supervised exit, and
     // pre-quit cleanup (auth preservation) must still run while this process is alive.
+    // The continuation tells the helper the quit-fence census passed so it may stop the
+    // unit; on a blocked census the request was cleared instead, which cancels the helper.
+    writeServeUpdateCensusContinuation()
     await this.runBeforeUpdateQuitCleanup()
     killAllPty()
     // Why: the helper stops the unit; systemd's RestartPreventExitStatus=3 plus a clean quit
