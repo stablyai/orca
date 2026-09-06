@@ -160,6 +160,9 @@ jobs:
 
       - name: Checkout the requested ref
         uses: actions/checkout@v6
+        env:
+          # Full-history checkout must also preserve case-twin branch and tag names.
+          GIT_DEFAULT_REF_FORMAT: reftable
         with:
           # Why an input at all rather than just github.ref: the whole point is to
           # build code that has not landed, and the workflow definition itself

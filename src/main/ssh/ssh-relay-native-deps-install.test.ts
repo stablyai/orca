@@ -561,7 +561,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // clean stage root
       '', // no persisted active pipe marker
       'WAITING', // initial pipe probe
-      '', // publish the per-launch credential
       '', // WMI relay launch
       'READY', // readiness poll
       '' // persist active pipe marker
@@ -657,7 +656,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // rm probe stderr
       'ORCA-NPTY-CLOEXEC:patched\n', // pty-master cloexec patch on the loadable node-pty
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -895,7 +893,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       'ORCA-NATIVE-DEPS-OK',
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -920,7 +917,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       'ORCA-NATIVE-DEPS-OK',
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 

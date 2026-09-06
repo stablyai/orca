@@ -137,13 +137,27 @@ describe('resolveMobileNativeChat', () => {
     })
   })
 
-  it('rejects non-Codex structured agent-session tabs', () => {
+  it('resolves Claude structured agent-session tabs on the same journal path', () => {
     expect(
       resolveMobileNativeChat({
         type: 'agent-session',
         sessionId: 'structured-1',
         agent: 'claude'
-      } as never)
+      })
+    ).toEqual({
+      agent: 'claude',
+      sessionId: 'structured-1',
+      transcriptPath: null
+    })
+  })
+
+  it('rejects structured agent-session tabs whose provider the reducer cannot replay', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'agent-session',
+        sessionId: 'structured-1',
+        agent: 'grok'
+      })
     ).toBeNull()
   })
 

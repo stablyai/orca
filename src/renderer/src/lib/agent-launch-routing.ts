@@ -89,15 +89,11 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   const projectRuntime = input.projectRuntime
   const runtimeRefused =
     projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl'
-  const hasInitialSessionOptions = Boolean(
-    input.initialSessionOptions && Object.keys(input.initialSessionOptions).length > 0
-  )
   const structuredSupported =
     isAgentSessionHandleProvider(input.agent) &&
     input.promptDelivery !== 'draft' &&
     input.workspaceKind !== 'floating' &&
     input.requiresTuiLaunchCustomization !== true &&
-    !hasInitialSessionOptions &&
     input.executionHostId === 'local' &&
     // Codex's Windows refusal is deliberate and settled elsewhere, so it stays a client-side
     // answer. Claude's is measured by the executing host at create time (agentSession.createSupport)

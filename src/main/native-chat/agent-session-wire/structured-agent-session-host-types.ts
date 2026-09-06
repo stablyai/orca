@@ -10,6 +10,17 @@ import type { StructuredAgentSessionHandoffTransport } from './structured-agent-
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
+/** What the host believes about a session it just made addressable again. The workspace and agent
+ *  come from the record, so a caller publishes the host's view rather than a client's assertion.
+ *  `readable` is false when the journal could not be opened — the tab is still worth publishing,
+ *  because attach recovers what read restore cannot. */
+export type StructuredAgentSessionReveal = {
+  sessionId: string
+  workspaceId: string
+  agent: 'claude' | 'codex'
+  readable: boolean
+}
+
 export type StructuredAgentSessionHostSession = {
   journal: AgentSessionJournal
   params: AgentSessionAttachParams

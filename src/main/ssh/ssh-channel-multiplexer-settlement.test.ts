@@ -30,7 +30,7 @@ describe('SshChannelMultiplexer notification settlement', () => {
     mux.notifyWithSettlement('pty.ackData', { acknowledgements: [] }, settled)
     expect(settled).not.toHaveBeenCalled()
     harness.settlements[0]({ ok: true })
-    expect(settled).toHaveBeenCalledWith({ ok: true })
+    expect(settled).toHaveBeenCalledWith({ outcome: 'accepted' })
     mux.dispose()
   })
 
@@ -47,7 +47,12 @@ describe('SshChannelMultiplexer notification settlement', () => {
     const settled = vi.fn()
 
     mux.notifyWithSettlement('pty.ackData', { acknowledgements: [] }, settled)
-    expect(settled).toHaveBeenCalledWith({ ok: false, error })
+    expect(settled).toHaveBeenCalledWith({
+      outcome: 'unverifiable',
+      reason: 'transport_settlement_lost',
+      bytesHandedToTransport: true,
+      error
+    })
     expect(mux.isDisposed()).toBe(true)
   })
 
@@ -65,7 +70,7 @@ describe('SshChannelMultiplexer notification settlement', () => {
 
     mux.notifyWithSettlement('pty.ackData', { acknowledgements: [] }, settled)
     expect(settled).toHaveBeenCalledOnce()
-    expect(settled).toHaveBeenCalledWith({ ok: true })
+    expect(settled).toHaveBeenCalledWith({ outcome: 'accepted' })
   })
 
   it('fails an unsettled publication when the multiplexer is disposed', () => {
@@ -85,7 +90,9 @@ describe('SshChannelMultiplexer notification settlement', () => {
     mux.dispose()
 
     expect(settled).toHaveBeenCalledWith({
-      ok: false,
+      outcome: 'unverifiable',
+      reason: 'transport_settlement_lost',
+      bytesHandedToTransport: true,
       error: expect.objectContaining({ code: 'DISPOSED' })
     })
     expect(close).toHaveBeenCalledOnce()

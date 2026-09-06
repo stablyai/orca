@@ -111,6 +111,18 @@ export function createAgentStatusRecoveryActions(
 
     setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
       set((s) => {
+        // The pane key is tracked even with no record: a worker settled while its tab was open
+        // is fenced before the record exists, and the record is only minted on close.
+        const wasBlocked = s.automaticResumeBlockedPaneKeys[paneKey] === true
+        let paneKeys = s.automaticResumeBlockedPaneKeys
+        if (blocked !== wasBlocked) {
+          paneKeys = { ...s.automaticResumeBlockedPaneKeys }
+          if (blocked) {
+            paneKeys[paneKey] = true
+          } else {
+            delete paneKeys[paneKey]
+          }
+        }
         const current = s.sleepingAgentSessionsByPaneKey[paneKey]
         if (
           !current ||
@@ -118,7 +130,9 @@ export function createAgentStatusRecoveryActions(
             ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
             : current.automaticResumeBlockedBy === undefined)
         ) {
-          return s
+          return paneKeys === s.automaticResumeBlockedPaneKeys
+            ? s
+            : { automaticResumeBlockedPaneKeys: paneKeys }
         }
         const next = { ...current }
         if (blocked) {
@@ -127,6 +141,7 @@ export function createAgentStatusRecoveryActions(
           delete next.automaticResumeBlockedBy
         }
         return {
+          automaticResumeBlockedPaneKeys: paneKeys,
           sleepingAgentSessionsByPaneKey: {
             ...s.sleepingAgentSessionsByPaneKey,
             [paneKey]: next

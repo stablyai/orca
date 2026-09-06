@@ -31,7 +31,14 @@ export function directPathForEndpoint(
 // instead of holding the supervisor's operation mutex for the full outer bound.
 const RECONNECT_GRACE_MS = 2_000
 
-function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Promise<void> {
+function waitForAuthenticatedSession(
+  session: RpcClient,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.reject(new Error('probe cancelled'))
+  }
   if (session.getState() === 'connected') {
     return Promise.resolve()
   }
@@ -72,7 +79,13 @@ function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Pro
       finish()
       reject(new Error('probe session authentication timed out'))
     }, timeoutMs)
+    const onAbort = (): void => {
+      finish()
+      reject(new Error('probe cancelled'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
     function finish(): void {
+      signal?.removeEventListener('abort', onAbort)
       if (timer) {
         clearTimeout(timer)
       }
@@ -87,8 +100,12 @@ function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Pro
 export async function openAuthenticatedDirectEndpoint(
   host: HostProfile,
   openDirect: (endpoint: string) => RpcClient,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<{ client: RpcClient; path: Exclude<MobileConnectionPath, 'relay'> } | null> {
+  if (signal?.aborted) {
+    return null
+  }
   const endpoints = directEndpointUrls(host)
   return await new Promise((resolve) => {
     const clients = new Set<RpcClient>()
@@ -110,8 +127,13 @@ export async function openAuthenticatedDirectEndpoint(
         continue
       }
       clients.add(client)
-      void waitForAuthenticatedSession(client, timeoutMs).then(
+      void waitForAuthenticatedSession(client, timeoutMs, signal).then(
         () => {
+          if (signal?.aborted) {
+            client.close()
+            rejectCandidate()
+            return
+          }
           if (settled) {
             client.close()
             return
