@@ -56,10 +56,10 @@ jobs:
           pnpm exec electron-vite build --mode e2e
           pnpm run build:web-from-renderer
       - name: Run existing relay performance scenarios
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_SSH_LOCALHOST=1 ORCA_FEATURE_REMOTE_AGENT_HOOKS=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test --config tests/playwright.config.ts ${{ matrix.spec }} --project=electron-headless --workers=1
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_SSH_LOCALHOST=1 ORCA_FEATURE_REMOTE_AGENT_HOOKS=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test --config tests/playwright.config.ts ${{ matrix.spec }} --project=electron-headless --workers=1 --repeat-each=3
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: localhost-ssh-pi-fixture-${{ strategy.job-index }}
+          name: localhost-ssh-repeat-${{ strategy.job-index }}
           path: test-results/
           retention-days: 3
