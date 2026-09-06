@@ -22,6 +22,7 @@ const testState = vi.hoisted(() => ({
   subscribeToPtyData: vi.fn(),
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
+  getPtyKittyKeyboardFlags: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
@@ -57,6 +58,10 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
 }))
 
+vi.mock('@/components/terminal-pane/terminal-pty-kitty-keyboard-flags', () => ({
+  getPtyKittyKeyboardFlags: testState.getPtyKittyKeyboardFlags
+}))
+
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
 
@@ -90,6 +95,8 @@ describe('post-paste submit retry input', () => {
     testState.replayPreHandlerPtyData.mockReset()
     testState.isRemoteRuntimePtyId.mockReset()
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
+    testState.getPtyKittyKeyboardFlags.mockReset()
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(0)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
     testState.inspectRuntimeTerminalProcess.mockReset()
@@ -101,7 +108,19 @@ describe('post-paste submit retry input', () => {
     vi.useRealTimers()
   })
 
+  it('keeps Codex paste-submit on Enter when no submit key is configured', async () => {
+    const promise = startCodexSubmit()
+    await signalCodexComposerReady()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(submitWrites(ENTER_SUBMIT_INPUT)).toHaveLength(2)
+    expect(submitWrites(CODEX_SUBMIT_INPUT)).toHaveLength(0)
+  })
+
   it('sends one retry submit input after the configured gap for agents that can eat the first submit', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(1)
     const promise = startCodexSubmit()
     await signalCodexComposerReady()
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
@@ -119,6 +138,18 @@ describe('post-paste submit retry input', () => {
       'launch'
     )
     expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('retries Enter when configured Codex Ctrl+Enter lacks Kitty keyboard proof', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    const promise = startCodexSubmit()
+    await signalCodexComposerReady()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(submitWrites(ENTER_SUBMIT_INPUT)).toHaveLength(2)
+    expect(submitWrites(CODEX_SUBMIT_INPUT)).toHaveLength(0)
+    expect(testState.getPtyKittyKeyboardFlags).toHaveBeenCalledWith('pty-1')
   })
 
   it('sends exactly one Enter for agents without a configured submit input or retry delay', async () => {
@@ -141,6 +172,8 @@ describe('post-paste submit retry input', () => {
 
   it('holds the PTY input transaction across the retry submit input', async () => {
     const writes: string[] = []
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(1)
     testState.sendRuntimePtyInputVerified.mockImplementation(
       async (_ptyId: string, data: string) => {
         writes.push(data)
@@ -169,6 +202,8 @@ describe('post-paste submit retry input', () => {
   })
 
   it('keeps a successful submit successful when the retry input is rejected', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(1)
     testState.sendRuntimePtyInputVerified
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)

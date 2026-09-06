@@ -10,7 +10,15 @@ import {
   encodeModifyOtherKeysEnter,
   encodeTerminalShiftEnter,
   TERMINAL_CTRL_BACKSPACE_INPUT
+<<<<<<< HEAD
 } from '../../../../shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
+=======
+} from '../../../../shared/terminal-modified-enter-encoding'
+import {
+  TERMINAL_CTRL_ENTER_CSI_U_INPUT,
+  TERMINAL_ENTER_INPUT
+} from '../../../../shared/terminal-ctrl-enter-input'
+>>>>>>> 34c2b1e95e (fix: make Codex paste submit configurable)
 import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
 import {
   resolveTerminalOptionShortcutAction,
@@ -214,7 +222,7 @@ export function resolveTerminalShortcutAction(
       hasCtrlEnterCsiUAuthority?.() === true
     return {
       type: 'sendInput',
-      data: canSendCsiU ? '\x1b[13;5u' : '\r'
+      data: canSendCsiU ? TERMINAL_CTRL_ENTER_CSI_U_INPUT : TERMINAL_ENTER_INPUT
     }
   }
 

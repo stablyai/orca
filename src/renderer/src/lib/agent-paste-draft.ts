@@ -1,7 +1,13 @@
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import { resolveAgentPostPasteSubmitInput } from '../../../shared/tui-agent-post-paste-submit'
+import {
+  resolveTerminalCtrlEnterInput,
+  TERMINAL_ENTER_INPUT
+} from '../../../shared/terminal-ctrl-enter-input'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { resolvePasteReadySignal } from '../../../shared/draft-paste-ready-scanner'
 import { useAppStore } from '@/store'
@@ -9,6 +15,7 @@ import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspec
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
 import '@/components/terminal-pane/terminal-bracketed-paste'
 import '../../../shared/terminal/input/terminal-bracketed-paste-text'
+import { getPtyKittyKeyboardFlags } from '@/components/terminal-pane/terminal-pty-kitty-keyboard-flags'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
@@ -26,8 +33,6 @@ export {
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
 const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
-const POST_PASTE_ENTER_INPUT = '\r'
-const POST_PASTE_CTRL_ENTER_INPUT = '\x1b[13;5u'
 
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
@@ -178,7 +183,11 @@ async function sendBracketedPasteToAgent(args: {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
-  const submitInput = resolvePostPasteSubmitInput(agent)
+  const submitInput = resolvePostPasteSubmitSequence(
+    agent,
+    useAppStore.getState().settings?.agentPostPasteSubmitInputs,
+    ptyId
+  )
   try {
     // Keep paste, Enter and retry under one PTY lock or another paste could submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
@@ -197,7 +206,7 @@ async function sendBracketedPasteToAgent(args: {
         try {
           await sendRuntimePtyInputVerified(ptyId, submitInput, inputKind)
         } catch {
-          // Why: a rejected retry leaves the first submit verdict untouched.
+          // Why: a rejected retry leaves the first Enter's verdict untouched.
         }
       }
 
@@ -208,10 +217,16 @@ async function sendBracketedPasteToAgent(args: {
   }
 }
 
-function resolvePostPasteSubmitInput(agent?: TuiAgent): string {
-  return agent && TUI_AGENT_CONFIG[agent]?.postPasteSubmitInput === 'ctrl-enter'
-    ? POST_PASTE_CTRL_ENTER_INPUT
-    : POST_PASTE_ENTER_INPUT
+function resolvePostPasteSubmitSequence(
+  agent: TuiAgent | undefined,
+  configuredInputs: GlobalSettings['agentPostPasteSubmitInputs'] | undefined,
+  ptyId: string
+): string {
+  const configuredInput = resolveAgentPostPasteSubmitInput(agent, configuredInputs)
+  if (configuredInput === 'ctrl-enter') {
+    return resolveTerminalCtrlEnterInput(getPtyKittyKeyboardFlags(ptyId))
+  }
+  return TERMINAL_ENTER_INPUT
 }
 
 function waitForAgentDraftInputReadyOnTab(args: {

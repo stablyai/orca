@@ -245,6 +245,7 @@ export function buildDefaultSettings(args: {
     agentDefaultArgs: {},
     agentLaunchChoices: {},
     agentDefaultEnv: {},
+    agentPostPasteSubmitInputs: {},
     agentYoloDefaultsMigrated: true,
     agentPermissionDefault: 'full-access',
     agentPermissionOverrides: {},
