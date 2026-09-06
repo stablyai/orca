@@ -74,16 +74,11 @@ export function applyLocalStructuredSessionTabSnapshots<
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
       continue
     }
-    // A frame that carries no publication is not a later publication to fence against. Recording
-    // its epoch retires the renderer's own — which is a module constant for the process lifetime,
-    // and nothing un-retires it — so every republication afterwards is dropped until a reload
-    // mints a new one. That is what made a revealed chat invisible: the click's own inventory
-    // refresh reads `none`/v0 for a worktree the host holds no entry for, and poisons the reveal
-    // that follows it. The mainstream session-tabs path clears its tracking here for the same
-    // reason; this one recorded the sentinel instead.
-    if (snapshot.removed === true || !hostSnapshotAffirmsWorktreeContents(snapshot)) {
-      localStructuredSessionVersionByWorktree.delete(snapshot.worktree)
-      localStructuredSessionEpochHistoryByWorktree.delete(snapshot.worktree)
+    // "Ask me later", not an answer: a worktree the host holds no entry for still answers a forced
+    // inventory, with `none` at version 0. Absence there proves nothing, so it neither applies nor
+    // records — recording it would retire the epoch below. Its cursor is left alone, so a genuinely
+    // stale frame arriving late is still fenced.
+    if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
       continue
     }
     const prior = localStructuredSessionVersionByWorktree.get(snapshot.worktree)
@@ -109,6 +104,18 @@ export function applyLocalStructuredSessionTabSnapshots<
       }
     )
     next = patch === next ? next : ({ ...next, ...patch } as State)
+    if (snapshot.removed === true) {
+      // A retraction still had to be applied above — the mirrored rows must go — but it is not a
+      // publication to fence later frames against. The renderer publishes under one epoch string
+      // for its whole lifetime, so recording a retraction retires that epoch permanently, and
+      // every republication afterwards is dropped until a reload mints a new one. That is what
+      // left a revealed chat invisible: closing the last chat prunes the host's entry, the
+      // retraction retired the renderer's epoch, and the tab the reveal published was discarded.
+      // The mainstream session-tabs path clears its tracking here for exactly this reason.
+      localStructuredSessionVersionByWorktree.delete(snapshot.worktree)
+      localStructuredSessionEpochHistoryByWorktree.delete(snapshot.worktree)
+      continue
+    }
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
       publicationEpoch: snapshot.publicationEpoch,
       snapshotVersion: snapshot.snapshotVersion
