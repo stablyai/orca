@@ -1,27 +1,17 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
-import CommentMarkdown, {
-  type CommentMarkdownLinkClickHandler
-} from '@/components/sidebar/CommentMarkdown'
-import { cn } from '@/lib/utils'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
-import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
+import { foldToolMessages } from './native-chat-tool-fold'
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
-import { NativeChatToolRun } from './NativeChatToolRun'
+import { MessageRow } from './NativeChatMessageRow'
 import { shouldShowNativeChatTypingIndicator } from './native-chat-typing-indicator'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
-import { nativeChatProseToMarkdown } from './native-chat-prose'
 import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
-import {
-  NativeChatAgentControls,
-  NativeChatImageAttachments,
-  ProviderFrameRow
-} from './NativeChatTranscriptChrome'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
@@ -31,152 +21,6 @@ function geometryOf(el: HTMLElement): ScrollGeometry {
 }
 
 const MAX_EXPANDED_TURNS = 128
-
-/** One message: its prose first, then a collapsible run folding all of the
- *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
- *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
-function MessageRow({
-  message,
-  expandSignal,
-  activeTurnIsWorking,
-  onScrollMessageToTop,
-  onLinkClick,
-  allowFileUriLinks = false,
-  deliveryFailed = false,
-  activityExpandOverride,
-  structuredActivityUi = true,
-  runtimeContext
-}: {
-  message: NativeChatMessage
-  expandSignal: boolean
-  activeTurnIsWorking?: boolean
-  /** Align this message's top to the top of the scroll viewport. */
-  onScrollMessageToTop: (el: HTMLElement) => void
-  onLinkClick?: CommentMarkdownLinkClickHandler
-  allowFileUriLinks?: boolean
-  deliveryFailed?: boolean
-  activityExpandOverride?: boolean
-  structuredActivityUi?: boolean
-  runtimeContext?: RuntimeFileOperationArgs | null
-}): React.JSX.Element | null {
-  const rowRef = useRef<HTMLDivElement | null>(null)
-  const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
-  const markdown = nativeChatProseToMarkdown(prose)
-  const hasImages = prose.some((block) => block.type === 'image-ref')
-  const isUser = message.role === 'user'
-  const isReasoning = message.role === 'reasoning'
-  const isSystem = message.role === 'system'
-  const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
-
-  const scrollToTop = useCallback(() => {
-    if (rowRef.current) {
-      onScrollMessageToTop(rowRef.current)
-    }
-  }, [onScrollMessageToTop])
-
-  // Skip rows with nothing renderable so the transcript shows no empty/ghost
-  // bubble.
-  // After all hooks, so hook order stays unconditional.
-  if (markdown.length === 0 && !hasImages && tools.length === 0) {
-    return null
-  }
-
-  if (providerFrame) {
-    return (
-      <div ref={rowRef}>
-        <ProviderFrameRow block={providerFrame} />
-      </div>
-    )
-  }
-
-  if (isUser) {
-    return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {markdown ? (
-            <>
-              <NativeChatImageAttachments
-                blocks={prose}
-                runtimeContext={runtimeContext}
-                enablePreview={runtimeContext !== undefined}
-              />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
-            </>
-          ) : (
-            <NativeChatImageAttachments
-              blocks={prose}
-              runtimeContext={runtimeContext}
-              enablePreview={runtimeContext !== undefined}
-            />
-          )}
-        </div>
-        {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
-            {translate(
-              'components.native-chat.launchPromptNotDelivered',
-              'Not delivered — check the terminal'
-            )}
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
-  // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. The controls reveal on hover (and on keyboard focus-within).
-  const showControls = !isReasoning && !isSystem && markdown.length > 0
-
-  return (
-    <div
-      ref={rowRef}
-      className={cn(
-        'group relative max-w-full select-text text-sm leading-relaxed text-foreground',
-        // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
-        isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
-        isSystem && 'text-xs text-muted-foreground'
-      )}
-    >
-      <NativeChatImageAttachments
-        blocks={prose}
-        runtimeContext={runtimeContext}
-        enablePreview={runtimeContext !== undefined}
-      />
-      {markdown ? (
-        <CommentMarkdown
-          content={markdown}
-          variant="document"
-          className="text-sm"
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-        />
-      ) : null}
-      {tools.length > 0 ? (
-        <NativeChatToolRun
-          blocks={tools}
-          expandSignal={expandSignal}
-          expandOverride={activityExpandOverride}
-          activeTurnIsWorking={activeTurnIsWorking}
-          structuredActivityUi={structuredActivityUi}
-        />
-      ) : null}
-      {showControls ? (
-        <NativeChatAgentControls
-          markdown={markdown}
-          onScrollToTop={scrollToTop}
-          className="pointer-events-none mt-1 -mb-5 w-fit select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-        />
-      ) : null}
-    </div>
-  )
-}
 
 export function NativeChatMessageList({
   session,
@@ -200,7 +44,7 @@ export function NativeChatMessageList({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
-  /** Turn timing/disclosure is available only on the structured Codex lane. */
+  /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {

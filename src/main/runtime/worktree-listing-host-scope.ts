@@ -1,4 +1,5 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { Repo } from '../../shared/repo-types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { selectHostBalancedPage } from '../../shared/host-balanced-listing-page'
 import type { RuntimeListingHostScope } from '../../shared/runtime-listing-host-scope'
 
@@ -61,4 +62,29 @@ export function buildWorktreeListingHostScope(args: {
     }
   }
   return { hostIds: [...covered].sort(), omittedHostIds: [...omitted].sort() }
+}
+
+/**
+ * Which hosts a listing claims to have been looking at.
+ *
+ * A `--repo` listing was scoped by the caller, so naming every configured host would report gaps
+ * the caller deliberately excluded. Naming NONE — which is what a scoped listing did before — means
+ * the scope can never report a gap at all, for any host kind, because `covered` and `omitted` are
+ * both derived from the returned rows plus this list. A scoped listing whose scan did not succeed
+ * then answers `{hostIds: [], omittedHostIds: []}`: byte-identical to a repo that genuinely has no
+ * worktrees, which is the one thing docs/reference/ssh-execution-boundary.md forbids a listing from
+ * implying.
+ *
+ * Measured before the fix, on one runtime with one refusing SSH host, in the same second: the
+ * unscoped listing reported `omittedHostIds: ["local", "ssh:<target>"]` while the scoped listing
+ * reported `[]`.
+ *
+ * Naming the single host the caller asked about costs nothing when rows come back — it lands in
+ * `covered`, so it is never reported omitted — and is the whole answer when they do not.
+ */
+export function listingKnownHostIds(
+  scopedRepo: Repo | null,
+  listKnownHostIds: () => Iterable<ExecutionHostId>
+): Iterable<ExecutionHostId> {
+  return scopedRepo ? [getRepoExecutionHostId(scopedRepo)] : listKnownHostIds()
 }

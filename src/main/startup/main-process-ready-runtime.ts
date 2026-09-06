@@ -9,7 +9,7 @@ import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { browserManager } from '../browser/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/browser-client-page-automation-runtime'
 import { BrowserClientPageCommandError } from '../browser/browser-client-page-command-failure'
-import { startPreGoneProcessMetricsSampling } from '../crash-reporting/process-gone-diagnostics'
+import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
@@ -130,9 +130,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
         console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
       )
   }
-  // Why: process-gone metrics only see survivors; retain a recent whole-app
-  // snapshot for comparison in crash reports.
-  startPreGoneProcessMetricsSampling()
+  // Why: process-gone metrics only see survivors, and the gone-time host memory
+  // read lands after the corpse released its pages; both need a live pre-gone
+  // sample to compare against in crash reports.
+  startPreGoneCrashSampling()
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
       name: details.name,

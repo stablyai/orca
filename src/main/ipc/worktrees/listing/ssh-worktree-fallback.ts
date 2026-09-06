@@ -9,7 +9,7 @@ import type { GitWorktreeInfo, DetectedWorktree, Worktree } from '../../../../sh
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
-  readWorktreeMetaForHost,
+  readWorktreeMetaForRepo,
   writeWorktreeMetaForHost
 } from '../../../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
@@ -159,7 +159,7 @@ export function buildDetectedGitWorktrees(
     const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
     const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
     const meta =
-      readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo)) ??
+      readWorktreeMetaForRepo(store, worktreeId, repo) ??
       getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
     const detected = toDetectedWorktree({

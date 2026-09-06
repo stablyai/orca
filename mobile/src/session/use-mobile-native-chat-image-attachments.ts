@@ -240,6 +240,7 @@ export function useMobileNativeChatImageAttachments({
             terminal: handle,
             deviceToken: deviceTokenRef.current,
             imagePaths: pendingImages.map((attachment) => attachment.path),
+            followedByText: text.trim().length > 0,
             deadline,
             ...(seededLaunchDraft
               ? { clearInput: buildAgentTuiClearInputForText(seededLaunchDraft) }

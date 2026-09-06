@@ -1,8 +1,10 @@
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import {
+  readWindowsProcessIdentityTableFresh,
   readWindowsProcessTable,
   readWindowsProcessTableFresh,
   resetWindowsProcessTableForTests,
+  type WindowsProcessIdentityRow,
   type WindowsProcessRow as NativeWindowsProcessRow
 } from '../windows/windows-process-table'
 
@@ -62,6 +64,16 @@ export async function queryWindowsProcessRowsFresh(): Promise<readonly WindowsPr
   return projectProcessRows(await readWindowsProcessTableFresh())
 }
 
+/**
+ * The same fresh scan for an ancestry walk, which reads only pid/ppid.
+ *
+ * Returns identity rows so the command line is not merely unused but absent:
+ * asking for it costs an `OpenProcess` per process on the box.
+ */
+export async function queryWindowsProcessLinksFresh(): Promise<WindowsProcessIdentityRow[]> {
+  return readWindowsProcessIdentityTableFresh()
+}
+
 export async function queryWindowsProcessDescendants(
   rootPid: number,
   options: { fresh?: boolean } = {}
@@ -106,6 +118,26 @@ export async function queryWindowsPaneProcessInventory(
     candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
     anchorRow: options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null
   }
+}
+
+/**
+ * The descendant walk over rows the caller already read.
+ *
+ * Why exported: a caller that needs a field this module's projection drops —
+ * process creation time, for a PID-reuse-safe teardown snapshot — would
+ * otherwise read the whole table a second time to get it.
+ * Null when the root is absent, which is a stale or filtered snapshot rather
+ * than a root with no descendants.
+ */
+export function windowsDescendantsFromRows<Row extends { pid: number; ppid: number }>(
+  rows: Row[],
+  rootPid: number
+): (Row & { depth: number })[] | null {
+  const index = getProcessTableIndex(rows)
+  if (!index.byPid.has(rootPid)) {
+    return null
+  }
+  return collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth)
 }
 
 /** Test-only: clear the shared snapshot so one case's rows never serve the next. */

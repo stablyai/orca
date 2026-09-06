@@ -3,7 +3,8 @@
  */
 import React, { createRef, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu,
@@ -52,6 +53,10 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
+vi.mock('@/components/tab-bar/TabWorkspaceLayoutMenuSection', () => ({
+  TabWorkspaceLayoutMenuSection: () => 'Move Tab to Split'
+}))
+
 function childrenText(children: ReactNode): string {
   return React.Children.toArray(children)
     .map((child) => {
@@ -65,11 +70,22 @@ function childrenText(children: ReactNode): string {
     .join('')
 }
 
-function Harness({ onSwitchToTerminal }: { onSwitchToTerminal?: () => void }) {
+function Harness({
+  onSwitchToTerminal,
+  structured = false,
+  enabled = true
+}: {
+  onSwitchToTerminal?: () => void
+  structured?: boolean
+  enabled?: boolean
+}) {
   const rootRef = createRef<HTMLDivElement>()
   const { menu } = useNativeChatContextMenu({
     rootRef,
+    enabled,
     onSwitchToTerminal,
+    showTerminalPaneActions: !structured,
+    workspaceLayout: structured ? { unifiedTabId: 'chat-tab', groupId: 'group-1' } : undefined,
     actions: {
       ...emptyNativeChatContextMenuActions,
       onPaste: vi.fn()
@@ -81,6 +97,11 @@ function Harness({ onSwitchToTerminal }: { onSwitchToTerminal?: () => void }) {
 describe('useNativeChatContextMenu', () => {
   beforeEach(() => {
     items.list = []
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
   })
 
   it('restores the bridge switch-to-terminal action when supplied', () => {
@@ -106,5 +127,32 @@ describe('useNativeChatContextMenu', () => {
     expect(
       items.list.some((candidate) => childrenText(candidate.children) === 'Switch to terminal view')
     ).toBe(false)
+  })
+
+  it('reuses workspace layout actions without terminal-only pane commands', () => {
+    const markup = renderToStaticMarkup(<Harness structured />)
+
+    expect(markup).toContain('Move Tab to Split')
+    expect(markup).not.toContain('Split Terminal Right')
+    expect(markup).not.toContain('Fork Agent Session')
+  })
+
+  it('subscribes to selection changes only while its retained chat is visible', () => {
+    const getSelection = vi.spyOn(window, 'getSelection').mockReturnValue(null)
+    const view = render(<Harness enabled={false} />)
+
+    getSelection.mockClear()
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(getSelection).not.toHaveBeenCalled()
+
+    view.rerender(<Harness enabled />)
+    getSelection.mockClear()
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(getSelection).toHaveBeenCalledOnce()
+
+    view.rerender(<Harness enabled={false} />)
+    getSelection.mockClear()
+    document.dispatchEvent(new Event('selectionchange'))
+    expect(getSelection).not.toHaveBeenCalled()
   })
 })

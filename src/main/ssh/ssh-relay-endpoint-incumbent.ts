@@ -20,6 +20,11 @@
  */
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
+import {
+  RELAY_CHILD_COUNT_VAR,
+  RELAY_UNRECOGNIZED_CHILD_COUNT_VAR,
+  relayDaemonChildCensusShell
+} from './relay-daemon-service-children'
 import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
 
@@ -38,6 +43,12 @@ export type RelayEndpointHolder = {
   matchesRelayArgv: boolean
   /** Direct children, or null when `pgrep` could not answer. Never guessed. */
   childCount: number | null
+  /**
+   * Direct children *not* positively identified as the daemon's own service processes, or
+   * null when the host could not enumerate them. This — not `childCount` — is what says
+   * whether the relay holds anything; see relay-daemon-service-children.ts.
+   */
+  unrecognizedChildCount: number | null
 }
 
 export type RelayEndpointIncumbent = {
@@ -95,11 +106,9 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     '    args=$(ps -o args= -p "$pid" 2>/dev/null | tr "\\n" " ")',
     '    match=no',
     '    case "$args" in *relay.js*"$sock"*) match=yes ;; esac',
-    '    kids=unknown',
-    '    if command -v pgrep >/dev/null 2>&1; then',
-    '      kids=$(pgrep -P "$pid" 2>/dev/null | grep -c .)',
-    '    fi',
-    '    printf \'HOLDER=%s %s %s\\n\' "$pid" "$match" "$kids"',
+    ...relayDaemonChildCensusShell().map((line) => `    ${line}`),
+    '    printf \'HOLDER=%s %s %s %s\\n\' "$pid" "$match" ' +
+      `"$${RELAY_CHILD_COUNT_VAR}" "$${RELAY_UNRECOGNIZED_CHILD_COUNT_VAR}"`,
     '  done',
     'else',
     "  printf 'HOLDERS_SOURCE=unavailable\\n'",
@@ -159,17 +168,23 @@ export function parseRelayEndpointIncumbentProbe(
 }
 
 function parseHolder(value: string): RelayEndpointHolder | null {
-  const [rawPid, rawMatch, rawKids] = value.split(/\s+/)
+  const [rawPid, rawMatch, rawKids, rawUnrecognized] = value.split(/\s+/)
   const pid = Number.parseInt(rawPid ?? '', 10)
   if (!Number.isInteger(pid) || pid <= 0) {
     return null
   }
-  const childCount = Number.parseInt(rawKids ?? '', 10)
   return {
     pid,
     matchesRelayArgv: rawMatch === 'yes',
-    childCount: Number.isInteger(childCount) && childCount >= 0 ? childCount : null
+    childCount: parseChildCount(rawKids),
+    unrecognizedChildCount: parseChildCount(rawUnrecognized)
   }
+}
+
+/** `unknown`, a missing field, and anything unparseable are all "could not tell" — never 0. */
+function parseChildCount(raw: string | undefined): number | null {
+  const count = Number.parseInt(raw ?? '', 10)
+  return Number.isInteger(count) && count >= 0 ? count : null
 }
 
 function unverifiableEndpoint(sockPath: string): RelayEndpointIncumbent {
@@ -239,8 +254,12 @@ export function mayLaunchOverRelayEndpoint(incumbent: RelayEndpointIncumbent): b
 
 /**
  * A live relay that provably holds nothing: identity confirmed against its argv, exactly one
- * holder, and zero children. Reaping it destroys no user work. Anything less is retained —
- * killing the wrong pid on someone's remote host is the worst outcome available here.
+ * holder, and no child the host could not account for as one of the daemon's own service
+ * processes. Reaping it destroys no user work. Anything less is retained — killing the wrong
+ * pid on someone's remote host is the worst outcome available here.
+ *
+ * Why not `childCount === 0`: the daemon's AI Vault sidecar never exits once spawned, so that
+ * gate was unreachable for any relay that had ever served a vault request (#13614).
  */
 export function isReapableRelayHusk(incumbent: RelayEndpointIncumbent): boolean {
   if (incumbent.verdict !== 'live' || !incumbent.holdersEnumerable) {
@@ -250,12 +269,16 @@ export function isReapableRelayHusk(incumbent: RelayEndpointIncumbent): boolean 
     return false
   }
   const [holder] = incumbent.holders
-  return holder.matchesRelayArgv && holder.childCount === 0
+  return holder.matchesRelayArgv && holder.unrecognizedChildCount === 0
 }
 
 export function describeRelayEndpointIncumbent(incumbent: RelayEndpointIncumbent): string {
   const holders = incumbent.holders
-    .map((holder) => `${holder.pid}(children=${holder.childCount ?? 'unknown'})`)
+    .map(
+      (holder) =>
+        `${holder.pid}(children=${holder.childCount ?? 'unknown'},` +
+        `unrecognized=${holder.unrecognizedChildCount ?? 'unknown'})`
+    )
     .join(',')
   return (
     `${incumbent.sockPath} verdict=${incumbent.verdict} evidence=${incumbent.evidence} ` +

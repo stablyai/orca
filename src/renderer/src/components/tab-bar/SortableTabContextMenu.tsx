@@ -116,6 +116,7 @@ type SortableTabContextMenuProps = {
   isChatView?: boolean
   /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
+  canSplitTerminal?: boolean
 }
 
 export function SortableTabContextMenu({
@@ -140,7 +141,8 @@ export function SortableTabContextMenu({
   onTogglePin,
   canToggleViewMode = false,
   isChatView = false,
-  onToggleViewMode
+  onToggleViewMode,
+  canSplitTerminal = true
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -168,6 +170,7 @@ export function SortableTabContextMenu({
           onActivate={onActivate}
           splitRightShortcut={splitRightShortcut}
           splitDownShortcut={splitDownShortcut}
+          showTerminalSplit={canSplitTerminal}
         />
         {canToggleViewMode && onToggleViewMode ? (
           <>

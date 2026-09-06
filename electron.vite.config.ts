@@ -253,6 +253,9 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
+          'codex/managed-home-shell-preflight': resolve(
+            'src/main/codex/managed-home-shell-preflight.ts'
+          ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
           'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
         },

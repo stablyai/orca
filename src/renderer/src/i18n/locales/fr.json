@@ -2087,7 +2087,7 @@
       "Terminal": {
         "73768427cf": "Fermer",
         "f82e9f02df": "Annuler",
-        "7958465754": "Des terminaux locaux exécutent des processus. Fermer quand même la fenêtre ?",
+        "7958465754": "Des terminaux exécutent des processus. Fermer quand même la fenêtre ?",
         "2fa9c69ff3": "Fermer la fenêtre ?",
         "cd51e28d8b": "Enregistrer",
         "0037b21794": "Ne pas enregistrer",
@@ -15462,11 +15462,18 @@
           "770d458144": "Grouper l'activité des agents par",
           "795cbf26e2": "Filtrer...",
           "4616ea39fd": "Aller à l'espace de travail",
+          "threadListOptionsFiltered": "Options de la liste des fils, filtres actifs",
           "59b131fbd9": "Marquer le fil comme non lu",
           "beb2c19173": "Non lus",
           "5651b216c6": "Projet inconnu",
           "22b22034bc": "Terminal autonome indisponible dans Activité.",
           "afdc2139a8": "Terminal de l'agent fermé. Ouvrez un nouveau terminal dans cet espace de travail pour continuer."
+        },
+        "ActivityScopeFilterControls": {
+          "resetScope": "Afficher tous les hôtes et projets"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "Effacer la notification"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "non lu",

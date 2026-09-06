@@ -1,6 +1,7 @@
 import { defineMethod, type RpcAnyMethod } from '../../core'
 import {
   TerminalHandle,
+  TerminalInspectProcess,
   TerminalListParams,
   TerminalRead,
   TerminalRecoverPane,
@@ -65,15 +66,21 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.inspectProcess',
-    params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      process: await runtime.inspectTerminalProcess(
-        params.terminal,
-        params.expectedIncarnationId
+    params: TerminalInspectProcess,
+    handler: async (params, { runtime }) => {
+      const options = {
+        ...(params.expectedIncarnationId
           ? { expectedIncarnationId: params.expectedIncarnationId }
-          : undefined
-      )
-    })
+          : {}),
+        ...(params.scanChildProcesses === true ? { scanChildProcesses: true } : {})
+      }
+      return {
+        process: await runtime.inspectTerminalProcess(
+          params.terminal,
+          Object.keys(options).length > 0 ? options : undefined
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.isRunningAgent',
