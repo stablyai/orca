@@ -63,6 +63,35 @@ describe('pre-v3 dispatch rows in worker-list', () => {
     expect(worker.projection.nextAction.kind).toBe('none')
   })
 
+  it.each(['completed', 'failed'] as const)(
+    'closes a pending question when a legacy dispatch settles as %s',
+    async (status) => {
+      h.setup()
+      const task = h.db.createTask({ spec: `legacy ${status} with question`, runId: h.activeRunId })
+      const dispatch = createRootDispatch(h.db, task.id, `term_legacy_q_${status}`)
+      const asked = h.db.createQuestion({
+        runId: h.activeRunId,
+        dispatchId: dispatch.id,
+        askerHandle: `term_legacy_q_${status}`,
+        question: 'Which branch?'
+      })
+      // Both settlement paths a pre-v3 dispatch can take: the task-status path and failDispatch.
+      if (status === 'completed') {
+        h.db.updateTaskStatus(task.id, 'completed', 'done')
+      } else {
+        h.db.failDispatch(dispatch.id, 'legacy failure')
+      }
+
+      const worker = (await listWorkers()).get(dispatch.id)!
+
+      expect(h.db.getQuestion(asked.question.message_id)?.status).toBe('closed')
+      expect(worker.dispatchStatus).toBe(status)
+      expect(worker.projection.attention.categories).not.toContain('input')
+      // Nothing can answer a question on a settled Dispatch, so `input` must not outlive it.
+      expect(worker.projection.attention.requiresAction).toBe(status === 'failed')
+    }
+  )
+
   it('keeps a legacy failed dispatch actionable on the failure, not on absence', async () => {
     h.setup()
     const failed = createLegacyDispatch('failed')

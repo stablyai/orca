@@ -29,6 +29,9 @@ export function completeDispatch(this: OrchestrationDb, ctxId: string): void {
         capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
       }
     })
+    // Why: a settled Dispatch can never be answered, and a pending thread on it kept the fleet row
+    // demanding input after the work was done.
+    this.closeQuestionsForDispatch(ctxId)
     this.db.exec('RELEASE complete_dispatch_transition')
   } catch (error) {
     this.db.exec('ROLLBACK TO complete_dispatch_transition')
@@ -63,6 +66,7 @@ export function settleActiveDispatchesForTask(
         capability_revoked_at: row.capability_revoked_at ?? new Date().toISOString()
       }
     })
+    db.closeQuestionsForDispatch(row.id)
   }
 }
 
@@ -202,6 +206,7 @@ export function failDispatch(
         projection: { completed_at: taskStatus === 'failed' ? new Date().toISOString() : null }
       })
     }
+    this.closeQuestionsForDispatch(ctxId)
     const updated = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined

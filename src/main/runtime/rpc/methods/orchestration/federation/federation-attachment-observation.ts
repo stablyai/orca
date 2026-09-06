@@ -1,6 +1,7 @@
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
 
 export function requireHomeAttachment(
@@ -54,6 +55,24 @@ export async function inspectRemoteAttachment(
     return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
   if (!verdict) {
+    // Why: the verdict register only fills on the first inventory sweep or exit frame, so a PTY
+    // this host just spawned has none for minutes and every fleet row read host_indeterminate.
+    // The host owns a connected local pane, so its own connected flag is host evidence of life,
+    // exactly as worker-show reads it. Nothing weaker earns a claim: a disconnected pane or an
+    // SSH-scoped one (contact, not the process) stays unverifiable, never `exited`.
+    const currentHostScope = runtime.getOrchestrationDispatchAuthority?.(
+      attachment.terminal_handle
+    )?.hostScope
+    const persistedHostScope = parseWorkerTerminalHostScope(
+      db.getWorkerTerminalResourceByOwner(dispatchId)?.host_scope ?? null
+    )
+    const provenLocal =
+      currentHostScope !== undefined &&
+      currentHostScope.kind !== 'ssh' &&
+      persistedHostScope?.kind !== 'ssh'
+    if (provenLocal && terminal.connected !== false) {
+      return { terminal, exact, status: 'live', agentWait }
+    }
     return {
       terminal,
       exact,

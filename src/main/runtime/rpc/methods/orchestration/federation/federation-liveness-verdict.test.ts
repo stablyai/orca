@@ -270,6 +270,57 @@ describe('federation host liveness verdicts', () => {
     }
   })
 
+  // Why: the verdict register only fills on the first inventory sweep, so a PTY this host just
+  // spawned has none for minutes; the fleet row read host_indeterminate the whole time.
+  it('reads a freshly spawned local pane from its own connected flag before any verdict', async () => {
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      hostScope: { kind: 'local', hostId: 'local' }
+    } as never)
+
+    await expect(
+      call('orchestration.federationFleetSnapshot', { dispatchIds: [DISPATCH_ID] })
+    ).resolves.toMatchObject({
+      items: [{ dispatchId: DISPATCH_ID, observation: { status: 'live', exactWorker: true } }]
+    })
+  })
+
+  it('keeps a disconnected verdict-less pane unverifiable rather than exited', async () => {
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(null)
+
+    await expect(
+      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
+    ).resolves.toMatchObject({
+      observation: { status: 'unverifiable', exactWorker: true, reason: 'missing_liveness_verdict' }
+    })
+  })
+
+  it('keeps a verdict-less pane the host reaches over SSH unverifiable', async () => {
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: HANDLE,
+      worktreeId: 'repo::remote-worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+      hostScope: { kind: 'ssh', targetId: 'ssh-hop' }
+    } as never)
+
+    await expect(
+      call('orchestration.federationShow', { dispatchId: DISPATCH_ID })
+    ).resolves.toMatchObject({
+      observation: { status: 'unverifiable', exactWorker: true, reason: 'missing_liveness_verdict' }
+    })
+  })
+
   it('keeps an old peer without a liveness verdict unverifiable', async () => {
     // Legacy hosts can return an exited-looking terminal summary but have no
     // verdict API; relay/contact state is not proof that the process exited.
