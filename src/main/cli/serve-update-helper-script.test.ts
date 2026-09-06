@@ -86,4 +86,42 @@ describe('serve update helper script', () => {
     expect(script.slice(rejectFn, rejectFn + 200)).toContain('rm -f "$REQUEST"')
     expect(script.slice(failFn, failFn + 200)).toContain('rm -f "$REQUEST"')
   })
+
+  it('hashes the decoded sha512 digest bytes against the artifact, not the digest twice', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    // The spooled sha512 is base64 of the raw digest; hashing the decoded bytes
+    // through sha512sum again would compare two different layers and never match.
+    expect(script).toContain("od -An -v -tx1 | tr -d ' \\n'")
+    expect(script).not.toContain('base64 -d 2>/dev/null | sha512sum')
+    // The decoded digest must be exactly 128 hex chars before the comparison.
+    expect(script).toContain('${#EXPECTED_SHA} -ne 128')
+  })
+
+  it('echoes the per-attempt attemptId in accepted and ok verdicts', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain("ATTEMPT_ID=$(parse_field 'attemptId')")
+    const acceptedAt = script.indexOf('"phase":"accepted"')
+    const okAt = script.indexOf('"phase":"ok"')
+    expect(script.slice(acceptedAt, acceptedAt + 160)).toContain('attemptId')
+    expect(script.slice(okAt, okAt + 160)).toContain('attemptId')
+    expect(script).not.toContain('runtimeId')
+  })
+
+  it('writes verdicts through a mktemp path and clears the result under the lock', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('mktemp "$SPOOL_DIR/result.XXXXXXXX"')
+    const flockAt = script.indexOf('flock -w 30 9')
+    const clearAt = script.indexOf('rm -f "$RESULT"')
+    const rootAt = script.indexOf('helper must run as root')
+    expect(clearAt).toBeGreaterThan(flockAt)
+    expect(clearAt).toBeGreaterThan(rootAt)
+  })
+
+  it('fails fast with a verdict when jq or flock are missing', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    expect(script).toContain('command -v jq')
+    expect(script).toContain('command -v flock')
+    expect(script).toContain('"reason":"jq-missing"')
+    expect(script).toContain('"reason":"flock-missing"')
+  })
 })

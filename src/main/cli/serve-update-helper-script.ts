@@ -47,7 +47,8 @@ LOG_TAG="orca-serve-update-helper"
 log() { echo "[$LOG_TAG] $*" >&2; }
 
 write_result() {
-  local tmp="$RESULT.$$.tmp"
+  local tmp
+  tmp=$(mktemp "$SPOOL_DIR/result.XXXXXXXX")
   printf '%s' "$1" > "$tmp"
   chmod 0644 "$tmp"
   mv -f "$tmp" "$RESULT"
@@ -67,8 +68,20 @@ fail() {
   exit 0
 }
 
-# A result left by a previous attempt must never be read as this one's verdict.
-rm -f "$RESULT"
+# jq and flock are hard dependencies; without them no verdict can ever be
+# written, so fail loudly instead of burning the app's 90s poll window.
+if ! command -v jq >/dev/null 2>&1; then
+  log "jq is required but not installed"
+  rm -f "$REQUEST"
+  write_result '{"phase":"failed","reason":"jq-missing"}'
+  exit 0
+fi
+if ! command -v flock >/dev/null 2>&1; then
+  log "flock is required but not installed"
+  rm -f "$REQUEST"
+  write_result '{"phase":"failed","reason":"flock-missing"}'
+  exit 0
+fi
 
 if [[ $(id -u) -ne 0 ]]; then
   reject "helper must run as root"
@@ -80,6 +93,10 @@ if ! flock -w 30 9; then
   reject "another update is in progress"
 fi
 
+# A result left by a previous attempt must never be read as this one's verdict.
+# Cleared under the lock so a concurrent helper cannot delete a live verdict.
+rm -f "$RESULT"
+
 if [[ ! -f "$REQUEST" ]]; then
   reject "no request spooled"
 fi
@@ -90,7 +107,7 @@ parse_field() {
 }
 
 SCHEMA=$(parse_field 'schemaVersion')
-RUNTIME_ID=$(parse_field 'runtimeId')
+ATTEMPT_ID=$(parse_field 'attemptId')
 TARGET_VERSION=$(parse_field 'targetVersion')
 ARTIFACT_PATH=$(parse_field 'artifactPath')
 SHA512=$(parse_field 'sha512')
@@ -100,7 +117,7 @@ REQUEST_UNIT=$(parse_field 'unitName')
 if [[ "$SCHEMA" != "2" ]]; then
   reject "unsupported schema version: $SCHEMA"
 fi
-if [[ -z "$RUNTIME_ID" || -z "$TARGET_VERSION" || -z "$ARTIFACT_PATH" || -z "$SHA512" ]]; then
+if [[ -z "$ATTEMPT_ID" || -z "$TARGET_VERSION" || -z "$ARTIFACT_PATH" || -z "$SHA512" ]]; then
   reject "incomplete request"
 fi
 if [[ "$REQUEST_UNIT" != "$UNIT_NAME" ]]; then
@@ -117,9 +134,13 @@ if ! systemctl list-unit-files "$UNIT_NAME" >/dev/null 2>&1; then
 fi
 
 # Trust anchor: re-hash the file that will actually be installed.
+# The spooled sha512 is base64 of the raw 64-byte digest; hex-encode the decoded
+# bytes and compare against sha512sum's hex output.
 ACTUAL_SHA=$(sha512sum -- "$ARTIFACT_PATH" | awk '{print $1}')
-EXPECTED_SHA=$(printf '%s' "$SHA512" | base64 -d 2>/dev/null | sha512sum | awk '{print $1}')
-if [[ -z "$EXPECTED_SHA" || "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+# Why the || true: an undecodable digest must reach the length check and produce a
+# rejected verdict, not kill the helper under set -e before any verdict is written.
+EXPECTED_SHA=$(printf '%s' "$SHA512" | { base64 -d 2>/dev/null || true; } | od -An -v -tx1 | tr -d ' \\n')
+if [[ \${#EXPECTED_SHA} -ne 128 || "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
   reject "artifact hash mismatch"
 fi
 
@@ -145,7 +166,7 @@ if [[ -n "$CURRENT_VERSION" ]]; then
 fi
 
 # From here the app may quit; the helper owns the unit.
-write_result '{"phase":"accepted","runtimeId":"'"$RUNTIME_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
+write_result '{"phase":"accepted","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
 log "accepted request from pid $SERVING_PID for $TARGET_VERSION"
 
 OLD_VERSION_RECORD="$CURRENT_VERSION"
@@ -229,7 +250,7 @@ if ! wait_for_ready; then
 fi
 
 rm -f "$BACKUP"
-write_result '{"phase":"ok","runtimeId":"'"$RUNTIME_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
+write_result '{"phase":"ok","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
 log "update to $TARGET_VERSION applied"
 `
 }
