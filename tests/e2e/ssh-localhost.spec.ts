@@ -173,9 +173,8 @@ test.describe('Localhost SSH', () => {
           const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
             target: {
               ...target,
-              // Why: local-only E2E should not leave a long-lived relay process
-              // behind if the Electron app is killed between cleanup hooks.
-              relayGracePeriodSeconds: 1
+              // Keep the relay alive between clients to isolate snapshot ownership from expiry.
+              relayGracePeriodSeconds: 120
             }
           })
           store.getState().recordSshRepoReadoptions(repoReadoptions)
