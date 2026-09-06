@@ -107,8 +107,10 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       rows: number
       cwd?: string | null
       oscLinks?: TerminalOscLinkRange[]
+      kittyKeyboardFlags?: number
     },
-    trailingOutput: { data: string; seq: number }[] = []
+    trailingOutput: { data: string; seq: number }[] = [],
+    targetSize?: { cols: number; rows: number }
   ): void {
     if (!snapshot.data) {
       return
@@ -120,8 +122,16 @@ export class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLiveP
       ptyId,
       snapshot.data,
       { cols: snapshot.cols, rows: snapshot.rows },
-      { cwd: snapshot.cwd, oscLinks: snapshot.oscLinks }
+      {
+        cwd: snapshot.cwd,
+        oscLinks: snapshot.oscLinks,
+        kittyKeyboardFlags: snapshot.kittyKeyboardFlags
+      }
     )
+    // Serialized ANSI must be parsed at its source geometry before live bytes use the new grid.
+    if (targetSize) {
+      this.resizeHeadlessTerminal(ptyId, targetSize.cols, targetSize.rows)
+    }
     for (const chunk of trailingOutput) {
       this.trackHeadlessTerminalData(ptyId, chunk.data, chunk.seq)
     }

@@ -11,6 +11,7 @@ export const PLUGIN_COMMAND_ALIAS_ACTION_IDS = [
   'tab.rename',
   'workspace.rename',
   'workspace.openBoard',
+  'view.sessions.toggle',
   'view.tasks',
   'sidebar.right.toggle',
   'sidebar.explorer.toggle',

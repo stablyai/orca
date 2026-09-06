@@ -17,7 +17,8 @@ const terminalHarness = vi.hoisted(() => ({
     scrollToTop: ReturnType<typeof vi.fn>
     scrollToBottom: ReturnType<typeof vi.fn>
     selectAll: ReturnType<typeof vi.fn>
-    modes: { bracketedPasteMode: boolean }
+    modes: { bracketedPasteMode: boolean; mouseTrackingMode: string }
+    buffer: { active: { cursorY: number; viewportY: number; baseY: number } }
     selectionText: string
     customKeyHandler: ((event: KeyboardEvent) => boolean) | null
   }[],
@@ -46,7 +47,7 @@ vi.mock('@xterm/xterm', () => ({
   Terminal: class {
     cols = 80
     rows = 24
-    buffer = { active: { cursorY: 0 } }
+    buffer = { active: { cursorY: 0, viewportY: 0, baseY: 0 } }
     writeCallbacks: (() => void)[] = []
     onDataListener: ((data: string) => void) | null = null
     customKeyHandler: ((event: KeyboardEvent) => boolean) | null = null
@@ -61,7 +62,7 @@ vi.mock('@xterm/xterm', () => ({
     dispose = vi.fn()
     resize = vi.fn()
     reset = vi.fn()
-    modes = { bracketedPasteMode: false }
+    modes = { bracketedPasteMode: false, mouseTrackingMode: 'none' }
     paste = vi.fn((data: string) => {
       terminalHarness.userInputListener?.()
       this.onDataListener?.(data)
@@ -141,14 +142,19 @@ import { AgentTerminalPreview } from './AgentTerminalPreview'
 
 describe('AgentTerminalPreview', () => {
   const input = vi.fn(async (_ptyId: string, _data: string) => true)
-  const fit = vi.fn(async (_ptyId: string, cols: number, rows: number) => ({ cols, rows }))
+  const fit = vi.fn(async (_ptyId: string, cols: number, rows: number, _surfaceId?: string) => ({
+    cols,
+    rows
+  }))
   const ack = vi.fn(async () => {})
   const unsubscribe = vi.fn(async () => {})
   const connect = vi.fn()
   const readClipboardText = vi.fn(async () => 'clip-text')
   const writeClipboardText = vi.fn(async () => {})
   const writeTerminalClipboardText = vi.fn(async () => {})
-  let emitData: ((payload: unknown) => void) | null
+  const dataListeners: ((payload: unknown) => void)[] = []
+  // Fans out like the real IPC channel: every mounted preview hears every payload.
+  const emitData = (payload: unknown): void => dataListeners.forEach((l) => l(payload))
 
   beforeEach(() => {
     terminalHarness.instances.length = 0
@@ -158,7 +164,7 @@ describe('AgentTerminalPreview', () => {
     imeHarness.forwarders.length = 0
     imeHarness.trackers.length = 0
     imeHarness.claimResult = false
-    emitData = null
+    dataListeners.length = 0
     connect.mockResolvedValue({
       snapshot: { data: '', cols: 80, rows: 24, seq: 1 },
       replay: []
@@ -173,8 +179,8 @@ describe('AgentTerminalPreview', () => {
           ack,
           unsubscribe,
           onData: (listener: (payload: unknown) => void) => {
-            emitData = listener
-            return vi.fn()
+            dataListeners.push(listener)
+            return () => dataListeners.splice(dataListeners.indexOf(listener), 1)
           }
         },
         ui: {
@@ -190,6 +196,8 @@ describe('AgentTerminalPreview', () => {
   afterEach(() => {
     cleanup()
     vi.clearAllMocks()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('routes signaled user input while a live write parses and drops parser replies', async () => {
@@ -199,7 +207,7 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminal.onDataListener).not.toBeNull())
 
     act(() => {
-      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[6n', bytes: 4 })
+      emitData({ type: 'data', ptyId: 'pty-1', data: '\x1b[6n', bytes: 4 })
     })
     expect(terminal.write).toHaveBeenCalledWith('\x1b[6n', expect.any(Function))
 
@@ -212,7 +220,7 @@ describe('AgentTerminalPreview', () => {
     expect(input).toHaveBeenCalledWith('pty-1', 'k')
 
     act(() => terminal.writeCallbacks.shift()?.())
-    expect(ack).toHaveBeenCalledWith('pty-1', 4)
+    expect(ack).toHaveBeenCalledWith('pty-1', 4, expect.any(String))
   })
 
   it('installs the macOS IME native-text forwarder and lets its claims bypass chord handling', async () => {
@@ -272,7 +280,7 @@ describe('AgentTerminalPreview', () => {
 
     // Live output keeps advancing the same mirror the forwarder reads.
     act(() => {
-      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[<u', bytes: 4 })
+      emitData({ type: 'data', ptyId: 'pty-1', data: '\x1b[<u', bytes: 4 })
     })
     expect(imeHarness.forwarders[0]!.getKittyKeyboardFlags()).toBe(0)
   })
@@ -292,13 +300,15 @@ describe('AgentTerminalPreview', () => {
       snapshot: { data: '', cols: 80, rows: 24, seq: 1 },
       replay: []
     })
-    connect.mockResolvedValueOnce({ snapshot: null, replay: [] })
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    connect.mockResolvedValueOnce({ snapshot: null, replay: [], liveness: 'exited' })
+    const onPtyGone = vi.fn()
+    const view = render(<AgentTerminalPreview ptyId="pty-1" onPtyGone={onPtyGone} />)
     await waitFor(() => expect(imeHarness.forwarders).toHaveLength(1))
 
-    act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
+    act(() => emitData({ type: 'resync', ptyId: 'pty-1' }))
     await waitFor(() => expect(imeHarness.forwarders[0]!.dispose).toHaveBeenCalledOnce())
     expect(imeHarness.trackers[0]!.dispose).toHaveBeenCalledOnce()
+    expect(onPtyGone).toHaveBeenCalledOnce()
 
     view.unmount()
     expect(imeHarness.forwarders[0]!.dispose).toHaveBeenCalledOnce()
@@ -488,7 +498,7 @@ describe('AgentTerminalPreview', () => {
 
     // The agent's TUI pushes kitty flags (CSI > 1 u) on the live stream.
     act(() => {
-      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[>1u', bytes: 5 })
+      emitData({ type: 'data', ptyId: 'pty-1', data: '\x1b[>1u', bytes: 5 })
     })
     terminal.input.mockClear()
 
@@ -516,7 +526,7 @@ describe('AgentTerminalPreview', () => {
 
     // The TUI exits and pops once on the live stream.
     act(() => {
-      emitData?.({ type: 'data', ptyId: 'pty-1', data: '\x1b[<u', bytes: 4 })
+      emitData({ type: 'data', ptyId: 'pty-1', data: '\x1b[<u', bytes: 4 })
     })
 
     expect(terminal.customKeyHandler!(altBackspace())).toBe(false)
@@ -573,7 +583,7 @@ describe('AgentTerminalPreview', () => {
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
 
-    act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
+    act(() => emitData({ type: 'resync', ptyId: 'pty-1' }))
     await waitFor(() => expect(connect).toHaveBeenCalledTimes(2))
     expect(terminalHarness.instances).toHaveLength(1)
     expect(terminal.dispose).not.toHaveBeenCalled()
@@ -599,17 +609,17 @@ describe('AgentTerminalPreview', () => {
         snapshot: { data: 'first', cols: 80, rows: 24, seq: 1 },
         replay: []
       })
-      .mockResolvedValueOnce({ snapshot: null, replay: [] })
+      .mockResolvedValueOnce({ snapshot: null, replay: [], liveness: 'exited' })
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
 
-    act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
+    act(() => emitData({ type: 'resync', ptyId: 'pty-1' }))
 
     await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
     expect(terminal.dispose).toHaveBeenCalledTimes(1)
     expect(terminalHarness.userInputDispose).toHaveBeenCalledTimes(1)
-    expect(unsubscribe).toHaveBeenCalledWith('pty-1')
+    expect(unsubscribe).toHaveBeenCalledWith('pty-1', expect.any(String))
   })
 
   it('does not claim a remote pane closed when no snapshot can exist for it', async () => {
@@ -621,46 +631,210 @@ describe('AgentTerminalPreview', () => {
   })
 
   it('connects a replacement pty after the previous pty was gone', async () => {
-    connect.mockResolvedValueOnce({ snapshot: null, replay: [] }).mockResolvedValueOnce({
-      snapshot: { data: 'replacement', cols: 80, rows: 24, seq: 1 },
-      replay: []
-    })
+    vi.useFakeTimers()
+    connect.mockImplementation(async (id: string) =>
+      id === 'pty-live'
+        ? { snapshot: { data: 'replacement', cols: 80, rows: 24, seq: 1 }, replay: [] }
+        : { snapshot: null, replay: [], liveness: 'exited' }
+    )
     const view = render(<AgentTerminalPreview ptyId="pty-gone" />)
-    await waitFor(() => expect(view.getByText(/No live terminal/)).toBeInTheDocument())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(view.getByText(/No live terminal/)).toBeInTheDocument()
 
     view.rerender(<AgentTerminalPreview ptyId="pty-live" />)
 
-    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
-    expect(connect).toHaveBeenLastCalledWith('pty-live', { scrollbackRows: 24 })
+    await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    expect(connect).toHaveBeenLastCalledWith('pty-live', {
+      scrollbackRows: 24,
+      surfaceId: expect.any(String)
+    })
     expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
   })
 
-  it('claims a grid sized to the dialog box and never re-requests an unchanged target', async () => {
+  it('veils the terminal across a resync repaint and lifts it once the replay lands', async () => {
     vi.useFakeTimers()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      (cb: FrameRequestCallback) => setTimeout(() => cb(0), 16) as unknown as number
+    )
+    let resolveRefresh!: (value: {
+      snapshot: { data: string; cols: number; rows: number; seq: number }
+      replay: never[]
+    }) => void
+    connect
+      .mockResolvedValueOnce({
+        snapshot: { data: 'first', cols: 80, rows: 24, seq: 1 },
+        replay: []
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = resolve
+          })
+      )
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
     await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await act(async () => {
+      terminal.writeCallbacks.splice(0).forEach((cb) => cb())
+      await vi.advanceTimersByTimeAsync(32)
+    })
+    expect(view.getByTestId('preview-phase-veil').dataset.visible).toBe('false')
 
-    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
-    const box = host.parentElement!
-    Object.defineProperty(box, 'clientWidth', { configurable: true, value: 900 })
-    Object.defineProperty(box, 'clientHeight', { configurable: true, value: 480 })
-    // 80×24 grid rendered at 800×384 → 10×16 cells → the box holds 90×30.
-    const screen = document.createElement('div')
-    screen.className = 'xterm-screen'
-    Object.defineProperty(screen, 'offsetWidth', { configurable: true, value: 800 })
-    Object.defineProperty(screen, 'offsetHeight', { configurable: true, value: 384 })
-    host.appendChild(screen)
-
-    await vi.advanceTimersByTimeAsync(200)
-    expect(fit).toHaveBeenCalledTimes(1)
-    expect(fit).toHaveBeenCalledWith('pty-1', 90, 30)
-
-    // A reconnect (e.g. the host reclaiming the grid) computes the same
-    // target — no repeat claim, so no resize tug-of-war with the host.
-    act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
+    act(() => emitData({ type: 'resync', ptyId: 'pty-1' }))
     await vi.waitFor(() => expect(connect).toHaveBeenCalledTimes(2))
-    await vi.advanceTimersByTimeAsync(400)
-    expect(fit).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      resolveRefresh({ snapshot: { data: 'second', cols: 100, rows: 30, seq: 2 }, replay: [] })
+    })
+    // The veil goes up before the reset, and only after the anti-flicker delay.
+    expect(terminal.reset).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(view.getByTestId('preview-phase-veil').dataset.visible).toBe('true')
+
+    await act(async () => {
+      terminal.writeCallbacks.splice(0).forEach((cb) => cb())
+      await vi.advanceTimersByTimeAsync(32)
+    })
+    expect(view.getByTestId('preview-phase-veil').dataset.visible).toBe('false')
+  })
+
+  it('leaves the wheel to xterm unless a surface opts into overflow handoff', async () => {
+    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+
+    const wheel = new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true })
+    host.dispatchEvent(wheel)
+
+    expect(wheel.defaultPrevented).toBe(false)
+  })
+
+  it('hands the wheel to the surface only once the terminal cannot scroll that way', async () => {
+    const onWheelOverflow = vi.fn((event: WheelEvent) => event.preventDefault())
+    const view = render(<AgentTerminalPreview ptyId="pty-1" onWheelOverflow={onWheelOverflow} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+
+    // Scrollback above the viewport: wheel-up is xterm's.
+    terminal.buffer.active.baseY = 10
+    terminal.buffer.active.viewportY = 5
+    const up = new WheelEvent('wheel', { deltaY: -40, bubbles: true, cancelable: true })
+    host.dispatchEvent(up)
+    expect(onWheelOverflow).not.toHaveBeenCalled()
+    expect(up.defaultPrevented).toBe(false)
+
+    // At the bottom, a fresh gesture later: wheel-down overflows to the surface, which owns preventDefault.
+    clock.mockReturnValue(2_000)
+    terminal.buffer.active.viewportY = 10
+    const down = new WheelEvent('wheel', { deltaY: 40, bubbles: true, cancelable: true })
+    host.dispatchEvent(down)
+    expect(onWheelOverflow).toHaveBeenCalledWith(down)
+    expect(down.defaultPrevented).toBe(true)
+
+    // Shift bypasses the terminal entirely.
+    const shifted = new WheelEvent('wheel', { deltaY: 40, bubbles: true })
+    // happy-dom's WheelEvent init drops modifier keys.
+    Object.defineProperty(shifted, 'shiftKey', { value: true })
+    host.dispatchEvent(shifted)
+    expect(onWheelOverflow).toHaveBeenCalledTimes(1)
+    clock.mockRestore()
+  })
+
+  it('holds a gesture that was scrolling the terminal at the end until it pauses', async () => {
+    const onWheelOverflow = vi.fn((event: WheelEvent) => event.preventDefault())
+    const view = render(<AgentTerminalPreview ptyId="pty-1" onWheelOverflow={onWheelOverflow} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!
+    // Only a wheel the terminal keeps propagates past the host; held and handed-off ones are stopped before xterm.
+    const propagated = vi.fn()
+    view.container.addEventListener('wheel', propagated)
+    const clock = vi.spyOn(Date, 'now')
+
+    clock.mockReturnValue(1_000)
+    terminal.buffer.active.baseY = 10
+    terminal.buffer.active.viewportY = 5
+    host.dispatchEvent(new WheelEvent('wheel', { deltaY: -40, bubbles: true, cancelable: true }))
+
+    // The same gesture reaches the top: swallowed, and xterm never sees it either.
+    clock.mockReturnValue(1_100)
+    terminal.buffer.active.viewportY = 0
+    const held = new WheelEvent('wheel', { deltaY: -40, bubbles: true, cancelable: true })
+    host.dispatchEvent(held)
+    expect(held.defaultPrevented).toBe(true)
+    expect(onWheelOverflow).not.toHaveBeenCalled()
+
+    // Pushing on keeps the hold alive.
+    clock.mockReturnValue(1_350)
+    host.dispatchEvent(new WheelEvent('wheel', { deltaY: -40, bubbles: true, cancelable: true }))
+    expect(onWheelOverflow).not.toHaveBeenCalled()
+
+    // A pause, then a fresh gesture: the surface takes it.
+    clock.mockReturnValue(1_700)
+    const fresh = new WheelEvent('wheel', { deltaY: -40, bubbles: true, cancelable: true })
+    host.dispatchEvent(fresh)
+    expect(onWheelOverflow).toHaveBeenCalledWith(fresh)
+    expect(propagated).toHaveBeenCalledTimes(1)
+    clock.mockRestore()
+  })
+
+  it('keeps two surfaces on the same pty in one window on separate streams', async () => {
+    connect.mockImplementation(async (_ptyId: string, opts: { surfaceId?: string }) => ({
+      snapshot: { data: `for ${opts.surfaceId}`, cols: 80, rows: 24, seq: 1 },
+      replay: []
+    }))
+    render(
+      <>
+        <AgentTerminalPreview ptyId="pty-1" />
+        <AgentTerminalPreview ptyId="pty-1" />
+      </>
+    )
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(2))
+    const [first, second] = terminalHarness.instances as [
+      (typeof terminalHarness.instances)[number],
+      (typeof terminalHarness.instances)[number]
+    ]
+    const surfaceIds = connect.mock.calls.map((call) => call[1].surfaceId as string)
+    expect(surfaceIds).toHaveLength(2)
+    expect(surfaceIds[0]).not.toBe(surfaceIds[1])
+    // A grid card and the dialog it opens are distinct surfaces on main.
+    await waitFor(() =>
+      expect(first.write).toHaveBeenCalledWith(`for ${surfaceIds[0]}`, expect.any(Function))
+    )
+    await waitFor(() =>
+      expect(second.write).toHaveBeenCalledWith(`for ${surfaceIds[1]}`, expect.any(Function))
+    )
+    first.write.mockClear()
+    second.write.mockClear()
+    // Drop the replay writes' callbacks so the next shift() is the live write's.
+    first.writeCallbacks.length = 0
+
+    act(() => {
+      emitData({
+        type: 'data',
+        ptyId: 'pty-1',
+        data: 'only-first',
+        bytes: 10,
+        surfaceId: surfaceIds[0]
+      })
+    })
+    expect(first.write).toHaveBeenCalledWith('only-first', expect.any(Function))
+    expect(second.write).not.toHaveBeenCalled()
+    act(() => first.writeCallbacks.shift()?.())
+    expect(ack).toHaveBeenCalledWith('pty-1', 10, surfaceIds[0])
+
+    act(() => emitData({ type: 'resync', ptyId: 'pty-1', surfaceId: surfaceIds[1] }))
+    await waitFor(() => expect(connect).toHaveBeenCalledTimes(3))
+    expect(connect).toHaveBeenLastCalledWith('pty-1', {
+      scrollbackRows: 24,
+      surfaceId: surfaceIds[1]
+    })
   })
 
   it('delays repeated capture after an overflow and cancels the retry on unmount', async () => {

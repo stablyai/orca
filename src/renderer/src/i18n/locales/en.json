@@ -7,6 +7,14 @@
       "cancel": "Keep filters"
     }
   },
+  "sessionGrid": {
+    "terminal": {
+      "notConnected": "Session not connected",
+      "reconnectTimedOut": "Reconnect timed out",
+      "load": "Load session",
+      "retry": "Try again"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
@@ -5309,7 +5317,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "sessions": "Sessions"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -16809,6 +16818,109 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "session": {
+        "grid": {
+          "SessionGridCard": {
+            "dcbfba372d": "Maximize to tabs view",
+            "3cb420110d": "Close session"
+          },
+          "SessionGridEmptySlot": {
+            "dbcddec0c0": "New session",
+            "ad86c2342f": "Launch a terminal or agent here"
+          },
+          "SessionGridOffscreenAttentionPill": {
+            "54a50fe32f": "{{count}} unseen session above",
+            "67c954bd0e": "{{count}} unseen sessions above",
+            "213f12b348": "{{count}} unseen session below",
+            "956f07e0bb": "{{count}} unseen sessions below"
+          },
+          "SessionGridToolbar": {
+            "8909cc10c3": "Auto",
+            "816c044c89": "Row by row",
+            "11c7b51380": "Page by page",
+            "5f1c42d996": "Free scroll",
+            "33561c90fb": "Terminal",
+            "b2bd7400d7": "Grid",
+            "e84bece7ac": "Terminal until its end, then the grid",
+            "859362a60c": "+ wheel scrolls the {{value0}}",
+            "c3a3a9b070": "grid",
+            "a83c6228b3": "terminal",
+            "b99757367b": "Back to workspace",
+            "71bc1856d3": "New session",
+            "b0fdffe943": "Previous page",
+            "7d252cff08": "Next page",
+            "5931c68e4d": "Grid Layout",
+            "1f61e1b041": "Scroll Behavior",
+            "c525d4f2b3": "Mouse Wheel",
+            "a28cc8ef24": "Show empty grid slots"
+          },
+          "SessionsGridPage": {
+            "c406fd4604": "No active sessions",
+            "02aa208e3c": "No terminal sessions open across any workspace.",
+            "3b6b0870de": "New session",
+            "emptyHiddenTitle": "Every session here is hidden",
+            "emptyHiddenBody": "You took these cards out of the grid. Their sessions are still running.",
+            "emptyRevealAction": "Reveal hidden sessions",
+            "emptyFilteredTitle": "No session matches these filters",
+            "emptyFilteredBody": "Sessions are open — the toolbar filters are keeping them off the grid.",
+            "emptyClearFiltersAction": "Clear filters"
+          },
+          "session": {
+            "grid": {
+              "worktree": {
+                "catalog": {
+                  "bdc7918d99": "Workspace",
+                  "3c706dc992": "Project"
+                }
+              },
+              "items": {
+                "builder": {
+                  "5c39f0175d": "Terminal",
+                  "6d07bd7ce3": "Project",
+                  "allWorkspaces": "All workspaces"
+                }
+              },
+              "visibility": {
+                "labels": {
+                  "366251c781": "Show in session grid",
+                  "f32a13596e": "Hide from session grid"
+                }
+              }
+            }
+          },
+          "SessionGridStateControl": {
+            "all": "All",
+            "group": "State",
+            "compactLabel": "State: {{value0}}"
+          },
+          "SessionGridWorkspacePicker": {
+            "all": "All workspaces",
+            "trigger": "Workspace: {{value0}}",
+            "search": "Search workspaces…",
+            "empty": "No workspace matches"
+          },
+          "SessionGridLaunchPicker": {
+            "inThisGrid": "In this grid",
+            "search": "Search workspaces…",
+            "empty": "No workspace matches",
+            "noEnabled": "No enabled agents",
+            "noDetected": "No agents detected",
+            "back": "Back to workspaces",
+            "launchIn": "Launch in {{value0}}",
+            "default": "Default",
+            "terminalShell": "Terminal Shell",
+            "agentSettings": "Agent settings…"
+          },
+          "SessionGridViewMenu": {
+            "zoom": "Zoom",
+            "zoomOut": "Zoom out",
+            "zoomReset": "Reset zoom",
+            "zoomIn": "Zoom in",
+            "trigger": "View",
+            "showHidden": "Show hidden sessions"
+          }
+        }
       }
     },
     "i18n": {
@@ -17541,7 +17653,9 @@
       "closed": "No live terminal — this agent's pane has closed.",
       "remotePreviewUnavailable": "No preview for this remote session — open the workspace to view the terminal.",
       "focusWorktree": "Open worktree",
-      "close": "Close"
+      "close": "Close",
+      "starting": "Starting session…",
+      "unavailable": "Preview unavailable. Retrying…"
     },
     "filters": {
       "remove": "Remove {{label}} filter",

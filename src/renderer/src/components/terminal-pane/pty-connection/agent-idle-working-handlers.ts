@@ -76,8 +76,18 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
 
   // Why: folder workspaces can inherit their SSH target from child repos, so
   // use the shared resolver instead of only looking up repo-backed worktrees.
-  session.worktree = getWorktreeMapFromState(session.state).get(session.deps.worktreeId)
-  session.worktreeConnectionId = getConnectionId(session.deps.worktreeId)
+  const executionHostId = session.state.unifiedTabsByWorktree?.[session.deps.worktreeId]?.find(
+    (tab) => tab.contentType === 'terminal' && tab.entityId === session.deps.tabId
+  )?.executionHostId
+  const selectedHost = parseExecutionHostId(executionHostId)
+  session.worktree = executionHostId
+    ? (session.state.getKnownWorktreeById(session.deps.worktreeId, executionHostId) ?? undefined)
+    : getWorktreeMapFromState(session.state).get(session.deps.worktreeId)
+  session.worktreeConnectionId = selectedHost
+    ? selectedHost.kind === 'ssh'
+      ? selectedHost.targetId
+      : null
+    : getConnectionId(session.deps.worktreeId)
   session.tab = (session.state.tabsByWorktree[session.deps.worktreeId] ?? []).find(
     (t) => t.id === session.deps.tabId
   )
@@ -92,7 +102,8 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   // only for a genuinely unknown/stale worktree that must fail closed (#9994).
   session.terminalWorktreeRoute = resolveTerminalWorktreeRoute(
     session.state,
-    session.deps.worktreeId
+    session.deps.worktreeId,
+    executionHostId
   )
   session.explicitRuntimeEnvironmentId = session.terminalWorktreeRoute?.runtimeEnvironmentId ?? null
   // Why: paired-web worktrees retain HUB execution identity; their runtime-scoped mirrored pane is the session-level transport owner.

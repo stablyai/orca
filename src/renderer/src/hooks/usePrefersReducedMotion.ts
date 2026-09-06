@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
-function readPrefersReducedMotion(): boolean {
+/** Read once, at call time: for an imperative scroll there is nothing to re-render on. */
+export function readPrefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false
   }

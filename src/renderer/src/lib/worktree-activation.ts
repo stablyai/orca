@@ -33,6 +33,7 @@ import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queu
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
+import { findWorktreeClaimedByNoHost } from '@/lib/worktree-host-qualified-lookup'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -200,7 +201,12 @@ export function activateAndRevealWorktree(
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
-  const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
+  // Why the second lookup: `executionHostId` can come from a live pty, which outranks the
+  // workspace catalog, and a row that never got a host stamp files under `local` — refusing
+  // there would strand a remote session. See worktree-host-qualified-lookup.
+  const wt =
+    state.getKnownWorktreeById(worktreeId, opts?.executionHostId) ??
+    (opts?.executionHostId ? findWorktreeClaimedByNoHost(state, worktreeId) : undefined)
   if (!wt) {
     return false
   }

@@ -310,97 +310,108 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('resumes from the quit-captured sleeping record when cold-restoring after an app restart', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('fresh-pty')
-    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
-      if (sessionId) {
-        return {
-          id: 'fresh-pty',
-          coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+  it.each([
+    { origin: 'quit', state: 'working', visible: true, restoreOnTabOpenOnly: undefined },
+    { origin: 'quit', state: 'working', visible: false, restoreOnTabOpenOnly: undefined },
+    { origin: 'worktree-sleep', state: 'working', visible: false, restoreOnTabOpenOnly: undefined },
+    { origin: 'worktree-sleep', state: 'done', visible: false, restoreOnTabOpenOnly: true }
+  ] as const)(
+    'cold-restores a $origin $state record with visible=$visible',
+    async ({ origin, state, visible, restoreOnTabOpenOnly }) => {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('fresh-pty')
+      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+        if (sessionId) {
+          return {
+            id: 'fresh-pty',
+            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+          }
         }
-      }
-      return 'fresh-pty'
-    })
-    transportFactoryQueue.push(transport)
-    const paneKey = makePaneKey('tab-1', LEAF_1)
-    const transcriptPath =
-      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-codex-session-1.jsonl'
-    // Why: after restart agentStatusByPaneKey is empty — the persisted sleeping record is the only provider session id source (#5232).
-    mockStoreState = {
-      ...mockStoreState,
-      tabsByWorktree: {
-        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
-      },
-      settings: {
-        ...mockStoreState.settings,
-        agentCmdOverrides: {}
-      },
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          agent: 'codex',
-          providerSession: {
+        return 'fresh-pty'
+      })
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const transcriptPath =
+        '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-codex-session-1.jsonl'
+      // Why: after restart agentStatusByPaneKey is empty — the persisted sleeping record is the only provider session id source (#5232).
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+        },
+        settings: {
+          ...mockStoreState.settings,
+          agentCmdOverrides: {}
+        },
+        agentStatusByPaneKey: {},
+        sleepingAgentSessionsByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            agent: 'codex',
+            providerSession: {
+              key: 'session_id',
+              id: 'codex-session-1',
+              transcriptPath
+            },
+            prompt: 'finish the task',
+            state,
+            origin,
+            restoreOnTabOpenOnly,
+            capturedAt: 1,
+            updatedAt: 1
+          }
+        }
+      } as StoreState
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' },
+        isVisibleRef: { current: visible }
+      })
+
+      connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks(20)
+      await new Promise((resolve) => setTimeout(resolve, 70))
+
+      expect(pane.terminal.write).toHaveBeenCalledWith(
+        `${RESET_GRAPHIC_RENDITION}cold-payload`,
+        expect.any(Function)
+      )
+      expect(pane.terminal.write).not.toHaveBeenCalledWith(
+        expect.stringContaining('--- session restored ---'),
+        expect.any(Function)
+      )
+      const writeCalls = pane.terminal.write.mock.calls.map(([data]) => data)
+      expect(writeCalls.findIndex((data) => data.includes('--- session restored ---'))).toBe(-1)
+      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
+      expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
+      expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(transport.connect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sessionId: 'lost-pty',
+          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+          resumeProviderSession: {
             key: 'session_id',
             id: 'codex-session-1',
             transcriptPath
           },
-          prompt: 'finish the task',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1
-        }
-      }
-    } as StoreState
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
-    })
-
-    connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(20)
-    await new Promise((resolve) => setTimeout(resolve, 70))
-
-    expect(pane.terminal.write).toHaveBeenCalledWith(
-      `${RESET_GRAPHIC_RENDITION}cold-payload`,
-      expect.any(Function)
-    )
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(
-      expect.stringContaining('--- session restored ---'),
-      expect.any(Function)
-    )
-    const writeCalls = pane.terminal.write.mock.calls.map(([data]) => data)
-    expect(writeCalls.findIndex((data) => data.includes('--- session restored ---'))).toBe(-1)
-    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
-    expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(1, 'restored')
-    expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(transport.connect).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: 'lost-pty',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
-        resumeProviderSession: {
-          key: 'session_id',
-          id: 'codex-session-1',
-          transcriptPath
-        },
-        env: expect.objectContaining({
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: 'tab-1',
-          ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          env: expect.objectContaining({
+            ORCA_PANE_KEY: paneKey,
+            ORCA_TAB_ID: 'tab-1',
+            ORCA_WORKTREE_ID: 'wt-1',
+            ORCA_WORKSPACE_ID: 'wt-1',
+            ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          })
         })
-      })
-    )
-    // Why: consuming the record prevents a later worktree activation from launching a duplicate resume tab.
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
-  })
+      )
+      // Why: consuming the record prevents a later worktree activation from launching a duplicate resume tab.
+      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    }
+  )
 
   it('marks the pane as freshly started when main declined an unverifiable resume', async () => {
     const { connectPanePty } = await import('./pty-connection')

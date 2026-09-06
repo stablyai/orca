@@ -3,8 +3,13 @@ import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clip
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
 import { normalizeFeatureInteractions } from '../../../../shared/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
+import {
+  hasHostGatedUiFields,
+  omitUnsupportedHostGatedUiFields
+} from '../../../../shared/host-gated-ui-fields'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import {
   readClipboardImagePngBase64,
   readClipboardImageThumbnail,
@@ -19,9 +24,54 @@ import {
   mergeWebUIState
 } from './web-preference-normalization'
 import { readLocalWebUIState } from './web-preferences-store'
-import { callRuntimeResult } from './web-runtime-calls'
+import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
+
+// Why a TTL and not a permanent answer: the host can be updated in place under a paired
+// browser, and a gated key stripped forever would never reach the host that now accepts it.
+const HOST_UI_CAPABILITIES_TTL_MS = 5 * 60_000
+let hostUiCapabilities: {
+  environmentId: string
+  readAt: number
+  capabilities: readonly string[]
+} | null = null
+
+async function readHostUiCapabilities(): Promise<readonly string[] | null> {
+  const environment = requireActiveEnvironmentOrNull()
+  if (!environment) {
+    return null
+  }
+  if (
+    hostUiCapabilities?.environmentId === environment.id &&
+    Date.now() - hostUiCapabilities.readAt < HOST_UI_CAPABILITIES_TTL_MS
+  ) {
+    return hostUiCapabilities.capabilities
+  }
+  const status = await getRemoteRuntimeStatus().catch(() => null)
+  if (!status) {
+    return null
+  }
+  const capabilities = status.capabilities ?? []
+  hostUiCapabilities = { environmentId: environment.id, readAt: Date.now(), capabilities }
+  return capabilities
+}
+
+/** Reset the host capability cache; exported for tests. */
+export function resetHostUiCapabilitiesForTest(): void {
+  hostUiCapabilities = null
+}
+
+// Why strip here too when the host also strips pairing-local keys: an old host predating that
+// strip would otherwise persist this browser's runtime:web-* keys over the desktop profile's
+// order. Host-gated keys are asked about only when present, so ordinary writes cost no extra RPC.
+async function toHostUiUpdate(updates: Partial<PersistedUIState>): Promise<object> {
+  const hostUpdates = omitPairingLocalUiFields(updates)
+  if (!hasHostGatedUiFields(hostUpdates)) {
+    return hostUpdates
+  }
+  return omitUnsupportedHostGatedUiFields(hostUpdates, await readHostUiCapabilities())
+}
 
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   let zoomLevel = readLocalWebUIState().uiZoomLevel
@@ -53,11 +103,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      // Why strip here too when the host also strips: an old host predating that strip would
-      // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = omitPairingLocalUiFields(updates)
       try {
-        await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        await callRuntimeResult('ui.set', await toHostUiUpdate(updates), 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
@@ -69,8 +116,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const hostUpdates = omitPairingLocalUiFields(updates)
-      await callRuntimeResult('ui.set', hostUpdates, 15_000)
+      await callRuntimeResult('ui.set', await toHostUiUpdate(updates), 15_000)
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()

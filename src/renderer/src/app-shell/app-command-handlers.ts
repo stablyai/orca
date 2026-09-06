@@ -19,6 +19,7 @@ import type {
   PhysicalModifierToken
 } from '../../../shared/keybindings'
 import { shortcutPlatform } from './app-window-chrome'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -232,6 +233,23 @@ export function createAppCommandHandlers(
           return false
         }
         return claim('view.tasks', () => store.openTaskPage())
+      }
+    ],
+    [
+      'view.sessions.toggle',
+      () => {
+        // The web client has no terminal preview transport, so the grid stays hidden there.
+        if (activeView === 'settings' || isPairedWebClientWindow()) {
+          return false
+        }
+        return claim('view.sessions.toggle', () => {
+          const store = useAppStore.getState()
+          if (store.activeView === 'sessions') {
+            store.closeSessionsPage()
+          } else {
+            store.openSessionsPage()
+          }
+        })
       }
     ],
     [

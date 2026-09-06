@@ -15,6 +15,7 @@ import {
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 import { useTerminalPaneMountLifecycle } from './use-terminal-pane-mount-lifecycle'
 import { useTerminalPaneLifecycleRefs } from './use-terminal-pane-lifecycle-refs'
+import { installTerminalPaneHibernationWakeListener } from './terminal-pane-hibernation-wake-listener'
 
 export {
   applyTerminalScrollbackRowsToMountedPanes,
@@ -52,26 +53,15 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
   const systemPrefersDarkRef = refs.systemPrefersDarkRef
   systemPrefersDarkRef.current = deps.systemPrefersDark
 
-  useEffect(() => {
-    const onWakeHibernatedAgents = (event: Event): void => {
-      const detail = (event as CustomEvent<{ worktreeId: string; wokenClaimKeys?: Set<string> }>)
-        .detail
-      if (!detail || detail.worktreeId !== deps.worktreeId) {
-        return
-      }
-      for (const panePtyBinding of deps.panePtyBindingsRef.current.values()) {
-        const claimKey = (panePtyBinding as IDisposableWithWake).wakeHibernatedAgentIfArmed?.(
-          detail.wokenClaimKeys
-        )
-        if (claimKey) {
-          detail.wokenClaimKeys?.add(claimKey)
-        }
-      }
-    }
-    window.addEventListener('orca:wake-hibernated-agents-worktree', onWakeHibernatedAgents)
-    return () =>
-      window.removeEventListener('orca:wake-hibernated-agents-worktree', onWakeHibernatedAgents)
-  }, [deps.worktreeId, deps.panePtyBindingsRef])
+  useEffect(
+    () =>
+      installTerminalPaneHibernationWakeListener({
+        worktreeId: deps.worktreeId,
+        tabId: deps.tabId,
+        panePtyBindingsRef: deps.panePtyBindingsRef
+      }),
+    [deps.worktreeId, deps.tabId, deps.panePtyBindingsRef]
+  )
 
   useEffect(() => {
     const previousIsVisible = getPreviousVisibleForTerminalPane({
@@ -192,10 +182,6 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
       }
     }
   }, [deps.settings?.terminalMouseHideWhileTyping, deps.managerRef, refs.mouseHideDisposablesRef])
-}
-
-type IDisposableWithWake = IDisposable & {
-  wakeHibernatedAgentIfArmed?: (claimedProviderSessions?: Set<string>) => string | null
 }
 
 type IDisposableWithVisibility = IDisposable & {

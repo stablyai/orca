@@ -87,7 +87,7 @@ vi.mock('./WorkspaceKanbanStatusLane', () => ({
 }))
 
 const { default: WorkspaceKanbanLaneGrid } = await import('./WorkspaceKanbanLaneGrid')
-const { extractWorkspaceKanbanLaneRange } = await import('./workspace-kanban-lane-range')
+const { extractVirtualRangeWithFocusedIndex } = await import('./virtual-range-with-focused-index')
 
 const STATUSES = Array.from({ length: 21 }, (_, index) => ({
   id: `state-${String(index + 1).padStart(2, '0')}`,
@@ -214,7 +214,10 @@ describe('WorkspaceKanbanLaneGrid', () => {
 
   it('adds only the focused lane to the normal overscanned range', () => {
     expect(
-      extractWorkspaceKanbanLaneRange({ startIndex: 4, endIndex: 7, overscan: 1, count: 21 }, 18)
+      extractVirtualRangeWithFocusedIndex(
+        { startIndex: 4, endIndex: 7, overscan: 1, count: 21 },
+        18
+      )
     ).toEqual([3, 4, 5, 6, 7, 8, 18])
   })
 

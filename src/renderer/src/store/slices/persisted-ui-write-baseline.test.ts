@@ -4,6 +4,7 @@ import {
   capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
   persistedUIWriteFieldsToWireUpdate,
+  quarantineRejectedPersistedUIWriteFields,
   type PersistedUIWriteBaseline
 } from './persisted-ui-write-baseline'
 
@@ -31,6 +32,15 @@ function makeBaseline(overrides: Partial<PersistedUIWriteBaseline> = {}): Persis
     acknowledgedAgentsByPaneKey: {},
     activityClearedAtByPaneKey: {},
     manuallyUnreadTurnsByPaneKey: {},
+    sessionsGridPreset: '2x2',
+    sessionsGridZoom: 1,
+    sessionsGridShowEmpty: true,
+    sessionsGridFilter: 'all',
+    sessionsGridStateFilter: 'all',
+    sessionsGridScrollMode: 'row',
+    sessionsGridWheelTarget: 'auto',
+    sessionsGridTabOrder: [],
+    sessionsGridHiddenTabIds: [],
     ...overrides
   }
 }
@@ -142,5 +152,112 @@ describe('persistedUIWriteFieldsToWireUpdate', () => {
       groupBy: 'none'
     })
     expect(update).toEqual({ hideDefaultBranchWorkspace: true, groupBy: 'none' })
+  })
+})
+
+describe('session grid fields', () => {
+  it('diffs the order array by value, so a fresh but equal array is not a local edit', () => {
+    const baseline = makeBaseline({ sessionsGridTabOrder: ['a', 'b'] })
+    const current = makeBaseline({ sessionsGridTabOrder: ['a', 'b'] })
+    expect(diffPersistedUIWriteFields(current, baseline)).toEqual({})
+    expect(
+      diffPersistedUIWriteFields(makeBaseline({ sessionsGridTabOrder: ['b', 'a'] }), baseline)
+    ).toEqual({ sessionsGridTabOrder: ['b', 'a'] })
+  })
+
+  it('diffs the hidden list by value, so a fresh but equal array is not a local edit', () => {
+    const baseline = makeBaseline({ sessionsGridHiddenTabIds: ['a', 'b'] })
+    const current = makeBaseline({ sessionsGridHiddenTabIds: ['a', 'b'] })
+    expect(diffPersistedUIWriteFields(current, baseline)).toEqual({})
+    expect(
+      diffPersistedUIWriteFields(makeBaseline({ sessionsGridHiddenTabIds: ['a'] }), baseline)
+    ).toEqual({ sessionsGridHiddenTabIds: ['a'] })
+  })
+
+  it('ships every grid field under its own name on the wire', () => {
+    expect(
+      persistedUIWriteFieldsToWireUpdate({
+        sessionsGridPreset: '3x2',
+        sessionsGridZoom: 1.2,
+        sessionsGridShowEmpty: false,
+        sessionsGridFilter: 'wt-1',
+        sessionsGridStateFilter: 'attention',
+        sessionsGridScrollMode: 'page',
+        sessionsGridWheelTarget: 'grid',
+        sessionsGridTabOrder: ['a'],
+        sessionsGridHiddenTabIds: ['b']
+      })
+    ).toEqual({
+      sessionsGridPreset: '3x2',
+      sessionsGridZoom: 1.2,
+      sessionsGridShowEmpty: false,
+      sessionsGridFilter: 'wt-1',
+      sessionsGridStateFilter: 'attention',
+      sessionsGridScrollMode: 'page',
+      sessionsGridWheelTarget: 'grid',
+      sessionsGridTabOrder: ['a'],
+      sessionsGridHiddenTabIds: ['b']
+    })
+  })
+})
+
+describe('quarantineRejectedPersistedUIWriteFields', () => {
+  it('leaves a transport failure alone so the fields stay dirty for the next edit', () => {
+    expect(
+      quarantineRejectedPersistedUIWriteFields(new Error('transport failure'), {
+        sidebarWidth: 300
+      })
+    ).toBeNull()
+    expect(
+      quarantineRejectedPersistedUIWriteFields(
+        Object.assign(new Error('offline'), { code: 'runtime_manually_disconnected' }),
+        { sessionsGridZoom: 1.2 }
+      )
+    ).toBeNull()
+  })
+
+  it('quarantines exactly the keys a strict host names, leaving batch-mates dirty', () => {
+    const error = Object.assign(
+      new Error('Unrecognized keys: "sessionsGridZoom", "sessionsGridTabOrder"'),
+      {
+        code: 'invalid_argument'
+      }
+    )
+    expect(
+      quarantineRejectedPersistedUIWriteFields(error, {
+        sidebarWidth: 300,
+        sessionsGridZoom: 1.2,
+        sessionsGridTabOrder: ['a']
+      })
+    ).toEqual({ sessionsGridZoom: 1.2, sessionsGridTabOrder: ['a'] })
+  })
+
+  it('matches a named key by its wire name, not the mirror name', () => {
+    const error = Object.assign(new Error('Unrecognized key: "hideSleepingWorkspaces"'), {
+      code: 'invalid_argument'
+    })
+    expect(
+      quarantineRejectedPersistedUIWriteFields(error, {
+        showSleepingWorkspaces: false,
+        sidebarWidth: 300
+      })
+    ).toEqual({ showSleepingWorkspaces: false })
+  })
+
+  it('falls back to the host-gated members when the message names no key', () => {
+    const error = Object.assign(new Error('invalid_argument'), { code: 'invalid_argument' })
+    expect(
+      quarantineRejectedPersistedUIWriteFields(error, {
+        sidebarWidth: 300,
+        sessionsGridPreset: '3x2'
+      })
+    ).toEqual({ sessionsGridPreset: '3x2' })
+  })
+
+  it('quarantines the whole batch when nothing narrower can be blamed', () => {
+    const error = Object.assign(new Error('invalid_argument'), { code: 'invalid_argument' })
+    expect(
+      quarantineRejectedPersistedUIWriteFields(error, { sidebarWidth: 300, groupBy: 'none' })
+    ).toEqual({ sidebarWidth: 300, groupBy: 'none' })
   })
 })

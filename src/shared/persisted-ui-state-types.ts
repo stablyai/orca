@@ -25,10 +25,35 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type {
+  SessionGridFilter,
+  SessionGridLayoutPreset,
+  SessionGridScrollMode,
+  SessionGridStateFilter,
+  SessionGridWheelTarget
+} from './session-grid-types'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
+  /** Session Grid view layout preset ('auto', '2x2', etc.). */
+  sessionsGridPreset?: SessionGridLayoutPreset
+  /** Session Grid zoom level. */
+  sessionsGridZoom?: number
+  /** Session Grid show empty slots toggle. */
+  sessionsGridShowEmpty?: boolean
+  /** Session Grid workspace filter ('all' or worktreeId). */
+  sessionsGridFilter?: SessionGridFilter
+  /** Session Grid state filter, orthogonal to the workspace filter above. */
+  sessionsGridStateFilter?: SessionGridStateFilter
+  /** Session Grid scroll behavior mode ('row', 'page', 'free'). */
+  sessionsGridScrollMode?: SessionGridScrollMode
+  /** Session Grid wheel owner over a card ('auto', 'terminal', 'grid'); Shift+wheel goes to the other. */
+  sessionsGridWheelTarget?: SessionGridWheelTarget
+  /** Session Grid manual drag-and-drop tab ordering. */
+  sessionsGridTabOrder?: string[]
+  /** Tabs the user hid from the grid. A view, not a model: the pty stays live and the tab stays in its tab bar. */
+  sessionsGridHiddenTabIds?: string[]
   /** Active top-level view at save time, restored on relaunch; sanitized to 'terminal' if unknown or now-gated. */
   activeView: TopLevelView
   sidebarWidth: number
