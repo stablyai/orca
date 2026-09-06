@@ -44,6 +44,9 @@ describe('terminal checkpoint serializer', () => {
       oscLinks: [{ row: 0, startCol: 0, endCol: 1, uri: 'https://example.com/😀\n' }]
     })
     const expected = JSON.stringify({
+      // Why first: the writer emits generation first so warm-reattach generation
+      // reads can probe the checkpoint head instead of parsing the full body.
+      generation: metadata.generation,
       snapshotAnsi: input.snapshotAnsi,
       scrollbackAnsi: input.scrollbackAnsi,
       oscLinks: input.oscLinks,
@@ -53,7 +56,6 @@ describe('terminal checkpoint serializer', () => {
       rows: input.rows,
       modes: input.modes,
       scrollbackLines: input.scrollbackLines,
-      generation: metadata.generation,
       checkpointedAt: metadata.checkpointedAt
     })
     const exactBytes = Buffer.byteLength(expected, 'utf8')
@@ -69,6 +71,9 @@ describe('terminal checkpoint serializer', () => {
       scrollbackLines: 100
     })
     const expected = JSON.stringify({
+      // Why first: the writer emits generation first so warm-reattach generation
+      // reads can probe the checkpoint head instead of parsing the full body.
+      generation: metadata.generation,
       snapshotAnsi: input.snapshotAnsi,
       scrollbackAnsi: input.scrollbackAnsi,
       oscLinks: input.oscLinks,
@@ -78,7 +83,6 @@ describe('terminal checkpoint serializer', () => {
       rows: input.rows,
       modes: input.modes,
       scrollbackLines: input.scrollbackLines,
-      generation: metadata.generation,
       checkpointedAt: metadata.checkpointedAt
     })
     const maxBytes = expected.length + 1
