@@ -178,6 +178,13 @@ export function projectWorktreeTabModelReconciliation(
     prunedNextLayout ?? (nextGroups[0] ? { type: 'leaf', groupId: nextGroups[0].id } : undefined)
   const currentLayout = state.layoutByWorktree[worktreeId]
   const layoutChanged = nextLayout !== currentLayout
+  // Why: the gate below fires when ANY of tabs/groups/active-group/layout/orphans
+  // changed, and then writes all of them. An unchanged one has to hand back the array
+  // already in the store — an equal copy would rerender everything selecting the map.
+  // Safe because filter and the group mapping above both preserve element identity, so
+  // `!tabsChanged` / `!groupsChanged` mean element-wise identical to what is stored.
+  const storedUnifiedTabs = tabsChanged ? validTabs : unifiedTabs
+  const storedGroups = groupsChanged ? nextGroups : groups
   let patch: Partial<AppState> = {}
 
   if (
@@ -213,14 +220,14 @@ export function projectWorktreeTabModelReconciliation(
         state.unifiedTabsByWorktree,
         'unifiedTabsByWorktree',
         worktreeId,
-        validTabs,
+        storedUnifiedTabs,
         batch
       ),
       groupsByWorktree: writeBatchedWorkspaceRecordEntry(
         state.groupsByWorktree,
         'groupsByWorktree',
         worktreeId,
-        nextGroups,
+        storedGroups,
         batch
       ),
       activeGroupIdByWorktree: writeBatchedWorkspaceRecordEntry(

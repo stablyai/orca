@@ -49,6 +49,14 @@ export function writeBatchedWorkspaceRecordEntry<T>(
     ;(current as Record<string, T | undefined>)[worktreeId] = value
     return current
   }
+  // Why: the reconciliation gate fires when any one of tabs/groups/active-group/
+  // layout/orphans changed, then writes all of them. Spreading a map whose entry
+  // is already this value hands it a new identity for no data change, rerendering
+  // every component selecting it. The key must already exist — the spread also
+  // stored an absent key as undefined, and dropping that would change Object.keys.
+  if (worktreeId in current && Object.is(current[worktreeId], value)) {
+    return current
+  }
   const next = { ...current, [worktreeId]: value } as Record<string, T>
   batch?.ownedStateKeys.add(stateKey)
   return next
