@@ -1,6 +1,13 @@
 name: Unit tests
 
 on:
+  workflow_dispatch:
+    inputs:
+      node_versions:
+        description: JSON array of Node.js major versions to test.
+        required: true
+        type: string
+        default: '[24]'
   workflow_call:
     inputs:
       node_versions:
@@ -58,3 +65,15 @@ jobs:
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+  typecheck:
+    name: Combined application typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - run: pnpm run typecheck
