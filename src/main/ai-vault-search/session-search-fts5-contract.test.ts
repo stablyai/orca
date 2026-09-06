@@ -220,10 +220,16 @@ describe('SessionSearchStore.search snippets', () => {
     await parse(path)
 
     // "ptmx" exists only in the identifier shadow column; the fallback column
-    // still highlights it, so the snippet is kept. A query the row matches via
-    // typo repair alone has nothing to highlight and yields ''.
+    // still highlights it, so the snippet is kept.
     const shadowHit = store.search({ query: 'ptmx' }).hits[0]
     expect(shadowHit?.evidence.snippet).toContain('[[ptmx]]')
+    // A window with nothing to mark (the identifier split retrieved the row
+    // through a piece the prose never spells out) is dropped, not shown bare.
+    const pieceHit = store.search({ query: 'kern.tty' }).hits[0]
+    expect(pieceHit).toBeDefined()
+    expect(pieceHit?.evidence.snippet === '' || pieceHit?.evidence.snippet.includes('[[')).toBe(
+      true
+    )
     store.close()
   })
 })

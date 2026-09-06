@@ -5,23 +5,49 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Why: the backfill's first await; failing it once is the cheapest way to make
-// a whole pass throw without touching the transcripts on disk.
+// a whole pass throw without touching the transcripts on disk, and holding it
+// is the one deterministic checkpoint before the backfill touches a file.
 let failNextParseCacheLoad = false
+let holdNextParseCacheLoad: Promise<void> | null = null
+let parseCacheLoads = 0
 vi.mock('../ai-vault/session-parse-cache-persistence', async (importOriginal) => {
   const actual = await importOriginal<typeof ParseCachePersistence>()
   return {
     ...actual,
-    ensureSessionParseCacheLoaded: (): Promise<void> => {
+    ensureSessionParseCacheLoaded: async (): Promise<void> => {
+      parseCacheLoads += 1
       if (failNextParseCacheLoad) {
         failNextParseCacheLoad = false
-        return Promise.reject(new Error('parse cache unavailable'))
+        throw new Error('parse cache unavailable')
       }
+      const hold = holdNextParseCacheLoad
+      holdNextParseCacheLoad = null
+      await hold
       return actual.ensureSessionParseCacheLoaded()
+    }
+  }
+})
+// Why: a search's refresh pass enumerates with a finite per-agent limit and the
+// backfill with an infinite one, so holding the finite call keeps one search
+// provably in flight while the backfill is free to run.
+let holdSearchRefresh: Promise<void> | null = null
+vi.mock('../ai-vault/session-scanner-source-discovery', async (importOriginal) => {
+  const actual = await importOriginal<typeof SourceDiscovery>()
+  return {
+    ...actual,
+    discoverAiVaultSessionSources: async (
+      args: Parameters<typeof actual.discoverAiVaultSessionSources>[0]
+    ): ReturnType<typeof actual.discoverAiVaultSessionSources> => {
+      if (Number.isFinite(args.limitPerAgent) && holdSearchRefresh) {
+        await holdSearchRefresh
+      }
+      return actual.discoverAiVaultSessionSources(args)
     }
   }
 })
 import { getSessionSearchIndexSink } from '../ai-vault/session-search-capture'
 import type * as ParseCachePersistence from '../ai-vault/session-parse-cache-persistence'
+import type * as SourceDiscovery from '../ai-vault/session-scanner-source-discovery'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { isolatedScanRoots, jsonLines } from '../ai-vault/session-scanner-test-fixtures'
 import { SessionSearchService, type SessionSearchScanRoots } from './session-search-service'
@@ -31,6 +57,8 @@ let services: SessionSearchService[] = []
 
 beforeEach(() => {
   resetSessionParseCacheForTests()
+  holdSearchRefresh = null
+  parseCacheLoads = 0
 })
 
 afterEach(async () => {
@@ -211,13 +239,68 @@ describe('SessionSearchService consent gate', () => {
       await writeClaudeTranscript(roots, `bulk-session-${i}`, 'the vacuum quota never settles')
     }
     const service = makeService(databasePath, { enabled: true, historyDays: null })
+    // Hold the backfill before its first file, start a search that stays in
+    // flight past the release, and check the backfill did not advance meanwhile.
+    let releaseBackfill!: () => void
+    holdNextParseCacheLoad = new Promise<void>((resolve) => {
+      releaseBackfill = resolve
+    })
     const backfill = service.ensureBackfill(roots)
-    const indexedBeforeSearch = service.coverage().sessionsIndexed
-    // While this search runs the backfill must not advance past the file it is on.
-    const during = await service.search({ query: 'vacuum', refresh: false }, roots)
-    expect(during.coverage.sessionsIndexed).toBeLessThanOrEqual(indexedBeforeSearch + 1)
+    let releaseSearch!: () => void
+    holdSearchRefresh = new Promise<void>((resolve) => {
+      releaseSearch = resolve
+    })
+    const search = service.search({ query: 'vacuum' }, roots)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    releaseBackfill()
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(service.coverage().sessionsIndexed).toBeLessThanOrEqual(1)
+    releaseSearch()
+    await search
     await backfill
     expect(service.coverage().sessionsIndexed).toBe(24)
+  })
+
+  it('lets a disable interrupt a backfill parked behind a stalled search', async () => {
+    const { roots, databasePath } = await scanRoots()
+    for (let i = 0; i < 3; i += 1) {
+      await writeClaudeTranscript(roots, `stall-session-${i}`, 'the vacuum quota never settles')
+    }
+    const service = makeService(databasePath, { enabled: true, historyDays: null })
+    const backfill = service.ensureBackfill(roots)
+    let releaseSearch!: () => void
+    holdSearchRefresh = new Promise<void>((resolve) => {
+      releaseSearch = resolve
+    })
+    const search = service.search({ query: 'vacuum' }, roots).catch(() => undefined)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    await service.configure({ enabled: false, historyDays: null }, roots)
+    await backfill
+    expect(getSessionSearchIndexSink()).toBeNull()
+
+    releaseSearch()
+    await search
+  })
+
+  it('starts no replacement backfill while a disable is waiting on the old one', async () => {
+    const { roots, databasePath } = await scanRoots()
+    await writeClaudeTranscript(roots, 'race-session', 'the vacuum quota never settles')
+    const service = makeService(databasePath, { enabled: true, historyDays: null })
+    let releaseBackfill!: () => void
+    holdNextParseCacheLoad = new Promise<void>((resolve) => {
+      releaseBackfill = resolve
+    })
+    const backfill = service.ensureBackfill(roots)
+    const disable = service.configure({ enabled: false, historyDays: null }, roots)
+    // A search landing mid-stop sees an open store and a cleared backfill slot.
+    const search = service.search({ query: 'vacuum', refresh: false }, roots).catch(() => undefined)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    releaseBackfill()
+    await Promise.all([backfill, disable, search])
+
+    expect(parseCacheLoads).toBe(1)
+    expect(getSessionSearchIndexSink()).toBeNull()
   })
 
   it('skips transcripts older than the history bound', async () => {

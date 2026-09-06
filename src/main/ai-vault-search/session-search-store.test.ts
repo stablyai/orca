@@ -178,6 +178,8 @@ describe('SessionSearchStore', () => {
     expect(typo.hits).toHaveLength(1)
     expect(typo.route).toMatch(/^typo\+/)
     expect(typo.repairedTerms).toContain('coalesces')
+    // The snippet highlights the term that retrieved the row, not the typo.
+    expect(typo.hits[0]?.evidence.snippet).toContain('[[coalesces]]')
   })
 
   it('ranks by newest when asked and filters by agent and scope', async () => {

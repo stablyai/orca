@@ -1,7 +1,27 @@
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-error'
+
+// Why: a refused WSL read is the one build failure that must not be cached.
+let failNextChatsReaddir = false
+vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
+  const actual = await importOriginal<typeof WslTranscriptFsAccess>()
+  return {
+    ...actual,
+    wslGatedReaddir: (
+      ...args: Parameters<typeof actual.wslGatedReaddir>
+    ): ReturnType<typeof actual.wslGatedReaddir> => {
+      if (failNextChatsReaddir && args[0].includes('workspace-hash')) {
+        failNextChatsReaddir = false
+        return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
+      }
+      return actual.wslGatedReaddir(...args)
+    }
+  }
+})
+import type * as WslTranscriptFsAccess from '../native-chat/wsl-transcript-fs-access'
 import {
   cursorChatMetaPath,
   readCursorChatMeta,
@@ -114,6 +134,17 @@ describe('cursor chat meta', () => {
     const laterTranscript = await writeTranscript(cursorHome, 'slug', 'chat-later', [])
 
     expect(await cursorChatMetaPath(laterTranscript)).toBe(laterMetaPath)
+  })
+
+  it('does not cache a metadata index whose build was refused by the WSL gate', async () => {
+    const cursorHome = await createCursorHome()
+    const metaPath = await writeChatMeta(cursorHome, 'workspace-hash', 'chat-refused')
+    const transcriptPath = await writeTranscript(cursorHome, 'slug', 'chat-refused', [])
+
+    failNextChatsReaddir = true
+    await expect(cursorChatMetaPath(transcriptPath)).rejects.toBeInstanceOf(WslTranscriptFsError)
+    // The next scan rebuilds instead of replaying the rejected promise.
+    await expect(cursorChatMetaPath(transcriptPath)).resolves.toBe(metaPath)
   })
 
   it('yields nothing and does not throw when there is no chats tree', async () => {

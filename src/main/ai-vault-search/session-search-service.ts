@@ -7,6 +7,7 @@ import type {
 } from '../../shared/ai-vault-search-types'
 import {
   aiVaultSearchHistoryCutoffMs,
+  widensAiVaultSearchHistory,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
@@ -27,7 +28,7 @@ import {
   registerSessionSearchIndexSink,
   withSessionSearchIndexRequired
 } from '../ai-vault/session-search-capture'
-import { backfillPauseMs } from './session-search-backfill-pacing'
+import { pauseBackfill } from './session-search-backfill-pacing'
 import { removeSessionSearchDatabase } from './session-search-schema'
 import { SessionSearchStore } from './session-search-store'
 
@@ -38,14 +39,6 @@ const BACKFILL_YIELD_EVERY_FILES = 8
 // no list scan has run; re-reading the newest few files per provider is a
 // readdir + stat plus the appended bytes, well under the query budget.
 const REFRESH_RECENT_PER_AGENT = 12
-/** null (all history) is the widest bound; otherwise more days means wider. */
-function widensHistory(previous: number | null, next: number | null): boolean {
-  if (previous === null) {
-    return false
-  }
-  return next === null || next > previous
-}
-
 export type SessionSearchServiceOptions = { databasePath: string } & AiVaultSearchSettings
 
 /** Scan roots the backfill enumerates; the parent resolves them so they match list scans. */
@@ -77,6 +70,7 @@ export class SessionSearchService {
   private searchesInFlight = 0
   private releaseBackfill: (() => void) | null = null
   private backfillController: AbortController | null = null
+  private stopping = false
 
   constructor(options: SessionSearchServiceOptions) {
     this.databasePath = options.databasePath
@@ -115,13 +109,21 @@ export class SessionSearchService {
     }
   }
 
-  /** Resolves once no search is in flight; the backfill checks this between files. */
-  private async waitForIdleSearches(): Promise<void> {
+  /** Resolves once no search is in flight (or the backfill is aborted); checked between files. */
+  private async waitForIdleSearches(signal: AbortSignal): Promise<void> {
     while (this.searchesInFlight > 0) {
+      throwIfAiVaultScanCancelled(signal)
       await new Promise<void>((resolve) => {
-        this.releaseBackfill = resolve
+        const release = (): void => {
+          signal.removeEventListener('abort', release)
+          if (this.releaseBackfill === release) {
+            this.releaseBackfill = null
+          }
+          resolve()
+        }
+        this.releaseBackfill = release
+        signal.addEventListener('abort', release, { once: true })
       })
-      this.releaseBackfill = null
     }
   }
 
@@ -144,7 +146,7 @@ export class SessionSearchService {
     this.policy = { enabled: next.enabled, historyDays: next.historyDays }
     if (options.clearIndex || (wasEnabled && !next.enabled)) {
       await this.stop()
-    } else if (wasEnabled && widensHistory(previousDays, next.historyDays)) {
+    } else if (wasEnabled && widensAiVaultSearchHistory(previousDays, next.historyDays)) {
       // Why: a finished backfill is memoized; a wider window has files it
       // skipped, so it has to enumerate again (rows already indexed are reused).
       await this.stop({ keepStore: true })
@@ -164,12 +166,15 @@ export class SessionSearchService {
 
   /** Idempotent: a running backfill is reused, a finished one is not restarted. */
   ensureBackfill(roots: SessionSearchScanRoots): Promise<void> {
-    if (!this.store) {
+    // Why: a search that lands while stop() awaits the aborted run must not
+    // start a replacement that outlives the store it is about to close.
+    if (!this.store || this.stopping) {
       return Promise.resolve()
     }
     if (!this.backfillRun) {
-      this.backfillController = new AbortController()
-      const run = this.runBackfill(roots, this.backfillController.signal)
+      const controller = new AbortController()
+      this.backfillController = controller
+      const run = this.runBackfill(roots, controller.signal)
         .catch((error) => {
           console.warn('[ai-vault-search] backfill stopped:', error)
           // Why: a failed pass must not be memoized as done; the next search
@@ -179,7 +184,9 @@ export class SessionSearchService {
           }
         })
         .finally(() => {
-          this.backfillController = null
+          if (this.backfillController === controller) {
+            this.backfillController = null
+          }
         })
       this.backfillRun = run
     }
@@ -205,15 +212,19 @@ export class SessionSearchService {
 
   /** Waits for the aborted backfill so its last parse cannot write to a closed store. */
   private async stop(options: { keepStore?: boolean } = {}): Promise<void> {
-    this.backfillController?.abort()
-    this.releaseBackfill?.()
-    const run = this.backfillRun
-    this.backfillRun = null
-    if (run) {
-      await run.catch(() => undefined)
-    }
-    if (!options.keepStore) {
-      this.closeStore()
+    this.stopping = true
+    try {
+      this.backfillController?.abort()
+      const run = this.backfillRun
+      this.backfillRun = null
+      if (run) {
+        await run.catch(() => undefined)
+      }
+      if (!options.keepStore) {
+        this.closeStore()
+      }
+    } finally {
+      this.stopping = false
     }
   }
 
@@ -282,7 +293,7 @@ export class SessionSearchService {
       })
       const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
       this.recordDiscovered(discoveries, issues)
-      await this.parseAll(this.withinHistory(candidates), signal, { yieldToSearches: true })
+      await this.parseAll(this.withinHistory(candidates), signal, { yieldToSearches: signal })
       store.setBackfillState('complete')
     } catch (error) {
       this.store?.setBackfillState('idle')
@@ -313,7 +324,7 @@ export class SessionSearchService {
   private async parseAll(
     candidates: SessionFileCandidate[],
     signal?: AbortSignal,
-    options: { yieldToSearches?: boolean } = {}
+    options: { yieldToSearches?: AbortSignal } = {}
   ): Promise<void> {
     const stats = createSessionParseStats()
     let sinceYield = 0
@@ -331,13 +342,12 @@ export class SessionSearchService {
           console.warn('[ai-vault-search] backfill skipped', candidate.file.path, error)
         }
         if (options.yieldToSearches && this.searchesInFlight > 0) {
-          await this.waitForIdleSearches()
-          throwIfAiVaultScanCancelled(signal)
+          await this.waitForIdleSearches(options.yieldToSearches)
         }
         sinceYield += 1
         if (sinceYield >= BACKFILL_YIELD_EVERY_FILES) {
           sinceYield = 0
-          await new Promise((resolve) => setTimeout(resolve, backfillPauseMs()))
+          await pauseBackfill(signal)
         }
       }
     })

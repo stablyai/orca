@@ -16,7 +16,8 @@ export type AiVaultSearchSnippetSegment = { text: string; matched: boolean }
 export function aiVaultSearchSnippetSegments(snippet: string): AiVaultSearchSnippetSegment[] {
   const segments: AiVaultSearchSnippetSegment[] = []
   let cursor = 0
-  const pattern = /\[\[(.*?)\]\]/g
+  // A phrase match can span a line break, so the marked text may hold a newline.
+  const pattern = /\[\[([\s\S]*?)\]\]/g
   let match: RegExpExecArray | null
   while ((match = pattern.exec(snippet)) !== null) {
     if (match.index > cursor) {

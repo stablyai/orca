@@ -26,7 +26,7 @@ function selfCpuShareSinceLastYield(): number {
 }
 
 /** How long the backfill sleeps after a batch of files: a beat, or a long back-off when the host is busy. */
-export function backfillPauseMs(): number {
+function backfillPauseMs(): number {
   if (process.platform === 'win32') {
     return selfCpuShareSinceLastYield() > WINDOWS_SELF_CPU_SHARE_CEILING
       ? BACKFILL_LOAD_PAUSE_MS
@@ -34,4 +34,24 @@ export function backfillPauseMs(): number {
   }
   const perCpu = loadavg()[0] / Math.max(1, cpus().length)
   return perCpu > BACKFILL_LOAD_PER_CPU_CEILING ? BACKFILL_LOAD_PAUSE_MS : BACKFILL_YIELD_MS
+}
+
+/** Sleeps for the pacing interval; an abort (disable, clear) ends the 15 s back-off at once. */
+export function pauseBackfill(signal?: AbortSignal): Promise<void> {
+  const ms = backfillPauseMs()
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve()
+      return
+    }
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }

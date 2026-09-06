@@ -24,6 +24,14 @@ describe('aiVaultSearchSnippetSegments', () => {
     ])
   })
 
+  it('keeps a phrase match that spans a line break as one marked segment', () => {
+    expect(aiVaultSearchSnippetSegments('fix the [[terminal\npath]] now')).toEqual([
+      { text: 'fix the ', matched: false },
+      { text: 'terminal\npath', matched: true },
+      { text: ' now', matched: false }
+    ])
+  })
+
   it('leaves an unmarked snippet as one plain segment', () => {
     expect(aiVaultSearchSnippetSegments('no markers here')).toEqual([
       { text: 'no markers here', matched: false }

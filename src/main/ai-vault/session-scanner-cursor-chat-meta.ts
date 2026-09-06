@@ -105,6 +105,13 @@ async function readCursorChatMetaIndex(chatsRoot: string): Promise<Map<string, s
     metaPathByChatId
   }))
   storeCursorChatMetaIndexEntry(chatsRoot, pending)
+  // Why: a rejected build (a refused WSL read) must not be served from the
+  // cache forever; the next scan rebuilds while this one still sees the error.
+  pending.catch(() => {
+    if (cursorChatMetaIndexCache.get(chatsRoot) === pending) {
+      cursorChatMetaIndexCache.delete(chatsRoot)
+    }
+  })
   return (await pending).metaPathByChatId
 }
 

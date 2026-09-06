@@ -54,3 +54,11 @@ export function aiVaultSearchHistoryCutoffMs(
 ): number | null {
   return historyDays === null ? null : now - historyDays * 86_400_000
 }
+
+/** null (all history) is the widest bound; otherwise more days means wider. */
+export function widensAiVaultSearchHistory(previous: number | null, next: number | null): boolean {
+  if (previous === null) {
+    return false
+  }
+  return next === null || next > previous
+}
