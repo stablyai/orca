@@ -295,6 +295,20 @@ describe('Claude terminal session option detection', () => {
     })
   })
 
+  it('reads a Claude header drawn with cursor-forward moves instead of spaces', () => {
+    // Main-buffer snapshot of a `claude --model opus` start on Claude Code
+    // 2.1.258: every gap between words is an `ESC[nC` move, not a space.
+    const screen =
+      '\u001b[38;2;215;119;87m ▐\u001b[48;2;0;0;0m▛███▛█\u001b[0m\u001b[3C\u001b[1mClaude\u001b[1CCode\u001b[1C\u001b[38;2;153;153;153;22mv2.1.258\r\n' +
+      '\u001b[38;2;215;119;87m▝▜\u001b[48;2;0;0;0m█████\u001b[49m█▀\u001b[2C\u001b[38;2;153;153;153mOpus\u001b[1C5\u001b[1Cwith\u001b[1Cxhigh\u001b[1Ceffort\u001b[1C·\u001b[1CClaude\u001b[1CMax\r\n' +
+      '\u001b[38;2;215;119;87m \u001b[1C▝▝\u001b[1C▝▝\u001b[4C\u001b[38;2;153;153;153m~/github/agents/orca'
+
+    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
+      model: 'opus',
+      effort: 'xhigh'
+    })
+  })
+
   it('does not mistake old conversation output for the current model', () => {
     const screen =
       'Set model to Opus 4.8 and saved as your default\r\n' +
