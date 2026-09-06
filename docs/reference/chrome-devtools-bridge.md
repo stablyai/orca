@@ -76,3 +76,16 @@ Responses preserve the supplied string or numeric ID:
 Malformed requests produce an error response without invoking a tool. Tool errors retain their MCP result and set `ok: false`. A protocol error or request timeout ends the session before processing further requests; a timeout does not prove that a page action was cancelled. Any failed response results in a nonzero process exit code. SIGINT/SIGTERM and stdin closure disconnect the MCP process.
 
 Native client configuration remains available through [`orca agent chrome-devtools setup`](chrome-devtools-mcp.md). Use the native client when its tools and persistent MCP sessions are already available; the CLI bridge supplies an additional route for shell-capable agents.
+
+## Standalone distribution
+
+When the installed Orca version does not yet include these commands, build a standalone Node.js 22+ executable from an Orca checkout with its development dependencies already available:
+
+```sh
+node config/scripts/build-chrome-devtools-standalone.mjs
+node out/standalone/chrome-devtools.cjs tools --json
+```
+
+An optional output path can be passed to the build script. The resulting `.cjs` file bundles its dependencies and can be copied outside the checkout; it does not need Orca's application runtime, the checkout, or a neighboring `node_modules` directory. Keep Node.js and `npx` available on the execution host. The MCP package itself is resolved by `npx` when a command runs.
+
+A launcher named `orca-chrome-devtools` can execute this file with Node.js and forward its arguments. It accepts the same `tools`, `call`, and `session` subcommands, including JSONL sessions and remote execution guards. This standalone entry reuses Orca's command handlers, schemas, argument parser, and error reporting.
