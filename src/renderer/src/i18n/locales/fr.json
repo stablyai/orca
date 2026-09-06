@@ -15940,7 +15940,8 @@
         "requestedVersionUnavailable": "Le programme de mise à jour du serveur n'a pas proposé la version d'Orca demandée.",
         "updateUnavailable": "Le serveur n'a pas signalé de mise à jour disponible.",
         "downloadIncomplete": "La mise à jour du serveur n'a pas fini de se télécharger.",
-        "reconnectTimeout": "Le serveur ne s'est pas reconnecté avec la version mise à jour."
+        "reconnectTimeout": "Le serveur ne s'est pas reconnecté avec la version mise à jour.",
+        "liveTerminals": "Le serveur a encore des terminaux ou des agents actifs. Fermez-les, puis réessayez la mise à jour."
       },
       "webRuntimeSession": {
         "remoteHostDisconnected": "L'espace de travail n'est pas connecté à un hôte Orca distant."
