@@ -217,6 +217,7 @@ export function DiffSectionItem({
         sideBySide={sideBySide}
         settings={settings}
         isEditable={isEditable}
+        collapseUnchanged
         worktreeId={worktreeId ?? ''}
         filePath={section.path}
         comments={comments}

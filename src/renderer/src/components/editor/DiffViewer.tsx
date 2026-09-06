@@ -249,6 +249,7 @@ export default function DiffViewer({
               sideBySide={sideBySide}
               settings={settings}
               isEditable={Boolean(editable)}
+              collapseUnchanged={false}
               worktreeId={worktreeId ?? ''}
               filePath={relativePath}
               comments={comments}

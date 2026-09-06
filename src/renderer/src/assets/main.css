@@ -3045,3 +3045,12 @@ html.native-shell .app-layout {
   width: 100%;
   max-width: none;
 }
+
+/* Why: Pierre positions its gutter slot 14px into the line-number column. Pull
+   the add-note button back into the glyph margin so it never covers a number. */
+.orca-diff-comment-add-btn-gutter {
+  position: relative;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+}

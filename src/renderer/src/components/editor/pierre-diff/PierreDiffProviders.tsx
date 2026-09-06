@@ -5,16 +5,10 @@ import { useCallback, useState } from 'react'
 import PierreDiffHighlightWorker from '@pierre/diffs/worker/worker.js?worker'
 import { EditProvider, WorkerPoolContext } from '@pierre/diffs/react'
 import type { EditorFactory } from '@pierre/diffs/react'
-import type { ThemesType } from '@pierre/diffs'
 import { getOrCreateWorkerPoolSingleton, type WorkerPoolManager } from '@pierre/diffs/worker'
 import { Editor } from '@pierre/diffs/edit'
 import type { PierreDiffAnnotationData } from './pierre-diff-comment-annotations'
-
-/**
- * `light-plus` / `dark-plus` are the VS Code default themes that Monaco's
- * `vs` / `vs-dark` mirror, so swapping renderers keeps syntax colors stable.
- */
-const PIERRE_DIFF_THEMES: ThemesType = { light: 'light-plus', dark: 'dark-plus' }
+import { PIERRE_DIFF_THEMES } from './pierre-diff-options'
 
 // Why: Shiki grammars are heavy per worker; cap the pool well under Pierre's
 // default of 8 so a diff tab can't starve the terminal and agent threads.

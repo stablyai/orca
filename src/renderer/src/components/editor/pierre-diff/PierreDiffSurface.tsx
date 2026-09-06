@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { FileDiff } from '@pierre/diffs/react'
+import { FileDiff, GutterUtilitySlotStyles } from '@pierre/diffs/react'
 import type { FileDiffMetadata, PostRenderPhase, SelectedLineRange } from '@pierre/diffs'
 import type { FileContents } from '@pierre/diffs'
 import type { EditorOptions } from '@pierre/diffs/edit'
@@ -20,6 +20,8 @@ export type PierreDiffSurfaceProps = {
   sideBySide: boolean
   settings?: PierreDiffSettings | null
   isEditable: boolean
+  /** Collapse unchanged context. Combined diffs do; the single-file tab does not. */
+  collapseUnchanged: boolean
   worktreeId: string
   filePath: string
   comments: readonly DecoratedDiffComment[]
@@ -50,6 +52,7 @@ export function PierreDiffSurface({
   sideBySide,
   settings,
   isEditable,
+  collapseUnchanged,
   worktreeId,
   filePath,
   comments,
@@ -76,7 +79,11 @@ export function PierreDiffSurface({
 
   const options = useMemo(
     () => ({
-      ...buildPierreDiffOptions<PierreDiffAnnotationData>({ settings, sideBySide }),
+      ...buildPierreDiffOptions<PierreDiffAnnotationData>({
+        settings,
+        sideBySide,
+        collapseUnchanged
+      }),
       enableGutterUtility: Boolean(onAddComment),
       onGutterUtilityClick: onAddComment
         ? (range: SelectedLineRange) =>
@@ -90,7 +97,7 @@ export function PierreDiffSurface({
             onPostRender(node, phase)
         : undefined
     }),
-    [settings, sideBySide, onPostRender, onAddComment]
+    [settings, sideBySide, collapseUnchanged, onPostRender, onAddComment]
   )
   const style = useMemo(
     () => buildPierreDiffStyle(settings, editorFontZoomLevel),
@@ -114,6 +121,36 @@ export function PierreDiffSurface({
     }),
     [handleEditorAttach, isEditable, onEditChange]
   )
+  // Why: Pierre's default utility button sits 14px into the line-number column.
+  // Render our own so the add-note affordance keeps the glyph-margin look and
+  // hit target it had under Monaco.
+  const renderGutterUtility = useCallback(
+    () =>
+      onAddComment ? (
+        <div style={GutterUtilitySlotStyles}>
+          <button
+            type="button"
+            className="orca-diff-comment-add-btn orca-diff-comment-add-btn-gutter"
+            title={addCommentLabel}
+            aria-label={addCommentLabel}
+          >
+            <svg
+              viewBox="0 0 16 16"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+          </button>
+        </div>
+      ) : null,
+    [addCommentLabel, onAddComment]
+  )
+
   const renderAnnotation = useCallback(
     (annotation: PierreDiffCommentAnnotation) =>
       renderPierreDiffCommentAnnotation(annotation, {
@@ -159,6 +196,7 @@ export function PierreDiffSurface({
         editorOptions={editorOptions}
         lineAnnotations={lineAnnotations}
         renderAnnotation={renderAnnotation}
+        renderGutterUtility={renderGutterUtility}
       />
     </div>
   )
