@@ -164,6 +164,17 @@ export async function createDraftRelease({
     if (!Number.isInteger(existingRelease.id)) {
       throw new Error(`Draft release ${tag} is missing a GitHub release id`)
     }
+    // Why: the listing is a snapshot; the draft can be published while notes
+    // generate, and patching then overwrites a live release body.
+    const currentRelease = await githubJson(
+      fetchImpl,
+      `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
+      token
+    )
+    if (currentRelease?.draft !== true) {
+      log(`Release ${tag} was published while notes were generated; leaving it unchanged.`)
+      return
+    }
     await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
