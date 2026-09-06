@@ -27,17 +27,12 @@ vi.mock('./use-native-chat-file-link-click', () => ({
   useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.openFileLink : undefined)
 }))
 
-vi.mock('../../store', () => ({
+vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: Record<string, unknown>) => unknown) =>
       selector({ openSettingsPage: vi.fn(), openSettingsTarget: vi.fn() }),
     { getState: () => ({ settings: mocks.settings }) }
   )
-}))
-
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ openSettingsPage: vi.fn(), openSettingsTarget: vi.fn() })
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
