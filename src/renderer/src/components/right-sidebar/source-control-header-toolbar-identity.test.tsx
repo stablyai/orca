@@ -51,6 +51,10 @@ function renderToolbar(options?: {
       filterExpanded={false}
       onFilterQueryChange={vi.fn()}
       onFilterExpandedChange={vi.fn()}
+      worktreeList={[]}
+      selectedWorktreeId={null}
+      appActiveWorktreeId={null}
+      onSelectWorktree={vi.fn()}
       visibleCreatePrHeaderAction={
         options?.visibleCreatePrHeaderAction === undefined
           ? CREATE_PR_ACTION

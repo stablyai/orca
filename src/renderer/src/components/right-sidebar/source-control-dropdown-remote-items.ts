@@ -47,7 +47,8 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
     behind,
     shouldForcePushWithLease,
     pushLabelCount,
-    forcePushTitle
+    forcePushTitle,
+    isSubjectLinkedWorktree
   } = ctx
 
   const push: DropdownItem = {
@@ -65,13 +66,19 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
               ? 'Push this branch and set an upstream if needed'
               : shouldForcePushWithLease
                 ? 'Try a regular push; git may require force push'
-                : behind > 0 && ahead > 0
-                  ? 'Push local commits; git may require syncing first'
-                  : ahead === 0
-                    ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
-                    : describePushCount(ahead),
-    // Why: Push stays available without an upstream (git resolves --set-upstream) and under force-with-lease; only detached HEAD and unknown review targets block.
-    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
+                : isSubjectLinkedWorktree && behind > 0 && ahead > 0
+                  ? 'Diverged from remote. Push is not available on a linked worktree — reconcile on the main checkout.'
+                  : behind > 0 && ahead > 0
+                    ? 'Push local commits; git may require syncing first'
+                    : ahead === 0
+                      ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+                      : describePushCount(ahead),
+    // Why: Push stays available without an upstream (git resolves --set-upstream) and under force-with-lease; only detached HEAD, unknown review targets, and a diverged linked worktree (a plain push would be rejected as non-fast-forward) block.
+    disabled:
+      globalBusy ||
+      publishBlockedByDetachedHead ||
+      pushBlockedByOpenHostedReviewTarget ||
+      (isSubjectLinkedWorktree && behind > 0 && ahead > 0 && !shouldForcePushWithLease)
   }
 
   const forcePush: DropdownItem = {
@@ -105,14 +112,21 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
           ? 'PR is already merged'
           : publishBlockedByDetachedHead
             ? 'Check out a branch before pulling commits'
-            : !hasUpstream
-              ? 'Publish the branch first to pull commits'
-              : shouldForcePushWithLease
-                ? 'Nothing new to pull — remote only has older copies of local commits'
-                : behind === 0
-                  ? 'Nothing to pull'
-                  : describePullCount(behind),
-    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
+            : isSubjectLinkedWorktree
+              ? 'Pull is not available on a linked worktree'
+              : !hasUpstream
+                ? 'Publish the branch first to pull commits'
+                : shouldForcePushWithLease
+                  ? 'Nothing new to pull — remote only has older copies of local commits'
+                  : behind === 0
+                    ? 'Nothing to pull'
+                    : describePullCount(behind),
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      !hasUpstream ||
+      publishBlockedByDetachedHead ||
+      isSubjectLinkedWorktree
   }
 
   const fastForward: DropdownItem = {
@@ -126,16 +140,23 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
           ? 'PR is already merged'
           : publishBlockedByDetachedHead
             ? 'Check out a branch before fast-forwarding'
-            : !hasUpstream
-              ? 'Publish the branch first to fast-forward'
-              : shouldForcePushWithLease
-                ? 'Nothing new to fast-forward — remote only has older copies of local commits'
-                : behind === 0
-                  ? 'Nothing to fast-forward'
-                  : ahead > 0
-                    ? 'Try a fast-forward pull; git may reject local commits'
-                    : describeFastForwardCount(behind),
-    disabled: globalBusy || upstreamLoading || !hasUpstream || publishBlockedByDetachedHead
+            : isSubjectLinkedWorktree
+              ? 'Fast-forward is not available on a linked worktree'
+              : !hasUpstream
+                ? 'Publish the branch first to fast-forward'
+                : shouldForcePushWithLease
+                  ? 'Nothing new to fast-forward — remote only has older copies of local commits'
+                  : behind === 0
+                    ? 'Nothing to fast-forward'
+                    : ahead > 0
+                      ? 'Try a fast-forward pull; git may reject local commits'
+                      : describeFastForwardCount(behind),
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      !hasUpstream ||
+      publishBlockedByDetachedHead ||
+      isSubjectLinkedWorktree
   }
 
   const sync: DropdownItem = {
@@ -149,19 +170,22 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
           ? 'PR is already merged'
           : publishBlockedByDetachedHead
             ? 'Check out a branch before syncing commits'
-            : !hasUpstream
-              ? 'Publish the branch first to sync commits'
-              : shouldForcePushWithLease
-                ? 'Use Force Push — remote only has older copies of local commits'
-                : ahead === 0 && behind === 0
-                  ? 'Branch is up to date'
-                  : describeSyncCounts(ahead, behind),
+            : isSubjectLinkedWorktree
+              ? 'Sync is not available on a linked worktree'
+              : !hasUpstream
+                ? 'Publish the branch first to sync commits'
+                : shouldForcePushWithLease
+                  ? 'Use Force Push — remote only has older copies of local commits'
+                  : ahead === 0 && behind === 0
+                    ? 'Branch is up to date'
+                    : describeSyncCounts(ahead, behind),
     disabled:
       globalBusy ||
       upstreamLoading ||
       !hasUpstream ||
       publishBlockedByDetachedHead ||
-      shouldForcePushWithLease
+      shouldForcePushWithLease ||
+      isSubjectLinkedWorktree
   }
 
   const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null

@@ -4,6 +4,7 @@ import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-
 import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { PrimaryAction } from '../../source-control-primary-action'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -11,6 +12,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
+import { SourceControlWorktreePicker } from './worktree-picker'
 import { SourceControlBranchContextRow } from './branch-context-row'
 import { shouldShowSourceControlBranchContextChrome } from './branch-context-stats'
 import { SourceControlHeaderOverflowMenu } from './header-overflow-menu'
@@ -20,6 +22,10 @@ type SourceControlHeaderToolbarProps = {
   filterExpanded: boolean
   onFilterQueryChange: (value: string) => void
   onFilterExpandedChange: (expanded: boolean) => void
+  worktreeList: readonly Worktree[]
+  selectedWorktreeId: string | null
+  appActiveWorktreeId: string | null
+  onSelectWorktree: (worktreeId: string) => void
   visibleCreatePrHeaderAction: PrimaryAction | null
   hostedReview: HostedReviewInfo | null
   isCreatePrIntentInFlight: boolean
@@ -148,6 +154,10 @@ export function SourceControlHeaderToolbar({
   filterExpanded,
   onFilterQueryChange,
   onFilterExpandedChange,
+  worktreeList,
+  selectedWorktreeId,
+  appActiveWorktreeId,
+  onSelectWorktree,
   visibleCreatePrHeaderAction,
   hostedReview,
   isCreatePrIntentInFlight,
@@ -219,6 +229,14 @@ export function SourceControlHeaderToolbar({
       >
         {showCollapsedToolbar ? (
           <>
+            {worktreeList.length > 1 ? (
+              <SourceControlWorktreePicker
+                worktrees={worktreeList}
+                selectedWorktreeId={selectedWorktreeId ?? appActiveWorktreeId ?? ''}
+                currentWorktreeId={appActiveWorktreeId ?? ''}
+                onSelect={onSelectWorktree}
+              />
+            ) : null}
             {hostedReview ? (
               <HostedReviewToolbarLink
                 review={hostedReview}

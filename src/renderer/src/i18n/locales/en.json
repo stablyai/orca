@@ -12304,7 +12304,13 @@
             "a4e93c21d7": "Current branch: {{value0}}",
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
+            "worktreePickerTriggerTitle": "Worktree: {{value0}}",
+            "worktreePickerSearchPlaceholder": "Search worktrees…",
+            "worktreePickerEmpty": "No worktrees match your search.",
+            "worktreePickerMainBadge": "Main",
+            "worktreePickerCurrentBadge": "Current",
+            "worktreePickerNonActiveNotice": "Viewing {{value0}} — changes and commits shown for this worktree"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -12813,7 +12819,9 @@
                   "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
                   "8f9a0b1c2d": "Nothing to commit. Branch is up to date.",
-                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…",
+                  "pull_unavailable_on_worktree": "Pull is not available on a linked worktree.",
+                  "push_unavailable_on_worktree": "Diverged from remote. Push is not available on a linked worktree — reconcile on the main checkout."
                 }
               },
               "branch": {

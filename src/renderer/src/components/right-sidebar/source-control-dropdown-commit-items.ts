@@ -22,10 +22,12 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     publishBlockedByMergedPR,
     publishBlockedByPRLoading,
     publishBlockedByDetachedHead,
+    ahead,
     behind,
     shouldForcePushWithLease,
     commitDisabledReason,
-    canCommit
+    canCommit,
+    isSubjectLinkedWorktree
   } = ctx
 
   const commit: DropdownItem = {
@@ -51,12 +53,14 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
             ? 'Linked review branch target is unavailable'
             : !hasUpstream && !(hasOpenHostedReview && canPushLinkedReviewWithoutUpstream)
               ? 'Publish the branch first to push commits'
-              : (commitDisabledReason ??
-                (shouldForcePushWithLease
-                  ? 'Commit staged changes and force push with lease'
-                  : behind > 0
-                    ? 'Commit staged changes and try to push'
-                    : 'Commit staged changes and push'))
+              : isSubjectLinkedWorktree && behind > 0 && ahead > 0 && !shouldForcePushWithLease
+                ? 'Diverged from remote. Push is not available on a linked worktree — reconcile on the main checkout.'
+                : (commitDisabledReason ??
+                  (shouldForcePushWithLease
+                    ? 'Commit staged changes and force push with lease'
+                    : behind > 0
+                      ? 'Commit staged changes and try to push'
+                      : 'Commit staged changes and push'))
   const commitPush: DropdownItem = {
     kind: 'commit_push',
     label: shouldForcePushWithLease ? 'Commit & Force Push' : 'Commit & Push',
@@ -69,6 +73,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
       publishBlockedByDetachedHead ||
       publishBlockedByPRLoading ||
       publishBlockedByMergedPR ||
+      (isSubjectLinkedWorktree && behind > 0 && ahead > 0 && !shouldForcePushWithLease) ||
       commitDisabledReason !== null
   }
 
@@ -84,6 +89,10 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
     }
     if (publishBlockedByDetachedHead) {
       return 'Check out a branch before syncing commits'
+    }
+    if (isSubjectLinkedWorktree) {
+      // Why: Commit & Sync pulls after the commit, which is disallowed on a linked worktree.
+      return 'Sync is not available on a linked worktree'
     }
     if (!hasUpstream) {
       // Why: direct the user to Publish Branch (the primary action) rather than naming a nonexistent compound action.
@@ -110,6 +119,7 @@ export function buildCommitDropdownItems(ctx: DropdownActionContext): CommitDrop
       !hasUpstream ||
       publishBlockedByDetachedHead ||
       shouldForcePushWithLease ||
+      isSubjectLinkedWorktree ||
       commitDisabledReason !== null
   }
 

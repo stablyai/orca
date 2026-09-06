@@ -62,4 +62,7 @@ export type PrimaryActionInputs = {
   // Why: eligibility is fetched asynchronously; keep the header anchor visible
   // while the request is in flight instead of flashing it in after ~1s.
   isHostedReviewCreationLoading?: boolean
+  // True when the Source Control subject is a git linked worktree (not the main checkout).
+  // Push/publish stays available; pull/sync are not offered on a worktree.
+  isSubjectLinkedWorktree?: boolean
 }

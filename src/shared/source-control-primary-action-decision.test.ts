@@ -165,6 +165,80 @@ describe('source-control primary action decision', () => {
     expect(resolveSourceControlCommitAreaPrimaryActionDecision(input).kind).toBe('commit')
   })
 
+  it('returns disabled pull-blocked action on a linked worktree when behind only', () => {
+    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
+        isSubjectLinkedWorktree: true
+      })
+    )
+    expect(result).toMatchObject({
+      kind: 'commit',
+      titleIntent: 'pull_unavailable_on_worktree',
+      disabled: true
+    })
+  })
+
+  it('keeps push available on a linked worktree with no upstream', () => {
+    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        hasCurrentBranch: true,
+        isSubjectLinkedWorktree: true
+      })
+    )
+    expect(result).toMatchObject({
+      kind: 'publish',
+      titleIntent: 'publish_branch',
+      disabled: false
+    })
+  })
+
+  it('returns a disabled push on a linked worktree when diverged without patch-equivalence', () => {
+    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 },
+        isSubjectLinkedWorktree: true
+      })
+    )
+    expect(result).toMatchObject({
+      kind: 'push',
+      titleIntent: 'push_unavailable_on_worktree',
+      count: 2,
+      disabled: true
+    })
+  })
+
+  it('offers force-push-with-lease on a linked worktree when diverged and patch-equivalent', () => {
+    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
+      inputs({
+        upstreamStatus: {
+          hasUpstream: true,
+          ahead: 2,
+          behind: 3,
+          behindCommitsArePatchEquivalent: true
+        },
+        isSubjectLinkedWorktree: true
+      })
+    )
+    expect(result).toMatchObject({
+      kind: 'push',
+      labelIntent: 'force_push',
+      titleIntent: 'force_push_with_lease',
+      disabled: false
+    })
+  })
+
+  it('keeps pull for the main checkout when behind', () => {
+    const result = resolveSourceControlCommitAreaPrimaryActionDecision(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 },
+        isSubjectLinkedWorktree: false
+      })
+    )
+    expect(result).toMatchObject({ kind: 'pull', titleIntent: 'pull_count', disabled: false })
+  })
+
   it('returns disabled create review while hosted-review creation eligibility is loading', () => {
     const input = inputs({
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },

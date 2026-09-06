@@ -14,7 +14,7 @@ function createDefaultCollapsedSections(): Set<string> {
 /**
  * Local presentation state for the Source Control panel: filter, collapsed sections/directories,
  * list-vs-tree mode and the base-ref dialog, plus the per-worktree reset that keeps a worktree
- * switch from inheriting the previous worktree's view.
+ * switch (app-active or picker-pinned) from inheriting the previous worktree's view.
  */
 export function useSourceControlPanelViewState({
   activeWorktreeId,

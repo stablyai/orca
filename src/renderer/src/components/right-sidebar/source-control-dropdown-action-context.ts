@@ -16,6 +16,7 @@ export type DropdownActionContext = {
   conflictOperation: GitConflictOperation
   isPullRequestOperationActive: boolean
   canPushLinkedReviewWithoutUpstream: boolean
+  isSubjectLinkedWorktree: boolean
   rebaseBaseRef: string | null | undefined
   hasDirtyLocalChanges: boolean
   upstreamLoading: boolean
@@ -54,7 +55,8 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     hasCurrentBranch = true,
     canPushLinkedReviewWithoutUpstream = false,
     rebaseBaseRef,
-    isPullRequestOperationActive = false
+    isPullRequestOperationActive = false,
+    isSubjectLinkedWorktree = false
   } = inputs
 
   const hasStaged = stagedCount > 0
@@ -116,6 +118,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
     conflictOperation,
     isPullRequestOperationActive,
     canPushLinkedReviewWithoutUpstream,
+    isSubjectLinkedWorktree,
     rebaseBaseRef,
     hasDirtyLocalChanges,
     upstreamLoading,

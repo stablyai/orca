@@ -58,6 +58,10 @@ vi.mock('@/store/selectors', () => ({
   useActiveWorktree: () => mocks.activeWorktree,
   useRepoById: (repoId: string | null) =>
     repoId === mocks.activeRepo.id ? mocks.activeRepo : null,
+  useWorktreeById: (worktreeId: string | null) =>
+    worktreeId === mocks.activeWorktree.id ? mocks.activeWorktree : null,
+  useWorktreesForRepo: (repoId: string | null) =>
+    repoId === mocks.activeRepo.id ? [mocks.activeWorktree] : [],
   useWorktreeMap: () => new Map([[mocks.activeWorktree.id, mocks.activeWorktree]])
 }))
 
