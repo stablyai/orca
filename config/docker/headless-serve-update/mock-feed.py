@@ -12,9 +12,6 @@ ROOT = "/srv/feed"
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=ROOT, **kwargs)
-
     def log_message(self, format, *args):  # noqa: A002 - stdlib signature
         pass  # keep container logs quiet
 
