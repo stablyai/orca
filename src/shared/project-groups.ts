@@ -193,3 +193,92 @@ export function getNextProjectGroupOrder(repos: readonly Repo[], groupId: string
   }
   return max + 1
 }
+
+/** Next tabOrder among siblings that share `parentGroupId` (null = top-level clients). */
+export function getNextProjectGroupSiblingTabOrder(
+  groups: readonly Pick<ProjectGroup, 'parentGroupId' | 'tabOrder'>[],
+  parentGroupId: string | null
+): number {
+  let max = -1
+  for (const group of groups) {
+    if ((group.parentGroupId ?? null) !== parentGroupId) {
+      continue
+    }
+    if (typeof group.tabOrder === 'number' && Number.isFinite(group.tabOrder)) {
+      max = Math.max(max, group.tabOrder)
+    }
+  }
+  return max + 1
+}
+
+/** True when `newParentGroupId` is the group itself or one of its descendants. */
+export function wouldCreateProjectGroupCycle(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  groupId: string,
+  newParentGroupId: string | null
+): boolean {
+  if (!newParentGroupId) {
+    return false
+  }
+  if (newParentGroupId === groupId) {
+    return true
+  }
+  return getProjectGroupSubtreeIds(groups, groupId).has(newParentGroupId)
+}
+
+/**
+ * Resolve a requested parent for create/reparent.
+ * - `null` clears the parent (top-level client).
+ * - Missing parents / cycles reject (`ok: false`) so updates never silently ungroup.
+ */
+export function resolveProjectGroupParentGroupId(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  groupId: string | null,
+  requestedParentGroupId: string | null | undefined
+): { ok: true; parentGroupId: string | null } | { ok: false } {
+  if (requestedParentGroupId == null) {
+    return { ok: true, parentGroupId: null }
+  }
+  if (!groups.some((group) => group.id === requestedParentGroupId)) {
+    return { ok: false }
+  }
+  if (groupId && wouldCreateProjectGroupCycle(groups, groupId, requestedParentGroupId)) {
+    return { ok: false }
+  }
+  return { ok: true, parentGroupId: requestedParentGroupId }
+}
+
+/** Depth from the root client (0 = top-level). Missing parents count as root. */
+export function getProjectGroupDepth(
+  groupsById: ReadonlyMap<string, Pick<ProjectGroup, 'id' | 'parentGroupId'>>,
+  groupId: string
+): number {
+  let depth = 0
+  let currentId: string | null = groupId
+  const seen = new Set<string>()
+  while (currentId) {
+    if (seen.has(currentId)) {
+      break
+    }
+    seen.add(currentId)
+    const parentId = groupsById.get(currentId)?.parentGroupId ?? null
+    if (!parentId || !groupsById.has(parentId)) {
+      break
+    }
+    depth += 1
+    currentId = parentId
+  }
+  return depth
+}
+
+/** Groups that can become parents of `groupId` (excludes self and descendants). */
+export function listProjectGroupReparentTargets(
+  groups: readonly ProjectGroup[],
+  groupId: string
+): ProjectGroup[] {
+  const subtreeIds = getProjectGroupSubtreeIds(groups, groupId)
+  return groups
+    .filter((group) => !subtreeIds.has(group.id))
+    .slice()
+    .sort((left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name))
+}

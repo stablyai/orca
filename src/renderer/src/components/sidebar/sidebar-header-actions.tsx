@@ -15,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import { SidebarCountBadge } from './sidebar-count-badge'
+import { SidebarClientScopeSwitcher } from './SidebarClientScopeSwitcher'
 import {
   useWorkspaceOptionsFilterBadge,
   WorkspaceOptionsMenuItems
@@ -99,6 +100,7 @@ export function SidebarHeaderActions({
   if (compact) {
     return (
       <div className="flex shrink-0 items-center gap-1">
+        <SidebarClientScopeSwitcher />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -136,6 +138,7 @@ export function SidebarHeaderActions({
 
   return (
     <div className="flex shrink-0 items-center gap-1">
+      <SidebarClientScopeSwitcher />
       {hideWorkspaceOptions ? null : (
         <SidebarWorkspaceOptionsMenu
           preserveWorkspaceBoardOpen

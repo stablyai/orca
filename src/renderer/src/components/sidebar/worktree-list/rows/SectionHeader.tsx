@@ -61,6 +61,15 @@ export type SectionHeaderRowContext = {
   projectActions: RepoHeaderProjectActions
   onRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  focusedProjectGroupId: string | null
+  onFocusProjectGroup: (groupId: string) => void
+  onClearFocusedProjectGroup: () => void
+  onCreateNestedClient: (parentGroupId: string, hostId?: ExecutionHostId) => void
+  onMoveClientInto: (
+    groupId: string,
+    parentGroupId: string | null,
+    hostId?: ExecutionHostId
+  ) => void
   onCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   onWorkspaceStatusDragOver: (event: React.DragEvent, status: WorkspaceStatus) => void
   onWorkspaceStatusDragLeave: (event: React.DragEvent) => void
@@ -364,8 +373,14 @@ export function renderWorktreeSectionHeaderRow(args: {
               groupId={projectGroupIdForHeader}
               hostId={projectGroupHostIdForHeader}
               label={row.label}
+              projectGroups={ctx.projectGroups}
               onRename={ctx.onRenameProjectGroup}
               onDelete={ctx.onDeleteProjectGroup}
+              isFocused={ctx.focusedProjectGroupId === projectGroupIdForHeader}
+              onFocus={ctx.onFocusProjectGroup}
+              onClearFocus={ctx.onClearFocusedProjectGroup}
+              onCreateNestedClient={ctx.onCreateNestedClient}
+              onMoveInto={ctx.onMoveClientInto}
             />
           ) : null}
 

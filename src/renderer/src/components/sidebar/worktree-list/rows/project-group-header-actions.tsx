@@ -1,11 +1,15 @@
-import React from 'react'
-import { Ellipsis, Plus } from 'lucide-react'
+import React, { useMemo } from 'react'
+import { Ellipsis, FolderInput, FolderPlus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
@@ -14,7 +18,13 @@ import { getFolderWorkspacePathStatusDescription } from '@/lib/folder-workspace-
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { listProjectGroupReparentTargets } from '../../../../../../shared/project-groups'
+import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from '../../repo-header-action-button-class'
+import {
+  flattenProjectGroupsForMenu,
+  formatProjectGroupMenuLabel
+} from '../../project-group-menu-labels'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -25,16 +35,42 @@ export function ProjectGroupHeaderMenu({
   groupId,
   hostId,
   label,
+  projectGroups,
   onRename,
-  onDelete
+  onDelete,
+  onFocus,
+  onClearFocus,
+  onCreateNestedClient,
+  onMoveInto,
+  isFocused
 }: {
   groupId: string
   /** Owner host of the group row, so rename/delete route to the host that holds it. */
   hostId?: ExecutionHostId
   label: string
+  projectGroups: readonly ProjectGroup[]
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  onFocus?: (groupId: string) => void
+  onClearFocus?: () => void
+  onCreateNestedClient?: (parentGroupId: string, hostId?: ExecutionHostId) => void
+  onMoveInto?: (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => void
+  isFocused?: boolean
 }): React.JSX.Element {
+  const groupsById = useMemo(
+    () => new Map(projectGroups.map((group) => [group.id, group])),
+    [projectGroups]
+  )
+  const currentGroup = groupsById.get(groupId)
+  const currentHostId = currentGroup ? getProjectGroupHostId(currentGroup) : null
+  const reparentTargets = useMemo(() => {
+    const sameHostGroups = currentHostId
+      ? projectGroups.filter((group) => getProjectGroupHostId(group) === currentHostId)
+      : projectGroups
+    return flattenProjectGroupsForMenu(listProjectGroupReparentTargets(sameHostGroups, groupId))
+  }, [currentHostId, groupId, projectGroups])
+  const canMoveToTopLevel = Boolean(currentGroup?.parentGroupId)
+
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -68,6 +104,59 @@ export function ProjectGroupHeaderMenu({
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
+        {isFocused ? (
+          <DropdownMenuItem onSelect={() => onClearFocus?.()}>
+            {translate('auto.components.sidebar.WorktreeList.showAllClients', 'Show all clients')}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => onFocus?.(groupId)}>
+            {translate('auto.components.sidebar.WorktreeList.focusClient', 'Show only this client')}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem onSelect={() => onCreateNestedClient?.(groupId, hostId)}>
+          <FolderPlus className="size-3.5" strokeWidth={2.25} />
+          {translate('auto.components.sidebar.WorktreeList.newClientInside', 'New client inside…')}
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <FolderInput className="size-3.5" strokeWidth={2.25} />
+            {translate(
+              'auto.components.sidebar.WorktreeList.moveClientInto',
+              'Move into another client'
+            )}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {canMoveToTopLevel ? (
+              <DropdownMenuItem onSelect={() => onMoveInto?.(groupId, null, hostId)}>
+                {translate(
+                  'auto.components.sidebar.WorktreeList.moveClientToTopLevel',
+                  'Top level'
+                )}
+              </DropdownMenuItem>
+            ) : null}
+            {canMoveToTopLevel && reparentTargets.length > 0 ? <DropdownMenuSeparator /> : null}
+            {reparentTargets.length > 0 ? (
+              reparentTargets.map((group) => (
+                <DropdownMenuItem
+                  key={group.id}
+                  disabled={currentGroup?.parentGroupId === group.id}
+                  onSelect={() => onMoveInto?.(groupId, group.id, hostId)}
+                >
+                  <span className="max-w-48 truncate">
+                    {formatProjectGroupMenuLabel(group, groupsById)}
+                  </span>
+                </DropdownMenuItem>
+              ))
+            ) : (
+              <DropdownMenuItem disabled>
+                {translate(
+                  'auto.components.sidebar.WorktreeList.moveClientIntoEmpty',
+                  'Create another client first'
+                )}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>

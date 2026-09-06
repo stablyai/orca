@@ -11,6 +11,7 @@ export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
   // hostId is the group row's owner host, so the mutation is not routed to whichever host has focus.
   | { type: 'rename'; groupId: string; currentName: string; hostId?: ExecutionHostId }
+  | { type: 'create-nested'; parentGroupId: string; hostId?: ExecutionHostId }
 
 export type ProjectGroupDeleteDialogState = {
   groupId: string
@@ -81,6 +82,20 @@ export function useProjectGroupDialogs(args: {
     setNameDialog({ type: 'create-from-repo', repo })
   }, [])
 
+  const handleCreateNestedClient = useCallback(
+    (parentGroupId: string, hostId?: ExecutionHostId) => {
+      setNameDialog({ type: 'create-nested', parentGroupId, hostId })
+    },
+    []
+  )
+
+  const handleMoveClientInto = useCallback(
+    (groupId: string, parentGroupId: string | null, hostId?: ExecutionHostId) => {
+      void updateProjectGroup(groupId, { parentGroupId }, { hostId })
+    },
+    [updateProjectGroup]
+  )
+
   const handleMoveProjectToGroup = useCallback(
     (repo: Repo, groupId: string) => {
       if (repo.projectGroupId === groupId) {
@@ -114,6 +129,27 @@ export function useProjectGroupDialogs(args: {
         const group = await createProjectGroup(name)
         if (group) {
           await moveProjectToGroup(nameDialog.repo.id, group.id)
+        }
+        return
+      }
+      if (nameDialog.type === 'create-nested') {
+        const group = await createProjectGroup(name, {
+          parentGroupId: nameDialog.parentGroupId,
+          hostId: nameDialog.hostId
+        })
+        if (!group) {
+          toast.error(
+            translate(
+              'auto.components.sidebar.WorktreeList.nestedClientCreateFailed',
+              'Failed to create client'
+            ),
+            {
+              description: translate(
+                'auto.components.sidebar.WorktreeList.nestedClientCreateFailedDesc',
+                'Orca could not create the nested client. Try again after reconnecting if this is a remote host.'
+              )
+            }
+          )
         }
         return
       }
@@ -196,6 +232,8 @@ export function useProjectGroupDialogs(args: {
     deleteProjectNames,
     removeContainedProjects,
     handleCreateGroupFromRepo,
+    handleCreateNestedClient,
+    handleMoveClientInto,
     handleMoveProjectToGroup,
     handleRemoveProjectFromGroup,
     handleRenameProjectGroup,

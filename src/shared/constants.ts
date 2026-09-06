@@ -270,6 +270,7 @@ export function getDefaultUIState(): PersistedUIState {
     alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
+    focusedProjectGroupId: null,
     agentsVisibleHostIds: null,
     agentsFilterRepoIds: [],
     agentsShowChildAgents: false,

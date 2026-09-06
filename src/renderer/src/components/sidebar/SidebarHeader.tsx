@@ -8,6 +8,8 @@ import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/componen
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { resolveFocusedProjectGroupId } from '../../../../shared/project-group-focus'
+import { EMPTY_PROJECT_GROUPS } from './worktree-list/viewport/viewport-props'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
@@ -22,6 +24,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
   useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const groupBy = useAppStore((s) => s.groupBy)
+  const projectGroups = useAppStore((s) => s.projectGroups ?? EMPTY_PROJECT_GROUPS)
+  const focusedProjectGroupId = useAppStore((s) => s.focusedProjectGroupId)
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
@@ -36,7 +40,14 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const acknowledgeIntro = React.useCallback(() => {
     void updateSettings?.({ agentsSidebarIntroShown: true })
   }, [updateSettings])
-  const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  const focusedGroupId = resolveFocusedProjectGroupId(projectGroups, focusedProjectGroupId)
+  const focusedGroupName = projectGroups.find((group) => group.id === focusedGroupId)?.name
+  const sidebarTitle =
+    focusedGroupName && groupBy === 'repo'
+      ? focusedGroupName
+      : groupBy === 'repo'
+        ? 'Projects'
+        : 'Workspaces'
   const activityLabel = translate(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
