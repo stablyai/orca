@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const SHA512 = createHash('sha512').update('appimage-content').digest('base64')
+const SERVE_UPDATE_VERDICT_POLL_MS = 500
 
 const {
   appMock,
@@ -142,10 +143,10 @@ vi.mock('./serve-update-artifact-capture', () => ({
 vi.mock('./cli/serve-update-helper-installer', () => ({
   SERVE_UPDATE_HELPER_INSTALL_PATH: '/usr/lib/orca/serve-update-helper.sh'
 }))
-vi.mock('./cli/linux-package-install-command', () => ({
+vi.mock('./linux-package-install-command', () => ({
   resolveTrustedExecutable: vi.fn(() => '/usr/bin/sudo')
 }))
-vi.mock('../../shared/child-process/run-process', () => ({
+vi.mock('../shared/child-process/run-process', () => ({
   runProcess: runProcessMock
 }))
 
@@ -174,6 +175,9 @@ describe('headless serve update install handoff', () => {
     readServeUpdateResultForMock.mockReturnValue(null)
     captureServeUpdateAppImageMock.mockReset()
     captureServeUpdateAppImageMock.mockResolvedValue({ ok: true, artifact: null })
+    runProcessMock
+      .mockReset()
+      .mockResolvedValue({ code: 0, stdout: '', stderr: '', timedOut: false })
     resetHandlers()
   })
 
@@ -735,12 +739,76 @@ describe('headless serve update install handoff', () => {
         'updater:status',
         expect.objectContaining({
           state: 'error',
+          message: expect.stringContaining('The server update did not complete')
+        })
+      )
+      expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
+        'headless_serve_update_not_accepted',
+        { version: '1.0.61' },
+        expect.objectContaining({ level: 'warn' })
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'linux')(
+    'stays alive with the real reason when the helper cannot be spawned',
+    async () => {
+      const send = vi.fn()
+      captureServeUpdateAppImageMock.mockResolvedValue({
+        ok: true,
+        artifact: {
+          artifactPath: '/downloads/orca-1.0.61.AppImage',
+          sha512: SHA512,
+          targetVersion: '1.0.61'
+        }
+      })
+      readServeUpdateResultForMock.mockReturnValue(null)
+      runProcessMock.mockRejectedValue(new Error('sudo_not_found'))
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+        return Promise.resolve(null)
+      })
+
+      const {
+        checkForUpdatesFromMenu,
+        downloadUpdate,
+        quitAndInstall,
+        setServeUpdateRuntimeId,
+        setupAutoUpdater
+      } = await loadUpdaterModule()
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve'
+      })
+      setServeUpdateRuntimeId('rt-42')
+
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
+      autoUpdaterMock.emit('update-downloaded', {
+        version: '1.0.61',
+        downloadedFile: '/downloads/orca-1.0.61.AppImage',
+        files: [{ url: 'orca-1.0.61.AppImage', sha512: SHA512 }]
+      })
+
+      quitAndInstall()
+      // One poll interval is enough for the spawn rejection to abort the verdict poll.
+      await vi.advanceTimersByTimeAsync(SERVE_UPDATE_VERDICT_POLL_MS + 100)
+
+      expect(appMock.quit).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+      expect(clearUpdateRequestMock).toHaveBeenCalled()
+      expect(send).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({
+          state: 'error',
           message: expect.stringContaining('Could not launch the server update helper')
         })
       )
       expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
         'headless_serve_update_not_accepted',
-        { version: '1.0.61', reason: expect.any(String) },
+        { version: '1.0.61', reason: 'sudo_not_found' },
         expect.objectContaining({ level: 'warn' })
       )
     }
