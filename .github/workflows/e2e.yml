@@ -228,6 +228,7 @@ jobs:
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
             . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
             . != "tests/e2e/local-ssh-browser-routing.spec.ts" and
+            . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
             . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
             . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
             . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
@@ -354,3 +355,21 @@ jobs:
           path: e2e-traces/
           retention-days: 7
           if-no-files-found: ignore
+
+  ssh-browser-network-route:
+    name: ssh browser network route
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Run Docker SSH browser network route journeys
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_RUN_DOCKER_SSH_BROWSER_E2E: '1'
+        run: node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts
