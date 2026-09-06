@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getVisibleWorkspaceHostIdSet } from '../sidebar/visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   resolveRepoFilterHostId,
@@ -115,6 +116,45 @@ export function reconcilePaletteFilter(
     projectKeys.length === filter.projectKeys.length
   ) {
     return filter
+  }
+  return { hostIds, projectKeys }
+}
+
+export type SidebarScopeForPaletteFilter = Parameters<typeof getVisibleWorkspaceHostIdSet>[0] & {
+  filterRepoIds: readonly string[]
+}
+
+/**
+ * Seeds the palette's host/project selection from the sidebar's "Show" scope so
+ * Cmd+J opens on the same slice the user is looking at. One-way: the user can
+ * clear or change it per open, and the sidebar never reads it back. A field
+ * that would select every option is left empty — that is not a filter, just chips.
+ */
+export function buildPaletteFilterFromSidebarScope(
+  scope: SidebarScopeForPaletteFilter,
+  model: PaletteFilterModel
+): PaletteFilterState {
+  const visibleHostIds = getVisibleWorkspaceHostIdSet(scope)
+  let hostIds: readonly string[] = []
+  if (visibleHostIds) {
+    const available = model.hosts.filter((host) => visibleHostIds.has(host.id as ExecutionHostId))
+    hostIds = available.length < model.hosts.length ? available.map((host) => host.id).sort() : []
+  }
+
+  let projectKeys: readonly string[] = []
+  if (scope.filterRepoIds.length > 0) {
+    const selectedRepoIds = new Set(scope.filterRepoIds)
+    const available = model.projects.filter((project) =>
+      (model.repoIdsByProjectKey.get(project.id) ?? []).some((repoId) =>
+        selectedRepoIds.has(repoId)
+      )
+    )
+    projectKeys =
+      available.length < model.projects.length ? available.map((project) => project.id).sort() : []
+  }
+
+  if (hostIds.length === 0 && projectKeys.length === 0) {
+    return EMPTY_PALETTE_FILTER
   }
   return { hostIds, projectKeys }
 }

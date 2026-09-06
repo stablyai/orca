@@ -4,7 +4,7 @@ import {
   queueBrowserFocusRequest
 } from '@/components/browser-pane/host-guest/browser-focus'
 import { captureCmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
-import { EMPTY_PALETTE_FILTER } from '@/components/cmd-j/palette-filter'
+import { buildPaletteFilterFromSidebarScope } from '@/components/cmd-j/palette-filter'
 import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
 import {
   CREATE_WORKTREE_ITEM_ID,
@@ -12,6 +12,7 @@ import {
 } from '@/lib/worktree-palette-create-action'
 import { useAppStore } from '@/store'
 import { CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID } from './worktree-jump-palette-model'
+import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import type { WorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
@@ -23,6 +24,7 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 
 type WorktreeJumpPaletteSelectionLifecycleInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteLocalState &
+  WorktreeJumpPaletteFilter &
   WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteProjectTargets &
   WorktreeJumpPaletteQuickActions &
@@ -57,6 +59,10 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   setQuery,
   setSelectedItemId,
   setRawFilter,
+  filterModel,
+  workspaceHostScope,
+  visibleWorkspaceHostIds,
+  filterRepoIds,
   selectionMovedByUserRef,
   taskSourceUrl,
   listRef,
@@ -108,7 +114,13 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       setQuery('')
       setSelectedItemId('')
       selectionMovedByUserRef.current = false
-      setRawFilter(EMPTY_PALETTE_FILTER)
+      // Each open starts from the sidebar's current Show scope, not the last palette selection.
+      setRawFilter(
+        buildPaletteFilterFromSidebarScope(
+          { workspaceHostScope, visibleWorkspaceHostIds, filterRepoIds },
+          filterModel
+        )
+      )
       listRef.current?.scrollTo(0, 0)
     }
     if (!visible && wasVisibleRef.current) {

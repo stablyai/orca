@@ -97,6 +97,9 @@ export function useWorktreeJumpPaletteStoreState({
     (state) => state.hideWorkspacesFromOtherDevices
   )
   const showSleepingWorkspaces = useAppStore((state) => state.showSleepingWorkspaces)
+  const workspaceHostScope = useAppStore((state) => state.workspaceHostScope)
+  const visibleWorkspaceHostIds = useAppStore((state) => state.visibleWorkspaceHostIds)
+  const filterRepoIds = useAppStore((state) => state.filterRepoIds)
   const alwaysShowDefaultBranchWorkspace = useAppStore(
     (state) => state.alwaysShowDefaultBranchWorkspace
   )
@@ -174,6 +177,9 @@ export function useWorktreeJumpPaletteStoreState({
     hideDetachedHeadWorkspaces,
     hideWorkspacesFromOtherDevices,
     showSleepingWorkspaces,
+    workspaceHostScope,
+    visibleWorkspaceHostIds,
+    filterRepoIds,
     alwaysShowDefaultBranchWorkspace,
     lastVisitedAtByWorktreeId,
     workspacePortScan,

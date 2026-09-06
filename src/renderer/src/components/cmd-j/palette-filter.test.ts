@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
   addPaletteFilterValues,
+  buildPaletteFilterFromSidebarScope,
   buildPaletteFilterPredicate,
   clearPaletteFilterField,
   EMPTY_PALETTE_FILTER,
@@ -210,5 +211,67 @@ describe('buildPaletteFilterPredicate', () => {
       model
     )
     expect(withProject?.matchesGroupHostId('ssh:builder')).toBe(false)
+  })
+})
+
+describe('buildPaletteFilterFromSidebarScope', () => {
+  const allHosts = { workspaceHostScope: 'all', visibleWorkspaceHostIds: null } as const
+
+  it('opens unfiltered when the sidebar shows every host and project', () => {
+    expect(buildPaletteFilterFromSidebarScope({ ...allHosts, filterRepoIds: [] }, model)).toBe(
+      EMPTY_PALETTE_FILTER
+    )
+  })
+
+  it('seeds the host chips from the sidebar host scope', () => {
+    expect(
+      buildPaletteFilterFromSidebarScope(
+        { workspaceHostScope: 'ssh:builder', visibleWorkspaceHostIds: null, filterRepoIds: [] },
+        model
+      )
+    ).toEqual(filterOf(['ssh:builder'], []))
+    expect(
+      buildPaletteFilterFromSidebarScope(
+        {
+          workspaceHostScope: 'all',
+          visibleWorkspaceHostIds: ['runtime:env-1', 'local'],
+          filterRepoIds: []
+        },
+        model
+      )
+    ).toEqual(filterOf(['local', 'runtime:env-1'], []))
+  })
+
+  it('maps sidebar repo picks onto the project rows that contain them', () => {
+    expect(
+      buildPaletteFilterFromSidebarScope({ ...allHosts, filterRepoIds: ['r2'] }, model)
+    ).toEqual(filterOf([], ['project:p1']))
+  })
+
+  it('treats a scope that covers every option as no filter', () => {
+    // Every host explicitly listed is the same as "all hosts": no chips to clear.
+    expect(
+      buildPaletteFilterFromSidebarScope(
+        {
+          workspaceHostScope: 'all',
+          visibleWorkspaceHostIds: ['local', 'ssh:builder', 'runtime:env-1'],
+          filterRepoIds: ['r1', 'r3']
+        },
+        model
+      )
+    ).toBe(EMPTY_PALETTE_FILTER)
+  })
+
+  it('falls back to a global search when the scope matches nothing the palette can show', () => {
+    expect(
+      buildPaletteFilterFromSidebarScope(
+        {
+          workspaceHostScope: 'ssh:gone',
+          visibleWorkspaceHostIds: null,
+          filterRepoIds: ['r-gone']
+        },
+        model
+      )
+    ).toBe(EMPTY_PALETTE_FILTER)
   })
 })
