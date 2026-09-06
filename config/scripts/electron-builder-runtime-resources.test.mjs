@@ -71,6 +71,24 @@ describe('packaged runtime resources', () => {
     }
   })
 
+  it('still fails when a required packaged main entry is missing entirely', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-missing-entry-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      const asar = {
+        listPackage: () => ['/out/main/index.js'],
+        extractFile: () => Buffer.from('', 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(
+        /managed-agent-hook-controls\.js was not found/
+      )
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
   it('verifies bare imports that rolldown hoisted into a shared main chunk', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-chunk-imports-'))
     try {
