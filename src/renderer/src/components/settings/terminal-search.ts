@@ -1,6 +1,7 @@
 import type { SettingsSearchEntry } from './settings-search'
 import {
   getTerminalAdvancedSearchEntries,
+  getTerminalGhosttyConfigFileImportSearchEntries,
   getTerminalGhosttyImportSearchEntries,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries
@@ -54,6 +55,7 @@ export {
   getTerminalAdvancedSearchEntries,
   getTerminalMacOptionSearchEntries,
   getTerminalMacYenSearchEntries,
+  getTerminalGhosttyConfigFileImportSearchEntries,
   getTerminalGhosttyImportSearchEntries
 } from './terminal-advanced-platform-search'
 export {
@@ -81,9 +83,12 @@ const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
 
 // Why: compose rather than filter — entry titles are localized, so matching on
 // an English title would leak the Warp entry back in under non-English locales.
+// The Ghostty config picker rides the same flag: it is a native dialog, so it is
+// only listed where desktop-only controls are shown.
 const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...getTerminalAppearanceSearchEntriesWithoutWarp(),
+    ...getTerminalGhosttyConfigFileImportSearchEntries(),
     ...getTerminalWarpImportSearchEntries(),
     ...getTerminalYamlImportSearchEntries()
   ]
