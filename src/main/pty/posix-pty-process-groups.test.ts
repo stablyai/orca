@@ -99,6 +99,96 @@ describe('POSIX PTY process-group termination', () => {
     expect(fallback).toHaveBeenCalledOnce()
     expect(readProcessTable).not.toHaveBeenCalled()
   })
+
+  // Measured 2026-09-02 on a loaded Mac (17 agent sessions, a test gate running): the TTY-scoped
+  // `ps` timed out, so the only kill that reached the pane was the leader-only fallback. The
+  // `login` leader died, its `zsh -l` and the agent underneath survived with no controlling TTY,
+  // and each survivor kept an orchestration long-poll open until the runtime's 16-slot cap was
+  // full. The descendant tree needs no TTY to prove ownership: everything under the leader is the
+  // pane's, so it is the strategy that runs when the TTY read cannot.
+  describe('descendant-tree strategy', () => {
+    const TREE = `
+      100    1  100
+      101  100  101
+      102  101  102
+      103  102  103
+      104  101  101
+      200    1  200
+      999    1  999
+    `
+
+    it('kills every group under the leader when the TTY read fails, leader group last', () => {
+      const fallback = vi.fn()
+      const signalProcessGroup = vi.fn()
+
+      forceKillPosixPtyProcessGroups(100, fallback, {
+        platform: 'darwin',
+        currentPid: 999,
+        readProcessTable: () => {
+          throw new Error('ps timed out')
+        },
+        readDescendantTable: () => TREE,
+        signalProcessGroup
+      })
+
+      expect(signalProcessGroup.mock.calls.map(([pgid]) => pgid)).toEqual([101, 102, 103, 100])
+      expect(fallback).not.toHaveBeenCalled()
+    })
+
+    it('never group-signals a tree that contains Orca itself', () => {
+      const fallback = vi.fn()
+      const signalProcessGroup = vi.fn()
+
+      forceKillPosixPtyProcessGroups(100, fallback, {
+        platform: 'darwin',
+        currentPid: 103,
+        readProcessTable: () => {
+          throw new Error('ps timed out')
+        },
+        readDescendantTable: () => TREE,
+        signalProcessGroup
+      })
+
+      expect(signalProcessGroup).not.toHaveBeenCalled()
+      expect(fallback).toHaveBeenCalledOnce()
+    })
+
+    it('falls back only when neither table proves what the leader owns', () => {
+      const fallback = vi.fn()
+      const signalProcessGroup = vi.fn()
+
+      forceKillPosixPtyProcessGroups(100, fallback, {
+        platform: 'darwin',
+        currentPid: 999,
+        readProcessTable: () => {
+          throw new Error('ps timed out')
+        },
+        readDescendantTable: () => `
+          200    1  200
+        `,
+        signalProcessGroup
+      })
+
+      expect(signalProcessGroup).not.toHaveBeenCalled()
+      expect(fallback).toHaveBeenCalledOnce()
+    })
+
+    it('prefers the TTY table when it answers, so the proven path is unchanged', () => {
+      const readDescendantTable = vi.fn(() => TREE)
+      const signalProcessGroup = vi.fn()
+
+      forceKillPosixPtyProcessGroups(100, vi.fn(), {
+        platform: 'darwin',
+        currentPid: 999,
+        readProcessTable: () => TABLE,
+        readDescendantTable,
+        signalProcessGroup
+      })
+
+      expect(readDescendantTable).not.toHaveBeenCalled()
+      expect(signalProcessGroup.mock.calls.map(([pgid]) => pgid)).toEqual([101, 103, 100])
+    })
+  })
 })
 
 describe('POSIX PTY group-sweep breadcrumbs', () => {

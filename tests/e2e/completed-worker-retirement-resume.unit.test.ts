@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session-resume'
@@ -251,6 +252,8 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     return method.handler(parsed, ctx)
   }
 
+  let workerLaunchTokenHash: string | null = null
+  vi.spyOn(runtime, 'createPreAllocatedTerminalHandle').mockReturnValue(TERMINAL_HANDLE)
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === 'terminal-coordinator' ? coordinatorPaneKey : ORIGINAL_PANE_KEY
   )
@@ -258,21 +261,27 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     handle === TERMINAL_HANDLE ? 'runtime:test:worker:1' : null
   )
   vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
-    handle === TERMINAL_HANDLE
+    handle === TERMINAL_HANDLE && workerLaunchTokenHash
       ? ({
           terminalHandle: TERMINAL_HANDLE,
           paneKey: ORIGINAL_PANE_KEY,
           processIncarnation: 'runtime:test:worker:1',
+          launchTokenHash: workerLaunchTokenHash,
           hostScope: { kind: 'local', hostId: 'local' }
         } as never)
       : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({ id: WORKTREE_ID } as never)
-  vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-    handle: TERMINAL_HANDLE,
-    worktreeId: WORKTREE_ID,
-    title: 'PR 4626 unified correction r3'
+  vi.spyOn(runtime, 'createTerminal').mockImplementation(async (_selector, opts) => {
+    workerLaunchTokenHash = opts?.launchToken
+      ? createHash('sha256').update(opts.launchToken).digest('hex')
+      : null
+    return {
+      handle: TERMINAL_HANDLE,
+      worktreeId: WORKTREE_ID,
+      title: 'PR 4626 unified correction r3'
+    }
   })
   vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
     handle: TERMINAL_HANDLE,
@@ -282,6 +291,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     exitCode: null
   })
   vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+  vi.spyOn(runtime, 'getWorktreeOrchestrationCliCommand').mockResolvedValue('orca')
   vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     accepted: true,

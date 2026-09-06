@@ -1,9 +1,11 @@
+import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
 import { assertOrchestrationWorktreeCreationSupported } from './orchestration-folder-worktree-placement'
+import { startArgvWorkerDispatch } from './orchestration-worker-argv-start'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
   createExistingWorktreeWorkerTerminal,
@@ -182,6 +184,31 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             worktreeId: resolvedWorktree!.id,
             effects
           })
+          // Why: agents that embed the prompt in their launch argv start the
+          // first turn WITH the process — no paste, no Enter, no submission
+          // verification, no agent_prompt_stalled revocation of a healthy
+          // worker. The whole path lives in orchestration-worker-argv-start.
+          if (agent && TUI_AGENT_CONFIG[agent].promptInjectionMode === 'argv') {
+            return await startArgvWorkerDispatch({
+              runtime,
+              db,
+              runId: run.id,
+              task,
+              dispatchId: started.dispatch.id,
+              coordinatorHandle: params.from,
+              devMode: params.devMode,
+              timeoutMs: params.timeoutMs ?? 60_000,
+              agent,
+              launchPreferences: launch.preferences,
+              launchReceipt: launch.receipt,
+              worktreeId: resolvedWorktree!.id,
+              effects,
+              setupReceipt,
+              onStage: (stage) => {
+                failedStage = stage
+              }
+            })
+          }
           const terminal = await createExistingWorktreeWorkerTerminal({
             runtime,
             worktreeId: resolvedWorktree!.id,

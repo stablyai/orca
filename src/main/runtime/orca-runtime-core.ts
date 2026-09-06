@@ -78,6 +78,11 @@ export const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
 export const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
 export const EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS = 2_000
+// Why: a stop that misses the first deadline is usually late, not stuck — `ps` under load, a
+// shell still tearing down its jobs — and a second bounded attempt turns it into a confirmed
+// kill instead of an unverifiable one. Measured 2026-09-02: the fire-and-forget follow-up left
+// agent processes alive for hours behind a `ptyKilled: false` receipt.
+export const EXPLICIT_TERMINAL_CLOSE_RETRY_TIMEOUT_MS = 3_000
 
 export const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 

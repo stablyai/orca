@@ -107,6 +107,17 @@ export class OrchestrationMutationExecutor {
     try {
       const result = await active
       const receipted = attachMutationReceipt(result, requestId, resumedPendingMutation)
+      if (request.method === 'orchestration.workerRelease' && isNonFinalWorkerRelease(result)) {
+        // Why: `release_pending` and `release_unknown` are the runtime saying the release did
+        // NOT happen yet, and the receipt's own recovery prescribes repeating worker-release
+        // with the same --retry-request. A completed receipt would serve every repeat from the
+        // ledger without re-entering the release — measured 2026-09-02: a resource stuck in
+        // `release_state = 'unknown'` for a day, with a live agent process behind it, and no
+        // request id the coordinator was allowed to mint. So the receipt is dropped and the
+        // same id re-enters; only a final state completes.
+        db.discardPendingMutationReceipt(callerFingerprint, requestId)
+        return receipted
+      }
       db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
       return receipted
     } catch (error) {
@@ -187,6 +198,11 @@ function attachMutationReceipt(result: unknown, requestId: string, replayed: boo
     return { result, mutation: { requestId, replayed } }
   }
   return { ...(result as Record<string, unknown>), mutation: { requestId, replayed } }
+}
+
+function isNonFinalWorkerRelease(result: unknown): boolean {
+  const state = (result as { state?: unknown } | null)?.state
+  return state === 'release_pending' || state === 'release_unknown'
 }
 
 function getPendingWorkerStartRecovery(

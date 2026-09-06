@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
@@ -25,11 +26,17 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('composed workers', () => {
-    function mockCurrentWorkerStart(options?: { ready?: boolean }): void {
+    function mockCurrentWorkerStart(options?: { ready?: boolean; terminalWarning?: string }): void {
+      // Why: the argv worker-start path pre-allocates the handle and mints the
+      // launch token BEFORE createTerminal. Real createTerminal adopts both;
+      // a mock that ignored them would trip the handle-substitution guard and
+      // the launch-token bind guard, testing a runtime that cannot exist.
+      let workerHandle = 'term_worker'
+      let workerLaunchTokenHash: string | null = null
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_coord'
           ? coordinatorPaneKey
-          : handle === 'term_worker'
+          : handle === workerHandle
             ? 'tab_worker:leaf_worker'
             : null
       )
@@ -43,22 +50,49 @@ describe('orchestration RPC methods', () => {
       vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
         id: 'repo::worktree'
       } as never)
-      vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-        handle: 'term_worker',
-        worktreeId: 'repo::worktree',
-        title: 'worker'
+      vi.spyOn(runtime, 'createTerminal').mockImplementation(async (_selector, opts) => {
+        workerHandle = opts?.preAllocatedHandle ?? 'term_worker'
+        workerLaunchTokenHash = opts?.launchToken
+          ? createHash('sha256').update(opts.launchToken).digest('hex')
+          : null
+        return {
+          handle: workerHandle,
+          worktreeId: 'repo::worktree',
+          title: 'worker',
+          ...(options?.terminalWarning
+            ? { surface: 'background' as const, warning: options.terminalWarning }
+            : {})
+        } as never
       })
-      vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
-        handle: 'term_worker',
-        condition: 'tui-idle',
-        satisfied: options?.ready !== false,
-        status: 'running',
-        exitCode: null
-      })
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+        handle === workerHandle && workerLaunchTokenHash
+          ? ({
+              runtimeId: runtime.getRuntimeId(),
+              terminalHandle: workerHandle,
+              ptyId: 'pty_worker',
+              worktreeId: 'repo::worktree',
+              paneKey: 'tab_worker:leaf_worker',
+              processIncarnation: 'runtime_test:term_worker:1',
+              launchTokenHash: workerLaunchTokenHash,
+              hostScope: null
+            } as never)
+          : null
+      )
+      vi.spyOn(runtime, 'waitForTerminal').mockImplementation(
+        async (handle) =>
+          ({
+            handle,
+            condition: 'tui-idle',
+            satisfied: options?.ready !== false,
+            status: 'running',
+            exitCode: null
+          }) as never
+      )
       vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
-        handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
+        handle === workerHandle ? 'runtime_test:term_worker:1' : null
       )
       vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+      vi.spyOn(runtime, 'getWorktreeOrchestrationCliCommand').mockResolvedValue('orca')
       vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_worker',
         accepted: true,
@@ -154,17 +188,36 @@ describe('orchestration RPC methods', () => {
       // the tab without scrolling the sidebar to the worker's workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         startupAgent: 'codex',
+        preAllocatedHandle: expect.stringMatching(/^term_/),
+        launchToken: expect.any(String),
+        // Why: the preamble travels in the launch argv — the capability the
+        // worker presents later must be the one baked in at spawn.
+        agentPrompt: expect.stringContaining('--dispatch-capability dcap_'),
         title: `worker-${task.id}`,
         surfaceOwner: false
       })
-      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
-        'term_worker',
-        expect.stringContaining('--dispatch-capability dcap_')
-      )
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
+    it('embeds the WSL CLI name before the worker pane exists', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.getWorktreeOrchestrationCliCommand).mockResolvedValueOnce('orca-ide')
+      const task = db.createTask({ spec: 'report from WSL' })
+
+      await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })
+
+      const createOptions = vi.mocked(runtime.createTerminal).mock.calls.at(-1)?.[1]
+      expect(createOptions?.agentPrompt).toContain('orca-ide orchestration send')
+      expect(runtime.getWorktreeOrchestrationCliCommand).toHaveBeenCalledWith('repo::worktree')
+    })
     it('applies and reports opaque per-invocation model preferences', async () => {
       setup()
+
       mockCurrentWorkerStart()
       const task = db.createTask({ spec: 'launch a custom model' })
 
@@ -244,16 +297,6 @@ describe('orchestration RPC methods', () => {
     it('commits the launched worker token with its durable authority', async () => {
       setup()
       mockCurrentWorkerStart()
-      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
-        runtimeId: runtime.getRuntimeId(),
-        terminalHandle: 'term_worker',
-        ptyId: 'pty_worker',
-        worktreeId: 'repo::worktree',
-        paneKey: 'tab_worker:leaf_worker',
-        processIncarnation: 'runtime_test:term_worker:1',
-        launchTokenHash: 'worker-launch-token-hash',
-        hostScope: { kind: 'local', hostId: 'local' }
-      })
       const task = db.createTask({ spec: 'persist worker identity' })
 
       const result = (await call('orchestration.workerStart', {
@@ -262,20 +305,20 @@ describe('orchestration RPC methods', () => {
         agent: 'codex'
       })) as { dispatchId: string }
 
+      // Why: the token handed to the spawn is the ONLY identity proof the
+      // binding pane can present; the context must carry exactly its hash.
+      const createOptions = vi.mocked(runtime.createTerminal).mock.calls.at(-1)?.[1]
+      const launchToken = createOptions?.launchToken
+      expect(launchToken).toBeTruthy()
       expect(db.getDispatchContextById(result.dispatchId)?.launch_token_hash).toBe(
-        'worker-launch-token-hash'
+        createHash('sha256').update(launchToken!).digest('hex')
       )
     })
 
     it('surfaces a worker terminal reveal failure without discarding the live worker', async () => {
       setup()
-      mockCurrentWorkerStart()
-      vi.mocked(runtime.createTerminal).mockResolvedValue({
-        handle: 'term_worker',
-        worktreeId: 'repo::worktree',
-        title: 'worker',
-        surface: 'background',
-        warning: 'Terminal term_worker is running but could not be revealed.'
+      mockCurrentWorkerStart({
+        terminalWarning: 'Terminal term_worker is running but could not be revealed.'
       })
       const task = db.createTask({ spec: 'keep working if reveal fails' })
 
@@ -300,7 +343,9 @@ describe('orchestration RPC methods', () => {
           warning: 'Terminal term_worker is running but could not be revealed.'
         })
       )
-      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalled()
+      expect(result.effects).toContainEqual(
+        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
+      )
     })
 
     it('starts in an exact existing worktree from a floating coordinator', async () => {
@@ -410,6 +455,8 @@ describe('orchestration RPC methods', () => {
       expect(createWorktree).not.toHaveBeenCalled()
     })
 
+    // Why: agents without launch-embedded prompts still take the paste path,
+    // where tui-idle readiness gates the brief; its timeout stays a failure.
     it('returns a failed receipt and preserves a created terminal as residual', async () => {
       setup()
       mockCurrentWorkerStart({ ready: false })
@@ -418,7 +465,7 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.workerStart', {
         task: task.id,
         from: 'term_coord',
-        agent: 'codex'
+        agent: 'goose'
       })) as { state: string; failedStage: string; residualResources: { id: string }[] }
 
       expect(result).toMatchObject({ state: 'failed', failedStage: 'agent_readiness' })
@@ -447,6 +494,46 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     })
 
+    // Why: createTerminal can substitute a canonical surface handle after spawn.
+    // The identity mismatch still fails, but the spawned pane must remain on
+    // the receipt so cleanup/abandon can see it.
+    it('reports a substituted spawn handle as residual on identity mismatch', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.createTerminal).mockImplementation(
+        async () =>
+          ({
+            handle: 'term_substituted',
+            worktreeId: 'repo::worktree',
+            title: 'worker'
+          }) as never
+      )
+      const task = db.createTask({ spec: 'substituted handle' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as {
+        state: string
+        failedStage: string
+        residualResources: { kind: string; action?: string; id: string }[]
+      }
+
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'authority_bind'
+      })
+      expect(result.residualResources).toEqual([
+        expect.objectContaining({
+          kind: 'terminal',
+          action: 'created',
+          id: 'term_substituted'
+        })
+      ])
+    })
+
+    // Why: prompt paste (and its rejection) only exists on the non-argv path.
     it('preserves the exact attached terminal when task input is rejected', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -458,7 +545,7 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.workerStart', {
         task: task.id,
         from: 'term_coord',
-        agent: 'codex'
+        agent: 'goose'
       })) as {
         state: string
         failedStage: string
@@ -472,7 +559,7 @@ describe('orchestration RPC methods', () => {
     })
 
     it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
-      'returns a truthful readiness failure for %s',
+      'reports a blocked startup screen without failing the ready dispatch for %s',
       async (blockedReason) => {
         setup()
         mockCurrentWorkerStart()
@@ -484,19 +571,31 @@ describe('orchestration RPC methods', () => {
           exitCode: null,
           blockedReason
         })
+        const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+        const insertMessage = vi.spyOn(db, 'insertMessage')
         const task = db.createTask({ spec: 'blocked startup prompt' })
 
         const result = (await call('orchestration.workerStart', {
           task: task.id,
           from: 'term_coord',
           agent: 'codex'
-        })) as { state: string; failedStage: string; lastError: string }
+        })) as { state: string; dispatchId: string }
 
-        expect(result).toMatchObject({
-          state: 'failed',
-          failedStage: 'agent_readiness',
-          lastError: `Agent startup blocked: ${blockedReason}`
+        // Why: the brief is already delivered via argv and the capability is
+        // bound — failing the start would revoke a capability the worker
+        // presents after a human clears the screen. Ready stands; the blocked
+        // screen surfaces as durable high-priority evidence to the Run.
+        expect(result.state).toBe('ready')
+        await vi.waitFor(() => {
+          expect(insertMessage).toHaveBeenCalledWith(
+            expect.objectContaining({
+              priority: 'high',
+              subject: expect.stringContaining(`startup blocked: ${blockedReason}`)
+            })
+          )
         })
+        expect(notify).toHaveBeenCalled()
+        expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
         expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
       }
     )

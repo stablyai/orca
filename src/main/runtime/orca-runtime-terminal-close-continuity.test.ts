@@ -366,6 +366,35 @@ describe('terminal close and handle incarnation continuity', () => {
     expect(harness.kill).toHaveBeenCalledWith(PTY_ID)
   })
 
+  it('retries an unconfirmed stop once, bounded, before issuing the unverified follow-up', async () => {
+    // Measured 2026-09-02 on a loaded Mac: the first exact stop missed its 2 s deadline while
+    // `ps` was slow, the follow-up was fire-and-forget, and the receipt read `ptyKilled: false`
+    // for a pane whose agent then outlived the tab by hours. A second bounded attempt is
+    // cheap, and it turns a late stop into a confirmed one instead of an unverifiable one.
+    const harness = createHarness()
+    const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    let attempts = 0
+    harness.setVerifiedStopResult(false)
+    harness.setStopAndWaitAction(() => {
+      attempts += 1
+      if (attempts === 2) {
+        harness.setVerifiedStopResult(true)
+      }
+    })
+
+    const closing = harness.runtime.closeTerminal(handle)
+    await vi.waitFor(() => expect(harness.closeTerminalTab).toHaveBeenCalled())
+    harness.retirePersistedTab()
+    harness.acknowledged.resolve()
+
+    const close = await closing
+    expect(close.ptyKilled).toBe(true)
+    expect(close.ptyStopVerdict).toBeUndefined()
+    expect(harness.stopAndWait).toHaveBeenCalledTimes(2)
+    expect(harness.stopAndWait.mock.calls[1]).toEqual([PTY_ID, { deadlineMs: expect.any(Number) }])
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
   it('leaves a confirmed kill receipt free of any stop verdict', async () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals

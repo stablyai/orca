@@ -48,6 +48,7 @@ import { attachTaskStore } from './tasks/task-store'
 import { attachTaskStatusTransition } from './tasks/task-status-transition'
 import { attachFederatedWorkerStartReconcile } from './worker-dispatch/federated-worker-start-reconcile'
 import { attachWorkerDispatchAbandon } from './worker-dispatch/worker-dispatch-abandon'
+import { attachWorkerDispatchArgvAuthority } from './worker-dispatch/worker-dispatch-argv-authority'
 import { attachWorkerDispatchAuthority } from './worker-dispatch/worker-dispatch-authority'
 import { attachWorkerDispatchOutcome } from './worker-dispatch/worker-dispatch-outcome'
 import { attachWorkerDispatchStage } from './worker-dispatch/worker-dispatch-stage'
@@ -94,6 +95,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerDispatchStart(ctor)
   attachWorkerDispatchStage(ctor)
   attachWorkerDispatchAuthority(ctor)
+  attachWorkerDispatchArgvAuthority(ctor)
   attachWorkerDispatchOutcome(ctor)
   attachFederatedWorkerStartReconcile(ctor)
   attachWorkerTerminalRecovery(ctor)

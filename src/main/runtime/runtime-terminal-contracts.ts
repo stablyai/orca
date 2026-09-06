@@ -29,6 +29,12 @@ export type TerminalCreateOptions = {
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent
+  // Why: embedded for startupAgent and for a bare command that resolves to a
+  // known TUI agent. The prompt is in the launch (argv/flag per
+  // promptInjectionMode) so the first turn starts with the process — no paste,
+  // no submission verification. Agents whose plan would defer the prompt to a
+  // post-start paste are refused.
+  agentPrompt?: string
   launchPreferences?: AgentLaunchPreferences
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   viewMode?: 'terminal' | 'chat'

@@ -38,6 +38,14 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
         worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
       })
     ).toBe('orca-ide')
+    expect(
+      resolveTerminalOrchestrationCliCommand({
+        connectionId: null,
+        isWsl: null,
+        worktreeId: 'folder:workspace-1',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+      })
+    ).toBe('orca-ide')
   })
 
   it('preserves native and SSH bare-orca commands', () => {

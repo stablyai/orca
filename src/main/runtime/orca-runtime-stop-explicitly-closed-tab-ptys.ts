@@ -1,6 +1,9 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithFocusTerminal } from './orca-runtime-focus-terminal'
-import { EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS } from './orca-runtime-core'
+import {
+  EXPLICIT_TERMINAL_CLOSE_RETRY_TIMEOUT_MS,
+  EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
+} from './orca-runtime-core'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
 import type { RuntimeTerminalClose } from '../../shared/runtime-types'
 import { countTerminalLayoutLeaves } from './headless-terminal-split-layout'
@@ -31,8 +34,24 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             verdict?.status === 'unverifiable' &&
             verdict.reason === SSH_PROVIDER_UNREGISTERED_REASON
           if (!providerAlreadyRetiredPty) {
+            // Why: one more exact, verified attempt under its own deadline before the
+            // fire-and-forget follow-up. The first miss is rarely a process that will not die;
+            // it is a `ps` or a shell teardown that took longer than 2 s.
+            try {
+              stopped = await this.ptyController.stopAndWait(ptyId, {
+                deadlineMs: Date.now() + EXPLICIT_TERMINAL_CLOSE_RETRY_TIMEOUT_MS
+              })
+            } catch (error) {
+              this.markPtyLivenessUnverifiable(
+                ptyId,
+                error instanceof Error ? error.message : String(error)
+              )
+            }
+          }
+          if (!stopped && !providerAlreadyRetiredPty) {
+            const retried = this.getPtyLivenessVerdict(ptyId)
             this.ptyController.kill(ptyId)
-            if (!verdict || verdict.status === 'live') {
+            if (!retried || retried.status === 'live') {
               this.markPtyLivenessUnverifiable(
                 ptyId,
                 'a follow-up stop was issued but its outcome could not be verified'

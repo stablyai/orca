@@ -208,4 +208,18 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
         : undefined
     })
   }
+
+  // Why: argv-injected prompts are built BEFORE a terminal exists, so the CLI
+  // name must come from the target workspace rather than a pane handle. This
+  // preserves `orca-ide` for WSL worktrees and bare `orca` for SSH/native.
+  async getWorktreeOrchestrationCliCommand(worktreeId: string): Promise<'orca' | 'orca-ide'> {
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
+    return resolveTerminalOrchestrationCliCommand({
+      connectionId: workspace.connectionId,
+      isWsl: null,
+      worktreeId: workspace.id,
+      worktreePath: workspace.path,
+      projectRuntime: this.resolveProjectRuntimeForWorktree(workspace.id)
+    })
+  }
 }

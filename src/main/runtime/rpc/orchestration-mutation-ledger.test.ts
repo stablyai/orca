@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db'
@@ -247,22 +247,20 @@ describe('durable orchestration mutation ledger', () => {
     db.close()
   })
 
-  it('resumes a pending idempotent worker release after restart', async () => {
+  // A release that answers `release_pending` or `release_unknown` has NOT done the thing it was
+  // asked to do: Orca itself says so in the receipt, and its own `recovery` text prescribes
+  // repeating worker-release with the same --retry-request. Measured 2026-09-02 on a Mac: the
+  // receipt was completed anyway, so every repeat was served from the ledger (`replayed: true`)
+  // without re-entering the release, the resource sat in `release_state = 'unknown'` for the rest
+  // of the day (the reconciler's backlog excludes `unknown`), and the only way out was a fresh
+  // request id the coordinator is forbidden to mint. So a non-final release state leaves no
+  // completed receipt: the same request id re-enters the release, exactly as the recovery says.
+  type ReleaseEffect = Mock<(params: { dispatch: string }) => unknown>
+
+  function releaseHarness(effect: ReleaseEffect) {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    const params = { dispatch: 'ctx_release' }
-    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
-    const payloadHash = createHash('sha256')
-      .update(JSON.stringify({ method: 'orchestration.workerRelease', params }))
-      .digest('hex')
-    db.beginMutationReceipt({
-      callerFingerprint,
-      requestId: 'mutation_release',
-      method: 'orchestration.workerRelease',
-      payloadHash
-    })
-    const effect = vi.fn().mockReturnValue({ state: 'release_pending' })
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
@@ -273,15 +271,34 @@ describe('durable orchestration mutation ledger', () => {
         })
       ]
     })
+    const params = { dispatch: 'ctx_release' }
+    const dispatch = (rpcId: string) =>
+      dispatcher.dispatch({
+        id: rpcId,
+        authToken: 'caller-token',
+        method: 'orchestration.workerRelease',
+        params,
+        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+        orchestrationRequestId: 'mutation_release'
+      })
+    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
+    const payloadHash = createHash('sha256')
+      .update(JSON.stringify({ method: 'orchestration.workerRelease', params }))
+      .digest('hex')
+    return { db, dispatch, callerFingerprint, payloadHash }
+  }
 
-    const result = await dispatcher.dispatch({
-      id: 'rpc_release_retry',
-      authToken: 'caller-token',
+  it('resumes a pending idempotent worker release after restart, and keeps it re-enterable while non-final', async () => {
+    const effect: ReleaseEffect = vi.fn(() => ({ state: 'release_pending' }))
+    const { db, dispatch, callerFingerprint, payloadHash } = releaseHarness(effect)
+    db.beginMutationReceipt({
+      callerFingerprint,
+      requestId: 'mutation_release',
       method: 'orchestration.workerRelease',
-      params,
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'mutation_release'
+      payloadHash
     })
+
+    const result = await dispatch('rpc_release_retry')
 
     expect(result).toMatchObject({
       ok: true,
@@ -291,7 +308,42 @@ describe('durable orchestration mutation ledger', () => {
       }
     })
     expect(effect).toHaveBeenCalledTimes(1)
+    expect(db.getMutationReceipt(callerFingerprint, 'mutation_release')).toBeUndefined()
+
+    effect.mockReturnValue({ state: 'released' })
+    const again = await dispatch('rpc_release_again')
+    expect(again).toMatchObject({ ok: true, result: { state: 'released' } })
+    expect(effect).toHaveBeenCalledTimes(2)
     expect(db.getMutationReceipt(callerFingerprint, 'mutation_release')?.state).toBe('completed')
+    db.close()
+  })
+
+  it('re-enters a release that answered release_unknown instead of replaying it', async () => {
+    const effect: ReleaseEffect = vi.fn(() => ({
+      state: 'release_unknown',
+      processAction: 'closed_agent_terminal',
+      lastError: 'The agent terminal was closed but its process could not be confirmed stopped'
+    }))
+    const { db, dispatch, callerFingerprint } = releaseHarness(effect)
+
+    const first = await dispatch('rpc_release_1')
+    expect(first).toMatchObject({ ok: true, result: { state: 'release_unknown' } })
+    expect(db.getMutationReceipt(callerFingerprint, 'mutation_release')).toBeUndefined()
+
+    effect.mockReturnValue({ state: 'released', processAction: 'closed_agent_terminal' })
+    const second = await dispatch('rpc_release_2')
+    expect(second).toMatchObject({
+      ok: true,
+      result: { state: 'released', mutation: { requestId: 'mutation_release', replayed: false } }
+    })
+    expect(effect).toHaveBeenCalledTimes(2)
+
+    const third = await dispatch('rpc_release_3')
+    expect(third).toMatchObject({
+      ok: true,
+      result: { state: 'released', mutation: { requestId: 'mutation_release', replayed: true } }
+    })
+    expect(effect).toHaveBeenCalledTimes(2)
     db.close()
   })
 

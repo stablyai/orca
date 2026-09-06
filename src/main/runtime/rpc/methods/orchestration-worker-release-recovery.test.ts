@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../orchestration/db'
 import { reconcileRequestedWorkerTerminalReleases } from '../../orchestration/worker-terminal-release-reconciliation'
@@ -34,12 +35,19 @@ describe('orchestration worker release recovery', () => {
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
       handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
     )
+    // Why: the argv worker-start path pre-allocates the handle and hands the
+    // spawn a launch token; the pane's authority must echo that token's hash
+    // or the bind guard (rightly) refuses the pane. Pinning the pre-allocated
+    // handle keeps every 'term_worker'-keyed fixture in this file valid.
+    let workerLaunchTokenHash: string | null = null
+    vi.spyOn(runtime, 'createPreAllocatedTerminalHandle').mockReturnValue('term_worker')
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
       handle === 'term_worker'
         ? ({
             terminalHandle: handle,
             paneKey: workerPaneKey,
             processIncarnation: 'runtime_test:term_worker:1',
+            ...(workerLaunchTokenHash ? { launchTokenHash: workerLaunchTokenHash } : {}),
             hostScope: { kind: 'local', hostId: 'local' }
           } as never)
         : null
@@ -51,10 +59,15 @@ describe('orchestration worker release recovery', () => {
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: 'repo::worktree'
     } as never)
-    vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      title: 'worker'
+    vi.spyOn(runtime, 'createTerminal').mockImplementation(async (_selector, opts) => {
+      workerLaunchTokenHash = opts?.launchToken
+        ? createHash('sha256').update(opts.launchToken).digest('hex')
+        : null
+      return {
+        handle: opts?.preAllocatedHandle ?? 'term_worker',
+        worktreeId: 'repo::worktree',
+        title: 'worker'
+      } as never
     })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle: 'term_worker',
@@ -64,6 +77,7 @@ describe('orchestration worker release recovery', () => {
       exitCode: null
     })
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'getWorktreeOrchestrationCliCommand').mockResolvedValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
