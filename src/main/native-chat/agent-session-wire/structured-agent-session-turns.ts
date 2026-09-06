@@ -17,6 +17,8 @@ import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
+import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import { runningTurnLifecycleTombstoneMutations } from './structured-agent-session-unexpected-exit'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -154,6 +156,7 @@ export async function performCancel(
   }
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
   let cancelled = false
+  let alreadyFinished = false
   let note = 'Cancellation requested.'
   try {
     cancelled = input.scope
@@ -172,6 +175,7 @@ export async function performCancel(
           })
         ).cancelled
     if (!cancelled) {
+      alreadyFinished = true
       note = 'The provider had already finished this turn.'
     }
   } catch (error) {
@@ -182,7 +186,23 @@ export async function performCancel(
   if (input.scope) {
     return { ok: true, value: { turnId: input.turnId, cancelled } }
   }
-  // Keyed by the operation id so a replayed cancel upserts one item, not two.
-  await appendStatus(ctx, input.clientOperationId, note)
+  if (alreadyFinished) {
+    const mutations: JournalLifecycleMutationInput[] = [
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: input.turnId },
+        body: { kind: 'status', text: note }
+      },
+      ...runningTurnLifecycleTombstoneMutations(ctx.journal.snapshot().items, input.turnId)
+    ]
+    await ctx.journal.appendLifecycleBatch({
+      settlementId: `cancel-finished:${ctx.sessionId}:${input.turnId}`,
+      fence: ctx.fence,
+      mutations
+    })
+    ctx.publish()
+  } else {
+    await appendStatus(ctx, input.turnId, note)
+  }
   return { ok: true, value: { turnId: input.turnId, cancelled } }
 }

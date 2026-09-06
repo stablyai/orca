@@ -119,7 +119,7 @@ export class StructuredAgentSessionHost {
         ),
       evict: (sessionId) => this.close(sessionId)
     })
-    this.restore = createStructuredAgentSessionHostRestore(deps, {
+    this.restore = createStructuredAgentSessionHostRestore(deps, this.sessions, () => this.now(), {
       reconcile: this.reconcileLeases,
       resolveRecovery: (sessionId) => this.runtimeState.resolveRecovery(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),

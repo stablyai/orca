@@ -193,8 +193,8 @@ function unexpectedExitFallbackMutations(
   stableSettlementId: string
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []
-  const tombstones: JournalLifecycleMutationInput[] = []
-  for (const item of session.journal.snapshot().items) {
+  const items = session.journal.snapshot().items
+  for (const item of items) {
     const identity = parseAgentJournalItemKey(item.itemId)
     if (!identity) {
       continue
@@ -203,17 +203,35 @@ function unexpectedExitFallbackMutations(
     if (terminal) {
       mutations.push({ kind: 'item', identity, body: terminal })
     }
-    if (item.body.kind === 'status' && item.body.turnLifecycle?.state === 'running') {
-      tombstones.push({ kind: 'tombstone', identity })
-    }
   }
   mutations.push({
     kind: 'item',
     identity: { provider: 'orca', clientMessageId: stableSettlementId },
     body: { kind: 'status', text: boundJournalStatusText(`Provider exited: ${event.reason}`) }
   })
-  mutations.push(...tombstones)
+  mutations.push(...runningTurnLifecycleTombstoneMutations(items))
   return mutations
+}
+
+export function runningTurnLifecycleTombstoneMutations(
+  items: readonly AgentJournalRenderItem[],
+  turnId?: string
+): JournalLifecycleMutationInput[] {
+  const tombstones: JournalLifecycleMutationInput[] = []
+  for (const item of items) {
+    if (
+      item.body.kind !== 'status' ||
+      item.body.turnLifecycle?.state !== 'running' ||
+      (turnId !== undefined && item.body.turnLifecycle.turnId !== turnId)
+    ) {
+      continue
+    }
+    const identity = parseAgentJournalItemKey(item.itemId)
+    if (identity) {
+      tombstones.push({ kind: 'tombstone', identity })
+    }
+  }
+  return tombstones
 }
 
 function terminalExitBody(item: AgentJournalRenderItem): AgentJournalItemBody | null {

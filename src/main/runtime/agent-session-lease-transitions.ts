@@ -8,6 +8,7 @@
 
 import {
   adjudicateAgentSessionRestart,
+  agentSessionRestartEvictionSettlementId,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
@@ -242,7 +243,9 @@ export function evictAgentSessionOwner(args: {
     claimStatus: 'released',
     lastRenewedAt: args.now,
     handoffOperationId: null,
-    deathEvidence: adjudication.evidence
+    deathEvidence: adjudication.evidence,
+    settlementRetryRequired: true,
+    settlementRetryId: agentSessionRestartEvictionSettlementId(record.lease, adjudication)
   })
 }
 
