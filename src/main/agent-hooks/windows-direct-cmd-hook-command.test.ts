@@ -4,9 +4,10 @@
 // through BOTH hosts Claude Code can pick, because the shape has to parse in either.
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
 import { wrapWindowsDirectCmdHookCommand } from './windows-direct-cmd-hook-command'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
@@ -99,7 +100,9 @@ describe.skipIf(process.platform !== 'win32')('direct hook command, run by both 
       expect(command, 'precondition: temp path must be cmd-safe').not.toBeNull()
       run(dir, scriptPath, command!)
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      // Why: cmd.exe/bash have just exited in this tree; a raw recursive rm throws EPERM on
+      // Windows while their handles drain.
+      removeTreeSync(dir)
     }
   }
 
