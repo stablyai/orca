@@ -11,10 +11,17 @@
  * answered. `limit` and `truncated` keep their existing meanings.
  *
  * `cursor` does NOT, and is refused rather than approximated. The PTY contract is an index into an
- * append-only completed-line buffer with a monotone count; a session journal is a bounded tail
- * re-projected on every read, so the same index addresses different lines over time and
- * `oldestCursor` can never grow to admit it. Pagination with a real anchor lives on
- * `worker-read --source transcript`.
+ * append-only completed-line buffer with a monotone count. A session journal is a REDUCED, MUTABLE
+ * timeline: an item's projected text changes at its original sequence after later items exist, the
+ * delta coalescer revises items repeatedly, settlement can rewrite one smaller, a pending approval
+ * renders as nothing and then as something, and `sequence` resets on epoch rollover — so no index,
+ * numeric or opaque, stays valid. `worker-read --source transcript` is a window index over the same
+ * bounded page, not an append-only anchor; do not point callers at it as one.
+ *
+ * The refusal is therefore permanent, not a stopgap, and no windowed alternative should be built:
+ * a broken cursor fails UNSAFE (a silent hole in a poller's output) while diffing a bounded tail
+ * fails safe (a harmless re-read), and a second paging-shaped verb would invite the PTY assumptions
+ * this one cannot honour.
  *
  * READ ONLY, deliberately. `terminal.show` still refuses a structured handle: synthesising a
  * `ptyId`/`leafId`/`paneRuntimeId` would hand every public terminal verb something that looks
@@ -52,17 +59,21 @@ export function readStructuredWorkerTerminal(args: {
     return null
   }
   if (args.cursor !== undefined) {
-    // A numeric cursor cannot be re-anchored here. `terminal.read`'s cursor is an index into an
-    // append-only completed-line buffer with a monotone count; this window is a BOUNDED tail that
-    // is re-projected every read, so the same index means different lines as the journal grows,
-    // and `truncated` (`cursor < oldestCursor`) could never fire to say so because `oldestCursor`
-    // is always 0. Serving it would silently return wrong or duplicated lines to a poller. The
-    // journal does have stable item identity, but the terminal cursor is a number on the wire and
-    // cannot carry it — `worker-read --source transcript` already has that contract, including
-    // `source_changed` detection.
+    // No index can be re-anchored here, so this refusal names no paging alternative — there is
+    // none. `terminal.read`'s cursor indexes an append-only completed-line buffer with a monotone
+    // count; this window is a bounded tail re-projected every read over a MUTABLE timeline, so the
+    // same index means different lines as items are revised in place, and `truncated`
+    // (`cursor < oldestCursor`) could never fire to say so because `oldestCursor` is always 0.
+    // Serving it would silently return wrong or duplicated lines to a poller.
+    //
+    // It must NOT redirect to `worker-read --source transcript`: a peer reaching this verb has
+    // neither a dispatch id nor coordinator standing (see the header), so it cannot run that one —
+    // and that verb is a window index over the same bounded page, so it would not be a paging
+    // answer even if it could.
     throw new Error(
       `${args.handle} serves recent output without a cursor; its history is not line-addressable. ` +
-        'Read it without --cursor, or page it with `orca orchestration worker-read --source transcript`.'
+        'Read it without --cursor: the tail is bounded and newest-last, so poll it and diff. ' +
+        'A structured session has no durable line anchor to page from — nothing else does either.'
     )
   }
   const page = readStructuredJournalPage(identity.sessionId)

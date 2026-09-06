@@ -107,9 +107,22 @@ describe('reading a structured worker through the terminal-read path', () => {
     // duplicated lines with `truncated:false`.
     const handle = registerWorker()
     installHost({ items: [message('i1', 'a')] })
-    expect(() => readStructuredWorkerTerminal({ handle, db: null, cursor: 0 })).toThrow(
-      /worker-read --source transcript/
-    )
+    const refusal = (() => {
+      try {
+        readStructuredWorkerTerminal({ handle, db: null, cursor: 0 })
+        return ''
+      } catch (error) {
+        return (error as Error).message
+      }
+    })()
+    expect(refusal).toMatch(/not line-addressable/)
+    // Tells the caller what DOES work here. Polling a bounded newest-last tail and diffing fails
+    // safe — a harmless re-read — where a broken cursor fails unsafe, as a silent hole.
+    expect(refusal).toMatch(/poll it and diff/)
+    // And names no paging alternative, because there is none. It must never send a peer to
+    // `worker-read`: that verb needs a dispatch id and coordinator standing this caller does not
+    // have, and it is a window index over the same bounded page rather than an append-only anchor.
+    expect(refusal).not.toContain('worker-read')
   })
 
   it('reports dropped history as truncated rather than pretending the page is whole', () => {
