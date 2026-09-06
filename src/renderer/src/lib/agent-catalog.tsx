@@ -301,6 +301,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://devin.ai/cli'
   },
   {
+    id: 'omo',
+    label: translate('auto.lib.agent.catalog.20f4d5938b', 'omo'),
+    // Why: `omo` is the native build (npm `omo-ai`); the original `senpi`
+    // (npm `@code-yeongyu/senpi`) is recognized as an alias of the same agent.
+    cmd: 'omo',
+    faviconDomain: 'github.com',
+    homepageUrl: 'https://github.com/code-yeongyu/oh-my-openagent'
+  },
+  {
     id: 'openclaw',
     label: translate('auto.lib.agent.catalog.5dff448636', 'OpenClaw'),
     cmd: 'openclaw',

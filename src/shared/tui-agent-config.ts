@@ -232,6 +232,15 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     windowsShiftEnterEncoding: 'csi-u',
     ctrlEnterEncoding: 'csi-u'
   },
+  omo: {
+    // Why: one agent with two entry points — `omo` is the native build (npm `omo-ai`),
+    // `senpi` the original (npm `@code-yeongyu/senpi`); either binary means the same agent.
+    detectCmd: 'omo',
+    detectCmdAliases: ['senpi'],
+    // Why: conservative until omo's argv surface is confirmed — typing into the started
+    // TUI works for any agent, while a wrong --flag would launch nothing.
+    promptInjectionMode: 'stdin-after-start'
+  },
   kimi: {
     detectCmd: 'kimi',
     promptInjectionMode: 'stdin-after-start'

@@ -178,6 +178,20 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('vibe')).toBe(true)
   })
 
+  it('recognizes omo under both of its executable names', () => {
+    // One agent, two entry points: `omo` is the native build (npm `omo-ai`),
+    // `senpi` the original (npm `@code-yeongyu/senpi`).
+    expect(recognizeAgentProcess('/home/dev/.local/bin/omo')).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
+    expect(recognizeAgentProcess('senpi')).toEqual({
+      agent: 'omo',
+      processName: 'senpi'
+    })
+    expect(isRecognizedAgentType('senpi')).toBe(true)
+  })
+
   it('recognizes Qwen Code by its installed qwen executable', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
       agent: 'qwen-code',
