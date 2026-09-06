@@ -106,6 +106,7 @@ export function useFileExplorerInlineInput({
 
   const handleInlineSubmit = useCallback(
     (value: string) => {
+      console.log('[nested-rename-submit]', JSON.stringify({ value, inlineInput, activeWorktreeId, worktreePath }))
       if (!inlineInput || !value.trim() || !activeWorktreeId || !worktreePath) {
         setInlineInput(null)
         return

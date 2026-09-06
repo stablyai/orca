@@ -54,6 +54,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   }
   const parentDir = dirname(oldPath)
   const newPath = joinPath(parentDir, trimmed)
+  console.log('[nested-rename-operation]', JSON.stringify(args))
   const operationGuard = captureFileExplorerOperationGuard(
     worktreeId,
     args.operationOwner ?? getFileExplorerOperationOwner(worktreeId)
@@ -70,6 +71,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   }
 
   try {
+    console.log('[nested-rename-route]', JSON.stringify(operationRoute))
     operationGuard.assertCurrent()
     await executeOpenEditorPathMove({
       context: fileContext,
@@ -107,6 +109,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
       }
     })
   } catch (err) {
+    console.log('[nested-rename-error]', String(err))
     toast.error(extractIpcErrorMessage(err, `Failed to rename '${existingName}'.`))
   }
   if (refreshDir) {
