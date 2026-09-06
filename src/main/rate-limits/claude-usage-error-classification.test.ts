@@ -3,9 +3,23 @@ import {
   classifyClaudeCredentialAbsence,
   classifyClaudeOAuthUsageError
 } from './claude-usage-error-classification'
-import { OAuthUsageError } from './claude-oauth-usage-error'
+import { OAuthUsageError, OAuthUsageUnreadableError } from './claude-oauth-usage-error'
 
 describe('classifyClaudeOAuthUsageError', () => {
+  // Why: a 200 that yielded no window is a read failure, not a usage answer. 'parse' is the kind
+  // the status-bar copy reads to keep the internal diagnostic out of the tooltip, and the CLI
+  // fallback is what can still produce a real reading.
+  it('classifies an unreadable usage body as a parse failure that may retry via the CLI', () => {
+    expect(
+      classifyClaudeOAuthUsageError(new OAuthUsageUnreadableError('no usage window'))
+    ).toMatchObject({
+      failureKind: 'parse',
+      shouldAttemptCliFallback: true,
+      shouldAttemptDelegatedRefresh: false,
+      terminal: false
+    })
+  })
+
   it('treats OAuth unauthorized as stale-token repair/fallback', () => {
     expect(
       classifyClaudeOAuthUsageError(new OAuthUsageError('Invalid OAuth token', 401, true))

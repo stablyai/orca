@@ -1,6 +1,13 @@
 // Why: a corrupt/hostile Retry-After must not gate usage refreshes for days.
 const MAX_RETRY_AFTER_MS = 24 * 60 * 60 * 1000
 
+/**
+ * The OAuth usage endpoint answered 200 but the body was not a usage reading. Distinct from
+ * OAuthUsageError (which carries an HTTP status) so the classifier can route it to the same
+ * retry-and-preserve path as a JSON parse failure instead of a successful empty reading.
+ */
+export class OAuthUsageUnreadableError extends Error {}
+
 export class OAuthUsageError extends Error {
   constructor(
     message: string,

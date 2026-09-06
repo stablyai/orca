@@ -11,6 +11,7 @@ import {
   redactMiniMaxSecret,
   type MiniMaxFetchResponse
 } from './minimax-request-context'
+import { isReadableUsageBody } from './unreadable-usage-response'
 
 export {
   extractMiniMaxCookieValue,
@@ -242,16 +243,26 @@ export async function fetchMiniMaxRateLimits(
     if (httpError) {
       return httpError
     }
-    let payload: MiniMaxUsageResponse
+    let body: unknown
     try {
-      payload = (await fetchResult.response.json()) as MiniMaxUsageResponse
+      body = await fetchResult.response.json()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid MiniMax usage response'
       return makeError(redactMiniMaxSecret(message), 'parse')
     }
+    // Why: reading `base_resp` off a JSON `null` throws, and the catch-all below files that
+    // TypeError as a network failure and puts its text in the tooltip. See
+    // unreadable-usage-response.ts — proving the shape first is the classification.
+    if (!isReadableUsageBody(body)) {
+      return makeError('MiniMax usage response was not a usage reading', 'parse')
+    }
+    const payload = body as MiniMaxUsageResponse
     const payloadError = handleMiniMaxPayloadError(fetchResult, payload)
     if (payloadError) {
       return payloadError
+    }
+    if (payload.model_remains !== undefined && !Array.isArray(payload.model_remains)) {
+      return makeError('MiniMax usage response model list could not be read', 'parse')
     }
     const snapshots = (payload.model_remains ?? [])
       .map(parseUsageItem)

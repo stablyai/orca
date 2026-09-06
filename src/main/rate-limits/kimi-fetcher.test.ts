@@ -34,6 +34,7 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
 
 import { fetchKimiRateLimits } from './kimi-fetcher'
+import { isProviderConfigured } from '../../renderer/src/components/status-bar/status-bar-provider-visibility'
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -105,6 +106,28 @@ describe('fetchKimiRateLimits', () => {
     const [, init] = netFetchMock.mock.calls[0]
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok-abc')
   })
+
+  // Why: Kimi coerces an unreadable body to `{}` and leans entirely on the windowless verdict
+  // being `error`. That coupling is what keeps it off the destructive road (`unavailable` would
+  // discard the last good snapshot and hide the chip), so it is pinned rather than assumed.
+  const unreadableBodies: [string, unknown][] = [
+    ['a JSON null body', null],
+    ['a JSON array body', []],
+    ['a bare string body', 'nope'],
+    ['an error envelope', { error: { code: 500, message: 'internal' } }]
+  ]
+
+  for (const [label, body] of unreadableBodies) {
+    it(`reports ${label} as a failed reading that keeps the chip visible`, async () => {
+      fsState.credentials = freshCredentials()
+      netFetchMock.mockResolvedValueOnce(jsonResponse(body))
+
+      const result = await fetchKimiRateLimits()
+
+      expect(result.status).toBe('error')
+      expect(isProviderConfigured(result)).toBe(true)
+    })
+  }
 
   it('surfaces an error when the usage request fails', async () => {
     fsState.credentials = freshCredentials()

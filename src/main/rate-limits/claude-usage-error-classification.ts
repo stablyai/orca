@@ -1,5 +1,5 @@
 import type { UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
-import { OAuthUsageError } from './claude-oauth-usage-error'
+import { OAuthUsageError, OAuthUsageUnreadableError } from './claude-oauth-usage-error'
 
 export type ClaudeUsageErrorClassification = {
   failureKind: UsageRateLimitFailureKind
@@ -27,7 +27,9 @@ export function classifyClaudeOAuthUsageError(error: unknown): ClaudeUsageErrorC
     return terminal('usage-unavailable')
   }
 
-  if (error instanceof SyntaxError) {
+  // Why: a 200 whose body yielded no window is a failed read like malformed JSON — retry via the
+  // CLI and keep the last good snapshot, never publish it as a successful empty reading.
+  if (error instanceof SyntaxError || error instanceof OAuthUsageUnreadableError) {
     return fallbackOnly('parse')
   }
 

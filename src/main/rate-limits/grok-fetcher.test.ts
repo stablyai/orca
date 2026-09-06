@@ -224,9 +224,12 @@ describe('fetchGrokRateLimits', () => {
     expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
-  it('returns unavailable when billing response has no config', async () => {
+  // A recognisable billing view with no credit carrier is the plan-has-no-credits answer. `{}` used
+  // to stand in for it and no longer can: a body naming no billing field is a read that failed, and
+  // grok-unreadable-billing-response.test.ts owns that case.
+  it('returns unavailable when a billing view carries no credit config', async () => {
     authState.file = freshAuthJson()
-    netFetchMock.mockResolvedValueOnce(jsonResponse({}))
+    netFetchMock.mockResolvedValueOnce(jsonResponse({ subscriptionTier: 'Enterprise' }))
 
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('unavailable')

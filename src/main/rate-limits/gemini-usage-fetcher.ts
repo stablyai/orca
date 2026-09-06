@@ -31,14 +31,21 @@ function isQuotaBucket(o: unknown): o is QuotaBucket {
   )
 }
 
-function parseQuotaResponse(data: unknown): QuotaBucket[] {
-  let rawBuckets: unknown[] = []
+// Why: an unreadable 200 (error envelope, renamed field, drifted bucket shape) used to collapse to
+// the same empty list a genuinely bucket-less account produces, and the stale policy writes an `ok`
+// over the account's last real quota. Only a recognised envelope that really lists zero buckets is
+// an empty reading; anything else is a failed one. `null` means "could not read".
+function parseQuotaResponse(data: unknown): QuotaBucket[] | null {
+  let rawBuckets: unknown[]
   if (Array.isArray(data)) {
     rawBuckets = data
   } else if (data && typeof data === 'object' && 'buckets' in data && Array.isArray(data.buckets)) {
     rawBuckets = data.buckets
+  } else {
+    return null
   }
-  return rawBuckets.filter((b) => isQuotaBucket(b))
+  const buckets = rawBuckets.filter((b) => isQuotaBucket(b))
+  return rawBuckets.length > 0 && buckets.length === 0 ? null : buckets
 }
 
 async function fetchQuota(accessToken: string, projectId: string): Promise<ProviderRateLimits> {
@@ -64,8 +71,19 @@ async function fetchQuota(accessToken: string, projectId: string): Promise<Provi
       }
     }
     const data = (await res.json()) as unknown
+    const parsed = parseQuotaResponse(data)
+    if (!parsed) {
+      return {
+        provider: 'gemini',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'Gemini quota response could not be read',
+        status: 'error'
+      }
+    }
     const buckets = deduplicateBuckets(
-      parseQuotaResponse(data).map((b) => ({ ...buildRateLimitBucket(b), modelId: b.modelId }))
+      parsed.map((b) => ({ ...buildRateLimitBucket(b), modelId: b.modelId }))
     )
     return {
       provider: 'gemini',

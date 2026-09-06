@@ -6,6 +6,7 @@
     "./scripts/vitest-host-ports-setup.ts",
     "../src/main/**/*",
     "../src/renderer/src/lib/skill-freshness-display-status.ts",
+    "../src/renderer/src/components/status-bar/status-bar-provider-visibility.ts",
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",

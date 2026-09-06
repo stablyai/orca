@@ -10,6 +10,7 @@ import {
   type GrokAuthReadResult,
   type GrokAuthSession
 } from './grok-auth'
+import { isReadableUsageBody, namesReadableUsageField } from './unreadable-usage-response'
 
 // Why: billing URL and headers must match Grok CLI or xAI rejects the request.
 const GROK_CLI_PROXY_BASE =
@@ -150,14 +151,51 @@ function grokRequestHeaders(session: GrokAuthSession): Record<string, string> {
   return headers
 }
 
-function resolveBillingConfig(data: GrokBillingResponse): GrokBillingConfig | null {
-  if (data.config) {
-    return data.config
+// Why: the fields a billing view is made of. A 200 naming none of them is a read that failed,
+// not a plan without credits — see clause 4 in unreadable-usage-response.ts.
+const BILLING_RESPONSE_KEYS = [
+  'config',
+  'creditUsagePercent',
+  'currentPeriod',
+  'billingPeriodStart',
+  'billingPeriodEnd',
+  'subscriptionTier',
+  'monthlyLimit',
+  'used',
+  'onDemandCap',
+  'onDemandUsed',
+  'prepaidBalance',
+  'isUnifiedBillingUser'
+] as const
+
+type GrokBillingConfigResolution =
+  | { kind: 'config'; config: GrokBillingConfig }
+  // Why: a recognisable billing view with no credit carrier is the documented "this plan has no
+  // weekly credits" answer. A body that names no billing field at all is not that — it is clause 4.
+  | { kind: 'absent' }
+  | { kind: 'unreadable'; reason: string }
+
+// Why: a present carrier of the wrong type is a failed read, not an absent one — the old
+// truthiness test handed `[]`/`"invalid"` to the mappers, which produce no window, and the
+// windowless road answers `unavailable`: it discards the last good snapshot and hides the chip.
+function resolveBillingConfig(data: GrokBillingResponse): GrokBillingConfigResolution {
+  if (data.config !== undefined && data.config !== null) {
+    return isReadableUsageBody(data.config)
+      ? { kind: 'config', config: data.config }
+      : { kind: 'unreadable', reason: 'Grok billing config was not a billing reading' }
   }
-  if (typeof data.creditUsagePercent === 'number') {
-    return data
+  if (data.creditUsagePercent !== undefined && data.creditUsagePercent !== null) {
+    return typeof data.creditUsagePercent === 'number'
+      ? { kind: 'config', config: data }
+      : { kind: 'unreadable', reason: 'Grok credit usage was not a number' }
   }
-  return null
+  // Both billing views resolve here, so the clause is stated once rather than at each fetch: an
+  // error envelope and a drifted schema reach this line as readable objects, and calling either
+  // absent publishes `unavailable`, which discards the last good snapshot and hides the chip.
+  if (!namesReadableUsageField(data, BILLING_RESPONSE_KEYS)) {
+    return { kind: 'unreadable', reason: 'Grok billing response was not a billing reading' }
+  }
+  return { kind: 'absent' }
 }
 
 function billingUsageResult(
@@ -212,10 +250,12 @@ async function fetchBillingData(
     }
   }
   const data: unknown = await res.json()
-  return {
-    kind: 'data',
-    data: typeof data === 'object' && data !== null ? (data as GrokBillingResponse) : {}
+  // Why: coercing an unreadable body to {} sent it down the "this plan has no credits" road, and
+  // that answer is 'unavailable' — which discards the last good snapshot and hides the chip.
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+    return { kind: 'result', result: result('error', 'Grok billing response could not be read') }
   }
+  return { kind: 'data', data: data as GrokBillingResponse }
 }
 
 type GrokMonthlyFallbackOutcome =
@@ -234,7 +274,11 @@ async function fetchMonthlyUsageFallback(
   if (outcome.kind === 'result') {
     return outcome
   }
-  const config = outcome.data.config ?? outcome.data
+  const resolution = resolveBillingConfig(outcome.data)
+  if (resolution.kind === 'unreadable') {
+    return { kind: 'result', result: result('error', resolution.reason) }
+  }
+  const config = resolution.kind === 'config' ? resolution.config : outcome.data
   return { kind: 'window', window: mapMonthlyUsage(config) }
 }
 
@@ -266,13 +310,17 @@ export async function fetchGrokRateLimits(
     if (outcome.kind === 'result') {
       return outcome.result
     }
-    const config = resolveBillingConfig(outcome.data)
+    const resolution = resolveBillingConfig(outcome.data)
+    if (resolution.kind === 'unreadable') {
+      return result('error', resolution.reason)
+    }
     // Why: a 200 without credit usage means the plan has no weekly credits —
     // 'unavailable' hides the bar (like Claude on API-key billing); 'error'
     // would paint a permanent alert for a signed-in account that has no quota.
-    if (!config) {
+    if (resolution.kind === 'absent') {
       return result('unavailable', 'Grok billing response did not include config')
     }
+    const config = resolution.config
     const weekly = mapWeeklyCredits(config)
     if (weekly) {
       return billingUsageResult({ weekly }, config, session)
