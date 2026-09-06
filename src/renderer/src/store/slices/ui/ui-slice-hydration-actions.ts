@@ -33,6 +33,7 @@ import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../sha
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automation-host-filter'
+import { sanitizeFocusedProjectGroupId } from '../../../../../shared/project-group-focus'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
 import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
@@ -174,6 +175,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             validRepoIds.size === 0
               ? persistedFilterRepoIds
               : persistedFilterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
+          focusedProjectGroupId: sanitizeFocusedProjectGroupId(ui.focusedProjectGroupId),
           agentsVisibleHostIds: preserveStringArrayIdentity(
             s.agentsVisibleHostIds,
             normalizeVisibleExecutionHostIds(ui.agentsVisibleHostIds)

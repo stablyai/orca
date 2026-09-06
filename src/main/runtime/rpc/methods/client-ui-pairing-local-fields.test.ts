@@ -52,7 +52,8 @@ describe('client UI RPC pairing-local field seams', () => {
     agentsReadFilter: 'unread',
     agentsGroupBy: 'project',
     activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
-    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
+    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 },
+    focusedProjectGroupId: 'group-client-a'
   }
 
   it.each(PAIRING_LOCAL_UI_FIELDS.map((field) => [field] as const))(

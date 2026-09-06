@@ -26,7 +26,10 @@ export function ProjectGroupHeaderMenu({
   hostId,
   label,
   onRename,
-  onDelete
+  onDelete,
+  onFocus,
+  onClearFocus,
+  isFocused
 }: {
   groupId: string
   /** Owner host of the group row, so rename/delete route to the host that holds it. */
@@ -34,6 +37,9 @@ export function ProjectGroupHeaderMenu({
   label: string
   onRename: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   onDelete: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  onFocus?: (groupId: string) => void
+  onClearFocus?: () => void
+  isFocused?: boolean
 }): React.JSX.Element {
   return (
     <DropdownMenu modal={false}>
@@ -68,6 +74,15 @@ export function ProjectGroupHeaderMenu({
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
+        {isFocused ? (
+          <DropdownMenuItem onSelect={() => onClearFocus?.()}>
+            {translate('auto.components.sidebar.WorktreeList.showAllClients', 'Show all clients')}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onSelect={() => onFocus?.(groupId)}>
+            {translate('auto.components.sidebar.WorktreeList.focusClient', 'Show only this client')}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {translate('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>

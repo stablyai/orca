@@ -76,7 +76,8 @@ export function mergeHostWebUIState(
     agentsReadFilter: local.agentsReadFilter,
     agentsGroupBy: local.agentsGroupBy,
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
-    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
+    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey,
+    focusedProjectGroupId: local.focusedProjectGroupId ?? null
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
   return { ...mergeWebUIState(local, incoming), ...pinned }
 }

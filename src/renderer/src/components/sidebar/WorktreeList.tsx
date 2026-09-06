@@ -136,14 +136,23 @@ const WorktreeList = React.memo(function WorktreeList({
     folderWorkspaces,
     defaultHostId
   })
+  const focusedProjectGroupId = useAppStore((s) => s.focusedProjectGroupId)
   const visibleScope = useSidebarHostVisibleScope({
     filterState,
     defaultHostId,
     repos,
     projectGroups,
     folderWorkspaces,
-    pairedDeviceIdsByEnvironment
+    pairedDeviceIdsByEnvironment,
+    focusedProjectGroupId
   })
+  const focusedVisibleWorktrees = useMemo(() => {
+    const focusedRepoIds = new Set(visibleScope.visibleReposForRows.map((repo) => repo.id))
+    if (!visibleScope.focusedSubtreeIds) {
+      return visibleWorktrees
+    }
+    return visibleWorktrees.filter((worktree) => focusedRepoIds.has(worktree.repoId))
+  }, [visibleScope.focusedSubtreeIds, visibleScope.visibleReposForRows, visibleWorktrees])
   const externalWorktreeCards = useSidebarExternalWorktreeCards({
     repos,
     visibleReposForRows: visibleScope.visibleReposForRows,
@@ -155,7 +164,7 @@ const WorktreeList = React.memo(function WorktreeList({
     projectOrderBy,
     pinnedDisplayPolicy,
     defaultHostId,
-    worktrees: visibleWorktrees,
+    worktrees: focusedVisibleWorktrees,
     repos,
     repoMap,
     worktreeMap,
@@ -184,6 +193,16 @@ const WorktreeList = React.memo(function WorktreeList({
     workspaceStatuses,
     sortBy
   })
+  const setFocusedProjectGroupId = useAppStore((s) => s.setFocusedProjectGroupId)
+  const handleFocusProjectGroup = useCallback(
+    (groupId: string) => {
+      setFocusedProjectGroupId(groupId)
+    },
+    [setFocusedProjectGroupId]
+  )
+  const handleClearFocusedProjectGroup = useCallback(() => {
+    setFocusedProjectGroupId(null)
+  }, [setFocusedProjectGroupId])
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
@@ -311,6 +330,9 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
+        focusedProjectGroupId={focusedProjectGroupId}
+        handleFocusProjectGroup={handleFocusProjectGroup}
+        handleClearFocusedProjectGroup={handleClearFocusedProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}

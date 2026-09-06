@@ -128,6 +128,7 @@ const UiUpdateFields = z
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     agentsVisibleHostIds: z.array(z.string()).nullable().optional(),
     agentsFilterRepoIds: StringArray.optional(),
+    focusedProjectGroupId: NullableString.optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),
     agentsReadFilter: z.enum(THREAD_READ_FILTER_VALUES).optional(),

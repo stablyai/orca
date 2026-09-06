@@ -20,7 +20,9 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsReadFilter',
   'agentsGroupBy',
   'activityClearedAtByPaneKey',
-  'manuallyUnreadTurnsByPaneKey'
+  'manuallyUnreadTurnsByPaneKey',
+  // Client/group focus is a per-window sidebar view; group ids are host-local.
+  'focusedProjectGroupId'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 export type PairingLocalUiField = (typeof PAIRING_LOCAL_UI_FIELDS)[number]

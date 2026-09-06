@@ -153,6 +153,22 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
+    focusedProjectGroupId: null,
+    setFocusedProjectGroupId: (groupId) => {
+      const focusedProjectGroupId =
+        typeof groupId === 'string' && groupId.length > 0 ? groupId : null
+      // Why: project groups only render in repo grouping; focusing a client without that mode would look empty.
+      if (focusedProjectGroupId && get().groupBy !== 'repo') {
+        window.api.ui
+          .set({ focusedProjectGroupId, groupBy: 'repo', collapsedGroups: [] })
+          .catch(console.error)
+        set({ focusedProjectGroupId, groupBy: 'repo', collapsedGroups: new Set<string>() })
+        return
+      }
+      set({ focusedProjectGroupId })
+      window.api.ui.set({ focusedProjectGroupId }).catch(console.error)
+    },
+
     agentsVisibleHostIds: null,
     setAgentsVisibleHostIds: (ids) => {
       const agentsVisibleHostIds = normalizeVisibleExecutionHostIds(ids)
