@@ -6,6 +6,7 @@ import { getHelperMarkerPath, getRequestPath, getResultPath } from '../shared/se
 import {
   clearUpdateRequest,
   clearUpdateResult,
+  getServeUpdateAttemptId,
   hasLinuxServeUpdateHelper,
   readHelperMarker,
   readServeUpdateResultFor,
@@ -47,6 +48,9 @@ describe('serve-update-spool', () => {
     expect(raw.schemaVersion).toBe(2)
     expect(raw.targetVersion).toBe('1.4.198')
     expect(raw.servingPid).toBe(process.pid)
+    // The per-attempt id is generated at spool time and exposed for verdict binding.
+    expect(typeof getServeUpdateAttemptId()).toBe('string')
+    expect(getServeUpdateAttemptId()?.length).toBeGreaterThan(0)
   })
 
   it('overwrites a stale request', () => {
@@ -76,43 +80,61 @@ describe('serve-update-spool', () => {
     expect(readUpdateResult()).toBeNull()
   })
 
-  it('binds the result to the requesting runtimeId and target version', () => {
+  it('binds the result to the spooled attemptId and target version', () => {
+    writeUpdateRequest(VALID_REQUEST)
+    const attemptId = getServeUpdateAttemptId() as string
     writeFileSync(
       getResultPath(spoolDir),
       JSON.stringify({
-        runtimeId: 'rt-1',
+        attemptId,
         targetVersion: '1.4.198',
         phase: 'rejected',
         reason: 'hash mismatch'
       })
     )
-    expect(readServeUpdateResultFor('rt-2', '1.4.198')).toBeNull()
-    expect(readServeUpdateResultFor('rt-1', '1.4.199')).toBeNull()
-    expect(readServeUpdateResultFor('rt-1', '1.4.198')).toEqual({
+    expect(readServeUpdateResultFor('other-attempt', '1.4.198')).toBeNull()
+    expect(readServeUpdateResultFor(attemptId, '1.4.199')).toBeNull()
+    expect(readServeUpdateResultFor(attemptId, '1.4.198')).toEqual({
       verdict: 'rejected',
       message: 'Update rejected: hash mismatch'
     })
     writeFileSync(
       getResultPath(spoolDir),
       JSON.stringify({
-        runtimeId: 'rt-1',
+        attemptId,
         targetVersion: '1.4.198',
         phase: 'failed',
         reason: 'disk full'
       })
     )
-    expect(readServeUpdateResultFor('rt-1', '1.4.198')).toEqual({
+    expect(readServeUpdateResultFor(attemptId, '1.4.198')).toEqual({
       verdict: 'failed',
       message: 'Update failed: disk full'
     })
     writeFileSync(
       getResultPath(spoolDir),
-      JSON.stringify({ runtimeId: 'rt-1', targetVersion: '1.4.198', phase: 'ok' })
+      JSON.stringify({ attemptId, targetVersion: '1.4.198', phase: 'ok' })
     )
-    expect(readServeUpdateResultFor('rt-1', '1.4.198')).toEqual({
+    expect(readServeUpdateResultFor(attemptId, '1.4.198')).toEqual({
       verdict: 'accepted',
       message: ''
     })
+  })
+
+  it('a re-spooled request invalidates the previous attemptId binding', () => {
+    writeUpdateRequest(VALID_REQUEST)
+    const firstAttempt = getServeUpdateAttemptId() as string
+    writeFileSync(
+      getResultPath(spoolDir),
+      JSON.stringify({ attemptId: firstAttempt, targetVersion: '1.4.198', phase: 'ok' })
+    )
+    expect(readServeUpdateResultFor(firstAttempt, '1.4.198')).not.toBeNull()
+    writeUpdateRequest({ ...VALID_REQUEST, targetVersion: '1.4.199' })
+    const secondAttempt = getServeUpdateAttemptId() as string
+    expect(secondAttempt).not.toBe(firstAttempt)
+    // The stale verdict from the first attempt can never be read as this one's.
+    expect(readServeUpdateResultFor(firstAttempt, '1.4.199')).toBeNull()
+    expect(readServeUpdateResultFor(secondAttempt, '1.4.199')).toBeNull()
   })
 
   it('helper marker requires a matching unit name and version', () => {
