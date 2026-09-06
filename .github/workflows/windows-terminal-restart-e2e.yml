@@ -46,10 +46,12 @@ jobs:
         timeout-minutes: 10
         shell: pwsh
         run: |
-          wsl.exe --list --online
-          if ($LASTEXITCODE -ne 0) { throw "WSL catalog lookup failed: $LASTEXITCODE" }
-          wsl.exe --install --distribution Ubuntu --no-launch
-          if ($LASTEXITCODE -ne 0) { throw "WSL installation failed: $LASTEXITCODE" }
+          $rootfs = Join-Path $env:RUNNER_TEMP 'noble-rootfs.tar.gz'
+          Invoke-WebRequest 'https://cdimages.ubuntu.com/ubuntu-wsl/noble/daily-live/20260906/noble-wsl-amd64.wsl' -OutFile $rootfs
+          if ((Get-FileHash $rootfs -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9d541cc89c945bbcfa4ba91308c84e4768569facfe3c046cf6874d528e4465f4') { throw 'Ubuntu rootfs checksum mismatch' }
+          $distroDir = Join-Path $env:RUNNER_TEMP 'orca-wsl-ubuntu'
+          wsl.exe --import Ubuntu $distroDir $rootfs --version 1
+          if ($LASTEXITCODE -ne 0) { throw "WSL import failed: $LASTEXITCODE" }
           wsl.exe --distribution Ubuntu --user root --exec /usr/bin/true
           if ($LASTEXITCODE -ne 0) { throw "WSL guest did not start: $LASTEXITCODE" }
           wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get update
