@@ -55,6 +55,11 @@ import type {
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../runtime/orca-runtime'
+import {
+  hasLocalGitOptions,
+  isLocalBranchCheckedOut,
+  normalizeLocalBranchName
+} from '../runtime/runtime-worktree-selection'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import { getEffectiveHooks, loadHooks, parseOrcaYaml } from '../hooks'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from '../setup-runner-script-text'
@@ -714,10 +719,6 @@ async function resolveCreateBranchNameSsh(
   return branchNameOverride
 }
 
-function normalizeLocalBranchName(branchName: string | undefined): string {
-  return branchName?.replace(/^refs\/heads\//, '') ?? ''
-}
-
 async function canCheckoutExistingLocalBranch(
   repoPath: string,
   branchName: string,
@@ -754,11 +755,11 @@ async function canCheckoutExistingLocalBranch(
     }
   }
   const worktrees = await listWorktrees(repoPath, gitOptions)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
-}
-
-function hasLocalGitOptions(gitOptions: { wslDistro?: string }): boolean {
-  return Object.keys(gitOptions).length > 0
+  return !(await isLocalBranchCheckedOut(
+    branchName,
+    worktrees.map((worktree) => worktree.branch),
+    (args) => gitExecFileAsync(args, { cwd: repoPath, ...gitOptions })
+  ))
 }
 
 function getLocalGitHubPrForBranch(
@@ -845,7 +846,11 @@ async function canCheckoutExistingLocalBranchSsh(
     }
   }
   const worktrees = await provider.listWorktrees(repoPath)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
+  return !(await isLocalBranchCheckedOut(
+    branchName,
+    worktrees.map((worktree) => worktree.branch),
+    (args) => provider.exec(args, repoPath)
+  ))
 }
 
 type SshGitExecutor = Pick<SshGitProvider, 'exec'>
