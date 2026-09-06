@@ -424,6 +424,13 @@ export default function BrowserAddressBar({
               ref={inputRef}
               value={value}
               onFocus={handleFocus}
+              onMouseDown={(event) => {
+                if (event.button === 0 && document.activeElement !== event.currentTarget) {
+                  // Keep the initial click from overriding the focus handler's full selection.
+                  event.preventDefault()
+                  event.currentTarget.focus()
+                }
+              }}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               data-orca-browser-address-bar="true"
