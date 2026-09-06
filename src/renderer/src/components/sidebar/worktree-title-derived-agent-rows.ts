@@ -1,6 +1,7 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
 import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
+import { isShellProcess } from '../../../../shared/shell-process-detection'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type {
@@ -146,6 +147,14 @@ function buildTitleDerivedAgentRow(args: {
     ownerIsLaunch: Boolean(args.tab.launchAgent)
   })
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
+  // Why: an owned pane whose title carries no agent frame is still that owner's session
+  // (Codex titles its panes with the worktree name, so a live Codex pane reads as
+  // "gh-13695"). Same concession as Cursor below, widened from one literal to any known
+  // owner: without it the pane's only row source is its title, so a restored agent tab
+  // vanishes from the sidebar/dashboard while its PTY stays connected (#14464).
+  // A shell title is positive evidence the agent left, so it must not resurrect a row.
+  const ownerIdentifiesPane =
+    args.ownerAgentType !== null && args.ownerAgentType !== 'unknown' && !isShellProcess(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
   // shared detector keeps it neutral so runtime liveness probes do not treat
   // the management/list screen as active work.
@@ -154,8 +163,12 @@ function buildTitleDerivedAgentRow(args: {
   // reads idle instead of vanishing (#10258).
   const status = isClaudeAgentsTitle
     ? 'idle'
-    : (classifyTitleActivity(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
-  const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
+    : (classifyTitleActivity(title) ??
+      (isCursorAgentTitle(title) || ownerIdentifiesPane ? 'idle' : null))
+  const label = isClaudeAgentsTitle
+    ? 'Claude Code'
+    : (resolveTitleActivityLabel(title) ??
+      (ownerIdentifiesPane ? formatAgentTypeLabel(args.ownerAgentType) : null))
   if (!status || !label) {
     return null
   }
