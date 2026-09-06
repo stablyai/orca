@@ -5,7 +5,10 @@
 // they share one path here rather than five copies in the host. The host keeps attach, holds and
 // teardown; this is the surface that assumes those already happened.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -116,5 +119,41 @@ export function readStructuredAgentSessionOptions(
       throw new Error('structured_agent_session_options_unsupported')
     }
     return context.deps.adapter.readOptions({ sessionId, fence: session.fence })
+  })
+}
+
+/**
+ * Settle a send whose ack window expired but which the provider later proved it
+ * had received.
+ *
+ * Without this the submission stays `unknown` for the life of the session: the
+ * client renders an unconfirmed bubble whose Retry redispatches, so the user is
+ * invited to deliver the same message to the agent a second time. Every send made
+ * while a turn is already running takes this path, because the provider does not
+ * echo the new message until the running turn ends.
+ *
+ * Serialized with the session's other journal writes, and a no-op once the row is
+ * `accepted` or `rejected` — the reducer treats both as terminal.
+ */
+export async function settleStructuredAgentSessionLateDispatch(
+  context: StructuredAgentSessionMutationContext,
+  input: {
+    sessionId: string
+    clientMessageId: string
+    providerIdentity: AgentJournalItemIdentity
+  }
+): Promise<void> {
+  const session = context.sessions.get(input.sessionId)
+  if (!session) {
+    return
+  }
+  await context.serialize(input.sessionId, async () => {
+    await session.journal.resolveDispatch({
+      clientMessageId: input.clientMessageId,
+      state: 'accepted',
+      providerIdentity: input.providerIdentity,
+      fence: session.fence
+    })
+    context.publish(input.sessionId, session.journal)
   })
 }

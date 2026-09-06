@@ -65,6 +65,60 @@ describe('Claude structured dispatch image limits', () => {
     expect(session.activeTurnSequence).toBe(session.dispatchSequence)
   })
 
+  it('settles the send a timed-out replay proves was delivered', async () => {
+    const session = sessionFor()
+    const settled = vi.fn()
+    const dispatched = dispatchClaudeTurn(
+      session,
+      { clientMessageId: 'client-1', body: userMessage([{ type: 'text', text: 'one' }]) },
+      500
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
+    await expect(dispatched).resolves.toMatchObject({ state: 'unknown' })
+
+    resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'), settled)
+    expect(settled).toHaveBeenCalledWith({
+      clientMessageId: 'client-1',
+      providerIdentity: { provider: 'claude', sessionId: 'provider-session', uuid: sentUuid }
+    })
+  })
+
+  it('settles a superseded dispatch even though it no longer owns the turn identity', async () => {
+    const session = sessionFor()
+    const settled = vi.fn()
+    const first = dispatchClaudeTurn(
+      session,
+      { clientMessageId: 'client-1', body: userMessage([{ type: 'text', text: 'one' }]) },
+      500
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    const firstUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
+    await expect(first).resolves.toMatchObject({ state: 'unknown' })
+
+    const second = dispatchClaudeTurn(
+      session,
+      { clientMessageId: 'client-2', body: userMessage([{ type: 'text', text: 'two' }]) },
+      100
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    const secondUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
+
+    // The stale replay must not claim the active turn, but the message it names
+    // did land, so the send it came from is delivered and must stop reading as
+    // unconfirmed — that banner is what makes a user resend a duplicate.
+    expect(resolveClaudeReplayWaiter(session, userReplayFrame(firstUuid!, 'one'), settled)).toBe(
+      false
+    )
+    expect(settled).toHaveBeenCalledWith({
+      clientMessageId: 'client-1',
+      providerIdentity: { provider: 'claude', sessionId: 'provider-session', uuid: firstUuid }
+    })
+    resolveClaudeReplayWaiter(session, userReplayFrame(secondUuid!, 'two'), settled)
+    await expect(second).resolves.toMatchObject({ state: 'accepted' })
+    expect(settled).toHaveBeenCalledTimes(1)
+  })
+
   it('never lets a late replay for dispatch A resolve dispatch B', async () => {
     const session = sessionFor()
     const first = dispatchClaudeTurn(

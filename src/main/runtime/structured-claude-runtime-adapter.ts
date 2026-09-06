@@ -34,6 +34,7 @@ export type StructuredClaudeRuntimeAdapterDeps = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 }
 
 export function createStructuredClaudeRuntimeAdapter(
@@ -100,6 +101,7 @@ export function createStructuredClaudeRuntimeAdapter(
     ...(deps.onBackgroundTasksChanged
       ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
       : {}),
+    ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
     ...(deps.openClaudeConnection ? { openConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })

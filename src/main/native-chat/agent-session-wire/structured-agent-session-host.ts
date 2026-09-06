@@ -38,6 +38,7 @@ import {
   respondToStructuredAgentSessionPrompt,
   sendStructuredAgentSessionTurn,
   setStructuredAgentSessionOption,
+  settleStructuredAgentSessionLateDispatch,
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
 import { tearDownStructuredAgentSessionHost } from './structured-agent-session-host-teardown'
@@ -330,6 +331,9 @@ export class StructuredAgentSessionHost {
 
   subscribe = (input: AgentSessionSubscribeInput): (() => void) =>
     this.backgroundTasks.subscribe(input)
+
+  settleLateDispatch = (input: Parameters<typeof settleStructuredAgentSessionLateDispatch>[1]) =>
+    settleStructuredAgentSessionLateDispatch(this.mutationContext(), input)
 
   publishBackgroundTaskState: StructuredAgentSessionBackgroundTaskChannel['publish'] = (
     sessionId,
