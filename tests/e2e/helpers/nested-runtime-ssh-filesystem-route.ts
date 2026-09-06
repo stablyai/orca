@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { terminalMarkerCommand } from './terminal-output-marker'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect } from './orca-app'
@@ -42,9 +43,23 @@ async function assertRemoteFilesystemMarker(
   marker: string
 ): Promise<void> {
   await focusActiveTerminalInput(client.page)
-  await client.page.keyboard.insertText(`${command} && printf '${marker}\\n'`)
-  await client.page.keyboard.press('Enter')
-  await expect.poll(() => getTerminalContent(client.page), { timeout: 15_000 }).toContain(marker)
+  const trace = await client.page.evaluateHandle(() => {
+    const state = window.__store!.getState()
+    const manager = window.__paneManagers!.get(state.activeTabId!)!
+    const active = () => ({tag:document.activeElement?.tagName, className:document.activeElement?.className})
+    const entries = manager.getPanes().map((pane) => ({ptyId:pane.container.dataset.ptyId, data:'', focused:pane.container.contains(document.activeElement)}))
+    const subscriptions = manager.getPanes().map((pane,index) => pane.terminal.onData((data) => {entries[index].data=(entries[index].data+data).slice(-2048)}))
+    return {entries, before:active(), active, dispose:() => subscriptions.forEach((s) => s.dispose())}
+  })
+  try {
+    await client.page.keyboard.insertText(`${command} && ${terminalMarkerCommand(marker)}`)
+    await client.page.keyboard.press('Enter')
+    await expect.poll(() => getTerminalContent(client.page), { timeout: 15_000 }).toContain(marker)
+  } finally {
+    console.log('[nested-filesystem-input]', marker, JSON.stringify(await trace.evaluate((t) => ({entries:t.entries,before:t.before,after:t.active()}))))
+    await trace.evaluate((t) => t.dispose())
+    await trace.dispose()
+  }
 }
 
 export async function assertNestedFilesystemRoute(
@@ -71,7 +86,7 @@ export async function assertNestedFilesystemRoute(
   try {
     await focusActiveTerminalInput(client.page)
     await client.page.keyboard.insertText(
-      `mkdir -p '${directory}' && printf 'nested-route-content\\n' > '${directory}/${sourceName}' && printf '${marker}\\n'`
+      `mkdir -p '${directory}' && printf 'nested-route-content\\n' > '${directory}/${sourceName}' && ${terminalMarkerCommand(marker)}`
     )
     await client.page.keyboard.press('Enter')
     await expect.poll(() => getTerminalContent(client.page), { timeout: 15_000 }).toContain(marker)
@@ -117,7 +132,7 @@ export async function assertNestedFilesystemRoute(
     const fileDeleteDialog = client.page.locator('[role="dialog"]:visible').last()
     const fileDeleteButton = fileDeleteDialog.getByRole('button', { name: 'Delete', exact: true })
     await expect(fileDeleteButton).toBeEnabled()
-    await fileDeleteButton.click({ force: true })
+    await fileDeleteButton.click()
     await expect(fileDeleteDialog).toBeHidden()
     await expect(row(renamedName)).toHaveCount(0, { timeout: 15_000 })
     await assertRemoteFilesystemMarker(
@@ -135,7 +150,7 @@ export async function assertNestedFilesystemRoute(
       exact: true
     })
     await expect(directoryDeleteButton).toBeEnabled()
-    await directoryDeleteButton.click({ force: true })
+    await directoryDeleteButton.click()
     await expect(directoryDeleteDialog).toBeHidden()
     await expect(row(directory)).toHaveCount(0, { timeout: 15_000 })
     await assertRemoteFilesystemMarker(
