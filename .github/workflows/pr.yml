@@ -93,7 +93,8 @@ jobs:
           # trigger on IME source rather than on a spec name in some route's list.
           NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
           echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
-          WSL_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --wsl-source)"
+          WSL_CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE" "$HEAD")"
+          WSL_SOURCE_CHANGED="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --wsl-source)"
           echo "wsl_source_changed=$WSL_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
           SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --reusable-workflow)"
