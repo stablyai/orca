@@ -1,10 +1,49 @@
 import { createHash } from 'node:crypto'
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 
 export const SHA512 = createHash('sha512').update('appimage-content').digest('base64')
 export const SERVE_UPDATE_VERDICT_POLL_MS = 500
 
-export function setupHeadlessServeTestHarness() {
+// A named return type: the inferred shape references @vitest/spy's non-portable
+// `Procedure`, which TS2883 rejects on exported declarations.
+export type ServeUpdateTestHarness = {
+  appMock: {
+    isPackaged: boolean
+    getVersion: Mock<() => string>
+    on: Mock
+    emit: (event: string, ...args: unknown[]) => void
+    quit: Mock
+  }
+  autoUpdaterMock: {
+    autoDownload: boolean
+    autoInstallOnAppQuit: boolean
+    autoRunAppAfterInstall: boolean
+    allowPrerelease: boolean
+    checkForUpdates: Mock
+    downloadUpdate: Mock
+    quitAndInstall: Mock
+    setFeedURL: Mock
+    on: Mock
+    emit: (event: string, ...args: unknown[]) => void
+  }
+  nativeUpdaterMock: { on: Mock }
+  killAllPtyMock: Mock
+  recordUpdaterLifecycleMock: Mock
+  requestServeUpdateHandoffMock: Mock<() => boolean>
+  failServeUpdateHandoffMock: Mock
+  hasServeUpdateSupervisorMock: Mock<() => boolean>
+  writeUpdateRequestMock: Mock<() => boolean>
+  clearUpdateRequestMock: Mock
+  clearUpdateResultMock: Mock
+  readServeUpdateResultForMock: Mock
+  writeServeUpdateCensusContinuationMock: Mock<() => boolean>
+  clearServeUpdateCensusContinuationMock: Mock
+  captureServeUpdateAppImageMock: Mock
+  runProcessMock: Mock
+  resetHandlers: () => void
+}
+
+export function setupHeadlessServeTestHarness(): ServeUpdateTestHarness {
   const {
     appMock,
     autoUpdaterMock,
