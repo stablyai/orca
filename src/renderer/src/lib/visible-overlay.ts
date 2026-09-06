@@ -1,4 +1,6 @@
-const OVERLAY_SELECTOR = '[role="dialog"], [role="alertdialog"], [role="listbox"], [role="menu"]'
+// The always-mounted worktree sidebar is page chrome, not an Escape-owning popup.
+const OVERLAY_SELECTOR =
+  '[role="dialog"], [role="alertdialog"], [role="listbox"]:not([data-worktree-sidebar]), [role="menu"]'
 
 type VisibleOverlayOptions = {
   /** Overlays inside a match are treated as page content, not as a layer above it. */
