@@ -1,11 +1,10 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getProjectGroupExecutionHostIdForRows } from '@/components/sidebar/worktree-list/listing/host-filtering'
 import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-options'
 import {
   buildPaletteFilterPredicate,
-  isPaletteFilterActive,
-  reconcilePaletteFilter
+  isPaletteFilterActive
 } from '@/components/cmd-j/palette-filter'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
@@ -26,7 +25,7 @@ type WorktreeJumpPaletteFilterInput = Pick<
   | 'projectHostSetups'
   | 'projectGroups'
 > &
-  Pick<WorktreeJumpPaletteLocalState, 'rawFilter' | 'setRawFilter'>
+  Pick<WorktreeJumpPaletteLocalState, 'filter'>
 
 export function useWorktreeJumpPaletteFilter({
   repos,
@@ -39,8 +38,7 @@ export function useWorktreeJumpPaletteFilter({
   projects,
   projectHostSetups,
   projectGroups,
-  rawFilter,
-  setRawFilter
+  filter
 }: WorktreeJumpPaletteFilterInput) {
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const repoByHostIdentity = useMemo(
@@ -83,14 +81,6 @@ export function useWorktreeJumpPaletteFilter({
       }),
     [allWorktrees, defaultHostId, hostOptions, projectHostSetups, projects, repos]
   )
-  const filter = useMemo(
-    () => reconcilePaletteFilter(rawFilter, filterModel),
-    [rawFilter, filterModel]
-  )
-  useEffect(() => {
-    setRawFilter((current) => reconcilePaletteFilter(current, filterModel))
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- local-state setter identity is stable across extraction.
-  }, [filterModel])
   const filterActive = isPaletteFilterActive(filter)
   const hostFilterActive = filter.hostIds.length > 0
   const filterPredicate = useMemo(
@@ -115,7 +105,6 @@ export function useWorktreeJumpPaletteFilter({
     canCreateWorktree,
     defaultHostId,
     filterModel,
-    filter,
     filterActive,
     hostFilterActive,
     filterPredicate,

@@ -1,27 +1,9 @@
----
-name: orca-emulator
-description: >-
-  iOS Simulator control from inside Orca, with the live device view in Orca's
-  emulator pane. Use when driving a booted Apple Simulator on macOS: taps,
-  gestures, typing, hardware buttons, rotation, and the accessibility tree, or
-  when an iOS change needs simulator evidence. For an Android device or emulator
-  use the Android emulator skill; build and install the app with xcodebuild or
-  simctl first.
-license: Apache-2.0
----
+<!-- Single-authored blocks shared by every skill-stubs/<topic>.md projection.
+     Insert one with a line reading `<!-- shared: <id> -->`; every block below must be
+     inserted exactly once by every stub. `reflow` re-wraps the block after {{topic}}
+     substitution, because the substituted name changes where the lines break. -->
 
-# Orca Emulator
-
-This file is a discovery stub, not the usage guide. The full, version-matched Orca emulator
-reference is served by the `orca` binary itself — kept out of this file on purpose so it can
-never drift from the binary that will actually run your commands.
-
-Engage Orca whenever you drive an iOS Simulator from inside the Orca app: taps, gestures,
-typing, hardware buttons, rotation, and the accessibility tree — all while the live view
-stays in Orca's emulator pane.
-Prefer this over raw `serve-sim` or direct `simctl` when running agents inside Orca, which
-handles device scoping, helper lifecycle, and worktree context for you. It complements the
-orca-cli skill for terminals, worktrees, and the built-in browser.
+<!-- block: resolver -->
 
 ## Resolve the CLI for this session
 
@@ -42,20 +24,14 @@ same way in POSIX shells, PowerShell, and cmd.exe.
 If the selected executable cannot run, report its exact error and stop. Do not fall through
 to another executable, which could silently target a different Orca build.
 
-## Load the full guide before running Orca commands
-
-```text
-ORCA skills get orca-emulator
-```
-
-That prints the complete, version-matched guide for the exact binary that will handle your
-next commands — booting devices, taps and gestures, typing, hardware buttons, rotation, and
-the accessibility tree. Read it first, then run the specific command you need.
+<!-- block: no-guessing -->
 
 Don't guess subcommands or flags from memory or from a cached copy of this stub. They
 change between Orca releases, and this file deliberately no longer lists them. Confirm the
 app is up with `ORCA status --json` (start it with `ORCA open --json` if needed), and
 prefer `--json` for agent-driven calls.
+
+<!-- block: older-binary-intro -->
 
 ## If an older Orca does not recognize `skills get`
 
@@ -64,11 +40,8 @@ unknown command. Another failure is not proof of an older binary; report it rath
 guessing or changing executables. For a confirmed pre-guide binary, use only this bounded,
 read-only bootstrap to orient. Do not dead-end and do not invent commands:
 
-```text
-ORCA status --json
-ORCA emulator list --json
-```
+<!-- block: older-binary-outro reflow -->
 
 Then tell the user that updating Orca restores the full, version-matched guide via
-`ORCA skills get orca-emulator`. Beyond these commands, ask the user rather than guessing a
+`ORCA skills get {{topic}}`. Beyond these commands, ask the user rather than guessing a
 command surface this older binary may not support.

@@ -74,8 +74,37 @@ describe('orca CLI skill guidance', () => {
       'ORCA worktree create --name <task-name> --no-parent --agent codex --prompt'
     )
     expect(skill).toContain('codex --model gpt-5.5 -c model_reasoning_effort="xhigh"')
-    expect(skill).toContain('wait only for TUI readiness if needed to avoid losing input')
-    expect(skill).toContain('send the prompt, and stop')
+    expect(skill).toContain('wait for TUI readiness so the prompt is not lost')
+    expect(skill).toContain('then send the prompt and stop')
+    // `terminal wait` prints an ordinary success envelope on timeout and only signals the
+    // unsatisfied wait through the exit code, so the gate and its failure direction have to
+    // sit beside the recipe or the brief gets typed into a half-started TUI.
+    expect(skill).toContain('Send only when the wait result reports `satisfied: true`')
+    expect(skill).toContain('report the handoff as not started and do not send')
+    expect(skill).toContain(
+      "A handoff is done when the new worktree id and agent handle have been reported and the prompt's send receipt reported `accepted: true`"
+    )
+  })
+
+  // The always-loaded guide keeps the boundaries; the reconstructible command catalogs move
+  // behind `skills get orca-cli --reference` so they are not charged to every turn, with
+  // `--full` only as the fallback for a CLI that predates the per-reference selector.
+  it('gates the reconstructible command catalogs behind bundled references', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain('ORCA skills get orca-cli --reference references/<file>.md')
+    expect(skill).toContain('If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full`')
+    for (const reference of [
+      'references/browser.md',
+      'references/automations.md',
+      'references/publishing.md'
+    ]) {
+      expect(skill).toContain(reference)
+      expect(readSkill(join(projectDir, 'skill-guides', 'orca-cli', reference)).trim()).not.toBe('')
+    }
+    expect(skill).not.toContain('ORCA automations create')
+    expect(skill).not.toContain('ORCA artifacts share <file>')
+    expect(skill).not.toContain('ORCA goto --url')
   })
 
   it('prefers agent-first workers without duplicating terminal delivery', () => {
