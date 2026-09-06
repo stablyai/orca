@@ -7359,6 +7359,8 @@
           "855a76343a": "Ghostty에서 가져오기",
           "711e589f18": "새 패널 및 실시간 업데이트에 사용할 기본 terminal 타이포그래피입니다.",
           "048aac8a64": "Terminal 타이포그래피",
+          "typographyPreviewTitle": "Terminal 미리보기",
+          "typographyPreviewDescription": "Terminal 글꼴 설정을 변경하면 업데이트됩니다.",
           "4415beb958": "비활성",
           "4e7d41a9f0": "활성화됨",
           "e90afcc44f": "끔",

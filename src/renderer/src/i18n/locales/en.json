@@ -8490,6 +8490,8 @@
           "855a76343a": "Import from Ghostty",
           "711e589f18": "Default terminal typography for new panes and live updates.",
           "048aac8a64": "Terminal Typography",
+          "typographyPreviewTitle": "Terminal preview",
+          "typographyPreviewDescription": "Updates as you change terminal font settings.",
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
           "e90afcc44f": "off",

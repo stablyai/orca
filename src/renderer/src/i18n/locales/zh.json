@@ -7402,6 +7402,8 @@
           "855a76343a": "从 Ghostty 导入",
           "711e589f18": "新窗格和实时更新的默认终端排版。",
           "048aac8a64": "终端排版",
+          "typographyPreviewTitle": "终端预览",
+          "typographyPreviewDescription": "更改终端字体设置时会实时更新。",
           "4415beb958": "已禁用",
           "4e7d41a9f0": "已启用",
           "e90afcc44f": "关",

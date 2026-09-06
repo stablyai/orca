@@ -20,11 +20,16 @@ import { translate } from '@/i18n/i18n'
 // Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
 const PREVIEW_COLS = 36
 const PREVIEW_ROWS = 15
+const PREVIEW_HEIGHT_CLASS_BY_SIZE = {
+  default: 'h-[300px]',
+  compact: 'h-64'
+} as const
 
 // Why: color-only stub pane; 40px is wide enough to read inactive-pane opacity dim, narrow enough not to crowd content.
 const STUB_PANE_PX = 40
 
 type PreviewMode = 'dark' | 'light'
+type PreviewSize = keyof typeof PREVIEW_HEIGHT_CLASS_BY_SIZE
 
 type TerminalSettingsPreviewProps = {
   title: string
@@ -33,8 +38,11 @@ type TerminalSettingsPreviewProps = {
   systemPrefersDark: boolean
   /** Override for `settings.terminalFontFamily`; set by the font picker on hover to preview a font before committing. */
   previewFontFamily?: string | null
+  previewRows?: number
+  previewSize?: PreviewSize
   /** Force the preview into this mode regardless of app settings; hides the in-header theme toggle when set. */
   modeOverride?: PreviewMode
+  showPaneDividerToggle?: boolean
   /** Render a Moon/Sun header toggle to flip the preview theme without changing the app theme. Ignored when `modeOverride` is set. */
   showThemeToggle?: boolean
 }
@@ -55,7 +63,10 @@ export function TerminalSettingsPreview({
   settings,
   systemPrefersDark,
   previewFontFamily,
+  previewRows = PREVIEW_ROWS,
+  previewSize = 'default',
   modeOverride,
+  showPaneDividerToggle = true,
   showThemeToggle
 }: TerminalSettingsPreviewProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -141,7 +152,7 @@ export function TerminalSettingsPreview({
       allowTransparency:
         settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
       cols: PREVIEW_COLS,
-      rows: PREVIEW_ROWS
+      rows: previewRows
     })
     terminalRef.current = terminal
 
@@ -255,65 +266,75 @@ export function TerminalSettingsPreview({
             <CardTitle className="text-sm">{title}</CardTitle>
             {description ? <CardDescription>{description}</CardDescription> : null}
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2 py-1">
-              <span className="text-xs font-medium text-muted-foreground">
-                {translate(
-                  'auto.components.settings.TerminalSettingsPreview.50419052fe',
-                  'Pane divider'
-                )}
-              </span>
-              <SettingsSwitch
-                checked={previewPaneDividerVisible}
-                onChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
-                ariaLabel={translate(
-                  'auto.components.settings.TerminalSettingsPreview.f8931d407d',
-                  'Show pane divider in preview'
-                )}
-              />
+          {showPaneDividerToggle || showToggle ? (
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              {showPaneDividerToggle ? (
+                <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2 py-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {translate(
+                      'auto.components.settings.TerminalSettingsPreview.50419052fe',
+                      'Pane divider'
+                    )}
+                  </span>
+                  <SettingsSwitch
+                    checked={previewPaneDividerVisible}
+                    onChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
+                    ariaLabel={translate(
+                      'auto.components.settings.TerminalSettingsPreview.f8931d407d',
+                      'Show pane divider in preview'
+                    )}
+                  />
+                </div>
+              ) : null}
+              {showToggle ? (
+                <div
+                  className="flex gap-0.5 rounded-md border border-border/50 p-0.5"
+                  role="group"
+                  aria-label={translate(
+                    'auto.components.settings.TerminalSettingsPreview.2c248fcc27',
+                    'Preview theme'
+                  )}
+                >
+                  {(['dark', 'light'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setTogglePreviewMode(mode)}
+                      aria-pressed={togglePreviewMode === mode}
+                      aria-label={translate(
+                        'auto.components.settings.TerminalSettingsPreview.a63953a48a',
+                        'Preview {{value0}} theme',
+                        { value0: mode }
+                      )}
+                      title={translate(
+                        'auto.components.settings.TerminalSettingsPreview.a63953a48a',
+                        'Preview {{value0}} theme',
+                        { value0: mode }
+                      )}
+                      className={`rounded-sm p-1 transition-colors ${
+                        togglePreviewMode === mode
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {mode === 'dark' ? (
+                        <Moon className="size-3.5" />
+                      ) : (
+                        <Sun className="size-3.5" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
-            {showToggle ? (
-              <div
-                className="flex gap-0.5 rounded-md border border-border/50 p-0.5"
-                role="group"
-                aria-label={translate(
-                  'auto.components.settings.TerminalSettingsPreview.2c248fcc27',
-                  'Preview theme'
-                )}
-              >
-                {(['dark', 'light'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setTogglePreviewMode(mode)}
-                    aria-pressed={togglePreviewMode === mode}
-                    aria-label={translate(
-                      'auto.components.settings.TerminalSettingsPreview.a63953a48a',
-                      'Preview {{value0}} theme',
-                      { value0: mode }
-                    )}
-                    title={translate(
-                      'auto.components.settings.TerminalSettingsPreview.a63953a48a',
-                      'Preview {{value0}} theme',
-                      { value0: mode }
-                    )}
-                    className={`rounded-sm p-1 transition-colors ${
-                      togglePreviewMode === mode
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {mode === 'dark' ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="px-4 pb-4">
         {/* Why: stub pane on the right keeps inactive-pane opacity visible; divider is opt-in to keep the default preview clean. */}
-        <div className="flex h-[300px] flex-col overflow-hidden rounded-md border border-border/50">
+        <div
+          className={`flex ${PREVIEW_HEIGHT_CLASS_BY_SIZE[previewSize]} flex-col overflow-hidden rounded-md border border-border/50`}
+        >
           <div className="flex min-h-0 flex-1 overflow-hidden" aria-hidden="true">
             <div
               ref={containerRef}

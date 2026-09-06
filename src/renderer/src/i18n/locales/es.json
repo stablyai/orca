@@ -7369,6 +7369,8 @@
           "855a76343a": "Importar desde Ghostty",
           "711e589f18": "Tipografía predeterminada del terminal para paneles nuevos y actualizaciones en vivo.",
           "048aac8a64": "Tipografía del terminal",
+          "typographyPreviewTitle": "Vista previa del terminal",
+          "typographyPreviewDescription": "Se actualiza al cambiar la configuración de fuente del terminal.",
           "4415beb958": "desactivado",
           "4e7d41a9f0": "activado",
           "e90afcc44f": "apagado",

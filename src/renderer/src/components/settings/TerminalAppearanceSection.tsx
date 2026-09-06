@@ -25,6 +25,7 @@ import { SettingsRow, SettingsSubsectionHeader, FontAutocomplete } from './Setti
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
+import { TerminalSettingsPreview } from './TerminalSettingsPreview'
 import { TerminalThemeCatalogSection } from './TerminalThemeSections'
 import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
@@ -125,6 +126,8 @@ export function TerminalAppearanceSection({
     ghosttyImportMatches
   const showGhosttyImport = !isSearching || forceVisiblePrimary || ghosttyImportMatches
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
+  const showTypographyPreview =
+    !isSearching || forceVisiblePrimary || primaryTypographyMatches || typographyMatches
 
   const advancedGroups = [
     cursorMatches
@@ -234,6 +237,27 @@ export function TerminalAppearanceSection({
               />
             </SearchableSetting>
           </div>
+
+          {showTypographyPreview ? (
+            <div className="ml-4">
+              <TerminalSettingsPreview
+                title={translate(
+                  'auto.components.settings.TerminalAppearanceSection.typographyPreviewTitle',
+                  'Terminal preview'
+                )}
+                description={translate(
+                  'auto.components.settings.TerminalAppearanceSection.typographyPreviewDescription',
+                  'Updates as you change terminal font settings.'
+                )}
+                settings={settings}
+                systemPrefersDark={systemPrefersDark}
+                previewFontFamily={previewFontFamily}
+                previewRows={13}
+                previewSize="compact"
+                showPaneDividerToggle={false}
+              />
+            </div>
+          ) : null}
 
           {showTypographyAdvancedDisclosure ? (
             <div className="ml-4">

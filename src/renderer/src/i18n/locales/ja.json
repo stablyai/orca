@@ -7391,6 +7391,8 @@
           "855a76343a": "Ghostty からインポート",
           "711e589f18": "新規ペインとライブアップデートのデフォルトのターミナルタイポグラフィ。",
           "048aac8a64": "ターミナルのタイポグラフィー",
+          "typographyPreviewTitle": "Terminal プレビュー",
+          "typographyPreviewDescription": "Terminal のフォント設定を変更すると更新されます。",
           "4415beb958": "無効",
           "4e7d41a9f0": "有効",
           "e90afcc44f": "オフ",
