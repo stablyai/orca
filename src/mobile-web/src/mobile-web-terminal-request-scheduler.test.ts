@@ -11,7 +11,7 @@ describe('MobileWebTerminalRequestScheduler', () => {
     const first = deferred<null>()
     const terminalRequest = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(null)
     const scheduler = createScheduler(terminalRequest)
-    scheduler.markHostReady('held', true)
+    scheduler.markHostReady(true)
 
     scheduler.sendInput('input', 'YQ==')
     scheduler.sendInput('input', 'Yg==')
@@ -26,7 +26,7 @@ describe('MobileWebTerminalRequestScheduler', () => {
     const terminalRequest = vi.fn().mockRejectedValueOnce(new Error('busy')).mockResolvedValue(null)
     const onError = vi.fn()
     const scheduler = createScheduler(terminalRequest, onError)
-    scheduler.markHostReady('held', true)
+    scheduler.markHostReady(true)
 
     scheduler.sendInput('input', 'YQ==')
     scheduler.sendInput('input', 'Yg==')
@@ -34,7 +34,7 @@ describe('MobileWebTerminalRequestScheduler', () => {
     expect(terminalRequest.mock.calls.map(([request]) => request.sequence)).toEqual([0, 0])
     expect(onError).toHaveBeenCalledOnce()
 
-    scheduler.setAuthority('read-only', false)
+    scheduler.setVisible(false)
     scheduler.sendInput('input', 'Yw==')
     scheduler.sendInput('queryReply', 'ZA==')
     await Promise.resolve()
@@ -54,7 +54,7 @@ describe('MobileWebTerminalRequestScheduler', () => {
       return Promise.resolve(null)
     })
     const scheduler = createScheduler(terminalRequest)
-    scheduler.markHostReady('held', true)
+    scheduler.markHostReady(true)
 
     scheduler.acknowledge(5)
     scheduler.acknowledge(8)
@@ -91,7 +91,7 @@ describe('MobileWebTerminalRequestScheduler', () => {
 
     scheduler.requestResync(4, 'gap')
     expect(terminalRequest).toHaveBeenCalledTimes(1)
-    scheduler.markHostReady('held', true)
+    scheduler.markHostReady(true)
     scheduler.requestResync(4, 'gap')
     scheduler.requestResync(4, 'gap')
     await vi.waitFor(() => expect(terminalRequest).toHaveBeenCalledTimes(2))
@@ -129,7 +129,7 @@ describe('MobileWebTerminalRequestScheduler', () => {
       .mockResolvedValueOnce({ status: 'accepted' })
       .mockResolvedValueOnce({ status: 'cancelled' })
     const scheduler = createScheduler(terminalRequest, vi.fn(), terminalDeviceInputRequest)
-    scheduler.markHostReady('held', true)
+    scheduler.markHostReady(true)
 
     const input = scheduler.sendInputAsync('input', 'YQ==')
     const paste = scheduler.pasteClipboard(true)

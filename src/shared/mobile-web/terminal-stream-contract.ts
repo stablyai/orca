@@ -142,8 +142,10 @@ const SubscribedEventSchema = z
     viewport: ViewportSchema,
     startSequence: SequenceSchema,
     maxOutstandingBytes: z.literal(MOBILE_WEB_TERMINAL_MAX_OUTSTANDING_BYTES),
-    inputFloor: z.enum(['held', 'read-only']),
-    queryReplyAuthority: z.boolean()
+    // Whether the host negotiated opcode 18 on this stream, not an election verdict: the host
+    // re-checks reply authority per frame and never publishes it. Absent means a shell that
+    // predates the field, which cannot prove negotiation, so the page must not attempt a reply.
+    queryReplyNegotiated: z.boolean().optional()
   })
   .strict()
 
@@ -215,9 +217,7 @@ const MetadataEventSchema = z
   .object({
     type: z.literal('metadata'),
     streamId: StreamIdSchema,
-    displayMode: z.enum(['auto', 'desktop']),
-    inputFloor: z.enum(['held', 'read-only']),
-    queryReplyAuthority: z.boolean()
+    displayMode: z.enum(['auto', 'desktop'])
   })
   .strict()
 const ClosedEventSchema = z

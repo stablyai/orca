@@ -232,7 +232,6 @@ function subscribed(): MobileWebTerminalEvent {
     viewport: { cols: 90, rows: 30 },
     startSequence: 0,
     maxOutstandingBytes: 256 * 1024,
-    inputFloor: 'held',
-    queryReplyAuthority: true
+    queryReplyNegotiated: true
   }
 }

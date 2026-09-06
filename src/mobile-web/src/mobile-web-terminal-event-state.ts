@@ -24,15 +24,9 @@ export type MobileWebTerminalEffect =
       type: 'ready'
       sequence: number
       viewport: { cols: number; rows: number }
-      inputFloor: 'held' | 'read-only'
-      queryReplyAuthority: boolean
+      queryReplyNegotiated: boolean
     }
-  | {
-      type: 'authority'
-      displayMode: 'auto' | 'desktop'
-      inputFloor: 'held' | 'read-only'
-      queryReplyAuthority: boolean
-    }
+  | { type: 'displayMode'; displayMode: 'auto' | 'desktop' }
   | { type: 'write'; data: Uint8Array; throughSequence: number }
   | {
       type: 'replace'
@@ -64,8 +58,7 @@ export class MobileWebTerminalEventState {
         type: 'ready',
         sequence: event.startSequence,
         viewport: event.viewport,
-        inputFloor: event.inputFloor,
-        queryReplyAuthority: event.queryReplyAuthority
+        queryReplyNegotiated: event.queryReplyNegotiated === true
       }
     }
     if (event.type === 'output') {
@@ -95,12 +88,7 @@ export class MobileWebTerminalEventState {
       return { type: 'closed' }
     }
     if (event.type === 'metadata') {
-      return {
-        type: 'authority',
-        displayMode: event.displayMode,
-        inputFloor: event.inputFloor,
-        queryReplyAuthority: event.queryReplyAuthority
-      }
+      return { type: 'displayMode', displayMode: event.displayMode }
     }
     if (event.type === 'resized') {
       return { type: 'resized', viewport: event.viewport }

@@ -229,9 +229,7 @@ describe('mobile web terminal snapshot and lifecycle contract', () => {
       {
         type: 'metadata',
         streamId: STREAM_ID,
-        displayMode: 'auto',
-        inputFloor: 'held',
-        queryReplyAuthority: true
+        displayMode: 'auto'
       },
       { type: 'closed', streamId: STREAM_ID, reason: 'terminal-exited' },
       { type: 'error', streamId: STREAM_ID, code: 'host_error', recoverable: true }

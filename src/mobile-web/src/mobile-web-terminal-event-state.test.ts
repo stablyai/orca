@@ -18,15 +18,13 @@ describe('MobileWebTerminalEventState', () => {
         viewport: { cols: 80, rows: 24 },
         startSequence: 10,
         maxOutstandingBytes: 256 * 1024,
-        inputFloor: 'held',
-        queryReplyAuthority: true
+        queryReplyNegotiated: true
       })
     ).toEqual({
       type: 'ready',
       sequence: 10,
       viewport: { cols: 80, rows: 24 },
-      inputFloor: 'held',
-      queryReplyAuthority: true
+      queryReplyNegotiated: true
     })
     state.apply({
       type: 'snapshotStart',
@@ -86,8 +84,7 @@ describe('MobileWebTerminalEventState', () => {
       viewport: { cols: 80, rows: 24 },
       startSequence: 4,
       maxOutstandingBytes: 256 * 1024,
-      inputFloor: 'held',
-      queryReplyAuthority: true
+      queryReplyNegotiated: true
     })
     expect(
       state.apply({
@@ -100,21 +97,29 @@ describe('MobileWebTerminalEventState', () => {
     ).toEqual({ type: 'resync', fromSequence: 4, reason: 'gap' })
   })
 
-  it('publishes input authority changes without exposing host metadata', () => {
+  it('publishes display mode changes without exposing host metadata', () => {
+    const state = new MobileWebTerminalEventState(STREAM_ID)
+    expect(state.apply({ type: 'metadata', streamId: STREAM_ID, displayMode: 'desktop' })).toEqual({
+      type: 'displayMode',
+      displayMode: 'desktop'
+    })
+  })
+
+  it('reads a shell that omits queryReplyNegotiated as no negotiated reply opcode', () => {
     const state = new MobileWebTerminalEventState(STREAM_ID)
     expect(
       state.apply({
-        type: 'metadata',
+        type: 'subscribed',
         streamId: STREAM_ID,
-        displayMode: 'desktop',
-        inputFloor: 'read-only',
-        queryReplyAuthority: false
+        viewport: { cols: 80, rows: 24 },
+        startSequence: 0,
+        maxOutstandingBytes: 256 * 1024
       })
     ).toEqual({
-      type: 'authority',
-      displayMode: 'desktop',
-      inputFloor: 'read-only',
-      queryReplyAuthority: false
+      type: 'ready',
+      sequence: 0,
+      viewport: { cols: 80, rows: 24 },
+      queryReplyNegotiated: false
     })
   })
 })

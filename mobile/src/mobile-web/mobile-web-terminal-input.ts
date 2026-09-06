@@ -29,14 +29,18 @@ export function handleMobileWebTerminalInput(args: {
     requireLive(args.isLive)
     if (args.request.operation === 'input' || args.request.operation === 'queryReply') {
       const bytes = atob(args.request.data)
-      // Why: the page's own label is not evidence; the host drops opcode 18 that fails this same grammar check.
-      if (args.request.operation === 'queryReply' && !isTerminalQueryReply(bytes)) {
-        return null
+      if (args.request.operation === 'queryReply') {
+        // Why: the page's own label is not evidence; the host drops opcode 18 that fails this same grammar check.
+        // A host that never echoed the queryReply capability would take the reply as floor-taking
+        // shell input, so drop rather than downgrade to opcode 0 (TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY).
+        if (!isTerminalQueryReply(bytes) || !args.record.supportsQueryReply) {
+          return null
+        }
       }
       sendMobileWebTerminalFrame(
         args.client,
         args.record,
-        args.request.operation === 'queryReply' && args.record.supportsQueryReply
+        args.request.operation === 'queryReply'
           ? TerminalStreamOpcode.QueryReply
           : TerminalStreamOpcode.Input,
         Uint8Array.from(bytes, (character) => character.charCodeAt(0))
