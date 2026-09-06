@@ -45,8 +45,9 @@ const SPAWN_CALL =
   /\b(?:spawn|spawnSync|spawnDetached|execFile|execFileSync|execFileAsync|execFileCb|exec|execSync|execAsync)\s*\(/g
 const SOURCE_ROOT = resolve(__dirname, '../..')
 /**
- * `run-process.ts` is the chokepoint: it sets windowsHide in `resolveSpawn`,
- * not at the call, so scanning it flags its own implementation.
+ * `run-process.ts` is the chokepoint: the flag comes from `resolveSpawn` (now
+ * in `spawn-resolution.ts`), not from the call, so scanning it flags its own
+ * implementation.
  *
  * `fork` is deliberately absent from SPAWN_CALL. Node forwards the option to
  * spawn at runtime, but `ForkOptions` does not declare it, so the two live
