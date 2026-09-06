@@ -51,12 +51,13 @@ const MANAGED_HOOK_TABLE =
 // Consumed only BETWEEN recovered tables; the last table keeps its trailing
 // newline so removal never glues the surviving neighbors together.
 const RECOVERED_TABLE_SEPARATOR = '\\r?\\n(?:[ \\t]*\\r?\\n)*'
-// Zero-width end-of-recovery check: past the last recovered table's line
-// ending, blank and comment lines may intervene, but the next content must be
-// a `[` header or EOF — anything else (a key/value continuation, even behind a
-// comment) extends the table and ends recovery with the table left intact.
+// Zero-width end-of-recovery check: either EOF directly (the file may end on
+// the `timeout` line with no trailing newline), or past the last table's line
+// ending blank and comment lines may intervene before a `[` header or EOF —
+// anything else (a key/value continuation, even behind a comment) extends the
+// table and ends recovery with the table left intact.
 const RECOVERED_TABLE_BOUNDARY =
-  '(?=\\r?\\n(?:[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n)*(?:\\[|(?:[ \\t]*#[^\\r\\n]*)?$))'
+  '(?=(?:$|\\r?\\n(?:[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n)*(?:\\[|(?:[ \\t]*#[^\\r\\n]*)?$)))'
 const MANAGED_BLOCK_RE = new RegExp(
   `(?:\\r?\\n)*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\r?\\n${MANAGED_HOOK_TABLE}(?:${RECOVERED_TABLE_SEPARATOR}${MANAGED_HOOK_TABLE})*${RECOVERED_TABLE_BOUNDARY})`,
   'g'

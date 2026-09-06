@@ -296,6 +296,27 @@ describe('kimi managed hooks TOML block', () => {
     expect(removed.text).toContain('[tools]')
   })
 
+  it('recovers an orphaned block whose last table ends at EOF without a trailing newline (#18861)', () => {
+    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+    // A hand-trimmed file can end directly on the `timeout` line; requiring a
+    // line ending before the EOF branch strands that table (partial removal
+    // or a full decline).
+    const orphanedNoNewline = installed
+      .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, '\n')
+      .replace(/\n$/, '')
+    expect(orphanedNoNewline).not.toMatch(/\n$/)
+
+    const removed = removeManagedKimiHooks(orphanedNoNewline)
+    expect(removed.changed).toBe(true)
+    expect(removed.text).toBe('default_model = "x"\n')
+    expect(readManagedKimiHookEvents(orphanedNoNewline, isManaged)).toEqual(
+      new Set(KIMI_HOOK_EVENTS)
+    )
+
+    const reinstalled = applyManagedKimiHooks(orphanedNoNewline, COMMAND)
+    expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
+  })
+
   it('treats stale managed entries pointing at a moved script path as managed', () => {
     const staleCommand =
       "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"
