@@ -121,6 +121,16 @@ describe('resolveStructuredLaunchSeedOptions', () => {
     ).toEqual({ model: 'gpt-5.6-sol' })
   })
 
+  it('seeds nothing when the stored values empty the model out', () => {
+    // `valuesByModel` is merged over the resolved model, so a stored `model` key
+    // can blank it. Emitting `{ model: '' }` fails the record's bounded-string
+    // guard, and that throw is not a wire refusal code — it escapes as a raw
+    // error the client reads as unknown, stranding the launch with no fallback.
+    expect(
+      resolveStructuredLaunchSeedOptions(persistedCodex({ 'gpt-5.6-sol': { model: '' } }), 'codex')
+    ).toBeUndefined()
+  })
+
   it('seeds nothing until a model is picked, so the CLI default survives', () => {
     expect(resolveStructuredLaunchSeedOptions(undefined, 'codex')).toBeUndefined()
     expect(
