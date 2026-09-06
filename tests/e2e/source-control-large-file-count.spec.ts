@@ -416,12 +416,17 @@ test.describe('Source Control large file count (#8013)', () => {
         rendererWorkingSetMb: { before: workingSetBeforeMb, after: workingSetAfterMb }
       })
 
-      const tooManyChangesBanner = orcaPage.getByText('Too many changes detected.', {
-        exact: false
-      })
+      const tooManyChangesBanner = orcaPage.getByTestId('too-many-changes-banner')
       await expect(tooManyChangesBanner).toBeVisible()
       if (process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH) {
-        await orcaPage.screenshot({ path: process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH })
+        // Narrowest supported sidebar is where the banner layout is worst.
+        await orcaPage.evaluate(() => {
+          window.__store?.getState().setRightSidebarWidth(250)
+          document.documentElement.classList.add('dark')
+        })
+        await tooManyChangesBanner.screenshot({
+          path: process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH
+        })
       }
 
       expect(measurement.didHitLimit).toBe(true)
@@ -439,7 +444,7 @@ test.describe('Source Control large file count (#8013)', () => {
       )
       expect(hugeState).not.toBeNull()
 
-      const retryButton = tooManyChangesBanner.locator('..').getByRole('button', { name: 'Retry' })
+      const retryButton = tooManyChangesBanner.getByRole('button', { name: 'Retry' })
       await expect(retryButton).toBeVisible()
       // Keep automatic refreshes from removing Retry before its real request starts.
       await installGitStatusRetryBarrier(electronApp, fixture.repoPath)
