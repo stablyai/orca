@@ -101,19 +101,16 @@ export async function inspectTerminalHostProcess(args: {
       clearSteadyStateAnchor(session)
     }
   }
-  // Agent-only evidence cannot erase an ordinary running command's PTY name.
+  const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
+  // Evidence names recognized agents only, so its null must not erase an ordinary command (#18078).
   const ordinaryForeground =
-    foregroundProcess !== null &&
-    !isShellProcess(foregroundProcess) &&
-    !recognizeAgentProcess(foregroundProcess)
-      ? foregroundProcess
-      : null
+    nonShellForeground && !recognizeAgentProcess(foregroundProcess) ? foregroundProcess : null
   return {
     foregroundProcess:
       evidence.verdict === 'live'
         ? (evidence.processName ?? ordinaryForeground)
         : foregroundProcess,
-    hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess),
+    hasChildProcesses: nonShellForeground,
     foregroundProcessEvidence: evidence
   }
 }
