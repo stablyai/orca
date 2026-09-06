@@ -391,4 +391,34 @@ describe('orca cli worktree awareness', () => {
       noParent: false
     })
   })
+  it('passes a board column name through worktree.set for the host to resolve', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_status_name', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          workspaceStatus: 'status-5-2'
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'set',
+        '--worktree',
+        'id:repo::/tmp/repo/child',
+        '--workspace-status',
+        'Human review',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'worktree.set',
+      expect.objectContaining({ workspaceStatus: 'Human review' })
+    )
+  })
 })
