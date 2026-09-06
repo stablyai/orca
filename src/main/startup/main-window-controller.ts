@@ -1,4 +1,5 @@
 import { app, type BrowserWindow } from 'electron'
+import { cancelScheduledRelaunch } from '../app-relaunch'
 import { createMainWindow, loadMainWindow } from '../window/createMainWindow'
 import {
   recordCrashBreadcrumb,
@@ -98,6 +99,9 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     onQuitAborted: () => {
       state.isQuitting = false
       clearExpectedRendererReload()
+      // Why: a relaunch deferred to `quit` must be withdrawn when the quit is abandoned, or the
+      // next unrelated quit — possibly hours later — resurrects it as a surprise restart.
+      cancelScheduledRelaunch()
     },
     onRendererProcessGone: (details, webContentsId) =>
       recordProcessGoneCrash(

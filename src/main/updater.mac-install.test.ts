@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import type * as MacUpdateMarkerModule from './mac-update-install-marker'
 
 const {
   appMock,
@@ -8,7 +9,9 @@ const {
   autoUpdaterMock,
   shellMock,
   isMock,
-  killAllPtyMock
+  killAllPtyMock,
+  isMacUpdateInstallInFlightMock,
+  markMacUpdateInstallInFlightMock
 } = vi.hoisted(() => {
   const appEventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
   const eventHandlers = new Map<string, ((...args: unknown[]) => void)[]>()
@@ -80,7 +83,9 @@ const {
       openExternal: vi.fn()
     },
     isMock: { dev: false },
-    killAllPtyMock: vi.fn()
+    killAllPtyMock: vi.fn(),
+    isMacUpdateInstallInFlightMock: vi.fn(),
+    markMacUpdateInstallInFlightMock: vi.fn()
   }
 })
 
@@ -109,6 +114,12 @@ vi.mock('./ipc/pty', () => ({
   killAllPty: killAllPtyMock
 }))
 
+vi.mock('./mac-update-install-marker', async (importOriginal) => ({
+  ...(await importOriginal<typeof MacUpdateMarkerModule>()),
+  isMacUpdateInstallInFlight: isMacUpdateInstallInFlightMock,
+  markMacUpdateInstallInFlight: markMacUpdateInstallInFlightMock
+}))
+
 vi.mock('./updater-changelog', () => ({
   fetchChangelog: vi.fn().mockResolvedValue(null)
 }))
@@ -134,10 +145,47 @@ describe('updater mac install handoff', () => {
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    isMacUpdateInstallInFlightMock.mockReset()
+    isMacUpdateInstallInFlightMock.mockReturnValue(false)
+    markMacUpdateInstallInFlightMock.mockReset()
     autoUpdaterMock.downloadUpdate.mockResolvedValue([])
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
+
+  it.runIf(process.platform === 'darwin')(
+    'does not write a duplicate marker during explicit quitAndInstall',
+    async () => {
+      const mainWindow = { webContents: { send: vi.fn() } }
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      const { setupAutoUpdater, downloadUpdate, quitAndInstall } = await loadUpdaterModule()
+
+      setupAutoUpdater(mainWindow as never)
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
+      autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      await new Promise((r) => setTimeout(r, 0))
+      downloadUpdate()
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+      quitAndInstall()
+      await vi.waitFor(() => {
+        expect(markMacUpdateInstallInFlightMock).toHaveBeenCalledTimes(1)
+      })
+
+      // The native install path writes the marker before quit; its will-quit hook must not write
+      // another attempt for the same handoff.
+      isMacUpdateInstallInFlightMock.mockReturnValue(true)
+      appMock.emit('will-quit')
+      expect(markMacUpdateInstallInFlightMock).toHaveBeenCalledTimes(1)
+    }
+  )
 
   it.runIf(process.platform === 'darwin')(
     'waits for Squirrel.Mac before honoring a manual quit that should install the update',
@@ -173,14 +221,15 @@ describe('updater mac install handoff', () => {
 
       nativeDownloadedHandler?.()
 
-      await vi.waitFor(() => {
-        expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
-      })
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'downloading',
-        percent: 100,
-        version: '1.0.61'
+        state: 'downloaded',
+        version: '1.0.61',
+        releaseUrl: undefined
       })
+      await vi.waitFor(() => {
+        expect(sendMock).toHaveBeenCalledWith('updater:quitAndInstallRequested')
+      })
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
     }
   )
 
@@ -223,6 +272,9 @@ describe('updater mac install handoff', () => {
       nativeDownloadedHandler?.()
       await vi.advanceTimersByTimeAsync(0)
 
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('updater:quitAndInstallRequested')
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
       expect(onBeforeQuit).toHaveBeenCalledTimes(1)
       expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
 
@@ -237,7 +289,7 @@ describe('updater mac install handoff', () => {
   )
 
   it.runIf(process.platform === 'darwin')(
-    'logs rejected deferred mac install handoffs without unhandled rejection',
+    'reports the update ready before a deferred renderer preparation fails',
     async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const reportDownloaded = vi.fn()
@@ -262,7 +314,7 @@ describe('updater mac install handoff', () => {
       )
       await Promise.resolve()
 
-      expect(reportDownloaded).not.toHaveBeenCalled()
+      expect(reportDownloaded).toHaveBeenCalledTimes(1)
       await vi.waitFor(() => {
         // Why: recordUpdaterLifecycle packs metadata into one console line.
         expect(warn).toHaveBeenCalledWith(

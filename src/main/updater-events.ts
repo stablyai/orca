@@ -43,7 +43,7 @@ type UpdaterHandlerContext = {
   markUpdateCheckEventAttempt: () => boolean
   markUpdateAvailableEventPending: (attemptId: number | null) => void
   markMissingManifestPrereleaseFallbackChecking: () => void
-  performQuitAndInstall: () => void | Promise<void>
+  requestRendererQuitAndInstall: () => void | Promise<void>
   shouldDeferMacQuitForInstall: () => boolean
   recordCompletedUpdateCheck: () => void
   restoreReleaseUpdateSource: () => void
@@ -86,7 +86,7 @@ export function registerAutoUpdaterHandlers({
   markUpdateCheckEventAttempt,
   markUpdateAvailableEventPending,
   markMissingManifestPrereleaseFallbackChecking,
-  performQuitAndInstall,
+  requestRendererQuitAndInstall,
   shouldDeferMacQuitForInstall,
   recordCompletedUpdateCheck,
   restoreReleaseUpdateSource,
@@ -105,7 +105,7 @@ export function registerAutoUpdaterHandlers({
     hasInstallableDownloadedVersion,
     getPendingInstallVersion,
     getKnownReleaseUrl,
-    performQuitAndInstall,
+    requestRendererQuitAndInstall,
     shouldDeferMacQuitForInstall,
     sendStatus
   })

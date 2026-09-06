@@ -1,5 +1,9 @@
 import { app, autoUpdater as nativeUpdater } from 'electron'
 import type { UpdateStatus } from '../shared/update-status-types'
+import {
+  isMacUpdateInstallInFlight,
+  markMacUpdateInstallInFlight
+} from './mac-update-install-marker'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 
 const MAC_INSTALL_READY_TIMEOUT_MS = 15000
@@ -9,7 +13,7 @@ export function registerMacUpdaterEvents({
   hasInstallableDownloadedVersion,
   getPendingInstallVersion,
   getKnownReleaseUrl,
-  performQuitAndInstall,
+  requestRendererQuitAndInstall,
   shouldDeferMacQuitForInstall,
   sendStatus
 }: {
@@ -17,14 +21,14 @@ export function registerMacUpdaterEvents({
   hasInstallableDownloadedVersion: () => boolean
   getPendingInstallVersion: () => string
   getKnownReleaseUrl: () => string | undefined
-  performQuitAndInstall: () => void | Promise<void>
+  requestRendererQuitAndInstall: () => void | Promise<void>
   shouldDeferMacQuitForInstall: () => boolean
   sendStatus: (status: UpdateStatus) => void
 }): void {
   if (process.platform === 'darwin') {
     nativeUpdater.on('update-downloaded', () => {
       const hasInstallableVersion = hasInstallableDownloadedVersion()
-      handleMacInstallerReady(hasInstallableVersion, performQuitAndInstall, () => {
+      handleMacInstallerReady(hasInstallableVersion, requestRendererQuitAndInstall, () => {
         sendStatus({
           state: 'downloaded',
           version: getPendingInstallVersion(),
@@ -33,6 +37,29 @@ export function registerMacUpdaterEvents({
       })
     })
   }
+
+  // Why will-quit and not the explicit install path only: autoInstallOnAppQuit is true on macOS
+  // (getLinuxPackageType() returns 'non-root' off Linux), so Squirrel applies a staged update on
+  // an ordinary quit too. A plain Cmd+Q therefore opens the same window in which reopening the
+  // old version cancels the install, and that quit never runs performQuitAndInstall.
+  // Why will-quit rather than before-quit: vetoes have already been resolved here, so the app is
+  // genuinely on its way out and the marker cannot strand a launch for a quit that got abandoned.
+  app.on('will-quit', () => {
+    if (
+      process.platform !== 'darwin' ||
+      !isMacInstallerReady() ||
+      // Explicit quitAndInstall already wrote the marker immediately before invoking native
+      // handoff. Writing a second attempt here leaves an orphan marker that reports the same
+      // install again on a later startup and can keep the launch gate active after settlement.
+      isMacUpdateInstallInFlight()
+    ) {
+      return
+    }
+    const pendingVersion = getPendingInstallVersion()
+    if (pendingVersion) {
+      markMacUpdateInstallInFlight(pendingVersion)
+    }
+  })
 
   app.on('before-quit', (event) => {
     if (!shouldDeferMacQuitForInstall()) {
@@ -186,6 +213,9 @@ export function handleMacInstallerReady(
   })
 
   if (installRequestedAfterSquirrelReady && hasNewerDownloadedVersion) {
+    installRequestedAfterSquirrelReady = false
+    // Why: a rejected renderer checkpoint must fall back to Ready to Install, not stick at 100%.
+    onReadyToReportDownloaded()
     void Promise.resolve()
       .then(() => onReadyToInstall())
       .catch((error) => {

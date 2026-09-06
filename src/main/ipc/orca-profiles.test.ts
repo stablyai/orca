@@ -6,6 +6,7 @@ const {
   appQuitMock,
   appRelaunchMock,
   relaunchAppMock,
+  scheduleRelaunchOnQuitMock,
   destroySystemTrayMock,
   createLocalOrcaProfileMock,
   getOrcaProfileListStateMock,
@@ -18,6 +19,7 @@ const {
   appQuitMock: vi.fn(),
   appRelaunchMock: vi.fn(),
   relaunchAppMock: vi.fn(),
+  scheduleRelaunchOnQuitMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
   createLocalOrcaProfileMock: vi.fn(),
   getOrcaProfileListStateMock: vi.fn(),
@@ -44,7 +46,8 @@ vi.mock('../tray/system-tray', () => ({
 }))
 
 vi.mock('../app-relaunch', () => ({
-  relaunchApp: relaunchAppMock
+  relaunchApp: relaunchAppMock,
+  scheduleRelaunchOnQuit: scheduleRelaunchOnQuitMock
 }))
 
 vi.mock('../orca-profiles/profile-index-store', () => ({
@@ -81,6 +84,7 @@ describe('registerOrcaProfileHandlers', () => {
     appRelaunchMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
+    scheduleRelaunchOnQuitMock.mockReset()
     destroySystemTrayMock.mockReset()
     createLocalOrcaProfileMock.mockReset()
     getOrcaProfileListStateMock.mockReset()
@@ -170,8 +174,8 @@ describe('registerOrcaProfileHandlers', () => {
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(appRelaunchMock).toHaveBeenCalledOnce()
-    expect(relaunchAppMock).toHaveBeenCalledWith('profile-switch')
+    expect(scheduleRelaunchOnQuitMock).toHaveBeenCalledOnce()
+    expect(scheduleRelaunchOnQuitMock).toHaveBeenCalledWith('profile-switch')
     // Why quit, not exit: before-quit/will-quit teardown (scrollback capture,
     // PTY kill, daemon checkpoints) must run on a profile switch.
     expect(appQuitMock).toHaveBeenCalledOnce()
@@ -327,8 +331,8 @@ describe('registerOrcaProfileHandlers', () => {
 
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(appRelaunchMock).toHaveBeenCalledOnce()
-    expect(relaunchAppMock).toHaveBeenCalledWith('profile-transfer')
+    expect(scheduleRelaunchOnQuitMock).toHaveBeenCalledOnce()
+    expect(scheduleRelaunchOnQuitMock).toHaveBeenCalledWith('profile-transfer')
     expect(appQuitMock).toHaveBeenCalledOnce()
     expect(appExitMock).not.toHaveBeenCalled()
   })

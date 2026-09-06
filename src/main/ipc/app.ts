@@ -7,7 +7,7 @@ import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp } from '../app-relaunch'
+import { relaunchApp, scheduleRelaunchOnQuit } from '../app-relaunch'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
@@ -303,7 +303,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Why: use the normal quit pipeline so daemon checkpoints and telemetry flush before exit.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      relaunchApp('admin-restart')
+      // Why scheduleRelaunchOnQuit: app.quit() here is vetoable, and a queued relaunch cannot be
+      // withdrawn — an abandoned restart would otherwise reopen the app at the next real exit.
+      scheduleRelaunchOnQuit('admin-restart')
       app.quit()
     }, 150)
   })

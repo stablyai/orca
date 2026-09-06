@@ -193,7 +193,7 @@ describe('createShutdownCheckpointGuard', () => {
       join(process.cwd(), 'src/renderer/src/components/use-terminal-editor-close-foundation.ts'),
       'utf8'
     )
-    const closeStart = source.indexOf('const confirmNativeWindowClose = useCallback(() => {')
+    const closeStart = source.indexOf('const confirmNativeWindowClose = useCallback(')
     const closeEnd = source.indexOf('window.api.ui.confirmWindowClose()', closeStart)
     expect(closeStart).toBeGreaterThanOrEqual(0)
     expect(closeEnd).toBeGreaterThan(closeStart)

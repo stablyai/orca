@@ -10,6 +10,10 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const collectBrowserWebviewIdsCalls = vi.hoisted(() => ({ count: 0 }))
+const closeRequestHandlerRef = vi.hoisted(() => ({
+  current: null as ((data: { isQuitting: boolean; requestId?: number }) => void) | null
+}))
+const proceedToNativeWindowCloseMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../store', () => {
   const state = {
@@ -40,7 +44,9 @@ vi.mock('@/lib/shutdown-checkpoint-guard', () => ({
   preventUnloadAndScheduleShutdownCheckpointReset: vi.fn()
 }))
 vi.mock('./window-close-request-coordinator', () => ({
-  setWindowCloseRequestHandler: vi.fn()
+  setWindowCloseRequestHandler: (handler: typeof closeRequestHandlerRef.current) => {
+    closeRequestHandlerRef.current = handler
+  }
 }))
 
 const { useTerminalWindowLifecycle } = await import('./use-terminal-window-lifecycle')
@@ -49,7 +55,7 @@ const controller = {
   activeBrowserTabId: null,
   activeTabType: 'terminal',
   activeWorktreeBrowserTabIdsKey: '',
-  proceedToNativeWindowClose: () => {},
+  proceedToNativeWindowClose: proceedToNativeWindowCloseMock,
   queueEditorCloseRequests: () => {},
   renderedActiveWorktreeId: null,
   setActiveBrowserTab: () => {},
@@ -69,6 +75,8 @@ function Host(): null {
 afterEach(() => {
   cleanup()
   collectBrowserWebviewIdsCalls.count = 0
+  closeRequestHandlerRef.current = null
+  proceedToNativeWindowCloseMock.mockReset()
   bumpRender = null
 })
 
@@ -82,5 +90,13 @@ describe('useTerminalWindowLifecycle browser-webview id seed', () => {
     }
 
     expect(collectBrowserWebviewIdsCalls.count).toBe(1)
+  })
+
+  it('forwards requestId when a clean close proceeds natively', () => {
+    render(<Host />)
+
+    closeRequestHandlerRef.current?.({ isQuitting: true, requestId: 42 })
+
+    expect(proceedToNativeWindowCloseMock).toHaveBeenCalledWith(true, 42)
   })
 })

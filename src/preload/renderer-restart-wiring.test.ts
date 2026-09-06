@@ -16,6 +16,7 @@ describe('renderer restart wiring', () => {
     const restartAborted = vi.fn()
     const handleStatus = vi.fn()
     const abort = vi.fn()
+    const requestUpdaterInstall = vi.fn(() => Promise.resolve())
     const listeners = new Map<string, (...args: unknown[]) => void>()
     const ipcRenderer = {
       on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
@@ -26,17 +27,24 @@ describe('renderer restart wiring', () => {
     eventTarget.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, unloadPrevented)
     eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, restartAborted)
 
-    registerRendererRestartIpcRelays(ipcRenderer, eventTarget, { handleStatus, abort })
+    registerRendererRestartIpcRelays(
+      ipcRenderer,
+      eventTarget,
+      { handleStatus, abort },
+      requestUpdaterInstall
+    )
     listeners.get('updater:status')?.({}, { state: 'error', message: 'install failed' })
     // Why: main abandons an install without any status when its verdict outlived the cycle.
     listeners.get('updater:quitAndInstallAborted')?.({})
     listeners.get('window:unload-prevented')?.({})
+    listeners.get('updater:quitAndInstallRequested')?.({})
 
-    expect(ipcRenderer.on).toHaveBeenCalledTimes(3)
+    expect(ipcRenderer.on).toHaveBeenCalledTimes(4)
     expect(handleStatus).toHaveBeenCalledWith({ state: 'error', message: 'install failed' })
     expect(abort).toHaveBeenCalledTimes(1)
     expect(unloadPrevented).toHaveBeenCalledTimes(1)
     expect(restartAborted).toHaveBeenCalledTimes(1)
+    expect(requestUpdaterInstall).toHaveBeenCalledTimes(1)
   })
 
   it('marks preparation before invoking main and aborts on IPC failure', async () => {
@@ -76,5 +84,33 @@ describe('renderer restart wiring', () => {
 
     expect(invoke).not.toHaveBeenCalled()
     expect(relay.markPrepared).not.toHaveBeenCalled()
+
+    await expect(
+      prepareAndInvokeUpdaterInstall(eventTarget, relay, invoke, () => Promise.resolve())
+    ).resolves.toBeUndefined()
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(relay.markPrepared).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesces simultaneous renderer and main install requests into one checkpoint', async () => {
+    const eventTarget = new EventTarget()
+    let finishCheckpoint!: () => void
+    const awaitCheckpoint = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishCheckpoint = resolve
+        })
+    )
+    const invoke = vi.fn(() => Promise.resolve())
+    const relay = { markPrepared: vi.fn(), abort: vi.fn() }
+
+    const first = prepareAndInvokeUpdaterInstall(eventTarget, relay, invoke, awaitCheckpoint)
+    const second = prepareAndInvokeUpdaterInstall(eventTarget, relay, invoke, awaitCheckpoint)
+    await vi.waitFor(() => expect(awaitCheckpoint).toHaveBeenCalledTimes(1))
+    finishCheckpoint()
+    await Promise.all([first, second])
+
+    expect(relay.markPrepared).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledTimes(1)
   })
 })

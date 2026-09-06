@@ -47,7 +47,10 @@ export type UiWindowApi = {
   onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
   requestClose: () => void
   popupMenu: () => void
-  onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
+  onWindowCloseRequested: (
+    callback: (data: { isQuitting: boolean; requestId?: number }) => void
+  ) => () => void
+  cancelWindowClose: (requestId?: number) => void
   confirmWindowClose: () => void
   notifyWindowRevealed: () => void
 }

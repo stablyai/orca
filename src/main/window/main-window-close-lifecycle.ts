@@ -24,6 +24,11 @@ export function installMainWindowCloseLifecycle(args: {
   const confirmCloseChannel = 'window:confirm-close'
   const closeRequestReceivedChannel = 'window:close-request-received'
   let closeRequestSequence = 0
+  // Why a set and not just the latest id: a dirty-file dialog can still be holding request N when
+  // a second close issues N+1. Comparing against the latest would reject the user's real Cancel on
+  // N and leave the quit state stuck — the mirror image of the stale-cancel bug this correlation
+  // exists to prevent. Any request that has not yet resolved may legitimately be cancelled.
+  const outstandingCloseRequests = new Set<number>()
   let quitRendererAckRequestId: number | null = null
   let quitRendererAckTimer: ReturnType<typeof setTimeout> | null = null
   const clearQuitRendererAckTimer = (): void => {
@@ -115,6 +120,7 @@ export function installMainWindowCloseLifecycle(args: {
     e.preventDefault()
     const isQuitting = opts?.getIsQuitting?.() ?? false
     const requestId = ++closeRequestSequence
+    outstandingCloseRequests.add(requestId)
     if (isQuitting) {
       armQuitRendererAckTimer(requestId)
     }
@@ -124,8 +130,28 @@ export function installMainWindowCloseLifecycle(args: {
       requestId
     })
   })
+  const onCloseCancelled = (event: Electron.IpcMainEvent, requestId?: number): void => {
+    if (event.sender.id !== rendererWebContentsId) {
+      return
+    }
+    // Why an outstanding id: accepting an uncorrelated or already-resolved cancel lets a stale one
+    // clear the quit state of a request still being decided.
+    if (typeof requestId !== 'number' || !outstandingCloseRequests.delete(requestId)) {
+      return
+    }
+    // The quit is abandoned, so nothing older is pending either.
+    outstandingCloseRequests.clear()
+    // Why the same treatment as a prevented unload: a guard veto abandons the quit just as
+    // surely, it simply has no beforeunload to report it.
+    state.resumeBoundsPersistence()
+    clearQuitRendererAckTimer()
+    opts?.onQuitAborted?.()
+  }
+  ipcMain.on('window:close-cancelled', onCloseCancelled)
+
   mainWindow.webContents.on('will-prevent-unload', () => {
     // Why: a prevented beforeunload cancels the quit; release the bounds-persistence freeze so later resizing still saves.
+    outstandingCloseRequests.clear()
     state.resumeBoundsPersistence()
     clearQuitRendererAckTimer()
     opts?.onQuitAborted?.()
@@ -134,6 +160,8 @@ export function installMainWindowCloseLifecycle(args: {
 
   const onConfirmClose = (): void => {
     clearQuitRendererAckTimer()
+    // The close was answered, so no earlier request is still awaiting a decision.
+    outstandingCloseRequests.clear()
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
       mainWindow.close()
@@ -173,7 +201,12 @@ export function installMainWindowCloseLifecycle(args: {
     if (hideToTrayIfEnabled()) {
       return
     }
-    mainWindow.webContents.send('window:close-requested', { isQuitting: false })
+    // Why a requestId here too: main now requires an exact correlation on the cancel, so a
+    // request sent without one could never be cancelled — the renderer-drawn X must be
+    // cancellable just like a native close.
+    const requestId = ++closeRequestSequence
+    outstandingCloseRequests.add(requestId)
+    mainWindow.webContents.send('window:close-requested', { isQuitting: false, requestId })
   }
   // Why: renderer-drawn title-bar ··· menu button replicates the Alt-key reveal autoHideMenuBar provides (Windows/Linux).
   const popupMenuChannel = 'menu:popup'
@@ -203,6 +236,7 @@ export function installMainWindowCloseLifecycle(args: {
     ipcMain.removeListener(popupMenuChannel, onPopupMenu)
     ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
+    ipcMain.removeListener('window:close-cancelled', onCloseCancelled)
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
   }
   return { dispose }

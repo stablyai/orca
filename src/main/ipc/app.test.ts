@@ -9,6 +9,7 @@ const {
   spawnMock,
   destroySystemTrayMock,
   relaunchAppMock,
+  scheduleRelaunchOnQuitMock,
   showOpenDialogMock,
   grantFloatingWorkspaceDirectoryMock,
   registerRendererShutdownCheckpointHandlerMock,
@@ -21,6 +22,7 @@ const {
   spawnMock: vi.fn(),
   destroySystemTrayMock: vi.fn(),
   relaunchAppMock: vi.fn(),
+  scheduleRelaunchOnQuitMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
   grantFloatingWorkspaceDirectoryMock: vi.fn(),
   registerRendererShutdownCheckpointHandlerMock: vi.fn(),
@@ -98,7 +100,8 @@ vi.mock('../tray/system-tray', () => ({
 }))
 
 vi.mock('../app-relaunch', () => ({
-  relaunchApp: relaunchAppMock
+  relaunchApp: relaunchAppMock,
+  scheduleRelaunchOnQuit: scheduleRelaunchOnQuitMock
 }))
 
 vi.mock('./floating-workspace-directory', () => ({
@@ -154,6 +157,7 @@ describe('registerAppHandlers', () => {
     destroySystemTrayMock.mockReset()
     relaunchAppMock.mockReset()
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
+    scheduleRelaunchOnQuitMock.mockReset()
     showOpenDialogMock.mockReset()
     grantFloatingWorkspaceDirectoryMock.mockReset()
     registerRendererShutdownCheckpointHandlerMock.mockReset()
@@ -242,8 +246,11 @@ describe('registerAppHandlers', () => {
     await restartPromise
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(appRelaunchMock).toHaveBeenCalledTimes(1)
-    expect(relaunchAppMock).toHaveBeenCalledWith('admin-restart')
+    expect(scheduleRelaunchOnQuitMock).toHaveBeenCalledTimes(1)
+    expect(scheduleRelaunchOnQuitMock).toHaveBeenCalledWith('admin-restart')
+    // Why not relaunchApp: this path quits vetoably, so the relaunch must only be
+    // queued if the quit actually happens.
+    expect(relaunchAppMock).not.toHaveBeenCalled()
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).not.toHaveBeenCalled()
   })
@@ -270,7 +277,7 @@ describe('registerAppHandlers', () => {
     await restartPromise
     await vi.advanceTimersByTimeAsync(150)
 
-    expect(appRelaunchMock).toHaveBeenCalledTimes(1)
+    expect(scheduleRelaunchOnQuitMock).toHaveBeenCalledTimes(1)
     expect(appQuitMock).toHaveBeenCalledTimes(1)
     expect(appExitMock).not.toHaveBeenCalled()
   })

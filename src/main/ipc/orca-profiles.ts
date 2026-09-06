@@ -1,6 +1,6 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { relaunchApp, type AppRelaunchReason } from '../app-relaunch'
+import { scheduleRelaunchOnQuit, type AppRelaunchReason } from '../app-relaunch'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -159,7 +159,9 @@ async function runBeforeProfileRelaunch(
 
 function scheduleProfileRelaunch(reason: Extract<AppRelaunchReason, `profile-${string}`>): void {
   setTimeout(() => {
-    relaunchApp(reason)
+    // Why scheduleRelaunchOnQuit: the quit below is vetoable and a queued relaunch cannot be
+    // withdrawn, so an abandoned profile switch must not leave a replacement process pending.
+    scheduleRelaunchOnQuit(reason)
     // Why: app.quit() (not app.exit) so before-quit/will-quit still run —
     // renderer scrollback capture, PTY kill, stats flush, and daemon final
     // checkpoints must not be skipped on a profile switch.

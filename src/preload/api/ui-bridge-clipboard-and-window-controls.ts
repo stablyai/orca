@@ -181,17 +181,27 @@ export const uiClipboardAndWindowControlsApi = {
   popupMenu: (): void => {
     ipcRenderer.send('menu:popup')
   },
-  onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void): (() => void) => {
+  onWindowCloseRequested: (
+    callback: (data: { isQuitting: boolean; requestId?: number }) => void
+  ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
       data: { isQuitting: boolean; requestId?: number }
     ): void => {
       // Why: main cannot reach will-quit while a frozen renderer owns the window close handshake.
       ipcRenderer.send('window:close-request-received', data?.requestId)
-      callback({ isQuitting: data?.isQuitting ?? false })
+      // Why forward requestId: main correlates a cancel against the request it answers, so a
+      // stale cancel cannot clear the quit state of a later one still being decided.
+      callback({ isQuitting: data?.isQuitting ?? false, requestId: data?.requestId })
     }
     ipcRenderer.on('window:close-requested', listener)
     return () => ipcRenderer.removeListener('window:close-requested', listener)
+  },
+  // Why a distinct channel: main preventDefaults the close and waits for the renderer's answer,
+  // but a declined close previously sent nothing at all, so main could not tell "still deciding"
+  // from "the user said no".
+  cancelWindowClose: (requestId?: number): void => {
+    ipcRenderer.send('window:close-cancelled', requestId)
   },
   confirmWindowClose: (): void => {
     ipcRenderer.send('window:confirm-close')

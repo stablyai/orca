@@ -1,17 +1,12 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { resolveMacAppBundlePath } from '../../shared/mac-update-install-marker'
 
 const MAC_BUNDLE_UPDATE_TIMEOUT_MS = 120_000
 
 export function getMacAppBundlePath(executable: string): string | null {
-  if (process.platform !== 'darwin') {
-    return null
-  }
-  const macOsDir = dirname(executable)
-  const contentsDir = dirname(macOsDir)
-  const appBundlePath = dirname(contentsDir)
-  return appBundlePath.endsWith('.app') ? appBundlePath : null
+  return resolveMacAppBundlePath(executable)
 }
 
 export async function waitForMacBundleVersion(
@@ -19,12 +14,39 @@ export async function waitForMacBundleVersion(
   targetVersion: string,
   timeoutMs = MAC_BUNDLE_UPDATE_TIMEOUT_MS
 ): Promise<boolean> {
+  return waitForMacBundleVersionMatching(executable, (v) => v === targetVersion, timeoutMs)
+}
+
+/**
+ * Wait until the bundle stops reporting `fromVersion`.
+ *
+ * Why not wait for a specific target: the version we asked for is not necessarily the one the
+ * installer stages — a later attempt can supersede ours. Waiting for *any* change is correct
+ * whichever build lands, and avoids burning the whole timeout on a target nobody is installing.
+ */
+export async function waitForMacBundleVersionChange(
+  executable: string,
+  fromVersion: string,
+  timeoutMs = MAC_BUNDLE_UPDATE_TIMEOUT_MS
+): Promise<boolean> {
+  return waitForMacBundleVersionMatching(
+    executable,
+    (v) => v !== null && v !== fromVersion,
+    timeoutMs
+  )
+}
+
+async function waitForMacBundleVersionMatching(
+  executable: string,
+  matches: (version: string | null) => boolean,
+  timeoutMs: number
+): Promise<boolean> {
   const appBundlePath = getMacAppBundlePath(executable)
   if (!appBundlePath) {
     return false
   }
   const infoPlistPath = resolve(appBundlePath, 'Contents', 'Info.plist')
-  if ((await readMacBundleVersion(infoPlistPath)) === targetVersion) {
+  if (matches(await readMacBundleVersion(infoPlistPath))) {
     return true
   }
 
@@ -52,7 +74,7 @@ export async function waitForMacBundleVersion(
       checking = true
       void readMacBundleVersion(infoPlistPath)
         .then((version) => {
-          if (version === targetVersion) {
+          if (matches(version)) {
             finish(true)
           }
         })
@@ -76,7 +98,12 @@ export async function waitForMacBundleVersion(
   })
 }
 
-async function readMacBundleVersion(infoPlistPath: string): Promise<string | null> {
+/** Reads the bundle's short version, or null when it cannot be read — which during a swap
+ *  means "still installing", never "gone". */
+export async function readMacBundleVersion(bundlePath: string): Promise<string | null> {
+  const infoPlistPath = bundlePath.endsWith('Info.plist')
+    ? bundlePath
+    : resolve(bundlePath, 'Contents', 'Info.plist')
   try {
     const plist = await readFile(infoPlistPath, 'utf8')
     const match = /<key>CFBundleShortVersionString<\/key>\s*<string>([^<]+)<\/string>/.exec(plist)

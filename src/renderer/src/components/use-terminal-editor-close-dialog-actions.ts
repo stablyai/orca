@@ -120,8 +120,15 @@ export function useTerminalEditorCloseDialogActions(
     }
     isClosingRef.current = true
     pendingEditorCloseQueueRef.current = []
+    const abandonedWindowClose = windowCloseAfterDirtyRef.current
     windowCloseAfterDirtyRef.current = null
     setSaveDialogFileId(null)
+    if (abandonedWindowClose) {
+      // Why tell main: cancelling here drops a pending window close without any beforeunload, so
+      // main would otherwise never learn the quit was abandoned and a relaunch deferred to `quit`
+      // would fire on the next unrelated one.
+      window.api.ui.cancelWindowClose(abandonedWindowClose.requestId)
+    }
     releaseCloseDialogGuardAfterDebounce()
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [releaseCloseDialogGuardAfterDebounce])

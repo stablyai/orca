@@ -6,14 +6,19 @@ import {
   isOrchestrationMutation,
   orchestrationMigrationData
 } from '../../shared/orchestration-rpc-contract'
-import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
+import type { PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
+import { awaitMacUpdateInstall } from './mac-update-install-gate'
+
+/** ShipIt relaunches the swapped app itself; give that longer than an ordinary open wait. */
+const POST_INSTALL_RELAUNCH_WAIT_MS = 60_000
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import { getCliStatus, projectRemoteAppStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import { attachMutationRecovery } from './client-error-recovery'
-import { markEnvironmentUsed, resolveEnvironmentPairingOffer } from './environments'
+import { markEnvironmentUsed } from './environments'
+import { resolveRemotePairing } from './remote-pairing-offer'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
@@ -262,11 +267,48 @@ export class RuntimeClient {
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }
+    // Why before launching: Squirrel's installer refuses to swap the bundle while any instance
+    // of it runs, and gives up silently — so opening Orca mid-install is how our own updates
+    // get cancelled and the user is left on the old version.
+    const installGate = await awaitMacUpdateInstall(process.execPath)
+    if (installGate.kind === 'untargetable-override') {
+      throw new RuntimeClientError(
+        'update_install_gate_untargetable',
+        'ORCA_OPEN_COMMAND is set without ORCA_APP_EXECUTABLE, so Orca cannot tell which app bundle would be launched. Opening the wrong one during an update cancels it. Set ORCA_APP_EXECUTABLE to the bundle you intend to open, or unset ORCA_OPEN_COMMAND.'
+      )
+    }
+    if (installGate.kind === 'installed') {
+      // Why wait longer than the caller's timeout: the installer relaunches Orca itself, and
+      // launching before that lands is how a second instance appears — which then blocks the
+      // NEXT update the same way. Only launch if the installer's relaunch never arrives.
+      const relaunched = await this.waitForDesktopWindow(
+        Math.max(timeoutMs, POST_INSTALL_RELAUNCH_WAIT_MS)
+      )
+      if (relaunched) {
+        return relaunched
+      }
+    }
+    // Why no failure branch for 'gave-up': refusing to open Orca is a worse outcome than a
+    // cancelled update, so an installer that never finished must not lock the user out.
     launchOrcaApp()
     if (initial.result.app.desktopWindowStatus === 'available') {
       return initial
     }
 
+    const opened = await this.waitForDesktopWindow(timeoutMs)
+    if (opened) {
+      return opened
+    }
+
+    throw new RuntimeClientError(
+      'runtime_open_timeout',
+      'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
+    )
+  }
+
+  private async waitForDesktopWindow(
+    timeoutMs: number
+  ): Promise<RuntimeRpcSuccess<CliStatusResult> | null> {
     const startedAt = Date.now()
     while (Date.now() - startedAt < timeoutMs) {
       const status = await this.getCliStatus()
@@ -278,11 +320,7 @@ export class RuntimeClient {
       }
       await delay(250)
     }
-
-    throw new RuntimeClientError(
-      'runtime_open_timeout',
-      'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
-    )
+    return null
   }
 }
 
@@ -291,33 +329,6 @@ function throwDesktopActivationBlocked(): never {
     'desktop_activation_blocked',
     'Orca is running headlessly, but it cannot open a desktop window safely because the persistent terminal provider is unavailable. Quit Orca normally and start the app again; do not use open -n.'
   )
-}
-
-function resolveRemotePairing(
-  userDataPath: string,
-  pairingCode: string | null,
-  environmentSelector: string | null
-): PairingOffer | null {
-  if (pairingCode && environmentSelector) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use either --pairing-code or --environment, not both.'
-    )
-  }
-  if (environmentSelector) {
-    return resolveEnvironmentPairingOffer(userDataPath, environmentSelector)
-  }
-  if (!pairingCode) {
-    return null
-  }
-  const pairing = parsePairingCode(pairingCode)
-  if (!pairing) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Invalid remote pairing code. Expected an orca://pair?... URL or bare pairing payload.'
-    )
-  }
-  return pairing
 }
 
 function delay(ms: number): Promise<void> {

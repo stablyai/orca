@@ -7,6 +7,7 @@ import { armUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
 import { getLinuxPackageType } from '../linux-update-package-type'
 import { LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE } from '../linux-package-downloaded-status'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
+import { markMacUpdateInstallInFlight } from '../mac-update-install-marker'
 import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-update-handoff'
 import { UpdaterPackageRecovery } from './updater-package-recovery'
 
@@ -102,6 +103,12 @@ export abstract class UpdaterInstallExecution extends UpdaterPackageRecovery {
         // Why: defensive — never call quitAndInstall if recovery/reset already cleared the handoff.
         if (!this.quitAndInstallInProgress) {
           return
+        }
+        // Why before the native call: from here ShipIt waits for this process to exit, and any
+        // launch of this bundle in that window cancels the install. The marker is the only way
+        // a launching process can know that, because this process is about to be gone.
+        if (process.platform === 'darwin') {
+          markMacUpdateInstallInFlight(pendingVersion)
         }
         // Why: mark before the call so a sync 'error' during quitAndInstall can recover; pre-native errors must not look like install failure.
         this.quitAndInstallNativeInvoked = true

@@ -15,7 +15,8 @@ import {
 export function registerRendererRestartIpcRelays(
   ipcRenderer: Pick<IpcRenderer, 'on'>,
   eventTarget: EventTarget,
-  relay: Pick<UpdaterQuitAbortRelay, 'handleStatus' | 'abort'>
+  relay: Pick<UpdaterQuitAbortRelay, 'handleStatus' | 'abort'>,
+  requestUpdaterInstall?: () => Promise<void>
 ): void {
   ipcRenderer.on('updater:status', (_event, status: UpdateStatus) => {
     relay.handleStatus(status)
@@ -28,7 +29,16 @@ export function registerRendererRestartIpcRelays(
     eventTarget.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
     eventTarget.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
   })
+  // Why: a quit deferred during macOS staging still needs the normal hot-exit checkpoint.
+  ipcRenderer.on('updater:quitAndInstallRequested', () => {
+    void requestUpdaterInstall?.().catch((error) => {
+      console.error('[updater] Deferred install preparation failed:', error)
+    })
+  })
 }
+
+// Why: downloaded status and a deferred request can land together; one latch must own both.
+let updaterInstallAttempt: Promise<void> | null = null
 
 export async function prepareAndInvokeUpdaterInstall(
   eventTarget: EventTarget,
@@ -36,17 +46,30 @@ export async function prepareAndInvokeUpdaterInstall(
   invoke: () => Promise<void>,
   awaitCheckpoint: () => Promise<void>
 ): Promise<void> {
-  await prepareRendererForAppRestart(eventTarget, {
-    startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-    abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-    awaitCheckpoint
-  })
-  relay.markPrepared()
+  if (updaterInstallAttempt) {
+    return updaterInstallAttempt
+  }
+  const attempt = (async (): Promise<void> => {
+    await prepareRendererForAppRestart(eventTarget, {
+      startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
+      abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+      awaitCheckpoint
+    })
+    relay.markPrepared()
+    try {
+      await invoke()
+    } catch (error) {
+      relay.abort()
+      throw error
+    }
+  })()
+  updaterInstallAttempt = attempt
   try {
-    await invoke()
-  } catch (error) {
-    relay.abort()
-    throw error
+    await attempt
+  } finally {
+    if (updaterInstallAttempt === attempt) {
+      updaterInstallAttempt = null
+    }
   }
 }
 

@@ -1,7 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { UpdateStatus } from '../../shared/update-status-types'
-import { prepareAndInvokeUpdaterInstall } from '../renderer-restart-wiring'
-import { awaitBeforeUnloadCheckpoint, updaterQuitAbortRelay } from '../preload-runtime-support'
+import { requestUpdaterQuitAndInstall } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
 
 export const updaterApi = {
@@ -15,13 +14,7 @@ export const updaterApi = {
     ipcRenderer.invoke('updater:getLinuxPackageInstallInstructions'),
   showLinuxPackage: () => ipcRenderer.invoke('updater:showLinuxPackage'),
   listBuilds: (channel) => ipcRenderer.invoke('updater:listBuilds', channel),
-  quitAndInstall: (): Promise<void> =>
-    prepareAndInvokeUpdaterInstall(
-      window,
-      updaterQuitAbortRelay,
-      () => ipcRenderer.invoke('updater:quitAndInstall'),
-      awaitBeforeUnloadCheckpoint
-    ),
+  quitAndInstall: requestUpdaterQuitAndInstall,
 
   onStatus: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus) => callback(status)

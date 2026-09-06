@@ -81,7 +81,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
     const pendingWindowClose = windowCloseAfterDirtyRef.current
     if (pendingWindowClose) {
       windowCloseAfterDirtyRef.current = null
-      proceedToNativeWindowClose(pendingWindowClose.isQuitting)
+      proceedToNativeWindowClose(pendingWindowClose.isQuitting, pendingWindowClose.requestId)
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [
@@ -93,7 +93,7 @@ export function useTerminalEditorCloseQueue(controller: TerminalEditorCloseFound
   ])
 
   const queueEditorCloseRequests = useCallback(
-    (fileIds: string[], pendingWindowClose?: { isQuitting: boolean }) => {
+    (fileIds: string[], pendingWindowClose?: { isQuitting: boolean; requestId?: number }) => {
       if (pendingWindowClose) {
         windowCloseAfterDirtyRef.current = pendingWindowClose
       }

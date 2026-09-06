@@ -306,7 +306,10 @@ describe('createMainWindow', () => {
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(webContents.send).toHaveBeenCalledWith('window:close-requested', {
-        isQuitting: false
+        isQuitting: false,
+        // Why an id: main requires an exact correlation on the cancel, so a request sent without
+        // one could never be cancelled.
+        requestId: expect.any(Number)
       })
     })
   })

@@ -11,7 +11,7 @@
 
 import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
 
-export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
+export type WindowCloseRequestHandler = (data: { isQuitting: boolean; requestId?: number }) => void
 
 /** Returns true to allow the close to proceed, false to cancel it (e.g. the user
  *  picked "Cancel" in an unsaved-changes prompt). */
@@ -72,13 +72,19 @@ async function runWindowCloseGuards(): Promise<boolean> {
  *  directly. Why confirm directly: with no workbench mounted there are no
  *  terminals or editor tabs to protect, so blocking would just deadlock the
  *  window (#5144). */
-export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }): Promise<void> {
+export async function dispatchWindowCloseRequest(data: {
+  isQuitting: boolean
+  requestId?: number
+}): Promise<void> {
   if (closeInFlight) {
     return
   }
   closeInFlight = true
   try {
     if (!(await runWindowCloseGuards())) {
+      // Why tell main: this veto never reaches beforeunload, so without it main cannot know the
+      // quit was abandoned and anything deferred to `quit` stays armed for a later, unrelated one.
+      window.api.ui.cancelWindowClose(data.requestId)
       return
     }
   } finally {
@@ -95,5 +101,8 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
     window.api.ui.confirmWindowClose()
     return
   }
+  // A beforeunload veto is another abandoned close path. Without this signal, main keeps the
+  // request outstanding and any relaunch deferred to `quit` can fire on a later unrelated quit.
+  window.api.ui.cancelWindowClose(data.requestId)
   showShutdownCheckpointFailureToast()
 }

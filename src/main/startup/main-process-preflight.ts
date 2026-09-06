@@ -37,6 +37,7 @@ import { startEventLoopStallProbe } from './event-loop-stall-probe'
 import { startMainThreadChurnProbe } from '../diagnostics/main-thread-churn-probe'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
+import { shouldExitForInFlightMacUpdateInstall } from '../mac-update-install-marker'
 import { createServeDesktopActivationGate } from './serve-desktop-activation'
 import {
   shouldBypassSingleInstanceLock,
@@ -196,6 +197,13 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Why: acquire AFTER configureDevUserDataPath — Electron derives lock identity from `userData`, so dev/packaged lock in separate namespaces.
   // Why skip in dev: parallel `pnpm dev` from multiple worktrees would make the second exit silently; packaged keeps the lock (corruption PR #1326 / #1312).
+  // Why before the lock: ShipIt refuses to swap the bundle while any instance of it runs, so a
+  // Dock click during an install cancels that install just by starting. Stepping aside lets the
+  // installer finish and relaunch the updated app, which is what the click wanted anyway.
+  if (shouldExitForInFlightMacUpdateInstall()) {
+    app.exit(0)
+    return false
+  }
   const bypass = shouldBypassSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
   const skip = shouldSkipSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
   if (bypass) {

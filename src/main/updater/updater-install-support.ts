@@ -7,6 +7,7 @@ import { redactLinuxPackageInstallText } from '../linux-package-install-diagnost
 import { getTrackedLinuxPackageArtifact } from '../linux-package-update-recovery'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { disarmUpdateInstallExitWatchdog } from '../update-install-exit-watchdog'
+import { clearMacUpdateInstallMarker } from '../mac-update-install-marker'
 import { resetMacInstallState } from '../updater-mac-install'
 import type { LinuxPackageInstallRecovery, UpdateStatus } from '../../shared/update-status-types'
 import { compareVersions } from '../updater-fallback'
@@ -78,6 +79,9 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     this.quitAndInstallNativeInvoked = false
     disarmUpdateInstallExitWatchdog()
     resetMacInstallState()
+    // Why: recovery means this process keeps running, so nothing is waiting for it to exit —
+    // leaving the marker would make the next launch wait for an install that was abandoned.
+    clearMacUpdateInstallMarker()
   }
 
   /**

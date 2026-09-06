@@ -523,4 +523,114 @@ describe('createMainWindow', () => {
 
     expect(destroy).not.toHaveBeenCalled()
   })
+
+  it('honours a cancel for an older request the user is still deciding on', () => {
+    // A dirty-file dialog can hold request N while a second close issues N+1. Comparing against
+    // the latest id would reject the user's real Cancel on N and leave the quit state stuck —
+    // the mirror image of accepting a stale cancel.
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const ipcHandlers: Record<string, (...args: any[]) => void> = {}
+    vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
+      ipcHandlers[channel] = handler as (...args: any[]) => void
+      return ipcMain
+    })
+    const webContents = {
+      id: 42,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    browserWindowMock.mockImplementation(function () {
+      return {
+        webContents,
+        on: vi.fn((event, handler) => {
+          windowHandlers[event] = handler
+        }),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        close: vi.fn(),
+        destroy: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+    })
+    const onQuitAborted = vi.fn()
+    createMainWindow(null, { getIsQuitting: () => true, onQuitAborted })
+
+    windowHandlers.close({ preventDefault: vi.fn() } as never)
+    windowHandlers.close({ preventDefault: vi.fn() } as never)
+    const requests = vi
+      .mocked(webContents.send)
+      .mock.calls.filter(([channel]) => channel === 'window:close-requested')
+      .map(([, request]) => request as { requestId: number })
+    const [firstRequest] = requests
+
+    ipcHandlers['window:close-cancelled']?.({ sender: { id: 42 } }, firstRequest.requestId)
+
+    expect(onQuitAborted).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a cancel for a request that was already resolved', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const ipcHandlers: Record<string, (...args: any[]) => void> = {}
+    vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
+      ipcHandlers[channel] = handler as (...args: any[]) => void
+      return ipcMain
+    })
+    const webContents = {
+      id: 42,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    browserWindowMock.mockImplementation(function () {
+      return {
+        webContents,
+        on: vi.fn((event, handler) => {
+          windowHandlers[event] = handler
+        }),
+        isDestroyed: vi.fn(() => false),
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        close: vi.fn(),
+        destroy: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+    })
+    const onQuitAborted = vi.fn()
+    createMainWindow(null, { getIsQuitting: () => true, onQuitAborted })
+
+    windowHandlers.close({ preventDefault: vi.fn() } as never)
+    const [request] = vi
+      .mocked(webContents.send)
+      .mock.calls.filter(([channel]) => channel === 'window:close-requested')
+      .map(([, sent]) => sent as { requestId: number })
+
+    ipcHandlers['window:confirm-close']?.()
+    ipcHandlers['window:close-cancelled']?.({ sender: { id: 42 } }, request.requestId)
+
+    expect(onQuitAborted).not.toHaveBeenCalled()
+  })
 })

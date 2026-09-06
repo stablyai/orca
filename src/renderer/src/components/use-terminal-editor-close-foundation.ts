@@ -33,9 +33,12 @@ export function useTerminalEditorCloseFoundation(
   // docs/reference/ssh-execution-boundary.md forbids.
   const [windowCloseDialogKind, setWindowCloseDialogKind] =
     useState<Exclude<WindowCloseRunningWork['kind'], 'none'>>('running')
-  const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
+  const pendingWindowCloseDialogRef = useRef<{ requestId?: number } | null>(null)
+  // Ignore stale probe completions so they cannot resolve a newer close request.
+  const windowCloseAssessmentGenerationRef = useRef(0)
+  const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean; requestId?: number } | null>(null)
 
-  const confirmNativeWindowClose = useCallback(() => {
+  const confirmNativeWindowClose = useCallback((requestId?: number) => {
     // Why: capture only after every close guard has committed. A canceled child-
     // process prompt must not consume App's synthetic/native unload guard.
     const accepted = runWithWindowCloseCheckpointScope(() =>
@@ -44,20 +47,50 @@ export function useTerminalEditorCloseFoundation(
     if (!accepted) {
       // Why: a checkpoint-vetoed quit used to die here with no dialog and no log,
       // leaving SIGKILL as the only exit (#15352). Dirty-file vetoes publish no reason.
+      // The close was abandoned, so release main's outstanding request and any relaunch armed for
+      // the quit; otherwise a later unrelated quit can resurrect the restart.
+      window.api.ui.cancelWindowClose(requestId)
       showShutdownCheckpointFailureToast()
       return
     }
     window.api.ui.confirmWindowClose()
   }, [])
 
+  const cancelWindowCloseDialog = useCallback(() => {
+    const pendingClose = pendingWindowCloseDialogRef.current
+    pendingWindowCloseDialogRef.current = null
+    setWindowCloseDialogOpen(false)
+    if (pendingClose) {
+      windowCloseAssessmentGenerationRef.current += 1
+      window.api.ui.cancelWindowClose(pendingClose.requestId)
+    }
+  }, [])
+
+  const confirmWindowCloseDialog = useCallback(() => {
+    const pendingClose = pendingWindowCloseDialogRef.current
+    pendingWindowCloseDialogRef.current = null
+    setWindowCloseDialogOpen(false)
+    if (pendingClose) {
+      windowCloseAssessmentGenerationRef.current += 1
+      confirmNativeWindowClose(pendingClose.requestId)
+    }
+  }, [confirmNativeWindowClose])
+
   const proceedToNativeWindowClose = useCallback(
-    (isQuitting: boolean) => {
+    (isQuitting: boolean, requestId?: number) => {
+      const assessmentGeneration = ++windowCloseAssessmentGenerationRef.current
       void assessWindowCloseRunningWork({ isQuitting })
         .then((runningWork) => {
-          if (runningWork.kind === 'none') {
-            confirmNativeWindowClose()
+          if (assessmentGeneration !== windowCloseAssessmentGenerationRef.current) {
             return
           }
+          if (runningWork.kind === 'none') {
+            pendingWindowCloseDialogRef.current = null
+            setWindowCloseDialogOpen(false)
+            confirmNativeWindowClose(requestId)
+            return
+          }
+          pendingWindowCloseDialogRef.current = { requestId }
           setWindowCloseDialogKind(runningWork.kind)
           setWindowCloseDialogOpen(true)
         })
@@ -65,7 +98,12 @@ export function useTerminalEditorCloseFoundation(
         // not evidence either way, and a close that silently does nothing is unrecoverable
         // without SIGKILL, so fall through to the close the user actually asked for.
         .catch(() => {
-          confirmNativeWindowClose()
+          if (assessmentGeneration !== windowCloseAssessmentGenerationRef.current) {
+            return
+          }
+          pendingWindowCloseDialogRef.current = null
+          setWindowCloseDialogOpen(false)
+          confirmNativeWindowClose(requestId)
         })
     },
     [confirmNativeWindowClose]
@@ -81,8 +119,9 @@ export function useTerminalEditorCloseFoundation(
     closeDialogDebounceTimersRef,
     releaseCloseDialogGuardAfterDebounce,
     windowCloseDialogOpen,
-    setWindowCloseDialogOpen,
     windowCloseDialogKind,
+    cancelWindowCloseDialog,
+    confirmWindowCloseDialog,
     windowCloseAfterDirtyRef,
     confirmNativeWindowClose,
     proceedToNativeWindowClose
