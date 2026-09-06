@@ -102,15 +102,38 @@ async function measureRemoteTyping(
   ptyId: string,
   runId: string
 ): Promise<TypingMeasurement> {
+  await page.evaluate((ptyId) => {
+    const receipt = { tail: '', markers: [] as string[], chars: 0, unsubscribe: () => {} }
+    receipt.unsubscribe = window.api.pty.onData((event) => {
+      if (event.id !== ptyId) return
+      receipt.chars += event.data.length
+      const text = receipt.tail + event.data
+      for (const marker of text.match(/REMOTE_KEY_[0-9]+_[0-9]+_[a-z]/g) ?? []) {
+        if (!receipt.markers.includes(marker) && receipt.markers.length < 20) receipt.markers.push(marker)
+      }
+      receipt.tail = text.slice(-128)
+    })
+    ;(window as any).__relayReceipt = receipt
+  }, ptyId)
   const latencies: number[] = []
   for (let index = 0; index < KEY_LATENCY_SAMPLES.length; index += 1) {
     const char = KEY_LATENCY_SAMPLES[index]
     const marker = `REMOTE_KEY_${runId}_${index + 1}_${char}`
     const started = performance.now()
     await page.evaluate(({ ptyId, char }) => window.api.pty.write(ptyId, char), { ptyId, char })
-    await waitForTerminalOutput(page, marker, 10_000, 80_000)
+    try {
+      await waitForTerminalOutput(page, marker, 10_000, 80_000)
+    } catch (error) {
+      console.log('[relay-perf-receipt]', JSON.stringify(await page.evaluate(() => {
+        const receipt = (window as any).__relayReceipt
+        receipt.unsubscribe()
+        return { markers: receipt.markers, chars: receipt.chars, tail: receipt.tail }
+      })))
+      throw error
+    }
     latencies.push(performance.now() - started)
   }
+  await page.evaluate(() => (window as any).__relayReceipt.unsubscribe())
   return {
     latencies,
     medianLatencyMs: median(latencies),
