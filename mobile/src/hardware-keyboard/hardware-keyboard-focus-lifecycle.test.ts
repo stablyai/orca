@@ -7,6 +7,7 @@ import { useHardwareKeyboardTextInputFocus } from './use-hardware-keyboard-text-
 const runtime = vi.hoisted(() => ({
   focused: true,
   connected: true,
+  platform: 'android',
   listener: null as null | ((event: { connected: boolean }) => void),
   appStateListener: null as null | ((state: string) => void),
   register: vi.fn(() => vi.fn()),
@@ -27,6 +28,11 @@ vi.mock('./mobile-hardware-keyboard-registry', () => ({
   registerMobileHardwareKeyboardScope: runtime.register
 }))
 vi.mock('react-native', () => ({
+  Platform: {
+    get OS() {
+      return runtime.platform
+    }
+  },
   AppState: {
     addEventListener: (_event: string, listener: typeof runtime.appStateListener) => {
       runtime.appStateListener = listener
@@ -56,6 +62,7 @@ afterEach(() => {
   renderer = null
   runtime.focused = true
   runtime.connected = true
+  runtime.platform = 'android'
   runtime.frames = []
   vi.clearAllMocks()
   vi.unstubAllGlobals()
@@ -120,6 +127,56 @@ function installCancellableFocusFrames() {
   vi.stubGlobal('requestAnimationFrame', (callback: () => void) => setTimeout(callback, 16))
   vi.stubGlobal('cancelAnimationFrame', clearTimeout)
 }
+
+it.each(['android', 'ios'])(
+  'handles native touch refocus before the deferred request on %s',
+  (platform) => {
+    runtime.platform = platform
+    installCancellableFocusFrames()
+    let focused = false
+    let nativeFocusRequests = 0
+    const input = {
+      focus: vi.fn(() => {
+        if (!focused) {
+          nativeFocusRequests++
+          focused = true
+        }
+      }),
+      blur: vi.fn(() => {
+        focused = false
+      }),
+      setNativeProps: vi.fn(),
+      isFocused: () => focused
+    }
+    const inputRef = { current: input } as never
+    let touch = () => {}
+    function Screen() {
+      touch = useHardwareKeyboardTextInputFocus({
+        enabled: true,
+        inputRef,
+        surfaceId: 'chat'
+      }).handleTouchStart
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Screen))
+    })
+    act(() => {
+      vi.advanceTimersByTime(16)
+    })
+    act(() => {
+      touch()
+    })
+    focused = true
+    nativeFocusRequests = 0
+    act(() => {
+      vi.runAllTimers()
+    })
+    expect(nativeFocusRequests).toBe(platform === 'android' ? 1 : 0)
+    expect(input.blur).toHaveBeenCalledTimes(platform === 'android' ? 2 : 1)
+    expect(input.setNativeProps).toHaveBeenLastCalledWith({ showSoftInputOnFocus: true })
+  }
+)
 
 it('cancels queued hardware focus when the keyboard disconnects before the frame', () => {
   installCancellableFocusFrames()

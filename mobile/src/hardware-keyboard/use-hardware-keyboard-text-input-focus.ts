@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
-import { AppState, type TextInput } from 'react-native'
+import { AppState, Platform, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import {
   addHardwareKeyboardConnectionListener,
@@ -99,6 +99,10 @@ export function useHardwareKeyboardTextInputFocus(options: {
     input.blur()
     touchFocusFrameRef.current = requestAnimationFrame(() => {
       touchFocusFrameRef.current = null
+      // Android touch can reclaim focus before this frame, making RN focus() a no-op.
+      if (Platform.OS === 'android' && input.isFocused()) {
+        input.blur()
+      }
       input.focus()
     })
   }, [inputRef, suppressSoftInput])
