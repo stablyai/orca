@@ -15,12 +15,20 @@ describe('dispatch recapability after agent crash', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_coord' ? 'tab_coord:leaf_coord' : 'tab_worker:leaf_worker'
+    )
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
       terminalHandle: 'term_worker',
       paneKey: 'tab_worker:leaf_worker',
       processIncarnation: incarnation
     } as never)
+    vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+    vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+      handle: 'term_worker',
+      accepted: true,
+      bytesWritten: 1
+    })
     vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(3)
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     const run = db.createRun({ objective: 'recap', coordinatorHandle: 'term_coord', coordinatorPaneKey: 'tab_coord:leaf_coord' })
@@ -33,15 +41,24 @@ describe('dispatch recapability after agent crash', () => {
     return { runtime, run, task, find }
   }
 
-  it('re-mints capability against the current incarnation and embeds it', async () => {
+  function tokenOf(preamble: string): string {
+    const m = /--dispatch-capability (dcap_\S+)/.exec(preamble)
+    if (!m) throw new Error('preamble carries no capability')
+    return m[1]
+  }
+
+  it('rotates the secret so the zombie loses authority and the replacement gains it', async () => {
     const { runtime, run, task, find } = harness('runtime_test:term_worker:1')
     const dispatch = find('orchestration.dispatch')
-    await dispatch.handler(
-      dispatch.params?.parse({ task: task.id, to: 'term_worker', from: 'term_coord', run: run.id, inject: false }),
+    const created = (await dispatch.handler(
+      dispatch.params?.parse({ task: task.id, to: 'term_worker', from: 'term_coord', run: run.id, inject: true, returnPreamble: true }),
       { runtime } as never
-    )
-    // Crash: the incarnation recorded at dispatch time is now dead; the
-    // replacement agent runs under a new one.
+    )) as { dispatch: { id: string }; preamble: string }
+    const oldToken = tokenOf(created.preamble)
+    expect(
+      db!.verifyDispatchCapability({ dispatchId: created.dispatch.id, capability: oldToken, paneKey: 'tab_worker:leaf_worker', processIncarnation: 'runtime_test:term_worker:1' })
+    ).toEqual({ valid: true })
+    // Crash: replacement agent runs under a new incarnation.
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
       terminalHandle: 'term_worker',
       paneKey: 'tab_worker:leaf_worker',
@@ -52,42 +69,64 @@ describe('dispatch recapability after agent crash', () => {
       show.params?.parse({ task: task.id, preamble: true, recapability: true, from: 'term_coord' }),
       { runtime } as never
     )) as { preamble: string }
-    expect(result.preamble).toContain('--dispatch-capability dcap_')
-    expect(result.preamble).toContain('--from term_worker')
+    const newToken = tokenOf(result.preamble)
+    expect(newToken).not.toBe(oldToken)
+    expect(
+      db!.verifyDispatchCapability({ dispatchId: created.dispatch.id, capability: oldToken, paneKey: 'tab_worker:leaf_worker', processIncarnation: 'runtime_test:term_worker:1' })
+    ).toMatchObject({ valid: false })
+    expect(
+      db!.verifyDispatchCapability({ dispatchId: created.dispatch.id, capability: newToken, paneKey: 'tab_worker:leaf_worker', processIncarnation: 'runtime_test:term_worker:2' })
+    ).toEqual({ valid: true })
   })
 
-  it('refuses recapability once the dispatch settled', async () => {
+  it('refuses recapability once the dispatch settled', () => {
     const { runtime, run, task, find } = harness('runtime_test:term_worker:1')
     const dispatch = find('orchestration.dispatch')
-    const created = (await dispatch.handler(
-      dispatch.params?.parse({ task: task.id, to: 'term_worker', from: 'term_coord', run: run.id, inject: false }),
-      { runtime } as never
-    )) as { dispatch: { id: string } }
-    db!.completeDispatch(created.dispatch.id)
-    const show = find('orchestration.dispatchShow')
-    await expect(
-      show.handler(
-        show.params?.parse({ task: task.id, preamble: true, recapability: true, from: 'term_coord' }),
+    let created: { dispatch: { id: string } } | undefined
+    const runFlow = async () => {
+      created = (await dispatch.handler(
+        dispatch.params?.parse({ task: task.id, to: 'term_worker', from: 'term_coord', run: run.id, inject: false }),
         { runtime } as never
-      )
-    ).rejects.toMatchObject({ code: 'dispatch_not_active' })
+      )) as { dispatch: { id: string } }
+    }
+    return runFlow().then(() => {
+      db!.completeDispatch(created!.dispatch.id)
+      const show = find('orchestration.dispatchShow')
+      let err: unknown
+      try {
+        show.handler(
+          show.params?.parse({ task: task.id, preamble: true, recapability: true, from: 'term_coord' }),
+          { runtime } as never
+        )
+      } catch (e) { err = e }
+      expect(err).toMatchObject({ code: 'dispatch_not_active' })
+    })
   })
 
-  it('refuses recapability without a stable pane', async () => {
+  it('refuses recapability without a stable pane', () => {
     const { runtime, run, task, find } = harness('runtime_test:term_worker:1')
     const dispatch = find('orchestration.dispatch')
-    await dispatch.handler(
-      dispatch.params?.parse({ task: task.id, to: 'term_worker', from: 'term_coord', run: run.id, inject: false }),
-      { runtime } as never
-    )
-    vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(undefined)
-    vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(undefined as never)
-    const show = find('orchestration.dispatchShow')
-    await expect(
-      show.handler(
-        show.params?.parse({ task: task.id, preamble: true, recapability: true, from: 'term_coord' }),
+    let done = false
+    const runFlow = async () => {
+      await dispatch.handler(
+        dispatch.params?.parse({ task: task.id, to: 'term_worker', from: 'term_coord', run: run.id, inject: false }),
         { runtime } as never
       )
-    ).rejects.toMatchObject({ code: 'stable_pane_required' })
+      done = true
+    }
+    return runFlow().then(() => {
+      expect(done).toBe(true)
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(undefined)
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue(undefined as never)
+      const show = find('orchestration.dispatchShow')
+      let err: unknown
+      try {
+        show.handler(
+          show.params?.parse({ task: task.id, preamble: true, recapability: true, from: 'term_coord' }),
+          { runtime } as never
+        )
+      } catch (e) { err = e }
+      expect(err).toMatchObject({ code: 'stable_pane_required' })
+    })
   })
 })

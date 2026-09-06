@@ -44,7 +44,7 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
     const showPreamble = flags.has('preamble') ? true : undefined
     const recapability = flags.has('recapability') ? true : undefined
     // Why: a preview must embed the same real coordinator handle as an actual dispatch.
-    const from = showPreamble
+    const from = showPreamble || recapability
       ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
       : undefined
     const result = await client.call<{

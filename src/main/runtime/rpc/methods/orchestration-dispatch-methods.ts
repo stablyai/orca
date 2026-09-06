@@ -152,15 +152,21 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatchShow',
     params: DispatchShowParams,
-    handler: (params, { runtime }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
       }
       const ctx = db.getDispatchContext(params.task)
+      // Why: recapability implies preamble — the minted secret has nowhere
+      // to go except embedded in a regenerated preamble.
+      const wantPreamble = params.preamble || params.recapability
 
       // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
-      if (params.preamble) {
+      if (wantPreamble) {
         const task = db.getTask(params.task)
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
@@ -171,6 +177,28 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         // Minting rotates the old secret, so a zombie holding it loses authority.
         let dispatchCapability: string | undefined
         if (params.recapability) {
+          if (!ctx || (ctx.status !== 'pending' && ctx.status !== 'dispatched')) {
+            throw new OrchestrationError(
+              'dispatch_not_active',
+              `Task ${params.task} has no active dispatch to re-authorize.`
+            )
+          }
+          // Why: same gate as orchestration.dispatch — only a terminal bound
+          // to the task's run may rotate its capability. Otherwise any
+          // terminal could DoS workers or un-fence deliberately fenced work.
+          const run = resolveRunScope(runtime, {
+            runId: task.run_id,
+            callerTerminalHandle: params.from,
+            requireCurrentConsumer: true,
+            legacyCoordinatorRunId,
+            callerEvidence: orchestrationCompatibilityEvidence
+          })
+          if (task.run_id !== run.id) {
+            throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
+              taskId: task.id,
+              runId: run.id
+            })
+          }
           if (!ctx || (ctx.status !== 'pending' && ctx.status !== 'dispatched')) {
             throw new OrchestrationError(
               'dispatch_not_active',
