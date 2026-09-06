@@ -14,6 +14,7 @@ const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
 
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
+  '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
   '@parcel/watcher',
@@ -237,8 +238,8 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     // backslashes, and extractFile expects that same host-style path.
     const internalPath = entry.replace(/^[\\/]+/, '')
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
-    for (const match of source.matchAll(/require\(["']([^"']+)["']\)/g)) {
-      const specifier = match[1]
+    for (const match of source.matchAll(/\b(?:require|import)\(\s*(["'`])([^"'`$]+)\1\s*\)/g)) {
+      const specifier = match[2]
       if (!isPackagedExternalSpecifier(specifier)) {
         continue
       }

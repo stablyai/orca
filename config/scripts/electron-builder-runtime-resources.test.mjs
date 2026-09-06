@@ -44,6 +44,33 @@ describe('packaged runtime resources', () => {
     }
   })
 
+  it('verifies literal dynamic imports from the packaged main bundle', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-dynamic-imports-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      const sources = new Map([
+        ['out/main/index.js', 'import(`@anthropic-ai/claude-agent-sdk`)'],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(
+        /@anthropic-ai\/claude-agent-sdk/
+      )
+
+      await mkdir(join(resourcesDir, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'), {
+        recursive: true
+      })
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
   it('normalizes host-specific asar entry separators', () => {
     expect(findAsarEntry(['\\out\\main\\index.js'], 'out/main/index.js')).toBe(
       '\\out\\main\\index.js'
@@ -132,6 +159,15 @@ describe('packaged runtime resources', () => {
       )
     ).toBe(true)
     expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
+  })
+
+  it('includes the Claude agent SDK in every desktop package plan', () => {
+    for (const platform of ['darwin', 'linux', 'win32']) {
+      const packagedTargets = createPackagedRuntimeNodeModuleResources(platform).map(
+        (resource) => resource.to
+      )
+      expect(packagedTargets).toContain(join('node_modules', '@anthropic-ai', 'claude-agent-sdk'))
+    }
   })
 
   it('prunes non-target @parcel/watcher architecture subpackages', async () => {
