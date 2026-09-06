@@ -4815,11 +4815,11 @@
       ],
       "runtimeBudget": {
         "p95Seconds": 2,
-        "scope": "deterministic identity, binding-store, session-policy, and window-boundary tests"
+        "scope": "deterministic identity, binding-store, session-policy, and window-boundary tests; this unit-test budget excludes SSH browser journeys, whose CI p95 is not yet established"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The deterministic suite passes locally; CI and real Electron soak history have not started."
+        "evidence": "The deterministic suite passes locally. Linux SSH provider journeys passed four baseline cases and twelve repeated cases in CI runs 34039986047 and 34040309638 with zero skips or retries. Long-term and cross-platform soak history remains incomplete."
       },
       "redGreenEvidence": {
         "status": "partial",
