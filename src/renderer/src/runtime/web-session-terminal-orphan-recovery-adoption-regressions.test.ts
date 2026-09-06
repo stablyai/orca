@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync'
+import {
+  makeState as makeTabsSyncState,
+  resetWebSessionTabsSyncTestState
+} from './web-session-tabs-sync-test-harness'
 import {
   ENVIRONMENT_ID,
   deferred,
@@ -13,8 +18,16 @@ import {
   recoverWebSessionTerminalOrphansBeforeApply
 } from './web-session-terminal-orphan-recovery'
 
+vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
+  observeAgentHookCompletionForNotification: vi.fn()
+}))
+
 describe('web session terminal orphan adoption regressions', () => {
-  beforeEach(() => clearWebSessionTerminalOrphanRecoveryForTests())
+  beforeEach(() => {
+    clearWebSessionTerminalOrphanRecoveryForTests()
+    resetWebSessionTabsSyncTestState()
+  })
 
   it('dedupes a stable unsupported adoption so an identical claim frame does not churn RPCs', async () => {
     const worktree = 'repo::failed-adoption-cache'
@@ -413,6 +426,98 @@ describe('web session terminal orphan adoption regressions', () => {
     ).resolves.toEqual(projected)
     expect(listAttempts).toBe(2)
   })
+
+  it.each(['empty-row', 'missing-selection', 'malformed-groups'])(
+    'preserves the prior inventory and mirror bindings after a post-adoption %s and retries',
+    async (failure) => {
+      const worktree = 'folder:malformed-post-adoption'
+      const claimed = pendingSurface('host-tab', 'leaf-1', 'pty-live', 'term-live')
+      const owned = pendingSurface('owned-tab', 'leaf-owned', 'pty-owned', 'term-owned')
+      const previous: RuntimeMobileSessionTabsResult = {
+        ...makeSnapshot(worktree, 'renderer:host:client-navigation', []),
+        tabs: [claimed, owned]
+      }
+      const empty = makeTabsSyncState({ activeWorktreeId: worktree })
+      const state = {
+        ...empty,
+        ...applyWebSessionTabsSnapshot(empty, previous, ENVIRONMENT_ID, 1)
+      }
+      const incoming: RuntimeMobileSessionTabsResult = {
+        ...previous,
+        snapshotVersion: 2,
+        tabs: [pendingSurface('host-tab', 'leaf-1', 'pty-live'), owned]
+      }
+      const projected = { ...previous, snapshotVersion: 3 }
+      const malformed =
+        failure === 'empty-row'
+          ? { ...projected, tabs: [{}] }
+          : failure === 'missing-selection'
+            ? { ...projected, activeTabId: undefined }
+            : { ...projected, tabGroups: [{ id: 'group-1' }] }
+      let listAttempts = 0
+      const call = vi.fn(async ({ method }: { method: string }) => {
+        const envelope = { id: method, ok: true as const, _meta: { runtimeId: 'host-runtime' } }
+        if (method === 'terminal.list') {
+          return {
+            ...envelope,
+            result: listResult(worktree, [
+              { handle: 'term-live', ptyId: 'pty-live', incarnationId: 'inc-live', orphaned: true }
+            ])
+          }
+        }
+        if (method === 'terminal.adoptOrphans') {
+          return {
+            ...envelope,
+            result: {
+              adopted: true,
+              topologyRevision: 8,
+              snapshot: { ...projected, publicationEpoch: 'renderer:host' }
+            }
+          }
+        }
+        expect(method).toBe('session.tabs.list')
+        listAttempts += 1
+        return { ...envelope, result: listAttempts === 1 ? malformed : projected }
+      })
+
+      const retained = await recoverWebSessionTerminalOrphansBeforeApply(
+        state,
+        incoming,
+        ENVIRONMENT_ID,
+        { call }
+      )
+      expect(retained).toEqual({ ...previous, snapshotVersion: incoming.snapshotVersion })
+      const mirrored = {
+        ...state,
+        ...applyWebSessionTabsSnapshot(state, retained!, ENVIRONMENT_ID, 2)
+      }
+      expect(mirrored.tabsByWorktree).toEqual(state.tabsByWorktree)
+      expect(mirrored.ptyIdsByTabId).toEqual(state.ptyIdsByTabId)
+      expect(mirrored.terminalLayoutsByTabId).toEqual(state.terminalLayoutsByTabId)
+      expect(mirrored.groupsByWorktree).toEqual(state.groupsByWorktree)
+
+      const retried = await recoverWebSessionTerminalOrphansBeforeApply(
+        mirrored,
+        incoming,
+        ENVIRONMENT_ID,
+        { call }
+      )
+      expect(retried).toEqual(projected)
+      const converged = {
+        ...mirrored,
+        ...applyWebSessionTabsSnapshot(mirrored, retried!, ENVIRONMENT_ID, 3)
+      }
+      expect(converged.ptyIdsByTabId).toEqual(state.ptyIdsByTabId)
+      expect(call.mock.calls.map(([request]) => request.method)).toEqual([
+        'terminal.list',
+        'terminal.adoptOrphans',
+        'session.tabs.list',
+        'terminal.list',
+        'terminal.adoptOrphans',
+        'session.tabs.list'
+      ])
+    }
+  )
 
   it.each(['retired', 'rebound', 'pending-replacement'])(
     'honors fresh %s sibling state from the post-adoption list',

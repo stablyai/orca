@@ -14,6 +14,7 @@ import { runInTerminalRecoveryRpcLane } from './web-session-terminal-orphan-reco
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
 import { hasTerminalHandleRetirementProof } from './web-session-terminal-orphan-recovery-surface-index'
+import { isTerminalRecoverySnapshot } from './web-session-terminal-recovery-snapshot-validation'
 import {
   mergeRetainedTerminalSurfaces,
   isValidReadySurface,
@@ -38,19 +39,7 @@ export type TerminalOrphanRecoveryCall = (args: {
 }) => Promise<RuntimeRpcResponse<unknown>>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}
-
-function isTerminalRecoverySnapshot(value: unknown): value is RuntimeMobileSessionTabsResult {
-  return (
-    isRecord(value) &&
-    typeof value.worktree === 'string' &&
-    value.worktree.length > 0 &&
-    typeof value.publicationEpoch === 'string' &&
-    Number.isSafeInteger(value.snapshotVersion) &&
-    Array.isArray(value.tabs) &&
-    value.tabs.every(isRecord)
-  )
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function isAdoptionResult(value: unknown): value is RuntimeTerminalOrphanAdoptionResult {
