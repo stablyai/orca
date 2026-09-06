@@ -30,6 +30,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       tabId: orphaned ? `pty:${pty.ptyId}` : pty.tabId!,
       leafId: orphaned ? `pty:${pty.ptyId}` : pane.leafId,
       title,
+      tabTitle: this.resolveTerminalTabTitle(pty.worktreeId, pty.tabId, pty.tabTitle),
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
@@ -43,6 +44,32 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
         pty.paneKey ?? null
       )
     }
+  }
+
+  protected setCreatedTerminalTitle(pty: RuntimePtyWorktreeRecord, title: string | null): void {
+    pty.tabTitle = title
+    pty.title = title || null
+    pty.titleUpdatedAt = title ? this.nextTitleObservationSequence() : null
+    if (title) {
+      this.setPtyManagementTitleFromObservedTitle(pty, title, pty.titleUpdatedAt)
+    }
+  }
+
+  protected resolveTerminalTabTitle(
+    worktreeId: string,
+    tabId: string | null,
+    fallback?: string | null
+  ): string | null {
+    if (!tabId) {
+      return fallback ?? null
+    }
+    const persisted = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree[
+      worktreeId
+    ]?.find((tab) => tab.id === tabId)
+    if (persisted) {
+      return persisted.customTitle ?? null
+    }
+    return fallback !== undefined ? fallback : (this.tabs.get(tabId)?.title ?? null)
   }
 
   protected getLiveLeafForHandle(handle: string): {

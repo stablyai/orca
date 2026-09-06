@@ -198,6 +198,7 @@ ORCA terminal close --worktree id:<repoId>::<worktreePath> --all --json
 
 Terminal rules:
 
+- Terminal JSON `title` is the live OSC title; optional `tabTitle` is the user-set tab title from `--title` or `terminal rename` and may be absent on older hosts.
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
 - Use `terminal close --terminal <handle>` to close one terminal. Use `terminal close --worktree <selector> --all` to stop every terminal process in exactly that workspace and durably remove its terminal tabs, layouts, and agent-resume records.
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.

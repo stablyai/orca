@@ -219,15 +219,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         if (pty) {
           pty.runtimeSessionOwned = true
           if (!adoptedStablePane) {
-            if (launchOpts.title) {
-              const observedAt = this.nextTitleObservationSequence()
-              pty.title = launchOpts.title
-              pty.titleUpdatedAt = observedAt
-              this.setPtyManagementTitleFromObservedTitle(pty, launchOpts.title, observedAt)
-            } else {
-              pty.title = null
-              pty.titleUpdatedAt = null
-            }
+            this.setCreatedTerminalTitle(pty, launchOpts.title ?? null)
             pty.launchConfig = effectiveLaunchConfig
               ? dependencies.copySleepingAgentLaunchConfig(effectiveLaunchConfig)
               : null
@@ -283,6 +275,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           ptyId: result.id,
           worktreeId: workspace.id,
           title: pty?.title ?? launchOpts.title ?? null,
+          tabTitle: this.resolveTerminalTabTitle(workspace.id, tabId, pty?.tabTitle),
           ...this.getPtyExecutionHostMetadata(result.id),
           surface,
           ...(result.pid ? { processId: result.pid } : {}),

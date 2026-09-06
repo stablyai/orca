@@ -176,6 +176,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       tabId: leaf.tabId,
       leafId: leaf.leafId,
       title,
+      tabTitle: this.resolveTerminalTabTitle(leaf.worktreeId, leaf.tabId, pty?.tabTitle),
       connected: provenAbsent ? false : leaf.connected,
       writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
