@@ -127,7 +127,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
     process.exitCode = exitCode
   },
   'serve update-helper install': async ({ flags, json }) => {
-    if (process.platform === 'win32') {
+    if (process.platform !== 'linux') {
       throw new RuntimeClientError(
         'unsupported_platform',
         'The serve auto-update helper is only supported on Linux.'
