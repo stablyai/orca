@@ -4,6 +4,8 @@ export const SERVE_UPDATE_SPOOL_DIR = '/var/lib/orca-server-update'
 export const SERVE_UPDATE_REQUEST_FILE = 'request.json'
 export const SERVE_UPDATE_RESULT_FILE = 'result.json'
 export const SERVE_UPDATE_HELPER_MARKER_FILE = 'helper.json'
+/** The app's quit-fence census passed; the helper may stop the unit. */
+export const SERVE_UPDATE_CENSUS_OK_FILE = 'census.ok'
 
 export const SERVE_UPDATE_SPOOL_SCHEMA_VERSION = 2
 
@@ -45,6 +47,10 @@ export function getResultPath(spoolDir: string): string {
 
 export function getHelperMarkerPath(spoolDir: string): string {
   return join(spoolDir, SERVE_UPDATE_HELPER_MARKER_FILE)
+}
+
+export function getCensusOkPath(spoolDir: string): string {
+  return join(spoolDir, SERVE_UPDATE_CENSUS_OK_FILE)
 }
 
 export function parseServeUpdateResult(value: unknown): ServeUpdateResult | null {
