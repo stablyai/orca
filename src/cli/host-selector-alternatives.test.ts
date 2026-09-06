@@ -130,10 +130,72 @@ describe('listSshTargets', () => {
       return { result: { targets: SSH_TARGETS } }
     })
 
-    await expect(listSshTargets({ call } as unknown as RuntimeClient)).resolves.toEqual([
+    await expect(
+      listSshTargets({ call } as unknown as RuntimeClient, { inventory: true })
+    ).resolves.toEqual([
       { ...SSH_TARGETS[0], connected: true, connectionStatus: 'connected', remotePlatform: 'win32' }
     ])
-    expect(call).toHaveBeenCalledWith('ssh.getState', { targetId: SSH_TARGETS[0].id })
+    expect(call).toHaveBeenCalledWith(
+      'ssh.getState',
+      { targetId: SSH_TARGETS[0].id },
+      { timeoutMs: expect.any(Number) }
+    )
+  })
+
+  it('does not fan out state requests during ordinary legacy selector lookup', async () => {
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    const call = vi
+      .fn()
+      .mockRejectedValueOnce(new RuntimeClientError('method_not_found', 'missing'))
+      .mockResolvedValueOnce({ result: { targets: SSH_TARGETS } })
+    await expect(
+      resolveSshHostTargetId({ call } as unknown as RuntimeClient, 'openclaw', [])
+    ).resolves.toBe(SSH_TARGETS[0].id)
+    expect(call).toHaveBeenCalledTimes(2)
+  })
+
+  it('enriches old summary-method responses too, but preserves unknown on state failure', async () => {
+    const call = vi
+      .fn()
+      .mockResolvedValueOnce({ result: { targets: SSH_TARGETS } })
+      .mockRejectedValueOnce(new Error('unavailable'))
+    await expect(
+      listSshTargets({ call } as unknown as RuntimeClient, { inventory: true })
+    ).resolves.toEqual(SSH_TARGETS)
+    expect(call).toHaveBeenCalledTimes(2)
+  })
+
+  it('surfaces inventory failures instead of claiming no targets exist', async () => {
+    const call = vi.fn().mockRejectedValue(new Error('runtime unavailable'))
+    await expect(
+      listSshTargets({ call } as unknown as RuntimeClient, { inventory: true })
+    ).rejects.toThrow('runtime unavailable')
+  })
+
+  it('bounds legacy state fanout and avoids redundant queries for complete summaries', async () => {
+    const targets = Array.from({ length: 100 }, (_, index) => ({
+      id: String(index),
+      label: String(index)
+    }))
+    let active = 0
+    let peak = 0
+    const call = vi.fn(async (method: string) => {
+      if (method === 'ssh.listTargetSummaries') {
+        return { result: { targets } }
+      }
+      active++
+      peak = Math.max(peak, active)
+      await new Promise((resolve) => setImmediate(resolve))
+      active--
+      return { result: { state: { status: 'connected', remotePlatform: 'linux' } } }
+    })
+    const rows = await listSshTargets({ call } as unknown as RuntimeClient, { inventory: true })
+    expect(rows).toHaveLength(100)
+    expect(peak).toBe(4)
+    call.mockResolvedValueOnce({ result: { targets: rows } })
+    call.mockClear()
+    await listSshTargets({ call } as unknown as RuntimeClient, { inventory: true })
+    expect(call).toHaveBeenCalledTimes(1)
   })
 
   // Why: this only ever runs to enrich an error we are already reporting; a failure here must

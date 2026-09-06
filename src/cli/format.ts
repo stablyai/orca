@@ -216,6 +216,8 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
 }
 
 export type HostListEntry = {
+  connectionSource?: 'probe'
+  probeError?: string
   kind: 'local' | 'ssh' | 'environment'
   name: string
   id: string
@@ -227,30 +229,36 @@ export type HostListEntry = {
 
 // Why: the selector column is the point of this command — the name alone is what callers already
 // had, and passing it on the wrong axis is the mistake this output exists to prevent.
-export function formatHostList(result: { hosts: HostListEntry[] }): string {
+export function formatHostList(result: { hosts: HostListEntry[]; warnings?: string[] }): string {
   const kindLabel: Record<HostListEntry['kind'], string> = {
     local: 'local',
     ssh: 'ssh target',
     environment: 'orca server'
   }
-  return result.hosts
-    .map(
-      (host) =>
-        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
-    )
-    .join('\n')
+  const rows = result.hosts.map(
+    (host) =>
+      `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
+  )
+  return [...rows, ...(result.warnings ?? []).map((warning) => `Warning: ${warning}`)].join('\n')
 }
 
 function formatHostConnection(host: HostListEntry): string {
   if (host.kind === 'local') {
     return ''
   }
-  if (host.connected === undefined) {
-    return `connection unknown${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
-  }
-  return host.connected
-    ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
-    : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+  const label =
+    host.connected === undefined
+      ? 'connection unknown'
+      : host.connected
+        ? 'connected'
+        : 'not connected'
+  const detail =
+    host.probeError ??
+    (host.connectionStatus &&
+    !['connected', 'disconnected', 'unknown'].includes(host.connectionStatus)
+      ? host.connectionStatus
+      : undefined)
+  return `${label}${host.connectionSource === 'probe' ? ' [probe]' : ''}${detail ? ` (${detail})` : ''}`
 }
 
 export function formatCliStatus(status: CliStatusResult): string {

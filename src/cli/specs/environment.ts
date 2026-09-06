@@ -10,8 +10,9 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Answers "what can I target and what do I pass" in one place: this machine, the SSH targets registered on it, and the Orca servers paired with it.',
       'The three kinds are reached differently. A paired Orca server is a connection, selected with --environment <name>. An SSH target is a machine the connected Orca host reaches, selected with --host ssh:<id>. Passing one where the other belongs is the most common way to get an empty or missing-host answer.',
-      'SSH and paired-server rows include the detected remote platform after the host responds (linux, darwin, or win32); older or unavailable hosts report platform unknown.',
-      'SSH and paired-server rows also include whether the target is currently connected and its lifecycle status when known.',
+      'All configured hosts are included, not only connected ones. Platform is host-reported (linux, darwin, or win32), never inferred from the name; missing evidence displays platform unknown.',
+      'SSH rows report the app-owned connection and lifecycle status. Paired-server rows use fresh read-only probes, marked connectionSource: probe / [probe], not the desktop persistent connection. A successful status probe sets connected: true; failed or unattempted probes omit connected and show connection unknown with a safe probeError.',
+      'Paired probes use at most four concurrent connections and a five-second total scan budget. Older servers fall back from status.get hostPlatform to host.platform. Listing does not change saved pairing metadata or last-used ordering; paired selectors use stable environment IDs.',
       "SSH targets are read from this machine's own Orca runtime, so this lists that machine's targets and not another server's. Run `orca host list` on the other machine to see the targets registered there.",
       '--environment and --pairing-code are rejected rather than ignored: paired servers come from this machine\u2019s pairing store, so a routed answer would describe two machines at once.'
     ],

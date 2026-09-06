@@ -15,11 +15,13 @@ export type SharedControlTestServer = {
   requests: { id: string; method: string; params?: unknown }[]
   auths: unknown[]
   connectionCount: () => number
+  activeConnectionCount: () => number
   flushDelayedResponses: () => void
   closeClients: () => void
 }
 
 type ServerOptions = {
+  results?: Record<string, unknown>
   delaySubscriptionReady?: boolean
   sendKeepaliveBeforeResponse?: boolean
   keepaliveDelayMs?: number
@@ -143,6 +145,7 @@ export async function createSharedControlTestServer(
     requests,
     auths,
     connectionCount: () => connectionCount,
+    activeConnectionCount: () => wss.clients.size,
     flushDelayedResponses: () => delayedResponses.splice(0).forEach((send) => send()),
     closeClients: () => wss.clients.forEach((client) => client.close(4001, 'test close'))
   }
@@ -174,7 +177,7 @@ function handleRequest(
   const streaming = isStreamingMethod(request.method)
   const result = streaming
     ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : { method: request.method }
+    : (options.results?.[request.method] ?? { method: request.method })
   const sendResponse = (): void => {
     if (options.sendUnknownResponseBeforeResponse) {
       sendEncrypted(ws, sharedKey, {

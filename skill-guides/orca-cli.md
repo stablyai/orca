@@ -57,6 +57,24 @@ ORCA status --json
 
 Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly instead of inspecting source files first.
 
+## Discover Hosts
+
+Run `ORCA host list --json` to discover this machine, all registered SSH targets,
+and all saved paired Orca servers. Use the printed selector: `--host local`,
+`--host ssh:<target-id>`, or `--environment <environment-id>`.
+
+Platform comes from the owning host, not its name. SSH connectivity is the local
+app's known SSH state. Paired connectivity is a fresh read-only CLI probe, marked
+`connectionSource: "probe"` / `[probe]`, not the desktop's persistent connection.
+Unknown connectivity omits `connected`; never interpret that as `false` or as
+evidence that remote processes exited. Failed probes retain the host row and a safe
+`probeError`. An unavailable SSH inventory produces an explicit incomplete-list warning.
+
+Paired probes have a five-second scan budget and at most four concurrent sockets;
+they do not change pairing metadata or last-used ordering. Older servers fall back
+to `host.platform` when `status.get` lacks platform. Use `ORCA environment list`
+for a saved-server listing without network probes.
+
 ## Full Handoffs
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.

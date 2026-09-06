@@ -1,22 +1,10 @@
 import type { CommandHandler } from '../dispatch'
-import {
-  formatEnvironment,
-  formatEnvironmentList,
-  formatHostList,
-  printResult,
-  type HostListEntry
-} from '../format'
+import { formatEnvironment, formatEnvironmentList, formatHostList, printResult } from '../format'
 import { listSshTargets } from '../host-selector-alternatives'
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
-import { RuntimeClient } from '../runtime-client'
 import type { RuntimeRpcSuccess } from '../runtime-client'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
-import {
-  isConnectedRuntimeHostState,
-  runtimeHostConnectionState,
-  type RuntimeHostConnectionState
-} from '../../shared/runtime-host-connection-state'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import { listPairedEnvironmentHosts } from './paired-host-inventory'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import {
   addEnvironmentFromPairingCode,
@@ -53,7 +41,17 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca host list`. It answers from this machine\u2019s own pairing store, so a routed answer would name servers paired with a different machine.',
       'Run `orca host list` on that machine to see the SSH targets registered there.'
     )
-    const sshTargets = (await listSshTargets(client)).map((target) => ({
+    const warnings: string[] = []
+    const [targets, environments] = await Promise.all([
+      listSshTargets(client, { inventory: true }).catch(() => {
+        warnings.push(
+          'SSH inventory unavailable; this listing is incomplete. Check the local Orca runtime and retry.'
+        )
+        return []
+      }),
+      listPairedEnvironmentHosts(getDefaultUserDataPath())
+    ])
+    const sshTargets = targets.map((target) => ({
       kind: 'ssh' as const,
       name: target.label,
       id: target.id,
@@ -62,7 +60,6 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
       ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
     }))
-    const environments = await listPairedEnvironmentHosts(getDefaultUserDataPath())
     const hosts = [
       {
         kind: 'local' as const,
@@ -74,7 +71,11 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...sshTargets,
       ...environments
     ]
-    printResult(localSuccess({ hosts }), json, formatHostList)
+    printResult(
+      localSuccess({ hosts, ...(warnings.length ? { warnings } : {}) }),
+      json,
+      formatHostList
+    )
   },
   'environment list': async ({ flags, json }) => {
     rejectLocalPairingStoreRetargeting(
@@ -104,39 +105,6 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
         `Removed environment ${result.removed.name} (${result.removed.id}).`
     )
   }
-}
-
-async function listPairedEnvironmentHosts(userDataPath: string): Promise<HostListEntry[]> {
-  return Promise.all(
-    listEnvironments(userDataPath).map(async (environment) => {
-      const base = {
-        kind: 'environment' as const,
-        name: environment.name,
-        id: environment.id,
-        selector: `--environment ${environment.name}`
-      }
-      try {
-        const client = new RuntimeClient(userDataPath, 5_000, null, environment.name)
-        const response = await client.call<RuntimeStatus>('status.get')
-        const connectionStatus = runtimeHostConnectionState({
-          hasStatusEntry: true,
-          status: response.result
-        })
-        return {
-          ...base,
-          connected: isConnectedRuntimeHostState(connectionStatus),
-          connectionStatus,
-          ...(response.result.hostPlatform ? { platform: response.result.hostPlatform } : {})
-        }
-      } catch {
-        return {
-          ...base,
-          connected: false,
-          connectionStatus: 'disconnected' as RuntimeHostConnectionState
-        }
-      }
-    })
-  )
 }
 
 /**

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
+  probeMock,
   runtimeClientConstructorMock,
   serveOrcaAppMock,
   getDefaultUserDataPathMock,
@@ -12,6 +13,7 @@ const {
   spawnMock
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
+  probeMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn(),
   serveOrcaAppMock: vi.fn(),
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
@@ -39,6 +41,8 @@ vi.mock('./runtime/environments', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 
+vi.mock('../shared/remote-runtime-client', () => ({ sendRemoteRuntimeRequest: probeMock }))
+
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
   return createChildProcessModuleMock(spawnMock)
@@ -48,7 +52,12 @@ import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
-const SSH_TARGET = { id: 'ssh-1777360569033-yvz2mp', label: 'openclaw', remotePlatform: 'win32' }
+const SSH_TARGET = {
+  id: 'ssh-1777360569033-yvz2mp',
+  label: 'openclaw',
+  remotePlatform: 'win32',
+  connected: true
+}
 
 /** Every SSH-target lookup answers with the one target only this machine's runtime knows about. */
 function queueSshTargetLookups(count: number): void {
@@ -61,6 +70,7 @@ function queueSshTargetLookups(count: number): void {
 describe('runtime-selector flags on locally pinned CLI commands', () => {
   beforeEach(() => {
     runtimeClientConstructorMock.mockClear()
+    probeMock.mockReset().mockResolvedValue(okFixture('probe', { hostPlatform: 'win32' }))
   })
 
   useWorktreeAwarenessEnvironment({
@@ -75,7 +85,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
   it('answers `host list` from this machine and stamps the runtime that actually answered', async () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
     queueSshTargetLookups(1)
-    queueFixtures(callMock, okFixture('req_m4air_status', { hostPlatform: 'win32' }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['host', 'list', '--json'], '/tmp/repo')
@@ -99,6 +108,8 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     })
     // The tell: `runtimeId: local` is only honest if no routed client was ever built.
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
+    expect(runtimeClientConstructorMock).toHaveBeenCalledTimes(1)
+    expect(probeMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects `host list --environment` instead of answering with a half-routed listing', async () => {
@@ -118,6 +129,20 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(callMock).not.toHaveBeenCalled()
     expect(runtimeClientConstructorMock).not.toHaveBeenCalledWith(null, 'm4air')
     process.exitCode = 0
+  })
+
+  it('marks an unavailable SSH inventory as incomplete while retaining paired hosts', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+    callMock.mockRejectedValueOnce(new Error('private local runtime diagnostic'))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['host', 'list', '--json'], '/tmp/repo')
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(printed.result.hosts.map((host: { id: string }) => host.id)).toEqual([
+      'local',
+      'env-m4air'
+    ])
+    expect(printed.result.warnings).toEqual([expect.stringContaining('listing is incomplete')])
+    expect(JSON.stringify(printed)).not.toContain('private local runtime diagnostic')
   })
 
   it('rejects `environment list --environment` rather than repeating the local answer', async () => {
