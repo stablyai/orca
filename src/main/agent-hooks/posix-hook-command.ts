@@ -34,3 +34,16 @@ export function wrapPosixHookCommand(
   ].join(' && ')
   return `if ${guards}; then ${invocation}; else ${fallback}; fi`
 }
+
+// Why: Antigravity ACP hosts (Zed) `shlex.split` the hook command and exec argv[0] directly instead
+// of running it through a shell, so the guard above — which starts with the builtin `if` — fails to
+// spawn and the host reads a hook that never started as a deny on every tool call (#16087). This is
+// the POSIX twin of the Windows argv[0] contract in #8430: hand the same snippet to an explicit
+// interpreter so argv[0] is a real executable, without giving up the missing-script fallback (#2426).
+export function wrapPosixHookCommandForExec(
+  scriptPath: string,
+  env: Record<string, string> = {},
+  options: { fallbackStdout?: string } = {}
+): string {
+  return `/bin/sh -c ${quotePosixShellString(wrapPosixHookCommand(scriptPath, env, options))}`
+}

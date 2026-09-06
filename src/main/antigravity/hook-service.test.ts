@@ -19,6 +19,10 @@ vi.mock('os', async () => {
 import { AntigravityHookService } from './hook-service'
 import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import {
+  posixHookInnerCommand,
+  shlexSplit
+} from '../agent-hooks/posix-hook-exec-command.test-fixture'
 
 const ANTIGRAVITY_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'antigravity-hook.cmd' : 'antigravity-hook.sh'
@@ -86,10 +90,12 @@ describe('AntigravityHookService', () => {
     if (process.platform === 'win32') {
       expect(config['orca-status'].PreInvocation[0].command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
     } else {
-      expect(config['orca-status'].PreInvocation[0].command).toContain(
+      expect(posixHookInnerCommand(config['orca-status'].PreInvocation[0].command ?? '')).toContain(
         "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
       )
-      expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
+      expect(posixHookInnerCommand(config['orca-status'].Stop[0].command ?? '')).toContain(
+        "ORCA_ANTIGRAVITY_EVENT='Stop'"
+      )
     }
 
     const script = readFileSync(
@@ -367,4 +373,78 @@ describe('AntigravityHookService', () => {
       join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND)
     )
   })
+
+  // Why: the tokenizer above is load-bearing for the argv[0] tests, so pin its behaviour on the
+  // exact escape the wrapper emits ('\\'' inside a single-quoted string) before relying on it.
+  // Why: a fixture that silently accepts malformed input would let a broken quoting change pass —
+  // real shlex raises on both of these, so this one must too (coderabbitai on #16222).
+  it('rejects incomplete shell syntax instead of guessing', () => {
+    expect(() => shlexSplit(`/bin/sh -c 'printf ok`)).toThrow(/unbalanced/)
+    expect(() => shlexSplit('/bin/sh -c foo\\')).toThrow(/trailing backslash/)
+  })
+
+  it('tokenizes single-quote escapes the way a POSIX shlex does', () => {
+    expect(shlexSplit(`/bin/sh -c 'printf '\\''%s'\\'' done'`)).toEqual([
+      '/bin/sh',
+      '-c',
+      "printf '%s' done"
+    ])
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'installs a PreToolUse command that is spawnable as argv[0] without a shell',
+    () => {
+      new AntigravityHookService().install()
+
+      const config = JSON.parse(
+        readFileSync(join(homeDir, '.gemini', 'config', 'hooks.json'), 'utf8')
+      ) as { 'orca-status': Record<string, { hooks?: { command: string }[] }[]> }
+      const command = config['orca-status'].PreToolUse[0].hooks?.[0]?.command
+      const argv = shlexSplit(command!)
+
+      // Why: a shell builtin as argv[0] makes exec fail with ENOENT, and Antigravity ACP reads a
+      // hook that never started as a deny — every tool call is blocked (#16087).
+      expect(argv[0]).not.toBe('if')
+
+      const result = spawnSync(argv[0]!, argv.slice(1), {
+        input: '{"toolCall":{"name":"run_command","args":{"CommandLine":"ls"}}}',
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ORCA_AGENT_HOOK_ENDPOINT: '',
+          ORCA_AGENT_HOOK_PORT: '',
+          ORCA_AGENT_HOOK_TOKEN: '',
+          ORCA_PANE_KEY: ''
+        }
+      })
+
+      expect(result.error).toBeUndefined()
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps answering the PreToolUse gate over exec when the managed script is missing',
+    () => {
+      new AntigravityHookService().install()
+      rmSync(join(homeDir, '.orca', 'agent-hooks'), { recursive: true, force: true })
+
+      const config = JSON.parse(
+        readFileSync(join(homeDir, '.gemini', 'config', 'hooks.json'), 'utf8')
+      ) as { 'orca-status': Record<string, { hooks?: { command: string }[] }[]> }
+      const argv = shlexSplit(config['orca-status'].PreToolUse[0].hooks?.[0]?.command ?? '')
+
+      const result = spawnSync(argv[0]!, argv.slice(1), {
+        input: '{"toolCall":{"name":"run_command"}}',
+        encoding: 'utf8'
+      })
+
+      // Why: making the command exec-spawnable must not cost the missing-script guard — dropping it
+      // would trade #16087 for #2426, where silence is itself a deny.
+      expect(result.error).toBeUndefined()
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
+    }
+  )
 })

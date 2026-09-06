@@ -105,7 +105,7 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
 
-export { wrapPosixHookCommand } from './posix-hook-command'
+export { wrapPosixHookCommand, wrapPosixHookCommandForExec } from './posix-hook-command'
 
 export function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
