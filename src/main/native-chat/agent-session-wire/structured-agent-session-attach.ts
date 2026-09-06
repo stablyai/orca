@@ -54,6 +54,8 @@ export type AgentSessionAttachParams = {
   agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
+  /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
+  options?: Readonly<Record<string, string>>
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
 }
@@ -78,6 +80,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     agent: params.agent,
     accountHome: params.accountHome,
     runtimeKind: params.runtimeKind,
+    options: params.options,
     providerHandle: params.providerHandle,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
@@ -191,6 +194,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.options ? { options: params.options } : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     runtimeKind: params.runtimeKind,

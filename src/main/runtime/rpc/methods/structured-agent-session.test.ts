@@ -193,6 +193,10 @@ function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatch
         variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
         path: params.agent === 'claude' ? '/host/.claude' : '/host/.codex'
       },
+      options:
+        params.agent === 'claude'
+          ? { model: 'opus', effort: 'high' }
+          : { model: 'gpt-5.6-sol', effort: 'medium' },
       runtimeKind: 'native'
     })),
     publishStructuredAgentSessionTab: vi.fn()
@@ -388,7 +392,8 @@ describe('method routing', () => {
     expect(hostCalls.attach).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' }
+        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+        options: { model: 'gpt-5.6-sol', effort: 'medium' }
       })
     )
     expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('providerHandle')
