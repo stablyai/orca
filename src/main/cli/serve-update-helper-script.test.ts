@@ -107,6 +107,18 @@ describe('serve update helper script', () => {
     expect(script).not.toContain('runtimeId')
   })
 
+  it('binds rejected and failed verdicts to the attempt so the app can read the real reason', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const rejectedAt = script.indexOf('"phase":"rejected"')
+    const failedAt = script.indexOf('"phase":"failed"')
+    expect(rejectedAt).toBeGreaterThan(-1)
+    expect(failedAt).toBeGreaterThan(-1)
+    expect(script.slice(rejectedAt, rejectedAt + 220)).toContain('attemptId')
+    expect(script.slice(rejectedAt, rejectedAt + 220)).toContain('targetVersion')
+    expect(script.slice(failedAt, failedAt + 220)).toContain('attemptId')
+    expect(script.slice(failedAt, failedAt + 220)).toContain('targetVersion')
+  })
+
   it('writes verdicts through a mktemp path and clears the result under the lock', () => {
     const script = buildServeUpdateHelperScript(INPUT)
     expect(script).toContain('mktemp "$SPOOL_DIR/result.XXXXXXXX"')
