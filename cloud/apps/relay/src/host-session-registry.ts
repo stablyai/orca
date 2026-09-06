@@ -29,7 +29,7 @@ import {
 import { HostCloseReasonMemory } from './host-close-reason-memory.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
-import type { RelayRuntimeObserver } from './relay-observability.js'
+import type { RelayClientAcceptStage, RelayRuntimeObserver } from './relay-observability.js'
 import type { PendingHostDataReservation } from './relay-connection-ledger.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
 import { ProcessQueuedByteBudget, wireSplice } from './splice-forwarder.js'
@@ -129,6 +129,13 @@ function send(socket: WebSocket, type: string, message: object): void {
 // stalled predecessor only accumulates doomed sockets.
 const ACTIVATION_QUEUE_WAIT_MS = 30_000
 
+// Why: hosts rebind a few minutes before this expires, so every host that
+// (re)connected in the same minute (a cell recreate dumps hundreds at once)
+// rebinds as one cohort every cycle, forever. Symmetric jitter walks the cohort
+// apart across cycles without raising the mean rebind rate.
+export const CONTROL_LEASE_MS = 55 * 60 * 1000
+export const CONTROL_LEASE_JITTER_MS = 5 * 60 * 1000
+
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
   private readonly activationQueues = new Map<string, Promise<void>>()
@@ -145,8 +152,15 @@ export class HostSessionRegistry {
     private readonly assignments: RelayAssignmentStore,
     private readonly queuedByteBudget: ProcessQueuedByteBudget,
     private readonly observer: RelayRuntimeObserver,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly random: () => number = Math.random
   ) {}
+
+  // Uniform over [CONTROL_LEASE_MS - jitter, CONTROL_LEASE_MS + jitter).
+  private controlLeaseExpiresAt(): number {
+    const offset = Math.floor((this.random() * 2 - 1) * CONTROL_LEASE_JITTER_MS)
+    return this.now() + CONTROL_LEASE_MS + offset
+  }
 
   async acceptClient(
     socket: WebSocket,
@@ -159,10 +173,31 @@ export class HostSessionRegistry {
       this.rejectClient(socket, RELAY_CLOSE_CODE.DRAINING)
       return
     }
+    // Why: the accept runs several serialized Postgres calls behind the contended
+    // cell-inventory lock, and phones bound their dial. Finishing the work for a
+    // phone that already hung up used to acquire (and leak for 90s) an activity
+    // lease, then fail at bind with host_data_reservation_already_bound.
+    const acceptStartedAt = this.now()
+    const abandonedByClient = (stage: RelayClientAcceptStage, cleanup?: () => void): boolean => {
+      if (socket.readyState === socket.OPEN) return false
+      capacityReservation?.release()
+      cleanup?.()
+      const elapsedMs = this.now() - acceptStartedAt
+      this.observer.recordClientAcceptAbandoned?.(stage, elapsedMs)
+      console.warn(
+        JSON.stringify({ event: 'orca_relay_client_accept_abandoned', stage, elapsedMs })
+      )
+      return true
+    }
     if (this.config.role === 'cell') {
-      const outerIdentity =
-        (await this.store.resolveResume(hostId, credential)) ??
-        (await this.store.resolveInviteForMove(hostId, credential))
+      // Each lookup is its own pooled round trip; stop between them once the phone
+      // has left instead of running the rest of the chain for nobody.
+      let outerIdentity = await this.store.resolveResume(hostId, credential)
+      if (abandonedByClient('assignment')) return
+      if (!outerIdentity) {
+        outerIdentity = await this.store.resolveInviteForMove(hostId, credential)
+        if (abandonedByClient('assignment')) return
+      }
       const assignment = outerIdentity
         ? await this.assignments.resolve({ userId: outerIdentity.userId, relayHostId: hostId })
         : null
@@ -172,6 +207,7 @@ export class HostSessionRegistry {
         this.rejectClient(socket, RELAY_CLOSE_CODE.WRONG_CELL)
         return
       }
+      if (abandonedByClient('assignment')) return
     }
     const reservation = await this.store.reserveCredential(hostId, credential)
     if (!reservation) {
@@ -181,6 +217,7 @@ export class HostSessionRegistry {
       return
     }
     this.observer.recordAuth(true)
+    if (abandonedByClient('credential', () => this.failReservationBestEffort(reservation))) return
     const sessionKey = this.key(reservation.userId, hostId)
     const session = this.sessions.get(sessionKey)
     if (
@@ -226,6 +263,14 @@ export class HostSessionRegistry {
         this.rejectClient(socket, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
         return
       }
+    }
+    if (
+      abandonedByClient('activity', () => {
+        this.failReservationBestEffort(reservation)
+        if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
+      })
+    ) {
+      return
     }
     const attachTimer = setTimeout(() => {
       session.pendingConns.delete(connId)
@@ -740,7 +785,7 @@ export class HostSessionRegistry {
       existing.socket = socket
       existing.state = existing.regionalDrainAttemptId ? 'drain-only' : 'active'
       existing.appVersion = appVersion
-      existing.leaseExpiresAt = this.now() + 55 * 60 * 1000
+      existing.leaseExpiresAt = this.controlLeaseExpiresAt()
       existing.lastPongAt = this.now()
       existing.activityRenewalDueAt =
         this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
@@ -791,7 +836,7 @@ export class HostSessionRegistry {
       appVersion,
       state: 'active',
       socket,
-      leaseExpiresAt: this.now() + 55 * 60 * 1000,
+      leaseExpiresAt: this.controlLeaseExpiresAt(),
       orphanTimer: null,
       heartbeatTimer: null,
       lastPongAt: this.now(),

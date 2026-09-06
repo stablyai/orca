@@ -35,7 +35,11 @@ function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Pro
       if (state === 'connected') {
         finish()
         resolve()
-      } else if (state === 'disconnected' || state === 'auth-failed') {
+      } else if (state === 'disconnected' || state === 'auth-failed' || state === 'reconnecting') {
+        // Why: a probe asks whether direct answers NOW. 'reconnecting' is the direct
+        // client's own backoff loop after a failed dial (an instant 1006 on a dead
+        // LAN); waiting it out held the supervisor's operation mutex for the full
+        // 12s bound and blocked relay recovery behind three doomed redials.
         finish()
         reject(new Error(`probe session ${state}`))
       }

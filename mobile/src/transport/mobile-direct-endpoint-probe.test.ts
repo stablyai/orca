@@ -71,4 +71,28 @@ describe('mobile direct endpoint probe', () => {
     expect(clients.get(host.endpoint)?.close).toHaveBeenCalledOnce()
     expect(result?.client.close).not.toHaveBeenCalled()
   })
+
+  it('fails as soon as every candidate falls into its own reconnect backoff', async () => {
+    // Incident 2026-09-04: foregrounding on a dead LAN produced an instant 1006 and
+    // the direct client's 500/1000/2000ms redials, while the probe sat on the
+    // 'connecting' phase and held the supervisor mutex for the whole 12s bound.
+    const clients: FakeClient[] = []
+    const openDirect = vi.fn(() => {
+      const client = new FakeClient('connecting')
+      clients.push(client)
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(20)
+    await expect(probing).resolves.toBeNull()
+
+    expect(clients).toHaveLength(2)
+    for (const client of clients) {
+      expect(client.close).toHaveBeenCalledOnce()
+    }
+    // No 12s timer is left behind to fire into a settled probe.
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })
