@@ -56,6 +56,7 @@ export type { ActivityGroupBy, ThreadReadFilter } from './agents-view-thread-fil
 export type StatusBarItem =
   | 'claude'
   | 'codex'
+  | 'zai'
   | 'gemini'
   | 'antigravity'
   | 'opencode-go'

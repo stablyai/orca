@@ -2,7 +2,7 @@
 title: Usage & rate-limit tracking
 ---
 
-Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, and MiniMax and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
+Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code, MiniMax, Grok, and the Z.AI Coding Plan and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
 
 ## What's shown
 
@@ -12,7 +12,11 @@ Orca reads local usage state for Claude Code, Codex, Gemini, OpenCode, Kimi Code
 
 ## How it works
 
-Orca reads the local usage state each agent maintains on disk (under `~/.claude`, `~/.codex`, and the Gemini/OpenCode equivalents). No API calls, no extra auth. This means the readout is only as fresh as the agent's own bookkeeping — numbers update when the agent writes, not in real time.
+For most providers, Orca reads usage state that the agent maintains locally (under `~/.claude`, `~/.codex`, and provider equivalents). Those readouts update when the agent writes its bookkeeping.
+
+For **Z.AI Coding Plan**, Orca reads only the explicit `zai-coding-plan` API-key record that OpenCode stores on the execution host. Set it up with `opencode auth login`, choose **Z.AI Coding Plan**, and enter your plan key. Orca never rewrites that credential or publishes it to the UI. It sends one read-only quota request to Z.AI's monitor endpoint at the configured global (`api.z.ai`) or China (`open.bigmodel.cn`) origin; it does not call a model or billing endpoint and does not try the other region. The 5-hour and weekly limits are shared by every supported tool using the same GLM Coding Plan.
+
+Z.AI's official usage plugin uses this monitor endpoint, but it is not a documented stable public API. If Z.AI rejects the key or the quota is unavailable, repeat the OpenCode login flow and confirm that the account has a Coding Plan. Orca treats missing or unfamiliar quota data as unknown rather than showing 0%.
 
 ## Multi-account accounting
 

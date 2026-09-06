@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon, ZaiIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import type { StatusBarController } from './use-status-bar-controller'
@@ -62,6 +62,17 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.c0909c686e', 'Codex Usage')}
           </DropdownMenuCheckboxItem>
         )}
+        {/* Why: Z.AI auth is opencode-store-based, not a CLI on PATH, so its toggle has no agent gate. */}
+        <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('zai')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('zai')
+          }}
+        >
+          <ZaiIcon size={14} />
+          {translate('auto.components.status.bar.StatusBar.zaiUsageMenu', 'Z.AI Usage')}
+        </DropdownMenuCheckboxItem>
         {isStatusBarItemAvailable('gemini', detectedAgentIds) && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('gemini')}

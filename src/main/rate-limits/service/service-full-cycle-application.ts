@@ -1,5 +1,6 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
+import { deriveZaiAuthConfigured } from '../zai-auth-configured'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
@@ -32,7 +33,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        zaiResult
       ],
       grokResultPromise
     } = prepared
@@ -125,6 +127,18 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const zai =
+      zaiResult.status === 'fulfilled'
+        ? zaiResult.value
+        : ({
+            provider: 'zai',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: 'Z.ai usage request failed unexpectedly',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -164,6 +178,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
+    this.trackActiveFailureStreak('zai', zai)
+    // Why: the fetcher owns the auth read, so the durable flag derives from its settled result — no duplicate auth probe.
+    this.zaiAuthConfigured = deriveZaiAuthConfigured(zai)
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
@@ -188,7 +205,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      zai: this.applyStalePolicy(zai, previousState.zai)
     })
 
     const grokResult = await grokResultPromise

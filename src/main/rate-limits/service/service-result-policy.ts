@@ -92,6 +92,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       | 'minimax'
       | 'grok'
       | 'antigravity'
+      | 'zai'
   ): ProviderRateLimits {
     if (!current) {
       return {

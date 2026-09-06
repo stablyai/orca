@@ -43,4 +43,17 @@ describe('getStatusBarToggles', () => {
       expect.arrayContaining(['status bar', 'minimax', 'usage', 'subscription', 'cookie'])
     )
   })
+
+  it('includes Z.AI usage so Appearance can toggle the status item unconditionally', () => {
+    const zaiToggle = getStatusBarToggles().find((entry) => entry.id === 'zai')
+
+    expect(zaiToggle).toMatchObject({
+      title: 'Z.AI Usage',
+      description: 'Show Z.AI Coding Plan usage in the status bar.',
+      toggleDescription: 'Show Z.AI Coding Plan usage when signed in through opencode auth.'
+    })
+    expect(zaiToggle?.keywords).toEqual(
+      expect.arrayContaining(['status bar', 'z.ai', 'glm', 'usage', 'subscription', 'opencode'])
+    )
+  })
 })

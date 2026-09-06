@@ -2,6 +2,7 @@ import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-
 import type { TaskResumeState, TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
 import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
 import type { ContextualTourId } from '../../../../../shared/contextual-tours'
+import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
@@ -10,6 +11,25 @@ import {
   sanitizeActivityClearedAtByPaneKey,
   sanitizePaneKeyTimestampRecord
 } from './ui-slice-hydration-sanitizers'
+
+export function hydratePetSelection(ui: PersistedUIState): {
+  customPets: NonNullable<PersistedUIState['customPets']>
+  petId: string
+} {
+  // Why: pre-rename builds used sidekick* keys; new pet* writes win after upgrade.
+  const customPets = Array.isArray(ui.customPets)
+    ? ui.customPets
+    : Array.isArray(ui.customSidekicks)
+      ? ui.customSidekicks
+      : []
+  const candidate = ui.petId ?? ui.sidekickId
+  const petId =
+    typeof candidate === 'string' &&
+    (isBundledPetId(candidate) || customPets.some((pet) => pet.id === candidate))
+      ? candidate
+      : DEFAULT_PET_ID
+  return { customPets, petId }
+}
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',

@@ -9,6 +9,7 @@ import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchZaiRateLimits } from './zai-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
 export type Deferred<T> = {
@@ -89,6 +90,7 @@ export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  vi.mocked(fetchZaiRateLimits).mockImplementation(async () => unavailableProvider('zai'))
 }
 
 /** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
@@ -105,6 +107,15 @@ export function resetRateLimitProviderMocks(): void {
     updatedAt: Date.now(),
     error: null,
     status: 'unavailable'
+  })
+  vi.mocked(fetchZaiRateLimits).mockResolvedValue({
+    provider: 'zai',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: null,
+    status: 'unavailable',
+    usageMetadata: { failureKind: 'missing-credentials' }
   })
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })

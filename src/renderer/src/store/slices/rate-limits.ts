@@ -25,6 +25,8 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     antigravity: null,
     minimax: null,
     grok: null,
+    zai: null,
+    zaiAuthConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
@@ -147,6 +149,13 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
   },
 
   setRateLimitsFromPush: (state) => {
-    set({ rateLimits: state })
+    set({
+      rateLimits: {
+        ...state,
+        // Why: an older paired host's push predates the Z.AI keys; fill the defaults so selectors never see undefined.
+        zai: state.zai ?? null,
+        zaiAuthConfigured: state.zaiAuthConfigured === true
+      }
+    })
   }
 })

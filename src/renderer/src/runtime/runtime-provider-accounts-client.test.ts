@@ -262,6 +262,46 @@ describe('watchProviderAccounts', () => {
     expect(snapshots).toHaveLength(2)
   })
 
+  it('preserves unknown Z.AI state when an old host omits additive fields', async () => {
+    const snapshots: ProviderAccountsSnapshot[] = []
+    watchProviderAccounts(REMOTE, {
+      onSnapshot: (snapshot) => snapshots.push(snapshot),
+      onError: () => {
+        throw new Error('unexpected error')
+      }
+    })
+    await flushMicrotasks()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'ready',
+        snapshot: {
+          ...snapshotFixture('old-host'),
+          rateLimits: {
+            claude: null,
+            codex: null,
+            gemini: null,
+            opencodeGo: null,
+            kimi: null,
+            antigravity: null,
+            minimax: null,
+            grok: null,
+            minimaxCookieConfigured: false,
+            grokAuthConfigured: false,
+            claudeTarget: { runtime: 'host', wslDistro: null },
+            codexTarget: { runtime: 'host', wslDistro: null },
+            inactiveClaudeAccounts: [],
+            inactiveCodexAccounts: []
+          }
+        }
+      }
+    })
+
+    expect(snapshots[0]?.rateLimits?.zai).toBeUndefined()
+    expect(snapshots[0]?.rateLimits?.zaiAuthConfigured).toBeUndefined()
+  })
+
   it('surfaces remote subscription failures as errors', async () => {
     const errors: unknown[] = []
     watchProviderAccounts(REMOTE, {

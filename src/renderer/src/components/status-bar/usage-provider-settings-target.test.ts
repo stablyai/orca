@@ -15,4 +15,10 @@ describe('getUsageProviderAccountsSectionId', () => {
   it('does not invent an Accounts section for CLI-owned Kimi credentials', () => {
     expect(getUsageProviderAccountsSectionId('kimi')).toBeNull()
   })
+
+  it('does not invent an Accounts section for Z.AI because opencode auth owns it', () => {
+    // Why: Z.AI re-auth happens via `opencode auth login`, so there is no Orca
+    // Accounts section to open for it.
+    expect(getUsageProviderAccountsSectionId('zai')).toBeNull()
+  })
 })

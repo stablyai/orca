@@ -343,3 +343,20 @@ export function DroidIcon({ size = 14 }: { size?: number }): React.JSX.Element {
     </svg>
   )
 }
+
+// Why: a token-compliant monochrome Z keeps the icon on the text color in both
+// themes; Z.AI's gradient brand mark would fight the status-bar chrome.
+export function ZaiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg
+      fill="currentColor"
+      height={size}
+      width={size}
+      viewBox="0 0 24 24"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path d="M5 4h14v3l-9.5 10H19v3H5v-3l9.5-10H5V4z" />
+    </svg>
+  )
+}
