@@ -309,6 +309,55 @@ describe('CodexSubagentRoster', () => {
     ])
   })
 
+  it('lets a child swept at turn end still report what it actually did', () => {
+    const { roster, agents } = createHarness()
+
+    deliver(
+      roster,
+      activity({ kind: 'started', agentThreadId: 'child-1', agentPath: '/root/read' })
+    )
+    roster.settleTurn(THREAD, TURN)
+    expect(agents()[0]?.state).toBe('unverifiable')
+
+    // A subagent that outlives its turn settles afterwards. Latching the sweep
+    // would report a child that finished as one we never saw finish.
+    deliver(
+      roster,
+      activity({ kind: 'completed', agentThreadId: 'child-1', agentPath: '/root/read' })
+    )
+    expect(agents()[0]?.state).toBe('completed')
+  })
+
+  it('refuses to put a swept child back to working', () => {
+    const { roster, agents } = createHarness()
+
+    deliver(
+      roster,
+      activity({ kind: 'started', agentThreadId: 'child-1', agentPath: '/root/read' })
+    )
+    roster.settleTurn(THREAD, TURN)
+    // A straggler progress tick after we gave up must not re-light the row.
+    deliver(
+      roster,
+      activity({ kind: 'interacted', agentThreadId: 'child-1', agentPath: '/root/read' })
+    )
+    expect(agents()[0]?.state).toBe('unverifiable')
+  })
+
+  it('keeps a real verdict when a later frame disagrees', () => {
+    const { roster, agents } = createHarness()
+
+    deliver(
+      roster,
+      activity({ kind: 'completed', agentThreadId: 'child-1', agentPath: '/root/read' })
+    )
+    deliver(
+      roster,
+      activity({ kind: 'interrupted', agentThreadId: 'child-1', agentPath: '/root/read' })
+    )
+    expect(agents()[0]?.state).toBe('completed')
+  })
+
   it('rule 4 — the session sweep settles every group and never un-terminals one', () => {
     const { roster, agents, appended } = createHarness()
 

@@ -47,6 +47,36 @@ export function isTerminalSubagentState(state: string): boolean {
   return normalizeSubagentState(state) !== 'working'
 }
 
+/** The child's own verdict about itself. `unverifiable` is deliberately absent:
+ *  it records that we stopped being able to see the child, not what it did, so
+ *  a later authoritative report must still be able to correct it. */
+const LATCHED_SUBAGENT_STATES: ReadonlySet<string> = new Set([
+  'idle',
+  'completed',
+  'failed',
+  'stopped'
+])
+
+/** Whether `next` may replace `current`.
+ *
+ *  A child that reported its own outcome keeps it. A child we merely lost sight
+ *  of may still settle: a turn-end sweep marks live children `unverifiable`, and
+ *  a subagent that outlives its turn reports `completed` afterwards — latching
+ *  the sweep would report a child that finished as one we never saw finish.
+ *  The reverse is refused: nothing returns to `working` once we have given up on
+ *  it, so a straggler progress tick cannot re-light a settled row. */
+export function canReplaceSubagentState(current: string, next: string): boolean {
+  const from = normalizeSubagentState(current)
+  if (from === 'working') {
+    return true
+  }
+  if (LATCHED_SUBAGENT_STATES.has(from)) {
+    return false
+  }
+  // `from` is `unverifiable`: only a real verdict may land.
+  return LATCHED_SUBAGENT_STATES.has(normalizeSubagentState(next))
+}
+
 export type NativeChatSubagentSummary = {
   total: number
   working: number

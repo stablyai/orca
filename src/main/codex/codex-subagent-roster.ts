@@ -23,6 +23,7 @@ import type {
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import {
+  canReplaceSubagentState,
   isTerminalSubagentState,
   subagentGroupFallbackText
 } from '../../shared/native-chat-subagent-summary'
@@ -130,10 +131,11 @@ export class CodexSubagentRoster {
         startedAt: now,
         ...(isTerminalSubagentState(state) ? { settledAt: now } : {})
       })
-    } else if (!isTerminalSubagentState(existing.state)) {
-      // Terminal latches. Re-applying the same non-terminal state is a no-op,
-      // which is what makes the duplicate `item/started` + `item/completed`
-      // delivery idempotent.
+    } else if (canReplaceSubagentState(existing.state, state)) {
+      // A child's own verdict latches. Re-applying the same non-terminal state
+      // is a no-op, which is what makes the duplicate `item/started` +
+      // `item/completed` delivery idempotent. `unverifiable` does not latch: a
+      // child swept at turn end can still report what it actually did.
       group.entries.set(activity.agentThreadId, {
         ...existing,
         state,
