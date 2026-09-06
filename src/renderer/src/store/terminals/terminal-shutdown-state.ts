@@ -45,20 +45,46 @@ export function commitTerminalShutdownState({
             clearTransientTerminalState(tab, index)
           )
         }
-    const ptyIdsByTabId = {
-      ...state.ptyIdsByTabId,
-      ...Object.fromEntries(tabs.map((tab) => [tab.id, [] as string[]] as const))
+    // Why copy-on-write everywhere below: a worktree whose panes already exited hits
+    // this with nothing to clear, and unconditional spreads then hand every map a new
+    // identity for no data change. ptyIdsByTabId is the costly one — six components
+    // select it whole, and selectLivePtyIdsForWorktree memoizes per sidebar card on
+    // its identity, so churning it rebuilds that record once per card.
+    // The four unread/input maps below already use this shape; this matches them.
+    let ptyIdsByTabId = state.ptyIdsByTabId
+    for (const tab of tabs) {
+      const current = ptyIdsByTabId[tab.id]
+      // Why `!== undefined`: an absent key is not an empty array, and the spread this
+      // replaces created the key. Only an already-empty entry can be skipped.
+      if (current !== undefined && current.length === 0) {
+        continue
+      }
+      if (ptyIdsByTabId === state.ptyIdsByTabId) {
+        ptyIdsByTabId = { ...state.ptyIdsByTabId }
+      }
+      ptyIdsByTabId[tab.id] = []
     }
-    const runtimePaneTitlesByTabId = keepIdentifiers
-      ? state.runtimePaneTitlesByTabId
-      : { ...state.runtimePaneTitlesByTabId }
-    const suppressedPtyExitIds = {
-      ...state.suppressedPtyExitIds,
-      ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
-    }
-    const pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
+    let runtimePaneTitlesByTabId = state.runtimePaneTitlesByTabId
+    let suppressedPtyExitIds = state.suppressedPtyExitIds
     for (const ptyId of exitGuardPtyIds) {
+      if (suppressedPtyExitIds[ptyId] === true) {
+        continue
+      }
+      if (suppressedPtyExitIds === state.suppressedPtyExitIds) {
+        suppressedPtyExitIds = { ...state.suppressedPtyExitIds }
+      }
+      suppressedPtyExitIds[ptyId] = true
+    }
+    let pendingPtyShutdownIds = state.pendingPtyShutdownIds
+    for (const ptyId of exitGuardPtyIds) {
+      // An absent owner count meant `delete` of a missing key, which changed nothing.
+      if (!(ptyId in pendingPtyShutdownIds)) {
+        continue
+      }
       const remainingOwners = (pendingPtyShutdownIds[ptyId] ?? 0) - 1
+      if (pendingPtyShutdownIds === state.pendingPtyShutdownIds) {
+        pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
+      }
       if (remainingOwners > 0) {
         pendingPtyShutdownIds[ptyId] = remainingOwners
       } else {
@@ -67,31 +93,50 @@ export function commitTerminalShutdownState({
     }
 
     // Sleeping terminals retain restart intent, but a wake can receive a different live PTY id.
-    const pendingCodexPaneRestartIds = keepIdentifiers
-      ? state.pendingCodexPaneRestartIds
-      : { ...state.pendingCodexPaneRestartIds }
-    const codexRestartNoticeByPtyId = { ...state.codexRestartNoticeByPtyId }
+    let pendingCodexPaneRestartIds = state.pendingCodexPaneRestartIds
+    let codexRestartNoticeByPtyId = state.codexRestartNoticeByPtyId
     for (const ptyId of exitGuardPtyIds) {
-      if (!keepIdentifiers) {
+      if (!keepIdentifiers && ptyId in pendingCodexPaneRestartIds) {
+        if (pendingCodexPaneRestartIds === state.pendingCodexPaneRestartIds) {
+          pendingCodexPaneRestartIds = { ...state.pendingCodexPaneRestartIds }
+        }
         delete pendingCodexPaneRestartIds[ptyId]
       }
-      delete codexRestartNoticeByPtyId[ptyId]
+      if (ptyId in codexRestartNoticeByPtyId) {
+        if (codexRestartNoticeByPtyId === state.codexRestartNoticeByPtyId) {
+          codexRestartNoticeByPtyId = { ...state.codexRestartNoticeByPtyId }
+        }
+        delete codexRestartNoticeByPtyId[ptyId]
+      }
     }
 
-    const pendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
-    const pendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
-    const terminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
+    let pendingSetupSplitByTabId = state.pendingSetupSplitByTabId
+    let pendingIssueCommandSplitByTabId = state.pendingIssueCommandSplitByTabId
+    let terminalLayoutsByTabId = state.terminalLayoutsByTabId
     let unreadTerminalTabs = state.unreadTerminalTabs
     let unreadTerminalPanes = state.unreadTerminalPanes
     let unreadAgentCompletionPanes = state.unreadAgentCompletionPanes
     let lastTerminalInputAtByPaneKey = state.lastTerminalInputAtByPaneKey
 
     for (const tab of tabs) {
-      if (!keepIdentifiers) {
+      if (!keepIdentifiers && tab.id in runtimePaneTitlesByTabId) {
+        if (runtimePaneTitlesByTabId === state.runtimePaneTitlesByTabId) {
+          runtimePaneTitlesByTabId = { ...state.runtimePaneTitlesByTabId }
+        }
         delete runtimePaneTitlesByTabId[tab.id]
       }
-      delete pendingSetupSplitByTabId[tab.id]
-      delete pendingIssueCommandSplitByTabId[tab.id]
+      if (tab.id in pendingSetupSplitByTabId) {
+        if (pendingSetupSplitByTabId === state.pendingSetupSplitByTabId) {
+          pendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
+        }
+        delete pendingSetupSplitByTabId[tab.id]
+      }
+      if (tab.id in pendingIssueCommandSplitByTabId) {
+        if (pendingIssueCommandSplitByTabId === state.pendingIssueCommandSplitByTabId) {
+          pendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
+        }
+        delete pendingIssueCommandSplitByTabId[tab.id]
+      }
       if (unreadTerminalTabs[tab.id]) {
         if (unreadTerminalTabs === state.unreadTerminalTabs) {
           unreadTerminalTabs = { ...state.unreadTerminalTabs }
@@ -124,17 +169,26 @@ export function commitTerminalShutdownState({
       }
       if (!keepIdentifiers) {
         const layout = terminalLayoutsByTabId[tab.id]
-        if (layout?.ptyIdsByLeafId) {
+        // Why the emptiness check: replacing an already-empty map with a fresh {} is
+        // the same value with a new identity.
+        if (layout?.ptyIdsByLeafId && Object.keys(layout.ptyIdsByLeafId).length > 0) {
+          if (terminalLayoutsByTabId === state.terminalLayoutsByTabId) {
+            terminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
+          }
           terminalLayoutsByTabId[tab.id] = { ...layout, ptyIdsByLeafId: {} }
         }
       }
     }
 
-    const lastKnownRelayPtyIdByTabId = keepIdentifiers
-      ? state.lastKnownRelayPtyIdByTabId
-      : { ...state.lastKnownRelayPtyIdByTabId }
+    let lastKnownRelayPtyIdByTabId = state.lastKnownRelayPtyIdByTabId
     if (!keepIdentifiers) {
       for (const tab of tabs) {
+        if (!(tab.id in lastKnownRelayPtyIdByTabId)) {
+          continue
+        }
+        if (lastKnownRelayPtyIdByTabId === state.lastKnownRelayPtyIdByTabId) {
+          lastKnownRelayPtyIdByTabId = { ...state.lastKnownRelayPtyIdByTabId }
+        }
         delete lastKnownRelayPtyIdByTabId[tab.id]
       }
     }
