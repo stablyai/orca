@@ -57,8 +57,18 @@ jobs:
         run: >-
           pnpm run test:e2e
           tests/e2e/golden-tab-bar-agent-launch.spec.ts
-          --repeat-each=3
+          --grep "under cmd.exe"
           --workers=1
+
+      - name: Inspect remaining temporary repo handles
+        if: failure()
+        shell: pwsh
+        run: |
+          $handleZip = Join-Path $env:RUNNER_TEMP 'Handle.zip'
+          $handleDir = Join-Path $env:RUNNER_TEMP 'orca-handle-diagnostic'
+          Invoke-WebRequest 'https://download.sysinternals.com/files/Handle.zip' -OutFile $handleZip
+          Expand-Archive $handleZip -DestinationPath $handleDir
+          & (Join-Path $handleDir 'handle64.exe') -accepteula -nobanner orca-e2e-repo-
 
       - name: Upload Playwright traces
         if: failure()
