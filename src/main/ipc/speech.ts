@@ -210,4 +210,8 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:stopDictation', async (_event, sessionId = 'desktop') => {
     await getSpeechSttService(store).stopDictation(getDesktopOwner(_event.sender.id, sessionId))
   })
+
+  ipcMain.handle('speech:clearDictation', async (_event, sessionId = 'desktop') => {
+    getSpeechSttService(store).clearUtterance(getDesktopOwner(_event.sender.id, sessionId))
+  })
 }

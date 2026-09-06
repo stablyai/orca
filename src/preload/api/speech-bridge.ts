@@ -38,6 +38,8 @@ export const speechApi = {
     ),
   stopDictation: (sessionId = 'desktop'): Promise<void> =>
     ipcRenderer.invoke('speech:stopDictation', sessionId),
+  clearDictation: (sessionId = 'desktop'): Promise<void> =>
+    ipcRenderer.invoke('speech:clearDictation', sessionId),
 
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>

@@ -95,6 +95,10 @@ const {
     finish(): Promise<string> {
       return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
     }
+
+    clear(): void {
+      this.feedCalls = []
+    }
   }
 
   return {
@@ -363,6 +367,48 @@ describe('SttService', () => {
     await service.stopDictation('desktop')
 
     expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
+  })
+
+  it('clears a local utterance without stopping the worker', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', sink, undefined, 'desktop')
+    service.clearUtterance('desktop')
+
+    expect(getLastWorker()?.messages.map((message) => message.type)).toContain('clear')
+    expect(getLastWorker()?.terminated).toBe(false)
+    expect(sink).not.toHaveBeenCalledWith({ type: 'stopped' })
+  })
+
+  it('clears cloud audio without finishing the transcription', async () => {
+    const sink = vi.fn()
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('openai-model', sink, undefined, 'desktop')
+    service.feedAudio(new Float32Array([0.25]), 16000, 'desktop')
+    service.clearUtterance('desktop')
+
+    expect(getCloudSessions()[0].feedCalls).toEqual([])
+    expect(sink).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'final' }))
+    expect(sink).not.toHaveBeenCalledWith({ type: 'stopped' })
+    expect(service.isActive()).toBe(true)
+  })
+
+  it('rejects clear from a mismatched owner', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    expect(() => service.clearUtterance('desktop:other')).toThrow('dictation_owner_mismatch')
   })
 
   it('keeps startup cancellation tombstoned after the worker has been created', async () => {
@@ -652,5 +698,30 @@ describe('SttService', () => {
 
     expect(getCreatedWorkerCount()).toBe(2)
     expect(getLastWorker()).not.toBe(firstWorker)
+  })
+
+  it('replaces an active desktop session in the same window instead of throwing', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop:4:1')
+    await expect(
+      service.startDictation('model-a', vi.fn(), undefined, 'desktop:4:2')
+    ).resolves.toBeUndefined()
+    expect(service.isActive()).toBe(true)
+  })
+
+  it('still rejects dictation from a different desktop window', async () => {
+    const service = new SttService({
+      getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
+      getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
+    } as never)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop:4:1')
+    await expect(
+      service.startDictation('model-a', vi.fn(), undefined, 'desktop:8:1')
+    ).rejects.toThrow('dictation_already_active')
   })
 })

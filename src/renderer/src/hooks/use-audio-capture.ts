@@ -1,4 +1,6 @@
 import { useRef, useCallback } from 'react'
+import { cleanupAudioCaptureGraph, flushDictationAudioBuffer } from './cleanup-audio-capture'
+import { useCapturePause } from './use-capture-pause'
 import { openMicrophoneCaptureStream } from '@/components/dictation/microphone-devices'
 import {
   DEFAULT_DICTATION_METER,
@@ -61,21 +63,13 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
   const lastMeterPublishedAtRef = useRef(Number.NEGATIVE_INFINITY)
 
   const cleanupCaptureResources = useCallback(() => {
-    trackLostCleanupRef.current?.()
-    trackLostCleanupRef.current = null
-
-    processorRef.current?.disconnect()
-    sourceRef.current?.disconnect()
-    processorRef.current = null
-    sourceRef.current = null
-
-    if (contextRef.current?.state !== 'closed') {
-      void contextRef.current?.close()
-    }
-    contextRef.current = null
-
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
+    cleanupAudioCaptureGraph({
+      trackLostCleanupRef,
+      processorRef,
+      sourceRef,
+      contextRef,
+      streamRef
+    })
   }, [])
 
   const resetBufferedAudio = useCallback(() => {
@@ -91,6 +85,12 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     lastMeterPublishedAtRef.current = Number.NEGATIVE_INFINITY
     publishMeter?.(DEFAULT_DICTATION_METER)
   }, [publishMeter])
+
+  const { pausedRef, pause, resume, resetPause, clearLiveAudio } = useCapturePause(
+    resetMeter,
+    resetBufferedAudio,
+    capturedChunkCountRef
+  )
 
   const removeOldestBufferedAudioChunk = useCallback(() => {
     const chunk = bufferedAudioRef.current.shift()
@@ -132,6 +132,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       cleanupCaptureResources()
       sessionIdRef.current = options.sessionId ?? 'desktop'
       bufferAudioRef.current = options.bufferAudio ?? false
+      resetPause()
       resetBufferedAudio()
       capturedChunkCountRef.current = 0
       resetMeter()
@@ -192,6 +193,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         processor.onaudioprocess = (e: AudioProcessingEvent) => {
           if (
             !isCapturingRef.current ||
+            pausedRef.current ||
             startRequestRef.current !== startRequest ||
             processorRef.current !== processor
           ) {
@@ -285,34 +287,25 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     [
       appendBufferedAudioChunk,
       cleanupCaptureResources,
+      pausedRef,
       publishMeter,
       resetBufferedAudio,
-      resetMeter
+      resetMeter,
+      resetPause
     ]
   )
 
   const flushBufferedAudio = useCallback(async () => {
-    const flushGeneration = bufferedAudioGenerationRef.current
-    try {
-      // Why: keep buffering enabled while draining so live audio appends behind
-      // startup audio instead of overtaking it through direct IPC sends.
-      while (
-        bufferedAudioGenerationRef.current === flushGeneration &&
-        bufferedAudioRef.current.length > 0
-      ) {
-        const chunk = bufferedAudioRef.current[0]
-        if (!chunk) {
-          break
-        }
-        removeOldestBufferedAudioChunk()
-        await window.api.speech.feedAudio(chunk.samples, chunk.sampleRate, chunk.sessionId)
-      }
-    } finally {
-      if (bufferedAudioGenerationRef.current === flushGeneration) {
-        bufferAudioRef.current = false
-        resetBufferedAudio()
-      }
-    }
+    // Why: keep buffering enabled while draining so live audio appends behind
+    // startup audio instead of overtaking it through direct IPC sends.
+    await flushDictationAudioBuffer({
+      generation: bufferedAudioGenerationRef.current,
+      bufferedAudioGenerationRef,
+      bufferedAudioRef,
+      bufferAudioRef,
+      removeOldestBufferedAudioChunk,
+      resetBufferedAudio
+    })
   }, [removeOldestBufferedAudioChunk, resetBufferedAudio])
 
   const discardBufferedAudio = useCallback(() => {
@@ -326,6 +319,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     (options: StopAudioCaptureOptions = {}) => {
       startRequestRef.current += 1
       isCapturingRef.current = false
+      resetPause()
       bufferAudioRef.current = false
       if (!options.preserveBufferedAudio) {
         resetBufferedAudio()
@@ -333,14 +327,17 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       cleanupCaptureResources()
       resetMeter()
     },
-    [cleanupCaptureResources, resetBufferedAudio, resetMeter]
+    [cleanupCaptureResources, resetBufferedAudio, resetMeter, resetPause]
   )
 
   return {
     start,
     stop,
+    pause,
+    resume,
     flushBufferedAudio,
     discardBufferedAudio,
+    clearLiveAudio,
     getCapturedChunkCount,
     isCapturingRef
   }

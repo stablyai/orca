@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -65,37 +65,89 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   setUserAgent(originalUserAgent)
+  vi.useRealTimers()
 })
 
+function collectControlActions(run: () => void): DictationControlAction[] {
+  const actions: DictationControlAction[] = []
+  const listener = (event: Event): void => {
+    actions.push((event as CustomEvent<DictationControlAction>).detail)
+  }
+  document.addEventListener(DICTATION_CONTROL_EVENT, listener)
+  run()
+  document.removeEventListener(DICTATION_CONTROL_EVENT, listener)
+  return actions
+}
+
 describe('DictationIndicator', () => {
-  it('stops dictation when the stop button is clicked', () => {
-    const actions: DictationControlAction[] = []
-    const listener = (event: Event): void => {
-      actions.push((event as CustomEvent<DictationControlAction>).detail)
-    }
-    document.addEventListener(DICTATION_CONTROL_EVENT, listener)
-
+  it('saves dictation when the save button is clicked', () => {
     render(<DictationIndicator />)
-    fireEvent.click(screen.getByRole('button', { name: 'Stop dictation' }))
+    const actions = collectControlActions(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    })
 
-    document.removeEventListener(DICTATION_CONTROL_EVENT, listener)
     expect(actions).toEqual(['stop'])
   })
 
-  it('keeps focus on the dictation target when the stop button is pressed', () => {
-    render(<DictationIndicator />)
-    const stopButton = screen.getByRole('button', { name: 'Stop dictation' })
+  it('pauses and resumes without closing the pill', () => {
+    const { rerender } = render(<DictationIndicator />)
+    expect(
+      collectControlActions(() => fireEvent.click(screen.getByRole('button', { name: 'Pause' })))
+    ).toEqual(['pause'])
 
-    expect(fireEvent.mouseDown(stopButton)).toBe(false)
+    storeState.dictationState = 'paused'
+    rerender(<DictationIndicator />)
+    expect(screen.getByText('Paused', { selector: '[aria-hidden="true"]' })).toBeTruthy()
+    expect(
+      collectControlActions(() => fireEvent.click(screen.getByRole('button', { name: 'Resume' })))
+    ).toEqual(['resume'])
   })
 
-  it('shows the assigned shortcut in the stop button tooltip in toggle mode', () => {
+  it('clears the current utterance without stopping and shows that it worked', () => {
+    render(<DictationIndicator />)
+    expect(
+      collectControlActions(() => fireEvent.click(screen.getByRole('button', { name: 'Clear' })))
+    ).toEqual(['clear'])
+    expect(screen.getByText('Cleared', { selector: '[aria-hidden="true"]' })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toBe('Cleared')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy()
+  })
+
+  it('returns to listening after the cleared hint', () => {
+    vi.useFakeTimers()
+    render(<DictationIndicator />)
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(screen.getByText('Cleared', { selector: '[aria-hidden="true"]' })).toBeTruthy()
+    act(() => {
+      vi.advanceTimersByTime(1200)
+    })
+    expect(screen.getByText('Listening', { selector: '[aria-hidden="true"]' })).toBeTruthy()
+  })
+
+  it('still saves with the original stop control after a clear', () => {
+    render(<DictationIndicator />)
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(
+      collectControlActions(() => fireEvent.click(screen.getByRole('button', { name: 'Save' })))
+    ).toEqual(['stop'])
+  })
+
+  it('keeps focus on the dictation target when the save button is pressed', () => {
+    render(<DictationIndicator />)
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+
+    expect(fireEvent.mouseDown(saveButton)).toBe(false)
+  })
+
+  it('shows the assigned shortcut in the save button tooltip in toggle mode', () => {
     render(<DictationIndicator />)
 
-    const tooltip = screen.getByTestId('tooltip-content')
-    expect(tooltip.textContent).toContain('Stop dictation')
-    expect(tooltip.textContent).toContain('⌘')
-    expect(tooltip.textContent).toContain('E')
+    const saveTooltip = screen
+      .getAllByTestId('tooltip-content')
+      .find((node) => node.textContent?.includes('Save'))
+    expect(saveTooltip?.textContent).toContain('⌘')
+    expect(saveTooltip?.textContent).toContain('E')
   })
 
   it('keeps the shortcut out of the always-visible pill, showing it only on hover', () => {
@@ -110,16 +162,31 @@ describe('DictationIndicator', () => {
     storeState.settings = { voice: { dictationMode: 'hold' } }
     render(<DictationIndicator />)
 
-    expect(screen.getByRole('button', { name: 'Stop dictation' })).toBeTruthy()
-    expect(screen.getByTestId('tooltip-content').textContent).not.toContain('⌘')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    const saveTooltip = screen
+      .getAllByTestId('tooltip-content')
+      .find((node) => node.textContent?.includes('Save'))
+    expect(saveTooltip?.textContent).not.toContain('⌘')
   })
 
-  it('hides the stop control once the session is already stopping', () => {
+  it('shows pause, save, and clear while the mic is still starting', () => {
+    storeState.dictationState = 'starting'
+    render(<DictationIndicator />)
+
+    expect(screen.getByText('Starting mic…', { selector: '[aria-hidden="true"]' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Clear' })).toBeTruthy()
+  })
+
+  it('hides the session controls once the session is already stopping', () => {
     storeState.dictationState = 'stopping'
     render(<DictationIndicator />)
 
     expect(screen.getByText('Processing…', { selector: '[aria-hidden="true"]' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Stop dictation' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull()
   })
 
   it('renders nothing while idle', () => {
