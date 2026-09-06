@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parse } from 'yaml'
 import { expect, it } from 'vitest'
@@ -42,9 +42,10 @@ it('selects the localhost journey for its remote hook authorities', () => {
     'src/relay/agent-hook-server.ts',
     'src/relay/plugin-overlay.ts',
     'src/main/agent-hooks/server.ts',
-    'src/main/ssh/ssh-relay-session-agent-hooks.ts',
+    'src/main/ssh/ssh-relay-session.ts',
     'src/shared/agent-hook-relay.ts'
   ]) {
+    expect(existsSync(resolve(import.meta.dirname, '../..', file)), file).toBe(true)
     expect(selectPrE2eSpecs([file])).toContain(spec)
   }
   expect(selectPrE2eSpecs(['src/renderer/src/components/Unrelated.tsx'])).not.toContain(spec)
