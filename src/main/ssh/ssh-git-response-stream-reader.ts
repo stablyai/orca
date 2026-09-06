@@ -16,6 +16,11 @@ const STREAM_INACTIVITY_TIMEOUT_MS = 30_000
  * are dropped on drain anyway; this just caps the pre-sentinel backlog. */
 const MAX_PENDING_FRAMES = 64
 
+/** Bound host memory during reassembly. The relay caps each git exec at MAX_GIT_BUFFER (10 MiB),
+ * so a legitimate diff tops out near 27 MiB — two blobs at that cap, base64-inflated. Anything past
+ * this is a buggy or hostile relay, and without the gate we would Buffer.concat then JSON.parse it. */
+const MAX_GIT_STREAM_RESPONSE_BYTES = 32 * 1024 * 1024
+
 export class GitResponseStreamError extends Error {
   readonly code = RelayErrorCode.StreamProtocolError
   constructor(message: string) {
@@ -50,6 +55,8 @@ export function requestGitStreamable(
     timeoutMs?: number
     /** Bounds the post-sentinel reassembly stall; resets on each chunk. */
     inactivityTimeoutMs?: number
+    /** Largest reassembled response to accept; defaults to MAX_GIT_STREAM_RESPONSE_BYTES. */
+    maxBytes?: number
   }
 ): Promise<unknown> {
   // Why: subscribe to chunk/end/error BEFORE awaiting the sentinel response so a
@@ -152,6 +159,25 @@ export function requestGitStreamable(
         return
       }
       const decoded = Buffer.from(data, 'base64')
+      // Why: without this the declared size is advisory — a relay that never sends
+      // responseEnd could stream past it forever and OOM the main process. The relay
+      // derives both figures from the same buffer, so an honest stream cannot trip it.
+      if (expectedSeq >= chunkCount) {
+        fail(
+          new GitResponseStreamError(
+            `Git stream ${streamIdRef.current} sent more chunks than declared: ${chunkCount}`
+          )
+        )
+        return
+      }
+      if (receivedBytes + decoded.length > totalBytes) {
+        fail(
+          new GitResponseStreamError(
+            `Git stream ${streamIdRef.current} overran declared size: ${receivedBytes + decoded.length}/${totalBytes} bytes`
+          )
+        )
+        return
+      }
       parts.push(decoded)
       receivedBytes += decoded.length
       expectedSeq += 1
@@ -293,6 +319,18 @@ export function requestGitStreamable(
           return
         }
         const marker = result.__orcaGitResponseStream
+        // Why: the relay declares the size up front, so reject before a single chunk transfers
+        // rather than after reassembling a payload we were never going to accept.
+        const maxBytes = options?.maxBytes ?? MAX_GIT_STREAM_RESPONSE_BYTES
+        if (marker.totalBytes > maxBytes) {
+          streamIdRef.current = marker.streamId
+          fail(
+            new GitResponseStreamError(
+              `Git stream ${marker.streamId} reports ${marker.totalBytes} bytes, above the ${maxBytes} byte cap`
+            )
+          )
+          return
+        }
         totalBytes = marker.totalBytes
         chunkCount = marker.chunkCount
         streamIdRef.current = marker.streamId
