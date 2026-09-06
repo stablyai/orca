@@ -172,10 +172,24 @@ const PARSE_CACHE_LIMIT = 256
  * synchronous I/O on `resolveSpawn`, where one dead network mount in PATH
  * blocks the calling thread each time.
  *
- * Held for the process's life, including the `null` misses. A `node.exe`
- * installed after the first probe is therefore not picked up until restart: the
- * stale miss just keeps the working cmd.exe fallback, and re-probing to catch
- * an install mid-session is what this cache exists to avoid.
+ * Held for the process's life, and the two stale directions are treated
+ * differently on purpose:
+ *
+ * - A stale `null` is left alone. A `node.exe` installed after the first probe
+ *   is not picked up until restart, which only means the working cmd.exe
+ *   fallback stays in use — and re-probing to catch that is the whole cost this
+ *   cache exists to avoid.
+ * - A stale path is revalidated on every hit, because it is the direction that
+ *   breaks. `resolveSpawn` would otherwise keep returning an interpreter that
+ *   has since been uninstalled, failing the spawn with ENOENT where an uncached
+ *   process falls back to cmd.exe and succeeds. Verified by execution: without
+ *   the check, deleting the cached `node.exe` still yielded its path.
+ *
+ * Known gap: PATH is in the key, so a caller that rebuilds `env` per spawn with
+ * a varying PATH — a per-worktree `.bin` prepended, say — misses every time and
+ * pays the full walk. Correct, just no faster than before. The 256 cap and the
+ * wholesale clear mean those misses cost memory nothing, so this is a bound on
+ * who benefits rather than a leak.
  */
 const nodeCache = new Map<string, string | null>()
 const NODE_CACHE_LIMIT = 256
@@ -249,7 +263,14 @@ function resolveShimNode(directory: string, env: NodeJS.ProcessEnv): string | nu
   // separates them because Windows allows one in neither a path nor a PATH.
   const key = `${directory}\n${pathValue}`
   const cached = nodeCache.get(key)
-  if (cached !== undefined) {
+  // A hit is confirmed still on disk before it is used, because the two stale
+  // directions are not symmetric. A stale `null` is safe and stays uncorrected:
+  // it keeps the cmd.exe fallback, which works. A stale path is not — handing
+  // `resolveSpawn` a `node.exe` that has since been uninstalled (or dropped
+  // from PATH by a version manager) fails the spawn with ENOENT, where an
+  // uncached process would have fallen back and succeeded. One `stat` instead
+  // of one per PATH entry, so the walk this cache exists to skip is still skipped.
+  if (cached !== undefined && (cached === null || statFile(cached))) {
     return cached
   }
   const resolved = probeShimNode(directory, pathValue)

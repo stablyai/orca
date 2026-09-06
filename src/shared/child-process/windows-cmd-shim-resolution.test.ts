@@ -1,4 +1,4 @@
-import { mkdtempSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -266,6 +266,32 @@ describeOnWindows('resolveWindowsCmdShim', () => {
     } finally {
       removeTreeSync(early)
       removeTreeSync(late)
+      removeTreeSync(shimDir)
+    }
+  })
+
+  it('falls back to cmd.exe when the cached interpreter has been uninstalled', () => {
+    // The mirror of the test above, and the direction that breaks: a cached
+    // node.exe that is later removed must not still be handed to `resolveSpawn`,
+    // which would fail the spawn with ENOENT where an uncached process falls
+    // back to cmd.exe and succeeds. Delete the `statFile` on the cache hit and
+    // this returns the deleted path instead of null.
+    const nodeDir = mkdtempSync(join(tmpdir(), 'orca-shim-gone-node-'))
+    const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-gone-'))
+    try {
+      const nodeExe = join(nodeDir, 'node.exe')
+      writeFileSync(nodeExe, '')
+      writeFileSync(join(shimDir, 'cli.js'), '')
+      const shim = join(shimDir, 'gone.cmd')
+      writeFileSync(shim, npmProgNodeShim('cli.js'))
+      const pathEnv = { ...env, Path: undefined, PATH: nodeDir }
+
+      expect(resolveWindowsCmdShim(shim, pathEnv)?.program).toBe(nodeExe)
+
+      rmSync(nodeExe)
+      expect(resolveWindowsCmdShim(shim, pathEnv)).toBeNull()
+    } finally {
+      removeTreeSync(nodeDir)
       removeTreeSync(shimDir)
     }
   })
