@@ -62,9 +62,19 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
     }
   })
 
+  // A row fully above a viewport scrolled to 300px.
+  const rowAboveFold = {
+    itemStart: 100,
+    itemEnd: 216,
+    scrollOffset: 300,
+    isFirstMeasure: false,
+    scrollDirection: null
+  } as const
+
   it('suppresses measured-row scroll correction while TanStack is scrolling', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...rowAboveFold,
         isScrolling: true,
         now: 1_000,
         suppressUntil: 0
@@ -75,6 +85,7 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('suppresses measured-row scroll correction during direct scroll input grace period', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...rowAboveFold,
         isScrolling: false,
         now: 1_000,
         suppressUntil: 1_250
@@ -85,11 +96,81 @@ describe('shouldAdjustWorktreeSidebarMeasuredRowScroll', () => {
   it('allows measured-row scroll correction after direct scrolling settles', () => {
     expect(
       shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...rowAboveFold,
         isScrolling: false,
         now: 1_500,
         suppressUntil: 1_250
       })
     ).toBe(true)
+  })
+
+  it('never corrects for a row at or below the fold', () => {
+    // Regression: with every resize corrected, a card growing under an
+    // unscrollable list booked a scrollOffset the element never reached, and
+    // the sticky header pinned the second project over the first row.
+    const belowFold = { isScrolling: false, now: 1_500, suppressUntil: 0 }
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...belowFold,
+        itemStart: 32,
+        itemEnd: 148,
+        scrollOffset: 0,
+        isFirstMeasure: true,
+        scrollDirection: null
+      })
+    ).toBe(false)
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...belowFold,
+        itemStart: 32,
+        itemEnd: 148,
+        scrollOffset: 0,
+        isFirstMeasure: false,
+        scrollDirection: null
+      })
+    ).toBe(false)
+  })
+
+  it('corrects a first measurement whose top is above the fold even when it spans it', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 0,
+        itemStart: 250,
+        itemEnd: 366,
+        scrollOffset: 300,
+        isFirstMeasure: true,
+        scrollDirection: null
+      })
+    ).toBe(true)
+  })
+
+  it('leaves a remeasured row that spans the fold alone', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 0,
+        itemStart: 250,
+        itemEnd: 366,
+        scrollOffset: 300,
+        isFirstMeasure: false,
+        scrollDirection: null
+      })
+    ).toBe(false)
+  })
+
+  it('skips remeasure correction while scrolling backward', () => {
+    expect(
+      shouldAdjustWorktreeSidebarMeasuredRowScroll({
+        ...rowAboveFold,
+        isScrolling: false,
+        now: 1_500,
+        suppressUntil: 0,
+        scrollDirection: 'backward'
+      })
+    ).toBe(false)
   })
 
   it('keeps pending reveal requests when the worktree still exists but the row is unresolved', () => {
