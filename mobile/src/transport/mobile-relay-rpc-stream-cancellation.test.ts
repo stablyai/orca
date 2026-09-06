@@ -190,6 +190,55 @@ describe('mobile relay subscription cancellation', () => {
     }
   )
 
+  it.each([
+    ['nativeChat.subscribe', { agent: 'claude', sessionId: 's1', subscriptionId: 'claude:s1' }],
+    ['terminal.subscribe', { terminal: 'term', client: { id: 'phone' } }]
+  ])(
+    'keeps the newer %s live when an older same-token subscription unmounts',
+    async (method, params) => {
+      const { streams, sendFrame } = createStreams()
+      const older = vi.fn()
+      const newer = vi.fn()
+      const cancelOlder = streams.subscribe(method, params, older)
+      const cancelNewer = streams.subscribe(method, { ...params }, newer)
+      await Promise.resolve()
+      expect(sendFrame).toHaveBeenCalledTimes(2)
+      cancelOlder()
+      // The host keys cleanup by the deterministic token, so unsubscribing would evict the newer.
+      expect(sendFrame).toHaveBeenCalledTimes(2)
+      streams.handleResponse(response('request-2', { type: 'snapshot' }))
+      expect(newer).toHaveBeenCalledTimes(1)
+      expect(streams.handleResponse(response('request-1', { type: 'snapshot' }))).toBe(false)
+      expect(older).not.toHaveBeenCalled()
+      cancelNewer()
+      expect(sendFrame).toHaveBeenCalledTimes(3)
+      expect(sendFrame).toHaveBeenLastCalledWith(
+        expect.objectContaining({ method: method.replace(/\.subscribe$/, '.unsubscribe') })
+      )
+    }
+  )
+
+  it('still unsubscribes a shared-token nativeChat stream when the sibling is unsent', async () => {
+    const wait = Promise.withResolvers<void>()
+    let connected = false
+    const { streams, sendFrame } = createStreams(() =>
+      connected ? Promise.resolve() : wait.promise
+    )
+    const params = { agent: 'claude', sessionId: 's1', subscriptionId: 'claude:s1' }
+    connected = true
+    const cancelOlder = streams.subscribe('nativeChat.subscribe', params, vi.fn())
+    await Promise.resolve()
+    connected = false
+    streams.subscribe('nativeChat.subscribe', params, vi.fn())
+    cancelOlder()
+    expect(sendFrame).toHaveBeenCalledTimes(2)
+    expect(sendFrame).toHaveBeenLastCalledWith({
+      id: 'request-3',
+      method: 'nativeChat.unsubscribe',
+      params: { subscriptionId: 'claude:s1' }
+    })
+  })
+
   it('cleans up every cancelled server subscription across repeated late-ready cycles', async () => {
     const { streams, sendFrame } = createStreams()
     const listener = vi.fn()

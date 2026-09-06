@@ -28,6 +28,21 @@ type StreamRecord = {
   receivedSnapshot?: boolean
 }
 
+type StreamUnsubscribe = { method: string; params: unknown }
+
+/** Unsubscribe derived from the subscribe params alone (no server-assigned id). */
+function buildParamsUnsubscribe(
+  method: string,
+  params: unknown,
+  requestId: string
+): StreamUnsubscribe | null {
+  if (method === 'terminal.subscribe') {
+    const unsubscribeParams = buildTerminalUnsubscribeParams(params)
+    return unsubscribeParams ? { method: 'terminal.unsubscribe', params: unsubscribeParams } : null
+  }
+  return buildStreamUnsubscribe(method, params, requestId)
+}
+
 type StreamManagerOptions = {
   nextId: () => string
   sendFrame: (request: { id: string; method: string; params?: unknown }) => boolean
@@ -38,7 +53,7 @@ export class MobileRelayRpcStreams {
   private readonly streams = new Map<string, StreamRecord>()
   private readonly cancelledSubscriptions = new Map<
     string,
-    { method: string; unsubscribe?: NonNullable<ReturnType<typeof buildStreamUnsubscribe>> }
+    { method: string; unsubscribe?: StreamUnsubscribe }
   >()
   private readonly terminalListeners = new Map<number, (result: unknown) => void>()
   private readonly terminalSnapshots = new Map<number, TerminalSnapshotState>()
@@ -175,25 +190,20 @@ export class MobileRelayRpcStreams {
     }
     stream.cancelled = true
     if (stream.sent) {
+      const byParams = buildParamsUnsubscribe(stream.method, stream.params, id)
       if (stream.method === 'terminal.subscribe') {
-        const params = buildTerminalUnsubscribeParams(stream.params)
-        if (params) {
-          this.options.sendFrame({
-            id: this.options.nextId(),
-            method: 'terminal.unsubscribe',
-            params
-          })
+        if (byParams) {
+          this.sendUnsubscribe(byParams)
         }
       } else {
         const unsubscribe = stream.subscriptionId
           ? buildReadyStreamUnsubscribe(stream.method, stream.subscriptionId)
           : null
-        const byParams = buildStreamUnsubscribe(stream.method, stream.params, id)
         if (byParams && stream.method === 'session.tabs.subscribe' && !stream.receivedSnapshot) {
           // The host registers cleanup only after resolving the initial snapshot.
           this.cancelledSubscriptions.set(id, { method: stream.method, unsubscribe: byParams })
         } else if (unsubscribe || byParams) {
-          this.options.sendFrame({ id: this.options.nextId(), ...(unsubscribe ?? byParams)! })
+          this.sendUnsubscribe((unsubscribe ?? byParams)!)
         } else if (
           stream.method === 'browser.screencast' ||
           stream.method === 'runtime.clientEvents.subscribe'
@@ -201,8 +211,7 @@ export class MobileRelayRpcStreams {
           // Keep only the cleanup route while the server assigns its subscription ID.
           this.cancelledSubscriptions.set(id, { method: stream.method })
         } else if (stream.subscriptionId) {
-          this.options.sendFrame({
-            id: this.options.nextId(),
+          this.sendUnsubscribe({
             method: stream.method.replace(/\.subscribe$/, '.unsubscribe'),
             params: { subscriptionId: stream.subscriptionId }
           })
@@ -210,6 +219,29 @@ export class MobileRelayRpcStreams {
       }
     }
     this.remove(id)
+  }
+
+  /** Skip the unsubscribe when a live sibling shares the host cleanup token (e.g. nativeChat's
+   *  deterministic `agent:sessionId`), since the host would evict the sibling's registration. */
+  private sendUnsubscribe(unsubscribe: StreamUnsubscribe): void {
+    if (this.hasLiveOwner(unsubscribe)) {
+      return
+    }
+    this.options.sendFrame({ id: this.options.nextId(), ...unsubscribe })
+  }
+
+  private hasLiveOwner(unsubscribe: StreamUnsubscribe): boolean {
+    const token = JSON.stringify(unsubscribe)
+    for (const [siblingId, sibling] of this.streams) {
+      if (sibling.cancelled || !sibling.sent) {
+        continue
+      }
+      const siblingUnsubscribe = buildParamsUnsubscribe(sibling.method, sibling.params, siblingId)
+      if (siblingUnsubscribe && JSON.stringify(siblingUnsubscribe) === token) {
+        return true
+      }
+    }
+    return false
   }
 
   private remove(id: string): void {
