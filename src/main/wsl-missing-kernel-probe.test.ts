@@ -47,22 +47,24 @@ for (const mode of ['sync', 'async'] as const) {
       vi.mocked(runProcessSync).mockReturnValue(result)
     }
 
-    it('requires guest execution and caches its success', async () => {
-      failStatus(-444)
-      guestResult(success)
-      expect(await probe()).toBe(true)
-      expect(await probe()).toBe(true)
-      const runner = mode === 'sync' ? runProcessSync : runProcess
-      expect(runner).toHaveBeenCalledTimes(1)
-      expect(runner).toHaveBeenCalledWith(
-        expect.objectContaining({
-          program: 'wsl.exe',
-          args: ['--exec', '/bin/true'],
-          timeoutMs: 5000,
-          cwd: 'C:\\Windows'
-        })
-      )
-    })
+    for (const status of [-444, 4_294_966_852]) {
+      it(`requires guest execution and caches its success for ${status}`, async () => {
+        failStatus(status)
+        guestResult(success)
+        expect(await probe()).toBe(true)
+        expect(await probe()).toBe(true)
+        const runner = mode === 'sync' ? runProcessSync : runProcess
+        expect(runner).toHaveBeenCalledTimes(1)
+        expect(runner).toHaveBeenCalledWith(
+          expect.objectContaining({
+            program: 'wsl.exe',
+            args: ['--exec', '/bin/true'],
+            timeoutMs: 5000,
+            cwd: 'C:\\Windows'
+          })
+        )
+      })
+    }
 
     for (const result of [
       { ...success, code: 1 },

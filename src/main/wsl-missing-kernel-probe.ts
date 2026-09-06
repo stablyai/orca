@@ -4,7 +4,8 @@ import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 
 export function isWslMissingKernelError(error: unknown): boolean {
   const failure = error as { code?: unknown; status?: unknown } | null
-  return failure?.code === -444 || failure?.status === -444
+  // Node preserves the Windows DWORD; PowerShell displays its signed equivalent.
+  return [failure?.code, failure?.status].some((code) => code === -444 || code === 4_294_966_852)
 }
 
 function defaultGuestProbe(): ProcessSpec {
