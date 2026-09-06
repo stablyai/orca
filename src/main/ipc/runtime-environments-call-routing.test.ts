@@ -408,6 +408,42 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects an import mutation when its capability-proven runtime was replaced before routing', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    environmentStore.markEnvironmentUsed(userDataPath, added.environment.id, {
+      runtimeId: 'runtime-replacement'
+    })
+
+    const call = handler<
+      {
+        selector: string
+        method: string
+        expectedEnvironmentRuntimeId?: string
+      },
+      RuntimeRpcResponse<unknown>
+    >('runtimeEnvironments:call')
+    await expect(
+      call(null, {
+        selector: 'desk',
+        method: 'files.writeBase64',
+        expectedEnvironmentRuntimeId: 'runtime-capability-proven'
+      })
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_environment_changed',
+        message: 'Runtime environment identity changed; refresh and try again'
+      }
+    })
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
+  })
+
   it.each([
     [
       new RemoteRuntimeClientError(

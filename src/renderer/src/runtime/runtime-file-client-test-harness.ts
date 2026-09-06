@@ -19,6 +19,7 @@ export type RuntimeRpcRequest = {
   params?: unknown
   timeoutMs?: number
   expectedEnvironmentPairingRevision?: number
+  expectedEnvironmentRuntimeId?: string
 }
 
 export type RuntimeRpcStub = Mock<(args: RuntimeRpcRequest) => unknown>
@@ -97,6 +98,7 @@ export function installRuntimeFileClientEnvironment(): void {
           id: 'status',
           ok: true,
           result: {
+            runtimeId: 'remote-runtime',
             runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
             minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
             capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY]
