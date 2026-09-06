@@ -58,6 +58,7 @@ async function createFakeCodexTerminal(
   if (!worktree) {
     throw new Error(`runtime did not register ${testRepoPath}`)
   }
+  rmSync(fixtureReport, { force: true })
   const created = await client.call<{ terminal: { handle: string } }>('terminal.create', {
     worktree: `id:${worktree.id}`,
     command: [fakeCodexCommand, ...args].join(' '),

@@ -7,6 +7,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -84,7 +85,9 @@ export function createStartingWorkerDispatch(
           })
         : undefined
     if (!task) {
-      throw new OrchestrationError('task_not_found', `Task ${params.taskId} was not found.`)
+      // Why: `--spec` creates the Task inline, so a missing row here always names an explicit id.
+      const taskId = params.taskId ?? ''
+      throw taskNotFoundError(`Task ${taskId} was not found.`, { taskId })
     }
     if (params.retryOf) {
       const prior = this.getDispatchContextById(params.retryOf)
@@ -101,15 +104,18 @@ export function createStartingWorkerDispatch(
         !priorSettled ||
         !['failed', 'blocked'].includes(task.status)
       ) {
-        throw new OrchestrationError(
-          'task_not_startable',
-          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`
+        throw taskNotStartableError(
+          this,
+          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`,
+          task,
+          params.retryOf
         )
       }
     } else if (task.status !== 'ready') {
-      throw new OrchestrationError(
-        'task_not_startable',
-        `Task ${task.id} is ${task.status}; only a ready Task can start.`
+      throw taskNotStartableError(
+        this,
+        `Task ${task.id} is ${task.status}; only a ready Task can start.`,
+        task
       )
     }
 

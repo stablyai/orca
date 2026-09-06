@@ -4,7 +4,7 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../../../s
 import type { GateStatus } from '../../../../orchestration/db'
 import { Coordinator } from '../../../../orchestration/coordinator'
 import { resolveRunScope } from '../runs/run-scope'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { taskNotFoundError } from '../../../../orchestration/task-dispatch-refusal'
 
 // Why: the coordinator instance is stored at module scope so orchestration.runStop
 // can signal it to halt. Only one coordinator can run at a time (enforced by
@@ -137,10 +137,10 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
         callerEvidence: orchestrationCompatibilityEvidence
       })
       if (task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${params.task} was not found in Run ${run.id}.`
-        )
+        throw taskNotFoundError(`Task ${params.task} was not found in Run ${run.id}.`, {
+          taskId: params.task,
+          runId: run.id
+        })
       }
       const gate = db.createGate({
         taskId: params.task,

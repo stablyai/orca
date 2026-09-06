@@ -43,7 +43,10 @@ const cloudB: OrcaProfileCloudSummary = {
   linkedAt: 2
 }
 
-function createResponse(slug = 'artifact-a', expiresAt = '2026-09-06T00:00:00.000Z'): Response {
+function createResponse(
+  slug = 'artifact-a',
+  expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+): Response {
   return new Response(
     JSON.stringify({
       artifact: {

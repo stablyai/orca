@@ -2,7 +2,11 @@ import { defineMethod, type RpcMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { resolveDispatchCreator } from './dispatch-creator'
-import { buildInjectRejectionMessage } from '../messaging/inject-rejection-message'
+import {
+  injectRejectedError,
+  taskNotFoundError,
+  taskNotStartableError
+} from '../../../../orchestration/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
 import { DispatchParams, DispatchShowParams } from '../schemas'
 
@@ -23,7 +27,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       const task = db.getTask(params.task)
       if (!task) {
-        throw new Error(`Task not found: ${params.task}`)
+        throw taskNotFoundError(`Task not found: ${params.task}`, { taskId: params.task })
       }
       const run = resolveRunScope(runtime, {
         runId: params.run,
@@ -33,10 +37,10 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         callerEvidence: orchestrationCompatibilityEvidence
       })
       if (task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${task.id} was not found in Run ${run.id}.`
-        )
+        throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
+          taskId: task.id,
+          runId: run.id
+        })
       }
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
@@ -67,7 +71,11 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       const to = params.to
 
       if (task.status !== 'ready') {
-        throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
+        throw taskNotStartableError(
+          db,
+          `Task ${params.task} is ${task.status}; only ready tasks can be dispatched`,
+          task
+        )
       }
 
       const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
@@ -102,7 +110,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
       if (params.inject) {
         const hasAgent = await runtime.isTerminalRunningAgent(to)
         if (!hasAgent) {
-          throw new Error(buildInjectRejectionMessage(to))
+          throw injectRejectedError(to, 'no_agent_detected')
         }
       }
 
