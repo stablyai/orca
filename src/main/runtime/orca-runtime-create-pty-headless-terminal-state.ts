@@ -2,6 +2,7 @@
 import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './orca-runtime-maybe-hydrate-headless-from-renderer'
 import type { RuntimeHeadlessTerminal } from './runtime-terminal-state-records'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { resolveRuntimeSessionScrollbackRows } from './runtime-session-scrollback-window'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
@@ -20,6 +21,12 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     const emulator = new HeadlessEmulator({
       cols: dims.cols,
       rows: dims.rows,
+      // Why bounded: retained grid is this process's dominant per-PTY heap term;
+      // the daemon twin was OOM-killed at full depth. This mirror also serves
+      // desktop hidden-output recovery at the user's configured depth, so the
+      // default covers the desktop default instead of truncating it — the env
+      // override trades recovery depth for memory.
+      scrollback: resolveRuntimeSessionScrollbackRows(),
       pathFlavor,
       remotePosixFileUriAuthority:
         !!this.ptysById.get(ptyId)?.connectionId && pathFlavor !== 'win32',
