@@ -103,7 +103,10 @@ async function makeRuntime() {
     }),
     'utf-8'
   )
-  vi.resetModules()
+  // Why no vi.resetModules(): the full persistence+runtime re-import costs 30s+ per test
+  // under full-suite parallelism and blew the 30s default. Isolation holds without it:
+  // the env + initDataPath() re-capture below re-point the module-level data path, and
+  // every test constructs its own Store over a fresh orca-data.json.
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
   const store = new Store()
@@ -132,8 +135,8 @@ afterEach(() => {
 })
 
 describe('scoped automationsChanged publication', () => {
-  // Why: makeRuntime() re-imports the full persistence+runtime module graph via
-  // vi.resetModules(); alone that costs 30s+ on a loaded machine.
+  // Why 120s: Store construction over a real orca-data.json slows past the 30s
+  // default under full-suite parallelism.
   it('names the host a delete removed a row from', { timeout: 120_000 }, async () => {
     const { runtime, published } = await makeRuntime()
     runtime.deleteAutomation('ssh-1-a', {
@@ -144,60 +147,72 @@ describe('scoped automationsChanged publication', () => {
     ])
   })
 
-  it('names the orphan bucket when an unowned row is deleted', async () => {
+  it('names the orphan bucket when an unowned row is deleted', { timeout: 120_000 }, async () => {
     const { runtime, published } = await makeRuntime()
     runtime.deleteAutomation('orphan-1', { selector: { kind: 'orphan' } })
     expect(published).toEqual([{ reason: 'definition', selector: { kind: 'orphan' } }])
   })
 
-  it('publishes source and destination when an update moves a record between hosts', async () => {
-    const { runtime, published, store } = await makeRuntime()
-    await runtime.updateAutomation(
-      'local-1',
-      { repo: 'repo-ssh' },
-      {
-        expectedOwner: { selector: { kind: 'self' } },
-        destination: { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } }
-      }
-    )
-    expect(published).toEqual([
-      { reason: 'definition', selector: { kind: 'self' } },
-      { reason: 'definition', selector: { kind: 'ssh', targetId: 'ssh-1' } }
-    ])
-    expect(store.automationChangeSelector('local-1')).toEqual({
-      kind: 'ssh',
-      targetId: 'ssh-1'
-    })
-  })
+  it(
+    'publishes source and destination when an update moves a record between hosts',
+    { timeout: 120_000 },
+    async () => {
+      const { runtime, published, store } = await makeRuntime()
+      await runtime.updateAutomation(
+        'local-1',
+        { repo: 'repo-ssh' },
+        {
+          expectedOwner: { selector: { kind: 'self' } },
+          destination: { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } }
+        }
+      )
+      expect(published).toEqual([
+        { reason: 'definition', selector: { kind: 'self' } },
+        { reason: 'definition', selector: { kind: 'ssh', targetId: 'ssh-1' } }
+      ])
+      expect(store.automationChangeSelector('local-1')).toEqual({
+        kind: 'ssh',
+        targetId: 'ssh-1'
+      })
+    }
+  )
 
-  it('publishes one event when an update leaves the record on the same host', async () => {
-    const { runtime, published } = await makeRuntime()
-    await runtime.updateAutomation(
-      'local-1',
-      { enabled: false },
-      { expectedOwner: { selector: { kind: 'self' } } }
-    )
-    expect(published).toEqual([{ reason: 'definition', selector: { kind: 'self' } }])
-  })
+  it(
+    'publishes one event when an update leaves the record on the same host',
+    { timeout: 120_000 },
+    async () => {
+      const { runtime, published } = await makeRuntime()
+      await runtime.updateAutomation(
+        'local-1',
+        { enabled: false },
+        { expectedOwner: { selector: { kind: 'self' } } }
+      )
+      expect(published).toEqual([{ reason: 'definition', selector: { kind: 'self' } }])
+    }
+  )
 
   // Why: an unnameable destination is exactly when scoping is unsafe — a subscriber scoped
   // elsewhere would never hear about the row it is still rendering. The publication has to
   // degrade to one unscoped authority event rather than name only the stale source.
-  it('degrades to an unscoped event when the store cannot name the destination', async () => {
-    const { store, runtime, published } = await makeRuntime()
-    const selector = store.automationChangeSelector.bind(store)
-    let updated = false
-    vi.spyOn(store, 'automationChangeSelector').mockImplementation((id: string) =>
-      updated ? null : selector(id)
-    )
-    const update = runtime.updateAutomation(
-      'local-1',
-      { enabled: false },
-      { expectedOwner: { selector: { kind: 'self' } } }
-    )
-    updated = true
-    await update
+  it(
+    'degrades to an unscoped event when the store cannot name the destination',
+    { timeout: 120_000 },
+    async () => {
+      const { store, runtime, published } = await makeRuntime()
+      const selector = store.automationChangeSelector.bind(store)
+      let updated = false
+      vi.spyOn(store, 'automationChangeSelector').mockImplementation((id: string) =>
+        updated ? null : selector(id)
+      )
+      const update = runtime.updateAutomation(
+        'local-1',
+        { enabled: false },
+        { expectedOwner: { selector: { kind: 'self' } } }
+      )
+      updated = true
+      await update
 
-    expect(published).toEqual([{ reason: 'definition' }])
-  })
+      expect(published).toEqual([{ reason: 'definition' }])
+    }
+  )
 })
