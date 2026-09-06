@@ -22,6 +22,9 @@ export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): s
   // GPU flags keep headless under Xvfb on a software path when the GPU
   // subprocess cannot initialize.
   return [
+    '--disable-backgrounding-occluded-windows',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
     '--no-sandbox',
     '--disable-gpu',
     '--disable-gpu-compositing',
