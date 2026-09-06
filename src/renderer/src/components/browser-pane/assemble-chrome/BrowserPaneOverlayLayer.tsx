@@ -14,6 +14,10 @@ import {
   useClientHostedBrowserRows
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
+import {
+  useEmbeddedBrowserPlacement,
+  embeddedBrowserStyle
+} from '../host-guest/embedded-browser-placement'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.
 
@@ -41,11 +45,13 @@ type BrowserOverlaySlotProps = {
 const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
   groupId,
-  isActive,
+  isActive: isTabActive,
   chromeShortcutScope,
   onFocusOwningGroup,
   isWorktreeActive
 }: BrowserOverlaySlotProps): React.JSX.Element {
+  const embedded = useEmbeddedBrowserPlacement(browserTab.id)
+  const isActive = isWorktreeActive && (embedded !== null || isTabActive)
   // Why: persistent page viewports (webview guests) live under this root so they survive BrowserPane chrome unmounts without reparenting.
   const setSlotViewportRef = useCallback(
     (node: HTMLDivElement | null): void => {
@@ -97,7 +103,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 
   return (
     <div
-      style={style}
+      style={embedded && isWorktreeActive ? embeddedBrowserStyle(embedded) : style}
+      inert={embedded && !embedded.interactive ? true : undefined}
       className="relative flex min-h-0 flex-1 flex-col"
       data-browser-overlay-tab-id={browserTab.id}
       onPointerDown={handleFocus}
@@ -109,7 +116,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
         <BrowserPane
           browserTab={browserTab}
           isActive={isActive}
-          chromeShortcutScope={chromeShortcutScope}
+          chromeShortcutScope={embedded ? 'owned-target' : chromeShortcutScope}
         />
       ) : null}
     </div>

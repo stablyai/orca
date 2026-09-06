@@ -104,7 +104,8 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
     profileId: string | undefined,
     sessionPartition: string | undefined,
     activate?: boolean,
-    requestedPageId?: string
+    requestedPageId?: string,
+    originPaneKey?: string
   ): Promise<{ browserPageId: string }> {
     const win = this.host.getAuthoritativeWindow()
     const requestId = randomUUID()
@@ -136,6 +137,7 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
         url,
         worktreeId,
         ...(requestedPageId ? { browserPageId: requestedPageId } : {}),
+        ...(originPaneKey ? { originPaneKey } : {}),
         // Why: keep these undefined (not null) when no profile is chosen so the renderer still applies default-profile inheritance.
         sessionProfileId: profileId,
         sessionPartition,

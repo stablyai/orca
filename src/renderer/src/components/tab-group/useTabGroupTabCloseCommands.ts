@@ -13,6 +13,7 @@ import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-
 import { cancelStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
+import { clearClosedCanvasContext } from '../agent-canvas/canvas-context-sync'
 
 function reportStructuredSessionCloseError(error: unknown): void {
   toast.error(
@@ -163,7 +164,22 @@ export function useTabGroupTabCloseCommands({
         if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
           return
         }
-      } else if (item.contentType === 'simulator') {
+      } else if (item.contentType === 'simulator' || item.contentType === 'canvas') {
+        if (item.contentType === 'canvas') {
+          void clearClosedCanvasContext(item)
+            .then(() => {
+              closeUnifiedTab(item.id)
+              if (!opts?.skipEmptyCheck) {
+                leaveWorktreeIfEmpty()
+              }
+            })
+            .catch((error: unknown) =>
+              toast.error('Could not remove canvas context', {
+                description: error instanceof Error ? error.message : String(error)
+              })
+            )
+          return
+        }
         closeUnifiedTab(item.id)
       } else {
         const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -224,7 +240,17 @@ export function useTabGroupTabCloseCommands({
           closeBrowserItem(item, runtimeEnvironmentId)
         } else if (item.contentType === 'terminal') {
           closeTerminalTab(item.entityId, { skipRunningProcessConfirm: true })
-        } else if (item.contentType === 'simulator') {
+        } else if (item.contentType === 'simulator' || item.contentType === 'canvas') {
+          if (item.contentType === 'canvas') {
+            void clearClosedCanvasContext(item)
+              .then(() => closeUnifiedTab(item.id))
+              .catch((error: unknown) =>
+                toast.error('Could not remove canvas context', {
+                  description: error instanceof Error ? error.message : String(error)
+                })
+              )
+            continue
+          }
           closeUnifiedTab(item.id)
         } else {
           const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)

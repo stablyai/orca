@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const tabContentTypeSchema = z.enum([
+  'canvas',
   'terminal',
   'editor',
   'diff',
@@ -12,6 +13,7 @@ export const tabContentTypeSchema = z.enum([
 ])
 
 export const workspaceVisibleTabTypeSchema = z.enum([
+  'canvas',
   'terminal',
   'editor',
   'agent-session',

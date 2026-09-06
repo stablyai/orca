@@ -133,19 +133,25 @@ export function EditorFileTabContextMenu({
           groupId={groupId}
           trailingSeparator
         />
-        <DropdownMenuItem
-          disabled={!canRename || isRenaming}
-          onSelect={() => {
-            skipMenuFocusRestoreRef.current = true
-            onActivate()
-            onOpenRenameInput()
-          }}
-        >
-          <Pencil className="size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.68cc610e7f', 'Rename')}
-          {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        {file.language !== 'canvas' && (
+          <>
+            <DropdownMenuItem
+              disabled={!canRename || isRenaming}
+              onSelect={() => {
+                skipMenuFocusRestoreRef.current = true
+                onActivate()
+                onOpenRenameInput()
+              }}
+            >
+              <Pencil className="size-3.5" />
+              {translate('auto.components.tab.bar.EditorFileTabContextMenu.68cc610e7f', 'Rename')}
+              {renameShortcut ? (
+                <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut>
+              ) : null}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onSelect={onTogglePin}>
           {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
           {isPinned
@@ -162,16 +168,18 @@ export function EditorFileTabContextMenu({
           <CopyX className="size-3.5" />
           {translate('components.tab.bar.EditorFileTabContextMenu.closeOthers', 'Close Others')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={onCloseAll}>
-          <ListX className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24',
-            'Close All Editor Tabs'
-          )}
-          {closeAllShortcut ? (
-            <DropdownMenuShortcut>{closeAllShortcut}</DropdownMenuShortcut>
-          ) : null}
-        </DropdownMenuItem>
+        {file.language !== 'canvas' && (
+          <DropdownMenuItem onSelect={onCloseAll}>
+            <ListX className="size-3.5" />
+            {translate(
+              'auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24',
+              'Close All Editor Tabs'
+            )}
+            {closeAllShortcut ? (
+              <DropdownMenuShortcut>{closeAllShortcut}</DropdownMenuShortcut>
+            ) : null}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
           <PanelRightClose className="size-3.5" />
           {translate(
@@ -213,44 +221,51 @@ export function EditorFileTabContextMenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.filePath)
-          }}
-        >
-          <Copy className="size-3.5" />
-          {translate('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            void window.api.ui.writeClipboardText(file.relativePath)
-          }}
-        >
-          <Copy className="size-3.5" />
-          {translate(
-            'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
-            'Copy Relative Path'
-          )}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onSelect={() => {
-            if (
-              shouldBlockEditorTabLocalOpen(
-                useAppStore.getState().settings,
-                file.runtimeEnvironmentId,
-                repoConnectionId
-              )
-            ) {
-              showLocalPathOpenBlockedToast()
-              return
-            }
-            window.api.shell.openPath(file.filePath)
-          }}
-        >
-          <ExternalLink className="size-3.5" />
-          {revealLabel}
-        </DropdownMenuItem>
+        {file.language !== 'canvas' && (
+          <>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.filePath)
+              }}
+            >
+              <Copy className="size-3.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.5b85754786',
+                'Copy Path'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(file.relativePath)
+              }}
+            >
+              <Copy className="size-3.5" />
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
+                'Copy Relative Path'
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                if (
+                  shouldBlockEditorTabLocalOpen(
+                    useAppStore.getState().settings,
+                    file.runtimeEnvironmentId,
+                    repoConnectionId
+                  )
+                ) {
+                  showLocalPathOpenBlockedToast()
+                  return
+                }
+                window.api.shell.openPath(file.filePath)
+              }}
+            >
+              <ExternalLink className="size-3.5" />
+              {revealLabel}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

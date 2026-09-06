@@ -29,6 +29,7 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
       activate?: boolean
       navigation?: RuntimeNavigationTarget
       targetGroupId?: string
+      originPaneKey?: string
       placement?: BrowserPageCreationPlacement
     },
     caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
@@ -141,7 +142,8 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
       params.profileId,
       params.profileId ? sessionPartition : undefined,
       focus.focusesHost,
-      params.page
+      params.page,
+      params.originPaneKey
     )
 
     // Why: the webview must mount and register before the tab is operable, so wait here (returning the ID anyway on timeout).

@@ -30,6 +30,7 @@ import { logStartupMilestone } from './startup-diagnostics'
 import type { WindowsDesktopStartupServices } from './windows-desktop-shell-path-startup'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
 import { mainProcessState as state } from './main-process-state'
+import { startCanvasMessaging } from '../runtime/canvas/canvas-messaging-runtime'
 
 export function emitPluginWorktreeLifecycle(event: RuntimeWorktreeLifecycleEvent): void {
   state.pluginService?.emitEvent(
@@ -179,6 +180,9 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
         userDataPath: app.getPath('userData'),
         endpointNamespace: state.devAgentHookEndpointNamespace
       })
+      if (state.runtime) {
+        startCanvasMessaging(state.runtime)
+      }
       logStartupMilestone('startup-service-done', { service: 'agent-hook-server' })
     },
     onDaemonError: (error) => {

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from '../../../codex/managed-wsl-home-shell-preflight'
 import { defineMethod, type RpcMethod } from '../core'
+import { CANVAS_AGENT_CONTEXT_METHODS } from './canvas-agent-context'
+import { CANVAS_MESSAGING_METHODS } from './canvas-messaging'
 
 const PrepareCodexForWslPaneParams = z
   .object({
@@ -34,5 +36,7 @@ export const AGENT_HOOK_METHODS: readonly RpcMethod[] = [
           settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
       })
     }
-  })
+  }),
+  ...CANVAS_AGENT_CONTEXT_METHODS,
+  ...CANVAS_MESSAGING_METHODS
 ]
