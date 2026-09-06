@@ -18189,14 +18189,15 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075.",
+      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075. Deterministic remote Codex fixture validation passed three normal restores and three forced reconnects with zero retries on merged main plus the replay probe correction (run 34050117471). The original forced-reconnect probe missed nonempty replay returned in pty:spawn reattach replies. Routine coverage now includes both modes by default; real Codex service execution remains opt-in.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/18018",
         "https://github.com/stablyai/orca/pull/18546",
         "https://github.com/stablyai/orca/issues/12547",
         "https://github.com/stablyai/orca/issues/16764",
         "https://github.com/stablyai/orca/actions/runs/34037450427",
-        "https://github.com/stablyai/orca/actions/runs/34037669843"
+        "https://github.com/stablyai/orca/actions/runs/34037669843",
+        "https://github.com/stablyai/orca/actions/runs/34050117471"
       ],
       "invariant": "Transport loss and frozen-host silence must preserve the remote session; host relay loss may rebind a pane without accumulating reattachable leases. Reconnects must preserve usable terminal content, bounded PTYs/fds/processes, complete large listings, and independently recoverable watcher processes. Electron test shutdown must release inherited pipes after confirmed root exit without closing live-process pipes.",
       "oracle": "Poll a changed connected SSH authority after injected faults, then require terminal output and appropriate PTY identity. Read remote process/fd state, listFiles replies, and rendered explorer rows. Resolve Playwright cleanup only after the root process exits and its inherited pipes close; live-process pipes remain untouched.",
@@ -18204,7 +18205,8 @@
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10"
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-codex-display-artifacts-repro.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1"
       ],
       "testFiles": [
         "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
@@ -18214,7 +18216,9 @@
         "tests/e2e/ssh-docker-resource-accumulation.spec.ts",
         "tests/e2e/ssh-docker-watcher-isolation.spec.ts",
         "tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
-        "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts"
+        "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+        "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
+        "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts"
       ],
       "assertionRefs": [
         {
@@ -18264,6 +18268,18 @@
           "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
           "assertions": [
             "five flooding SSH panes remain below unchanged 2500ms soft and 5000ms hard freeze budgets during bulk reopen and two double-animation-frame view changes"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
+          "assertions": [
+            "normal restore and forced SSH reconnect leave no stale or duplicate status rows; forced reconnect preserves the original PTY and requires nonempty replay from that PTY through an event or reattach reply"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts",
+          "assertions": [
+            "unrelated, replacement, initial-spawn, empty and non-replay replies do not count; original reattach results and failures pass through unchanged"
           ]
         }
       ],
@@ -18322,7 +18338,8 @@
         "Linux headed CI covers the bulk-open freeze reproduction; Windows clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not covered by that result.",
         "Some legacy assertions inspect terminal serialization or backing state rather than rendered DOM; no blanket visual coverage claim.",
         "No p95 CI history or full product mutation proof.",
-        "One headless bulk-open probe reached 6478.6ms in run 34035957303; animation-frame scheduling explains the consistent interaction failures, but does not directly explain that isolated timer-lag outlier. Long-term headed CI soak remains outstanding."
+        "One headless bulk-open probe reached 6478.6ms in run 34035957303; animation-frame scheduling explains the consistent interaction failures, but does not directly explain that isolated timer-lag outlier. Long-term headed CI soak remains outstanding.",
+        "Codex replay artifact evidence uses a deterministic remote TUI on Linux CI; real-service, macOS/Windows clients and cross-version replay remain separate coverage gaps."
       ],
       "demotionRule": "Keep experimental while any recovery reproduction fails or any teardown, identity, resource-count, or rendered oracle flakes; never promote by extending sleeps or retries."
     },
