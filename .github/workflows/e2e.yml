@@ -24,6 +24,7 @@ jobs:
       - name: Start isolated localhost SSH server
         shell: bash
         run: |
+          mkdir -p "$HOME/.pi/agent"
           fixture="$RUNNER_TEMP/orca-localhost-sshd"
           mkdir -p "$fixture"
           ssh-keygen -q -t ed25519 -N '' -f "$fixture/host_key"
@@ -59,6 +60,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: localhost-ssh-pam-${{ strategy.job-index }}
+          name: localhost-ssh-pi-fixture-${{ strategy.job-index }}
           path: test-results/
           retention-days: 3
