@@ -116,6 +116,19 @@ async function runSelectedRuntimeAddJourney(
     await setActiveRuntimePreference(client.page, null)
     measurements.runtimeSwitchMs = Date.now() - startedAt
 
+    await client.page.evaluate(() => {
+      document.addEventListener('focusin', (event) => {
+        const element = event.target as HTMLElement | null
+        console.info('[pr11346-focus] ' + JSON.stringify({
+          time: performance.now(), tag: element?.tagName,
+          role: element?.getAttribute('role'),
+          label: element?.getAttribute('aria-label'),
+          className: element?.className,
+          menuOpen: Boolean(document.querySelector('[role="menu"]'))
+        }))
+      })
+    })
+
     const initialServerInventory = await listRuntimeInventory(serverRuntime)
     const initialClientInventory = await listRuntimeInventory(clientLocalRuntime)
     expect(initialServerInventory.repos.map((repo) => repo.path)).not.toContain(fixture.gitPath)
