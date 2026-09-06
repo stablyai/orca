@@ -126,7 +126,8 @@ export function EditorFileTabContextMenu({
           }
           skipMenuFocusRestoreRef.current = false
           event.preventDefault()
-          // The closing menu can still reclaim focus before its teardown completes.
+          // Why: opening the input in onSelect lets the still-closing menu reclaim
+          // focus, and the resulting blur commits the rename away before the user types.
           onActivate()
           onOpenRenameInput()
         }}
