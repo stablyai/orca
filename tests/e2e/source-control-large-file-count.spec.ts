@@ -21,6 +21,11 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import {
+  hasCapturedGitStatusRetry,
+  installGitStatusRetryBarrier,
+  restoreGitStatusRetryHandler
+} from './helpers/git-status-retry-barrier'
+import {
   createLargeFileCountRepo,
   removeLargeFileCountRepo,
   removeLargeFileCountUntrackedTree
@@ -434,13 +439,17 @@ test.describe('Source Control large file count (#8013)', () => {
       )
       expect(hugeState).not.toBeNull()
 
-      // Why: watcher refreshes stay parked while huge; the visible Retry is the
-      // explicit recovery path after the underlying change count drops.
-      removeLargeFileCountUntrackedTree(fixture.repoPath)
-      await expect(tooManyChangesBanner).toBeVisible()
       const retryButton = tooManyChangesBanner.locator('..').getByRole('button', { name: 'Retry' })
       await expect(retryButton).toBeVisible()
-      await retryButton.click()
+      // Keep automatic refreshes from removing Retry before its real request starts.
+      await installGitStatusRetryBarrier(electronApp, fixture.repoPath)
+      try {
+        await retryButton.click()
+        await expect.poll(() => hasCapturedGitStatusRetry(electronApp)).toBe(true)
+        removeLargeFileCountUntrackedTree(fixture.repoPath)
+      } finally {
+        await restoreGitStatusRetryHandler(electronApp)
+      }
       await expect(tooManyChangesBanner).not.toBeVisible()
       await expect
         .poll(() =>

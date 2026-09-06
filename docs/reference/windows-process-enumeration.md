@@ -189,7 +189,7 @@ on any other OS keeps using the scan.
 
 ## Why the package is patched
 
-`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries three hunks.
+`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries four hunks.
 
 1. **Spectre mitigation.** The upstream `binding.gyp` requires Spectre-mitigated
    libraries, which Orca's Windows build agents do not install. `node-pty` is
@@ -204,9 +204,121 @@ on any other OS keeps using the scan.
    realpath, then loads the relative path from the `node_modules` symlink, so
    `node_addon_api.gyp` resolves outside the repo and hourly Windows builds
    die at configure. `node-pty` is patched the same way for the same reason.
+4. **No PEB reads, no `PROCESS_VM_READ`.** See below.
 
 The typings claim `commandLine` is truncated at 512 characters. Measured, it is
 not: the longest observed on a real host was 26,059.
+
+### The command line comes from the kernel, not the target's memory
+
+Upstream, `GetProcessCommandLine` opens every process with
+`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` and issues three chained
+`ReadProcessMemory` calls — PEB, `RTL_USER_PROCESS_PARAMETERS`, then the string
+— to recover the command line. Walking another process's address space for
+credentials-adjacent data on a repeating timer is what a credential dumper does,
+so Defender for Endpoint scores it as such regardless of intent. Nothing about
+the flag sets above changes that; only removing the read does.
+
+Windows 8.1 added `NtQueryInformationProcess`'s `ProcessCommandLineInformation`
+class (60), which returns the same string as a `UNICODE_STRING` the kernel
+builds, needing only `PROCESS_QUERY_LIMITED_INFORMATION`. Electron's floor is
+Windows 10, so every OS Orca supports has it. The entry point is resolved with
+`GetProcAddress` on `ntdll.dll` — it has no import library — and the size is
+probed with a null-buffer call that answers `STATUS_INFO_LENGTH_MISMATCH`.
+
+The same hunk drops `PROCESS_VM_READ` from `GetProcessMemoryUsage` and
+`GetCpuUsage`, which acquired it and never read an address space:
+`GetProcessMemoryInfo` and `GetProcessTimes` are satisfied by
+`PROCESS_QUERY_LIMITED_INFORMATION`. Measured, both return identical values
+under the weaker right on every process that opens at all.
+
+Measured on Windows 11, ~540 processes, counted in-process by replacing the
+addon's import table entries with counting stubs:
+
+| per `CommandLine` scan | before                                    | after                                  |
+| ---------------------- | ----------------------------------------- | -------------------------------------- |
+| `OpenProcess` calls    | 543                                       | 543                                    |
+| desired access         | `0x0410` (`VM_READ \| QUERY_INFORMATION`) | `0x1000` (`QUERY_LIMITED_INFORMATION`) |
+| `ReadProcessMemory`    | 1128                                      | **0**                                  |
+| p50 / p95              | 13.5 / 14.5 ms                            | 12.3 / 13.5 ms                         |
+
+Command lines were byte-identical on every process both readers recovered
+(405/405, and 399/399 and 376/376 on other runs), including a 24,087-character
+argv with embedded quotes, non-ASCII characters and trailing whitespace, and a
+WOW64 target. The weaker right is also a strict superset in reach: three
+processes that refused `PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` granted
+`PROCESS_QUERY_LIMITED_INFORMATION`, and none went the other way.
+
+### There is no PEB fallback, deliberately
+
+An earlier revision kept the PEB reader for a kernel without class 60, behind a
+latch. That was wrong, and the reason is worth recording: `ClassifyQueryFailure`
+mapped `STATUS_INVALID_INFO_CLASS` / `NOT_SUPPORTED` / `NOT_IMPLEMENTED` from
+**any single target** onto a process-wide, one-way switch back to
+`PROCESS_VM_READ` plus three `ReadProcessMemory` per pid per scan, for the life
+of the process, with nothing observable from JS.
+
+The environment this reader exists for is one where an EDR hooks `ntdll`. A hook
+that returns `STATUS_INVALID_INFO_CLASS` for a class it does not recognise would
+have silently reinstated the exact primitive the patch removes, on precisely the
+machines it was written for — and one stray status from one process was enough.
+The same applies under Wine or any instrumented `ntdll`.
+
+So the fallback is gone rather than guarded. `GetProcessCommandLine` returns
+false and leaves the command line empty, which is already a normal outcome
+(`WindowsProcessRow.command` is documented as empty when a process denies a
+query handle, and callers fall back to the image name). Degrading to no command
+line is recoverable; silently resuming address-space reads is not.
+
+This also makes the property checkable on the artifact rather than the source:
+the patched reader never calls `ReadProcessMemory`, so the symbol is absent from
+the compiled addon's import table. `inspectWindowsProcessTreeAddon()` in
+`config/scripts/windows-process-tree-gyp-rebuild.mjs` is that check, and it is
+the only way to tell the two binaries apart — see below. It answers
+`clean` / `unpatched` / `missing` rather than a boolean, because a binary that is
+not there has not been cleared, and a caller reading `false` as “verified” would
+pass exactly the thing the check exists to catch.
+
+Because the returned `UNICODE_STRING` comes from that same hookable boundary,
+its `Buffer` and `Length` are bounds-checked against the allocation before the
+characters are encoded, and the probed size is capped at the header plus 64 KiB
+(`Length` is a `USHORT`) so a bogus size cannot turn into a `bad_alloc` that
+fails an entire scan instead of one process.
+
+### The published tarball ships a loadable unpatched prebuilt
+
+`@vscode/windows-process-tree@0.8.0` publishes
+`build/Release/windows_process_tree.node` in the tarball. It is node-addon-api,
+so it is ABI-stable and loads cleanly under both Node and Electron — and it was
+built from unpatched source, so it performs 1179 `ReadProcessMemory` calls and
+opens every process at `0x0410` per scan.
+
+That matters because `allowBuilds` is `false` for this package and CI installs
+with `--ignore-scripts`, so nothing compiles it at install time. A `require()`
+health check cannot tell the two binaries apart, and a rebuild that is skipped —
+`rebuild-native-deps.mjs` soft-exits 0 on a Windows file lock during postinstall
+— leaves the upstream prebuilt in place and cached.
+
+Four checks close that, all keyed on the absent `ReadProcessMemory` import:
+
+- `ensureWindowsProcessTreeCommandLinePatch()` deletes a binary that still has
+  it, so a skipped rebuild fails loudly instead of using the prebuilt;
+- `ensure-native-runtime.mjs` treats such a binary as a load failure, which is
+  what triggers the rebuild;
+- the relay build asserts it on the artifact it just produced;
+- `loadWindowsProcessTree()` asserts it again on the addon staged beside a relay
+  bundle and refuses to bind one that still imports the symbol, falling back to
+  the CIM scan. The build-time assertion is not enough on its own: a bundle and
+  the addon beside it redeploy independently, so a host that has not taken a new
+  bundle keeps whatever `.node` is already there.
+
+What none of this does is narrow _which_ processes are asked. A detailed scan
+still queries every pid, including `lsass.exe`; it now asks with the same right
+Task Manager uses instead of `PROCESS_VM_READ`. Restricting the command-line
+pass to Orca's own subtree is the complementary change, and it belongs with the
+identity/detailed reader split rather than here — a ppid-derived allowlist would
+miss exactly the detached, reparented descendants the trackers exist to find
+(#9045, #10475), so it needs the job-object membership as its source of truth.
 
 ## Packaging
 
@@ -220,6 +332,10 @@ The addon is Windows-only, so it follows the same contract as
 - listed in the win32 branch of `rebuild-native-deps.mjs` and
   `ensure-native-runtime.mjs`;
 - copied into the packaged `node_modules` for win32 only.
+
+The relay's copy is a separate artifact staged beside the bundle, so a relay host
+only picks up a rebuilt addon on redeploy. Until then it keeps whatever binary it
+already has, which is why the addon is checked again at load.
 
 ## What the snapshot does not provide
 

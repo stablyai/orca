@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
@@ -21,6 +21,14 @@ import {
   resetMainWindowMocks,
   withPlatform
 } from './createMainWindow-test-harness'
+
+// These cases exercise foreground behavior against Electron mocks.
+beforeEach(() => {
+  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
+  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+})
+afterEach(() => vi.unstubAllEnvs())
 
 describe('createMainWindow', () => {
   beforeEach(() => {
