@@ -30,6 +30,9 @@ describe('resolveAgentLaunchRoute', () => {
     'routes a supported local %s launch to structured native chat',
     (agent) => {
       expect(route({ agent })).toBe('structured-native-chat')
+      expect(route({ agent, initialSessionOptions: { model: 'gpt-5.6-sol' } })).toBe(
+        'structured-native-chat'
+      )
       expect(
         route({ agent, launchText: 'explain this change', promptDelivery: 'auto-submit' })
       ).toBe('structured-native-chat')
@@ -76,7 +79,6 @@ describe('resolveAgentLaunchRoute', () => {
     expect(route({ agent: 'openclaude' })).toBe('legacy-native-chat')
     expect(route({ agent: 'grok' })).toBe('legacy-native-chat')
     expect(route({ requiresTuiLaunchCustomization: true })).toBe('legacy-native-chat')
-    expect(route({ initialSessionOptions: { model: 'gpt-5.6-sol' } })).toBe('legacy-native-chat')
   })
 
   it.each([

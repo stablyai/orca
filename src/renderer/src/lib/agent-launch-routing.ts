@@ -88,15 +88,11 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   const projectRuntime = input.projectRuntime
   const runtimeRefused =
     projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl'
-  const hasInitialSessionOptions = Boolean(
-    input.initialSessionOptions && Object.keys(input.initialSessionOptions).length > 0
-  )
   const structuredSupported =
     isAgentSessionHandleProvider(input.agent) &&
     input.promptDelivery !== 'draft' &&
     input.workspaceKind !== 'floating' &&
     input.requiresTuiLaunchCustomization !== true &&
-    !hasInitialSessionOptions &&
     input.executionHostId === 'local' &&
     // Windows eligibility is not a client-side platform guess for either provider: the executing
     // host measures it at create time (agentSession.createSupport), because only that host knows
