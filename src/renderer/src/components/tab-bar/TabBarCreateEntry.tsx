@@ -34,7 +34,7 @@ import {
 } from './tab-create-entry-copy'
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
 import { useStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isAcpStructuredAgent } from '../../../../shared/acp-agent-recipes'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
@@ -67,10 +67,13 @@ function TabBarCreateEntrySession({
   // inside the option render loop.
   const structuredLaunchStatusByAgent = {
     claude: useStructuredAgentLaunchStatus(worktreeId, 'claude'),
-    codex: useStructuredAgentLaunchStatus(worktreeId, 'codex')
+    codex: useStructuredAgentLaunchStatus(worktreeId, 'codex'),
+    grok: useStructuredAgentLaunchStatus(worktreeId, 'grok'),
+    cursor: useStructuredAgentLaunchStatus(worktreeId, 'cursor'),
+    openclaude: useStructuredAgentLaunchStatus(worktreeId, 'openclaude')
   }
   const isStructuredLaunchPending = (agent: TuiAgent): boolean =>
-    isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
+    isAcpStructuredAgent(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)

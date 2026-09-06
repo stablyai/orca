@@ -240,6 +240,39 @@ describe('connectPanePty', () => {
     })
   })
 
+  it('launches the selected provider after a switch retires the previous session', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('new-grok-pty')
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-1', ptyId: null, launchAgent: 'claude' }]
+    }
+    delete mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]
+    const startup = {
+      command: "grok '--model' 'grok-4.6'",
+      launchAgent: 'grok',
+      launchConfig: { agentCommand: 'grok', agentArgs: '--model grok-4.6', agentEnv: {} }
+    }
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({ startup }) as never
+    )
+    await flushAsyncTicks(20)
+    expect(createdTransportOptions[0]).toMatchObject({
+      command: startup.command,
+      launchAgent: 'grok'
+    })
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        resumeProviderSession: { key: 'session_id', id: 'old-claude-session' }
+      })
+    )
+    expect(transport.connect.mock.calls[0][0].command).toBeUndefined()
+    binding.dispose()
+  })
+
   it('clears stale launch config when a pane consumes a non-agent startup command', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

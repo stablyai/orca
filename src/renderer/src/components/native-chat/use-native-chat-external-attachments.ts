@@ -62,7 +62,20 @@ export function useNativeChatExternalAttachments({
         return
       }
       if (owner.kind !== 'ssh') {
-        attachResolvedPaths(paths)
+        // Why: picker/drop paths are often outside allowed roots; preview
+        // reads fs:readFile and is denied unless the path is granted first
+        // (clipboard paste already does this for its temp file).
+        void (async () => {
+          await Promise.all(
+            paths.map((targetPath) =>
+              window.api.fs.authorizeExternalPath({ targetPath }).catch(() => undefined)
+            )
+          )
+          if (disabledRef.current) {
+            return
+          }
+          attachResolvedPaths(paths)
+        })()
         return
       }
       void (async () => {

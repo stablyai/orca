@@ -1,4 +1,4 @@
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationEnvelope,
@@ -23,13 +23,13 @@ import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-sessi
 type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
-  agent: AgentSessionHandleProvider
+  agent: AcpStructuredAgent
 }
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
   worktreeId: string
-  agent: AgentSessionHandleProvider
+  agent: AcpStructuredAgent
   params: StructuredAgentSessionCreateParams
 }
 
@@ -94,7 +94,7 @@ export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): b
 
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: AcpStructuredAgent
 ): StructuredAgentSessionLaunchIntent {
   const sessionId = `${agent}_${crypto.randomUUID().replaceAll('-', '_')}`
   const fields = { worktree: toRuntimeWorktreeSelector(worktreeId), agent }

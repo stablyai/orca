@@ -60,12 +60,14 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const handleRestartCodexPane = useCallback(
     (
       paneId: number,
-      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP
+      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP,
+      restartCwd = cwd,
+      startupCallbacks: Pick<PtyConnectionDeps, 'onStartupBound' | 'onDeferredCwdSpawnFailed'> = {}
     ) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
-        return
+        return false
       }
       const transport = paneTransportsRef.current.get(paneId)
       const panePtyBinding = panePtyBindingsRef.current.get(paneId)
@@ -86,8 +88,9 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
         worktreeId,
-        cwd,
+        cwd: restartCwd,
         startup: restartStartup,
+        ...startupCallbacks,
         mountFollowsTerminalPark: false,
         paneTransportsRef,
         paneMode2031Ref,
@@ -121,8 +124,18 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         syncPanePtyLayoutBinding,
         clearExitedPanePtyLayoutBinding
       })
-      panePtyBindingsRef.current.set(paneId, newPaneBinding)
+      panePtyBindingsRef.current.set(paneId, {
+        ...newPaneBinding,
+        dispose: () => {
+          try {
+            newPaneBinding.dispose()
+          } finally {
+            startupCallbacks.onDeferredCwdSpawnFailed?.()
+          }
+        }
+      })
       manager.setActivePane(paneId, { focus: true })
+      return true
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [
@@ -164,6 +177,25 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       updateTabTitle,
       worktreeId
     ]
+  )
+
+  const handleRestartChatPane = useCallback(
+    (
+      paneId: number,
+      startup: PtyConnectionDeps['startup'],
+      restartCwd: string | undefined
+    ): Promise<void> =>
+      new Promise((resolve, reject) => {
+        const started = handleRestartCodexPane(paneId, startup, restartCwd, {
+          onStartupBound: resolve,
+          onDeferredCwdSpawnFailed: () =>
+            reject(new Error('The replacement provider could not start.'))
+        })
+        if (!started) {
+          reject(new Error('The chat pane is no longer available.'))
+        }
+      }),
+    [handleRestartCodexPane]
   )
 
   const clearPaneProcessExit = useCallback(
@@ -248,7 +280,11 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     pendingCodexPaneRestartIds
   ])
 
-  return { handleRestartExitedPane, handleCloseExitedPane }
+  return {
+    handleRestartExitedPane,
+    handleCloseExitedPane,
+    handleRestartChatPane
+  }
 }
 
 export type TerminalPaneProcessExitController = ReturnType<typeof useTerminalPaneProcessExitActions>

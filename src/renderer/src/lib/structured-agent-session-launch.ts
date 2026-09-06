@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type { AcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
@@ -57,7 +57,7 @@ export type StructuredAgentLaunchResult = {
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
 
-function structuredAgentLabel(agent: AgentSessionHandleProvider): string {
+function structuredAgentLabel(agent: AcpStructuredAgent): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
 
@@ -77,7 +77,7 @@ export function subscribeStructuredAgentLaunchStatus(listener: () => void): () =
 
 export function getStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: AcpStructuredAgent
 ): StructuredAgentLaunchStatus {
   const state = pendingStructuredLaunchesByIdentity.get(launchIdentity(worktreeId, agent))
   if (!state) {
@@ -88,7 +88,7 @@ export function getStructuredAgentLaunchStatus(
 
 export function useStructuredAgentLaunchStatus(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: AcpStructuredAgent
 ): StructuredAgentLaunchStatus {
   return useSyncExternalStore(
     subscribeStructuredAgentLaunchStatus,
@@ -99,7 +99,7 @@ export function useStructuredAgentLaunchStatus(
 
 // Why keyed by agent too: one worktree can hold a Claude and a Codex launch at once, and a shared
 // key would hand the second caller the first agent's intent.
-function launchIdentity(worktreeId: string, agent: AgentSessionHandleProvider): string {
+function launchIdentity(worktreeId: string, agent: AcpStructuredAgent): string {
   return `${agent}:${worktreeId}`
 }
 
@@ -204,7 +204,7 @@ function trackLaunchFailureToast(state: StructuredLaunchState): void {
 
 function structuredAgentLaunchState(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: AcpStructuredAgent,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
   const identity = launchIdentity(worktreeId, agent)
@@ -292,7 +292,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
 
 export function startStructuredAgentLaunch(
   worktreeId: string,
-  agent: AgentSessionHandleProvider,
+  agent: AcpStructuredAgent,
   options: StructuredAgentLaunchOptions = {}
 ): StructuredAgentLaunchResult {
   const { state, caller } = structuredAgentLaunchState(worktreeId, agent, options)

@@ -1,4 +1,4 @@
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isAcpStructuredAgent } from '../../../../shared/acp-agent-recipes'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
@@ -21,7 +21,7 @@ export async function settleFullCreationStructuredLaunch(args: {
 }> {
   let activation = args.initialActivation
   let structuredLaunchAccepted = args.structuredLaunch
-  if (!args.structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
+  if (!args.structuredLaunch || !isAcpStructuredAgent(args.agent)) {
     return { structuredLaunchAccepted, visibilityUnknown: false, activation }
   }
 

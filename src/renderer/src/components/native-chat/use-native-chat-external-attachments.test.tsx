@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 const mocks = vi.hoisted(() => ({
   resolveNativeChatAttachmentOwner: vi.fn(),
-  uploadNativeChatAttachmentPaths: vi.fn()
+  uploadNativeChatAttachmentPaths: vi.fn(),
+  authorizeExternalPath: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -91,6 +92,13 @@ async function renderProbe(args: {
   }
 }
 
+beforeEach(() => {
+  mocks.authorizeExternalPath.mockResolvedValue(undefined)
+  window.api = {
+    fs: { authorizeExternalPath: mocks.authorizeExternalPath }
+  } as unknown as Window['api']
+})
+
 afterEach(() => {
   root?.unmount()
   root = null
@@ -98,15 +106,89 @@ afterEach(() => {
 })
 
 describe('useNativeChatExternalAttachments', () => {
-  it('attaches local worktree paths unchanged', async () => {
+  it('authorizes local paths before attaching so preview can read files outside allowed roots', async () => {
     mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
     const attachResolvedPaths = vi.fn()
     const probe = await renderProbe({ attachResolvedPaths })
     await act(async () => {
-      probe.latest().attachExternalPaths(['/local/a.txt'])
+      probe.latest().attachExternalPaths(['/tmp/logo.png', '/tmp/shot.png'])
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'])
+    expect(mocks.authorizeExternalPath.mock.calls).toEqual([
+      [{ targetPath: '/tmp/logo.png' }],
+      [{ targetPath: '/tmp/shot.png' }]
+    ])
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/tmp/logo.png', '/tmp/shot.png'])
     expect(mocks.uploadNativeChatAttachmentPaths).not.toHaveBeenCalled()
+  })
+
+  it('does not attach local paths until authorize resolves', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const authorization = deferred<void>()
+    mocks.authorizeExternalPath.mockReturnValue(authorization.promise)
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+
+    act(() => {
+      probe.latest().attachExternalPaths(['/tmp/logo.png'])
+    })
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+
+    await act(async () => {
+      authorization.resolve(undefined)
+    })
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/tmp/logo.png'])
+  })
+
+  it('drops a local authorize that resolves after the composer became disabled', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const authorization = deferred<void>()
+    mocks.authorizeExternalPath.mockReturnValue(authorization.promise)
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+
+    act(() => {
+      probe.latest().attachExternalPaths(['/tmp/logo.png'])
+    })
+    await probe.setDisabled(true)
+    await act(async () => {
+      authorization.resolve(undefined)
+    })
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('delivers concurrent local authorizations in completion order', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const firstAuth = deferred<void>()
+    const secondAuth = deferred<void>()
+    mocks.authorizeExternalPath
+      .mockReturnValueOnce(firstAuth.promise)
+      .mockReturnValueOnce(secondAuth.promise)
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+
+    act(() => {
+      probe.latest().attachExternalPaths(['/tmp/a.png'])
+      probe.latest().attachExternalPaths(['/tmp/b.png'])
+    })
+    await act(async () => {
+      secondAuth.resolve(undefined)
+    })
+    await act(async () => {
+      firstAuth.resolve(undefined)
+    })
+
+    expect(attachResolvedPaths.mock.calls).toEqual([[['/tmp/b.png']], [['/tmp/a.png']]])
+  })
+
+  it('still attaches when local authorize rejects so send is not blocked by preview grant', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    mocks.authorizeExternalPath.mockRejectedValue(new Error('authorize failed'))
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+    await act(async () => {
+      probe.latest().attachExternalPaths(['/tmp/logo.png'])
+    })
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/tmp/logo.png'])
   })
 
   it('uploads SSH worktree paths and attaches the remote results', async () => {
@@ -133,6 +215,7 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshConnectionGeneration: 4
     })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1')
+    expect(mocks.authorizeExternalPath).not.toHaveBeenCalled()
   })
 
   it('delivers concurrent SSH resolutions in order without deduplicating paths', async () => {

@@ -290,6 +290,11 @@ export type AgentSessionOptionResult = {
   options?: Record<string, string>
 }
 
+export type AgentSessionSwitchProviderResult = {
+  agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
+  provider: 'codex' | 'claude' | 'grok' | 'cursor'
+}
+
 export type AgentSessionOptionChoice = {
   value: string
   label: string

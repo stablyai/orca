@@ -16979,7 +16979,9 @@
         "pendingAttachmentLimit": "Too many attachments are waiting. Finish composing before attaching more.",
         "viewAttachment": "View image",
         "imagePreview": "Full-size image preview",
-        "imagePreviewUnavailable": "Preview unavailable"
+        "imagePreviewUnavailable": "Preview unavailable",
+        "searchModels": "Search models",
+        "noMatchingModels": "No matching models"
       },
       "tool": {
         "running": "Running…",
@@ -17006,6 +17008,9 @@
       },
       "providerFrame": {
         "byteLength": "{{value0}} bytes"
+      },
+      "continuationPrompt": {
+        "summary": "Continue from prior session"
       },
       "status": {
         "responding": "Agent is responding",
@@ -17642,6 +17647,16 @@
       "hide": "Hide Agents",
       "action": "Try Agents",
       "hiddenToast": "Agents tab hidden. Re-enable it in Settings → Experimental."
+    }
+  },
+  "agentSession": {
+    "tab": {
+      "title": {
+        "claude": "Claude Chat",
+        "grok": "Grok Chat",
+        "cursor": "Cursor Chat",
+        "codex": "Codex Chat"
+      }
     }
   },
   "rendererRecovery": {

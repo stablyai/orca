@@ -1,3 +1,6 @@
+import { createAcpStructuredSessionAdapter } from '../acp/acp-structured-launch'
+import type { openAcpJsonRpcConnection } from '../acp/acp-jsonrpc-connection'
+import { readProcessStartTimeMs } from './agent-session-process-identity-probe'
 // Where the structured agent-session wire becomes a live host on this runtime.
 //
 // Built on the first `agentSession.*` call rather than at startup: the record
@@ -62,6 +65,7 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveClaudeCommand?: () => string
   /** Provider transports are overridden only to drive the runtime against scripted children. */
   openCodexConnection?: CodexStructuredSessionAdapterDeps['openConnection']
+  openAcpConnection?: typeof openAcpJsonRpcConnection
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
@@ -263,9 +267,35 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
     })
-    const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
-      await Promise.all([codex.closeAll(), claude.closeAll()])
+    const acp = createAcpStructuredSessionAdapter({
+      store,
+      resolveWorkspacePath: deps.resolveWorkspacePath,
+      resolveEnvironment: async () => ({
+        ...(await bootEnvironment),
+        ...(await deps.resolveLaunchEnv?.()),
+        ...(await deps.resolveLaunchEnvOverlay?.())
+      }),
+      readProcessStartTime: deps.readProcessStartTime ?? readProcessStartTimeMs,
+      ...(deps.openAcpConnection ? { openConnection: deps.openAcpConnection } : {}),
+      onEvent: (event) => {
+        if (event.type !== 'ended' || event.cause !== 'unexpected-exit') {
+          return
+        }
+        recoveryChain = recoveryChain.then(async () => {
+          try {
+            await host?.handleAdapterEvent(event)
+          } catch (error) {
+            deps.onError?.({ scope: `structured-agent-session-exit:${event.sessionId}`, error })
+          }
+        })
+      }
     })
+    const adapter = new StructuredAgentSessionAdapterRouter(
+      { codex, claude, grok: acp, cursor: acp, openclaude: acp },
+      async () => {
+        await Promise.all([codex.closeAll(), claude.closeAll(), acp.closeAll()])
+      }
+    )
     host = new StructuredAgentSessionHost({
       store,
       adapter,

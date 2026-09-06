@@ -29,7 +29,7 @@ import {
 } from '@/lib/agent-launch-routing'
 import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isAcpStructuredAgent } from '../../../../shared/acp-agent-recipes'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { useAppStore } from '@/store'
 import {
@@ -233,7 +233,7 @@ export async function submitFolderWorkspaceCreate({
       runtimeEnvironmentId
     })
     let structuredLaunchAccepted = structuredLaunch
-    if (structuredLaunch && isAgentSessionHandleProvider(quickAgent)) {
+    if (structuredLaunch && isAcpStructuredAgent(quickAgent)) {
       const launch = startStructuredAgentLaunch(folderWorkspaceKey(workspace.id), quickAgent, {
         prompt: launchDraftPrompt ?? note
       })

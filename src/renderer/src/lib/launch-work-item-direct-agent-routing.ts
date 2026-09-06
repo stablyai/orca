@@ -1,4 +1,4 @@
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -128,7 +128,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   primaryTabId: string | null
 }> {
   let { structuredLaunch, primaryTabId } = args
-  if (!structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
+  if (!structuredLaunch || !isAcpStructuredAgent(args.agent)) {
     return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
   }
 

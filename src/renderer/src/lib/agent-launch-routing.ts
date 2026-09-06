@@ -1,12 +1,13 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   getTuiAgentDefaultArgs,
   getTuiAgentDefaultEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
+import { isNativeChatSupportedAgent } from '../../../shared/native-chat-agent-support'
 import {
   decideInitialAgentTabViewMode,
   type NativeChatLaunchPromptDelivery
@@ -83,14 +84,14 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     return 'terminal-tui'
   }
   if (input.settings?.experimentalStructuredNativeChat !== true) {
-    return 'legacy-native-chat'
+    return isNativeChatSupportedAgent(input.agent) ? 'legacy-native-chat' : 'terminal-tui'
   }
 
   const projectRuntime = input.projectRuntime
   const runtimeRefused =
     projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl'
   const structuredSupported =
-    isAgentSessionHandleProvider(input.agent) &&
+    isAcpStructuredAgent(input.agent) &&
     input.promptDelivery !== 'draft' &&
     input.workspaceKind !== 'floating' &&
     input.requiresTuiLaunchCustomization !== true &&
@@ -102,5 +103,8 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     !runtimeRefused &&
     input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
 
-  return structuredSupported ? 'structured-native-chat' : 'legacy-native-chat'
+  if (structuredSupported) {
+    return 'structured-native-chat'
+  }
+  return isNativeChatSupportedAgent(input.agent) ? 'legacy-native-chat' : 'terminal-tui'
 }

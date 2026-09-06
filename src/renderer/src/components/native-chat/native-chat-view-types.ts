@@ -6,9 +6,11 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
+import type { NativeChatSwitchProvider } from './use-native-chat-provider-models'
 
 type NativeChatOrchestrationProps = {
   orchestrationDispatchStatus?: AgentStatusOrchestrationContext['dispatchStatus']
+  onSwitchProvider?: NativeChatSwitchProvider
 }
 
 export type NativeChatBridgeViewProps = NativeChatOrchestrationProps & {
@@ -42,6 +44,7 @@ export type NativeChatStructuredViewProps = NativeChatOrchestrationProps & {
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
+  worktreeId?: string
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 

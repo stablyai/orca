@@ -8,6 +8,10 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import {
+  isGrokBootstrapContextText,
+  stripGrokUserQueryEnvelope
+} from '../ai-vault/session-scanner-grok-user-text'
 
 /**
  * Grok `chat_history.jsonl` rows: user/assistant/reasoning/tool records with
@@ -167,21 +171,7 @@ function isGrokBootstrapContext(content: unknown): boolean {
   if (!text) {
     return false
   }
-  const normalized = text.trim().toLowerCase()
-  if (!normalized.startsWith('<user_info>')) {
-    return false
-  }
-  const userInfoEnd = normalized.indexOf('</user_info>')
-  if (userInfoEnd === -1) {
-    return false
-  }
-  const remainder = normalized.slice(userInfoEnd + '</user_info>'.length).trim()
-  // Why: Grok 0.2.93 appends its git snapshot to the user-info bootstrap row;
-  // reject only that known envelope so real prompts mentioning either tag survive.
-  return (
-    remainder.length === 0 ||
-    (remainder.startsWith('<git_status>') && remainder.endsWith('</git_status>'))
-  )
+  return isGrokBootstrapContextText(text)
 }
 
 function standaloneTextContent(content: unknown): string | null {
@@ -223,22 +213,6 @@ function splitGrokPastedImageQuery(text: string): { path: string; query: string 
     return null
   }
   return { path: match[1], query: (match[2] ?? '').trim() }
-}
-
-function stripGrokUserQueryEnvelope(text: string): string {
-  const opener = '<user_query>'
-  const closer = '</user_query>'
-  const lower = text.toLowerCase()
-  const start = lower.indexOf(opener)
-  if (start === -1) {
-    return text
-  }
-  const bodyStart = start + opener.length
-  const end = lower.indexOf(closer, bodyStart)
-  if (end === -1) {
-    return text.slice(bodyStart).trim()
-  }
-  return text.slice(bodyStart, end).trim()
 }
 
 function parseTimestamp(value: unknown): number | null {

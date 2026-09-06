@@ -3,7 +3,7 @@ import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { splitNativeChatBlocks } from './native-chat-tool-fold'
 import { NativeChatToolRun } from './NativeChatToolRun'
@@ -83,42 +83,15 @@ export const MessageRow = memo(function MessageRow({
 
   if (isUser) {
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {markdown ? (
-            <>
-              <NativeChatImageAttachments
-                blocks={prose}
-                runtimeContext={runtimeContext}
-                enablePreview={runtimeContext !== undefined}
-              />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
-            </>
-          ) : (
-            <NativeChatImageAttachments
-              blocks={prose}
-              runtimeContext={runtimeContext}
-              enablePreview={runtimeContext !== undefined}
-            />
-          )}
-        </div>
-        {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
-            {translate(
-              'components.native-chat.launchPromptNotDelivered',
-              'Not delivered — check the terminal'
-            )}
-          </div>
-        ) : null}
-      </div>
+      <NativeChatUserMessageRow
+        rowRef={rowRef}
+        markdown={markdown}
+        prose={prose}
+        onLinkClick={onLinkClick}
+        allowFileUriLinks={allowFileUriLinks}
+        deliveryFailed={deliveryFailed}
+        runtimeContext={runtimeContext}
+      />
     )
   }
 

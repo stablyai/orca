@@ -22,6 +22,20 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import { translateMain } from '../i18n/main-i18n'
+
+function structuredAgentSessionTabTitle(agent: RuntimeMobileSessionAgentTab['agent']): string {
+  if (agent === 'claude' || agent === 'openclaude') {
+    return translateMain('agentSession.tab.title.claude', 'Claude Chat')
+  }
+  if (agent === 'grok') {
+    return translateMain('agentSession.tab.title.grok', 'Grok Chat')
+  }
+  if (agent === 'cursor') {
+    return translateMain('agentSession.tab.title.cursor', 'Cursor Chat')
+  }
+  return translateMain('agentSession.tab.title.codex', 'Codex Chat')
+}
 
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
@@ -45,9 +59,6 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     for (const session of host?.listSessionTabs() ?? []) {
-      if (session.agent !== 'codex' && session.agent !== 'claude') {
-        continue
-      }
       let sessionId = session.sessionId
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)
@@ -65,7 +76,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'claude' | 'codex'
+    agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
     activate: boolean
     notify?: boolean
   }): Promise<void> {
@@ -76,9 +87,6 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
-      if (!input.activate) {
-        return
-      }
       const priorGroups = existing.tabGroups ?? []
       const groupId =
         priorGroups.find((group) => group.tabOrder.includes(id))?.id ??
@@ -88,13 +96,26 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       const snapshot: RuntimeMobileSessionTabsSnapshot = {
         ...existing,
         snapshotVersion: existing.snapshotVersion + 1,
-        activeGroupId: groupId ?? existing.activeGroupId,
-        activeTabId: id,
-        activeTabType: 'agent-session',
-        tabGroups: priorGroups.map((group) =>
-          group.id === groupId ? { ...group, activeTabId: id } : group
-        ),
-        tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
+        ...(input.activate
+          ? {
+              activeGroupId: groupId ?? existing.activeGroupId,
+              activeTabId: id,
+              activeTabType: 'agent-session' as const,
+              tabGroups: priorGroups.map((group) =>
+                group.id === groupId ? { ...group, activeTabId: id } : group
+              )
+            }
+          : {}),
+        tabs: existing.tabs.map((tab) =>
+          tab.id === id && tab.type === 'agent-session'
+            ? {
+                ...tab,
+                agent: input.agent,
+                title: structuredAgentSessionTabTitle(input.agent),
+                isActive: input.activate ? true : tab.isActive
+              }
+            : { ...tab, isActive: input.activate ? tab.id === id : tab.isActive }
+        )
       }
       this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
       if (input.notify !== false) {
@@ -105,7 +126,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: input.agent === 'claude' ? 'Claude Chat' : 'Codex Chat',
+      title: structuredAgentSessionTabTitle(input.agent),
       sessionId: input.sessionId,
       agent: input.agent,
       isActive: input.activate

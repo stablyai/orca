@@ -31,8 +31,8 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import {
   hasExplicitTuiLaunchCustomization,
   hasExplicitTuiAgentArgs,
@@ -207,27 +207,26 @@ function launchAgentInNewTabInternal(
       : worktreeId.startsWith('folder:')
         ? 'folder'
         : 'git-worktree'
-  const launchRoute = forceLegacy
-    ? 'legacy-native-chat'
-    : resolveAgentLaunchRoute({
-        agent,
-        settings: store.settings,
-        executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
-        platform: CLIENT_PLATFORM,
-        hostCapabilities: readLocalRuntimeCapabilities(),
-        workspaceKind,
-        projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
-        promptDelivery: viewModePromptDelivery,
-        launchText: trimmedPrompt,
-        nativeChatTranscriptIsLocalReadable:
-          initialViewModeOptions.nativeChatTranscriptIsLocalReadable,
-        requiresTuiLaunchCustomization:
-          Boolean(initialCwd?.trim()) ||
-          hasExplicitTuiAgentArgs(agent, agentArgs) ||
-          hasExplicitTuiLaunchCustomization(store.settings, agent),
-        initialSessionOptions: startupPlan.sessionOptions
-      })
-  if (launchRoute === 'structured-native-chat' && isAgentSessionHandleProvider(agent)) {
+  const launchRoute = resolveAgentLaunchRoute({
+    agent,
+    settings: forceLegacy
+      ? { ...store.settings, experimentalStructuredNativeChat: false }
+      : store.settings,
+    executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
+    platform: CLIENT_PLATFORM,
+    hostCapabilities: readLocalRuntimeCapabilities(),
+    workspaceKind,
+    projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
+    promptDelivery: viewModePromptDelivery,
+    launchText: trimmedPrompt,
+    nativeChatTranscriptIsLocalReadable: initialViewModeOptions.nativeChatTranscriptIsLocalReadable,
+    requiresTuiLaunchCustomization:
+      Boolean(initialCwd?.trim()) ||
+      hasExplicitTuiAgentArgs(agent, agentArgs) ||
+      hasExplicitTuiLaunchCustomization(store.settings, agent),
+    initialSessionOptions: startupPlan.sessionOptions
+  })
+  if (launchRoute === 'structured-native-chat' && isAcpStructuredAgent(agent)) {
     const structuredLaunch = startStructuredAgentLaunch(worktreeId, agent, {
       prompt: trimmedPrompt,
       ...(promptDelivery === 'submit-after-ready' ? { promptDelivery } : {}),
@@ -260,7 +259,7 @@ function launchAgentInNewTabInternal(
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialViewModeProps
+    ...(launchRoute === 'legacy-native-chat' ? initialViewModeProps : {})
   })
   seedNativeChatAppliedSessionOptions(tab.id, agent, startupPlan.sessionOptions)
   if (initialCwd?.trim()) {

@@ -8,7 +8,11 @@ import type {
   AgentSessionPromptResult
 } from '../../../../shared/agent-session-wire'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
-import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
+import { useStructuredSessionOptionsSurface } from './use-structured-session-options-surface'
+import {
+  isCrossProviderStructuredModelChoice,
+  parseStructuredModelChoice
+} from '../../../../shared/structured-agent-session-switchable-models'
 import { agentSessionRefusalOperationState } from '../../../../shared/agent-session-refusal-retry'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 import {
@@ -28,6 +32,7 @@ import {
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+import { useStructuredAgentSessionSwitchableModels } from './use-structured-agent-session-switchable-models'
 
 export type StructuredPromptItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
@@ -38,8 +43,9 @@ export function useStructuredAgentSession(args: {
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
+  worktreeId?: string
 }) {
-  const { agent, isVisible, sessionId, target } = args
+  const { agent, isVisible, sessionId, target, worktreeId } = args
   // Declared first: the hold is what gives a restored session its provider child back, and the
   // read below is useless for sending until it lands.
   useStructuredAgentSessionHold({
@@ -59,6 +65,7 @@ export function useStructuredAgentSession(args: {
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent)
   )
+  const [liveOptions, setLiveOptions] = useState<AgentSessionOptionsResult | null>(null)
   const activeOptionRecordRef = useRef(optionState.record)
   const optionCatalog = useMemo(() => getAgentSessionOptionCatalog(agent), [agent])
   const outboxController = useStructuredAgentSessionOutbox({
@@ -76,6 +83,7 @@ export function useStructuredAgentSession(args: {
     const next = createStructuredAgentSessionOptionState(agent)
     activeOptionRecordRef.current = next.record
     setOptionState(next)
+    setLiveOptions(null)
   }, [agent, sessionId, state.fence])
 
   const mutate = useCallback(
@@ -126,10 +134,10 @@ export function useStructuredAgentSession(args: {
         }
         return null
       }
-      if (stateRef.current.fence !== targetFence) {
+      operationIds.current.delete(key)
+      if (stateRef.current.fence !== targetFence && stateRef.current.fence !== result.fence) {
         return null
       }
-      operationIds.current.delete(key)
       setWriteError(null)
       return result.value
     },
@@ -153,6 +161,7 @@ export function useStructuredAgentSession(args: {
     })
       .then((result) => {
         if (!stale) {
+          setLiveOptions(result)
           setOptionState((current) =>
             current.record === activeOptionRecordRef.current
               ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
@@ -166,32 +175,83 @@ export function useStructuredAgentSession(args: {
     }
   }, [isVisible, optionCatalog, sessionId, state.fence, target, turnId])
 
-  const optionSnapshot = useMemo(
+  const baseOptionSnapshot = useMemo(
     () => structuredAgentSessionOptionSnapshot(optionState),
     [optionState]
   )
+  const optionSnapshot = useStructuredAgentSessionSwitchableModels({
+    agent,
+    target,
+    worktreeId,
+    isVisible,
+    snapshot: baseOptionSnapshot,
+    live: liveOptions
+  })
   const setStructuredOption = useCallback(
     async (id: string, value: string | boolean): Promise<boolean> => {
+      if (typeof value !== 'string') {
+        return false
+      }
+      const cross = id === 'model' ? isCrossProviderStructuredModelChoice(agent, value) : null
+      const parsed = id === 'model' ? parseStructuredModelChoice(value) : null
+      const optionValue = parsed?.modelId ?? value
+      const selected = optionSnapshot.find((option) => option.id === id)
       if (
-        !canSetStructuredAgentSessionOption(optionState, id, value) ||
-        typeof value !== 'string'
+        cross &&
+        (optionState.pendingId !== null ||
+          selected?.kind.type !== 'select' ||
+          !selected.kind.choices.some((choice) => choice.value === value && !choice.disabled))
       ) {
+        return false
+      }
+      if (!cross && !canSetStructuredAgentSessionOption(optionState, id, optionValue)) {
         return false
       }
       const targetRecord = optionState.record
       setOptionState((current) => ({ ...current, pendingId: id }))
       try {
+        if (cross) {
+          const switched = await mutate(
+            'agentSession.switchProvider',
+            'agentSession.switchProvider',
+            { agent: cross.agent, model: cross.modelId }
+          )
+          return Boolean(switched)
+        }
         const result = await mutate<AgentSessionOptionResult>(
           'agentSession.setOption',
           'agentSession.setOption',
-          { key: id, value }
+          { key: id, value: optionValue }
         )
         if (result && activeOptionRecordRef.current === targetRecord) {
           setOptionState((current) =>
             current.record === targetRecord
-              ? commitStructuredAgentSessionOptionValues(current, result.options ?? { [id]: value })
+              ? commitStructuredAgentSessionOptionValues(
+                  current,
+                  result.options ?? { [id]: optionValue }
+                )
               : current
           )
+        }
+        if (result && id === 'model') {
+          const refreshed = await callStructuredAgentSession<AgentSessionOptionsResult>(
+            target,
+            'agentSession.options',
+            { sessionId }
+          ).catch(() => null)
+          if (
+            refreshed &&
+            refreshed.current.model === optionValue &&
+            activeOptionRecordRef.current === targetRecord &&
+            optionCatalog
+          ) {
+            setLiveOptions(refreshed)
+            setOptionState((current) =>
+              current.record === targetRecord
+                ? applyStructuredAgentSessionOptions(current, optionCatalog, refreshed)
+                : current
+            )
+          }
         }
         return Boolean(result)
       } finally {
@@ -202,24 +262,9 @@ export function useStructuredAgentSession(args: {
         )
       }
     },
-    [mutate, optionState]
+    [agent, mutate, optionCatalog, optionSnapshot, optionState, sessionId, target]
   )
-  const setOption = useCallback(
-    async (id: string, value: string | boolean) => {
-      await setStructuredOption(id, value)
-      return { snapshot: optionSnapshot }
-    },
-    [optionSnapshot, setStructuredOption]
-  )
-  const optionSurface = useMemo<SessionOptionsSurface>(
-    () => ({
-      getSnapshot: () => optionSnapshot,
-      setOption,
-      invokeAction: async () => ({ snapshot: optionSnapshot }),
-      subscribe: () => () => {}
-    }),
-    [optionSnapshot, setOption]
-  )
+  const optionSurface = useStructuredSessionOptionsSurface(optionSnapshot, setStructuredOption)
 
   const prompts = state.items.filter(
     (item): item is StructuredPromptItem =>

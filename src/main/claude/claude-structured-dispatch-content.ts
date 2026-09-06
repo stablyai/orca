@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto'
-import { open } from 'node:fs/promises'
+import type { open } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
+import {
+  chatImageMimeType,
+  MAX_CHAT_IMAGE_COUNT,
+  MAX_CHAT_IMAGE_TOTAL_BYTES,
+  readBoundedChatImage
+} from '../native-chat/chat-image-attachment'
 
-const MAX_IMAGE_BYTES = 5 * 1024 * 1024
-const MAX_IMAGE_COUNT = 20
-const MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024
 const MAX_REPLAY_CONTENT_KEY_BYTES = 256
 
 type ImageBudget = {
@@ -14,45 +17,8 @@ type ImageBudget = {
   localBytes: number
 }
 
-export async function readClaudeImage(path: string, openImpl: typeof open = open): Promise<Buffer> {
-  const file = await openImpl(path, 'r')
-  try {
-    const invalidImage = (): Error =>
-      new Error(`Claude image must be a non-empty file no larger than ${MAX_IMAGE_BYTES} bytes`)
-    const info = await file.stat()
-    if (!info.isFile()) {
-      throw new Error('Claude image must be a file')
-    }
-    if (info.size > MAX_IMAGE_BYTES) {
-      throw invalidImage()
-    }
-    const buffer = Buffer.allocUnsafe(info.size + 1)
-    let bytesRead = 0
-    while (bytesRead < buffer.length) {
-      const result = await file.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead)
-      if (result.bytesRead === 0) {
-        break
-      }
-      bytesRead += result.bytesRead
-    }
-    // A file can grow after the initial stat and after the final read returns
-    // zero. Prove the descriptor's size matches what was copied before sending.
-    const finalInfo = await file.stat()
-    if (bytesRead === 0 || bytesRead > MAX_IMAGE_BYTES || finalInfo.size !== bytesRead) {
-      throw invalidImage()
-    }
-    return buffer.subarray(0, bytesRead)
-  } finally {
-    await file.close()
-  }
-}
-
-const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
-  '.gif': 'image/gif',
-  '.jpeg': 'image/jpeg',
-  '.jpg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp'
+export function readClaudeImage(path: string, openImpl?: typeof open): Promise<Buffer> {
+  return readBoundedChatImage(path, 'Claude image', openImpl)
 }
 
 async function imageContent(
@@ -60,8 +26,8 @@ async function imageContent(
   budget: ImageBudget
 ): Promise<unknown> {
   budget.count += 1
-  if (budget.count > MAX_IMAGE_COUNT) {
-    throw new Error(`Claude messages support at most ${MAX_IMAGE_COUNT} images`)
+  if (budget.count > MAX_CHAT_IMAGE_COUNT) {
+    throw new Error(`Claude messages support at most ${MAX_CHAT_IMAGE_COUNT} images`)
   }
   if (block.url) {
     return { type: 'image', source: { type: 'url', url: block.url } }
@@ -71,10 +37,10 @@ async function imageContent(
   }
   const data = await readClaudeImage(block.path)
   budget.localBytes += data.byteLength
-  if (budget.localBytes > MAX_TOTAL_IMAGE_BYTES) {
-    throw new Error(`Claude images must total no more than ${MAX_TOTAL_IMAGE_BYTES} bytes`)
+  if (budget.localBytes > MAX_CHAT_IMAGE_TOTAL_BYTES) {
+    throw new Error(`Claude images must total no more than ${MAX_CHAT_IMAGE_TOTAL_BYTES} bytes`)
   }
-  const mediaType = IMAGE_MIME_BY_EXTENSION[extname(block.path).toLowerCase()]
+  const mediaType = chatImageMimeType(block.path)
   if (!mediaType) {
     throw new Error(`Claude does not support the image type ${extname(block.path)}`)
   }

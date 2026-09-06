@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { Fragment, memo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,7 @@ import {
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
 } from './native-chat-session-option-labels'
+import { NativeChatModelPicker } from './NativeChatModelPicker'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatSessionOptionPickersProps = {
@@ -170,23 +171,42 @@ function DescriptorMenuRows(props: {
       </>
     )
   }
+  const choices = descriptor.kind.choices
+  if (choices.length === 0) {
+    return (
+      <DropdownMenuLabel className="font-normal text-muted-foreground">
+        {translate('components.native-chat.composer.noMatchingModels', 'No matching models')}
+      </DropdownMenuLabel>
+    )
+  }
   return (
     <DropdownMenuRadioGroup
       value={descriptor.kind.currentValue}
       onValueChange={(value) => setValue(value)}
     >
-      {descriptor.kind.choices.map((choice) => (
-        <DropdownMenuRadioItem
-          key={choice.value}
-          value={choice.value}
-          disabled={!descriptor.settable || pending}
-        >
-          <ChoiceBody
-            label={nativeChatSessionChoiceLabel(choice)}
-            description={choice.description}
-          />
-        </DropdownMenuRadioItem>
-      ))}
+      {choices.map((choice, index) => {
+        const previousGroup = choices[index - 1]?.group
+        const showGroup = choice.group !== undefined && choice.group !== previousGroup
+        return (
+          <Fragment key={choice.value}>
+            {showGroup ? (
+              <>
+                {index > 0 ? <DropdownMenuSeparator /> : null}
+                <DropdownMenuLabel>{choice.group}</DropdownMenuLabel>
+              </>
+            ) : null}
+            <DropdownMenuRadioItem
+              value={choice.value}
+              disabled={!descriptor.settable || pending || choice.disabled}
+            >
+              <ChoiceBody
+                label={nativeChatSessionChoiceLabel(choice)}
+                description={choice.description}
+              />
+            </DropdownMenuRadioItem>
+          </Fragment>
+        )
+      })}
     </DropdownMenuRadioGroup>
   )
 }
@@ -275,29 +295,39 @@ function NativeChatSessionOptionPickersInner({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
-      <DropdownMenu
-        key={`model:${requestedModelSequence ?? 'idle'}`}
-        defaultOpen={requestedModelSequence !== null}
-      >
-        <PickerTrigger
-          label={nativeChatModelPillLabel(model)}
-          tooltipLabel={modelTooltip}
+      {model.kind.type === 'select' && model.kind.choices.some((choice) => choice.group) ? (
+        <NativeChatModelPicker
+          key={`model:${requestedModelSequence ?? 'idle'}`}
+          descriptor={model}
           disabled={isWorking || pendingId !== null}
-          disabledReason={modelReason}
-          dispatched={sessionOptionDispatchUnconfirmed(model)}
+          defaultOpen={requestedModelSequence !== null}
+          onSelect={(value) => setOption(model, value)}
         />
-        <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-64">
-          {modelReason && !model.settable ? (
-            <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
-          ) : null}
-          <DescriptorMenuRows
-            descriptor={model}
-            pending={pendingId !== null}
-            setValue={(value) => setOption(model, value)}
-            invokeAction={() => invokeAction(model)}
+      ) : (
+        <DropdownMenu
+          key={`model:${requestedModelSequence ?? 'idle'}`}
+          defaultOpen={requestedModelSequence !== null}
+        >
+          <PickerTrigger
+            label={nativeChatModelPillLabel(model)}
+            tooltipLabel={modelTooltip}
+            disabled={isWorking || pendingId !== null}
+            disabledReason={modelReason}
+            dispatched={sessionOptionDispatchUnconfirmed(model)}
           />
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-64">
+            {modelReason && !model.settable ? (
+              <DropdownMenuLabel className="font-normal">{modelReason}</DropdownMenuLabel>
+            ) : null}
+            <DescriptorMenuRows
+              descriptor={model}
+              pending={pendingId !== null}
+              setValue={(value) => setOption(model, value)}
+              invokeAction={() => invokeAction(model)}
+            />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }

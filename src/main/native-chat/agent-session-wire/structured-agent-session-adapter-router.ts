@@ -1,14 +1,16 @@
+import { isAcpStructuredAgent, type AcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
-type RoutedAgent = 'claude' | 'codex'
+type RoutedAgent = AcpStructuredAgent
 
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
   private readonly owners = new Map<string, StructuredAgentSessionAdapter>()
 
   constructor(
-    private readonly adapters: Record<RoutedAgent, StructuredAgentSessionAdapter>,
+    private readonly adapters: Record<'claude' | 'codex', StructuredAgentSessionAdapter> &
+      Partial<Record<RoutedAgent, StructuredAgentSessionAdapter>>,
     private readonly closeAdapters: () => Promise<void>
   ) {}
 
@@ -37,7 +39,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       }
     }
     let released = false
-    for (const candidate of Object.values(this.adapters)) {
+    for (const candidate of new Set(Object.values(this.adapters))) {
       released = (await candidate.releaseAcquisition?.(input)) === true || released
     }
     return released
@@ -130,6 +132,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   }
 
   private adapterForAgent(agent: string): StructuredAgentSessionAdapter | null {
-    return agent === 'claude' || agent === 'codex' ? this.adapters[agent] : null
+    return isAcpStructuredAgent(agent) ? (this.adapters[agent] ?? null) : null
   }
 }

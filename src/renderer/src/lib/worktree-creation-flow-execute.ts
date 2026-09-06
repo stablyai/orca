@@ -13,7 +13,7 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -209,7 +209,7 @@ export async function executeWorktreeCreation(
   }
 
   let structuredLaunchAccepted = structuredLaunch
-  if (structuredLaunch && isAgentSessionHandleProvider(preparedRequest.agent)) {
+  if (structuredLaunch && isAcpStructuredAgent(preparedRequest.agent)) {
     const structuredSession = await launchStructuredWorktreeSession({
       creationId,
       request: preparedRequest,

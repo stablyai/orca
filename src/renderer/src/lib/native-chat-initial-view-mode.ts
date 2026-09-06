@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
+import { isAcpStructuredAgent } from '../../../shared/acp-agent-recipes'
 import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript
@@ -30,7 +31,7 @@ export function decideInitialAgentTabViewMode(args: {
   if (args.experimentalNativeChat !== true || args.openAgentTabsInChatByDefault !== true) {
     return undefined
   }
-  if (!isNativeChatSupportedAgent(args.agent)) {
+  if (!isNativeChatSupportedAgent(args.agent) && !isAcpStructuredAgent(args.agent ?? '')) {
     return undefined
   }
   if (

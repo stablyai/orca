@@ -35,6 +35,8 @@ describe('handle identity', () => {
   it('rejects unknown persisted provider names instead of defaulting to Codex', () => {
     expect(isAgentSessionHandleProvider('codex')).toBe(true)
     expect(isAgentSessionHandleProvider('claude')).toBe(true)
+    expect(isAgentSessionHandleProvider('grok')).toBe(true)
+    expect(isAgentSessionHandleProvider('cursor')).toBe(true)
     expect(isAgentSessionHandleProvider('gemini')).toBe(false)
     expect(isAgentSessionHandleProvider(undefined)).toBe(false)
   })

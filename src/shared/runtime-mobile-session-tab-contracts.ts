@@ -93,7 +93,7 @@ export type RuntimeMobileSessionAgentTab = {
   id: string
   title: string
   sessionId: string
-  agent: 'claude' | 'codex'
+  agent: 'codex' | 'claude' | 'openclaude' | 'grok' | 'cursor'
   color?: string | null
   isPinned?: boolean
   isActive: boolean

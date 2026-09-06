@@ -1,3 +1,4 @@
+import { STRUCTURED_AGENT_SESSION_SWITCH_PROVIDER_METHOD } from './structured-agent-session-switch-provider'
 // `agentSession.*` — the structured session RPC surface.
 //
 // Every method here is gated on the client advertising
@@ -86,7 +87,13 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       if (!supportsStructuredSessions(ctx)) {
         throw new Error('structured_agent_session_unsupported')
       }
-      return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
+      return {
+        ...(await ctx.runtime.getStructuredAgentSessionCreateSupport(
+          params.worktree,
+          params.agent
+        )),
+        canSwitchProvider: true
+      }
     }
   }),
   defineMethod({
@@ -129,7 +136,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
             attachParams,
             tab: {
               workspaceId: resolved.location.workspaceId,
-              agent: resolved.agent as 'claude' | 'codex'
+              agent: params.agent
             }
           }
         }
@@ -209,6 +216,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     params: SetOptionParams,
     handler: async (params, ctx) => requireHost(ctx).setOption(callerFor(ctx), params)
   }),
+  STRUCTURED_AGENT_SESSION_SWITCH_PROVIDER_METHOD,
   defineMethod({
     name: 'agentSession.requestHandoff',
     params: HandoffParams,

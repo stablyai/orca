@@ -8,7 +8,7 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isAcpStructuredAgent } from '../../../../shared/acp-agent-recipes'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
@@ -122,7 +122,10 @@ function QuickLaunchAgentMenuItemsInner({
   // inside the agent list's render loop.
   const structuredLaunchStatusByAgent = {
     claude: useStructuredAgentLaunchStatus(worktreeId, 'claude'),
-    codex: useStructuredAgentLaunchStatus(worktreeId, 'codex')
+    codex: useStructuredAgentLaunchStatus(worktreeId, 'codex'),
+    grok: useStructuredAgentLaunchStatus(worktreeId, 'grok'),
+    cursor: useStructuredAgentLaunchStatus(worktreeId, 'cursor'),
+    openclaude: useStructuredAgentLaunchStatus(worktreeId, 'openclaude')
   }
 
   const openAgentSettings = useCallback(() => {
@@ -206,7 +209,7 @@ function QuickLaunchAgentMenuItemsInner({
         const entry = getCatalogEntry(agent)
         const label = entry?.label ?? agent
         const isStructuredLaunchPending =
-          isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
+          isAcpStructuredAgent(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
         const pendingLabel = translate(
           'components.native-chat.structuredSessionLaunchPending',
           'Starting {{value0}} chat…',

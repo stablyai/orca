@@ -47,6 +47,7 @@ import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
+import { switchStructuredAgentSessionProvider } from './structured-agent-session-provider-switch'
 import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
@@ -204,17 +205,13 @@ export class StructuredAgentSessionHost {
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
     providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)
 
-  listSessionTabs() {
-    return listStructuredAgentSessionTabs(this.sessions)
-  }
+  listSessionTabs = () => listStructuredAgentSessionTabs(this.sessions)
 
-  getPersistedVisibleSessionTabIndex(): { present: boolean; sessionIds: string[] } {
-    return this.deps.store.getVisibleSessionTabIndex()
-  }
+  getPersistedVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
+    this.deps.store.getVisibleSessionTabIndex()
 
-  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.deps.store.setSessionTabVisibility(sessionId, visible)
-  }
+  setSessionTabVisibility = (sessionId: string, visible: boolean): Promise<void> =>
+    this.deps.store.setSessionTabVisibility(sessionId, visible)
 
   reconcileRestartLeases = async (): Promise<void> => {
     const refusal = await this.reconcileLeases('startup')
@@ -241,12 +238,11 @@ export class StructuredAgentSessionHost {
     })
   }
 
-  attach(
+  attach = (
     caller: StructuredAgentSessionCaller,
     params: AgentSessionAttachParams
-  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> {
-    return attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
-  }
+  ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionAttachResult>> =>
+    attachStructuredAgentSession(this.attachContext(), caller.callerKey, params)
 
   flushStreamedEvents = (sessionId: string): Promise<void> =>
     this.runtimeState.flushEventSink(sessionId)
@@ -307,6 +303,11 @@ export class StructuredAgentSessionHost {
     params: Parameters<typeof setStructuredAgentSessionOption>[2]
   ): ReturnType<typeof setStructuredAgentSessionOption> =>
     setStructuredAgentSessionOption(this.mutationContext(), caller, params)
+
+  switchProvider = (
+    caller: StructuredAgentSessionCaller,
+    params: Parameters<typeof switchStructuredAgentSessionProvider>[2]
+  ) => switchStructuredAgentSessionProvider(this.attachContext(), caller.callerKey, params)
 
   requestHandoff = (
     caller: StructuredAgentSessionCaller,

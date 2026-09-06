@@ -18,7 +18,7 @@ import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isAcpStructuredAgent } from '../../../../shared/acp-agent-recipes'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
@@ -102,10 +102,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               ...(launch.startup ? { startup: launch.startup } : {}),
               ...(launch.route === 'structured-native-chat' ? { providesInitialSurface: true } : {})
             })
-            if (
-              launch.route === 'structured-native-chat' &&
-              isAgentSessionHandleProvider(launch.agent)
-            ) {
+            if (launch.route === 'structured-native-chat' && isAcpStructuredAgent(launch.agent)) {
               const structured = startStructuredAgentLaunch(folderWorktree.id, launch.agent)
               const fallback = structured.claimDefinitiveRefusalFallback(() => {
                 activateAndRevealWorktree(folderWorktree.id, {

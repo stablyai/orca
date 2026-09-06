@@ -87,6 +87,11 @@ const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
+    method: 'agentSession.switchProvider',
+    hostMethod: 'switchProvider',
+    result: { ok: true, replayed: false, value: { agent: 'claude', provider: 'claude' } }
+  },
+  {
     method: 'agentSession.requestHandoff',
     hostMethod: 'requestHandoff',
     result: { status: { owner: 'native' } }
@@ -234,6 +239,10 @@ function paramsFor(method: string): unknown {
       const fields = { key: 'model', value: 'gpt-5' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.switchProvider': {
+      const fields = { agent: 'claude', model: 'sonnet' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.history':
       return { sessionId: SESSION, direction: 'tail' }
     case 'agentSession.hold':
@@ -336,6 +345,12 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
+    switchProvider: vi.fn(async () => ({
+      ok: true,
+      replayed: false,
+      value: { agent: 'claude', provider: 'claude' }
+    })),
+    listSessionTabs: vi.fn(() => [{ sessionId: SESSION, workspaceId: WORKSPACE, agent: 'grok' }]),
     requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
@@ -361,9 +376,10 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
 async function expectDeclaredSurfaceExecutes(
   build: AgentSessionWireBuild,
   hostCalls: Record<string, ReturnType<typeof vi.fn>>,
-  clientCapabilities: readonly string[]
+  clientCapabilities: readonly string[],
+  calls = STRUCTURED_CALLS
 ): Promise<void> {
-  for (const { method, hostMethod, result } of STRUCTURED_CALLS) {
+  for (const { method, hostMethod, result } of calls) {
     // Two methods share one host method, so "has been called" would already be
     // true from the earlier one: only this call's own delta pins the pairing.
     const before = hostMethod ? hostCalls[hostMethod].mock.calls.length : 0
@@ -509,16 +525,15 @@ describe('cross-version structured agent sessions', () => {
     it(
       'executes every method a release-shaped checkout registers',
       async () => {
-        // The stand-in for the release that ships this surface: the same source,
-        // read the way a release checkout reads it rather than through the test
-        // runner's module graph. It is the only place the "registered means
-        // usable" claim is executable today, because the baseline registers none
-        // of these methods — so it has to carry the whole manifest, not a sample.
+        // HEAD can precede uncommitted additions, so exercise its own registered surface.
         const releasedCurrent = await loadAgentSessionWireBuild('HEAD')
         expect(releasedCurrent.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+        const declaredCalls = STRUCTURED_CALLS.filter(({ method }) =>
+          releasedCurrent.methodNames.includes(method)
+        )
         expect(
-          releasedCurrent.methodNames.filter((name) => name.startsWith('agentSession.'))
-        ).toHaveLength(STRUCTURED_CALLS.length)
+          releasedCurrent.methodNames.filter((name) => name.startsWith('agentSession.')).sort()
+        ).toEqual(declaredCalls.map(({ method }) => method).sort())
         // Each build owns its own host slot, so the one the suite installed in
         // current source is not this dispatcher's. Installing here is also the
         // anti-vacuous guard: without it every host-backed method answers
@@ -530,7 +545,8 @@ describe('cross-version structured agent sessions', () => {
           await expectDeclaredSurfaceExecutes(
             releasedCurrent,
             hostCalls,
-            releasedCurrent.capabilities
+            releasedCurrent.capabilities,
+            declaredCalls
           )
         } finally {
           await releasedCurrent.installStructuredHost(null)

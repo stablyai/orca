@@ -28,6 +28,10 @@ import {
   resolveNativeChatModelDiscoveryContext
 } from './native-chat-session-option-discovery'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
+import {
+  useNativeChatProviderModels,
+  type NativeChatSwitchProvider
+} from './use-native-chat-provider-models'
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
@@ -90,6 +94,7 @@ export function useNativeChatSessionOptions(args: {
   dispatchCommand: NativeChatSessionOptionDispatchCommand
   onAgentPicker?: () => void
   readTerminalScreen?: () => string | null
+  onSwitchProvider?: NativeChatSwitchProvider
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
@@ -241,5 +246,11 @@ export function useNativeChatSessionOptions(args: {
     surface?.getSnapshot ?? getEmptySnapshot,
     surface?.getSnapshot ?? getEmptySnapshot
   )
-  return { surface, snapshot }
+  return useNativeChatProviderModels({
+    agent,
+    terminalTabId,
+    surface,
+    snapshot,
+    onSwitchProvider: args.onSwitchProvider
+  })
 }

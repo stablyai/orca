@@ -32,6 +32,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   failedDeliveryMessageIds,
   showTurnStatus = true,
+  preserveMessageOrder = false,
   runtimeContext
 }: {
   session: NativeChatLiveSession
@@ -46,6 +47,8 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds?: ReadonlySet<string>
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
+  /** A provider handoff already orders history across independent transcript clocks. */
+  preserveMessageOrder?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -77,8 +80,13 @@ export function NativeChatMessageList({
 
   // Keep hidden harness turns as fold boundaries, then strip them before render.
   const messages = useMemo(
-    () => stripNoiseMessages(foldToolMessages(orderNativeChatMessages(session.messages))),
-    [session.messages]
+    () =>
+      stripNoiseMessages(
+        foldToolMessages(
+          preserveMessageOrder ? session.messages : orderNativeChatMessages(session.messages)
+        )
+      ),
+    [session.messages, preserveMessageOrder]
   )
   const showTypingIndicator = showTurnStatus
     ? isWorking

@@ -21,12 +21,14 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId,
   isActive,
   target,
+  worktreeId,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
   target: RuntimeClientTarget
+  worktreeId: string
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
@@ -69,6 +71,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
         agent={tab.agentSessionAgent}
         isVisible={isActive}
         target={target}
+        worktreeId={worktreeId}
       />
     </div>
   )
@@ -121,6 +124,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             groupId={tab.groupId}
             isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
             target={target}
+            worktreeId={worktreeId}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

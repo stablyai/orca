@@ -19,7 +19,10 @@ export function NativeChatSessionGate({
   const lastResolutionRef = useRef<NativeChatPaneResolution | null>(null)
   const currentResolution = resolveNativeChatSession(input)
   const previousResolution =
-    lastResolutionRef.current?.paneKey === input.paneKey ? lastResolutionRef.current : null
+    lastResolutionRef.current?.paneKey === input.paneKey &&
+    (!input.ptyId || input.ptyId === lastResolutionRef.current.ptyId)
+      ? lastResolutionRef.current
+      : null
   const resolution = (() => {
     if (!currentResolution) {
       return previousResolution
@@ -44,9 +47,12 @@ export function NativeChatSessionGate({
     if (resolution) {
       // Why: hook and title evidence are transport-fed and can vanish between a
       // disconnect and replay. Commit the last rendered conversation identity.
-      lastResolutionRef.current = resolution
+      lastResolutionRef.current = {
+        ...resolution,
+        ptyId: resolution.ptyId ?? previousResolution?.ptyId ?? null
+      }
     }
-  }, [resolution])
+  }, [resolution, previousResolution])
   if (!resolution) {
     return <NativeChatEmptyState kind="not-agent" />
   }

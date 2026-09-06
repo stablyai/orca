@@ -137,6 +137,62 @@ describe('NativeChatSessionGate', () => {
     )
   })
 
+  it('does not reuse a cached session after a disconnected snapshot when a new PTY appears', () => {
+    const paneKey = 'tab-1:leaf-1'
+    const renderGate = (ptyId: string | null, agentStatusEntry?: AgentStatusEntry) => (
+      <NativeChatSessionGate
+        paneKey={paneKey}
+        launchAgent="claude"
+        ptyId={ptyId}
+        agentStatusEntry={agentStatusEntry}
+      >
+        {(resolution) => (
+          <div>
+            {resolution.sessionId ?? 'new-session'}:{resolution.ptyId ?? 'no-pty'}
+          </div>
+        )}
+      </NativeChatSessionGate>
+    )
+    const view = render(
+      renderGate(
+        null,
+        entry({
+          paneKey,
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'old-session' }
+        })
+      )
+    )
+    expect(screen.getByText('old-session:no-pty')).toBeInTheDocument()
+    view.rerender(renderGate('new-pty'))
+    expect(screen.getByText('new-session:new-pty')).toBeInTheDocument()
+  })
+
+  it('does not carry a provider session id into a replacement PTY', () => {
+    const renderGate = (ptyId: string, agentStatusEntry?: AgentStatusEntry) => (
+      <NativeChatSessionGate
+        paneKey="tab-1:leaf-1"
+        launchAgent="claude"
+        ptyId={ptyId}
+        agentStatusEntry={agentStatusEntry}
+      >
+        {(resolution) => <div>{resolution.sessionId ?? 'new-session'}</div>}
+      </NativeChatSessionGate>
+    )
+    const view = render(
+      renderGate(
+        'old-pty',
+        entry({
+          paneKey: 'tab-1:leaf-1',
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: 'old-session' }
+        })
+      )
+    )
+    view.rerender(renderGate('new-pty'))
+    expect(screen.getByText('new-session')).toBeInTheDocument()
+  })
+
   it('does not open native chat from an unsupported title fallback', () => {
     renderResolution({
       paneKey: 'tab-1:leaf-1',

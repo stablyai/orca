@@ -18,8 +18,10 @@ import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-comman
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import { prepareNativeChatContinuationSend } from './native-chat-provider-continuation'
 
 export function useNativeChatPtyComposerSend(args: {
+  paneKey: string
   agent: AgentType
   draft: string
   imageAttachments: readonly { path: string }[]
@@ -57,6 +59,21 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     const classification = args.classifySend(text)
+    let continuation: ReturnType<typeof prepareNativeChatContinuationSend> | null = null
+    try {
+      if (classification === 'chat') {
+        continuation = prepareNativeChatContinuationSend({
+          paneKey: args.paneKey,
+          agent: args.agent,
+          ptyId: target.ptyId,
+          text
+        })
+      }
+    } catch (error) {
+      args.setNotice(error instanceof Error ? error.message : String(error))
+      return
+    }
+    const wireText = continuation?.text ?? text
     const { sendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
@@ -74,14 +91,17 @@ export function useNativeChatPtyComposerSend(args: {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
         target.settings,
         target.ptyId,
-        text,
+        wireText,
         imagePaths,
         sendOptions
       )
     } else if (text.trim().length > 0) {
-      pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+      pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, wireText, sendOptions)
     } else {
       submitNativeChatPrompt(target.settings, target.ptyId)
+    }
+    if (pendingHandle && continuation) {
+      pendingHandle = continuation.track(pendingHandle)
     }
     if (classification !== 'chat') {
       if (pendingHandle) {

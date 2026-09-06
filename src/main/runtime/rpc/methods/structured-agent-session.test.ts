@@ -150,6 +150,14 @@ function hostStub(): StructuredAgentSessionHost {
     setSessionTabVisibility: vi.fn(async () => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
     setOption: vi.fn(async () => ({ ok: true, replayed: false })),
+    switchProvider: vi.fn(async () => ({
+      ok: true,
+      replayed: false,
+      value: { agent: 'claude', provider: 'claude' }
+    })),
+    listSessionTabs: vi.fn(() => [
+      { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }
+    ]),
     requestHandoff: vi.fn(async () => ({
       ok: true,
       replayed: false,
@@ -194,7 +202,7 @@ function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatch
         workspaceId: 'workspace-1',
         workspaceKind: 'git-worktree'
       },
-      provider: params.agent,
+      provider: params.agent === 'openclaude' ? 'claude' : params.agent,
       agent: params.agent,
       accountHome: {
         variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
@@ -496,6 +504,143 @@ describe('method routing', () => {
     )
   })
 
+  it('switches provider on the attached session and republishes the tab agent', async () => {
+    hostCalls.listSessionTabs
+      .mockReturnValueOnce([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }])
+      .mockReturnValue([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'claude' }])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    const response = await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: true, value: { agent: 'claude', provider: 'claude' } }
+    })
+    expect(hostCalls.switchProvider).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        agent: 'claude',
+        provider: 'claude',
+        model: 'sonnet'
+      })
+    )
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: SESSION, agent: 'claude', activate: true })
+    )
+  })
+
+  it('restamps the switch envelope with the account home the host actually resolved', async () => {
+    hostCalls.listSessionTabs
+      .mockReturnValueOnce([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }])
+      .mockReturnValue([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'claude' }])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(hostCalls.switchProvider.mock.calls[0]?.[1]?.envelope.payloadFingerprint).toBe(
+      computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.switchProvider',
+        sessionId: SESSION,
+        fields: {
+          ...fields,
+          provider: 'claude',
+          accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/host/.claude' }
+        }
+      })
+    )
+  })
+
+  it('refuses a switch whose declared intent fingerprint does not match its params', async () => {
+    const response = await call(
+      'agentSession.switchProvider',
+      { envelope: envelope(), agent: 'claude', model: 'sonnet' },
+      STRUCTURED_CLIENT
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: false } })
+    expect(hostCalls.switchProvider).not.toHaveBeenCalled()
+  })
+
+  it('reports an unknown outcome when the tab cannot be published after a committed switch', async () => {
+    hostCalls.listSessionTabs
+      .mockReturnValueOnce([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }])
+      .mockReturnValue([{ sessionId: SESSION, workspaceId: 'workspace-1', agent: 'claude' }])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    const response = await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT,
+      {
+        publishStructuredAgentSessionTab: vi.fn(async () => {
+          throw new Error('snapshot write failed')
+        })
+      }
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
+    })
+  })
+
+  it('keeps current provider metadata when replaying an earlier switch', async () => {
+    hostCalls.switchProvider.mockResolvedValueOnce({
+      ok: true,
+      replayed: true,
+      value: { agent: 'claude', provider: 'claude' }
+    })
+    hostCalls.listSessionTabs.mockReturnValue([
+      { sessionId: SESSION, workspaceId: 'workspace-1', agent: 'grok' }
+    ])
+    const fields = { agent: 'claude' as const, model: 'sonnet' }
+    await call(
+      'agentSession.switchProvider',
+      {
+        envelope: envelope({
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.switchProvider',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'grok', activate: false })
+    )
+  })
+
   it('routes Claude create support and create through the provider-aware runtime', async () => {
     const worktree = 'id:workspace-1'
     const support = await call(
@@ -707,6 +852,33 @@ describe('parameter validation', () => {
       'agentSession.create',
       attachParams({ providerHandle: { kind: 'opaque', agent: 'codex', value: 'thread-1' } })
     )
+  })
+
+  it('accepts ACP create intents and still rejects unknown agents', async () => {
+    const fields = { worktree: 'id:workspace-1', agent: 'grok' as const }
+    const created = await call(
+      'agentSession.create',
+      {
+        envelope: envelope({
+          expectedRuntimeFence: null,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method: 'agentSession.create',
+            sessionId: SESSION,
+            fields
+          })
+        }),
+        ...fields
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(created).toMatchObject({ ok: true })
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'grok', activate: true })
+    )
+    await rejects('agentSession.createSupport', {
+      worktree: 'id:workspace-1',
+      agent: 'gemini'
+    })
   })
 
   it('requires a sha256 fingerprint and a positive fence', async () => {

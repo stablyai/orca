@@ -5,6 +5,7 @@ import { canContinueAgentSessionInNewSession } from './terminal-agent-session-co
 import type { TerminalPaneController } from './use-terminal-pane-controller'
 import { useAppStore } from '@/store'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
+import { restartNativeChatProvider } from './native-chat-provider-restart'
 
 export function TerminalPaneNativeChatPortal({
   controller
@@ -78,6 +79,7 @@ export function TerminalPaneNativeChatPortal({
           target={structuredChatTarget}
           contextMenuActions={contextMenuActions}
           orchestrationDispatchStatus={chatPaneDispatchStatus}
+          worktreeId={controller.worktreeId}
         />
       ) : (
         <NativeChatView
@@ -89,6 +91,7 @@ export function TerminalPaneNativeChatPortal({
           resolvedAgent={chatPaneResolvedAgent}
           ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
           onSwitchToTerminal={switchNativeChatToTerminal}
+          onSwitchProvider={(agent, model) => restartNativeChatProvider(controller, agent, model)}
           readTerminalScreen={readNativeChatTerminalScreen}
           contextMenuActions={contextMenuActions}
           orchestrationDispatchStatus={chatPaneDispatchStatus}

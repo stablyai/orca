@@ -67,6 +67,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       onOptimisticSendCanceled,
       onSlashCommand,
       onSwitchToTerminal,
+      onSwitchProvider,
       readTerminalScreen,
       launchSeed,
       structuredTransport
@@ -237,6 +238,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
         targetPtyId,
         dispatchCommand: dispatchSessionOptionCommand,
         onAgentPicker: onSwitchToTerminal,
+        onSwitchProvider,
         readTerminalScreen
       })
     const sessionOptionsSurface = structuredTransport?.optionsSurface ?? ptySessionOptionsSurface
@@ -254,6 +256,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
 
     const sendPty = useNativeChatPtyComposerSend({
+      paneKey,
       agent,
       draft,
       imageAttachments,
