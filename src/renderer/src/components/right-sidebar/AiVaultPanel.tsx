@@ -36,6 +36,7 @@ import {
 } from './ai-vault-session-worktree'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
+import { useAiVaultTranscriptDeepSearchPanel } from './ai-vault-transcript-deep-search'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
@@ -214,42 +215,63 @@ export default function AiVaultPanel(): React.JSX.Element {
     }
   }, [activeProjectKey, activeWorktreePath, scope])
 
-  const filteredSessions = useMemo(
-    () =>
-      filterAiVaultSessions(sessions, {
-        query,
-        agents,
-        scope,
-        sort,
-        activeWorktreePaths,
-        activeProjectKey,
-        sessionProjectById,
-        projectLabelByKey,
-        hideEmptySessions
-      }),
-    [
-      activeProjectKey,
-      activeWorktreePaths,
+  // Deep-search candidates share every non-query view filter (agents, scope,
+  // hide-empty, sort) but bypass the metadata text predicate: transcript-only
+  // hits stay visible, the results view respects the user's view settings, and
+  // the request cap is not consumed by sessions the user has filtered out.
+  const { filteredSessions, candidates } = useMemo(() => {
+    const filters = {
       agents,
-      hideEmptySessions,
-      projectLabelByKey,
-      query,
       scope,
+      sort,
+      activeWorktreePaths,
+      activeProjectKey,
       sessionProjectById,
-      sessions,
-      sort
-    ]
-  )
+      projectLabelByKey,
+      hideEmptySessions
+    }
+    return {
+      filteredSessions: filterAiVaultSessions(sessions, { ...filters, query }),
+      candidates: filterAiVaultSessions(sessions, { ...filters, query: '' })
+    }
+  }, [
+    activeProjectKey,
+    activeWorktreePaths,
+    agents,
+    hideEmptySessions,
+    projectLabelByKey,
+    query,
+    scope,
+    sessionProjectById,
+    sessions,
+    sort
+  ])
 
+  const deepSearch = useAiVaultTranscriptDeepSearchPanel({
+    query,
+    sessions: candidates
+  })
+  // During a transcript search the panel is a results view: show ONLY the
+  // matched sessions, so the global list does not turn into a cluttered mix.
+  // Zero hits stay in this view too — falling back to the metadata list would
+  // imply the transcript search matched something it did not.
+  // `filteredSessionsCount` (feed below) follows this list view too — otherwise a
+  // 0-hit metadata filter would render the empty-state banner ABOVE the matched
+  // sessions, burying search hits below a "no sessions" message.
+  const listSessions =
+    deepSearch.deepSearchStatus === 'done' && deepSearch.deepSearchQuery === query
+      ? deepSearch.matchedSessions
+      : filteredSessions
   const groups = useMemo(
     () =>
-      groupAiVaultSessions(filteredSessions, group, {
+      groupAiVaultSessions(listSessions, group, {
         sessionProjectById,
         projectLabelByKey
       }),
-    [filteredSessions, group, projectLabelByKey, sessionProjectById]
+    [group, listSessions, projectLabelByKey, sessionProjectById]
   )
 
+  const matchById = deepSearch.transcriptMatchById
   const copyText = useCallback(async (text: string, label: string): Promise<void> => {
     await window.api.ui.writeClipboardText(text)
     toast.success(
@@ -312,8 +334,14 @@ export default function AiVaultPanel(): React.JSX.Element {
       <AiVaultPanelHeader
         query={query}
         loading={loading}
-        shownCount={filteredSessions.length}
+        shownCount={listSessions.length}
         sessionCount={sessions.length}
+        deepSearchStatus={deepSearch.deepSearchStatus}
+        deepSearchQuery={deepSearch.deepSearchQuery}
+        deepSearchTruncated={deepSearch.deepSearchTruncated}
+        deepSearchMatchCount={deepSearch.deepSearchMatchCount}
+        onDeepSearch={deepSearch.onDeepSearch}
+        onDeepSearchClear={deepSearch.clearDeepSearch}
         hasScanResult={Boolean(scanResult)}
         activeWorktreePath={activeWorktreePath}
         activeProjectKey={activeProjectKey}
@@ -349,10 +377,11 @@ export default function AiVaultPanel(): React.JSX.Element {
 
       <AiVaultSessionVirtualList
         groups={groups}
+        getTranscriptMatch={matchById ? (session) => matchById.get(session.id) ?? null : null}
         collapsedGroups={collapsedGroups}
         loading={loading}
         sessionsCount={sessions.length}
-        filteredSessionsCount={filteredSessions.length}
+        filteredSessionsCount={listSessions.length}
         noAgentsSelected={agents.length === 0}
         error={error}
         vaultScope={scope}

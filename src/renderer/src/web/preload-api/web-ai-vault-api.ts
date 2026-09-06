@@ -61,6 +61,10 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
     // Why: full first-prompt re-parse is local-FS only; web/runtime falls back to preview text.
     getFirstUserPrompt: () => Promise.resolve({ prompt: null }),
+    // Why: deep search reads transcripts on the local filesystem, which a web
+    // client does not have, and there is no runtime RPC for it yet. Report an
+    // empty (not erroring) result so the UI can show "no transcript matches".
+    searchTranscripts: () => Promise.resolve({ matches: [], issues: [], truncated: false }),
     // Why: session deletion is local-only and has no runtime RPC; a web
     // client's sessions are runtime-hosted, so report the same non-local
     // rejection the UI already gates on rather than pretend to delete.
