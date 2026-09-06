@@ -3,6 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
+import {
+  applyMinimalOpenCodeSqliteSchema,
+  applyOpenCodeSqliteSchema,
+  insertOpenCodeMessage,
+  insertOpenCodePart,
+  insertOpenCodeSession
+} from './session-scanner-opencode-sqlite-fixtures'
 import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-discovery'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
@@ -25,181 +32,17 @@ function createTempDb(): { db: Database.Database; path: string } {
   return { db: new Database(path), path }
 }
 
-function applyOpenCodeSchema(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE session (
-      id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL,
-      parent_id TEXT,
-      slug TEXT NOT NULL,
-      directory TEXT NOT NULL,
-      title TEXT NOT NULL,
-      version TEXT NOT NULL,
-      share_url TEXT,
-      summary_additions INTEGER,
-      summary_deletions INTEGER,
-      summary_files INTEGER,
-      summary_diffs TEXT,
-      revert TEXT,
-      permission TEXT,
-      time_created INTEGER NOT NULL,
-      time_updated INTEGER NOT NULL,
-      time_compacting INTEGER,
-      time_archived INTEGER,
-      workspace_id TEXT,
-      path TEXT,
-      agent TEXT,
-      model TEXT,
-      cost REAL DEFAULT 0 NOT NULL,
-      tokens_input INTEGER DEFAULT 0 NOT NULL,
-      tokens_output INTEGER DEFAULT 0 NOT NULL,
-      tokens_reasoning INTEGER DEFAULT 0 NOT NULL,
-      tokens_cache_read INTEGER DEFAULT 0 NOT NULL,
-      tokens_cache_write INTEGER DEFAULT 0 NOT NULL,
-      metadata TEXT
-    );
-    CREATE TABLE message (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      time_created INTEGER NOT NULL,
-      time_updated INTEGER NOT NULL,
-      data TEXT NOT NULL
-    );
-    CREATE TABLE part (
-      id TEXT PRIMARY KEY,
-      message_id TEXT NOT NULL,
-      session_id TEXT NOT NULL,
-      time_created INTEGER NOT NULL,
-      time_updated INTEGER NOT NULL,
-      data TEXT NOT NULL
-    );
-    CREATE TABLE project (
-      id TEXT PRIMARY KEY,
-      worktree TEXT NOT NULL,
-      vcs TEXT,
-      name TEXT,
-      icon_url TEXT,
-      icon_color TEXT,
-      time_created INTEGER NOT NULL,
-      time_updated INTEGER NOT NULL,
-      time_initialized INTEGER,
-      sandboxes TEXT NOT NULL,
-      commands TEXT,
-      icon_url_override TEXT
-    );
-  `)
-}
-
-function applyMinimalOpenCodeSchema(db: Database.Database): void {
-  db.exec(`CREATE TABLE session (
-    id TEXT PRIMARY KEY,
-    time_created INTEGER NOT NULL,
-    time_updated INTEGER NOT NULL
-  );`)
-}
-
-function insertSession(
-  db: Database.Database,
-  args: {
-    id: string
-    title?: string
-    directory?: string
-    timeCreated: number
-    timeUpdated: number
-    parentId?: string | null
-    timeArchived?: number | null
-    model?: string | null
-    agent?: string | null
-    tokensInput?: number
-    tokensOutput?: number
-    tokensReasoning?: number
-    tokensCacheRead?: number
-    cost?: number
-  }
-): void {
-  db.prepare(
-    `INSERT INTO session (id, project_id, parent_id, slug, directory, title, version,
-       time_created, time_updated, time_archived, model, agent, cost,
-       tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write)
-     VALUES (?, 'proj-1', ?, ?, ?, ?, '1.0.0',
-       ?, ?, ?, ?, ?, ?,
-       ?, ?, ?, ?, 0)`
-  ).run(
-    args.id,
-    args.parentId ?? null,
-    `slug-${args.id}`,
-    args.directory ?? '/tmp/opencode',
-    args.title ?? 'OpenCode title',
-    args.timeCreated,
-    args.timeUpdated,
-    args.timeArchived ?? null,
-    args.model ?? JSON.stringify({ id: 'glm-5.2', providerID: 'zai-coding-plan' }),
-    args.agent ?? 'build',
-    args.cost ?? 0,
-    args.tokensInput ?? 100,
-    args.tokensOutput ?? 40,
-    args.tokensReasoning ?? 10,
-    args.tokensCacheRead ?? 5
-  )
-}
-
-function insertMessage(
-  db: Database.Database,
-  args: {
-    id: string
-    sessionId: string
-    role: 'user' | 'assistant'
-    timeCreated: number
-    summaryTitle?: string | null
-    summaryBody?: string | null
-  }
-): void {
-  const data = JSON.stringify({
-    role: args.role,
-    time: { created: args.timeCreated },
-    agent: 'build',
-    summary:
-      args.summaryTitle || args.summaryBody
-        ? { title: args.summaryTitle ?? null, body: args.summaryBody ?? null }
-        : undefined
-  })
-  db.prepare(
-    `INSERT INTO message (id, session_id, time_created, time_updated, data)
-     VALUES (?, ?, ?, ?, ?)`
-  ).run(args.id, args.sessionId, args.timeCreated, args.timeCreated, data)
-}
-
-function insertPart(
-  db: Database.Database,
-  args: {
-    id: string
-    messageId: string
-    sessionId: string
-    timeCreated: number
-    type?: 'text' | 'tool' | 'reasoning'
-    text?: string
-  }
-): void {
-  const data = JSON.stringify({
-    type: args.type ?? 'text',
-    text: args.text ?? 'hello world'
-  })
-  db.prepare(
-    `INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
-     VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(args.id, args.messageId, args.sessionId, args.timeCreated, args.timeCreated, data)
-}
 describe('listOpenCodeSqliteSessions', () => {
   it('returns candidates sorted by time_updated desc via the synthesized mtimeMs', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_old',
       title: 'Old',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_001_000
     })
-    insertSession(db, {
+    insertOpenCodeSession(db, {
       id: 'ses_new',
       title: 'New',
       timeCreated: 1_777_634_002_000,
@@ -223,8 +66,8 @@ describe('listOpenCodeSqliteSessions', () => {
 
   it('dedups matching session ids across databases and keeps the newest row', async () => {
     const { db: oldDb, path: oldPath } = createTempDb()
-    applyOpenCodeSchema(oldDb)
-    insertSession(oldDb, {
+    applyOpenCodeSqliteSchema(oldDb)
+    insertOpenCodeSession(oldDb, {
       id: 'ses_duplicate',
       title: 'Old duplicate',
       timeCreated: 1_777_634_000_000,
@@ -233,8 +76,8 @@ describe('listOpenCodeSqliteSessions', () => {
     oldDb.close()
 
     const { db: newDb, path: newPath } = createTempDb()
-    applyOpenCodeSchema(newDb)
-    insertSession(newDb, {
+    applyOpenCodeSqliteSchema(newDb)
+    insertOpenCodeSession(newDb, {
       id: 'ses_duplicate',
       title: 'New duplicate',
       timeCreated: 1_777_634_002_000,
@@ -252,19 +95,19 @@ describe('listOpenCodeSqliteSessions', () => {
   })
   it('excludes archived and child sessions', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_normal',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_001_000
     })
-    insertSession(db, {
+    insertOpenCodeSession(db, {
       id: 'ses_archived',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_002_000,
       timeArchived: 1_777_634_002_500
     })
-    insertSession(db, {
+    insertOpenCodeSession(db, {
       id: 'ses_child',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_003_000,
@@ -309,7 +152,7 @@ describe('listOpenCodeSqliteSessions', () => {
 
   it('lists sessions from a minimal readable session table', async () => {
     const { db, path } = createTempDb()
-    applyMinimalOpenCodeSchema(db)
+    applyMinimalOpenCodeSqliteSchema(db)
     db.prepare(`INSERT INTO session VALUES ('ses_minimal', 1777634000000, 1777634001000)`).run()
     db.close()
 
@@ -328,8 +171,8 @@ describe('listOpenCodeSqliteSessions', () => {
 describe('parseOpenCodeSqliteSession', () => {
   it('builds an AiVaultSession with title, cwd, model, tokens, and resume command', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_1',
       title: 'OpenCode title',
       directory: '/tmp/opencode',
@@ -341,27 +184,27 @@ describe('parseOpenCodeSqliteSession', () => {
       tokensCacheRead: 5,
       cost: 0.01
     })
-    insertMessage(db, {
+    insertOpenCodeMessage(db, {
       id: 'msg_1',
       sessionId: 'ses_1',
       role: 'user',
       timeCreated: 1_777_634_000_500,
       summaryTitle: 'OpenCode title'
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'prt_1',
       messageId: 'msg_1',
       sessionId: 'ses_1',
       timeCreated: 1_777_634_000_500,
       text: 'Plan the work'
     })
-    insertMessage(db, {
+    insertOpenCodeMessage(db, {
       id: 'msg_2',
       sessionId: 'ses_1',
       role: 'assistant',
       timeCreated: 1_777_634_000_900
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'prt_2',
       messageId: 'msg_2',
       sessionId: 'ses_1',
@@ -396,21 +239,21 @@ describe('parseOpenCodeSqliteSession', () => {
 
   it('falls back to summary.body for title when session.title is empty', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_2',
       title: '',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_001_000
     })
-    insertMessage(db, {
+    insertOpenCodeMessage(db, {
       id: 'msg_1',
       sessionId: 'ses_2',
       role: 'user',
       timeCreated: 1_777_634_000_500,
       summaryBody: 'fallback title from summary'
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'prt_1',
       messageId: 'msg_1',
       sessionId: 'ses_2',
@@ -430,8 +273,8 @@ describe('parseOpenCodeSqliteSession', () => {
 
   it('returns null when the session id is not found', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_real',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_001_000
@@ -459,7 +302,7 @@ describe('parseOpenCodeSqliteSession', () => {
 
   it('parses a minimal readable session table without optional columns or messages', async () => {
     const { db, path } = createTempDb()
-    applyMinimalOpenCodeSchema(db)
+    applyMinimalOpenCodeSqliteSchema(db)
     db.prepare(`INSERT INTO session VALUES ('ses_minimal', 1777634000000, 1777634001000)`).run()
     db.close()
 
@@ -481,8 +324,8 @@ describe('parseOpenCodeSqliteSession', () => {
 
   it('extracts model from older modelID schema', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_3',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_001_000,
@@ -500,26 +343,26 @@ describe('parseOpenCodeSqliteSession', () => {
 
   it('captures every text part of the earliest user message and no later turn', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_fp',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_900_000
     })
-    insertMessage(db, {
+    insertOpenCodeMessage(db, {
       id: 'msg_1',
       sessionId: 'ses_fp',
       role: 'user',
       timeCreated: 1_777_634_000_000
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'part_1a',
       messageId: 'msg_1',
       sessionId: 'ses_fp',
       timeCreated: 10,
       text: 'first ask line one'
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'part_1b',
       messageId: 'msg_1',
       sessionId: 'ses_fp',
@@ -527,7 +370,7 @@ describe('parseOpenCodeSqliteSession', () => {
       text: 'first ask line two'
     })
     // Non-text parts of the same message must not leak into the copied prompt.
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'part_1c',
       messageId: 'msg_1',
       sessionId: 'ses_fp',
@@ -535,13 +378,13 @@ describe('parseOpenCodeSqliteSession', () => {
       type: 'tool',
       text: 'tool output blob'
     })
-    insertMessage(db, {
+    insertOpenCodeMessage(db, {
       id: 'msg_2',
       sessionId: 'ses_fp',
       role: 'user',
       timeCreated: 1_777_634_500_000
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'part_2a',
       messageId: 'msg_2',
       sessionId: 'ses_fp',
@@ -559,19 +402,19 @@ describe('parseOpenCodeSqliteSession', () => {
 
   it('skips an earliest user message that has no text parts', async () => {
     const { db, path } = createTempDb()
-    applyOpenCodeSchema(db)
-    insertSession(db, {
+    applyOpenCodeSqliteSchema(db)
+    insertOpenCodeSession(db, {
       id: 'ses_fp2',
       timeCreated: 1_777_634_000_000,
       timeUpdated: 1_777_634_900_000
     })
-    insertMessage(db, {
+    insertOpenCodeMessage(db, {
       id: 'msg_1',
       sessionId: 'ses_fp2',
       role: 'user',
       timeCreated: 1_777_634_000_000
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'part_1a',
       messageId: 'msg_1',
       sessionId: 'ses_fp2',
@@ -579,13 +422,13 @@ describe('parseOpenCodeSqliteSession', () => {
       type: 'tool',
       text: 'tool only'
     })
-    insertMessage(db, {
+    insertOpenCodeMessage(db, {
       id: 'msg_2',
       sessionId: 'ses_fp2',
       role: 'user',
       timeCreated: 1_777_634_500_000
     })
-    insertPart(db, {
+    insertOpenCodePart(db, {
       id: 'part_2a',
       messageId: 'msg_2',
       sessionId: 'ses_fp2',

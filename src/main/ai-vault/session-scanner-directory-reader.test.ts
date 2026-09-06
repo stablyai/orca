@@ -61,3 +61,28 @@ describe('walkSessionFiles directory reader', () => {
     ).rejects.toBe(cancelled)
   })
 })
+
+it('visits file contents before descending further without retaining paths', async () => {
+  tempRoot = await mkdtemp(join(tmpdir(), 'orca-session-stream-'))
+  await writeFile(join(tempRoot, 'first.jsonl'), '{}\n')
+  await mkdir(join(tempRoot, 'nested'))
+  await writeFile(join(tempRoot, 'nested', 'second.jsonl'), '{}\n')
+  const visited: string[] = []
+  const readDirectory = vi.fn(async (path: string) => {
+    if (path.endsWith('nested')) {
+      expect(visited).toEqual([join(tempRoot!, 'first.jsonl')])
+    }
+    return (await readdir(path, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    )
+  })
+  const retained = await walkSessionFiles(tempRoot, 'claude', [], {
+    extensions: new Set(['.jsonl']),
+    readDirectory,
+    onFile: async (path) => {
+      visited.push(path)
+    }
+  })
+  expect(retained).toEqual([])
+  expect(visited).toHaveLength(2)
+})

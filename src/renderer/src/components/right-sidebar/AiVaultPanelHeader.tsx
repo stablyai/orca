@@ -9,7 +9,11 @@ import type {
 } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
+import { AiVaultSearchConsentCard, AiVaultSearchTitlesOnlyNotice } from './AiVaultSearchConsentCard'
+import { AiVaultSearchStatus } from './AiVaultSearchStatus'
+import type { AiVaultSearchConsent } from './ai-vault-search-consent'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
+import type { AiVaultSessionSearchView } from './ai-vault-session-search-results'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 type AiVaultPanelHeaderProps = {
@@ -40,6 +44,8 @@ type AiVaultPanelHeaderProps = {
   onSessionLimitChange: (limit: AiVaultSessionLimit) => void
   onReset: () => void
   onRefresh: () => void
+  search: AiVaultSessionSearchView
+  consent: AiVaultSearchConsent
 }
 
 export function AiVaultPanelHeader({
@@ -69,7 +75,9 @@ export function AiVaultPanelHeader({
   onHideEmptySessionsChange,
   onSessionLimitChange,
   onReset,
-  onRefresh
+  onRefresh,
+  search,
+  consent
 }: AiVaultPanelHeaderProps): React.JSX.Element {
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
@@ -170,6 +178,11 @@ export function AiVaultPanelHeader({
         <input
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              search.flush()
+            }
+          }}
           placeholder={translate(
             'auto.components.right.sidebar.AiVaultPanel.searchSessions',
             'Search sessions'
@@ -194,6 +207,45 @@ export function AiVaultPanelHeader({
           </Button>
         ) : null}
       </div>
+
+      {consent.showCard ? (
+        <AiVaultSearchConsentCard
+          enabling={consent.enabling}
+          onEnable={consent.enable}
+          onDismiss={consent.dismiss}
+        />
+      ) : null}
+
+      {!consent.enabled && consent.dismissed && query.trim() ? (
+        <AiVaultSearchTitlesOnlyNotice onReopen={consent.reopen} />
+      ) : null}
+
+      {consent.enabled && search.localOnly ? (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {translate(
+            'auto.components.right.sidebar.AiVaultPanel.localSearchOnly',
+            'Conversation search covers this computer only. Remote hosts use title search.'
+          )}
+        </p>
+      ) : null}
+      {consent.enabled && search.updating ? (
+        <p role="status" className="mt-1.5 text-[11px] text-muted-foreground">
+          {translate(
+            'auto.components.right.sidebar.AiVaultPanel.searchUpdating',
+            'Updating search results…'
+          )}
+        </p>
+      ) : null}
+      {consent.enabled ? (
+        <AiVaultSearchStatus
+          coverage={search.coverage}
+          hitCount={search.listCounts.filteredSessionsCount}
+          hasQuery={search.active}
+          repairedTerms={search.repairedTerms}
+          newestFirst={search.newestFirst}
+          onNewestFirstChange={search.setNewestFirst}
+        />
+      ) : null}
     </div>
   )
 }

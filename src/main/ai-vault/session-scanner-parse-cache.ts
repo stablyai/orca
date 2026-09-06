@@ -1,4 +1,4 @@
-import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
+import { inSessionParseFileLane } from './session-parse-file-lane'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -12,22 +12,24 @@ import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
-import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
-import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
+import { refreshCachedCodexMetadata } from './session-scanner-codex-cached-metadata'
+import { consumeCompleteJsonlLines, type JsonlReadResult } from './session-scanner-jsonl-reader'
+import { getSessionParseCacheEntry, storeSessionParseCacheEntry } from './session-parse-cache-store'
+import {
+  endsWithNewlineAt,
+  fileIdentity,
+  sameFileIdentity,
+  type ResumePoint
+} from './session-scanner-resume-point'
+import {
+  getSessionSearchIndexMode,
+  getSessionSearchIndexSink,
+  withoutSessionSearchCapture,
+  withSessionSearchCapture,
+  type SessionSearchIndexSink
+} from './session-search-capture'
 
-// Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
-// full steady-state result set stays resident between forced rescans.
-const MAX_CACHE_ENTRIES = 4096
-const NEWLINE_BYTE = 0x0a
-
-type ResumePoint = {
-  state: ResumableSessionParseState
-  // Byte offset just past the last complete ('\n'-terminated) line consumed;
-  // a trailing unterminated line is deliberately left before this point.
-  byteOffset: number
-}
-
-type SessionParseCacheEntry = {
+export type SessionParseCacheEntry = {
   mtimeMs: number
   sizeBytes: number | null
   platform: NodeJS.Platform
@@ -80,6 +82,14 @@ function resumableStateFactoryFor(
   }
 }
 
+export {
+  invalidateSessionParseCacheEntry,
+  resetSessionParseCacheForTests,
+  seedSessionParseCache,
+  snapshotSessionParseCacheForPersistence,
+  type PersistedSessionParseCacheEntry
+} from './session-parse-cache-store'
+
 export type SessionParseStats = {
   reused: number
   incremental: number
@@ -93,75 +103,6 @@ export type SessionParseStats = {
 
 export function createSessionParseStats(): SessionParseStats {
   return { reused: 0, incremental: 0, fullParses: 0, earlyStopped: 0, bytesRead: 0 }
-}
-
-const cache = new Map<string, SessionParseCacheEntry>()
-
-export function resetSessionParseCacheForTests(): void {
-  cache.clear()
-}
-
-// Drops one entry after its file is deleted. Cleanliness, not correctness:
-// discovery walks disk first, so a trashed file is never rediscovered anyway.
-export function invalidateSessionParseCacheEntry(path: string): void {
-  cache.delete(path)
-}
-
-// Persisted subset of a cache entry: the non-serializable `resume` parser
-// state is dropped (see session-parse-cache-persistence.ts).
-export type PersistedSessionParseCacheEntry = Omit<SessionParseCacheEntry, 'resume'>
-
-export function snapshotSessionParseCacheForPersistence(): [
-  string,
-  PersistedSessionParseCacheEntry
-][] {
-  return [...cache].map(([path, entry]): [string, PersistedSessionParseCacheEntry] => [
-    path,
-    {
-      mtimeMs: entry.mtimeMs,
-      sizeBytes: entry.sizeBytes,
-      platform: entry.platform,
-      session: entry.session
-    }
-  ])
-}
-
-// Seeded entries carry `resume: null`: after a restart an unchanged file is a
-// cache hit; a file that changed while the app was closed pays one full
-// (not incremental) re-parse.
-export function seedSessionParseCache(
-  entries: Iterable<[string, PersistedSessionParseCacheEntry]>
-): void {
-  const list = [...entries]
-  // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
-  // tail rather than seeding the oldest entries and dropping the tail.
-  for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
-    if (cache.size >= MAX_CACHE_ENTRIES) {
-      return
-    }
-    // In-process entries are always fresher than persisted ones; never clobber.
-    if (cache.has(path)) {
-      continue
-    }
-    cache.set(path, {
-      mtimeMs: entry.mtimeMs,
-      sizeBytes: entry.sizeBytes,
-      platform: entry.platform,
-      session: entry.session,
-      resume: null
-    })
-  }
-}
-
-function storeEntry(path: string, entry: SessionParseCacheEntry): void {
-  cache.delete(path)
-  cache.set(path, entry)
-  if (cache.size > MAX_CACHE_ENTRIES) {
-    const oldest = cache.keys().next()
-    if (!oldest.done) {
-      cache.delete(oldest.value)
-    }
-  }
 }
 
 /**
@@ -178,15 +119,44 @@ export async function parseAgentSessionFileCached(
   platform: NodeJS.Platform,
   stats?: SessionParseStats
 ): Promise<AiVaultSession | null> {
+  return inSessionParseFileLane(candidate.file.path, () =>
+    parseCachedInLane(candidate, platform, stats)
+  )
+}
+
+async function parseCachedInLane(
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform,
+  stats?: SessionParseStats
+): Promise<AiVaultSession | null> {
   const { file } = candidate
-  const entry = cache.get(file.path)
+  const entry = getSessionParseCacheEntry(file.path)
+  const registeredSink = getSessionSearchIndexSink()
+  const sink = registeredSink?.acceptsCandidate?.(candidate) === false ? null : registeredSink
+  const indexed = sink ? sink.indexedFile(file.path, fileIdentity(file)) : null
+  const indexCurrent =
+    sink === null ||
+    (indexed !== null &&
+      indexed.mtimeMs === file.mtimeMs &&
+      (indexed.sizeBytes === null ||
+        file.sizeBytes === undefined ||
+        indexed.sizeBytes === file.sizeBytes))
+  // In `required` mode a file the index has not caught up on is never
+  // "unchanged"; in `opportunistic` mode it is reused and handed to the backfill.
+  const indexRequired = sink !== null && getSessionSearchIndexMode() === 'required'
 
   const unchanged =
     entry !== undefined &&
     entry.platform === platform &&
     entry.mtimeMs === file.mtimeMs &&
-    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
+    (entry.sizeBytes === null ||
+      file.sizeBytes === undefined ||
+      entry.sizeBytes === file.sizeBytes) &&
+    (indexCurrent || !indexRequired)
   if (unchanged) {
+    if (sink && !indexCurrent) {
+      sink.markStale(candidate)
+    }
     if (stats) {
       stats.reused++
     }
@@ -212,9 +182,10 @@ export async function parseAgentSessionFileCached(
     // Codex titles come from session_index.jsonl, which mtime+size can't see.
     // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
     if (entry.session && candidate.agent === 'codex') {
-      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
+      entry.session = await refreshCachedCodexMetadata(candidate, entry.session)
+      sink?.updateMetadata?.(candidate, entry.session)
     }
-    storeEntry(file.path, entry)
+    storeSessionParseCacheEntry(file.path, entry)
     return entry.session
   }
 
@@ -225,9 +196,12 @@ export async function parseAgentSessionFileCached(
       platform,
       entry,
       stats,
-      stateFactory
+      stateFactory,
+      sink,
+      indexRequired,
+      indexedOffset: indexed?.byteOffset ?? null
     })
-    storeEntry(file.path, parsed)
+    storeSessionParseCacheEntry(file.path, parsed)
     return parsed.session
   }
 
@@ -235,8 +209,10 @@ export async function parseAgentSessionFileCached(
     stats.fullParses++
     stats.bytesRead += file.sizeBytes ?? 0
   }
-  const session = await parseAgentSessionFile(candidate, platform)
-  storeEntry(file.path, {
+  const session = sink
+    ? await indexWholeFileParse(sink, candidate, () => parseAgentSessionFile(candidate, platform))
+    : await parseAgentSessionFile(candidate, platform)
+  storeSessionParseCacheEntry(file.path, {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform,
@@ -246,21 +222,52 @@ export async function parseAgentSessionFileCached(
   return session
 }
 
+async function indexWholeFileParse(
+  sink: SessionSearchIndexSink,
+  candidate: SessionFileCandidate,
+  parse: () => Promise<AiVaultSession | null>
+): Promise<AiVaultSession | null> {
+  const captured = await withSessionSearchCapture(parse)
+  sink.apply({
+    candidate,
+    session: captured.value,
+    mode: 'replace',
+    messages: captured.messages,
+    previousByteOffset: 0,
+    byteOffset: candidate.file.sizeBytes ?? 0
+  })
+  return captured.value
+}
+
 async function parseResumableCandidate(args: {
   candidate: SessionFileCandidate
   platform: NodeJS.Platform
   entry: SessionParseCacheEntry | undefined
   stats?: SessionParseStats
   stateFactory: () => ResumableSessionParseState
+  sink: SessionSearchIndexSink | null
+  indexRequired: boolean
+  indexedOffset: number | null
 }): Promise<SessionParseCacheEntry> {
   const { file } = args.candidate
   const resume = args.entry?.platform === args.platform ? args.entry.resume : null
-  const canResume =
+  const parserCanResume =
     resume !== null &&
     resume !== undefined &&
     typeof file.sizeBytes === 'number' &&
     file.sizeBytes >= resume.byteOffset &&
+    sameFileIdentity(resume.identity, fileIdentity(file)) &&
     (resume.byteOffset === 0 || (await endsWithNewlineAt(file.path, resume.byteOffset)))
+  // The index can only take an append that continues from its own offset.
+  const indexInStep =
+    args.sink !== null && parserCanResume && args.indexedOffset === resume.byteOffset
+  const canResume = parserCanResume && (indexInStep || !args.indexRequired)
+  // Whole-file parses always feed the index (the bytes are read anyway); an
+  // append feeds it only when in step, otherwise the backfill re-parses later.
+  const feedIndex = args.sink !== null && (!canResume || indexInStep)
+  if (args.sink && canResume && !indexInStep) {
+    args.sink.markStale(args.candidate)
+  }
 
   // Clone before consuming: a failed read must not corrupt the cached state,
   // or the next resume would double-count the lines applied before the error.
@@ -279,15 +286,22 @@ async function parseResumableCandidate(args: {
     }
   }
 
-  const readResult = await consumeCompleteJsonlLines({
-    path: file.path,
-    start: startOffset,
-    onLine: (line) => state.consumeLine(line),
-    // Bound: the optional hooks are declared as methods, so a parser written
-    // with method syntax must not lose `this` on the way into the reader.
-    onLineBytes: state.consumeLineBytes?.bind(state),
-    shouldStop: state.shouldStop?.bind(state)
-  })
+  const read = (): Promise<JsonlReadResult> =>
+    consumeCompleteJsonlLines({
+      path: file.path,
+      start: startOffset,
+      onLine: (line) => state.consumeLine(line),
+      // Bound: the optional hooks are declared as methods, so a parser written
+      // with method syntax must not lose `this` on the way into the reader.
+      onLineBytes: state.consumeLineBytes?.bind(state),
+      shouldStop: state.shouldStop?.bind(state)
+    })
+  // Capture only when the index takes these rows: it disables the Codex
+  // byte-prefix fast path, which is exactly the cost a list-only scan must not pay.
+  const captured = feedIndex
+    ? await withSessionSearchCapture(read)
+    : { value: await read(), messages: [] }
+  const readResult = captured.value
   if (args.stats) {
     args.stats.bytesRead += readResult.bytesRead
   }
@@ -297,28 +311,33 @@ async function parseResumableCandidate(args: {
 
   // Keep parity with the one-shot parser: a final unterminated line is shown,
   // but stays out of the resumable state so the (possibly still-growing) line
-  // is re-read once complete instead of being half-counted.
+  // is re-read once complete instead of being half-counted. The index only
+  // stores complete lines, so the display-only consume must not emit rows.
   let displayState = state
   if (readResult.trailingPartialLine !== null) {
     displayState = state.clone()
-    displayState.consumeLine(readResult.trailingPartialLine)
+    withoutSessionSearchCapture(() => displayState.consumeLine(readResult.trailingPartialLine!))
+  }
+
+  const session = await displayState.finalize(args.platform)
+  if (feedIndex && args.sink) {
+    args.sink.apply({
+      candidate: args.candidate,
+      // The index stores what the complete lines say; the trailing partial line
+      // only changes the displayed session.
+      session: displayState === state ? session : await state.finalize(args.platform),
+      mode: canResume ? 'append' : 'replace',
+      messages: captured.messages,
+      previousByteOffset: startOffset,
+      byteOffset: readResult.consumedThrough
+    })
   }
 
   return {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     platform: args.platform,
-    session: await displayState.finalize(args.platform),
-    resume: { state, byteOffset: readResult.consumedThrough }
+    session,
+    resume: { state, byteOffset: readResult.consumedThrough, identity: fileIdentity(file) }
   }
-}
-
-// A resume point is only valid if it still sits just past a line break;
-// anything else means the file was rewritten, not appended. Heuristic: a
-// grown rewrite keeping '\n' at exactly this byte would slip through, but
-// agent transcripts are append-only so that trade is accepted (worst case is
-// a stale vault row until the file is next truncated or the app restarts).
-async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
-  const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan')
-  return slice.length === 1 && slice[0] === NEWLINE_BYTE
 }

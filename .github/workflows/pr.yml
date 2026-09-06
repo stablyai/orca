@@ -879,6 +879,13 @@ jobs:
           src/main/ipc/pty-codex-account-attribution.test.ts
           src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
           src/relay/windows-port-scan.win32.test.ts
+          src/main/ai-vault-search/session-search-fts5-contract.test.ts
+          src/main/ai-vault-search/session-search-schema.test.ts
+          src/main/ai-vault-search/session-search-query-regressions.test.ts
+          src/main/ai-vault-search/session-search-retention-delete.test.ts
+          src/main/ai-vault-search/session-search-refresh-lane.test.ts
+          src/main/ai-vault/session-newest-files.test.ts
+          src/main/ai-vault/session-scanner-discovery-cancellation.test.ts
 
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package

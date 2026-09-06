@@ -3,7 +3,7 @@ import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-acces
 const NEWLINE_BYTE = 0x0a
 const CARRIAGE_RETURN_BYTE = 0x0d
 
-type JsonlReadResult = {
+export type JsonlReadResult = {
   consumedThrough: number
   trailingPartialLine: string | null
   bytesRead: number

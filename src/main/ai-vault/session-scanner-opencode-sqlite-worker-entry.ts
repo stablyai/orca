@@ -1,11 +1,13 @@
 import { parentPort } from 'node:worker_threads'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 import type {
+  OpenCodeSqliteParseValue,
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
+import { withSessionSearchCapture } from './session-search-capture'
 
 // Why (#8864): OpenCode SQLite reads use synchronous node:sqlite. Running them
 // on this worker thread keeps the multi-GB-DB scan off the Electron main-process
@@ -30,15 +32,28 @@ async function handleRequest(
       })
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
-    const session = await parseOpenCodeSqliteSession({
+    return { id: request.id, ok: true, value: await parseSession(request) }
+  } catch (err) {
+    return { id: request.id, ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+// The parsers emit index rows into a capture scope, and that scope cannot span
+// threads; capture here and hand the rows back with the session.
+async function parseSession(
+  request: Extract<OpenCodeSqliteWorkerRequest, { kind: 'parse' }>
+): Promise<OpenCodeSqliteParseValue> {
+  const parse = (): Promise<AiVaultSession | null> =>
+    parseOpenCodeSqliteSession({
       dbPath: request.dbPath,
       sessionId: request.sessionId,
       platform: request.platform
     })
-    return { id: request.id, ok: true, value: session }
-  } catch (err) {
-    return { id: request.id, ok: false, error: err instanceof Error ? err.message : String(err) }
+  if (!request.capture) {
+    return { session: await parse(), messages: [] }
   }
+  const captured = await withSessionSearchCapture(parse)
+  return { session: captured.value, messages: captured.messages }
 }
 
 port.on('message', (request: OpenCodeSqliteWorkerRequest) => {

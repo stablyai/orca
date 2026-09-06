@@ -29,6 +29,7 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import { RuntimeClientSettingsController } from './runtime-client-settings'
 import { RuntimeAutomationController } from './runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from './runtime-orchestration-federation'
+import { installAiVaultSearchSettingsSource } from '../ai-vault-search/session-search-enablement'
 import { configureAiVaultSessionSources } from '../ai-vault/cached-session-list'
 import { configureHostReadableTranscriptPathSources } from '../native-chat/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-identity'
@@ -91,6 +92,11 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
   ) {
     super()
     this.store = store
+    // Why: `orca serve` never runs registerSettingsHandlers, so without this the
+    // scanner would spawn with the default (off) policy on every headless host.
+    if (store?.getSettings) {
+      installAiVaultSearchSettingsSource(() => store.getSettings())
+    }
     store?.onSettingsChanged?.((updates) => {
       if ('experimentalStructuredNativeChat' in updates) {
         this.notifyMobileSessionTabsChanged()

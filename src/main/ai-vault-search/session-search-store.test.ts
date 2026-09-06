@@ -1,0 +1,301 @@
+import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
+import {
+  registerSessionSearchIndexSink,
+  withSessionSearchIndexRequired
+} from '../ai-vault/session-search-capture'
+import { SessionSearchStore } from './session-search-store'
+import {
+  assistantRecord,
+  CLAUDE_SESSION_ID as SESSION_ID,
+  parseTranscript as parse,
+  userRecord
+} from './session-search-transcript-fixtures'
+let tempRoots: string[] = []
+let store: SessionSearchStore
+
+beforeEach(async () => {
+  resetSessionParseCacheForTests()
+  const root = await makeTempDir()
+  store = new SessionSearchStore(join(root, 'index.sqlite'), (error) => {
+    throw error
+  })
+  registerSessionSearchIndexSink(store)
+})
+
+afterEach(async () => {
+  registerSessionSearchIndexSink(null)
+  store.close()
+  await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
+  tempRoots = []
+})
+
+async function makeTempDir(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'orca-session-search-'))
+  tempRoots.push(root)
+  return root
+}
+
+describe('SessionSearchStore', () => {
+  it('indexes a transcript through the parse cache and finds it by mid-session text', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(
+      path,
+      `${[
+        userRecord(0, 'first question about the tab switcher'),
+        assistantRecord(1, [{ type: 'text', text: 'Looking at resolveTerminalPath now.' }]),
+        userRecord(2, 'the locator is flaky again'),
+        assistantRecord(3, [
+          {
+            type: 'tool_use',
+            id: 'toolu_1',
+            name: 'Bash',
+            input: { command: 'pnpm test src/tabs' }
+          }
+        ]),
+        userRecord(4, [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_1',
+            content: 'Error: strict mode violation: getByRole(button) resolved to 2 elements'
+          }
+        ]),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Fix flaky locator' })
+      ].join('\n')}\n`
+    )
+    await parse(path)
+
+    const literal = store.search({ query: 'strict mode violation getByRole' })
+    expect(literal.hits).toHaveLength(1)
+    expect(literal.hits[0]).toMatchObject({
+      agent: 'claude',
+      sessionId: SESSION_ID,
+      title: 'Fix flaky locator',
+      cwd: '/repo/app',
+      evidence: { role: 'tool' }
+    })
+    expect(literal.hits[0]?.evidence.snippet).toContain('[[strict]]')
+    expect(literal.route).toBe('phrase')
+
+    // Identifier split: a partial camelCase name still matches.
+    expect(store.search({ query: 'TerminalPath' }).hits).toHaveLength(1)
+    // Tool command indexed from the tool_use block.
+    expect(store.search({ query: 'pnpm test src/tabs' }).hits).toHaveLength(1)
+    // Conversation tier excludes tool rows but keeps prompts.
+    expect(store.search({ query: 'getByRole', tier: 'conversation' }).hits).toHaveLength(0)
+    expect(store.search({ query: 'locator flaky', tier: 'conversation' }).hits).toHaveLength(1)
+    // user, assistant, user, tool_use, tool_result
+    expect(store.coverage()).toMatchObject({ sessionsIndexed: 1, messagesIndexed: 5 })
+  })
+
+  it('appends only the new lines on an incremental parse and keeps the cursor in step', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'alpha question')}\n`)
+    await parse(path)
+    expect(store.search({ query: 'omega' }).hits).toHaveLength(0)
+
+    await appendFile(path, `${assistantRecord(1, 'omega answer')}\n`)
+    const { stats } = await parse(path)
+    expect(stats.incremental).toBe(1)
+    expect(store.search({ query: 'omega' }).hits).toHaveLength(1)
+    expect(store.search({ query: 'alpha' }).hits).toHaveLength(1)
+    expect(store.coverage().messagesIndexed).toBe(2)
+  })
+
+  it('re-indexes a rename-replaced file instead of appending onto stale rows', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'stale question')}\n`)
+    await parse(path)
+
+    const staging = join(root, 'staging.jsonl')
+    await writeFile(
+      staging,
+      `${userRecord(0, 'fresh question')}\n${assistantRecord(1, 'fresh answer')}\n`
+    )
+    await rename(staging, path)
+    await parse(path)
+
+    expect(store.search({ query: 'stale' }).hits).toHaveLength(0)
+    expect(store.search({ query: 'fresh' }).hits).toHaveLength(1)
+    expect(store.coverage().messagesIndexed).toBe(2)
+  })
+
+  it('marks a cache-known file stale in opportunistic mode and re-parses it in required mode', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'before the index existed')}\n`)
+    registerSessionSearchIndexSink(null)
+    await parse(path)
+    expect(store.coverage().sessionsIndexed).toBe(0)
+
+    // A list scan must not pay for the index: reuse the cache, queue the file.
+    registerSessionSearchIndexSink(store)
+    const opportunistic = await parse(path)
+    expect(opportunistic.stats.reused).toBe(1)
+    expect(store.coverage()).toMatchObject({ sessionsIndexed: 0, filesPending: 1 })
+
+    // The backfill lane drains the queue with a whole-file parse.
+    const stale = store.takeStale()
+    expect(stale.map((candidate) => candidate.file.path)).toEqual([path])
+    const required = await withSessionSearchIndexRequired(() => parse(path))
+    expect(required.stats.reused).toBe(0)
+    expect(store.search({ query: 'before the index existed' }).hits).toHaveLength(1)
+    expect(store.coverage().filesPending).toBe(0)
+  })
+
+  it('drops a stale mark once the backfill indexes the file', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'queued behind the backfill')}\n`)
+    registerSessionSearchIndexSink(null)
+    await parse(path)
+    registerSessionSearchIndexSink(store)
+    await parse(path)
+    expect(store.coverage().filesPending).toBe(1)
+
+    await withSessionSearchIndexRequired(() => parse(path))
+    expect(store.coverage()).toMatchObject({ sessionsIndexed: 1, filesPending: 0 })
+    expect(store.takeStale()).toEqual([])
+  })
+
+  it('repairs a typo from the index vocabulary', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(
+      path,
+      `${userRecord(0, 'the watcher coalesces events')}\n${assistantRecord(1, 'watcher coalesces them')}\n`
+    )
+    await parse(path)
+    const result = store.search({ query: 'watcher coalesces' })
+    expect(result.hits).toHaveLength(1)
+    const typo = store.search({ query: 'watcher coalesces'.replace('coalesces', 'coalesecs') })
+    expect(typo.hits).toHaveLength(1)
+    expect(typo.route).toMatch(/^typo\+/)
+    expect(typo.repairedTerms).toContain('coalesces')
+    // The snippet highlights the term that retrieved the row, not the typo.
+    expect(typo.hits[0]?.evidence.snippet).toContain('[[coalesces]]')
+  })
+
+  it('ranks by newest when asked and filters by agent and scope', async () => {
+    const root = await makeTempDir()
+    const older = join(root, 'aaaaaaaa-0000-4000-8000-000000000001.jsonl')
+    const newer = join(root, 'aaaaaaaa-0000-4000-8000-000000000002.jsonl')
+    await writeFile(
+      older,
+      `${userRecord(0, 'shared phrase one', 'aaaaaaaa-0000-4000-8000-000000000001')}\n`
+    )
+    await writeFile(
+      newer,
+      `${userRecord(500, 'shared phrase two', 'aaaaaaaa-0000-4000-8000-000000000002')}\n`
+    )
+    await parse(older)
+    await parse(newer)
+    const newest = store.search({ query: 'shared phrase', sort: 'newest' })
+    expect(newest.hits.map((hit) => hit.sessionId)).toEqual([
+      'aaaaaaaa-0000-4000-8000-000000000002',
+      'aaaaaaaa-0000-4000-8000-000000000001'
+    ])
+    expect(store.search({ query: 'shared phrase', agents: ['codex'] }).hits).toHaveLength(0)
+    expect(store.search({ query: 'shared phrase', scopePaths: ['/repo'] }).hits).toHaveLength(2)
+    expect(store.search({ query: 'shared phrase', scopePaths: ['/other'] }).hits).toHaveLength(0)
+    // `_` is a LIKE wildcard; an escaped scope must not match `/repo` through `/r_po`.
+    expect(store.search({ query: 'shared phrase', scopePaths: ['/r_po'] }).hits).toHaveLength(0)
+    expect(store.search({ query: 'shared phrase', scopePaths: ['\\repo\\'] }).hits).toHaveLength(2)
+    // A non-positive limit from an unvalidated caller is clamped, not passed to SQL.
+    expect(store.search({ query: 'shared phrase', limit: -1 }).hits).toHaveLength(1)
+    expect(store.search({ query: 'shared phrase', limit: 0 }).hits).toHaveLength(1)
+  })
+
+  it('keeps a provider with discovered files and no indexed sessions in coverage', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'indexed claude question')}\n`)
+    await parse(path)
+
+    store.setDiscovered('claude', 1, 0)
+    store.setDiscovered('codex', 7, 2)
+    store.recordParseFailure('codex')
+    store.recordParseFailure('codex')
+    store.setBackfillState('complete')
+
+    const coverage = store.coverage()
+    expect(coverage.providers).toEqual([
+      { agent: 'claude', sessionsIndexed: 1, messagesIndexed: 1, filesDiscovered: 1 },
+      {
+        agent: 'codex',
+        sessionsIndexed: 0,
+        messagesIndexed: 0,
+        filesDiscovered: 7,
+        parseFailures: 2,
+        scanIssues: 2
+      }
+    ])
+    // The SQL GROUP BY has no codex row at all; silence would hide the failure.
+    expect(coverage.sessionsIndexed).toBe(1)
+  })
+
+  it('does not choke on FTS5 syntax in user text', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'run cli.mjs with foo-bar and C++')}\n`)
+    await parse(path)
+    for (const query of ['cli.mjs', 'foo-bar', 'C++', '"quoted phrase"', 'AND OR NOT']) {
+      expect(() => store.search({ query })).not.toThrow()
+    }
+    expect(store.search({ query: 'cli.mjs' }).hits).toHaveLength(1)
+    expect(store.search({ query: 'foo-bar' }).hits).toHaveLength(1)
+  })
+
+  it('keeps C++ a token of its own, apart from the letter C', async () => {
+    const root = await makeTempDir()
+    const cpp = join(root, 'aaaaaaaa-0000-4000-8000-0000000000c1.jsonl')
+    const plainC = join(root, 'aaaaaaaa-0000-4000-8000-0000000000c2.jsonl')
+    await writeFile(
+      cpp,
+      `${userRecord(0, 'port the parser to C++ today', 'aaaaaaaa-0000-4000-8000-0000000000c1')}\n`
+    )
+    await writeFile(
+      plainC,
+      `${userRecord(0, 'port the parser to plain C today', 'aaaaaaaa-0000-4000-8000-0000000000c2')}\n`
+    )
+    await parse(cpp)
+    await parse(plainC)
+    const hits = store.search({ query: 'C++' }).hits
+    expect(hits.map((hit) => hit.sessionId)).toEqual(['aaaaaaaa-0000-4000-8000-0000000000c1'])
+  })
+
+  it('hands freed pages back to the file after a purge', async () => {
+    const root = await makeTempDir()
+    const filler = 'x'.repeat(4000)
+    for (let i = 0; i < 40; i += 1) {
+      const id = `aaaaaaaa-0000-4000-8000-0000000000${i.toString(16).padStart(2, '0')}`
+      const path = join(root, `${id}.jsonl`)
+      await writeFile(path, `${userRecord(0, `padding ${filler}`, id)}\n`)
+      await parse(path)
+    }
+    const pageCount = (): number => Number(store.db.pragma('page_count', { simple: true }))
+    const before = pageCount()
+
+    await store.purgeOlderThan(Date.now() + 60_000)
+
+    expect(store.coverage().sessionsIndexed).toBe(0)
+    expect(Number(store.db.pragma('freelist_count', { simple: true }))).toBe(0)
+    expect(pageCount()).toBeLessThan(before)
+  })
+
+  it('warms once and survives a close mid-way', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'warm the pages')}\n`)
+    await parse(path)
+    const first = store.warm()
+    expect(store.warm()).toBe(first)
+    await expect(first).resolves.toBeUndefined()
+  })
+})

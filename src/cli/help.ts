@@ -1,3 +1,4 @@
+import { formatSearchFlagHelp } from './agent-session-search-help'
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
@@ -73,9 +74,10 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
-  const skillsHelp = formatSkillsCommandFlagHelp(command, flag)
-  if (skillsHelp) {
-    return skillsHelp
+  const tableHelp =
+    formatSearchFlagHelp(command, flag) ?? formatSkillsCommandFlagHelp(command, flag)
+  if (tableHelp) {
+    return tableHelp
   }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'

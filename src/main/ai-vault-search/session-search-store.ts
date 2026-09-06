@@ -1,0 +1,308 @@
+import { deleteExpiredSearchFiles } from './session-search-retention-delete'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
+import { aiVaultSearchHistoryCutoffMs } from '../../shared/ai-vault-search-settings'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
+import type SyncDatabase from '../sqlite/sync-database'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchProviderCoverage,
+  AiVaultSearchResult
+} from '../../shared/ai-vault-search-types'
+import type {
+  SessionSearchFileIdentity,
+  SessionSearchIndexedFile,
+  SessionSearchIndexSink,
+  SessionSearchIndexUpdate
+} from '../ai-vault/session-search-capture'
+import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import { redactSessionSearchText } from './session-search-redaction'
+import { SessionSearchIndexWriter } from './session-search-index-writer'
+import { SessionSearchQuery } from './session-search-query'
+import { openSessionSearchDatabase } from './session-search-schema'
+
+// Why: the query log keeps only the surface form so the eval set can be rebuilt
+// from real usage (the shoot-out's highest-value follow-up); bounded ring.
+const SEARCH_LOG_LIMIT = 5000
+// Why: a 2,000-page vacuum step is ~55 ms on a 4 GB index; a 50k-row read is ~48 ms.
+const COMPACT_PAGES_PER_STEP = 2000
+const WARM_ROWS_PER_STEP = 50_000
+
+export type SessionSearchBackfillState = 'idle' | 'running' | 'complete'
+
+type ProviderDiscovery = { files: number; parseFailures: number; scanIssues: number }
+
+/** Owns the index database: the scanner writes through it, search reads from it. */
+export class SessionSearchStore implements SessionSearchIndexSink {
+  /** Exposed for tests that assert on file-level state (page counts). */
+  readonly db: SyncDatabase
+  private readonly writer: SessionSearchIndexWriter
+  private readonly query: SessionSearchQuery
+  private backfill: SessionSearchBackfillState = 'idle'
+  private closed = false
+  private historyDays: number | null = null
+  private providerCounts: { agent: AiVaultAgent; sessions: number; messages: number }[] | null =
+    null
+  private warmed: Promise<void> | null = null
+  private lastIndexedAt: string | null = null
+  private applyFailures = 0
+  private readonly stale = new Map<string, SessionFileCandidate>()
+  private readonly discovery = new Map<AiVaultAgent, ProviderDiscovery>()
+
+  constructor(
+    path: string,
+    private readonly onError: (error: unknown) => void = (error) =>
+      console.warn(
+        '[ai-vault-search] index write failed:',
+        error instanceof Error ? error.name : 'IndexError'
+      )
+  ) {
+    this.db = openSessionSearchDatabase(path)
+    this.writer = new SessionSearchIndexWriter(this.db)
+    this.query = new SessionSearchQuery(this.db)
+  }
+
+  indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
+    try {
+      return this.writer.indexedFile(path, identity)
+    } catch (error) {
+      this.onError(error)
+      return null
+    }
+  }
+
+  setHistoryDays(days: number | null): void {
+    this.historyDays = days
+    for (const [path, candidate] of this.stale) {
+      if (!this.acceptsCandidate(candidate)) {
+        this.stale.delete(path)
+      }
+    }
+  }
+
+  acceptsCandidate(candidate: SessionFileCandidate): boolean {
+    const cutoff = aiVaultSearchHistoryCutoffMs(this.historyDays)
+    return !this.closed && (cutoff === null || candidate.file.mtimeMs >= cutoff)
+  }
+
+  updateMetadata(candidate: SessionFileCandidate, session: AiVaultSession): void {
+    if (!this.acceptsCandidate(candidate)) {
+      return
+    }
+    try {
+      this.writer.updateMetadata(candidate.file.path, session)
+    } catch (error) {
+      this.onError(error)
+    }
+  }
+
+  apply(update: SessionSearchIndexUpdate): void {
+    if (!this.acceptsCandidate(update.candidate)) {
+      return
+    }
+    this.providerCounts = null
+    try {
+      this.writer.apply(update)
+      // Why: list scans queue every file the backfill has not reached yet; once
+      // it lands, a later search must not re-parse the whole queue (8 s live).
+      this.stale.delete(update.candidate.file.path)
+      this.lastIndexedAt = new Date().toISOString()
+    } catch (error) {
+      this.applyFailures += 1
+      this.onError(error)
+    }
+  }
+
+  markStale(candidate: SessionFileCandidate): void {
+    if (this.acceptsCandidate(candidate)) {
+      this.stale.set(candidate.file.path, candidate)
+    }
+  }
+
+  /** Hands the stale set to the backfill lane and clears it. */
+  takeStale(): SessionFileCandidate[] {
+    const candidates = [...this.stale.values()]
+    this.stale.clear()
+    return candidates
+  }
+
+  get staleCount(): number {
+    return this.stale.size
+  }
+
+  removeFile(path: string): void {
+    this.providerCounts = null
+    this.stale.delete(path)
+    try {
+      this.writer.removeFile(path)
+    } catch (error) {
+      this.onError(error)
+    }
+  }
+
+  /** Hides expired sessions immediately, then removes their rows in resumable batches. */
+  async purgeOlderThan(cutoffMs: number | null, signal?: AbortSignal): Promise<void> {
+    try {
+      await deleteExpiredSearchFiles(
+        this.db,
+        cutoffMs,
+        () => this.closed || signal?.aborted === true,
+        () => {
+          this.providerCounts = null
+        }
+      )
+      if (!this.closed && !signal?.aborted) {
+        await this.compact(signal)
+      }
+    } catch (error) {
+      if (!this.closed) {
+        this.onError(error)
+      }
+    }
+  }
+
+  private async compact(signal?: AbortSignal): Promise<void> {
+    try {
+      let freed = Number(this.db.pragma('freelist_count', { simple: true }))
+      while (!this.closed && !signal?.aborted && freed > 0) {
+        this.db.pragma(`incremental_vacuum(${COMPACT_PAGES_PER_STEP})`)
+        const remaining = Number(this.db.pragma('freelist_count', { simple: true }))
+        // Why: without auto_vacuum the step is a no-op; never spin on it.
+        if (remaining >= freed) {
+          return
+        }
+        freed = remaining
+        await yieldToEventLoop()
+      }
+    } catch (error) {
+      this.onError(error)
+    }
+  }
+
+  /**
+   * Reads the messages table through in slices so its pages sit in the OS
+   * cache before the first query joins against it. Measured on a 4 GB index:
+   * the first query after a cold start drops from ~1.3 s to ~0.45 s, and each
+   * slice holds the connection for under 50 ms.
+   */
+  warm(): Promise<void> {
+    this.warmed ??= this.readMessagesThrough().catch((error) => this.onError(error))
+    return this.warmed
+  }
+
+  private async readMessagesThrough(): Promise<void> {
+    const max = (
+      this.db.prepare('SELECT max(id) AS id FROM messages').get() as { id: number | null }
+    ).id
+    const touch = this.db.prepare(
+      'SELECT count(*) FROM messages WHERE id BETWEEN ? AND ? AND role IS NOT NULL'
+    )
+    for (let low = 1; max !== null && low <= max; low += WARM_ROWS_PER_STEP) {
+      if (this.closed) {
+        return
+      }
+      touch.get(low, low + WARM_ROWS_PER_STEP - 1)
+      await yieldToEventLoop()
+    }
+  }
+
+  setBackfillState(state: SessionSearchBackfillState): void {
+    this.backfill = state
+  }
+
+  /** What a full discovery pass saw, so a provider that indexed nothing is still visible. */
+  setDiscovered(agent: AiVaultAgent, files: number, scanIssues: number): void {
+    const entry = this.providerDiscovery(agent)
+    entry.files = files
+    entry.scanIssues = scanIssues
+  }
+
+  recordParseFailure(agent: AiVaultAgent): void {
+    this.providerDiscovery(agent).parseFailures += 1
+  }
+
+  search(args: AiVaultSearchArgs): AiVaultSearchResult {
+    const startedAt = performance.now()
+    const execution = this.query.execute(args, aiVaultSearchHistoryCutoffMs(this.historyDays))
+    const durationMs = performance.now() - startedAt
+    this.logQuery(args.query, execution.route, execution.hits.length, durationMs)
+    return {
+      hits: execution.hits,
+      route: execution.route,
+      ...(execution.repairedTerms ? { repairedTerms: execution.repairedTerms } : {}),
+      durationMs,
+      coverage: this.coverage()
+    }
+  }
+
+  coverage(): AiVaultSearchCoverage {
+    const providers = (this.providerCounts ??= this.db
+      .prepare(
+        `SELECT s.agent AS agent, COUNT(DISTINCT s.id) AS sessions, COUNT(m.id) AS messages
+         FROM sessions s LEFT JOIN messages m ON m.session_row_id = s.id
+         WHERE s.id NOT IN (SELECT session_row_id FROM search_pending_deletes)
+         GROUP BY s.agent ORDER BY s.agent`
+      )
+      .all() as { agent: AiVaultAgent; sessions: number; messages: number }[])
+    const indexed = new Map(providers.map((row) => [row.agent, row]))
+    const agents = [...new Set([...indexed.keys(), ...this.discovery.keys()])].sort()
+    const byProvider: AiVaultSearchProviderCoverage[] = agents.map((agent) => {
+      const row = indexed.get(agent)
+      const seen = this.discovery.get(agent)
+      return {
+        agent,
+        sessionsIndexed: row?.sessions ?? 0,
+        messagesIndexed: row?.messages ?? 0,
+        ...(seen && seen.files > 0 ? { filesDiscovered: seen.files } : {}),
+        ...(seen && seen.parseFailures > 0 ? { parseFailures: seen.parseFailures } : {}),
+        ...(seen && seen.scanIssues > 0 ? { scanIssues: seen.scanIssues } : {})
+      }
+    })
+    return {
+      enabled: true,
+      sessionsIndexed: byProvider.reduce((sum, row) => sum + row.sessionsIndexed, 0),
+      messagesIndexed: byProvider.reduce((sum, row) => sum + row.messagesIndexed, 0),
+      providers: byProvider,
+      backfill: this.backfill,
+      filesPending: this.stale.size,
+      lastIndexedAt: this.lastIndexedAt
+    }
+  }
+
+  get failures(): number {
+    return this.applyFailures
+  }
+
+  close(): void {
+    this.closed = true
+    this.db.close()
+  }
+
+  private providerDiscovery(agent: AiVaultAgent): ProviderDiscovery {
+    const existing = this.discovery.get(agent)
+    if (existing) {
+      return existing
+    }
+    const created: ProviderDiscovery = { files: 0, parseFailures: 0, scanIssues: 0 }
+    this.discovery.set(agent, created)
+    return created
+  }
+
+  private logQuery(query: string, route: string, hits: number, durationMs: number): void {
+    try {
+      this.db
+        .prepare(
+          'INSERT INTO search_log(ts, query, route, hits, duration_ms) VALUES (?, ?, ?, ?, ?)'
+        )
+        .run(new Date().toISOString(), redactSessionSearchText(query), route, hits, durationMs)
+      this.db
+        .prepare(
+          `DELETE FROM search_log WHERE id <= (
+             SELECT id FROM search_log ORDER BY id DESC LIMIT 1 OFFSET ?)`
+        )
+        .run(SEARCH_LOG_LIMIT)
+    } catch (error) {
+      this.onError(error)
+    }
+  }
+}

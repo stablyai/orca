@@ -18,6 +18,7 @@ export function opencodeDiscoveries(
   return storageDirs.map(async (storageDir, index) =>
     discoverOpenCodeSessions({
       storageDir,
+      signal: options.signal,
       dbPaths: await opencodeDbPathsForSource(options, wslHomeDirs, storageDir, index, issues),
       limitPerAgent: limit,
       issues

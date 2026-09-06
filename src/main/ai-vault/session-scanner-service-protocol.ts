@@ -5,23 +5,45 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import type { ReadAiVaultFirstUserPromptArgs } from './session-first-user-prompt-read'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchResult
+} from '../../shared/ai-vault-search-types'
+import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
 
 export type AiVaultServiceLane = 'cache' | 'interactive'
-export type AiVaultServiceOperation = 'scan' | 'titles' | 'subagents' | 'firstPrompt'
+export type AiVaultServiceOperation =
+  | 'scan'
+  | 'titles'
+  | 'subagents'
+  | 'firstPrompt'
+  | 'search'
+  | 'searchCoverage'
+  | 'searchConfigure'
 
 export type AiVaultServiceSubagentRequest = {
   agent: 'claude' | 'omp'
   parentFilePath: string
 }
 
+export type AiVaultSessionSearchInit = { databasePath: string } & AiVaultSearchSettings
+
 export type AiVaultServiceInit = {
   type: 'init'
   protocol: typeof AI_VAULT_SERVICE_PROTOCOL_VERSION
   sessionParseCache: SessionParseCachePersistenceOptions | null
+  sessionSearch?: AiVaultSessionSearchInit | null
+}
+
+/** Search requests carry the scan roots so the child's backfill sees what list scans see. */
+export type AiVaultServiceSearchRequest = {
+  args: AiVaultSearchArgs
+  roots: Omit<AiVaultWorkerScanOptions, 'limit' | 'unlimited' | 'scopePaths'>
 }
 
 export type AiVaultServiceRequestBody =
@@ -41,6 +63,23 @@ export type AiVaultServiceRequestBody =
       operation: 'firstPrompt'
       request: ReadAiVaultFirstUserPromptArgs
     }
+  | { type: 'request'; operation: 'search'; request: AiVaultServiceSearchRequest }
+  | {
+      type: 'request'
+      operation: 'searchCoverage'
+      request: Pick<AiVaultServiceSearchRequest, 'roots'>
+    }
+  | {
+      type: 'request'
+      operation: 'searchConfigure'
+      request: AiVaultServiceSearchConfigureRequest
+    }
+
+/** Applies a consent/retention change to the running child; `clearIndex` deletes the database first. */
+export type AiVaultServiceSearchConfigureRequest = {
+  init: AiVaultSessionSearchInit
+  clearIndex?: boolean
+} & Pick<AiVaultServiceSearchRequest, 'roots'>
 
 export type AiVaultServiceRequest = AiVaultServiceRequestBody & { id: number }
 
@@ -56,6 +95,9 @@ export type AiVaultServiceResultValue =
   | { operation: 'titles'; value: AiVaultSessionTitlesResult }
   | { operation: 'subagents'; value: AiVaultSubagentListResult }
   | { operation: 'firstPrompt'; value: { prompt: string | null } }
+  | { operation: 'search'; value: AiVaultSearchResult }
+  | { operation: 'searchCoverage'; value: AiVaultSearchCoverage }
+  | { operation: 'searchConfigure'; value: AiVaultSearchCoverage }
 
 export type AiVaultServiceChildMessage =
   | {
@@ -68,7 +110,7 @@ export type AiVaultServiceChildMessage =
   | { type: 'invalidated'; generation: number }
 
 export function aiVaultServiceLane(operation: AiVaultServiceOperation): AiVaultServiceLane {
-  return operation === 'subagents' || operation === 'firstPrompt' ? 'interactive' : 'cache'
+  return operation === 'scan' || operation === 'titles' ? 'cache' : 'interactive'
 }
 
 export function isAiVaultServiceRequest(value: unknown): value is AiVaultServiceRequest {
@@ -82,7 +124,10 @@ export function isAiVaultServiceRequest(value: unknown): value is AiVaultService
     (message.operation === 'scan' ||
       message.operation === 'titles' ||
       message.operation === 'subagents' ||
-      message.operation === 'firstPrompt')
+      message.operation === 'firstPrompt' ||
+      message.operation === 'search' ||
+      message.operation === 'searchCoverage' ||
+      message.operation === 'searchConfigure')
   )
 }
 

@@ -1,4 +1,5 @@
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
+import { getAgentSessionHistoryPaneSearchEntries } from '@/components/settings/agent-session-history-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
@@ -15,6 +16,7 @@ import {
   Bug,
   Cable,
   FlaskConical,
+  History,
   Lock,
   Server,
   ShieldCheck,
@@ -73,6 +75,24 @@ export function buildRemoteSettingsSections(
             ),
             icon: ShieldCheck,
             searchEntries: getDeveloperPermissionsPaneSearchEntries(),
+            group: 'security'
+          }
+        ]
+      : []),
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'agent-session-history',
+            title: translate(
+              'auto.hooks.useSettingsNavigationMetadata.agentSessionHistoryTitle',
+              'Agent Session History'
+            ),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.agentSessionHistoryDescription',
+              'Local index that lets you search inside past agent conversations.'
+            ),
+            icon: History,
+            searchEntries: getAgentSessionHistoryPaneSearchEntries(),
             group: 'security'
           }
         ]

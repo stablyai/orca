@@ -1,3 +1,4 @@
+import { AgentSessionHistoryPane } from './AgentSessionHistoryPane'
 import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
@@ -74,6 +75,30 @@ export function renderDeveloperPermissionsSettingsSection(
     >
       {view.isSectionMounted('developer-permissions') ? (
         <DeveloperPermissionsPane highlightedSettingId={model.highlightedSettingsTargetId} />
+      ) : null}
+    </SettingsSection>
+  ) : null
+}
+
+export function renderAgentSessionHistorySettingsSection(
+  context: SettingsRenderContext
+): React.JSX.Element | null {
+  const { model, navigation, view } = context
+  return model.showDesktopOnlySettings ? (
+    <SettingsSection
+      id="agent-session-history"
+      title={translate(
+        'auto.components.settings.Settings.agentSessionHistoryTitle',
+        'Agent Session History'
+      )}
+      description={translate(
+        'auto.components.settings.Settings.agentSessionHistoryDescription',
+        'Local index that lets you search inside past agent conversations.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('agent-session-history')}
+    >
+      {view.isSectionMounted('agent-session-history') ? (
+        <AgentSessionHistoryPane settings={model.settings} updateSettings={model.updateSettings} />
       ) : null}
     </SettingsSection>
   ) : null

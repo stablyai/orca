@@ -2,6 +2,15 @@ import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-acces
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
+import {
+  applyCodexStateThreadFallback,
+  readCodexStateThreadMetadata,
+  type CodexStateThreadReader
+} from './session-scanner-codex-state-threads'
+import {
+  extractCodexSessionMetadataTitle,
+  isCodexWorkerSession
+} from './session-scanner-codex-session-meta'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   cloneSessionAccumulator,
@@ -15,6 +24,7 @@ import {
   consumeCodexLegacyEventMessage,
   consumeCodexResponseMessage
 } from './session-scanner-codex-message-records'
+import { consumeCodexTokenCount } from './session-scanner-codex-token-count'
 import type {
   CodexUsageSnapshot,
   FileWithMtime,
@@ -23,18 +33,16 @@ import type {
   SessionAccumulator
 } from './session-scanner-types'
 import {
-  addCodexUsage,
   asRecord,
   extractGitBranch,
   extractModel,
   extractString,
-  normalizeCodexUsage,
-  normalizeTitleText,
-  parseJsonObject,
-  subtractCodexUsage
+  parseJsonObject
 } from './session-scanner-values'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
+import { captureCodexToolRecord } from './session-search-codex-tool-records'
+import { isSessionSearchCaptureActive } from './session-search-capture'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
@@ -53,7 +61,8 @@ export async function parseCodexSessionFile(
     platform,
     codexHome,
     executionHostId,
-    titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+    titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId),
+    stateThreadReader: (threadId) => readCodexStateThreadMetadata(codexHome, threadId)
   })
 }
 
@@ -167,6 +176,8 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
+  captureCodexToolRecord(record.type, payload, record.timestamp, state.historyMode)
+
   if (record.type === 'response_item' && payload.type === 'message') {
     if (state.historyMode === 'paginated') {
       return
@@ -195,32 +206,8 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
-  if (payload.type !== 'token_count') {
-    return
-  }
-
-  const info = asRecord(payload.info)
-  if (!info) {
-    return
-  }
-  const totalUsage = normalizeCodexUsage(info.total_token_usage)
-  const lastUsage = normalizeCodexUsage(info.last_token_usage)
-  let delta: CodexUsageSnapshot | null = null
-  if (totalUsage) {
-    delta = subtractCodexUsage(totalUsage, state.previousTotals)
-    state.previousTotals = totalUsage
-  } else if (lastUsage) {
-    delta = lastUsage
-    state.previousTotals = state.previousTotals
-      ? addCodexUsage(state.previousTotals, lastUsage)
-      : lastUsage
-  }
-  if (delta) {
-    accumulator.totalTokens += delta.totalTokens
-  }
-  const model = extractModel(payload)
-  if (model) {
-    accumulator.model = model
+  if (payload.type === 'token_count') {
+    state.previousTotals = consumeCodexTokenCount(accumulator, payload, state.previousTotals)
   }
 }
 
@@ -230,6 +217,7 @@ async function finalizeCodexParseState(
   args: {
     codexHome: string | null
     titleReader?: (sessionId: string) => Promise<string | null>
+    stateThreadReader?: CodexStateThreadReader
     executionHostId?: ExecutionHostId
     executionHostPlatform?: NodeJS.Platform | null
   }
@@ -248,6 +236,7 @@ async function finalizeCodexParseState(
       snapshot.accumulator.title = indexedTitle
     }
   }
+  await applyCodexStateThreadFallback(snapshot.accumulator, args.stateThreadReader)
   return finalizeSession(snapshot.accumulator, platform, {
     codexHome: args.codexHome,
     executionHostId: args.executionHostId,
@@ -259,20 +248,27 @@ export function createCodexSessionResumeState(
   file: FileWithMtime,
   codexHome: string | null
 ): ResumableSessionParseState {
-  return codexResumeStateFromParseState(createCodexParseState(file), codexHome, (sessionId) =>
-    readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+  return codexResumeStateFromParseState(
+    createCodexParseState(file),
+    codexHome,
+    (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId),
+    (threadId) => readCodexStateThreadMetadata(codexHome, threadId)
   )
 }
 
 function codexResumeStateFromParseState(
   state: CodexSessionParseState,
   codexHome: string | null,
-  titleReader: (sessionId: string) => Promise<string | null>
+  titleReader: (sessionId: string) => Promise<string | null>,
+  stateThreadReader: CodexStateThreadReader
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeCodexRecordLine(state, line),
     consumeLineBytes: (line) => {
-      const timelineOnlyRecord = readCodexTimelineOnlyRecord(line)
+      // The prefix fast path skips exactly the tool records the search index wants.
+      const timelineOnlyRecord = isSessionSearchCaptureActive()
+        ? null
+        : readCodexTimelineOnlyRecord(line)
       if (timelineOnlyRecord) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {
@@ -281,12 +277,22 @@ function codexResumeStateFromParseState(
     },
     shouldStop: () => state.rejectedWorkerSession,
     clone: () =>
-      codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
+      codexResumeStateFromParseState(
+        cloneCodexParseState(state),
+        codexHome,
+        titleReader,
+        stateThreadReader
+      ),
     touchFile: (file) => {
       state.accumulator.modifiedAt = file.modifiedAt
     },
     finalize: (platform, options?: ResumableParseFinalizeOptions) =>
-      finalizeCodexParseState(state, platform, { codexHome, titleReader, ...options })
+      finalizeCodexParseState(state, platform, {
+        codexHome,
+        titleReader,
+        stateThreadReader,
+        ...options
+      })
   }
 }
 
@@ -298,6 +304,7 @@ async function parseCodexSessionLines(args: {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
   titleReader?: (sessionId: string) => Promise<string | null>
+  stateThreadReader?: CodexStateThreadReader
 }): Promise<AiVaultSession | null> {
   const state = createCodexParseState(args.file)
   for await (const line of args.lines) {
@@ -310,25 +317,8 @@ async function parseCodexSessionLines(args: {
   return finalizeCodexParseState(state, args.platform, {
     codexHome: args.codexHome,
     titleReader: args.titleReader,
+    stateThreadReader: args.stateThreadReader,
     executionHostId: args.executionHostId,
     executionHostPlatform: args.executionHostPlatform
   })
-}
-
-function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
-  const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
-  if (threadSource) {
-    return threadSource.toLowerCase() !== 'user'
-  }
-
-  const source = asRecord(payload.source)
-  return Boolean(asRecord(source?.subagent))
-}
-
-function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): string | null {
-  return (
-    normalizeTitleText(extractString(payload.title) ?? '') ??
-    normalizeTitleText(extractString(payload.thread_name) ?? '') ??
-    normalizeTitleText(extractString(payload.threadName) ?? '')
-  )
 }
