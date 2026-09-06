@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
-import type { OrchestrationRpcState } from './orchestration-rpc-test-harness'
+import { createOrchestrationRpcHarness } from './orchestration/rpc-test-harness'
+import type { OrchestrationRpcState } from './orchestration/rpc-test-harness'
 
 const released: string[] = []
 

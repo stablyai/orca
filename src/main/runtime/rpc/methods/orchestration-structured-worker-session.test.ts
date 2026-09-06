@@ -16,7 +16,7 @@ const {
   sendStructuredWorkerPreamble,
   structuredWorkerHoldId
 } = await import('./orchestration-structured-worker-session')
-const { isUnknownWorkerStartOutcome } = await import('./orchestration-worker-topology')
+const { isUnknownWorkerStartOutcome } = await import('./orchestration/worker/worker-topology')
 const { structuredWorkerIdentities } = await import('../../structured-worker-identity')
 const { structuredWorkerChildIdentityEnv } =
   await import('../../structured-worker-child-identity-env')

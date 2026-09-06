@@ -22,7 +22,7 @@ import {
 } from '../../structured-worker-identity'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { readStructuredWorkerOutput } from './orchestration-structured-worker-lifecycle'
-import { inspectWorkerTerminal } from './orchestration-worker-observation'
+import { inspectWorkerTerminal } from './orchestration/worker/worker-observation'
 
 const WORKTREE = 'repo::wt'
 const STRUCTURED_HANDLE = 'structworker_worker'
@@ -30,7 +30,7 @@ const TERMINAL_HANDLE = 'term_worker'
 
 const structuredPreambles: string[] = []
 
-vi.mock('./orchestration-worker-topology', async (importOriginal) => ({
+vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createStructuredWorkerSessionForWorktree: async (args: { effects: unknown[] }) => {
     args.effects.push({ kind: 'terminal', role: 'agent', action: 'created' })

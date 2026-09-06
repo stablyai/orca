@@ -19,13 +19,13 @@ const createStructuredWorkerSessionForWorktree = vi.fn(
 )
 const createExistingWorktreeWorkerTerminal = vi.fn(async () => ({ handle: TERMINAL_HANDLE }))
 
-vi.mock('./orchestration-worker-topology', async (importOriginal) => ({
+vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createStructuredWorkerSessionForWorktree: (args: never) =>
     createStructuredWorkerSessionForWorktree(args),
   createExistingWorktreeWorkerTerminal: () => createExistingWorktreeWorkerTerminal()
 }))
-vi.mock('./orchestration-federated-worker-start', () => ({
+vi.mock('./orchestration/federation/federated-worker-start', () => ({
   startFederatedWorker: async () => ({ state: 'ready', dispatchId: 'ctx_remote' })
 }))
 vi.mock('./orchestration-structured-worker-session', async (importOriginal) => ({

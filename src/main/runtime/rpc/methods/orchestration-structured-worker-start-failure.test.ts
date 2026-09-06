@@ -26,29 +26,29 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
     throw new Error('The dispatch preamble was rejected: no capacity')
   }
 }))
-vi.mock('./orchestration-worker-start-validation', () => ({
+vi.mock('./orchestration/worker/worker-start-validation', () => ({
   prepareLocalWorkerStart: () => ({
     agent: 'claude',
     launch: { receipt: { requested: null, effective: null }, preferences: undefined }
   })
 }))
-vi.mock('./orchestration-worker-setup-gate', () => ({
+vi.mock('./orchestration/worker/worker-setup-gate', () => ({
   persistGatedSetupSpawnFailure: () => false,
   persistWorkerReadinessStage: () => {},
   persistWorkerSetupWaitOutcome: () => {}
 }))
-vi.mock('./orchestration-worker-start-receipt', () => ({
+vi.mock('./orchestration/worker/worker-start-receipt', () => ({
   failWorkerStartWithReceipt: (args: { failedStage: string }) => ({
     state: 'failed',
     stage: args.failedStage
   })
 }))
-vi.mock('./orchestration-dispatch-creator', () => ({
+vi.mock('./orchestration/runs/dispatch-creator', () => ({
   resolveDispatchCreator: () => ({ kind: 'terminal', handle: 'term_c' })
 }))
 vi.mock('../../orchestration/preamble', () => ({ buildDispatchPreamble: () => 'preamble' }))
 
-const { startLocalWorker } = await import('./orchestration-local-worker-start')
+const { startLocalWorker } = await import('./orchestration/worker/local-worker-start')
 
 const WORKTREE = 'wt_1'
 
@@ -95,13 +95,20 @@ function fakes() {
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     getOrchestrationDispatchAuthority: () => ({
       paneKey: 'pane',
-      processIncarnation: 'structured:x'
+      processIncarnation: 'structured:x',
+      hostScope: { kind: 'local', hostId: 'local' }
     }),
     forgetStructuredSessionMail: vi.fn(),
+    validateOrchestrationAgentLauncher: vi.fn(),
+    getTerminalProcessIncarnation: vi.fn(() => 'inc_1'),
+    getTerminalPaneKey: vi.fn(() => 'pane_1'),
     retireStructuredAgentSessionTabFromSnapshot
   } as unknown as OrcaRuntimeService
   const db = {
-    createStartingWorkerDispatch: () => ({ dispatch: { id: 'd_fail', depth: 0 } }),
+    createStartingWorkerDispatch: () => ({
+      dispatch: { id: 'd_fail', depth: 0 },
+      task: { id: 't1', spec: 'do the thing' }
+    }),
     recordWorkerStage: () => {},
     prepareStartingWorkerAuthority: () => 'capability'
   } as unknown as OrchestrationDb
@@ -118,7 +125,7 @@ describe('a structured worker-start that fails after the session exists', () => 
     const { runtime, db, retireStructuredAgentSessionTabFromSnapshot } = fakes()
 
     const receipt = await startLocalWorker({
-      params: { from: 'term_c' } as never,
+      params: { from: 'term_c', timeoutMs: 1_000, agent: 'claude' } as never,
       mode: {
         mode: 'structured',
         preferred: 'structured',
@@ -127,10 +134,10 @@ describe('a structured worker-start that fails after the session exists', () => 
       } as const,
       runtime,
       db,
-      run: { id: 'run_1' },
-      task: { id: 't1', spec: 'do the thing' },
-      readinessTimeoutMs: 1_000,
-      orchestrationMutation: undefined as never
+      run: { id: 'run_1' } as never,
+      existingTask: { id: 't1', spec: 'do the thing' } as never,
+      coordinatorPane: null,
+      orchestrationMutation: undefined
     })
 
     expect(receipt).toMatchObject({ state: 'failed', stage: 'dispatch_input' })

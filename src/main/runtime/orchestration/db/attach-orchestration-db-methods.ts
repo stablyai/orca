@@ -1,3 +1,4 @@
+import { attachAttemptObservationStore } from './attempt-observation-store'
 import { attachCoordinatorRunStore } from './coordinator-runs/coordinator-run-store'
 import { attachDecisionGateStore } from './decision-gates/decision-gate-store'
 import { attachDispatchCapability } from './dispatch-context/dispatch-capability'
@@ -7,12 +8,14 @@ import { attachDispatchLookup } from './dispatch-context/dispatch-lookup'
 import { attachDispatchDepth } from './dispatch-depth'
 import { attachWorkerReportSettlement } from './dispatch-context/worker-report-settlement'
 import { attachFederatedDispatchStore } from './federation/federated-dispatch-store'
+import { attachFederatedDispatchObservationFence } from './federation/federated-dispatch-observation-fence'
 import { attachFederationRelayAck } from './federation/federation-relay-ack'
 import { attachFederationRelayEnqueue } from './federation/federation-relay-enqueue'
 import { attachFederationRelayImport } from './federation/federation-relay-import'
 import { attachFederationRelayItem } from './federation/federation-relay-item'
 import { attachRemoteDispatchAttachmentAuthority } from './federation/remote-dispatch-attachment-authority'
 import { attachRemoteDispatchAttachmentCreate } from './federation/remote-dispatch-attachment-create'
+import { attachRemoteDispatchAttachmentRelease } from './federation/remote-dispatch-attachment-release'
 import { attachRemoteDispatchAttachmentStop } from './federation/remote-dispatch-attachment-stop'
 import { attachRemoteQuestionStore } from './federation/remote-question-store'
 import { attachLegacyAskOperation } from './legacy/legacy-ask-operation'
@@ -27,10 +30,13 @@ import { attachLegacyReplyOperation } from './legacy/legacy-reply-operation'
 import { attachLegacyWorkerCompletion } from './legacy/legacy-worker-completion'
 import { attachDirectMailboxRouting } from './messages/direct-mailbox-routing'
 import { attachForeignDirectMailboxRouting } from './messages/foreign-direct-mailbox-routing'
+import { attachMailboxPointerEnterState } from './messages/mailbox-pointer-enter-state'
 import { attachMessageInbox } from './messages/message-inbox'
 import { attachMessageInsert } from './messages/message-insert'
+import { attachRoleMailboxDelivery } from './messages/role-mailbox-delivery'
 import { attachStructuredPointerOperationStore } from './messages/structured-pointer-operation-store'
 import { attachMutationReceiptStore } from './mutation-receipts/mutation-receipt-store'
+import { attachLifecycleTransition } from './lifecycle-transition'
 import { attachQuestionThreads } from './questions/question-threads'
 import { attachOrchestrationReset } from './reset/orchestration-reset'
 import { attachRunBinding } from './runs/run-binding'
@@ -62,6 +68,7 @@ import { attachWorkerTerminalResourceStore } from './worker-terminal/worker-term
 import { attachWorkerTerminalTransfer } from './worker-terminal/worker-terminal-transfer'
 
 export function attachOrchestrationDbMethods(ctor: { prototype: object }): void {
+  attachAttemptObservationStore(ctor)
   attachCreateTables(ctor)
   attachSchemaMigrate(ctor)
   attachSchemaColumnProbes(ctor)
@@ -69,6 +76,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachBackfillLegacyQuestionThreads(ctor)
   attachAdoptLegacyRun(ctor)
   attachMutationReceiptStore(ctor)
+  attachLifecycleTransition(ctor)
   attachLegacyCompatibilityPrincipals(ctor)
   attachLegacyCompatibilityCandidates(ctor)
   attachLegacyWorkerCompletion(ctor)
@@ -86,8 +94,10 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachLegacyCoordinatorMailTakeover(ctor)
   attachRunDelivery(ctor)
   attachMessageInsert(ctor)
+  attachRoleMailboxDelivery(ctor)
   attachStructuredPointerOperationStore(ctor)
   attachMessageInbox(ctor)
+  attachMailboxPointerEnterState(ctor)
   attachDirectMailboxRouting(ctor)
   attachForeignDirectMailboxRouting(ctor)
   attachQuestionThreads(ctor)
@@ -102,8 +112,10 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachWorkerDispatchStop(ctor)
   attachWorkerDispatchAbandon(ctor)
   attachFederatedDispatchStore(ctor)
+  attachFederatedDispatchObservationFence(ctor)
   attachRemoteDispatchAttachmentCreate(ctor)
   attachRemoteDispatchAttachmentAuthority(ctor)
+  attachRemoteDispatchAttachmentRelease(ctor)
   attachRemoteDispatchAttachmentStop(ctor)
   attachFederationRelayEnqueue(ctor)
   attachFederationRelayAck(ctor)

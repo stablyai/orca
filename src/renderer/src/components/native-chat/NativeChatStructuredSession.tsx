@@ -188,6 +188,7 @@ export function NativeChatStructuredSession(
             fontScale={fontScale.scale}
             workingStartedAt={null}
             showTurnStatus
+            turnActivity={controller.turnActivity}
             onLinkClick={fileLinkClick}
             allowFileUriLinks={fileLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}

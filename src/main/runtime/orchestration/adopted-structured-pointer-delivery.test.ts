@@ -1,3 +1,4 @@
+import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionPtyWriteGate } from '../agent-session-pty-write-gate'
 import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orca-runtime-write-orchestration-pointer-pty'
@@ -11,7 +12,7 @@ const PTY_ID = 'pty_adopted'
 // borrow the REAL implementations through the real prototype chain; a re-declared copy would pin
 // nothing.
 class PointerWriteProbe extends OrcaRuntimeWithWriteOrchestrationPointerPty {
-  probeWritePointer(ptyId: string, data: string): boolean | Promise<boolean> {
+  probeWritePointer(ptyId: string, data: string): WriteSettlement | Promise<WriteSettlement> {
     return this.writeOrchestrationPointerPty(ptyId, data)
   }
 }
@@ -68,26 +69,31 @@ describe('an orchestration pointer aimed at an adopted pane', () => {
     }
     // Zero bytes: the controller path would re-admit, refuse again, and fire
     // `pty:writeUnavailable`, whose renderer handler runs transport RECOVERY on a healthy pane.
+    // A proven refusal, not a bare false: the settlement vocabulary keeps "declined before any
+    // byte moved" distinct from "we lost track", which is what a durable reservation reads.
     expect(
       probe(PointerWriteProbe.prototype, stub).probeWritePointer(
         PTY_ID,
         'You have 1 orchestration message.'
       )
-    ).toBe(false)
+    ).toEqual({ outcome: 'refused', reason: 'write_gate_denied' })
     expect(write).not.toHaveBeenCalled()
     expect(writeWithSettlement).not.toHaveBeenCalled()
   })
 
   it('still writes through when nothing owns the pane', () => {
     const write = vi.fn(() => true)
+    // The gate admits an unbound pane, so the bytes reach the provider and its own settlement is
+    // what the caller gets back.
+    const writeWithSettlement = vi.fn(() => ({ outcome: 'accepted' }) as const)
     const stub = {
       orchestrationPointerAdmissionByPtyId: new Map(),
-      ptyController: { write }
+      ptyController: { write, writeWithSettlement }
     }
     expect(
       probe(PointerWriteProbe.prototype, stub).probeWritePointer('pty_unbound', 'pointer')
-    ).toBe(true)
-    expect(write).toHaveBeenCalledTimes(1)
+    ).toEqual({ outcome: 'accepted' })
+    expect(writeWithSettlement).toHaveBeenCalledTimes(1)
   })
 })
 

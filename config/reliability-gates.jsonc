@@ -12959,15 +12959,15 @@
       "invariant": "Injected orchestration task prompts for recognized agent CLIs must send the prompt body inside one bracketed-paste frame, sanitize embedded ESC bytes, preserve chunk boundaries without losing the frame, and submit exactly once only after the agent can accept Enter. A successful orchestration.workerStart must durably record exactly one accepted and started turn; a swallowed Enter must fail with agent_prompt_stalled and never trigger a blind rescue Enter. Claude and Codex must emit a post-paste composer marker and then settle, or reach the bounded fallback first; every other agent retains the platform delay.",
       "oracle": "Runtime tests assert the exact PTY write sequence, failure cleanup, Claude/Codex marker-gated multi-frame renders, and the legacy platform delay for every other configured agent. The candidate resets settlement on later frames, gives a late marker a fresh bounded window, and still submits once at the hard deadline if output never settles. The worker-start contract drives the production RPC through a delayed fake Codex composer and independently checks exact turn/Enter counts plus reopened SQLite Task, Dispatch, worker receipt, and mutation receipt state for accepted and swallowed outcomes. Other orchestration tests assert dispatch/coordinator use the agent prompt path; the live CLI harness covers long Codex-like framing.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-start-prompt-contract.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts --reporter=dot",
         "node tests/tools/repro-orchestration-long-prompt.mjs --cli out/bin/orca-dev --mode codex-like --size-kb 32 --timeout-ms 20000"
       ],
       "testFiles": [
         "src/shared/agent-prompt-injection.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-worker-start-prompt-contract.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts",
         "src/main/runtime/orchestration/coordinator.test.ts",
         "tests/tools/repro-orchestration-long-prompt.mjs"
       ],
@@ -12995,7 +12995,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts",
           "assertions": [
             "orchestration.dispatch uses the agent prompt path for injected preambles",
             "raw terminal.send is not called for injected task prompts",
@@ -13003,7 +13003,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-worker-start-prompt-contract.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts",
           "assertions": [
             "delayed composer readiness produces exactly one submitted and started turn with no premature Enter and durable ready receipts",
             "a swallowed Enter records agent_prompt_stalled across Task, Dispatch, worker, and mutation receipts without a rescue Enter"
@@ -13030,7 +13030,7 @@
           "date": "2026-08-23",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-start-prompt-contract.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-start-prompt-contract.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 21.84,
           "summary": "Two deterministic worker-start RPC contracts passed with fake clocks and reopened SQLite receipts for one accepted turn and one swallowed-Enter stalled outcome."
@@ -13039,7 +13039,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 11.32,
           "summary": "4 files and 1,303 tests passed with one skipped. Claude and Codex both wait for post-marker quiescence, and a Codex marker arriving at 7.9 seconds receives a fresh window through its final slow frame. Exact-build live Codex workers accepted injected prompts without manual Enter, replied, called worker_done, and settled successfully in the rendered Electron UI."
@@ -13048,7 +13048,7 @@
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 13.3,
           "summary": "4 files and 1,283 tests passed. The hardened multi-frame oracle failed on the first-marker candidate because it submitted at 751 ms during an intermediate Claude frame; the quiescence candidate waited through the final 1,000 ms frame and submitted once at 2,500 ms. Continuous render output remained bounded to one fallback submit at 8 seconds. An isolated Claude Code 2.1.231 Haiku probe saw the first marker at 400 ms, continued output through 1,500 ms, sent one Enter at 3,000 ms after 1.5 seconds quiet, and created the expected marker; no Fable or Opus probe was used."
@@ -13057,7 +13057,7 @@
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 16.9,
           "summary": "4 files and 1,282 tests passed. Unmodified main wrote Enter at 500 ms before the deterministic Claude composer rendered at 750 ms; the candidate waited for the split show-cursor marker and wrote one Enter. A live Claude Code 2.1.231 Haiku trace rendered the pasted marker and show-cursor in one 523-byte frame without submitting a model request."
@@ -13066,7 +13066,7 @@
           "date": "2026-07-07",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration-tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/agent-prompt-injection.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/orchestration/runs/tasks-dispatch.test.ts src/main/runtime/orchestration/coordinator.test.ts",
           "result": "passed",
           "durationSeconds": 7.4,
           "summary": "4 test files passed, 697 tests passed; covers framing, runtime PTY writes, orchestration RPC dispatch, and coordinator dispatch behavior."
@@ -13136,12 +13136,12 @@
         "internal incident evidence: improve-vps-setup, 2026-08-10"
       ],
       "invariant": "Each message has one stable row ID and authoritative recipient; coordinator-addressed current-delivery inserts are atomically owned by run:<id>. Pointer staging may set delivered_at but never consumes mail. Each Run consumer generation has at most one outstanding Delivery with a fixed ID and fixed message IDs; ordinary checks replay it until an explicit matching acknowledgment marks exactly those rows read. Rebinding fences the old generation, notification types/counts correspond to unread rows retrievable under the same authority, and federation replay imports each stable message identity once without re-waking an already-read duplicate.",
-      "oracle": "Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then separately exceed the bound and require retryable undelivered state.",
+      "oracle": "Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then distinguish the three settlement outcomes end to end: only a proven refusal releases the reservation and drains a delivery parked behind the watermark; a dropped in-flight settlement must surface as unverifiable with bytes handed to the transport, preserve the durable write-attempted reservation, and emit no duplicate pointer after restart; a settled write that throws mid-pointer is unverifiable, not a refusal; and an Enter whose settlement is lost stays at enter-attempted so restart emits no second Enter. Install the production PTY controller and verify that it routes settled writes through the owning provider and refuses before any byte when the routed provider cannot settle. Census every production PTY provider class and reject a settlement synthesized from the fire-and-forget write.",
       "commands": [
         "pnpm run build:cli && pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-message-delivery-identity.test.ts --reporter=dot --testTimeout=5000",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/rpc/methods/orchestration-runs.test.ts src/main/runtime/rpc/methods/orchestration-send.test.ts src/main/runtime/rpc/methods/orchestration-check.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/ipc/pty-controller-ownership-routing.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/providers/settled-pty-writer-census.test.ts src/main/runtime/orchestration/mailbox-pointer-stage.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/rpc/methods/orchestration/runs/runs.test.ts src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/main/runtime/orchestration-message-delivery-identity.test.ts",
@@ -13149,23 +13149,26 @@
         "src/main/runtime/orchestration-mailbox-detached-routing.test.ts",
         "src/main/runtime/orchestration-mailbox-routing-races.test.ts",
         "src/main/runtime/orchestration-mailbox-transport-settlement.test.ts",
+        "src/main/ipc/pty-controller-ownership-routing.test.ts",
         "src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts",
         "src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts",
         "src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts",
         "src/main/runtime/orchestration/formatter.test.ts",
         "src/main/providers/ssh-pty-provider.test.ts",
         "src/main/providers/ssh-pty-write.test.ts",
+        "src/main/providers/settled-pty-writer-census.test.ts",
+        "src/main/runtime/orchestration/mailbox-pointer-stage.test.ts",
         "src/main/daemon/client.test.ts",
         "src/main/daemon/daemon-pty-router.test.ts",
         "src/main/daemon/degraded-daemon-pty-provider.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-runs.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-send.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-check.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/runs/runs.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts",
         "src/main/runtime/orchestration/federation-sync.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts"
+        "src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts"
       ],
       "assertionRefs": [
         {
@@ -13229,14 +13232,14 @@
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
           "assertions": [
             "a lost relay acknowledgment retries without duplicating the home message",
             "a reordered relay gap converges without loss or duplication"
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts",
           "assertions": [
             "protocol v1 and v2 completion acknowledgments replay after Run-home restart",
             "terminal settlement remains replayable until the worker durably acknowledges it"
@@ -13245,13 +13248,36 @@
         {
           "file": "src/main/runtime/orchestration-mailbox-transport-settlement.test.ts",
           "assertions": [
-            "a rejected pointer transport stays undelivered and becomes restart-retryable"
+            "a refused pointer transport releases its reservation, stays undelivered, and becomes restart-retryable",
+            "a dropped in-flight SSH settlement reaches the stager as unverifiable with bytes handed to the transport and emits no duplicate pointer after restart",
+            "a settled write that throws mid-pointer preserves the write-attempted reservation",
+            "an Enter whose settlement is lost stays at enter-attempted and restart emits no second Enter"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/mailbox-pointer-stage.test.ts",
+          "assertions": [
+            "a refused pointer write drains a delivery parked behind its watermark"
+          ]
+        },
+        {
+          "file": "src/main/providers/settled-pty-writer-census.test.ts",
+          "assertions": [
+            "every production IPtyProvider class exposes a settled writer",
+            "no settled writer synthesizes its settlement from the fire-and-forget write"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-controller-ownership-routing.test.ts",
+          "assertions": [
+            "the installed controller preserves provider uncertainty instead of flattening it",
+            "a routed provider that cannot settle is refused before any byte reaches its write"
           ]
         },
         {
           "file": "src/main/daemon/client.test.ts",
           "assertions": [
-            "an asynchronous daemon socket write failure settles as rejected",
+            "an asynchronous daemon socket write failure settles as unverifiable, never as a proven refusal",
             "a wedged daemon socket write disconnects at its bounded settlement deadline"
           ]
         },
@@ -13277,10 +13303,19 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-09-05",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/ipc/pty-controller-ownership-routing.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/providers/settled-pty-writer-census.test.ts src/main/runtime/orchestration/mailbox-pointer-stage.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.73,
+          "summary": "267 tests passed after the pointer-write path moved to the three-valued WriteSettlement union. New coverage: a dropped in-flight SSH settlement reaches the stager as unverifiable with bytes handed to the transport, a settled write that throws mid-pointer preserves the write-attempted reservation, an Enter whose settlement is lost stays at enter-attempted with no second Enter after restart, a refusal releases the reservation and drains a delivery parked behind its watermark, the production controller refuses before any byte when the routed provider cannot settle, and a census pins the five production IPtyProvider classes and rejects a settlement synthesized from the fire-and-forget write. Each new assertion was verified red against the pre-fix shape."
+        },
+        {
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/ipc/pty-controller-ownership-routing.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/providers/settled-pty-writer-census.test.ts src/main/runtime/orchestration/mailbox-pointer-stage.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
           "result": "passed",
           "durationSeconds": 8.22,
           "summary": "245 tests passed across mailbox identity, durable coordinator-handle migration, insertion-time canonicalization, duplicate-free 51-row ownership branch caps, unrestricted reservation merging, direct and Dispatch pointer suppression, persisted reconciliation, 50-row paging and filtered waits, cross-PTY serialization, lifecycle fencing, bounded daemon and SSH transport settlement, outstanding Deliveries, reminted Dispatch ownership, acknowledgment, cancellation, and bounded pane lookup."
@@ -13289,7 +13324,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 8.99,
           "summary": "52 tests passed with real OrchestrationDb rows, a deliberately dropped federation acknowledgment, reconnect/restart, forward-only checkpoints, duplicate read-row wake suppression, and protocol v1/v2 lifecycle settlement replay. The broader final federation/cross-version set passed 77/77."
@@ -13307,7 +13342,7 @@
           "date": "2026-08-14",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/rpc/methods/orchestration-runs.test.ts src/main/runtime/rpc/methods/orchestration-send.test.ts src/main/runtime/rpc/methods/orchestration-check.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/rpc/methods/orchestration/runs/runs.test.ts src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts",
           "result": "passed",
           "durationSeconds": 14.15,
           "summary": "1,293 tests passed and 1 was skipped across Run-bound pointer delivery, PTY retirement and respawn, stale-leaf liveness, direct-mail routing, filtered waiter ownership, canonical stored-recipient notification, and orchestration RPC behavior."
@@ -13375,10 +13410,10 @@
       "oracle": "Drive Run create, Task create, and worker-start through production Electron runtimes with a deterministic Codex fixture. Require append-only ledgers with one still-live PID and no interruption, a visible inactive worker tab while the coordinator stays active, Run delivery through stable pane identity, and stable PTY/incarnation, tab, leaf, worktree, Task, and Dispatch across workspace re-entry. In a restart journey, retain the original daemon PTY and PID, remove renderer ownership, retain sleeping-session evidence, mark the Dispatch legacy, relaunch, and require exact inactive tab adoption, readable ACK output, cleared resume state, one spawn, and no resume argv or Conversation interrupted text after another workspace round trip. The service oracle removes renderer lookup identity from current-contract callers while retaining real restored-PTY and hook commitments, replays authenticated completion and takeover across fresh runtimes, and requires one Task, Dispatch, terminal authority, message, mutation, ordinary-mail delivery, remote process fencing, and unchanged fixture marker bytes while foreign pane evidence remains rejected. Unit tests separately remint a creator pane and process from Run A into Run B, require the nested Run A worker to fall back to its current coordinator, require indexed query plans, and bound 300 Task reads with 50,000 retained Runs. They also assert authority-specific legacy affordances, exact identity and owner matching, retained-output fallback, pane-stable routing, federated non-activation, and SSH fallback parity.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts src/main/runtime/rpc/methods/orchestration-check.test.ts src/main/runtime/rpc/methods/orchestration-send.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-acknowledgment-migration.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/orchestration-creator-authority-performance.test.ts",
@@ -13399,11 +13434,11 @@
         "src/cli/handlers/orchestration-migration.test.ts",
         "src/cli/handlers/orchestration-check-identity.test.ts",
         "src/cli/handlers/orchestration-worker-cli.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-check.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-send.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts",
         "src/main/runtime/orchestration/federation-acknowledgment-migration.test.ts",
         "src/main/ssh/ssh-remote-orca-cli.test.ts",
         "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
@@ -13486,27 +13521,27 @@
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts",
           "assertions": [
             "same-workspace worker creation uses visible inactive presentation",
             "worker-start preserves and reports renderer reveal failures"
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-check.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts",
           "assertions": [
             "Run delivery resolves through a stable coordinator pane after handle remint",
             "a live handle cannot be retargeted by mismatched pane metadata"
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-send.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts",
           "assertions": [
             "Dispatch delivery resolves through a stable worker pane after handle remint"
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts",
           "assertions": [
             "a remote worker_done waits for Run-home settlement even when an older CLI omits the wait hint",
             "protocol v1/v2 clients can start fresh workers and complete success or failure on a current worker server",
@@ -13533,7 +13568,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
           "assertions": ["federated worker placement explicitly sets activate=false"]
         },
         {
@@ -13578,7 +13613,7 @@
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 6.02,
           "summary": "The 70f1d52f mixed-version oracle passed all 21 cases. Protocol v1/v2 clients started fresh workers on a current server, completed success and failure with explicit legacy authority, and automatically retried a lost ACK after Run-home restart; current-protocol settlement and duplicate-report controls stayed green."
@@ -13587,7 +13622,7 @@
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "failed",
           "durationSeconds": 4.21,
           "summary": "The byte-identical 70f1d52f oracle failed 6 mixed-version cases while 15 controls passed when the fresh v1/v2 refusal was restored: success and failure through both negotiated versions plus both lost-ACK restart cases."
@@ -13596,7 +13631,7 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "failed",
           "durationSeconds": 5.05,
           "summary": "The byte-identical ac7bdf4e federation oracle failed 7 of 17 tests on affected 09ec516ae5: fresh v1/v2 work started before completion rejection, persisted v1/v2 work could not finish after update, same-outcome ACKs rejected, duplicate reports remained pending, and a dropped ACK was not replayed."
@@ -13605,7 +13640,7 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "failed",
           "durationSeconds": 5.86,
           "summary": "The same byte-identical oracle failed the same 7 of 17 tests on latest main 1136503c6a."
@@ -13614,7 +13649,7 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 4.28,
           "summary": "The same byte-identical oracle passed all 17 tests on candidate 008f740161, including restart replay and both directions of v1/v2 update compatibility."
@@ -13623,7 +13658,7 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "failed",
           "durationSeconds": 19.84,
           "summary": "With the claimed production files restored to latest main in 3a15d3ed5d, the same byte-identical oracle returned to the same 7 failures while 10 unaffected cases still passed."
@@ -13686,7 +13721,7 @@
           "date": "2026-07-28",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration-composed-workers.test.ts src/main/runtime/rpc/methods/orchestration-check.test.ts src/main/runtime/rpc/methods/orchestration-send.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
           "result": "passed",
           "durationSeconds": 5.27,
           "summary": "Five focused files passed with 216 tests, covering visible inactive local worker creation, reveal-failure warnings, stable-pane mailbox routing, live-handle precedence, and SSH fallback parity."
@@ -13704,7 +13739,7 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/federation/federation-lifecycle-settlement.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 4.58,
           "summary": "Nine deterministic tests passed for protocol negotiation, Run-home completion and rejection, already-aborted waits, authoritative remote-attachment settlement bound to the exact queued worker_done outcome, and exact verdict replay after lost acknowledgments without mutating durable rejection mail twice."
@@ -13713,7 +13748,7 @@
           "date": "2026-07-28",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration/federation/federation.test.ts",
           "result": "passed",
           "durationSeconds": 2.72,
           "summary": "Two focused files passed with 34 tests, covering authority-aware legacy affordances and federated non-reveal."
@@ -13795,21 +13830,21 @@
       "invariant": "A live Dispatch created by orchestration dispatch can be stopped or abandoned even though it has no supervised worker row. Release must durably record the requested outcome, revoke lifecycle authority, close questions, free the exact assignee identity, and block only the Task whose current Dispatch was released. It must never close the unsupervised terminal process, disturb unrelated or supervised workers, or let a repeat or opposite verb rewrite the persisted outcome.",
       "oracle": "Create manual, unrelated, and supervised Dispatches through production runtime methods. Require dispatch-show to return the manual id while no worker row exists, then release it and require failed status with exact stopped or abandoned provenance, completion and revocation timestamps, one status notification, zero terminal closes, and immediate redispatch to the same terminal. Repeat through the opposite verb and require the first durable outcome. Create two active contexts for one Task through an explicit ready override, release the older context, and require only its identity to unlock while the newer context and Task remain dispatched. In an isolated Electron runtime, repeat both verbs against one real pane and require the same PTY/incarnation to survive before a third dispatch succeeds.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration-workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-low-level-dispatch-release.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts",
         "src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-workers-recovery.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts",
         "src/cli/handlers/orchestration-worker-cli.test.ts",
         "tests/e2e/orchestration-low-level-dispatch-release.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts",
           "assertions": [
             "worker-abandon and worker-stop durably release context-only Dispatches without closing terminals",
             "repeat and cross-verb calls preserve the first stored outcome",
@@ -13847,7 +13882,7 @@
           "date": "2026-08-09",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration-workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/manual-dispatch-release.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/rpc/methods/orchestration/worker/workers-recovery.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/cli/handlers/orchestration-worker-cli.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 3.38,
           "summary": "Five focused files passed 60 tests, including both context-only release verbs, stale/current ownership, question closure, repeat and cross-verb idempotency, supervised controls, terminal-close negative assertions, and text-mode retained-process guidance."
@@ -13920,17 +13955,19 @@
       "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease. Explicit reuse, real user input, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. Once the authoritative owning provider positively excludes the resource's exact immutable process incarnation, even an external, user-owned, or transferred dead resource must converge to released without any process close. Unknown host scope, missing incarnation metadata, or unavailable inventory must remain retained. Exact terminal-close persistence must settle when a host partition omits renderer-owned layout state. Output preservation and the requested-to-releasing transition are atomic, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
       "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. Rebase a closed web-terminal host partition without terminalLayoutsByTabId and require the persistence write to complete while preserving host-authoritative membership; replay a valid legacy retirement under the same omission and require exact membership removal plus revision advancement. For retained external, user-owned, transferred, stopped, and abandoned resources, run one fresh inventory against the exact local/WSL or SSH provider: an exact live incarnation and every unknown inventory shape stay retained, while positive absence atomically sets ownership_state and release_state to released with processAction none and zero closeTerminal calls. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/pty-inventory-liveness-verdict.test.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
+        "src/main/runtime/pty-inventory-liveness-verdict.test.ts",
         "src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts",
         "src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
-        "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts",
+        "src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts",
         "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
         "src/main/runtime/orchestration/worker-transcript-read.test.ts",
         "src/renderer/src/lib/worker-terminal-takeover-report.test.ts",
@@ -13938,6 +13975,14 @@
         "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/pty-inventory-liveness-verdict.test.ts",
+          "assertions": [
+            "320 simultaneously live PTYs retain truthful verdicts with linear identity checks and no detached history",
+            "400 unresolved PTY retirements preserve active doubt while bounding history at 256 entries",
+            "a replacement lifecycle clears the retained historical verdict for the reused PTY id"
+          ]
+        },
         {
           "file": "src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts",
           "assertions": [
@@ -13961,7 +14006,7 @@
           ]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts",
           "assertions": [
             "reconciles a dead external terminal without closing a process",
             "reconciles a dead user-taken-over terminal without closing a process",
@@ -13980,7 +14025,7 @@
           "assertions": ["resumes a pending idempotent worker release after restart"]
         },
         {
-          "file": "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
+          "file": "src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts",
           "assertions": [
             "finishes a requested release after restart-style interruption",
             "coalesces overlapping reconciliation passes and closes each resource once",
@@ -14002,7 +14047,7 @@
           "date": "2026-08-27",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/mobile-session-terminal-persistence-retirement.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 8.78,
           "summary": "Seven deterministic files passed 78 tests, including red-green host-partition rebase and legacy-retirement regressions with an absent web-terminal layout map plus exact lease, reuse, takeover, recovery, restart, archive, and accounting contracts."
@@ -14020,7 +14065,7 @@
           "date": "2026-08-11",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 4.98,
           "summary": "Six focused files passed 67 tests on the rebased candidate, covering dead external, user-owned, stopped, abandoned, and transferred reconciliation; exact local/WSL/SSH provider routing; malformed, missing, and unavailable inventory retention; zero process closes; existing lease, archive, recovery, mutation, and renderer-input contracts."
@@ -14029,7 +14074,7 @@
           "date": "2026-08-03",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release.test.ts src/main/runtime/rpc/methods/orchestration/worker/worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
           "result": "passed",
           "durationSeconds": 3.48,
           "summary": "Five focused files passed 56 tests covering lease serialization, reminted-handle transfer, duplicate-identity fencing, retain and takeover races, immutable archives, conservative legacy migration, mutation restart, reset cleanup, bounded accounting, and renderer input reporting."
@@ -14045,11 +14090,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The version-skew legacy-retirement test deterministically threw at mobile-session-terminal-persistence-retirement.ts:75 before the null-safe layout read and passed with exact tab removal, tombstone cleanup, and topology-revision advancement after the fix. The byte-identical compiled-CLI Electron oracle left the dead resource external/retained on latest main 5ea7df1a5b, passed on combined candidate d697666ce8 with released/released SQLite state and processAction none, and reproduced external/retained after disabling the claimed production files at merge-base 64aec94cb2. The earlier unchanged three-case dead external/user-owned/transferred service oracle likewise failed 3/3 on main, passed 3/3 on candidate, and failed 3/3 with production restored; every run asserted durable state and zero terminal close calls."
+        "evidence": "The version-skew legacy-retirement test deterministically threw at mobile-session-terminal-persistence-retirement.ts:75 before the null-safe layout read and passed with exact tab removal, tombstone cleanup, and topology-revision advancement after the fix. The byte-identical compiled-CLI Electron oracle left the dead resource external/retained on latest main 5ea7df1a5b, passed on combined candidate d697666ce8 with released/released SQLite state and processAction none, and reproduced external/retained after disabling the claimed production files at merge-base 64aec94cb2. The earlier unchanged three-case dead external/user-owned/transferred service oracle likewise failed 3/3 on main, passed 3/3 on candidate, and failed 3/3 with production restored; every run asserted durable state and zero terminal close calls. The 320-live-PTY oracle failed on the prior single-map implementation and passes with complete active evidence, zero detached history, and a linear identity-check bound after the cache split."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Normal owned release performs constant-count indexed resource and identity queries plus one bounded archive capture. Missing layout maps use constant-time empty-record fallbacks inside the existing explicit persistence pass, with no added scan or allocation proportional to terminal history. A retained release performs exactly one bounded inventory against its authoritative local/WSL or specific SSH provider, with no retry, polling, timer, subprocess, renderer subscription, or per-session follow-up fanout. Worker-list uses two set queries rather than one resource lookup per worker."
+        "evidence": "Normal owned release performs constant-count indexed resource and identity queries plus one bounded archive capture. Missing layout maps use constant-time empty-record fallbacks inside the existing explicit persistence pass, with no added scan or allocation proportional to terminal history. A retained release performs exactly one bounded inventory against its authoritative local/WSL or specific SSH provider, with no retry, polling, timer, subprocess, renderer subscription, or per-session follow-up fanout. Each liveness observation performs constant-time active-identity classification; retirement performs one historical insertion and at most one oldest-entry eviction, while active evidence scales only with supported PTYs and detached history is capped at 256. Worker-list uses two set queries rather than one resource lookup per worker."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
@@ -18189,14 +18234,15 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075.",
+      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075. Deterministic remote Codex fixture validation passed three normal restores and three forced reconnects with zero retries on merged main plus the replay probe correction (run 34050117471). The original forced-reconnect probe missed nonempty replay returned in pty:spawn reattach replies. Routine coverage now includes both modes by default; real Codex service execution remains opt-in.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/18018",
         "https://github.com/stablyai/orca/pull/18546",
         "https://github.com/stablyai/orca/issues/12547",
         "https://github.com/stablyai/orca/issues/16764",
         "https://github.com/stablyai/orca/actions/runs/34037450427",
-        "https://github.com/stablyai/orca/actions/runs/34037669843"
+        "https://github.com/stablyai/orca/actions/runs/34037669843",
+        "https://github.com/stablyai/orca/actions/runs/34050117471"
       ],
       "invariant": "Transport loss and frozen-host silence must preserve the remote session; host relay loss may rebind a pane without accumulating reattachable leases. Reconnects must preserve usable terminal content, bounded PTYs/fds/processes, complete large listings, and independently recoverable watcher processes. Electron test shutdown must release inherited pipes after confirmed root exit without closing live-process pipes.",
       "oracle": "Poll a changed connected SSH authority after injected faults, then require terminal output and appropriate PTY identity. Read remote process/fd state, listFiles replies, and rendered explorer rows. Resolve Playwright cleanup only after the root process exits and its inherited pipes close; live-process pipes remain untouched.",
@@ -18204,7 +18250,9 @@
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1",
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10"
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-codex-display-artifacts-repro.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts"
       ],
       "testFiles": [
         "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
@@ -18214,7 +18262,9 @@
         "tests/e2e/ssh-docker-resource-accumulation.spec.ts",
         "tests/e2e/ssh-docker-watcher-isolation.spec.ts",
         "tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
-        "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts"
+        "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+        "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
+        "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts"
       ],
       "assertionRefs": [
         {
@@ -18264,6 +18314,18 @@
           "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
           "assertions": [
             "five flooding SSH panes remain below unchanged 2500ms soft and 5000ms hard freeze budgets during bulk reopen and two double-animation-frame view changes"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
+          "assertions": [
+            "normal restore and forced SSH reconnect leave no stale or duplicate status rows; forced reconnect preserves the original PTY and requires nonempty replay from that PTY through an event or reattach reply"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts",
+          "assertions": [
+            "unrelated, replacement, initial-spawn, empty and non-replay replies do not count; original reattach results and failures pass through unchanged"
           ]
         }
       ],
@@ -18322,7 +18384,8 @@
         "Linux headed CI covers the bulk-open freeze reproduction; Windows clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not covered by that result.",
         "Some legacy assertions inspect terminal serialization or backing state rather than rendered DOM; no blanket visual coverage claim.",
         "No p95 CI history or full product mutation proof.",
-        "One headless bulk-open probe reached 6478.6ms in run 34035957303; animation-frame scheduling explains the consistent interaction failures, but does not directly explain that isolated timer-lag outlier. Long-term headed CI soak remains outstanding."
+        "One headless bulk-open probe reached 6478.6ms in run 34035957303; animation-frame scheduling explains the consistent interaction failures, but does not directly explain that isolated timer-lag outlier. Long-term headed CI soak remains outstanding.",
+        "Codex replay artifact evidence uses a deterministic remote TUI on Linux CI; real-service, macOS/Windows clients and cross-version replay remain separate coverage gaps."
       ],
       "demotionRule": "Keep experimental while any recovery reproduction fails or any teardown, identity, resource-count, or rendered oracle flakes; never promote by extending sleeps or retries."
     },

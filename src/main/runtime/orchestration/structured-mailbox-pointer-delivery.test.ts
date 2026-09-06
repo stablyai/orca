@@ -78,6 +78,7 @@ function harness(options: {
   refusal?: AgentSessionPtyWriteRefusal
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
+  outstandingOwnDelivery?: boolean
   /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
   mailbox?: string
   dispatchId?: string | null
@@ -94,7 +95,9 @@ function harness(options: {
   const stored = new Map<string, unknown>()
   const db = {
     getDispatchContextById: () => ({ run_id: 'run_1' }),
-    hasOutstandingRunDelivery: () => options.outstandingRunDelivery ?? false,
+    hasOutstandingMailboxDelivery: (handle: string) =>
+      ((options.outstandingRunDelivery ?? false) && handle.startsWith('run:')) ||
+      ((options.outstandingOwnDelivery ?? false) && !handle.startsWith('run:')),
     getUndeliveredUnreadMessages: () => [{ id: 'm1', type: 'status', sequence: 3 }],
     markAsDelivered,
     getStructuredPointerOperation: (key: string) => stored.get(key),
@@ -244,9 +247,9 @@ describe('structured mailbox pointer delivery', () => {
 
   it('nudges the worker while its coordinator holds an unacked Run delivery', async () => {
     // The exact window in which a coordinator replies to its workers: it checked, is acting on the
-    // batch, and has not acked yet. A delivery row exists only for a `run:` address, so this one
-    // belongs to the coordinator — gating the WORKER's dispatch mailbox on it dropped the nudge
-    // with nothing parked, and the worker sat idle on durable mail it was never told about.
+    // batch, and has not acked yet. The gate is keyed on the handle being nudged, so the
+    // coordinator's `run:` delivery is invisible here — gating the WORKER's dispatch mailbox on it
+    // dropped the nudge with nothing parked, and the worker sat idle on mail it was never told of.
     const { delivery, send, markAsDelivered } = harness({
       journal: idleJournal(),
       outstandingRunDelivery: true
@@ -255,6 +258,15 @@ describe('structured mailbox pointer delivery', () => {
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+  })
+
+  it('does not re-nudge a mailbox still holding its own unacked batch', async () => {
+    // The other half of the same gate: the consumer already has this batch, so a second nudge
+    // spends a whole provider turn telling it something it was told.
+    const { delivery, send } = harness({ journal: idleJournal(), outstandingOwnDelivery: true })
+    delivery.deliverForHandle('dispatch:d1')
+    await flush()
+    expect(send).not.toHaveBeenCalled()
   })
 
   it('retries a rejected nudge on the next journal edge', async () => {
@@ -341,7 +353,7 @@ describe('forgetting one settled worker', () => {
     }))
     const db = {
       getDispatchContextById: () => ({ run_id: 'run_1' }),
-      hasOutstandingRunDelivery: () => false,
+      hasOutstandingMailboxDelivery: () => false,
       getUndeliveredUnreadMessages: () => [{ id: 'm1', type: 'status', sequence: 3 }],
       markAsDelivered: vi.fn(),
       getStructuredPointerOperation: () => undefined,

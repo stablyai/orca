@@ -36,13 +36,15 @@ CREATE TABLE IF NOT EXISTS messages (
   sequence      INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at    TEXT NOT NULL DEFAULT (datetime('now')),
   delivered_at  TEXT,
-  sender_pane_key TEXT
+  sender_pane_key TEXT,
+  pointer_enter_pending INTEGER NOT NULL DEFAULT 0,
+  pointer_pty_id TEXT,
+  pointer_process_incarnation TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_id ON messages(id);
 CREATE INDEX IF NOT EXISTS idx_inbox ON messages(to_handle, read);
 CREATE INDEX IF NOT EXISTS idx_thread ON messages(thread_id);
-
 CREATE TABLE IF NOT EXISTS run_coordinator_handles (
   run_id          TEXT NOT NULL,
   terminal_handle TEXT NOT NULL,
@@ -78,6 +80,8 @@ END;
 CREATE TABLE IF NOT EXISTS deliveries (
   id                    TEXT PRIMARY KEY,
   run_id                TEXT NOT NULL,
+  -- Default keeps a downgraded binary's column-less INSERT working against a v34 database.
+  mailbox_handle        TEXT NOT NULL DEFAULT '',
   consumer_generation   INTEGER NOT NULL,
   message_ids           TEXT NOT NULL,
   status                TEXT NOT NULL DEFAULT 'outstanding'
@@ -86,8 +90,6 @@ CREATE TABLE IF NOT EXISTS deliveries (
   acknowledged_at       TEXT
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_deliveries_one_outstanding
-  ON deliveries(run_id) WHERE status = 'outstanding';
 CREATE INDEX IF NOT EXISTS idx_deliveries_run_created
   ON deliveries(run_id, created_at);
 
@@ -108,6 +110,26 @@ CREATE TABLE IF NOT EXISTS mutation_caller_identities (
   transport           TEXT PRIMARY KEY,
   caller_fingerprint  TEXT NOT NULL UNIQUE
 );
+
+-- Attempt evidence stays additive so old Task/Dispatch/worker CHECK enums remain wire-compatible.
+CREATE TABLE IF NOT EXISTS attempt_observation_facts (
+  id                    TEXT PRIMARY KEY,
+  dispatch_id           TEXT NOT NULL,
+  task_id               TEXT NOT NULL,
+  sequence              INTEGER NOT NULL,
+  authority_id          TEXT NOT NULL,
+  authority_clock       TEXT NOT NULL,
+  facet                 TEXT NOT NULL,
+  payload               TEXT NOT NULL,
+  source_observed_at    INTEGER,
+  execution_received_at INTEGER,
+  home_received_at      INTEGER NOT NULL,
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(dispatch_id, sequence)
+);
+
+CREATE INDEX IF NOT EXISTS idx_attempt_observation_facts_projection
+  ON attempt_observation_facts(dispatch_id, facet, sequence);
 
 CREATE TABLE IF NOT EXISTS worker_dispatches (
   dispatch_id            TEXT PRIMARY KEY,
@@ -138,6 +160,8 @@ CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   terminal_handle          TEXT NOT NULL,
   pane_key                 TEXT,
   process_incarnation      TEXT,
+  endpoint_id              TEXT,
+  endpoint_incarnation     TEXT,
   host_scope               TEXT,
   ownership_state          TEXT NOT NULL DEFAULT 'owned'
     CHECK(ownership_state IN ('owned', 'transferred', 'user_owned', 'external', 'released')),
@@ -149,6 +173,8 @@ CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   release_requested_at     TEXT,
   release_completed_at     TEXT,
   release_error            TEXT,
+  recovery_attempt_count   INTEGER NOT NULL DEFAULT 0,
+  last_recovery_at         TEXT,
   archive_source           TEXT,
   archive_status           TEXT,
   created_at               TEXT NOT NULL DEFAULT (datetime('now')),

@@ -160,16 +160,12 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (!db || this.inFlight.has(mailboxHandle)) {
       return
     }
-    // The `hasOutstandingRunDelivery` gate applies to a `run:` mailbox and ONLY to one, exactly as
-    // in the PTY lane: it guards a coordinator's own mailbox against re-notifying a batch already
-    // handed to that coordinator. A delivery row exists only for a `run:` address, so for a
-    // `dispatch:` or bare-handle mailbox the run's outstanding delivery belongs to the coordinator
-    // that is replying — gating there would suppress exactly the nudges a coordinator sends its
-    // workers.
-    if (
-      mailboxHandle.startsWith('run:') &&
-      db.hasOutstandingRunDelivery?.(mailboxHandle.slice('run:'.length))
-    ) {
+    // Don't re-nudge a mailbox whose consumer still holds an unacknowledged batch. The lookup is
+    // keyed on the exact handle being nudged, so a coordinator's own `run:` delivery is invisible
+    // to a worker's `dispatch:` gate and cannot suppress the nudges a coordinator sends its
+    // workers. Worth more here than in the PTY lane: a structured nudge costs a whole provider
+    // turn, not a line of text into a composer.
+    if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
       return
     }
     const unread = selectOrchestrationPointerBatch({

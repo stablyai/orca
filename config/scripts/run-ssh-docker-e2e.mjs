@@ -33,8 +33,6 @@ if (runtime.status !== 0) {
 //     cost the lane its credibility. NOTE: a runner script test:e2e:ssh-docker-perf exists in
 //     package.json but NO workflow invokes it, so this spec currently runs in no CI lane at
 //     all. Recorded as a real gap, not as coverage living somewhere else.
-//   ssh-codex-display-artifacts-repro.spec.ts — installs a real remote codex binary that CI
-//     runners do not have (observed as `spawn codex ENOENT`). Runs in no CI lane at all.
 // The bulk-open frame probe runs headed: headless Linux compositing schedules idle RAFs
 // roughly 1s apart, so it cannot measure foreground interaction against the same budget.
 //
@@ -62,12 +60,14 @@ const result = spawnSync(
     'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts',
     'tests/e2e/pty-input-write-queue-ssh.spec.ts',
     'tests/e2e/ssh-ai-vault-session-history.spec.ts',
+    'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
     'tests/e2e/ssh-cold-activation-restore.spec.ts',
     'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts',
     'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts',
     'tests/e2e/ssh-docker-half-open-link.spec.ts',
     'tests/e2e/ssh-docker-quick-open-large-listing.spec.ts',
     'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+    'tests/e2e/ssh-docker-relay-stall-credential.spec.ts',
     'tests/e2e/ssh-docker-resource-accumulation.spec.ts',
     'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
     'tests/e2e/ssh-external-image-preview.spec.ts',

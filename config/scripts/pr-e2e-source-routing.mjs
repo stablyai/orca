@@ -57,9 +57,11 @@ export const PR_E2E_SOURCE_ROUTES = [
     id: 'ssh-terminal-source',
     specs: [
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
+      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
       'tests/e2e/ssh-docker-half-open-link.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-docker-relay-stall-credential.spec.ts',
       'tests/e2e/ssh-docker-resource-accumulation.spec.ts',
       'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
       'tests/e2e/ssh-port-forward-lifecycle.spec.ts',

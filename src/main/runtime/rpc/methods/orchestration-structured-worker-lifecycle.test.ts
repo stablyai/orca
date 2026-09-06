@@ -18,7 +18,7 @@ const {
   readStructuredWorkerJournal,
   stopStructuredWorker
 } = await import('./orchestration-structured-worker-lifecycle')
-const { readArchivedWorkerOutput } = await import('./orchestration-worker-archive-read')
+const { readArchivedWorkerOutput } = await import('./orchestration/worker/worker-archive-read')
 
 const IDENTITY: StructuredWorkerIdentity = {
   handle: 'structworker_1',

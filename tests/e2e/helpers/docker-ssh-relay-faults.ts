@@ -119,6 +119,53 @@ echo "$killed"
   return killed
 }
 
+// Why /proc rather than pgrep -f: the relay argv is `node <dir>/relay.js …` and pgrep's pattern
+// would also match this very shell. Shared by the STOP/CONT pair so both act on the same set.
+const RELAY_PID_SCAN = `
+for proc in /proc/[0-9]*; do
+  [ -r "$proc/cmdline" ] || continue
+  argv=()
+  mapfile -d '' -t argv < "$proc/cmdline" 2>/dev/null || continue
+  entry="\${argv[1]:-}"
+  [ "\${entry##*/}" = relay.js ] || continue
+  pid="\${proc##*/}"
+`
+
+function signalDockerSshRelayProcesses(target: DockerSshRelayTarget, signal: string): number {
+  const output = execDockerSshRelayTargetControlCommand(
+    target,
+    `
+signalled=0
+${RELAY_PID_SCAN}
+  kill -${signal} "$pid" 2>/dev/null && signalled=$((signalled+1))
+done
+echo "$signalled"
+`
+  )
+  const count = Number(output.trim().split('\n').at(-1))
+  if (!Number.isInteger(count)) {
+    throw new Error(`Unexpected relay-${signal} count from ${target.containerName}: ${output}`)
+  }
+  return count
+}
+
+/**
+ * SIGSTOP every relay process (daemon and every --connect bridge), leaving sshd and the
+ * container running. TCP stays up and the kernel keeps accepting connects into the listener's
+ * backlog, so the client sees a host that answers at the transport and says nothing above it.
+ *
+ * Why this and not `docker pause`: pausing freezes sshd too, so the client's redeploy cannot
+ * even reach the host. Freezing only the relay is the shape that produced the credential wedge:
+ * the client CAN reach the host, decides the relay is gone, and launches a second daemon.
+ */
+export function stopDockerSshRelayProcesses(target: DockerSshRelayTarget): number {
+  return signalDockerSshRelayProcesses(target, 'STOP')
+}
+
+export function continueDockerSshRelayProcesses(target: DockerSshRelayTarget): number {
+  return signalDockerSshRelayProcesses(target, 'CONT')
+}
+
 /**
  * Undo any fault a failing test left behind.
  *
@@ -130,4 +177,9 @@ export function clearDockerSshRelayFaults(target: DockerSshRelayTarget | null): 
     return
   }
   tryRun(['unpause', target.containerName])
+  try {
+    continueDockerSshRelayProcesses(target)
+  } catch {
+    // The container may already be gone; cleanup removes it either way.
+  }
 }

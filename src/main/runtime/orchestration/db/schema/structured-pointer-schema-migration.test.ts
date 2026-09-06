@@ -6,7 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { SCHEMA_VERSION } from '../contract-constants'
 
-/** A pre-v31 database, with the narrow archive CHECK and no structured pointer table. */
+/**
+ * A pre-v39 database: the narrow archive CHECK, stamped at 38 so ONLY v39 runs.
+ *
+ * Seeding lower would still pass while exercising the whole v13->v39 chain instead, which
+ * would mask a broken rebuild. `createTables` supplies every other table before migration, so
+ * a 38 stamp survives the completeness check and the migration start resolves to 38.
+ */
 function seedLegacyDatabase(path: string): void {
   const db = new Database(path)
   db.exec(`
@@ -20,7 +26,7 @@ function seedLegacyDatabase(path: string): void {
     INSERT INTO worker_terminal_archives (dispatch_id, resource_id, kind, content, created_at)
       VALUES ('d_old', 'res_old', 'terminal_tail', '{"lines":["kept"]}', '2026-01-01 00:00:00');
   `)
-  db.pragma('user_version = 30')
+  db.pragma('user_version = 38')
   db.close()
 }
 

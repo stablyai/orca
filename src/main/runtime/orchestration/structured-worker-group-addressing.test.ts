@@ -11,7 +11,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 const { listAddressableStructuredWorkers, structuredWorkerAgentStatus } =
   await import('./structured-worker-group-addressing')
 const { resolveGroupAddress } = await import('./groups')
-const { sendGroupMessage } = await import('../rpc/methods/orchestration-send-group')
+const { sendGroupMessage } = await import('../rpc/methods/orchestration/messaging/send-group')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,

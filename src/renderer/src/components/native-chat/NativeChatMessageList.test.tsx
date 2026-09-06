@@ -84,6 +84,184 @@ describe('NativeChatMessageList assistant messages', () => {
     expect(document.querySelector('.text-destructive')).toBeNull()
   })
 
+  it('keeps a reduced-motion-safe spinner activity line at the tail of a no-tool Codex turn', () => {
+    render(
+      <NativeChatMessageList
+        session={{
+          ...session,
+          status: 'working',
+          messages: [
+            {
+              id: 'user-prose',
+              role: 'user',
+              blocks: [{ type: 'text', text: 'Write a long answer' }],
+              timestamp: 1,
+              source: 'transcript'
+            },
+            {
+              id: 'assistant-prose',
+              role: 'assistant',
+              blocks: [{ type: 'text', text: 'The answer is still streaming.' }],
+              timestamp: 2,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    const activity = screen.getByText('Working…')
+    const row = activity.closest('[data-native-chat-turn-activity]')
+    const spinner = row?.querySelector('svg')
+    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
+    expect(spinner).toHaveClass('size-4', 'animate-spin', 'motion-reduce:animate-none')
+    expect(row).toHaveAttribute('aria-live', 'polite')
+    expect(screen.getByText('The answer is still streaming.').compareDocumentPosition(row!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    )
+  })
+
+  it('keeps the broad fallback distinct from the running tool row', () => {
+    render(
+      <NativeChatMessageList
+        session={{
+          ...session,
+          status: 'working',
+          messages: [
+            {
+              id: 'assistant-running-tool',
+              role: 'assistant',
+              blocks: [
+                {
+                  type: 'tool-call',
+                  name: 'shell',
+                  input: { command: 'pnpm test' },
+                  state: 'running'
+                }
+              ],
+              timestamp: 1,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    const toolLabel = screen.getByText('Running pnpm test')
+    expect(toolLabel).toHaveClass('animate-pulse')
+    expect(screen.getAllByText('Running pnpm test')).toHaveLength(1)
+    const activity = screen.getByText('Working…')
+    expect(activity.textContent).not.toBe(toolLabel.textContent)
+    expect(activity).not.toHaveTextContent('shell')
+    expect(activity).not.toHaveTextContent('pnpm test')
+    const spinner = activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')
+    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
+    expect(spinner).toHaveClass('animate-spin', 'motion-reduce:animate-none')
+  })
+
+  it('uses the broad fallback after a tool settles', () => {
+    render(
+      <NativeChatMessageList
+        session={{
+          ...session,
+          status: 'working',
+          messages: [
+            {
+              id: 'assistant-completed-tool',
+              role: 'assistant',
+              blocks: [
+                {
+                  type: 'tool-call',
+                  name: 'shell',
+                  input: { command: 'pnpm test' },
+                  state: 'completed'
+                },
+                { type: 'tool-result', output: 'passed' }
+              ],
+              timestamp: 1,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    const settledTool = screen.getByText('shell pnpm test')
+    const activity = screen.getByText('Working…')
+    expect(activity.textContent).not.toBe(settledTool.textContent)
+    expect(activity).not.toHaveTextContent('shell')
+    expect(activity).not.toHaveTextContent('pnpm test')
+    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
+    expect(activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')).toHaveClass(
+      'animate-spin'
+    )
+  })
+
+  it('keeps a completed tool row static while the turn tail spins, then removes the tail', () => {
+    const workingSession: NativeChatLiveSession = {
+      ...session,
+      status: 'working',
+      messages: [
+        {
+          id: 'assistant-settled-tool',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'shell',
+              input: { command: 'pnpm test' },
+              state: 'completed'
+            },
+            { type: 'tool-result', output: 'passed' }
+          ],
+          timestamp: 1,
+          source: 'transcript'
+        }
+      ]
+    }
+    const { container, rerender } = render(
+      <NativeChatMessageList
+        session={workingSession}
+        isWorking
+        turnActivity={{ kind: 'description', text: 'Preparing the answer' }}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    const settledTool = screen.getByText('shell pnpm test')
+    expect(settledTool.closest('button')?.querySelector('.animate-pulse')).toBeNull()
+    expect(settledTool.closest('button')?.querySelector('.lucide-check')).toBeInTheDocument()
+    const activity = screen.getByText('Preparing the answer')
+    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
+    expect(activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')).toHaveClass(
+      'animate-spin'
+    )
+
+    rerender(
+      <NativeChatMessageList
+        session={{ ...workingSession, status: 'ready' }}
+        isWorking={false}
+        turnActivity={{ kind: 'description', text: 'Preparing the answer' }}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
+    expect(container.querySelector('.animate-pulse')).toBeNull()
+    expect(container.querySelector('.animate-spin')).toBeNull()
+  })
+
   it('keeps bridge chats on the legacy activity chrome', () => {
     render(
       <NativeChatMessageList

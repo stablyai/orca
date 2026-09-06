@@ -26,7 +26,8 @@ vi.mock('./structured-agent-session-create', () => ({
 
 const { stopStructuredWorker } = await import('./orchestration-structured-worker-lifecycle')
 const { createStructuredWorkerSession } = await import('./orchestration-structured-worker-session')
-const { completeWorkerTerminalRelease } = await import('./orchestration-worker-release-completion')
+const { completeWorkerTerminalRelease } =
+  await import('./orchestration/worker/worker-release-completion')
 
 const WORKTREE = 'workspace-1'
 const SESSION = 'session-1'
