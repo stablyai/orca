@@ -314,8 +314,10 @@ describe('control lease jitter', () => {
     expect(centeredAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS)
     expect(longestAck.leaseExpiresAt).toBeLessThan(now + CONTROL_LEASE_MS + CONTROL_LEASE_JITTER_MS)
     // The mean grant is unchanged, so steady-state rebind load is unchanged;
-    // hosts that connected together now differ by minutes, not zero.
-    expect(longestAck.leaseExpiresAt - shortestAck.leaseExpiresAt).toBeGreaterThan(9 * 60 * 1000)
+    // hosts that connected together now differ by most of the jitter band, not zero.
+    expect(longestAck.leaseExpiresAt - shortestAck.leaseExpiresAt).toBeGreaterThan(
+      CONTROL_LEASE_JITTER_MS
+    )
     shortest.registry.drain(0)
     centered.registry.drain(0)
     longest.registry.drain(0)

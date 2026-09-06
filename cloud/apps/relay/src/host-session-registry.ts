@@ -129,12 +129,15 @@ function send(socket: WebSocket, type: string, message: object): void {
 // stalled predecessor only accumulates doomed sockets.
 const ACTIVATION_QUEUE_WAIT_MS = 30_000
 
-// Why: hosts rebind a few minutes before this expires, so every host that
-// (re)connected in the same minute (a cell recreate dumps hundreds at once)
-// rebinds as one cohort every cycle, forever. Symmetric jitter walks the cohort
-// apart across cycles without raising the mean rebind rate.
-export const CONTROL_LEASE_MS = 55 * 60 * 1000
-export const CONTROL_LEASE_JITTER_MS = 5 * 60 * 1000
+// Why: this lease bounds how long a host lingers on a cell after a missed drain,
+// and rebinding it is the only passive rebalancing we have, so it has to stay
+// finite. 6h keeps both properties while cutting control-activation traffic on
+// the contended cell-inventory lock ~6x; the relay JWT (5 min, refreshed by the
+// desktop) and the 75s silence watchdog are enforced separately, so a longer
+// grant authorizes nothing extra. Symmetric jitter walks same-minute reconnect
+// cohorts apart across cycles without changing the mean rebind rate.
+export const CONTROL_LEASE_MS = 6 * 60 * 60 * 1000
+export const CONTROL_LEASE_JITTER_MS = 30 * 60 * 1000
 
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
