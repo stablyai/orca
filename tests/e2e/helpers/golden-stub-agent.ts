@@ -1,7 +1,7 @@
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
-import { focusActiveTerminalInput, waitForTerminalOutput } from './terminal'
+import { focusActiveTerminalInput, getTerminalContent, waitForTerminalOutput } from './terminal'
 import type { BuiltInWindowsTerminalShell } from '../../../src/shared/windows-terminal-shell'
 
 export const GOLDEN_STUB_READY_MARKER = 'GOLDEN_STUB_AGENT_READY'
@@ -58,5 +58,10 @@ export async function launchGoldenStubAgentFromNewTab(
   await expect(launchOption).toBeVisible({ timeout: 15_000 })
   await launchOption.click({ force: true })
   await focusActiveTerminalInput(page)
+  try {
   await waitForTerminalOutput(page, GOLDEN_STUB_READY_MARKER, 20_000)
+  } catch (error) {
+    console.error('[golden-agent-launch-buffer]', await getTerminalContent(page, 12000))
+    throw error
+  }
 }
