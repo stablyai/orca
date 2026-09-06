@@ -2,7 +2,11 @@ import type { BrowserWindow } from 'electron'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '../../../../shared/child-process/run-process'
 import { unregisterPty } from '../../../memory/pty-registry'
-import type { IPtyProvider } from '../../../providers/types'
+import { SessionNotFoundError } from '../../../daemon/daemon-errors'
+import type {
+  IPtyProvider,
+  PtySpawnOptions as PtyProviderSpawnOptions
+} from '../../../providers/types'
 import { noCodexResumeLaunch } from '../host-env/codex-resume'
 import { getLocalPtyProvider, localProvider, setLocalPtyProvider } from '../provider/registry'
 import { agentSessionOwners } from '../pane/agent-session-owners'
@@ -92,6 +96,28 @@ function providerWith(spawn: IPtyProvider['spawn']): IPtyProvider {
   const provider = Object.create(localProvider) as IPtyProvider
   provider.spawn = spawn
   return provider
+}
+
+const LEAF_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
+function arrangeStableOwnerPane(ctx: ReturnType<typeof createState>, ptyId: string): void {
+  ctx.args.worktreeId = 'workspace-1'
+  ctx.spawnIdentityPaneKey = `tab-1:${LEAF_ID}`
+  let paneRetired = false
+  ctx.deps.runtime = {
+    resolveTerminalPane: () => {
+      if (paneRetired) {
+        throw new Error('terminal_not_found')
+      }
+      return { handle: 'term_stale', ptyId, tabId: 'tab-1', leafId: LEAF_ID, connected: true }
+    },
+    onPtyExit: () => {
+      paneRetired = true
+    }
+  } as unknown as PtyRuntimeControllerDeps['runtime']
+  ctx.deps.store = {
+    getWorkspaceSession: () => ({})
+  } as unknown as PtyRuntimeControllerDeps['store']
 }
 
 describe('runtime PTY secret references', () => {
@@ -252,6 +278,79 @@ describe('runtime PTY secret references', () => {
       }
     }
   )
+
+  it('resolves credentials for the fresh spawn after failed stable-owner adoption', async () => {
+    const ctx = createState()
+    arrangeStableOwnerPane(ctx, 'pty-runtime-stale')
+    ctx.spawnOptions = {
+      cols: 100,
+      rows: 30,
+      command: '/usr/local/bin/claude',
+      env: { POSTHOG_READ_ONLY: REFERENCE }
+    }
+    const spawn = vi.fn(async (options: PtyProviderSpawnOptions) => {
+      if (options.attachOnly) {
+        throw new SessionNotFoundError('pty-runtime-stale')
+      }
+      return { id: 'pty-runtime-fresh' }
+    })
+    ctx.provider = providerWith(spawn)
+
+    await executeRuntimePtySpawn(ctx)
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({
+      attachOnly: true,
+      sessionId: 'pty-runtime-stale',
+      env: { POSTHOG_READ_ONLY: REFERENCE }
+    })
+    expect(spawn.mock.calls[1]?.[0]).toEqual({
+      cols: 100,
+      rows: 30,
+      command: '/usr/local/bin/claude',
+      env: { POSTHOG_READ_ONLY: SENTINEL }
+    })
+    expect(ctx.spawnOptions.env).toEqual({ POSTHOG_READ_ONLY: REFERENCE })
+    expect(ctx.result).toMatchObject({ id: 'pty-runtime-fresh' })
+  })
+
+  it('adopts a live stable owner without any secret lookup', async () => {
+    const ctx = createState()
+    arrangeStableOwnerPane(ctx, 'pty-runtime-live')
+    ctx.spawnOptions = { cols: 100, rows: 30, env: { POSTHOG_READ_ONLY: REFERENCE } }
+    const spawn = vi.fn(async () => ({ id: 'pty-runtime-live', isReattach: true }))
+    ctx.provider = providerWith(spawn)
+
+    await executeRuntimePtySpawn(ctx)
+
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ attachOnly: true, env: { POSTHOG_READ_ONLY: REFERENCE } })
+    )
+    expect(runProcess).not.toHaveBeenCalled()
+    expect(ctx.result).toMatchObject({ id: 'pty-runtime-live' })
+  })
+
+  it('refuses the fresh spawn when resolution fails after failed adoption', async () => {
+    vi.mocked(runProcess).mockResolvedValue({ ...OK, code: 1 })
+    const ctx = createState()
+    arrangeStableOwnerPane(ctx, 'pty-runtime-gone')
+    ctx.spawnOptions = { cols: 100, rows: 30, env: { POSTHOG_READ_ONLY: REFERENCE } }
+    const spawn = vi.fn(async (options: PtyProviderSpawnOptions) => {
+      if (options.attachOnly) {
+        throw new SessionNotFoundError('pty-runtime-gone')
+      }
+      return { id: 'pty-runtime-must-not-spawn' }
+    })
+    ctx.provider = providerWith(spawn)
+
+    await expect(executeRuntimePtySpawn(ctx)).rejects.toMatchObject({
+      code: 'nonzero-exit',
+      envKey: 'POSTHOG_READ_ONLY'
+    })
+    expect(spawn).toHaveBeenCalledTimes(1)
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({ attachOnly: true })
+  })
 
   it('rejects WSL before Doppler or provider spawn', async () => {
     const ctx = createState()

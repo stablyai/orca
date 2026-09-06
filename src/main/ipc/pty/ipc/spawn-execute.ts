@@ -63,17 +63,14 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
-    const spawnOptions =
-      ctx.preAdoptedStablePane || stablePaneOwnerCandidate
-        ? ctx.spawnOptions
-        : await resolveChildSpawnOptions(ctx)
     const stablePaneSpawn = ctx.preAdoptedStablePane
       ? ctx.preAdoptedStablePane
       : await spawnForStablePane({
           runtime: ctx.deps.runtime,
           store: ctx.deps.store,
           provider: ctx.provider,
-          spawnOptions,
+          spawnOptions: ctx.spawnOptions,
+          resolveFreshSpawnOptions: () => resolveChildSpawnOptions(ctx),
           owner: stablePaneOwnerCandidate,
           worktreeId: args.worktreeId,
           connectionId: args.connectionId,

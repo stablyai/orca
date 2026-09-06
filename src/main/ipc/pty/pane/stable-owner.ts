@@ -166,6 +166,8 @@ export type StablePaneSpawnContext = {
   worktreeId?: string
   connectionId?: string | null
   resolveOwner?: () => StablePaneOwner | null
+  // Why: fresh spawns need launch-time secret resolution; adoption creates no process and must not.
+  resolveFreshSpawnOptions?: () => Promise<PtySpawnOptions>
   onFreshSpawn?: (result: PtySpawnResult) => void
 }
 
@@ -298,7 +300,10 @@ export async function spawnForStablePane(
       return attached
     }
   }
-  const result = await args.provider.spawn(args.spawnOptions)
+  const spawnOptions = args.resolveFreshSpawnOptions
+    ? await args.resolveFreshSpawnOptions()
+    : args.spawnOptions
+  const result = await args.provider.spawn(spawnOptions)
   args.onFreshSpawn?.(result)
   return { result, owner: null }
 }
