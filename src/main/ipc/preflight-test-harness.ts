@@ -20,7 +20,13 @@ export type PreflightMocks = {
   mergePersistedWindowsPathMock: Mock
 }
 
-export const defaultBitbucketStatus = { configured: false, authenticated: false, account: null }
+export const defaultBitbucketStatus = {
+  configured: false,
+  authenticated: false,
+  account: null,
+  baseUrl: null,
+  tokenConfigured: false
+}
 
 export const defaultAzureDevOpsStatus = {
   configured: false,
