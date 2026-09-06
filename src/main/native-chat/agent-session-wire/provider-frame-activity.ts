@@ -21,11 +21,22 @@ function redactSecrets(text: string): string | null {
   }
   return text
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/gi, 'Bearer [redacted]')
-    .replace(/\b(?:sk|xox[baprs]|gh[pousr])-[A-Za-z0-9_-]{12,}\b/gi, '[redacted]')
+    .replace(/\b(?:sk|xox[baprs])-[A-Za-z0-9_-]{12,}\b/gi, '[redacted]')
     .replace(
-      /\b(api[_ -]?key|access[_ -]?token|secret|password|authorization)(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|\S+)/gi,
+      /\b(?:gh[pousr]_[A-Za-z0-9]{12,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})\b/g,
+      '[redacted]'
+    )
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g, '[redacted]')
+    .replace(/(:\/\/[^\s/:@]+:)[^\s@/]+@/g, '$1[redacted]@')
+    .replace(
+      /\b(api[_ -]?key|access[_ -]?token|token|secret|password|authorization)(\s*[:=]\s*)(?:"[^"]*"|'[^']*'|\S+)/gi,
       '$1$2[redacted]'
     )
+}
+
+/** A reasoning summary streams as a bold headline plus body; only the headline is activity copy. */
+function reasoningHeadline(text: string | null | undefined): string | null {
+  return text?.split(/\r?\n/).find((line) => line.trim()) ?? null
 }
 
 /** Keep only a short sentence-shaped preview from provider-declared display fields. */
@@ -36,7 +47,7 @@ export function providerActivityText(value: unknown): string | null {
   }
   const unwrapped = normalized
     .replace(/^(?:#{1,6}|[-+])\s+/, '')
-    .replace(/^\*\*(.+)\*\*$/, '$1')
+    .replace(/^\*\*(.+?)(?:\*\*)?$/, '$1')
     .replace(/^`(.+)`$/, '$1')
     .trim()
   if (
@@ -93,7 +104,7 @@ export function codexProviderFrameActivity(
     return providerActivityText(stringField(source, 'message'))
   }
   if (method === 'item/reasoning/summaryTextDelta') {
-    return providerActivityText(reasoningText)
+    return providerActivityText(reasoningHeadline(reasoningText))
   }
   if (method === 'item/reasoning/summaryPartAdded') {
     return null

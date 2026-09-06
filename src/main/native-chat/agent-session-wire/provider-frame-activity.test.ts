@@ -71,4 +71,40 @@ describe('provider frame activity', () => {
     expect(Array.from(bounded ?? '').length).toBeLessThanOrEqual(MAX_PROVIDER_ACTIVITY_LENGTH)
     expect(bounded?.endsWith('…')).toBe(true)
   })
+
+  it('keeps only the reasoning headline and tolerates an unterminated bold header', () => {
+    expect(
+      codexProviderFrameActivity(
+        'item/reasoning/summaryTextDelta',
+        {},
+        '**Inspecting the workspace**\n\nI am looking at notes.txt before answering.'
+      )
+    ).toBe('Inspecting the workspace')
+    expect(
+      codexProviderFrameActivity('item/reasoning/summaryTextDelta', {}, '**Inspecting the wor')
+    ).toBe('Inspecting the wor')
+  })
+
+  it.each([
+    ['Auth with ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 done', 'Auth with [redacted] done'],
+    [
+      'Using github_pat_11ABCDEFG0abcdefghijklmnop_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123 now',
+      'Using [redacted] now'
+    ],
+    ['Signing with AKIAIOSFODNN7EXAMPLE now', 'Signing with [redacted] now'],
+    [
+      'Session eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c ready',
+      'Session [redacted] ready'
+    ],
+    [
+      'Cloning https://user:hunter2secret@github.com/org/repo.git',
+      'Cloning https://user:[redacted]@github.com/org/repo.git'
+    ],
+    [
+      'Fetching https://api.example.com/v1/data?token=abcdefghijklmnop0123 now',
+      'Fetching https://api.example.com/v1/data?token=[redacted] now'
+    ]
+  ])('redacts %s', (input, expected) => {
+    expect(providerActivityText(input)).toBe(expected)
+  })
 })
