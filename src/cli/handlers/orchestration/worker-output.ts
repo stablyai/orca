@@ -1,3 +1,4 @@
+import { summarizeSubagentGroup } from '../../../shared/native-chat-subagent-summary'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../../shared/runtime-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
@@ -26,6 +27,10 @@ function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
     }
     if (block.type === 'tool-result') {
       return `[tool result${block.isError ? ' error' : ''}] ${block.output}`
+    }
+    if (block.type === 'subagent-group') {
+      const summary = summarizeSubagentGroup(block.agents)
+      return `[subagents] ${summary.total} total, ${summary.working} working`
     }
     return block.url ? `[image] ${block.url}` : `[image omitted]`
   })

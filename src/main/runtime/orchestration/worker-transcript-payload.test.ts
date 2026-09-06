@@ -31,6 +31,67 @@ describe('worker transcript wire bounds', () => {
     expect(result.warnings).toContain('Local image paths were omitted from transcript output.')
   })
 
+  it('bounds a subagent roster instead of passing it through whole', () => {
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-1',
+        role: 'assistant',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: Array.from({ length: 40 }, (_, index) => ({
+              id: `task-${index}-${'i'.repeat(900)}`,
+              label: 'l'.repeat(900),
+              state: 'working'
+            }))
+          }
+        ]
+      }
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    expect(block?.type).toBe('subagent-group')
+    expect(block?.type === 'subagent-group' && block.agents).toHaveLength(20)
+    expect(block?.type === 'subagent-group' && block.agents[0]?.label).toHaveLength(512)
+    expect(block?.type === 'subagent-group' && block.agents[0]?.id).toHaveLength(512)
+    expect(result.warnings).toContain(
+      'Some subagent roster entries were omitted from transcript output.'
+    )
+  })
+
+  it('keeps two roster ids sharing a 512-char prefix distinct', () => {
+    // The id is the roster key: a plain prefix clip would merge the two children.
+    const head = 'a'.repeat(512)
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-1',
+        role: 'assistant',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: [
+              { id: `${head}-one`, label: 'Audit', state: 'working' },
+              { id: `${head}-two`, label: 'Audit', state: 'working' }
+            ]
+          }
+        ]
+      }
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    if (block?.type !== 'subagent-group') {
+      throw new Error('expected a subagent-group block')
+    }
+    expect(block.agents[0]?.id).not.toBe(block.agents[1]?.id)
+    expect(block.agents[0]?.id).toHaveLength(512)
+  })
+
   it('keeps fallback identifiers stable without exposing the transcript path', () => {
     const transcriptPath = 'C:\\Users\\worker\\.codex\\session.jsonl'
     const message = {

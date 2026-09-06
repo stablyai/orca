@@ -38,6 +38,7 @@ import {
   isModeledClaudeContent,
   isSettledClaudeResultKind
 } from './claude-structured-provider-fallback'
+import { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
 
@@ -88,10 +89,16 @@ export function createClaudeJournalTranslator(
   const promptItems = new Map<string, AgentJournalItemIdentity[]>()
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   let currentTurn: { sessionId: string; turnId: string } | null = null
+  const groupKeyOf = (turn: { sessionId: string; turnId: string } | null): string | null =>
+    turn ? `${turn.sessionId}:${turn.turnId}` : null
   const providerFallback = createClaudeProviderFrameFallback(
     deps.sink,
     deps.fallbackIdPrefix ?? 'acquisition'
   )
+  const subagents = new ClaudeSubagentRoster({
+    sink: deps.sink,
+    currentGroupKey: () => groupKeyOf(currentTurn)
+  })
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
@@ -130,6 +137,9 @@ export function createClaudeJournalTranslator(
       return false
     }
     let changed = false
+    if (envelope.parentToolUseId) {
+      subagents.observeChildActivity(envelope.parentToolUseId)
+    }
     const body = claudeMessageBody(envelope)
     // The final frame of a streamed block lands on the block's identity, not its own uuid.
     const identity =
@@ -158,6 +168,8 @@ export function createClaudeJournalTranslator(
         claudeToolIdentity(envelope.sessionId, result.toolUseId),
         claudeToolBody({ tool, result })
       )
+      // A spawn call's result is the parent turn's evidence its child finished.
+      subagents.observeToolResult(result.toolUseId, result.failed)
       // Tool inputs are only needed until their matching result arrives.
       tools.delete(result.toolUseId)
       changed = true
@@ -192,6 +204,9 @@ export function createClaudeJournalTranslator(
       message.parent_tool_use_id === null
     ) {
       if (currentTurn) {
+        // A new turn starting is the only end the previous one gets when its
+        // result never arrives; settling it later would sweep THIS turn.
+        subagents.settleTurn(groupKeyOf(currentTurn))
         publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
       }
       currentTurn = { sessionId: envelope.sessionId, turnId: envelope.uuid }
@@ -231,6 +246,8 @@ export function createClaudeJournalTranslator(
     handle: (event) => {
       if (event.type === 'ended') {
         streamedText.flush()
+        // No event will ever settle a child once the provider is gone.
+        subagents.settleSession()
         if (currentTurn) {
           publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
           currentTurn = null
@@ -250,6 +267,9 @@ export function createClaudeJournalTranslator(
         promptItems.delete(event.promptKey)
         deps.sink.publish()
       } else if (event.type === 'message' && event.message.type === 'result') {
+        // The turn is over however it ended, so a foreground child still
+        // reported as working will never be settled by an event.
+        subagents.settleTurn(groupKeyOf(currentTurn))
         if (currentTurn) {
           publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
           currentTurn = null
@@ -266,6 +286,9 @@ export function createClaudeJournalTranslator(
           providerFallback.append(kind, event.message, failure?.text)
         }
       } else if (event.type === 'message') {
+        // These frames stay `status-chrome`: the roster reads them here, and the
+        // fallback below still drops the raw frame instead of printing an opcode.
+        subagents.observeSystemFrame(event.message)
         if (!handleMessage(event.message, event.startsTurn === true)) {
           providerFallback.append(claudeProviderFrameKind(event.message), event.message)
         }
@@ -282,6 +305,7 @@ export function createClaudeJournalTranslator(
       tools.clear()
       promptItems.clear()
       streamedBlocks.clear()
+      subagents.dispose()
     }
   }
 }

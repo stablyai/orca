@@ -34,7 +34,24 @@ const ProviderFrame = z.object({
   payload: BoundedPayload
 })
 
-const KNOWN_BLOCK_TYPES = new Set(['text', 'tool-call', 'tool-result', 'image-ref'])
+const KNOWN_BLOCK_TYPES = new Set([
+  'text',
+  'tool-call',
+  'tool-result',
+  'image-ref',
+  'subagent-group'
+])
+
+/** Child-agent lifecycle stays an open string for the same reason tool states
+ *  do: a state a newer build writes must not turn the row malformed. */
+const SubagentEntry = z.object({
+  id: z.string(),
+  label: z.string(),
+  state: z.string().min(1),
+  tokens: z.number().optional(),
+  startedAt: z.number().optional(),
+  settledAt: z.number().optional()
+})
 
 /** Renderers select blocks by `type` equality and skip what they cannot draw,
  *  so an unknown block type stays admissible; a known type with a broken
@@ -59,6 +76,11 @@ const Block = z.union([
       path: z.string().optional(),
       url: z.string().optional(),
       alt: z.string().optional()
+    }),
+    z.object({
+      type: z.literal('subagent-group'),
+      groupId: z.string(),
+      agents: z.array(SubagentEntry)
     })
   ]),
   z.object({ type: z.string() }).refine((block) => !KNOWN_BLOCK_TYPES.has(block.type))
