@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { FEATURE_WALL_SETUP_STEPS } from '../../../../shared/feature-wall-setup-steps'
 import { getLocalizedFeatureWallSetupChecklistCopy } from './feature-wall-setup-checklist-localized-copy'
-import ko from '../../i18n/locales/ko.json'
 import en from '../../i18n/locales/en.json'
+import ja from '../../i18n/locales/ja.json'
+import ko from '../../i18n/locales/ko.json'
 
 describe('feature-wall-setup-checklist-localized-copy', () => {
   it('returns non-empty localized name and description for all setup checklist steps', () => {
@@ -13,14 +14,25 @@ describe('feature-wall-setup-checklist-localized-copy', () => {
     }
   })
 
-  it('has valid Korean and English catalog entries for all setup checklist steps', () => {
+  it('has 16 English catalog entries for the setup checklist steps', () => {
     const enKeys = en.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
-    const koKeys = ko.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
     expect(Object.keys(enKeys).length).toBe(16)
-    expect(Object.keys(koKeys).length).toBe(16)
-    for (const [hash, enVal] of Object.entries(enKeys)) {
+    for (const enVal of Object.values(enKeys)) {
       expect(typeof enVal).toBe('string')
-      expect((koKeys as Record<string, string>)[hash]).toBeTruthy()
     }
   })
+
+  it.each(Object.entries({ ja, ko }))(
+    '%s translates every setup checklist step',
+    (_locale, catalog) => {
+      const enKeys = en.auto.components.feature.wall.feature.wall.setup.checklist.localized.copy
+      const localeKeys = catalog.auto.components.feature.wall.feature.wall.setup.checklist.localized
+        .copy as Record<string, string>
+      expect(Object.keys(localeKeys).length).toBe(16)
+      for (const [hash, enVal] of Object.entries(enKeys)) {
+        expect(localeKeys[hash], hash).toBeTruthy()
+        expect(localeKeys[hash], hash).not.toBe(enVal)
+      }
+    }
+  )
 })
