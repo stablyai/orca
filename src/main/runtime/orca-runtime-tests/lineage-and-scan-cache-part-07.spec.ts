@@ -54,6 +54,17 @@ function makeGraph(terminals: readonly RestartTerminal[]) {
  * ORCA_TERMINAL_HANDLE alive so its dispatch still resolves; the coordinator's handle in
  * `runs.coordinator_handle` is only ever rebound by a later orchestration command.
  */
+/** Attention is projected from liveness facts, not lineage; exact equality is on the rest. */
+function lineageOf<T extends { attention?: unknown }>(
+  context: T | undefined
+): Omit<T, 'attention'> | undefined {
+  if (!context) {
+    return undefined
+  }
+  const { attention: _attention, ...lineage } = context
+  return lineage
+}
+
 describe('OrcaRuntimeService orchestration lineage across restart', () => {
   it('projects the coordinator pane key as the worker parent after the handles are reminted', () => {
     const terminals = makeTerminals()
@@ -136,7 +147,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
       const contexts = after.syncWindowGraph(1, makeGraph(terminals)).agentOrchestrationByPaneKey
 
       expect(db.getRun(run.id)?.coordinator_handle).toBe(beforeHandles.coordinator)
-      expect(contexts?.[paneKey('worker')]).toEqual({
+      expect(lineageOf(contexts?.[paneKey('worker')])).toEqual({
         taskId: workerTask.id,
         dispatchId: workerDispatch.id,
         dispatchStatus: 'dispatched',
@@ -150,7 +161,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
       // The nested worker's creator (the worker) kept its daemon handle, but its authority is
       // gated on the process incarnation the task was created under; it must still nest under
       // the worker pane by durable pane key, never fall through to the coordinator.
-      expect(contexts?.[paneKey('nested-worker')]).toEqual({
+      expect(lineageOf(contexts?.[paneKey('nested-worker')])).toEqual({
         taskId: nestedTask.id,
         dispatchId: nestedDispatch.id,
         dispatchStatus: 'dispatched',
@@ -192,7 +203,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
 
       // Why: a handle no live row carries must not reach the renderer, and the durable pane key
       // is still published so the row nests again the moment that pane is restored.
-      expect(context).toEqual({
+      expect(lineageOf(context)).toEqual({
         taskId: task.id,
         dispatchId: dispatch.id,
         dispatchStatus: 'dispatched',
