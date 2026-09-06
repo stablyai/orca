@@ -2,7 +2,7 @@ import { Buffer } from 'buffer/'
 
 export const MOBILE_HTML_PREVIEW_MESSAGE_CHANNEL = 'orca-mobile-html-preview'
 export const MOBILE_HTML_PREVIEW_SCRIPT_CSP_HASH =
-  "'sha256-Kuw/Gf8QkMQB1gqK1oElrANQV0gTKf9FoXMrBCK54d8='"
+  "'sha256-kwh1h6IbgYr08HhgH2Y5HskcfOg80ZUbQJgPpSamqOE='"
 
 export const MOBILE_HTML_PREVIEW_SCRIPT = String.raw`(function () {
   var allowedTags = new Set(
@@ -15,12 +15,13 @@ export const MOBILE_HTML_PREVIEW_SCRIPT = String.raw`(function () {
   );
   var remainingNodes = 20000;
 
-  function safeExternalUrl(value) {
+  function safeExternalUrl(value, httpsOnly) {
     var trimmed = String(value || '').trim();
     if (trimmed.length === 0 || trimmed.length > 4096) return null;
     try {
       var parsed = new URL(trimmed);
-      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? trimmed : null;
+      if (parsed.protocol === 'https:') return trimmed;
+      return httpsOnly !== true && parsed.protocol === 'http:' ? trimmed : null;
     } catch (_) {
       return null;
     }
@@ -56,7 +57,7 @@ export const MOBILE_HTML_PREVIEW_SCRIPT = String.raw`(function () {
       return;
     }
     if (name === 'src' && tag === 'img') {
-      var src = safeRasterDataUrl(value);
+      var src = safeRasterDataUrl(value) || safeExternalUrl(value, true);
       if (src) target.setAttribute('src', src);
       return;
     }
@@ -150,7 +151,8 @@ const MOBILE_HTML_PREVIEW_CSP = [
   "default-src 'none'",
   `script-src ${MOBILE_HTML_PREVIEW_SCRIPT_CSP_HASH}`,
   "style-src 'unsafe-inline'",
-  'img-src data:',
+  // Why: `https:` keeps the remote images main rendered; plaintext `http:` stays blocked.
+  'img-src data: https:',
   "font-src 'none'",
   "connect-src 'none'",
   "media-src 'none'",

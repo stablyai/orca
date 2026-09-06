@@ -43,7 +43,7 @@ describe('mobile HTML preview document', () => {
     expect(shell).toContain(`script-src ${scriptHash}`)
     expect(shell).toContain("default-src 'none'")
     expect(shell).toContain("connect-src 'none'")
-    expect(shell).toContain('img-src data:')
+    expect(shell).toContain('img-src data: https:')
     expect(shell).not.toContain(payload)
     expect(shell.match(/<script>/g)).toHaveLength(1)
   })
@@ -60,7 +60,7 @@ describe('mobile HTML preview document', () => {
       <form action="${sentinel}/form"><input autofocus></form>
       <svg onload="globalThis.pwned=true"><foreignObject>bad</foreignObject></svg>
       <math><mtext>bad</mtext></math>
-      <img id="remote" src="${sentinel}/image.png" onerror="globalThis.pwned=true">
+      <img id="remote" src="http://sentinel.invalid/escape/image.png" onerror="globalThis.pwned=true">
       <img id="svg" src="data:image/svg+xml,&lt;svg onload=alert(1)&gt;">
       <img id="raster" src="data:image/png;base64,iVBORw0KGgo=" alt="safe raster">
       <a id="javascript" href="javascript:alert(1)">bad scheme</a>
@@ -84,6 +84,27 @@ describe('mobile HTML preview document', () => {
     expect(preview.querySelector('#data')?.hasAttribute('href')).toBe(false)
     expect(preview.querySelector('#safe')?.getAttribute('href')).toBe('https://example.com/path')
     expect(preview.querySelectorAll('style')).toHaveLength(1)
+  })
+
+  it('keeps https images the preview policy admits and drops plaintext http ones', () => {
+    const shell = buildMobileHtmlPreviewDocument('')
+    const { document } = executePreviewDocument(
+      [
+        '<img id="secure" src="https://example.com/image.png" alt="remote">',
+        '<img id="plaintext" src="http://example.com/image.png">',
+        '<img id="relative" src="/image.png">'
+      ].join('\n')
+    )
+    const preview = document.getElementById('preview')!
+    const imgSrc = shell.match(/img-src ([^;"]+)/)?.[1] ?? ''
+
+    expect(preview.querySelector('#secure')?.getAttribute('src')).toBe(
+      'https://example.com/image.png'
+    )
+    expect(preview.querySelector('#secure')?.getAttribute('alt')).toBe('remote')
+    expect(preview.querySelector('#plaintext')?.hasAttribute('src')).toBe(false)
+    expect(preview.querySelector('#relative')?.hasAttribute('src')).toBe(false)
+    expect(imgSrc.split(' ')).toEqual(['data:', 'https:'])
   })
 
   it('emits only a token-bound HTTP(S) link message after a sanitized link click', () => {
