@@ -2,7 +2,7 @@ import { addWslEnvKeys } from '../../wsl-env'
 import { extractExecError, parseRetryAfterMs } from '../exec-error'
 import { resolveCommand, resolveDefaultWslCli } from './wsl-command-resolution'
 import { isHostCommandMissing } from './github-cli-host-fallback'
-import { execFileCapture } from './exec-file-capture'
+import { execFileCaptureToTermination } from './exec-file-capture'
 import type { GitExecOptions } from './git-exec-options'
 import { argsLookIdempotent } from './gh-idempotency'
 import {
@@ -63,14 +63,21 @@ export async function glabExecFileAsync(
   let attemptedDefaultWslFallback = false
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
-      const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
-        cwd: resolved.cwd,
-        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-        maxBuffer: options.maxBuffer,
-        timeout: options.timeout ?? DEFAULT_GLAB_EXEC_TIMEOUT_MS,
-        env: options.env,
-        signal: options.signal
-      })
+      // Why to-termination: same shim chain as gh — the deadline has to reap the
+      // whole tree, not just the wrapper that spawned it (#18234).
+      const { stdout, stderr } = await execFileCaptureToTermination(
+        resolved.binary,
+        resolved.args,
+        {
+          cwd: resolved.cwd,
+          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+          maxBuffer: options.maxBuffer,
+          timeout: options.timeout ?? DEFAULT_GLAB_EXEC_TIMEOUT_MS,
+          env: options.env,
+          signal: options.signal
+        },
+        resolved.termination
+      )
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
       lastError = err

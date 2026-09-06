@@ -117,7 +117,8 @@ export function useNativeChatLiveSession(
   // Appended messages accumulate separately from the snapshot so pagination doesn't lose in-flight appends; merged by id and capped to the read window (#6).
   const [appended, setAppended] = useState<NativeChatMessage[]>([])
   // Id-dedup merger backing `appended`; caches the id→index map so each live frame costs O(incoming), not O(existing) (#18).
-  const appendMergerRef = useRef(createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY))
+  const appendMergerRef = useRef<ReturnType<typeof createNativeChatMerger>>(undefined!)
+  appendMergerRef.current ??= createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
 
   const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 

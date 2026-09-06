@@ -72,7 +72,7 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
     if (nextGroups.length > 1 && snapshot.tabGroupLayout) {
       this.persistHeadlessTabGroups(worktreeId, nextGroups, snapshot.tabGroupLayout)
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
   }
@@ -111,7 +111,7 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       tabGroupLayout: split.layout
     }
     this.persistHeadlessTabGroups(worktreeId, split.groups, split.layout)
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
   }
@@ -147,7 +147,7 @@ export class OrcaRuntimeWithMoveHeadlessMobileSessionTab extends OrcaRuntimeWith
       tabGroupLayout: layout
     }
     this.persistHeadlessTabGroups(worktreeId, moved.groups, layout)
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
     return { moved: true }
   }

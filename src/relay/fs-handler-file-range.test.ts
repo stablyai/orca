@@ -105,10 +105,10 @@ describe('readRelayFileRange', () => {
   // which the writer refuses once the producer queue is busy -- so an over-wide
   // cap fails with ResponseOverCapacity depending on unrelated load.
   //
-  // Fitting the lane once is not enough: the control queue is a SHARED budget
-  // and overflowing it closes the client, so a full-cap frame has to leave room
-  // for a second one. Anything wider lets two pipelined tail reads -- or one
-  // read racing an unrelated response -- kill the connection.
+  // Fitting the lane once is not enough: the control queue is a SHARED budget,
+  // so a full-cap frame has to leave room for a second one. Anything wider lets
+  // two pipelined tail reads -- or one read racing an unrelated response --
+  // fail as ResponseOverCapacity on load that has nothing to do with them.
   it('leaves control-queue headroom for a second full-cap window', async () => {
     const contents = Buffer.allocUnsafe(MAX_FILE_RANGE_READ_BYTES)
     for (let i = 0; i < contents.length; i++) {

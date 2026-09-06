@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_STATES } from '../../../shared/agent-status-types'
-import type { AgentRowState } from './agent-row-tool-preview'
+import type { AgentRowState } from './agent-row-decay-state'
 import { formatAgentToolPreview, showsAgentToolPreview } from './agent-row-tool-preview'
 
 const TOOL = { toolName: 'bash', toolInput: 'rm -rf build/' }
-const ROW_STATES: readonly AgentRowState[] = [...AGENT_STATUS_STATES, 'idle']
+const ROW_STATES: readonly AgentRowState[] = [...AGENT_STATUS_STATES, 'idle', 'unverifiable']
 
 describe('showsAgentToolPreview', () => {
   it('covers exactly the two states whose tool fields describe live work', () => {

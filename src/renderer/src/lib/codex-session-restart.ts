@@ -11,6 +11,7 @@ import {
   isCodexForegroundProcess,
   isCodexRestartEligiblePane
 } from './codex-pane-restart-eligibility'
+import { isClientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -93,7 +94,7 @@ async function isConfirmedCodexForegroundDespiteShellReading(
 ): Promise<boolean> {
   if (
     launchAgent !== 'codex' ||
-    inspection.unavailable === true ||
+    isClientOnlyUnverifiableInspection(inspection) ||
     inspection.foregroundProcess === null ||
     !isShellProcess(inspection.foregroundProcess)
   ) {
@@ -170,7 +171,7 @@ async function scanCodexPanes(
       return {
         ptyId,
         eligible,
-        inconclusive: inspection === null || inspection.unavailable === true,
+        inconclusive: inspection === null || isClientOnlyUnverifiableInspection(inspection),
         launchedCodex: tab.launchAgent === 'codex',
         notified: false,
         laneKey: lane.laneKey,

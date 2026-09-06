@@ -14,6 +14,7 @@ import {
   UNCHANGED_AUTOMATION_AGENT_STATUS_ENTRY
 } from './automation-agent-status-entry-change'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isProvenProcessExit } from '../../../shared/terminal-exit-cause'
 
 type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
@@ -33,6 +34,7 @@ export function createAutomationDispatchCompletion(args: {
   let pendingExitCode: number | null = null
   let pendingDone = false
   let completionMarked = false
+  let contactLost = false
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
   let releaseReuseDispatchTab = (): void => {}
@@ -85,8 +87,34 @@ export function createAutomationDispatchCompletion(args: {
       console.error('[automations] Failed to clear retired terminal identity:', error)
     }
   }
+  /**
+   * A lost PTY is not a result. Record nothing: the run keeps its non-final
+   * `dispatched` status, so it is never evicted from history and never shown as
+   * Failed for work that is very likely still running (on SSH, a relay whose
+   * reattach failed). Ownership of an unobservable run belongs to main's
+   * AutomationRunCompletionWatcher, which reports the truthful "lost the
+   * terminal for this run" instead of an exit code nobody witnessed.
+   *
+   * `finalize()` is deliberately never reached here — closing the terminal of a
+   * process we cannot prove dead is what orphans live work.
+   */
+  const abandonUnverifiableRun = (code: number): void => {
+    if (completionMarked || contactLost) {
+      return
+    }
+    contactLost = true
+    cleanupRunObservers()
+    args.releaseTerminalOwnership()
+    console.warn(
+      `[automations] Lost contact with the process for run ${args.run.id} (code ${code}); leaving the run dispatched rather than reporting an exit.`
+    )
+  }
   const markExitResult = async (code: number): Promise<void> => {
     if (completionMarked) {
+      return
+    }
+    if (!isProvenProcessExit(code)) {
+      abandonUnverifiableRun(code)
       return
     }
     completionMarked = true

@@ -63,7 +63,7 @@ describe('FileExplorerVirtualRows add-as-project action', () => {
       statusByRelativePath: new Map(),
       ignoredByRelativePath: new Set(),
       expanded: new Set([directoryNode.path]),
-      dirCache: {},
+      loadingDirPaths: new Set<string>(),
       selectedPaths: new Set(),
       activeFileId: null,
       flashingPath: null,

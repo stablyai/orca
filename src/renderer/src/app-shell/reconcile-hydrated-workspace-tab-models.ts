@@ -3,12 +3,13 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session-st
 /** Reconcile every workspace loaded during boot so stale unified-tab subsets converge. */
 export function reconcileHydratedWorkspaceTabModels(
   session: Pick<WorkspaceSessionState, 'tabsByWorktree'>,
-  reconcileWorktreeTabModel: (worktreeId: string) => unknown
+  // Why batched: one store write for the whole session instead of one per
+  // workspace, each fanning out to every non-React store subscriber.
+  reconcileWorktreeTabModels: (worktreeIds: readonly string[]) => void
 ): string[] {
-  const reconciled: string[] = []
-  for (const worktreeId of Object.keys(session.tabsByWorktree)) {
-    reconcileWorktreeTabModel(worktreeId)
-    reconciled.push(worktreeId)
+  const reconciled = Object.keys(session.tabsByWorktree)
+  if (reconciled.length > 0) {
+    reconcileWorktreeTabModels(reconciled)
   }
   return reconciled
 }

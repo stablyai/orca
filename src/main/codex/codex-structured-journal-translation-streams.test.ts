@@ -89,11 +89,11 @@ describe('codex journal translation', () => {
     const { translator, tap } = translatorWith()
     let rejectTerminal = true
     const appendItem = tap.sink.appendItem
-    tap.sink.tryAppendItem = (identity, body, blobs, options) => {
+    tap.sink.tryAppendItem = (identity, body, options) => {
       if (rejectTerminal && body.kind === 'tool-call' && body.state === 'failed') {
         return { accepted: false as const, reason: 'backpressure' as const }
       }
-      appendItem(identity, body, blobs, options)
+      appendItem(identity, body, options)
       return { accepted: true as const }
     }
     for (let index = 0; index <= 256; index += 1) {

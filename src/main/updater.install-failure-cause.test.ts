@@ -101,6 +101,11 @@ vi.mock('./updater-nudge', () => ({
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))
+vi.mock('./linux-update-package-type', () => ({
+  getLinuxPackageType: () => 'non-root',
+  getLinuxRootPackageType: () => null,
+  isExternallyManagedLinuxInstall: () => false
+}))
 
 // The real electron-updater DebUpdater failure text when elevation is impossible.
 const DEB_ELEVATION_ERROR =
@@ -155,6 +160,8 @@ async function reachDownloaded(): Promise<typeof UpdaterModule> {
   autoUpdaterMock.emit('checking-for-update')
   autoUpdaterMock.emit('update-available', { version: '1.4.163' })
   await new Promise((resolve) => setTimeout(resolve, 0))
+  autoUpdaterMock.downloadUpdate.mockResolvedValue([])
+  updater.downloadUpdate()
   autoUpdaterMock.emit('update-downloaded', { version: '1.4.163' })
   expect(updater.getUpdateStatus().state).toBe('downloaded')
   return updater

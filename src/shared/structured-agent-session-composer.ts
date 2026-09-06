@@ -35,7 +35,10 @@ function commandParts(text: string): { name: string; argument: string } | null {
   return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
 }
 
-function structuredSlashCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
+/** The command catalog a structured session offers and accepts. The composer menu
+ *  and the dispatcher must read the same list, or a menu pick falls through the
+ *  command guard and reaches the model as literal prompt text. */
+export function structuredSlashCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   if (agent === 'codex') {
     return STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
   }

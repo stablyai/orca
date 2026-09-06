@@ -8,6 +8,8 @@ import {
 } from './setup-runner-command'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+// Exported so the gate and its tests share one definition.
+export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 
@@ -126,7 +128,9 @@ function buildPosixStartupScript(
     `IFS=: read -r seen status < ${marker} || true;`,
     `if [ "$seen" = ${nonceValue} ]; then`,
     `rm -f ${marker} ${tmp} 2>/dev/null;`,
-    `if [ "$status" = "0" ]; then if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
+    // Why: failure and timeout announce themselves; a silent success left
+    // "Waiting for setup..." as the pane's last line forever.
+    `if [ "$status" = "0" ]; then echo ${quotePosixArg(SETUP_COMPLETE_MESSAGE)} >&2; if [ -n "\${${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}:-}" ]; then eval "\$${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}"; exit "$?"; else ${startupSuccessCommand}; fi; fi;`,
     'echo "Setup failed; skipping agent startup." >&2;',
     'exit "${status:-1}";',
     'fi;',
@@ -247,6 +251,7 @@ function buildWindowsStartupCommand(
     '        [Console]::Error.WriteLine("Missing sequenced startup command.")',
     '        exit 1',
     '      }',
+    `      [Console]::Error.WriteLine(${quotePowerShellString(SETUP_COMPLETE_MESSAGE)})`,
     '      Invoke-Expression $startup',
     '      if ($global:LASTEXITCODE -ne $null) { exit $global:LASTEXITCODE }',
     '      if (-not $?) { exit 1 }',

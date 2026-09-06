@@ -270,6 +270,7 @@ type NumberFieldProps = {
   integer?: boolean
   onChange: (value: number) => void
   suffix?: string
+  className?: string
 }
 
 export function ColorField({
@@ -315,7 +316,8 @@ export function NumberField({
   step = 1,
   integer = false,
   onChange,
-  suffix
+  suffix,
+  className
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
@@ -346,6 +348,7 @@ export function NumberField({
 
   return (
     <SettingsRow
+      className={className}
       label={label}
       description={
         <>

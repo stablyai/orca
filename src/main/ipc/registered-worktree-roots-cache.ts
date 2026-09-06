@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { getErrorCode } from '../git/worktree-operation-options'
 import type { Store } from '../persistence'
-import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
+import { isRepoRoot, listRepoWorktreeGraph } from '../repo-worktrees'
 import { getLocalRepos } from './filesystem-allowed-roots'
 import { isDescendantOrEqual, normalizeExistingPath } from './filesystem-path-containment'
 
@@ -54,7 +54,7 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
       try {
         roots.push(resolve(repo.path))
 
-        for (const worktree of await listRepoWorktrees(repo)) {
+        for (const worktree of await listRepoWorktreeGraph(repo)) {
           roots.push(resolve(worktree.path))
         }
       } catch (error) {

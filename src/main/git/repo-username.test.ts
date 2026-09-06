@@ -140,6 +140,33 @@ describe('resolveLocalGitUsername', () => {
     await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
   })
 
+  it('stops after a successful empty remote list', async () => {
+    await expect(resolveLocalGitUsernameDetailed('/repo')).resolves.toEqual({
+      username: '',
+      authoritative: true
+    })
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toEqual([
+      ['config', '--get', 'github.user'],
+      ['config', '--get', 'user.username'],
+      ['remote']
+    ])
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps remote fallback probes when remote enumeration fails', async () => {
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    const original = gitExecFileAsyncMock.getMockImplementation()!
+    gitExecFileAsyncMock.mockImplementation(async (...args) => {
+      if (args[0].length === 1 && args[0][0] === 'remote') {
+        throw makeExecError('remote enumeration failed')
+      }
+      return original(...args)
+    })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: 'gh-demo\n', stderr: '' })
+
+    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
+  })
+
   it('uses GitHub CLI login for GitHub remotes instead of repo-local author identity', async () => {
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
     gitConfig['user.email'] = 'demo@example.com'

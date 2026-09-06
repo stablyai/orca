@@ -5,7 +5,6 @@
 // the record store's compare-and-swap, which also owns the idempotency row, so
 // a retried attach replays instead of reserving a second owner.
 
-import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentSessionJournalIdentity,
   AgentSessionProviderHandle
@@ -32,6 +31,7 @@ import {
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -51,7 +51,7 @@ export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
-  agent: AgentType
+  agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
@@ -162,9 +162,18 @@ export async function attachJournal(input: {
     fence,
     historyFilePath
   })
-  return {
-    ...opened,
-    unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+  try {
+    // That await is a WRITE. A failure in it leaves the journal with no caller
+    // holding a reference to close it.
+    return {
+      ...opened,
+      unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+    }
+  } catch (error) {
+    // A rejected close leaves the handle open, so the journal is retained for a
+    // later retry rather than dropped along with the only reference to it.
+    await agentSessionJournalCloseRetries.closeOrRetain(opened.journal)
+    throw error
   }
 }
 

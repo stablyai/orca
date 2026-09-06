@@ -177,6 +177,7 @@ export type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason,
   RuntimeTerminalWaitCondition,
+  RuntimeWorktreeTerminalCloseResult,
   RuntimeWorktreeTerminalSleepResult
 } from './runtime-terminal-contracts'
 export type {

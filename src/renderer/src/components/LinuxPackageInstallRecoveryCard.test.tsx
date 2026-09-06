@@ -3,16 +3,21 @@ import { act, cleanup, fireEvent, render, screen, type RenderResult } from '@tes
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinuxPackageInstallRecovery } from '../../../shared/update-status-types'
+
+const { toastSuccess } = vi.hoisted(() => ({ toastSuccess: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { success: toastSuccess } }))
+
 import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
 
 const RELEASE_URL = 'https://github.com/stablyai/orca/releases/tag/v1.4.200'
 const DIAGNOSTIC = 'pkexec: no polkit authentication agent found'
 const INSTALL_COMMAND = 'sudo apt-get install -y /tmp/orca-updates/orca_1.4.200_amd64.deb'
 const PACKAGE_FILE_NAME = 'orca_1.4.200_amd64.deb'
-const SUMMARY = 'Orca downloaded the update but could not install the system package automatically.'
+const SUMMARY =
+  'Orca downloaded the system package. Quit Orca before finishing the update from a terminal.'
 const COPIED_NOTE =
-  `Command copied. Run it in a system terminal to install ${PACKAGE_FILE_NAME}, ` +
-  'then quit and reopen Orca.'
+  `Command copied. Quit Orca, run it in a system terminal to install ${PACKAGE_FILE_NAME}, ` +
+  'then reopen Orca.'
 const INSTRUCTIONS = {
   ok: true as const,
   command: INSTALL_COMMAND,
@@ -26,17 +31,16 @@ const NO_PACKAGE_MANAGER = {
 
 const getInstructions = vi.fn()
 const showLinuxPackage = vi.fn()
-const quitAndInstall = vi.fn()
 const writeClipboardText = vi.fn()
 const openUrl = vi.fn()
 const onClose = vi.fn()
 const allMocks = [
   getInstructions,
   showLinuxPackage,
-  quitAndInstall,
   writeClipboardText,
   openUrl,
-  onClose
+  onClose,
+  toastSuccess
 ]
 
 function makeRecovery(
@@ -45,7 +49,7 @@ function makeRecovery(
   return {
     kind: 'linux-package-install',
     packageType: 'deb',
-    reason: 'package-install-failed',
+    reason: 'manual-install-required',
     version: '1.4.200',
     ...overrides
   }
@@ -68,14 +72,6 @@ function renderCard(options: CardOptions = {}): RenderResult {
   return render(cardElement(options))
 }
 
-/**
- * Main force-sends a new recovery object on every attempt, which re-renders this card rather than
- * remounting it. That push is the only signal a retry failed — quitAndInstall already resolved.
- */
-function pushFreshRecovery(view: RenderResult, options: CardOptions = {}): void {
-  view.rerender(cardElement({ ...options, recovery: makeRecovery(options.recovery) }))
-}
-
 // Why: each action chains several promises; drain them without depending on timer faking.
 async function flushActions(): Promise<void> {
   await act(async () => {
@@ -85,12 +81,18 @@ async function flushActions(): Promise<void> {
   })
 }
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (reason?: unknown) => void
+} {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
     resolve = res
+    reject = rej
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 function button(name: string): HTMLElement {
@@ -120,8 +122,8 @@ beforeEach(() => {
   allMocks.forEach((mock) => mock.mockReset())
   getInstructions.mockResolvedValue(INSTRUCTIONS)
   showLinuxPackage.mockResolvedValue(undefined)
-  quitAndInstall.mockResolvedValue(undefined)
   writeClipboardText.mockResolvedValue(undefined)
+  openUrl.mockResolvedValue(undefined)
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
@@ -129,8 +131,7 @@ beforeEach(() => {
       ui: { writeClipboardText },
       updater: {
         getLinuxPackageInstallInstructions: getInstructions,
-        showLinuxPackage,
-        quitAndInstall
+        showLinuxPackage
       }
     }
   })
@@ -142,27 +143,27 @@ afterEach(() => {
 })
 
 describe('LinuxPackageInstallRecoveryCard copy', () => {
-  it('leads with the recovery copy and the three dedicated actions', () => {
+  it('leads with the manual-install copy and recovery actions', () => {
     renderCard()
 
-    expect(screen.getByText('Automatic Install Failed')).toBeTruthy()
+    expect(screen.getByText('Manual Install Required')).toBeTruthy()
     expect(screen.getByText(SUMMARY)).toBeTruthy()
     expect(
       screen.getByText(/a system terminal on the computer where Orca is installed/)
     ).toBeTruthy()
-    expect(screen.getByText(/quit and reopen Orca to run the new version/)).toBeTruthy()
+    expect(screen.getByText(/Copy the command, quit Orca/)).toBeTruthy()
 
     expect(button('Copy Install Command')).toBeTruthy()
-    expect(button('Try Automatic Install Again')).toBeTruthy()
     expect(button('Show Package')).toBeTruthy()
+    expect(button('Download Manually')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Automatic Install/ })).toBeNull()
   })
 
   it('never offers the generic Retry Download action', () => {
     renderCard()
 
     expect(screen.queryByRole('button', { name: 'Retry Download' })).toBeNull()
-    // The release fallback only appears once no command can be built.
-    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+    expect(button('Download Manually')).toBeTruthy()
   })
 
   it('minimizes to the status bar from the header control', () => {
@@ -182,71 +183,10 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
 
     expect(getInstructions).toHaveBeenCalledTimes(1)
     expect(writeClipboardText).toHaveBeenCalledWith(INSTALL_COMMAND)
-    // The confirmation names the artifact and never replaces the button's own label.
-    expect(footnoteText()).toBe(COPIED_NOTE)
-    expect(footnoteText()).toContain(PACKAGE_FILE_NAME)
+    expect(toastSuccess).toHaveBeenCalledWith(COPIED_NOTE)
+    expect(footnoteElement()).toBeNull()
     expect(button('Copy Install Command')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Command copied' })).toBeNull()
-  })
-
-  it('announces through the card, not a nested live region', async () => {
-    renderCard()
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-
-    expect(footnoteText()).toBe(COPIED_NOTE)
-    expect(footnoteElement()?.hasAttribute('role')).toBe(false)
-    expect(screen.queryByRole('status')).toBeNull()
-  })
-
-  it('clears the confirmation when another action starts', async () => {
-    renderCard()
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-    expect(footnoteText()).toBe(COPIED_NOTE)
-
-    fireEvent.click(button('Show Package'))
-    await flushActions()
-
-    expect(footnoteElement()).toBeNull()
-  })
-
-  it('clears the confirmation when the automatic install is retried', async () => {
-    renderCard()
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-    expect(footnoteText()).toBe(COPIED_NOTE)
-
-    fireEvent.click(button('Try Automatic Install Again'))
-    await flushActions()
-
-    expect(quitAndInstall).toHaveBeenCalledTimes(1)
-    expect(footnoteElement()).toBeNull()
-  })
-
-  it('retires the copy confirmation after the transient window', async () => {
-    // Why: happy-dom's window timers escape Vitest's fake clock, so capture the scheduled callback.
-    const scheduled: { handler: () => void; delay?: number }[] = []
-    vi.spyOn(window, 'setTimeout').mockImplementation(((handler: () => void, delay?: number) => {
-      scheduled.push({ handler, delay })
-      return scheduled.length
-    }) as unknown as typeof window.setTimeout)
-    vi.spyOn(window, 'clearTimeout').mockImplementation(() => undefined)
-    renderCard()
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-    expect(footnoteText()).toBe(COPIED_NOTE)
-
-    const expiry = scheduled.find((entry) => entry.delay === 4_000)
-    expect(expiry).toBeTruthy()
-    act(() => expiry?.handler())
-
-    expect(footnoteElement()).toBeNull()
-    expect(button('Copy Install Command')).toBeTruthy()
   })
 
   it('keeps the copy path when the instruction call rejects', async () => {
@@ -266,8 +206,8 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
     expect(footnoteElement()?.className).toContain('text-destructive')
     // Why: only main can rule out a command; a rejection must not push the 160 MB redownload.
     expect(button('Copy Install Command').dataset.variant).toBe('default')
-    expect(screen.getByText(/Copy the command and run it/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+    expect(screen.getByText(/Copy the command, quit Orca/)).toBeTruthy()
+    expect(button('Download Manually')).toBeTruthy()
     expect(writeClipboardText).not.toHaveBeenCalled()
   })
 
@@ -281,9 +221,9 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
     await flushActions()
 
     expect(footnoteText()).toBe('The downloaded package no longer matches the verified release.')
-    expect(screen.getByText('Automatic Install Failed')).toBeTruthy()
+    expect(screen.getByText('Manual Install Required')).toBeTruthy()
     expect(button('Copy Install Command').dataset.variant).toBe('default')
-    expect(button('Show Package').dataset.variant).toBe('link')
+    expect(button('Show Package').dataset.variant).toBe('outline')
   })
 
   it('retries the instruction call after a rejection', async () => {
@@ -297,7 +237,8 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
     await flushActions()
 
     expect(getInstructions).toHaveBeenCalledTimes(2)
-    expect(footnoteText()).toBe(COPIED_NOTE)
+    expect(footnoteElement()).toBeNull()
+    expect(toastSuccess).toHaveBeenCalledWith(COPIED_NOTE)
   })
 
   it('keeps the copy path when only the clipboard write fails', async () => {
@@ -313,9 +254,9 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
     const copyButton = button('Copy Install Command')
     expect(copyButton.dataset.variant).toBe('default')
     expect(isAriaDisabled(copyButton)).toBe(false)
-    expect(button('Show Package').dataset.variant).toBe('link')
-    expect(screen.getByText(/Copy the command and run it/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
+    expect(button('Show Package').dataset.variant).toBe('outline')
+    expect(screen.getByText(/Copy the command, quit Orca/)).toBeTruthy()
+    expect(button('Download Manually')).toBeTruthy()
   })
 
   it('recovers from a clipboard failure on the next copy attempt', async () => {
@@ -329,7 +270,69 @@ describe('LinuxPackageInstallRecoveryCard copy action', () => {
     await flushActions()
 
     expect(writeClipboardText).toHaveBeenCalledTimes(2)
-    expect(footnoteText()).toBe(COPIED_NOTE)
+    expect(footnoteElement()).toBeNull()
+    expect(toastSuccess).toHaveBeenCalledWith(COPIED_NOTE)
+  })
+
+  it('does not write a command after the card unmounts', async () => {
+    const pending = deferred<typeof INSTRUCTIONS>()
+    getInstructions.mockReturnValue(pending.promise)
+    const { unmount } = renderCard()
+
+    fireEvent.click(button('Copy Install Command'))
+    unmount()
+    pending.resolve(INSTRUCTIONS)
+    await flushActions()
+
+    expect(writeClipboardText).not.toHaveBeenCalled()
+    expect(toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('does not write a command for a recovery the card has replaced', async () => {
+    const pending = deferred<typeof INSTRUCTIONS>()
+    getInstructions.mockReturnValue(pending.promise)
+    const view = renderCard({ recovery: makeRecovery() })
+
+    fireEvent.click(button('Copy Install Command'))
+    view.rerender(cardElement({ recovery: makeRecovery({ version: '1.4.201' }) }))
+    pending.resolve(INSTRUCTIONS)
+    await flushActions()
+
+    expect(writeClipboardText).not.toHaveBeenCalled()
+    expect(toastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('ignores an instruction rejection from a same-version recovery cycle', async () => {
+    const pending = deferred<typeof INSTRUCTIONS>()
+    const recovery = makeRecovery()
+    getInstructions.mockReturnValue(pending.promise)
+    const view = renderCard({ recovery })
+
+    fireEvent.click(button('Copy Install Command'))
+    view.rerender(cardElement({ recovery: { ...recovery } }))
+    pending.reject(new Error('Package install recovery is no longer current.'))
+    await flushActions()
+
+    expect(footnoteElement()).toBeNull()
+    expect(isAriaDisabled(button('Copy Install Command'))).toBe(false)
+  })
+
+  it('ignores a clipboard rejection from a replaced recovery cycle', async () => {
+    const pending = deferred<void>()
+    const recovery = makeRecovery()
+    writeClipboardText.mockReturnValue(pending.promise)
+    const view = renderCard({ recovery })
+
+    fireEvent.click(button('Copy Install Command'))
+    await flushActions()
+    expect(writeClipboardText).toHaveBeenCalledWith(INSTALL_COMMAND)
+
+    view.rerender(cardElement({ recovery: { ...recovery } }))
+    pending.reject(new Error('Clipboard is unavailable.'))
+    await flushActions()
+
+    expect(footnoteElement()).toBeNull()
+    expect(toastSuccess).not.toHaveBeenCalled()
   })
 })
 
@@ -344,21 +347,18 @@ describe('LinuxPackageInstallRecoveryCard hashing state', () => {
     const checking = button('Checking package...')
     expect(isAriaDisabled(checking)).toBe(true)
     expect(isAriaDisabled(button('Show Package'))).toBe(true)
-    expect(isAriaDisabled(button('Try Automatic Install Again'))).toBe(true)
 
     fireEvent.click(checking)
     fireEvent.click(button('Show Package'))
-    fireEvent.click(button('Try Automatic Install Again'))
 
     // Why: the buttons stay clickable for focus reasons, so the handlers must do the refusing.
     expect(getInstructions).toHaveBeenCalledTimes(1)
     expect(showLinuxPackage).not.toHaveBeenCalled()
-    expect(quitAndInstall).not.toHaveBeenCalled()
 
     pending.resolve(INSTRUCTIONS)
     await flushActions()
 
-    expect(footnoteText()).toBe(COPIED_NOTE)
+    expect(toastSuccess).toHaveBeenCalledWith(COPIED_NOTE)
     expect(isAriaDisabled(button('Show Package'))).toBe(false)
   })
 
@@ -370,7 +370,7 @@ describe('LinuxPackageInstallRecoveryCard hashing state', () => {
     fireEvent.click(button('Copy Install Command'))
 
     // Why: ui/button styles only `disabled:`, so without these an inert action looks fully live.
-    for (const name of ['Checking package...', 'Try Automatic Install Again', 'Show Package']) {
+    for (const name of ['Checking package...', 'Show Package']) {
       expect(button(name).className).toContain('aria-disabled:opacity-50')
       expect(button(name).className).toContain('aria-disabled:cursor-default')
     }
@@ -436,8 +436,11 @@ describe('LinuxPackageInstallRecoveryCard details', () => {
 
     fireEvent.click(button('Show details'))
 
+    expect(screen.getByText('Details')).toBeTruthy()
+    expect(screen.queryByText('Last error')).toBeNull()
     // Why: the digest check is a point-in-time claim, not a standing guarantee about the file.
     const detail = screen.getByText(/Orca checks the downloaded file against the release metadata/)
+    expect(detail.textContent).not.toContain(DIAGNOSTIC)
     expect(detail.textContent).toContain('at the moment it builds this command')
     expect(detail.textContent).toContain(
       'The system package itself is not signature-checked, and Orca cannot vouch for the file ' +
@@ -456,7 +459,10 @@ describe('LinuxPackageInstallRecoveryCard details', () => {
 
   it('scrolls long diagnostics instead of widening the card', () => {
     const long = `${DIAGNOSTIC} ${'diagnostic-overflow '.repeat(400)}`
-    const { container } = renderCard({ diagnostic: long })
+    const { container } = renderCard({
+      diagnostic: long,
+      recovery: makeRecovery({ reason: 'authentication-denied' })
+    })
 
     fireEvent.click(button('Show details'))
 
@@ -468,97 +474,12 @@ describe('LinuxPackageInstallRecoveryCard details', () => {
   })
 })
 
-describe('LinuxPackageInstallRecoveryCard retry', () => {
-  it('retries the automatic install through quitAndInstall', () => {
-    renderCard()
-
-    fireEvent.click(button('Try Automatic Install Again'))
-
-    expect(quitAndInstall).toHaveBeenCalledTimes(1)
-    expect(getInstructions).not.toHaveBeenCalled()
-  })
-
-  it('holds the busy slot while the quit is in flight', async () => {
-    renderCard()
-
-    fireEvent.click(button('Try Automatic Install Again'))
-    await flushActions()
-
-    // Why: the retry now re-proves the package digest before quitting, so the click must report
-    // progress instead of leaving three inert buttons for the length of the hash.
-    expect(isAriaDisabled(button('Checking package...'))).toBe(true)
-    // Why: quitAndInstall resolves as soon as main schedules the install, so a resolved promise is
-    // not an outcome — the slot stays held until a real status arrives.
-    expect(isAriaDisabled(button('Copy Install Command'))).toBe(true)
-    expect(isAriaDisabled(button('Show Package'))).toBe(true)
-
-    fireEvent.click(button('Copy Install Command'))
-    fireEvent.click(button('Show Package'))
-    await flushActions()
-
-    expect(getInstructions).not.toHaveBeenCalled()
-    expect(showLinuxPackage).not.toHaveBeenCalled()
-    expect(quitAndInstall).toHaveBeenCalledTimes(1)
-  })
-
-  it('releases the busy slot when a fresh recovery status arrives', async () => {
-    const view = renderCard()
-
-    fireEvent.click(button('Try Automatic Install Again'))
-    await flushActions()
-    expect(isAriaDisabled(button('Copy Install Command'))).toBe(true)
-
-    // A failed retry never rejects — main pushes a new recovery status a moment later.
-    pushFreshRecovery(view)
-
-    expect(isAriaDisabled(button('Copy Install Command'))).toBe(false)
-    expect(isAriaDisabled(button('Show Package'))).toBe(false)
-    expect(isAriaDisabled(button('Try Automatic Install Again'))).toBe(false)
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-
-    expect(getInstructions).toHaveBeenCalledTimes(1)
-    expect(writeClipboardText).toHaveBeenCalledWith(INSTALL_COMMAND)
-    expect(footnoteText()).toBe(COPIED_NOTE)
-  })
-
-  it('leaves an in-flight hash job busy when a fresh recovery status arrives', () => {
-    const pending = deferred<typeof INSTRUCTIONS>()
-    getInstructions.mockReturnValue(pending.promise)
-    const view = renderCard()
-
-    fireEvent.click(button('Copy Install Command'))
-    pushFreshRecovery(view)
-
-    // Why: the release is scoped to the retry slot — a running hash must keep its busy state.
-    expect(button('Checking package...')).toBeTruthy()
-    expect(isAriaDisabled(button('Show Package'))).toBe(true)
-
-    pending.resolve(INSTRUCTIONS)
-  })
-
-  it('also releases the busy slot if the preload call itself rejects', async () => {
-    quitAndInstall.mockRejectedValue(new Error('Error: updater is not initialized'))
-    renderCard()
-
-    fireEvent.click(button('Try Automatic Install Again'))
-    await flushActions()
-
-    expect(footnoteText()).toBe('updater is not initialized')
-    expect(isAriaDisabled(button('Copy Install Command'))).toBe(false)
-    expect(isAriaDisabled(button('Show Package'))).toBe(false)
-  })
-})
-
 describe('LinuxPackageInstallRecoveryCard reveal', () => {
-  it('reveals the retained package from the link-style action', async () => {
+  it('reveals the retained package from the secondary action', async () => {
     renderCard()
 
     const show = button('Show Package')
-    expect(show.dataset.variant).toBe('link')
-    // The link-style action still has to meet the touch-target floor.
-    expect(show.className).toContain('min-h-[44px]')
+    expect(show.dataset.variant).toBe('outline')
 
     fireEvent.click(show)
     await flushActions()
@@ -578,6 +499,17 @@ describe('LinuxPackageInstallRecoveryCard reveal', () => {
     // Why: a reveal failure is not a command-build failure, so the copy path must survive it.
     expect(button('Copy Install Command')).toBeTruthy()
   })
+
+  it('reports a failed official-release open in place', async () => {
+    openUrl.mockRejectedValue(new Error('Could not open the release page.'))
+    renderCard()
+
+    fireEvent.click(button('Download Manually'))
+    await flushActions()
+
+    expect(footnoteText()).toBe('Could not open the release page.')
+    expect(footnoteElement()?.className).toContain('text-destructive')
+  })
 })
 
 describe('LinuxPackageInstallRecoveryCard without a usable command', () => {
@@ -590,10 +522,8 @@ describe('LinuxPackageInstallRecoveryCard without a usable command', () => {
 
     expect(screen.queryByRole('button', { name: 'Copy Install Command' })).toBeNull()
     expect(button('Show Package').dataset.variant).toBe('default')
-    expect(button('Try Automatic Install Again')).toBeTruthy()
     expect(footnoteText()).toBe(NO_PACKAGE_MANAGER.message)
-    // The copy-and-run explainer would be dead advice with no command to copy.
-    expect(screen.queryByText(/Copy the command and run it/)).toBeNull()
+    expect(screen.getByText(/Quit Orca before finishing the update/)).toBeTruthy()
 
     fireEvent.click(button('Download Manually'))
     expect(openUrl).toHaveBeenCalledWith(RELEASE_URL)
@@ -627,43 +557,6 @@ describe('LinuxPackageInstallRecoveryCard without a usable command', () => {
 
     expect(showLinuxPackage).toHaveBeenCalledTimes(1)
   })
-
-  it('restores the copy path when the automatic install is retried', async () => {
-    getInstructions.mockResolvedValueOnce(NO_PACKAGE_MANAGER)
-    renderCard()
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-    expect(screen.queryByRole('button', { name: 'Copy Install Command' })).toBeNull()
-
-    // Why: a retry re-evaluates the machine, so the earlier "no command" verdict must not stick.
-    fireEvent.click(button('Try Automatic Install Again'))
-    await flushActions()
-
-    expect(quitAndInstall).toHaveBeenCalledTimes(1)
-    expect(button('Copy Install Command').dataset.variant).toBe('default')
-    expect(button('Show Package').dataset.variant).toBe('link')
-    expect(screen.getByText(/Copy the command and run it/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Download Manually' })).toBeNull()
-  })
-
-  it('copies again once a fresh recovery status follows a failed retry', async () => {
-    getInstructions.mockResolvedValueOnce(NO_PACKAGE_MANAGER)
-    const view = renderCard()
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-
-    fireEvent.click(button('Try Automatic Install Again'))
-    await flushActions()
-    pushFreshRecovery(view)
-
-    fireEvent.click(button('Copy Install Command'))
-    await flushActions()
-
-    expect(writeClipboardText).toHaveBeenCalledWith(INSTALL_COMMAND)
-    expect(footnoteText()).toBe(COPIED_NOTE)
-  })
 })
 
 describe('LinuxPackageInstallRecoveryCard keyboard', () => {
@@ -690,8 +583,8 @@ describe('LinuxPackageInstallRecoveryCard keyboard', () => {
       'Minimize to status bar',
       'Show details',
       'Copy Install Command',
-      'Try Automatic Install Again',
-      'Show Package'
+      'Show Package',
+      'Download Manually'
     ]
     for (const name of order) {
       await user.tab()

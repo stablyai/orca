@@ -7,6 +7,10 @@ export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): s
   // these Chromium switches startup can block before the first renderer target.
   const keychainArgs =
     process.platform === 'darwin' ? ['--password-store=basic', '--use-mock-keychain'] : []
+  if (process.platform === 'darwin') {
+    // Crash tests must not block later launches on AppKit's saved-window recovery dialog.
+    return [...keychainArgs, appPath, '-ApplePersistenceIgnoreState', 'YES']
+  }
   if (headful || process.platform !== 'linux') {
     return [...keychainArgs, appPath]
   }

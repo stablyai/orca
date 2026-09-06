@@ -39,7 +39,13 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     return this.stopRequestedPtyIds.has(ptyId)
   }
 
-  /** Null when nothing has been observed either way, so callers keep their own default. */
+  /**
+   * Null when this register holds no defensible claim — a never-asked host, a fresh app start, or
+   * an absence observation too weak to name (a relay that answered but does not know the id: see
+   * the inventory sweep and handlePtyReattachFailure). It is NOT a death certificate, so a caller
+   * authorizing a kill must fail closed on it; a caller that only has this evidence to work with,
+   * like terminal.recoverPane, refuses on the positive verdicts instead.
+   */
   getPtyLivenessVerdict(ptyId: string): PtyLivenessVerdict | null {
     return this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict ?? null
   }
@@ -92,11 +98,9 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
   }
 
   protected rememberPtyLivenessVerdict(ptyId: string, verdict: PtyLivenessVerdict): void {
-    if (verdict.status === 'exited') {
-      // An earned death certificate ends the question; nothing left to remember.
-      this.ptyLivenessVerdictByPtyId.delete(ptyId)
-      return
-    }
+    // An earned death certificate is KEPT, not dropped, so the register is three-valued on disk as
+    // well as in the type. Its only writer is a host-delivered exit frame; nothing weaker may
+    // reach it (docs/reference/ssh-execution-boundary.md).
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.ptyLivenessObservationSequence += 1
     this.ptyLivenessVerdictByPtyId.set(ptyId, {

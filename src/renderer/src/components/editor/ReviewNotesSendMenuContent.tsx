@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import {
   DropdownMenuItem,
@@ -32,7 +32,7 @@ import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timesta
 import { selectLivePtyIdsForWorktree } from '@/components/sidebar/worktree-card-status-inputs'
 import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { agentRowDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 
 type OrderedSendTarget = {
@@ -124,17 +124,18 @@ export function ReviewNotesSendMenuContent({
 
           toast.message(
             activeAgentNotesSendFailureMessage(result.status, {
-              explicitTarget: options.explicitTarget
+              explicitTarget: options.explicitTarget,
+              code: result.code
             })
           )
         })
-        .catch((error) => {
-          console.error('Failed to send notes:', error)
+        .catch(() => {
+          console.error('Failed to send notes:', { code: 'runtime-unverifiable' })
           toast.error(
-            translate(
-              'auto.components.editor.ReviewNotesSendMenuContent.f5096c6e4e',
-              'Could not send notes.'
-            )
+            activeAgentNotesSendFailureMessage('status-unavailable', {
+              explicitTarget: options.explicitTarget,
+              code: 'runtime-unverifiable'
+            })
           )
         })
         .finally(() => {
@@ -245,7 +246,7 @@ function AgentTargetMenuItem({
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
   const tabTitle = target.tabTitle.trim()
-  const state = asDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
+  const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
   const secondaryParts = [
@@ -307,22 +308,6 @@ function orderSendTargetsByWorktreeAgentRows(
   }
 
   return ordered
-}
-
-function asDotState(
-  state: AgentStatusState | 'idle',
-  workingMode?: DashboardAgentRowData['entry']['workingMode']
-): AgentDotState {
-  switch (state) {
-    case 'working':
-      return workingMode === 'monitoring' ? 'monitoring' : 'working'
-    case 'blocked':
-    case 'waiting':
-    case 'done':
-    case 'idle':
-      return state
-  }
-  return 'idle'
 }
 
 function formatAgentRelativeTime(agent: DashboardAgentRowData, now: number): string | null {
