@@ -11,6 +11,8 @@ export type ServeUpdateRequest = {
   schemaVersion: typeof SERVE_UPDATE_SPOOL_SCHEMA_VERSION
   /** Echoed in the result so the app binds the verdict to THIS install attempt. */
   runtimeId: string
+  /** Random per-attempt id echoed in the result; fences a replayed/stale verdict. */
+  attemptId: string
   fromVersion: string
   targetVersion: string
   artifactPath: string
@@ -54,6 +56,8 @@ export function parseServeUpdateRequest(value: unknown): ServeUpdateRequest | nu
     state.schemaVersion !== SERVE_UPDATE_SPOOL_SCHEMA_VERSION ||
     typeof state.runtimeId !== 'string' ||
     state.runtimeId.length === 0 ||
+    typeof state.attemptId !== 'string' ||
+    state.attemptId.length === 0 ||
     typeof state.fromVersion !== 'string' ||
     state.fromVersion.length === 0 ||
     typeof state.targetVersion !== 'string' ||

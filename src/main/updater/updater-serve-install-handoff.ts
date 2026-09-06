@@ -5,6 +5,7 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import {
   clearUpdateRequest,
   clearUpdateResult,
+  getServeUpdateAttemptId,
   getServeUpdateUnitName,
   readServeUpdateResultFor,
   writeUpdateRequest
@@ -115,12 +116,12 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
 
   /** Resolves once the helper's verdict lands in the spool, or null on timeout. Never clears spool state. */
   private async awaitSupervisedServeVerdict(
-    runtimeId: string,
+    attemptId: string,
     targetVersion: string
   ): Promise<{ verdict: ServeUpdateVerdict; message: string } | null> {
     const deadline = Date.now() + SERVE_UPDATE_VERDICT_TIMEOUT_MS
     while (Date.now() < deadline) {
-      const result = readServeUpdateResultFor(runtimeId, targetVersion)
+      const result = readServeUpdateResultFor(attemptId, targetVersion)
       if (result) {
         return result
       }
@@ -166,7 +167,10 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
     const helperRun = this.spawnSupervisedServeHelper().catch((error: unknown) => {
       spawnError = error instanceof Error ? error.message : String(error)
     })
-    const outcome = await this.awaitSupervisedServeVerdict(this.serveUpdateRuntimeId, targetVersion)
+    const attemptId = getServeUpdateAttemptId()
+    const outcome = attemptId
+      ? await this.awaitSupervisedServeVerdict(attemptId, targetVersion)
+      : null
     if (spawnError && !outcome) {
       await helperRun
       clearUpdateRequest()

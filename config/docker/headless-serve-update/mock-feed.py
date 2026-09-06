@@ -7,7 +7,6 @@ latest-linux.yml and download the artifact. stdlib only.
 import argparse
 import functools
 import http.server
-import os
 
 ROOT = "/srv/feed"
 
@@ -25,8 +24,8 @@ def main():
     parser.add_argument("--port", type=int, default=8123)
     parser.add_argument("--root", default=ROOT)
     args = parser.parse_args()
-    os.chdir(args.root)
-    server = http.server.ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
+    handler = functools.partial(Handler, directory=args.root)
+    server = http.server.ThreadingHTTPServer(("0.0.0.0", args.port), handler)
     server.serve_forever()
 
 
