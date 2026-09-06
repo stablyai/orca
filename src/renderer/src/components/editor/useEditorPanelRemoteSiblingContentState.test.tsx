@@ -83,6 +83,9 @@ function HookProbe({ activeFile }: { activeFile: OpenFile }): null {
     isChangesMode: false,
     openFiles: [activeFile],
     gitStatusEntries: undefined,
+    gitBranchEntries: undefined,
+    gitBranchCompareSummary: undefined,
+    changedLineHighlightsEnabled: true,
     editorViewMode: {}
   }).fileContents
   return null

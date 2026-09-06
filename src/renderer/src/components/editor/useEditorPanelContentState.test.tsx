@@ -4,8 +4,12 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
+import type {
+  GitBranchChangeEntry,
+  GitBranchCompareSummary
+} from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import type { DiffContent, FileContent } from './editor-panel-content-types'
+import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn(),
@@ -89,6 +93,8 @@ type ProbeProps = {
   activeFile: OpenFile | null
   openFiles: OpenFile[]
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
+  gitBranchChangesByWorktree?: Record<string, GitBranchChangeEntry[]>
+  gitBranchCompareSummaryByWorktree?: Record<string, GitBranchCompareSummary | null>
 }
 
 const authorizeExternalPath = vi.fn()
@@ -96,24 +102,32 @@ const authorizeExternalPath = vi.fn()
 const onLocalLogTailChanged = vi.fn(() => () => {})
 const fsApi = { authorizeExternalPath, onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
-let latestDiffContents: Record<string, DiffContent> = {}
 let latestReloadContent: (file: OpenFile) => void = () => {}
 const EMPTY_GIT_STATUS_BY_WORKTREE: Record<string, GitStatusEntry[]> = {}
+const EMPTY_GIT_BRANCH_CHANGES_BY_WORKTREE: Record<string, GitBranchChangeEntry[]> = {}
+const EMPTY_GIT_BRANCH_COMPARE_SUMMARY_BY_WORKTREE: Record<string, GitBranchCompareSummary | null> =
+  {}
 
 function HookProbe({
   activeFile,
   openFiles,
-  gitStatusByWorktree = EMPTY_GIT_STATUS_BY_WORKTREE
+  gitStatusByWorktree = EMPTY_GIT_STATUS_BY_WORKTREE,
+  gitBranchChangesByWorktree = EMPTY_GIT_BRANCH_CHANGES_BY_WORKTREE,
+  gitBranchCompareSummaryByWorktree = EMPTY_GIT_BRANCH_COMPARE_SUMMARY_BY_WORKTREE
 }: ProbeProps): null {
   const state = useEditorPanelContentState({
     activeFile,
     isChangesMode: false,
     openFiles,
     gitStatusEntries: activeFile ? gitStatusByWorktree[activeFile.worktreeId] : undefined,
+    gitBranchEntries: activeFile ? gitBranchChangesByWorktree[activeFile.worktreeId] : undefined,
+    gitBranchCompareSummary: activeFile
+      ? gitBranchCompareSummaryByWorktree[activeFile.worktreeId]
+      : undefined,
+    changedLineHighlightsEnabled: true,
     editorViewMode: {}
   })
   latestFileContents = state.fileContents
-  latestDiffContents = state.diffContents
   latestReloadContent = state.reloadContent
   return null
 }
@@ -137,7 +151,6 @@ describe('useEditorPanelContentState', () => {
 
   beforeEach(() => {
     latestFileContents = {}
-    latestDiffContents = {}
     authorizeExternalPath.mockReset()
     authorizeExternalPath.mockResolvedValue(undefined)
     onLocalLogTailChanged.mockClear()
@@ -378,60 +391,6 @@ describe('useEditorPanelContentState', () => {
     )
   })
 
-  it('loads folder workspace branch diffs through the path-specific SSH connection', async () => {
-    const activeFile = createOpenFile({
-      id: 'branch-diff',
-      filePath: '/home/neil/platform/api/src/file.ts',
-      relativePath: 'api/src/file.ts',
-      worktreeId: 'folder:folder-workspace-1',
-      mode: 'diff',
-      diffSource: 'branch',
-      branchCompare: {
-        baseRef: 'main',
-        compareRef: 'feature',
-        compareVersion: 'feature',
-        baseOid: 'base',
-        headOid: 'head',
-        mergeBase: 'merge-base'
-      }
-    })
-    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
-    mocks.getRuntimeGitBranchDiff.mockResolvedValue({
-      kind: 'text',
-      originalContent: 'old',
-      modifiedContent: 'remote branch diff',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('remote branch diff')
-    )
-    expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
-      'folder:folder-workspace-1',
-      '/home/neil/platform/api/src/file.ts'
-    )
-    expect(mocks.getRuntimeGitBranchDiff).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: 'folder:folder-workspace-1',
-        worktreePath: '/home/neil/platform',
-        connectionId: 'ssh-1'
-      }),
-      expect.objectContaining({
-        compare: expect.objectContaining({ headOid: 'head', mergeBase: 'merge-base' }),
-        filePath: 'api/src/file.ts'
-      })
-    )
-  })
-
   it('does not read locally while a remote host worktree owner is still hydrating (#6648)', async () => {
     const activeFile = createOpenFile({
       filePath: '/home/user/project/src/index.ts',
@@ -506,107 +465,6 @@ describe('useEditorPanelContentState', () => {
         worktreeId: 'wt-1'
       })
     )
-  })
-
-  it('keeps a loaded unstaged diff when git status moves the row to staged', async () => {
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    mocks.getRuntimeGitDiff.mockResolvedValue({
-      kind: 'text',
-      originalContent: 'old',
-      modifiedContent: 'large diff content',
-      originalIsBinary: false,
-      modifiedIsBinary: false
-    })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(
-        <HookProbe
-          activeFile={activeFile}
-          openFiles={[activeFile]}
-          gitStatusByWorktree={{
-            'wt-1': [{ path: 'file.ts', status: 'modified', area: 'unstaged' }]
-          }}
-        />
-      )
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('large diff content')
-    )
-
-    await act(async () => {
-      root?.render(
-        <HookProbe
-          activeFile={activeFile}
-          openFiles={[activeFile]}
-          gitStatusByWorktree={{
-            'wt-1': [{ path: 'file.ts', status: 'modified', area: 'staged' }]
-          }}
-        />
-      )
-    })
-
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(1)
-  })
-
-  it('reloads a loaded unstaged diff when its own status row is still present', async () => {
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    mocks.getRuntimeGitDiff
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'first diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'refreshed diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('first diff content')
-    )
-
-    await act(async () => {
-      root?.render(
-        <HookProbe
-          activeFile={activeFile}
-          openFiles={[activeFile]}
-          gitStatusByWorktree={{
-            'wt-1': [{ path: 'file.ts', status: 'modified', area: 'unstaged' }]
-          }}
-        />
-      )
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('refreshed diff content')
-    )
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
   })
 
   it('starts a fresh file read for a forced reload instead of reusing the in-flight read', async () => {
@@ -763,103 +621,6 @@ describe('useEditorPanelContentState', () => {
       await staleRead.promise
     })
     expect(latestFileContents[activeFile.id]?.content).toBe('fresh reopen content')
-  })
-
-  it('ignores an older diff read that resolves after a newer forced diff read', async () => {
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    const staleDiff = createDeferred<DiffContent>()
-    const freshDiff = createDeferred<DiffContent>()
-    mocks.getRuntimeGitDiff
-      .mockReturnValueOnce(staleDiff.promise)
-      .mockReturnValueOnce(freshDiff.promise)
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-    await vi.waitFor(() => expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(1))
-
-    dispatchExternalFileChange(activeFile, '/repo')
-    await vi.waitFor(() => expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2))
-
-    await act(async () => {
-      freshDiff.resolve({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'fresh diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-      await freshDiff.promise
-    })
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('fresh diff content')
-    )
-
-    await act(async () => {
-      staleDiff.resolve({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'stale diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-      await staleDiff.promise
-    })
-    expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('fresh diff content')
-  })
-
-  it('routes reloadContent for a diff tab to a forced diff refetch, not a file read', async () => {
-    // Why: the changed-on-disk banner's "Reload from Disk" on an unstaged
-    // diff tab must refetch the diff body — routing it to the file store
-    // would leave the visible diff stale (and vice versa for edit tabs).
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    mocks.getRuntimeGitDiff
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'first diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'reloaded diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('first diff content')
-    )
-
-    await act(async () => {
-      latestReloadContent(activeFile)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('reloaded diff content')
-    )
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
-    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
   })
 
   it('routes reloadContent for an edit tab to a forced file read, not a diff refetch', async () => {

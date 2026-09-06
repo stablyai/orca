@@ -178,6 +178,7 @@ function props(activeFile: OpenFile, content: string) {
     editBuffers: {},
     openFiles: [activeFile],
     worktreeEntries: [],
+    branchEntries: [],
     resolvedLanguage: 'typescript',
     isMarkdown: false,
     isMermaid: false,

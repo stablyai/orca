@@ -11114,6 +11114,10 @@
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
         },
+        "EditorChangedLineHighlightsSetting": {
+          "67d39a5ae2": "Changed Line Highlights",
+          "d483e27bbc": "Tint changed lines while editing a tracked file, and color changed files in the file tree."
+        },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
           "availableCount": "{{value0}} ready to update",
