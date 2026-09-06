@@ -4,10 +4,7 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone,
-  PaneExternalDropHandler,
-  PaneExternalDropResolver,
-  PaneExternalDropTarget
+  DropZone
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
@@ -68,7 +65,7 @@ export type {
   PaneExternalDropTarget,
   PaneExternalDropResolver,
   PaneExternalDropHandler
-}
+} from './pane-manager-types'
 
 export class PaneManager {
   private root: HTMLElement
@@ -313,10 +310,12 @@ export class PaneManager {
 
   suspendRendering(): void {
     this.renderingSuspended = true
-    suspendPaneRendering(this.panes.values(), {
-      owner: this,
-      livePanes: () => (this.destroyed ? [] : this.panes.values())
-    })
+    suspendPaneRendering(
+      this.panes.values(),
+      this.options.retainHiddenWebgl === false
+        ? undefined
+        : { owner: this, livePanes: () => (this.destroyed ? [] : this.panes.values()) }
+    )
   }
 
   resumeRendering(): void {

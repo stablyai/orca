@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ManagedPaneInternal } from './pane-manager-types'
+import type { ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
+import { PaneManager } from './pane-manager'
 import {
   releaseHiddenWebglRetention,
   resetHiddenWebglRetentionForTest,
@@ -27,6 +28,13 @@ function retentionFor(owner: object, panes: ManagedPaneInternal[]) {
   return { owner, livePanes: () => panes }
 }
 
+// panes is private, and the retention branch is only reachable through a mounted pane.
+function managerWithPane(pane: ManagedPaneInternal, options: Partial<PaneManagerOptions>) {
+  const manager = new PaneManager({} as HTMLElement, options as PaneManagerOptions)
+  Object.assign(manager, { panes: new Map([[1, pane]]) })
+  return manager
+}
+
 describe('terminal-webgl-hidden-retention', () => {
   beforeEach(() => {
     resetHiddenWebglRetentionForTest()
@@ -48,6 +56,25 @@ describe('terminal-webgl-hidden-retention', () => {
     suspendPaneRendering(panes)
     expect(addon?.dispose).toHaveBeenCalled()
     expect(panes[0].webglAddon).toBeNull()
+  })
+
+  it('disposes a floating manager context on hide so reopen cannot reuse a corrupt atlas', () => {
+    const pane = createPane()
+    const addon = pane.webglAddon
+    managerWithPane(pane, { retainHiddenWebgl: false }).suspendRendering()
+    expect(addon?.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.webglAttachmentDeferred).toBe(true)
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
+  })
+
+  // Why: pins the option's polarity — an inverted default would silently strand
+  // every ordinary worktree on the dispose branch.
+  it('retains an ordinary manager context on hide', () => {
+    const pane = createPane()
+    managerWithPane(pane, {}).suspendRendering()
+    expect(pane.webglAddon).not.toBeNull()
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(1)
   })
 
   // Why: the retained branch's blur is already pinned above; only the dispose branch changed.
