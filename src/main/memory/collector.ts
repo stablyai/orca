@@ -179,7 +179,11 @@ async function enumerateWindows(): Promise<ProcRow[]> {
   return enumerateWindowsProcessResources()
 }
 /** Walk every descendant PID of `root`, inclusive. Exported for tests. */
-export function collectSubtree(index: ProcIndex, root: number): number[] {
+export function collectSubtree(
+  index: ProcIndex,
+  root: number,
+  excludedPids?: ReadonlySet<number>
+): number[] {
   const result: number[] = []
   const seen = new Set<number>()
   const queue = [root]
@@ -188,7 +192,10 @@ export function collectSubtree(index: ProcIndex, root: number): number[] {
     if (pid === undefined) {
       break
     }
-    if (seen.has(pid)) {
+    // Once a PID was attributed to an earlier PTY, its complete subtree was
+    // already traversed. Do not walk those descendants again for overlapping
+    // PTY roots (common when several panes share a supervisor).
+    if (seen.has(pid) || excludedPids?.has(pid)) {
       continue
     }
     seen.add(pid)
@@ -295,7 +302,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     let sessionPrivateMemory = 0
 
     if (pty.pid != null) {
-      for (const pid of collectSubtree(processIndex, pty.pid)) {
+      for (const pid of collectSubtree(processIndex, pty.pid, claimed)) {
         if (claimed.has(pid)) {
           continue
         }

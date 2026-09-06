@@ -69,9 +69,13 @@ export class WebRuntimeConnectionHeartbeat {
       return
     }
     if (this.heartbeatProbeSentAt === null && now - this.lastInboundFrameAt >= HEARTBEAT_IDLE_MS) {
-      if (this.options.sendProbe()) {
-        this.heartbeatProbeSentAt = now
-      }
+      // Why the deadline is armed before the send and regardless of its result: a probe that could
+      // not be written is the strongest evidence the link is gone, not a reason to stop watching.
+      // Gating this on a successful send disarms the only branch above that can declare the socket
+      // dead, so a saturated or half-open socket would never be judged at all -- the same wedge
+      // fixed on the SSH transport in #17817. See also #17823.
+      this.heartbeatProbeSentAt = now
+      this.options.sendProbe()
     }
   }
 

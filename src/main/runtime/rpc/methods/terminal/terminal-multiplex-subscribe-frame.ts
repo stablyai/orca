@@ -40,7 +40,7 @@ export function installMultiplexSubscribeFrame(
       if (state.streams.get(request.streamId) !== installedStream) {
         return
       }
-      state.detachStream(request.streamId, false)
+      state.detachStream(request.streamId, null)
       state.sendStreamError(
         request.streamId,
         error instanceof Error ? error.message : String(error)
@@ -62,7 +62,7 @@ export function installMultiplexSubscribeFrame(
       if (state.streams.get(request.streamId) !== stream) {
         return
       }
-      state.detachStream(request.streamId, false)
+      state.detachStream(request.streamId, null)
       state.sendStreamError(
         request.streamId,
         error instanceof Error ? error.message : String(error)

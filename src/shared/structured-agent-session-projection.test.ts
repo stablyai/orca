@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { parsePaneKey } from './stable-pane-id'
 import {
@@ -6,6 +7,7 @@ import {
   hasPersistedStructuredAgentSessionTurn,
   projectStructuredItemToNativeChat,
   projectStructuredAgentSessionStatus,
+  projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
 } from './structured-agent-session-projection'
 
@@ -44,6 +46,52 @@ describe('structured agent session status projection', () => {
     expect(projectStructuredAgentSessionStatus([running, completed])).toBe('idle')
   })
 
+  it('summarizes status with the newest user prompt, and null before any persisted turn', () => {
+    const running = item('running', 3, {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId: 'turn-1', state: 'running' }
+    })
+    const first = item('first', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'first' }]
+    })
+    const second = item('second', 2, {
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: 'second' },
+        { type: 'text', text: 'line' }
+      ]
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([running])).toEqual({
+      status: null,
+      latestPrompt: ''
+    })
+    expect(projectStructuredAgentSessionStatusSummary([first, second, running])).toEqual({
+      status: 'working',
+      latestPrompt: 'second line'
+    })
+    expect(projectStructuredAgentSessionStatusSummary([first, second])).toEqual({
+      status: 'idle',
+      latestPrompt: 'second line'
+    })
+  })
+
+  it('bounds the wire prompt at the shared agent-status preview cap', () => {
+    const pasted = item('pasted', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH * 40) }]
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([pasted]).latestPrompt).toHaveLength(
+      AGENT_STATUS_MAX_FIELD_LENGTH
+    )
+  })
+
   it('creates a deterministic pane identity for status stores', () => {
     const paneKey = structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')
 
@@ -79,6 +127,21 @@ describe('structured agent session status projection', () => {
         text: 'codex · notification:new/event',
         providerFrame: expect.objectContaining({ kind: 'notification:new/event' })
       })
+    ])
+  })
+
+  it('preserves structured tool lifecycle state for the live renderer', () => {
+    const projected = projectStructuredItemToNativeChat(
+      item('running-tool', 1, {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'cat package.json' },
+        state: 'running'
+      })
+    )
+
+    expect(projected?.blocks).toEqual([
+      { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
     ])
   })
 })

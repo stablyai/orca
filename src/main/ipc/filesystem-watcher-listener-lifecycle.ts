@@ -7,6 +7,7 @@ import {
   UNWATCHABLE_ROOT_CACHE_MAX,
   watcherLifecycleState
 } from './filesystem-watcher-lifecycle-state'
+import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 
 export function rememberUnwatchableRoot(rootKey: string): void {
   const { unwatchableRoots } = watcherLifecycleState
@@ -203,9 +204,7 @@ function cleanupLocalWatchersForSender(senderId: number): void {
         clearTimeout(pending)
         watcherLifecycleState.pendingTeardowns.delete(key)
       }
-      if (watchedRoot.batch.timer) {
-        clearTimeout(watchedRoot.batch.timer)
-      }
+      cancelLocalBatchFlush(watchedRoot)
       trackDetachedLocalUnsubscribe(key, watchedRoot)
       watcherLifecycleState.watchedRoots.delete(key)
     }

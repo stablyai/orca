@@ -45,6 +45,7 @@ export function buildClaudeStatusPayload(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     interrupted: options.interrupted,
     sessionBoundary: options.sessionBoundary,
     turnCompletedAt: options.turnCompletedAt,

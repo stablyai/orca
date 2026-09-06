@@ -1,7 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeStatusSlice } from './runtime-status-types'
+export type {
+  RuntimeEnvironmentStatus,
+  RuntimeStatusRefreshOptions,
+  RuntimeStatusSlice
+} from './runtime-status-types'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
 import {
   clearRecentRuntimeCompatibilityFailure,
@@ -16,105 +20,27 @@ import {
 import { reconcileCatalogRows } from './repo-identity-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
+import * as runtimeStatusDiagnostics from './runtime-status-diagnostics-generation'
+import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 import {
   ensureBrowserClientHostForRestartedRuntime,
   ensureBrowserClientHostsForRestoredPages
 } from '@/runtime/restored-client-hosted-browser-host-attach'
 import * as runtimeStatusRecheck from './runtime-status-recheck'
-
-/** Live status for one saved runtime environment, as last observed by the
- * renderer. `status === null` records a probe that failed or timed out so the
- * sidebar can still distinguish "unknown/unreachable" from "never checked". */
-export type RuntimeEnvironmentStatus = {
-  status: RuntimeStatus | null
-  appVersion?: string | null
-  /** When the stored status was last *observed to change*; an unchanged re-probe
-   * is dropped rather than rewritten, so this is not a probe-freshness clock. */
-  checkedAt: number
-  connectionGeneration?: number
-}
-
-export type RuntimeStatusRefreshOptions = {
-  /** Whether a failed probe is published as `null`. True (default) for a user-initiated check:
-   * the user asked and we could not reach the host. False for a caller that just watched the
-   * control transport prove the host alive — `status.get` dials its own short-lived socket with
-   * a fresh handshake, so it can fail while that transport stays healthy, and per
-   * `docs/reference/ssh-execution-boundary.md` such a failure is `unverifiable`, never `exited`.
-   * Publishing it over a live cached verdict manufactures a stuck-offline sidebar. */
-  publishUnreachable?: boolean
-}
-
-export type RuntimeStatusSlice = {
-  /** Saved remote Orca servers. Host pickers use this to show user-chosen names
-   * instead of opaque runtime ids. */
-  runtimeEnvironments: readonly PublicKnownRuntimeEnvironment[]
-  /** True only after the saved-runtime catalog has loaded successfully. Gates
-   * fail-closed host routing, so a failed read must NOT flip it. */
-  runtimeEnvironmentCatalogHydrated: boolean
-  /** True once the catalog read has finished, successfully or not. Surfaces that
-   * only need to stop waiting (skill discovery) read this instead of
-   * `runtimeEnvironmentCatalogHydrated`, so a failed read degrades rather than
-   * leaving them pending for the whole session. */
-  runtimeEnvironmentCatalogSettled: boolean
-  /** Keyed by runtime environment id. Fed into buildExecutionHostRegistry so
-   * compat verdicts/blocked health show live in the sidebar host pickers. */
-  runtimeStatusByEnvironmentId: Map<string, RuntimeEnvironmentStatus>
-  /** Tombstones of runtime environment ids that were removed from the saved list
-   * this session and not yet re-added. Distinct from "absent from
-   * `runtimeEnvironments`", which also matches not-yet-hydrated envs — a
-   * catalog-merge guard keyed on mere absence would drop legitimate runtime repos
-   * during boot before the saved list hydrates (#8881). */
-  removedRuntimeEnvironmentIds: ReadonlySet<string>
-  /** Replaces the saved-environment list, trims stale status entries, and
-   * retires state owned by any environment that just left the saved list. */
-  setRuntimeEnvironments: (environments: readonly PublicKnownRuntimeEnvironment[]) => void
-  /** Merges one environment's status. Replaces the prior entry for that id. */
-  setRuntimeEnvironmentStatus: (
-    environmentId: string,
-    status: RuntimeEnvironmentStatus,
-    options?: { suppressDisconnectToast?: boolean }
-  ) => void
-  /** Drops a removed environment so stale hosts don't linger in the registry. */
-  clearRuntimeEnvironmentStatus: (environmentId: string) => void
-  /** Drops every entry whose id is not in the saved-environments set. */
-  retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
-  /** Probes one saved runtime and records the latest reachable/unreachable state.
-   * `publishUnreachable: false` records nothing when the probe fails, for callers that
-   * already hold live evidence the host is up (see the option's doc below). */
-  refreshRuntimeEnvironmentStatus: (
-    environmentId: string,
-    timeoutMs?: number,
-    options?: RuntimeStatusRefreshOptions
-  ) => Promise<boolean>
-  /** Best-effort: list saved environments and probe each so the sidebar shows
-   * live health at boot, before the settings pane is ever opened. */
-  hydrateRuntimeEnvironmentStatuses: () => Promise<void>
-}
-
-const connectionGenerationByEnvironment = new Map<string, number>()
-
-export function getRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
-  return connectionGenerationByEnvironment.get(environmentId) ?? 0
-}
+import * as runtimeStatusDiagnosticsPublish from './runtime-status-diagnostics-publish'
 
 export const clearRuntimeEnvironmentConnectionGenerationsForTests = (): void => {
-  runtimeStatusRecheck.cancelRuntimeStatusRechecks(connectionGenerationByEnvironment.keys())
-  connectionGenerationByEnvironment.clear()
+  runtimeStatusRecheck.cancelRuntimeStatusRechecks(
+    runtimeStatusConnectionGeneration.clearRuntimeEnvironmentConnectionGenerations()
+  )
+  runtimeStatusDiagnostics.clearRuntimeEnvironmentDiagnosticsGenerationsForTests()
 }
 
-export const setRuntimeEnvironmentConnectionGenerationForTests = (
-  environmentId: string,
-  generation: number
-): void => {
-  connectionGenerationByEnvironment.set(environmentId, generation)
-}
-
-function advanceRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
-  const next = getRuntimeEnvironmentConnectionGeneration(environmentId) + 1
-  connectionGenerationByEnvironment.set(environmentId, next)
-  return next
-}
+export {
+  getRuntimeEnvironmentConnectionGeneration,
+  setRuntimeEnvironmentConnectionGenerationForTests
+} from './runtime-status-connection-generation'
 
 export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeStatusSlice> = (
   set,
@@ -158,7 +84,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       for (const id of nextStatuses.keys()) {
         if (!keep.has(id)) {
           nextStatuses.delete(id)
-          advanceRuntimeEnvironmentConnectionGeneration(id)
+          runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
           statusesChanged = true
         }
       }
@@ -166,7 +92,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         if (nextStatuses.delete(id)) {
           statusesChanged = true
         }
-        advanceRuntimeEnvironmentConnectionGeneration(id)
+        runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
       }
       // Add just-removed ids as tombstones and clear any that were re-added, so an
       // in-flight catalog merge for a removed env can be dropped without mistaking a
@@ -252,10 +178,14 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         (previous?.status == null || previous.status.runtimeId !== status.status.runtimeId)
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       const connectionGeneration = connectionChanged
-        ? advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+        ? runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(
+            environmentId
+          )
         : (previous?.connectionGeneration ??
           status.connectionGeneration ??
-          getRuntimeEnvironmentConnectionGeneration(environmentId))
+          runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(
+            environmentId
+          ))
       if (activeEnvironmentId === environmentId && (sessionEnded || connectionChanged)) {
         bumpProviderRuntimeSessionGeneration()
       }
@@ -290,15 +220,13 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     runtimeStatusRecheck.reconcileRuntimeStatusRecheck({
       environmentId,
       status: status.status,
-      connectionGeneration: getRuntimeEnvironmentConnectionGeneration(environmentId),
+      connectionGeneration:
+        runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(environmentId),
       environmentExists: () =>
         get().runtimeEnvironments.some((environment) => environment.id === environmentId),
-      getConnectionGeneration: () => getRuntimeEnvironmentConnectionGeneration(environmentId),
-      publish: (nextStatus) =>
-        get().setRuntimeEnvironmentStatus(environmentId, {
-          status: nextStatus,
-          checkedAt: Date.now()
-        })
+      getConnectionGeneration: () =>
+        runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(environmentId),
+      publish: (entry) => get().setRuntimeEnvironmentStatus(environmentId, entry)
     })
     if (runtimeRestarted) {
       void ensureBrowserClientHostForRestartedRuntime(get(), environmentId)
@@ -312,11 +240,21 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     }
   },
 
+  publishRuntimeEnvironmentDiagnostics:
+    runtimeStatusDiagnosticsPublish.createRuntimeEnvironmentDiagnosticsSlicePublisher({
+      getCurrent: (environmentId) => get().runtimeStatusByEnvironmentId.get(environmentId),
+      setState: (updater) =>
+        set((s) => runtimeStatusDiagnosticsPublish.updateRuntimeStatusStore(s, updater)),
+      getStore: get,
+      getConnectionGeneration:
+        runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration
+    }),
+
   clearRuntimeEnvironmentStatus: (environmentId) => {
     runtimeStatusRecheck.cancelRuntimeStatusRecheck(environmentId)
     dismissRuntimeDisconnectedToast(environmentId)
     set((s) => {
-      advanceRuntimeEnvironmentConnectionGeneration(environmentId)
+      runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(environmentId)
       if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
         return s
       }
@@ -348,15 +286,15 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   },
 
   refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
-    refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (status) => {
-      if (status === null && options?.publishUnreachable === false) {
+    refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (entry) => {
+      if (entry.status === null && options?.publishUnreachable === false) {
         // Unverifiable, not exited: leave the cached verdict for the caller's retry to settle.
         return
       }
       // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
-      get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })
-      if (status) {
+      get().setRuntimeEnvironmentStatus(environmentId, entry)
+      if (entry.status) {
         // Why here: hydration can ask before the environment is reachable, and a restored
         // client-hosted page only comes back once this desktop attaches as its host.
         void ensureBrowserClientHostsForRestoredPages(get())

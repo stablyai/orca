@@ -17,7 +17,6 @@
 main/agent-hooks/wsl-hook-relay-launch.ts
 main/browser/wsl-browser-network-relay-launch.ts
 main/claude-accounts/claude-command-process.ts
-main/codex-accounts/runtime-home-service.ts
 main/codex-accounts/service.ts
 main/codex/codex-state-db-backfill-recovery.ts
 main/codex/codex-trust-grant-host.ts

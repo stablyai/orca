@@ -27,6 +27,8 @@ import {
 
 // Why: a cold CI run extracts the baseline checkout before the first journey.
 const SUITE_TIMEOUT_MS = 180_000
+// Last stable release before SnapshotStart began publishing terminal mode metadata.
+const TERMINAL_MODE_METADATA_LEGACY_REF = 'v1.4.190'
 
 /**
  * The frames one journey must produce, named rather than numbered so a diff reads
@@ -60,11 +62,18 @@ let baseline: TerminalWireBuild
 let currentReference: JourneyRecord
 /** What the baseline host publishes to a client of its own version. */
 let baselineReference: JourneyRecord
+let legacyTerminalModeMetadata: TerminalWireBuild
 
 beforeAll(async () => {
   baselineRef = resolveBaselineReleaseRef()
-  current = await loadTerminalWireBuild(WORKING_TREE)
-  baseline = await loadTerminalWireBuild(baselineRef)
+  const [workingTree, baselineRelease, legacyRelease] = await Promise.all([
+    loadTerminalWireBuild(WORKING_TREE),
+    loadTerminalWireBuild(baselineRef),
+    loadTerminalWireBuild(TERMINAL_MODE_METADATA_LEGACY_REF)
+  ])
+  current = workingTree
+  baseline = baselineRelease
+  legacyTerminalModeMetadata = legacyRelease
   currentReference = await runTerminalSkewJourney({ hostBuild: current, clientBuild: current })
   baselineReference = await runTerminalSkewJourney({ hostBuild: baseline, clientBuild: baseline })
 }, SUITE_TIMEOUT_MS)
@@ -260,6 +269,24 @@ describe('cross-version remote terminal wire', () => {
       expect(stalled.record.rejected).toContainEqual(
         expect.objectContaining({ direction: 'client-to-host', rawOpcode: inputOpcode })
       )
+    },
+    SUITE_TIMEOUT_MS
+  )
+
+  it(
+    'new client handles a release without terminal mode metadata',
+    async () => {
+      const record = await runTerminalSkewJourney({
+        hostBuild: legacyTerminalModeMetadata,
+        clientBuild: current
+      })
+      expect(record.hostLabel).toBe(TERMINAL_MODE_METADATA_LEGACY_REF)
+      expectJourneyActuallyRan(record)
+      expectWireCompatible(record)
+      for (const start of record.snapshotStarts) {
+        expect(start).not.toHaveProperty('terminalOwner')
+        expect(start).not.toHaveProperty('alternateScreen')
+      }
     },
     SUITE_TIMEOUT_MS
   )

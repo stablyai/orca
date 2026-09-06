@@ -16,21 +16,9 @@
   },
   "overrides": [
     {
-      "files": ["app/h/*/session/*.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 5015, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
       "files": ["src/terminal/TerminalWebView.tsx"],
       "rules": {
         "max-lines": ["error", { "max": 379, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["src/terminal/terminal-webview-html.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 1784, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

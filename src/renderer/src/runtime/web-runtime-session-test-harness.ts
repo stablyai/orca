@@ -151,6 +151,10 @@ export function stubBrowserTabCreateEnvironment(mocks: WebRuntimeSessionMocks): 
     browserPagesByWorkspace: {},
     browserTabsByWorktree: {},
     remoteBrowserPageHandlesByPageId: {},
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    activeTabIdByWorktree: {},
+    activeGroupIdByWorktree: {},
     unifiedTabsByWorktree: {
       [WORKTREE_ID]: [
         {
@@ -200,6 +204,10 @@ export function stubTerminalCreateEnvironment(mocks: WebRuntimeSessionMocks): vo
       activeRuntimeEnvironmentId: ENVIRONMENT_ID
     },
     activeWorktreeId: WORKTREE_ID,
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    activeTabIdByWorktree: {},
+    activeGroupIdByWorktree: {},
     browserPagesByWorkspace: {},
     remoteBrowserPageHandlesByPageId: {},
     createBrowserTab: mocks.createBrowserTab,

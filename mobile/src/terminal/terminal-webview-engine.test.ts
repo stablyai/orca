@@ -1,15 +1,14 @@
-import { readFileSync } from 'node:fs'
 import { Script } from 'node:vm'
 import { parse } from 'acorn'
 import { describe, expect, it, vi } from 'vitest'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { XTERM_HTML } from './terminal-webview-html'
+import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 
-const terminalHtmlSource = readFileSync(
-  new URL('./terminal-webview-html.ts', import.meta.url),
-  'utf8'
-)
+// Assert against the assembled document so extracted fragments cannot silently
+// disappear from the WebView while source-level checks still pass.
+const terminalHtmlSource = readTerminalWebViewHtmlSource()
 
 function createWebglRecoveryHarness(failSecondAttach = false) {
   const variablesStart = terminalHtmlSource.indexOf('  var webglAddon = null;')

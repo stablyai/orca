@@ -1,0 +1,61 @@
+---
+title: Agent session history
+description: Browse and resume past Claude, Codex, Cursor, Gemini, and other agent sessions from Orca's right sidebar.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+Orca scans the on-disk session transcripts that supported agent CLIs leave behind and lists them in a right-sidebar panel called **Agent Session History**. Pick a past session, click **Resume**, and Orca runs the agent's resume command in a fresh terminal — same `cwd`, same session ID, no manual `--resume` flag wrangling.
+
+## Open the panel
+
+Open the right sidebar and switch to the **Agents** tab. The panel header reads "Agent Session History".
+
+The header shows a count like `12 shown · 47 recent` and a search box. Type to filter by session title, working directory, branch, model, or preview text from the conversation.
+
+## Scope
+
+The scope toggle at the top of the panel decides which sessions appear:
+
+- **Workspace** — sessions from the current workspace or worktree, depending on the active workspace context.
+- **Project** — sessions that resolve to the active Orca project.
+- **All** — every session Orca found across every agent on this machine.
+
+Remote workspaces can browse local history, but resume actions only run from local workspaces — Orca tells you so in the panel when the active worktree is remote.
+
+## View options
+
+The view-options menu (next to the search box) controls which agents are scanned, plus sort and grouping:
+
+- **Agents** — toggle individual CLIs on or off (Claude, Codex, Hermes, Pi, OMP, Prime Agent, Cursor, Gemini, Antigravity, Rovo Dev, Copilot, OpenCode, Grok, OpenClaw, Devin, Droid, Kimi). Disabled agents are skipped during the scan. Use **Select all** / **Clear** in the Agents header to flip every agent at once — **Clear** leaves none selected so you can turn on only the CLI you care about without unchecking a long list. An empty selection shows **No agents selected** instead of the usual empty-filter message.
+- **Sort** — `Last updated` or `Created`.
+- **Group** — `Project`, `Folder` (one heading per `cwd`), or `Agent` (one heading per CLI).
+- **Hide empty sessions** — drop sessions with zero recorded messages.
+
+## Resume a session
+
+Click a session row to open its details: working directory, branch, model, message count, **First prompt**, and the latest conversation turns. **First prompt** loads the untruncated first user message from the transcript when you expand details (list rows only keep a short preview for search). Use **Copy** on that card to put the full ask on the clipboard — useful for reusing a long prompt without reopening the log. You can also drag an enabled session row into the workspace to resume it. From the row's actions you can:
+
+- **Resume** — opens a new terminal in the session's `cwd` and runs the agent's resume command (e.g. `claude --resume <id>`, `codex resume <id>`, `pi --session <session_file>`, `prime-agent --resume <path>`, `cursor-agent --resume <id>`, `acli rovodev run --restore <id>`). Codex sessions also re-export `CODEX_HOME` when the original session set one.
+
+Pi resumes from the on-disk session file reported by its hooks (`--session <path>`), not from a bare session id. If that file is missing, Resume is unavailable for that row even when a session id exists.
+
+- **Copy resume command** — copies the same shell command to the clipboard for use in an external terminal.
+- **Copy session ID** / **Copy log path** — for scripting or attaching transcripts to bug reports.
+- **Open log** / **Reveal log** — open the raw transcript file in Orca, or jump to it in your OS file manager.
+- **Open cwd** — open the session's working directory as a workspace.
+
+<Callout title="Resume needs a local workspace">
+  Resume runs the agent CLI on the machine where Orca is rendering. If you're connected to a remote
+  workspace, switch back to a local one (or use **Copy resume command** and run it on the remote
+  yourself) before clicking **Resume**.
+</Callout>
+
+## Where the transcripts come from
+
+Orca reads each agent's own on-disk session store — Codex's `~/.codex/sessions`, Claude's `~/.claude` history, Cursor's session log, OpenCode's legacy session files or `~/.local/share/opencode/opencode.db`, and so on. There's nothing extra to enable; if the CLI writes a transcript, it shows up in the panel after the next scan. Use the **Refresh Session History** button in the header to rescan on demand.
+
+## Next steps
+
+- [Hot-swap Codex accounts](/docs/agents/codex-hot-swap) — switch the Codex login behind an active session without restarting it.
+- [Hooks & memory](/docs/agents/hooks-memory) — control what context an agent picks up on every launch (including resumed sessions).

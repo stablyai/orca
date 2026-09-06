@@ -18,18 +18,19 @@ export function reservedPtySourceSendLength(
 }
 
 function reclaimCreditedSpans(record: DeliveryRecord): void {
+  let removed = 0
   while (record.spans[0]?.sourceEndSu <= record.creditedEndSu) {
     record.retainedDataBytes -= chargedPtyRetainedStringBytes(record.spans.shift()!.data)
+    removed += 1
+  }
+  if (removed > 0) {
+    record.sendSpanIndex = Math.max(0, record.sendSpanIndex - removed)
   }
 }
 
 function advanceCredit(record: DeliveryRecord, creditedEndSu: number): void {
   record.creditedEndSu = creditedEndSu
-  for (const boundary of record.sentBoundaries) {
-    if (boundary < creditedEndSu) {
-      record.sentBoundaries.delete(boundary)
-    }
-  }
+  record.sentBoundaries.dropBelow(creditedEndSu)
   reclaimCreditedSpans(record)
 }
 
@@ -93,6 +94,10 @@ export function commitPtySourceSend(
 ): boolean {
   if (record.pendingSend !== reservation) {
     throw new Error('PTY source send reservation is stale')
+  }
+  // sentBoundaries lookups and cleanup both assume ascending order, so inserts must ascend.
+  if (reservation.span.sourceEndSu <= record.sentEndSu) {
+    throw new Error('PTY source send reservation regresses the sent boundary')
   }
   record.pendingSend = null
   record.sentEndSu = reservation.span.sourceEndSu

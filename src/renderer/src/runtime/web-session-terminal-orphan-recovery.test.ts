@@ -90,7 +90,7 @@ describe('web session terminal orphan recovery', () => {
       state,
       missingSnapshot,
       'windows-2',
-      call as never
+      { call: call as never }
     ).then((result) => {
       settled = true
       return result
@@ -142,7 +142,7 @@ describe('web session terminal orphan recovery', () => {
     )
   })
 
-  it('does not apply absence when an exact recoverable orphan cannot be adopted yet', async () => {
+  it('keeps an exact recoverable orphan visible when adoption is unavailable', async () => {
     const worktree = 'repo::/worktree'
     const call = vi.fn(async ({ method }) =>
       method === 'terminal.list'
@@ -192,8 +192,12 @@ describe('web session terminal orphan recovery', () => {
     }
 
     await expect(
-      recoverWebSessionTerminalOrphansBeforeApply(state, missing, 'windows-2', call as never)
-    ).resolves.toBeNull()
+      recoverWebSessionTerminalOrphansBeforeApply(state, missing, 'windows-2', {
+        call: call as never
+      })
+    ).resolves.toMatchObject({
+      tabs: [expect.objectContaining({ terminal: 'term_live', status: 'ready' })]
+    })
   })
 
   it('proposes pruned pane and group topology using host tab identities', async () => {
@@ -308,9 +312,43 @@ describe('web session terminal orphan recovery', () => {
         state,
         { ...adoptedSnapshot, publicationEpoch: 'missing' },
         'windows-2',
-        call as never
+        { call: call as never }
       )
-    ).resolves.toEqual(adoptedSnapshot)
+    ).resolves.toEqual({
+      ...adoptedSnapshot,
+      tabs: [
+        {
+          type: 'terminal',
+          id: 'agent-tab::leaf-agent',
+          parentTabId: 'agent-tab',
+          leafId: 'leaf-agent',
+          title: 'Terminal',
+          isActive: false,
+          status: 'ready',
+          terminal: 'term_agent'
+        },
+        {
+          type: 'terminal',
+          id: 'agent-tab::leaf-setup',
+          parentTabId: 'agent-tab',
+          leafId: 'leaf-setup',
+          title: 'Terminal',
+          isActive: false,
+          status: 'ready',
+          terminal: 'term_setup'
+        },
+        {
+          type: 'terminal',
+          id: 'shell-tab::leaf-shell',
+          parentTabId: 'shell-tab',
+          leafId: 'leaf-shell',
+          title: 'Terminal',
+          isActive: true,
+          status: 'ready',
+          terminal: 'term_shell'
+        }
+      ]
+    })
     expect(call).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
@@ -433,8 +471,25 @@ describe('web session terminal orphan recovery', () => {
     }
 
     await expect(
-      recoverWebSessionTerminalOrphansBeforeApply(state, hostSnapshot, 'windows-2', call as never)
-    ).resolves.toEqual(adoptedSnapshot)
+      recoverWebSessionTerminalOrphansBeforeApply(state, hostSnapshot, 'windows-2', {
+        call: call as never
+      })
+    ).resolves.toEqual({
+      ...adoptedSnapshot,
+      tabs: [
+        ...adoptedSnapshot.tabs,
+        {
+          type: 'terminal',
+          id: 'host-tab::leaf-orphan',
+          parentTabId: 'host-tab',
+          leafId: 'leaf-orphan',
+          title: 'Terminal',
+          isActive: false,
+          status: 'ready',
+          terminal: 'term_orphan'
+        }
+      ]
+    })
     expect(call).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -531,25 +586,19 @@ describe('web session terminal orphan recovery', () => {
           leafId: 'leaf-1',
           title: 'closed',
           isActive: false,
-          status: 'pending-handle' as const,
-          terminal: null
+          status: 'ready' as const,
+          terminal: 'term_live'
         }
       ]
     }
 
-    const first = recoverWebSessionTerminalOrphansBeforeApply(
-      state,
-      missing,
-      'windows-2',
-      call as never
-    )
+    const first = recoverWebSessionTerminalOrphansBeforeApply(state, missing, 'windows-2', {
+      call: call as never
+    })
     await vi.waitFor(() => expect(rejectFirstAdoption).not.toBeNull())
-    const second = recoverWebSessionTerminalOrphansBeforeApply(
-      state,
-      converged,
-      'windows-2',
-      call as never
-    )
+    const second = recoverWebSessionTerminalOrphansBeforeApply(state, converged, 'windows-2', {
+      call: call as never
+    })
     rejectFirstAdoption!()
 
     await expect(first).resolves.toBeNull()

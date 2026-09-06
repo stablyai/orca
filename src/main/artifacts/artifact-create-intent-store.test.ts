@@ -1,9 +1,12 @@
-import { execFileSync } from 'node:child_process'
 import { mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ARTIFACT_CLI_MAX_RPC_BYTES, artifactWriteRequestByteLength } from '../../shared/artifacts'
+import {
+  ARTIFACT_MAX_CONTENT_BYTES,
+  ARTIFACT_MAX_REQUEST_BYTES,
+  artifactWriteRequestByteLength
+} from '../../shared/artifacts'
 import {
   MAX_ARTIFACT_CREATE_INTENT_BYTES,
   MAX_PENDING_ARTIFACT_CREATES,
@@ -12,9 +15,14 @@ import {
   getOrCreateArtifactCreateIntent,
   removeArtifactCreateIntent
 } from './artifact-create-intent-store'
+import { runProcessSync } from '../../shared/child-process/run-process'
+import { __resetSecureFileWindowsUserSidForTests } from '../../shared/secure-file'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
-vi.mock('node:child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: vi.fn(),
+  runProcessSync: vi.fn()
+}))
 
 const createdPaths: string[] = []
 const scope: ArtifactShareScope = {
@@ -164,12 +172,27 @@ describe('artifact create intent store', () => {
     expect((await readdir(directory)).some((name) => name.endsWith('.tmp'))).toBe(false)
   })
 
-  it('hardens one Windows journal directory without per-file PowerShell launches', async () => {
+  it('hardens one Windows journal directory without per-file ACL launches', async () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    vi.mocked(execFileSync).mockImplementation((file) =>
-      String(file).endsWith('whoami.exe') ? '"USER","S-1-5-21-1000"' : ''
-    )
+    const ok = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+    // Earlier cases in this file already resolved (and cached) the SID against an unstubbed mock.
+    __resetSecureFileWindowsUserSidForTests()
+    vi.mocked(runProcessSync).mockImplementation((spec) => {
+      if (spec.program.endsWith('whoami.exe')) {
+        return { ...ok, stdout: '"USER","S-1-5-21-1000"' }
+      }
+      const args = spec.args ?? []
+      if (args.length > 1) {
+        return ok // /reset and the /grant:r pass
+      }
+      // The verify pass re-reads the DACL; answer with the three protected inheritable rules.
+      const rules = ['host\\me', 'NT AUTHORITY\\SYSTEM', 'BUILTIN\\Administrators'].map(
+        (name, index) =>
+          index === 0 ? `${args[0]} ${name}:(OI)(CI)(F)` : `   ${name}:(OI)(CI)(F)`
+      )
+      return { ...ok, stdout: `${rules.join('\r\n')}\r\n\r\nSuccessfully processed 1 files\r\n` }
+    })
     try {
       const userDataPath = await createUserDataPath()
       getOrCreateArtifactCreateIntent(
@@ -189,16 +212,20 @@ describe('artifact create intent store', () => {
         body
       )
 
-      const powershellCalls = vi
-        .mocked(execFileSync)
-        .mock.calls.filter(([file]) => String(file).endsWith('powershell.exe'))
-      expect(powershellCalls).toHaveLength(1)
-      expect((powershellCalls[0]![1] as string[]).at(-1)).toBe('1')
+      // One harden across both intents: counted by its /reset pass, which opens each harden.
+      const aclCalls = vi
+        .mocked(runProcessSync)
+        .mock.calls.map(([spec]) => spec)
+        .filter((spec) => spec.program.endsWith('icacls.exe'))
+      expect(aclCalls.filter((spec) => spec.args?.includes('/reset'))).toHaveLength(1)
+      // The child intent files rely on inheritance, so the directory rules must carry (OI)(CI).
+      const grant = aclCalls.find((spec) => spec.args?.includes('/grant:r'))
+      expect(grant?.args?.filter((arg) => arg.endsWith(':(OI)(CI)(F)'))).toHaveLength(3)
     } finally {
       if (originalPlatform) {
         Object.defineProperty(process, 'platform', originalPlatform)
       }
-      vi.mocked(execFileSync).mockReset()
+      vi.mocked(runProcessSync).mockReset()
     }
   })
 
@@ -270,12 +297,15 @@ describe('artifact create intent store', () => {
     ).toThrow(/unsupported format/)
   })
 
-  it('persists a valid artifact request near the RPC limit', async () => {
+  it('persists an escaped artifact within the recovery limit', async () => {
     const userDataPath = await createUserDataPath()
-    const nearLimitBody = { ...body, content: 'x'.repeat(ARTIFACT_CLI_MAX_RPC_BYTES - 200) }
+    const nearLimitBody = {
+      ...body,
+      content: '"'.repeat(Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 2))
+    }
     expect(
       artifactWriteRequestByteLength({ sourceKey: '/repo/report.html', ...nearLimitBody })
-    ).toBeLessThanOrEqual(ARTIFACT_CLI_MAX_RPC_BYTES)
+    ).toBeLessThanOrEqual(ARTIFACT_MAX_REQUEST_BYTES)
 
     expect(() =>
       getOrCreateArtifactCreateIntent(
@@ -289,7 +319,41 @@ describe('artifact create intent store', () => {
     ).not.toThrow()
     const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
     const [fileName] = await readdir(directory)
-    expect((await stat(join(directory, fileName))).size).toBeGreaterThan(ARTIFACT_CLI_MAX_RPC_BYTES)
+    expect((await stat(join(directory, fileName))).size).toBeGreaterThan(ARTIFACT_MAX_CONTENT_BYTES)
+  })
+
+  it('rejects oversized artifact content before creating a recovery record', async () => {
+    const userDataPath = await createUserDataPath()
+    expect(() =>
+      getOrCreateArtifactCreateIntent(
+        'local-profile',
+        userDataPath,
+        '/repo/report.html',
+        scope,
+        'key-a',
+        { ...body, content: 'x'.repeat(ARTIFACT_MAX_CONTENT_BYTES + 1) }
+      )
+    ).toThrow(/10 MiB limit/)
+  })
+
+  it('rejects a recovery body whose escaped request exceeds the transport budget', async () => {
+    const userDataPath = await createUserDataPath()
+    const content = '\u0000'.repeat(Math.ceil(ARTIFACT_MAX_REQUEST_BYTES / 6))
+    expect(content.length).toBeLessThan(ARTIFACT_MAX_CONTENT_BYTES)
+    expect(
+      artifactWriteRequestByteLength({ sourceKey: '/repo/report.html', ...body, content })
+    ).toBeGreaterThan(ARTIFACT_MAX_REQUEST_BYTES)
+
+    expect(() =>
+      getOrCreateArtifactCreateIntent(
+        'local-profile',
+        userDataPath,
+        '/repo/report.html',
+        scope,
+        'key-a',
+        { ...body, content }
+      )
+    ).toThrow(/supported size/)
   })
 
   it('rejects an oversized recovery record before reading it', async () => {

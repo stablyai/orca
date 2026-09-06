@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { DiffSection } from '../../diff-section-types'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
@@ -21,7 +20,7 @@ export function useCombinedDiffSectionRevalidation({
   registry,
   requestSectionReload,
   sectionIndexByKeyRef,
-  sections,
+  sectionEntries,
   shouldAutoReloadFromGitStatus,
   treeMode
 }: {
@@ -30,7 +29,9 @@ export function useCombinedDiffSectionRevalidation({
   registry: CombinedDiffSectionLoadRegistry
   requestSectionReload: (index: number) => void
   sectionIndexByKeyRef: React.RefObject<ReadonlyMap<string, number>>
-  sections: DiffSection[]
+  // The entry set is structurally stable while individual section content/loading state changes.
+  // Use it for the status signature so progressive loads do not rescan the section array.
+  sectionEntries: readonly { path: string }[]
   shouldAutoReloadFromGitStatus: boolean
   treeMode: CombinedDiffFileTreeMode
 }): string {
@@ -39,8 +40,8 @@ export function useCombinedDiffSectionRevalidation({
     if (!shouldAutoReloadFromGitStatus) {
       return ''
     }
-    return buildCombinedGitStatusSignature(sections, gitStatusEntries)
-  }, [gitStatusEntries, sections, shouldAutoReloadFromGitStatus])
+    return buildCombinedGitStatusSignature(sectionEntries, gitStatusEntries)
+  }, [gitStatusEntries, sectionEntries, shouldAutoReloadFromGitStatus])
   const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
 
   useEffect(() => {

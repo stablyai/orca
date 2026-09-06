@@ -9,7 +9,7 @@ import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
 const mocks = vi.hoisted(() => ({
   remountTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
-  getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => null),
+  getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => ({})),
   recordRendererCrashBreadcrumb: vi.fn(),
   hasPty: vi.fn<(id: string) => Promise<boolean | null>>(async () => true)
 }))
@@ -32,7 +32,7 @@ beforeEach(() => {
   mocks.remountTerminalTabForRecovery.mockClear()
   mocks.remountTerminalTabForRecovery.mockReturnValue(true)
   mocks.getTab.mockClear()
-  mocks.getTab.mockReturnValue(null)
+  mocks.getTab.mockReturnValue({})
   mocks.recordRendererCrashBreadcrumb.mockClear()
   mocks.hasPty.mockClear()
   mocks.hasPty.mockResolvedValue(true)
@@ -148,6 +148,35 @@ describe('requestTerminalPaneRecovery', () => {
       })
     }
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
+  })
+
+  it('releases recovery budget and retries when the tab closes', async () => {
+    vi.useFakeTimers()
+    const instance = registerTerminalPaneRecoveryInstance('tab-1')
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      vi.setSystemTime(attempt * 20_000)
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled'
+      })
+    }
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
+    expect(vi.getTimerCount()).toBe(1)
+
+    mocks.getTab.mockReturnValue(null)
+    instance.unregister()
+
+    expect(captureTerminalPaneRecoveryGeneration('tab-1')).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+    mocks.getTab.mockReturnValue({})
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled'
+      })
+    ).toBe(true)
   })
 
   it('a window-cap decline schedules a retry that heals when the window reopens', async () => {

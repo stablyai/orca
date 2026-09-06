@@ -1,6 +1,3 @@
-import { createServer } from 'node:http'
-import type { AddressInfo } from 'node:net'
-import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { readHostBrowserPageIds, readHostBrowserPageUrl } from './helpers/host-session-tabs'
@@ -9,308 +6,23 @@ import {
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
+import {
+  findMirroredBrowserPage,
+  focusClientBrowserRow,
+  navigateGuest,
+  openClientHostedFixturePage,
+  readClientBrowserRows,
+  selectPairedWorktreeGroup,
+  startClientHostedMarkerFixture,
+  waitForPairedWorktreeId,
+  waitForRenderedClientWebview
+} from './helpers/client-hosted-browser-fixture'
+import {
+  refreshAuthorityRuntimeId,
+  waitForRelaunchedRuntime
+} from './helpers/client-hosted-runtime-relaunch'
 
 const CLIENT_NAME = 'STA-4150 client-hosted restart survival'
-
-type MarkerFixture = {
-  close(): Promise<void>
-  markerUrl: string
-  /** A second page the guest reaches on its own, to tell "survived" from "survived where". */
-  movedUrl: string
-  origin: string
-}
-
-async function startMarkerFixture(): Promise<MarkerFixture> {
-  const server = createServer((request, response) => {
-    const marker = request.url === '/moved' ? 'moved-on' : 'restart-survivor'
-    response.writeHead(200, {
-      'cache-control': 'no-store',
-      'content-type': 'text/html; charset=utf-8'
-    })
-    response.end(
-      `<!doctype html><html><head><title>${marker}</title></head>` +
-        `<body><h1 id="marker">${marker}</h1></body></html>`
-    )
-  })
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      server.off('error', reject)
-      resolve()
-    })
-  })
-  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
-  return {
-    close: () =>
-      new Promise<void>((resolve, reject) => {
-        server.closeAllConnections()
-        server.close((error) => (error ? reject(error) : resolve()))
-      }),
-    markerUrl: `${origin}/survivor`,
-    movedUrl: `${origin}/moved`,
-    origin
-  }
-}
-
-/** Navigates the guest itself, the way following a link does — no client-side URL entry involved. */
-async function navigateGuest(page: Page, fromUrl: string, toUrl: string): Promise<void> {
-  const navigated = await page.evaluate(
-    async ({ fromUrl, toUrl }) => {
-      for (const candidate of document.querySelectorAll('webview')) {
-        const webview = candidate as Electron.WebviewTag
-        try {
-          if (!webview.getURL().startsWith(fromUrl)) {
-            continue
-          }
-          await webview.loadURL(toUrl)
-          return true
-        } catch {
-          // The guest may still be attaching.
-        }
-      }
-      return false
-    },
-    { fromUrl, toUrl }
-  )
-  if (!navigated) {
-    throw new Error(`No client-hosted guest was showing ${fromUrl} to navigate`)
-  }
-}
-
-type MirroredBrowserPage = {
-  localPageId: string
-  placementKind: 'client' | 'server' | null
-  remotePageId: string
-  url: string
-}
-
-async function findPairedWorktreeId(page: Page, repoPath: string): Promise<string | null> {
-  return page.evaluate(
-    (path) =>
-      window.__store
-        ?.getState()
-        .allWorktrees()
-        .find((worktree) => worktree.path === path)?.id ?? null,
-    repoPath
-  )
-}
-
-async function waitForPairedWorktreeId(page: Page, repoPath: string): Promise<string> {
-  await expect
-    .poll(() => findPairedWorktreeId(page, repoPath), {
-      timeout: 120_000,
-      message: 'paired client never received the host worktree'
-    })
-    .not.toBeNull()
-  const worktreeId = await findPairedWorktreeId(page, repoPath)
-  if (!worktreeId) {
-    throw new Error('Paired worktree disappeared after discovery')
-  }
-  return worktreeId
-}
-
-async function selectPairedWorktreeGroup(
-  page: Page,
-  environmentId: string,
-  worktreeId: string
-): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          ({ environmentId, worktreeId }) => {
-            const state = window.__store?.getState()
-            state?.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
-            return state?.activeGroupIdByWorktree[worktreeId] ?? null
-          },
-          { environmentId, worktreeId }
-        ),
-      {
-        timeout: 120_000,
-        message: 'paired client never activated a tab group for the worktree'
-      }
-    )
-    .not.toBeNull()
-}
-
-async function findMirroredBrowserPage(
-  page: Page,
-  worktreeId: string,
-  url: string
-): Promise<MirroredBrowserPage | null> {
-  return page.evaluate(
-    ({ url, worktreeId }) => {
-      const state = window.__store?.getState()
-      for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
-        for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
-          if (!browserPage.url.startsWith(url)) {
-            continue
-          }
-          const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
-          return {
-            localPageId: browserPage.id,
-            placementKind: handle?.placement?.kind ?? null,
-            remotePageId: handle?.remotePageId ?? browserPage.id,
-            url: browserPage.url
-          }
-        }
-      }
-      return null
-    },
-    { url, worktreeId }
-  )
-}
-
-/** Every browser row the client holds for a worktree, for diagnosing duplicates and culls. */
-async function readClientBrowserRows(
-  page: Page,
-  worktreeId: string
-): Promise<{ pageId: string; placementKind: string | null; url: string }[]> {
-  return page.evaluate((worktreeId) => {
-    const state = window.__store?.getState()
-    const rows: { pageId: string; placementKind: string | null; url: string }[] = []
-    for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
-      for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
-        rows.push({
-          pageId: browserPage.id,
-          placementKind:
-            state?.remoteBrowserPageHandlesByPageId[browserPage.id]?.placement?.kind ?? null,
-          url: browserPage.url
-        })
-      }
-    }
-    return rows
-  }, worktreeId)
-}
-
-async function createProductBrowserPage(page: Page, url: string): Promise<void> {
-  await page.evaluate(async (url) => {
-    const state = window.__store?.getState()
-    if (!state?.activeWorktreeId) {
-      throw new Error('Paired client has no active worktree')
-    }
-    const groupId = state.activeGroupIdByWorktree[state.activeWorktreeId]
-    if (!groupId) {
-      throw new Error('Paired client has no active tab group')
-    }
-    state.setBrowserDefaultUrl(url)
-    await state.openNewBrowserTabInActiveWorkspace(groupId)
-  }, url)
-}
-
-async function openClientHostedFixturePage(
-  client: PairedElectronClient,
-  worktreeId: string,
-  url: string
-): Promise<MirroredBrowserPage> {
-  await createProductBrowserPage(client.page, url)
-  await expect
-    .poll(() => findMirroredBrowserPage(client.page, worktreeId, url), {
-      timeout: 60_000,
-      message: `paired client never materialized ${url}`
-    })
-    .not.toBeNull()
-  const mirrored = await findMirroredBrowserPage(client.page, worktreeId, url)
-  if (!mirrored) {
-    throw new Error(`Mirrored browser page disappeared for ${url}`)
-  }
-  expect(mirrored.placementKind, 'fixture page must be hosted on the viewing desktop').toBe(
-    'client'
-  )
-  await focusClientBrowserRow(client.page, worktreeId, mirrored.localPageId)
-  return mirrored
-}
-
-/**
- * Reads the marker out of the guest belonging to one specific page.
- *
- * Bound to that page's retained host rather than scanning every `<webview>`: a scan by URL alone is
- * satisfied by any guest on the fixture origin, so a run that lost the surviving tab and opened a
- * fresh one would still read `moved-on` and pass. Client-hosted guests never enter their pane's
- * subtree -- the host is a fixed-position overlay -- so the binding is the stamped page id, which
- * is also the identity the restart has to preserve.
- */
-async function readClientWebviewMarker(
-  page: Page,
-  target: { urlPrefix: string; remotePageId: string }
-): Promise<string | null> {
-  return page.evaluate(async ({ urlPrefix, remotePageId }) => {
-    const host = document.querySelector(
-      `[data-browser-client-page-id="${CSS.escape(remotePageId)}"]`
-    )
-    for (const candidate of host?.querySelectorAll('webview') ?? []) {
-      const webview = candidate as Electron.WebviewTag
-      try {
-        if (!webview.getURL().startsWith(urlPrefix)) {
-          continue
-        }
-        return (await webview.executeJavaScript(
-          'document.querySelector("#marker")?.textContent ?? null'
-        )) as string | null
-      } catch {
-        // The guest may still be attaching.
-      }
-    }
-    return null
-  }, target)
-}
-
-async function waitForRenderedClientWebview(
-  page: Page,
-  target: { urlPrefix: string; remotePageId: string },
-  message: string
-): Promise<string> {
-  await expect
-    .poll(() => readClientWebviewMarker(page, target), { timeout: 120_000, message })
-    .not.toBeNull()
-  const marker = await readClientWebviewMarker(page, target)
-  if (!marker) {
-    throw new Error(`Client-hosted guest for ${target.urlPrefix} lost its marker`)
-  }
-  return marker
-}
-
-/** Surfaces a row's pane so its guest is mounted where the scoped marker read can see it. */
-async function focusClientBrowserRow(
-  page: Page,
-  worktreeId: string,
-  localPageId: string
-): Promise<void> {
-  await page.evaluate(
-    ({ browserPageId, worktreeId }) => {
-      window.__store?.getState().focusBrowserTabInWorktree(worktreeId, browserPageId, {
-        surfacePane: true
-      })
-    },
-    { browserPageId: localPageId, worktreeId }
-  )
-}
-
-async function refreshAuthorityRuntimeId(client: PairedElectronClient): Promise<string | null> {
-  return client.page
-    .evaluate(async (environmentId) => {
-      await window.api.runtimeEnvironments.connect({ selector: environmentId })
-      await window.__store?.getState().refreshRuntimeEnvironmentStatus(environmentId)
-      return (
-        window.__store?.getState().runtimeStatusByEnvironmentId.get(environmentId)?.status
-          ?.runtimeId ?? null
-      )
-    }, client.environmentId)
-    .catch(() => null)
-}
-
-/** Waits until the client is talking to a genuinely new runtime process, not the one it paired to. */
-async function waitForRelaunchedRuntime(
-  client: PairedElectronClient,
-  previousRuntimeId: string
-): Promise<void> {
-  await expect
-    .poll(() => refreshAuthorityRuntimeId(client), {
-      timeout: 180_000,
-      message: 'paired client never reconnected to a relaunched runtime process'
-    })
-    .toEqual(expect.not.stringMatching(`^${previousRuntimeId}$`))
-}
 
 /**
  * Server-restart half of the tab-persistence contract. The client-quit half is covered by
@@ -334,7 +46,10 @@ test('keeps a client-hosted browser tab across a paired runtime restart', async 
   testRepoPath
 }, testInfo) => {
   test.setTimeout(420_000)
-  const fixture = await startMarkerFixture()
+  const fixture = await startClientHostedMarkerFixture({
+    created: 'restart-survivor',
+    moved: 'moved-on'
+  })
   const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
   let client: PairedElectronClient | null = null
   try {

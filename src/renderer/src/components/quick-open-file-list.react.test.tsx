@@ -7,6 +7,7 @@ import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useRuntimeFileListForWorktree, type RuntimeFileListState } from './quick-open-file-list'
@@ -201,10 +202,40 @@ describe('useRuntimeFileListForWorktree', () => {
         rootPath: '/srv/platform',
         excludePaths: undefined,
         requestToken: expect.any(String),
+        // #12547: the caller names the cap so a full page is readable as truncation.
+        maxResults: QUICK_OPEN_LISTING_MAX_RESULTS,
         signal: expect.any(AbortSignal)
       }
     )
     expect(states.at(-1)?.files).toEqual(['packages/app/package.json'])
+    expect(states.at(-1)?.truncated).toBe(false)
+  })
+
+  // #12547: the host stops at the cap the caller names, so a full page is a prefix. Reporting
+  // truncated:false unconditionally is what left the user with a silent partial list.
+  it('reports a capped listing as truncated instead of as the whole workspace', async () => {
+    const states: RuntimeFileListState[] = []
+    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
+    listRuntimeFilesMock.mockResolvedValue(
+      Array.from({ length: QUICK_OPEN_LISTING_MAX_RESULTS }, (_, i) => `src/file-${i}.ts`)
+    )
+
+    useAppStore.setState({
+      folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
+      projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
+      repos: [],
+      worktreesByRepo: {}
+    } as Partial<AppState>)
+
+    await renderProbe({
+      enabled: true,
+      onState: (state) => states.push(state),
+      worktreeId: workspaceKey
+    })
+    await waitForListRuntimeFilesCall()
+
+    expect(states.at(-1)?.files).toHaveLength(QUICK_OPEN_LISTING_MAX_RESULTS)
+    expect(states.at(-1)?.truncated).toBe(true)
   })
 
   it('routes paired folder workspace queries to the owning runtime', async () => {

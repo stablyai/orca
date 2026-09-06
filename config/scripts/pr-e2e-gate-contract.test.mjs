@@ -39,7 +39,7 @@ const nativeImeSpec = readFileSync(
   'utf8'
 )
 
-const filterStep = prWorkflow.jobs['e2e-paths'].steps.find(
+const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
 const rollbackStep = prWorkflow.jobs.static_analysis.steps.find(
@@ -106,15 +106,16 @@ describe('PR E2E gate contract', () => {
     // Why: without this the job could lose its filter and run on every PR — the
     // cost the path filter exists to avoid — while the gate assertions above
     // stay green.
-    expect(prWorkflow.jobs.e2e.needs).toBe('e2e-paths')
-    expect(prWorkflow.jobs.e2e.if).toBe("needs.e2e-paths.outputs.should_run == 'true'")
-    expect(prWorkflow.jobs['e2e-paths'].outputs.should_run).toBe(
-      '${{ steps.filter.outputs.should_run }}'
+    expect(prWorkflow.jobs.e2e.needs).toBe('code_paths')
+    expect(prWorkflow.jobs.e2e.if).toBe("needs.code_paths.outputs.e2e_should_run == 'true'")
+    expect(prWorkflow.jobs.code_paths.outputs.e2e_should_run).toBe(
+      '${{ steps.e2e_filter.outputs.should_run }}'
     )
-    expect(prWorkflow.jobs['e2e-paths'].outputs.test_files).toBe(
-      '${{ steps.filter.outputs.test_files }}'
+    expect(prWorkflow.jobs.code_paths.outputs.test_files).toBe(
+      '${{ steps.e2e_filter.outputs.test_files }}'
     )
-    expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.e2e-paths.outputs.test_files }}')
+    expect(prWorkflow.jobs.e2e.with.ref).toBe('${{ github.event.pull_request.head.sha }}')
+    expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.code_paths.outputs.test_files }}')
   })
 
   it('enforces every job verify depends on', () => {
@@ -266,6 +267,7 @@ describe('PR E2E gate contract', () => {
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
       'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
       'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',
@@ -315,6 +317,11 @@ describe('PR E2E gate contract', () => {
     expect(
       selectPrE2eSpecs(['src/renderer/src/hooks/remote-workspace-session-merge.test.ts'])
     ).toEqual([])
+    expect(
+      selectPrE2eSpecs([
+        'src/renderer/src/hooks/__tests__/remote-workspace-target-sync-test-harness.ts'
+      ])
+    ).toEqual([])
   })
 
   it('triggers the Docker-SSH lane from SSH source, not from a spec name', () => {
@@ -353,11 +360,11 @@ describe('PR E2E gate contract', () => {
     expect(sshLaneCondition).toContain("inputs.ssh_source_changed == 'true' ||")
 
     expect(e2eWorkflow.on.workflow_call.inputs.ssh_source_changed.type).toBe('string')
-    expect(prWorkflow.jobs['e2e-paths'].outputs.ssh_source_changed).toBe(
-      '${{ steps.filter.outputs.ssh_source_changed }}'
+    expect(prWorkflow.jobs.code_paths.outputs.ssh_source_changed).toBe(
+      '${{ steps.e2e_filter.outputs.ssh_source_changed }}'
     )
     expect(prWorkflow.jobs.e2e.with.ssh_source_changed).toBe(
-      '${{ needs.e2e-paths.outputs.ssh_source_changed }}'
+      '${{ needs.code_paths.outputs.ssh_source_changed }}'
     )
     expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --ssh-source')
     expect(filterStep.run).toContain('ssh_source_changed=$SSH_SOURCE_CHANGED')
@@ -464,6 +471,50 @@ describe('PR E2E gate contract', () => {
       expect(selectPrE2eSpecs([source.replace(/\.tsx?$/, '.test.ts')]), source).toEqual([])
       expect(existsSync(join(projectDir, spec)), spec).toBe(true)
     }
+    const parkedSplitSpec = 'tests/e2e/terminal-parked-cli-split.spec.ts'
+    for (const source of [
+      'src/main/window/attach-main-window-services.ts',
+      'src/preload/api/ui-command-event-api.ts',
+      'src/preload/index.ts',
+      'src/renderer/src/components/terminal-pane/terminal-pane-split-request-routing.ts',
+      'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts',
+      'src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.ts',
+      'src/renderer/src/hooks/ipc-events/terminal-ui-routing-ipc-bridge.ts'
+    ]) {
+      expect(selectPrE2eSpecs([source]), source).toContain(parkedSplitSpec)
+      expect(selectPrE2eSpecs([source.replace(/\.ts$/, '.test.ts')]), source).not.toContain(
+        parkedSplitSpec
+      )
+    }
+    expect(existsSync(join(projectDir, parkedSplitSpec)), parkedSplitSpec).toBe(true)
+
+    const restartContinuitySpec = 'tests/e2e/paired-remote-terminal-serve-restart-binding.spec.ts'
+    for (const source of [
+      'src/main/daemon/daemon-attach-only-retirement.ts',
+      'src/main/daemon/daemon-pty-applied-size.ts',
+      'src/main/daemon/daemon-pty-session-control.ts',
+      'src/main/daemon/daemon-pty-spawn-result.ts',
+      'src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts',
+      'src/renderer/src/components/terminal-pane/terminal-error-accumulation.ts',
+      'src/renderer/src/runtime/web-runtime-session.ts',
+      'src/renderer/src/runtime/web-session-tabs-sync.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-adoption.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-surface.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-inventory.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-inventory-validation.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-cache.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-pane.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-queue.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-recovery-rpc-lane.ts',
+      'src/renderer/src/runtime/web-session-terminal-orphan-topology.ts'
+    ]) {
+      expect(selectPrE2eSpecs([source]), source).toContain(restartContinuitySpec)
+      expect(selectPrE2eSpecs([source.replace(/\.ts$/, '.test.ts')]), source).not.toContain(
+        restartContinuitySpec
+      )
+    }
+    expect(existsSync(join(projectDir, restartContinuitySpec)), restartContinuitySpec).toBe(true)
     const quickCommandSpec = 'tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts'
     for (const source of [
       'src/renderer/src/components/terminal-pane/pty-connection.ts',
@@ -514,12 +565,12 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs.terminal_ime_native.uses).toBe(
       './.github/workflows/terminal-ime-e2e.yml'
     )
-    expect(prWorkflow.jobs.terminal_ime_native.needs).toBe('e2e-paths')
+    expect(prWorkflow.jobs.terminal_ime_native.needs).toBe('code_paths')
     expect(prWorkflow.jobs.terminal_ime_native.if).toBe(
-      "needs.e2e-paths.outputs.native_ime_source_changed == 'true'"
+      "needs.code_paths.outputs.native_ime_source_changed == 'true'"
     )
-    expect(prWorkflow.jobs['e2e-paths'].outputs.native_ime_source_changed).toBe(
-      '${{ steps.filter.outputs.native_ime_source_changed }}'
+    expect(prWorkflow.jobs.code_paths.outputs.native_ime_source_changed).toBe(
+      '${{ steps.e2e_filter.outputs.native_ime_source_changed }}'
     )
     expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --native-ime-source')
     expect(filterStep.run).toContain('native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED')
@@ -585,13 +636,8 @@ describe('PR E2E gate contract', () => {
       .filter((spec) => nativeGateExpression.test(readFileSync(join(projectDir, spec), 'utf8')))
     expect(nativeGatedSpecs.length).toBeGreaterThan(0)
 
-    // Why exempt: the digit repro needs a nested gnome-shell, which no hosted runner provides
-    // (headless mutter never answers RemoteDesktop.CreateSession); the macOS spec needs a real
-    // macOS input source, and no macOS runner exists on any PR or scheduled lane.
-    const unreachableSpecs = new Set([
-      'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts',
-      'tests/e2e/terminal-macos-2set-korean-native.spec.ts'
-    ])
+    // The macOS spec needs a native input source; PR and scheduled IME lanes use Linux.
+    const unreachableSpecs = new Set(['tests/e2e/terminal-macos-2set-korean-native.spec.ts'])
     const unclaimed = nativeGatedSpecs.filter(
       (spec) => !unreachableSpecs.has(spec) && !nativeImeRunner.includes(spec)
     )
@@ -631,8 +677,13 @@ describe('PR E2E gate contract', () => {
 
     // Why pin the titles: the runner requires one receipt per name, so a rename that nobody
     // mirrored here would fail the lane loudly instead of quietly halving it.
+    const nativeDigitSpec = readFileSync(
+      join(projectDir, 'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts'),
+      'utf8'
+    )
+    expect(nativeDigitSpec).toContain('appendImeEngagementReceipt(testInfo.title, trace)')
     for (const title of EXPECTED_NATIVE_IME_TESTS) {
-      expect(nativeImeSpec, title).toContain(title)
+      expect(nativeImeSpec + nativeDigitSpec, title).toContain(title)
     }
   })
 

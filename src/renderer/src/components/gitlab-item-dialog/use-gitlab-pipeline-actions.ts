@@ -63,7 +63,16 @@ export function useGitLabPipelineActions(
         }
       }
     },
-    [details?.item.projectRef, expandedJobId, item, jobTraceById, mountedRef, repoSelector]
+    [
+      details?.item.projectRef,
+      expandedJobId,
+      item,
+      jobTraceById,
+      mountedRef,
+      repoSelector,
+      setExpandedJobId,
+      setJobTraceById
+    ]
   )
 
   const handleRetryJob = useCallback(
@@ -113,7 +122,15 @@ export function useGitLabPipelineActions(
         }
       }
     },
-    [details?.item.projectRef, handleRefresh, item, mountedRef, repoSelector]
+    [
+      details?.item.projectRef,
+      handleRefresh,
+      item,
+      mountedRef,
+      repoSelector,
+      setDetails,
+      setRetryingJobId
+    ]
   )
 
   return { handleRetryJob, handleToggleJobTrace }

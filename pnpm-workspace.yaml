@@ -6,9 +6,25 @@ packages: []
 
 minimumReleaseAge: 4320
 # 6.3.289 was published 2026-08-29T12:48Z; it clears the 3-day gate on 2026-09-01T12:48Z.
+# zod 4.5.4 was published 2026-08-29T17:55Z; it clears the 3-day gate on 2026-09-01T17:55Z.
 minimumReleaseAgeExclude:
   - pdfjs-dist@6.3.289
+  - zod@4.5.4
 shamefullyHoist: true
+
+# Orca always launches the user's own resolved Claude CLI via
+# pathToClaudeCodeExecutable, so the SDK's bundled ~95 MB-per-platform CLI
+# binaries must never be installed. Excluding them is what makes the path
+# override mandatory rather than merely preferred.
+ignoredOptionalDependencies:
+  - '@anthropic-ai/claude-agent-sdk-darwin-arm64'
+  - '@anthropic-ai/claude-agent-sdk-darwin-x64'
+  - '@anthropic-ai/claude-agent-sdk-linux-arm64'
+  - '@anthropic-ai/claude-agent-sdk-linux-arm64-musl'
+  - '@anthropic-ai/claude-agent-sdk-linux-x64'
+  - '@anthropic-ai/claude-agent-sdk-linux-x64-musl'
+  - '@anthropic-ai/claude-agent-sdk-win32-arm64'
+  - '@anthropic-ai/claude-agent-sdk-win32-x64'
 
 supportedArchitectures:
   os:
@@ -42,6 +58,7 @@ patchedDependencies:
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.300': config/patches/@xterm__addon-ligatures@0.11.0-beta.300.patch
   '@xterm/addon-webgl@0.20.0-beta.299': config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch
+  '@xterm/addon-search@0.17.0-beta.300': config/patches/@xterm__addon-search@0.17.0-beta.300.patch
   '@xterm/addon-serialize@0.15.0-beta.300': config/patches/@xterm__addon-serialize@0.15.0-beta.300.patch
   '@xterm/xterm@6.1.0-beta.303': config/patches/@xterm__xterm@6.1.0-beta.303.patch
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch

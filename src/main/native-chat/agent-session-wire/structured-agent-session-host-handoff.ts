@@ -17,6 +17,8 @@ import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catc
 
 type HostHandoffAccess = {
   session: (sessionId: string) => StructuredAgentSessionHostSession
+  /** Non-throwing lookup, for the paths that only observe a detached session. */
+  findSession: (sessionId: string) => StructuredAgentSessionHostSession | undefined
   eventSink: (sessionId: string) => DeferredStructuredAgentSessionEventSink
   flush: (sessionId: string) => Promise<void>
   serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
@@ -95,8 +97,14 @@ export function createStructuredAgentSessionHostHandoff(
     activateTuiHistoryCatchup: (sessionId) => tuiHistoryCatchup.activate(sessionId),
     stopTuiHistoryCatchup: (sessionId) => tuiHistoryCatchup.stop(sessionId),
     publish: (sessionId, status) => {
-      const session = host.session(sessionId)
-      const fence = deps.store.getRecord(sessionId)?.lease.runtimeFence ?? session.fence
+      // A status publish is a notification, not a mutation. Eviction and host teardown both drop
+      // the session while a handoff flow is still settling, and `requireSession` would turn that
+      // last publish — usually the FAILED one — into an unhandled rejection nothing can catch.
+      const fence =
+        deps.store.getRecord(sessionId)?.lease.runtimeFence ?? host.findSession(sessionId)?.fence
+      if (fence === undefined) {
+        return
+      }
       host.subscribers.handoff(sessionId, fence, status)
     },
     schedule: host.serialize,
@@ -169,7 +177,7 @@ export function structuredTuiTranscriptImportOptions(
     : { codexSessionsDirs: [join(record.accountHome.path, 'sessions')] }
 }
 
-async function acquireNativeHandoffOwner(
+export async function acquireNativeHandoffOwner(
   deps: StructuredAgentSessionHostDeps,
   host: HostHandoffAccess,
   input: { sessionId: string; fence: number; spawnToken: string }
@@ -180,8 +188,11 @@ async function acquireNativeHandoffOwner(
     throw new Error('agent_session_identity_required')
   }
   const eventSink = host.eventSink(input.sessionId)
+  const priorBarrier = await eventSink.drained()
+  if (!priorBarrier.ok) {
+    throw priorBarrier.error
+  }
   eventSink.unbind()
-  await eventSink.drained()
   const acquired = await deps.adapter.acquire({
     identity: journalIdentityFor(record, session.params),
     fence: input.fence,
@@ -215,11 +226,16 @@ async function acquireNativeHandoffOwner(
   }
   session.hasProviderChild = true
   session.fence = proved.lease.runtimeFence
+  session.acquisitionGeneration = acquired.acquisitionGeneration ?? null
   eventSink.bind({
     journal: session.journal,
     fence: proved.lease.runtimeFence,
     publish: () => host.subscribers.publish(input.sessionId, session.journal)
   })
+  const acquiredBarrier = await eventSink.drained()
+  if (!acquiredBarrier.ok) {
+    throw acquiredBarrier.error
+  }
   host.subscribers.snapshot(input.sessionId, session.journal, proved.lease.runtimeFence)
   return proved
 }

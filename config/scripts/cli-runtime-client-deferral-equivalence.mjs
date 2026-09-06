@@ -2,7 +2,7 @@
 // Equivalence check for deferring the RuntimeClient module graph in the CLI.
 //
 // Builds the CLI twice with the REAL tsc emit — once from the working tree and
-// once with the seven touched files restored from git HEAD~ (the pre-deferral
+// once with the touched files restored from git HEAD~ (the pre-deferral
 // implementation) — then compares stdout, stderr and exit code BYTE FOR BYTE
 // across a matrix of invocations.
 //
@@ -13,7 +13,7 @@
 //
 // Usage: node config/scripts/cli-runtime-client-deferral-equivalence.mjs [--baseline <rev>]
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -21,8 +21,11 @@ const REPO = fileURLToPath(new URL('../..', import.meta.url))
 
 // The files this change touches. Restoring exactly these from the baseline rev
 // reconstructs the old implementation without disturbing anything else.
+// Files absent at the baseline (e.g. cli-error.ts, split out of format.ts
+// later) are removed for the baseline build and put back afterwards.
 const TOUCHED = [
   'src/cli/args.ts',
+  'src/cli/cli-error.ts',
   'src/cli/dispatch.ts',
   'src/cli/flags.ts',
   'src/cli/format.ts',
@@ -72,12 +75,16 @@ function buildTree(label, baselineRev) {
     if (baselineRev) {
       for (const file of TOUCHED) {
         const path = join(REPO, file)
-        restored.push([path, readFileSync(path)])
-        const old = execFileSync('git', ['show', `${baselineRev}:${file}`], {
+        restored.push([path, existsSync(path) ? readFileSync(path) : null])
+        const old = spawnSync('git', ['show', `${baselineRev}:${file}`], {
           cwd: REPO,
           maxBuffer: 64 * 1024 * 1024
         })
-        writeFileSync(path, old)
+        if (old.status === 0) {
+          writeFileSync(path, old.stdout)
+        } else {
+          rmSync(path, { force: true })
+        }
       }
     }
     execFileSync(
@@ -97,7 +104,11 @@ function buildTree(label, baselineRev) {
     )
   } finally {
     for (const [path, contents] of restored) {
-      writeFileSync(path, contents)
+      if (contents === null) {
+        rmSync(path, { force: true })
+      } else {
+        writeFileSync(path, contents)
+      }
     }
   }
   return join(outDir, 'cli/index.js')

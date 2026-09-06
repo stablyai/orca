@@ -137,6 +137,26 @@ export function directWslGitExitCode(error: unknown, resolved: ResolvedCommand):
   return typeof code === 'number' ? code : null
 }
 
+/**
+ * Exit 1 with nothing on stderr is Git answering "no" (a missing ref under
+ * `show-ref --verify --quiet`, no differences under `diff --quiet`), not a
+ * broken environment. `wsl.exe` always explains its own launch failures, so
+ * this cannot mask a dead distro. Retrying such an exit through the user's
+ * interactive login shell doubles the spawn count and runs the distro's rc
+ * files for a result the direct route already produced correctly.
+ */
+export function isQuietGitControlFlowExit(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const record = error as Record<string, unknown>
+  if (record.code !== 1) {
+    return false
+  }
+  const stderr = record.stderr
+  return stderr !== undefined && stderr !== null && String(stderr).trim().length === 0
+}
+
 export function invalidateMissingDirectWslGit(error: unknown, resolved: ResolvedCommand): boolean {
   const isMissing = isDirectWslGitNotFound(error, resolved)
   if (isMissing && resolved.wsl) {

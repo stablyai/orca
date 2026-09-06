@@ -179,6 +179,32 @@ describe('collectSubtree', () => {
 
     expect(collectSubtree(index, 1)).toEqual([1])
   })
+
+  it('does not descend into a subtree already attributed to another PTY', async () => {
+    const { collectSubtree } = await loadCollector()
+    class CountingChildrenMap extends Map<number, number[]> {
+      lookups = 0
+
+      override get(key: number): number[] | undefined {
+        this.lookups += 1
+        return super.get(key)
+      }
+    }
+    const childrenOf = new CountingChildrenMap([
+      [1, [2, 4]],
+      [2, [3]],
+      [3, [5]]
+    ])
+    const byPid = new Map([1, 2, 3, 4, 5].map((pid) => [pid, { pid, ppid: 0, cpu: 0, memory: 0 }]))
+    const index = { byPid, childrenOf, hasPrivateMemory: false }
+
+    // A prior PTY rooted at 2 already claimed 2 and all of its descendants;
+    // the overlapping walk must still include the independent sibling 4.
+    expect(collectSubtree(index, 1, new Set([2]))).toEqual([1, 4])
+    // The excluded branch is not even expanded (2 lookups: roots 1 and 4,
+    // versus 5 without the claimed-subtree fast path).
+    expect(childrenOf.lookups).toBe(2)
+  })
 })
 
 describe('collectMemorySnapshot', () => {
@@ -378,7 +404,7 @@ describe('collectMemorySnapshot', () => {
         worktreeId: 'repo-1::/wt/b',
         sessionId: 's-b',
         paneKey: 'p-b',
-        pid: 100 // also rooted at 100, but every pid is already claimed
+        pid: 101 // a descendant of the first root, already claimed with its subtree
       }
     ])
 

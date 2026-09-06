@@ -57,6 +57,7 @@ const ELECTRON_ARCHITECTURE_BY_ENUM = {
 }
 const PACKAGED_NATIVE_ARCHITECTURES = new Set(['ia32', 'x64', 'arm', 'arm64'])
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
+const JS_SOURCE_MAP_ARTIFACT_RE = /\.(?:c|m)?js\.map$/
 const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
 const NODE_BUILTINS = new Set([
@@ -438,12 +439,22 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
   }
 }
 
-function prunePackagedRuntimeTypeDeclarations(resourcesDir) {
+// Why type declarations: they are compile-time only; the packaged app never resolves them.
+// Why source maps: they embed the original sources (megabytes for @linear/sdk alone) and
+// nothing in the packaged app turns on Node's source-map support, so they are never read.
+// Orca's own main-process maps live outside node_modules and ship as a separate release artifact.
+function isPrunableTypeOrSourceMapArtifact(filename) {
+  return TYPE_DECLARATION_ARTIFACT_RE.test(filename) || JS_SOURCE_MAP_ARTIFACT_RE.test(filename)
+}
+
+// Why one walk: pruneMatchingFiles only ever deletes files, so passes over the same tree
+// commute — a second recursive traversal costs seconds for no extra deletions.
+function prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir) {
   const nodeModulesDir = join(resourcesDir, 'node_modules')
   if (!existsSync(nodeModulesDir)) {
     return
   }
-  pruneMatchingFiles(nodeModulesDir, (filename) => TYPE_DECLARATION_ARTIFACT_RE.test(filename))
+  pruneMatchingFiles(nodeModulesDir, isPrunableTypeOrSourceMapArtifact)
 }
 
 function prunePackagedSherpaOnnx(resourcesDir, electronPlatformName) {
@@ -481,9 +492,10 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   const architecture = normalizeElectronArchitecture(electronArch)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
-  prunePackagedRuntimeTypeDeclarations(resourcesDir)
-  prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
+  // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
   prunePackagedZodSources(resourcesDir)
+  prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
+  prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
 }
 
 function pruneMatchingFiles(directory, shouldPrune) {
@@ -506,8 +518,8 @@ module.exports = {
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,
+  prunePackagedRuntimeTypeAndSourceMapArtifacts,
   prunePackagedSherpaOnnx,
-  prunePackagedRuntimeTypeDeclarations,
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 }

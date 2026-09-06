@@ -16,10 +16,11 @@ import {
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
 } from '../build-plugins/bootstrap-fatal-exit-banner'
+import { createRequire } from 'node:module'
 import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
-const targetConfig = readFileSync('config/electron-vite-target.config.ts', 'utf8')
+const targetConfig = readFileSync('config/electron-vite-target.config.cts', 'utf8')
 const devRunner = readFileSync('config/scripts/run-electron-vite-dev.mjs', 'utf8')
 
 type BootstrapProcessMock = EventEmitter & {
@@ -72,7 +73,26 @@ function failBootstrapWithBanner(options: {
   return processMock
 }
 
+const electronBuilderConfig = createRequire(import.meta.url)('../electron-builder.config.cjs') as {
+  files: string[]
+}
+
 describe('Electron Vite output contract', () => {
+  it("minifies main and renderer with rolldown's in-process minifier", () => {
+    // Why: 'esbuild' routes every chunk through a second, undeclared transpiler.
+    expect(electronViteConfig.main?.build?.minify).toBe('oxc')
+    expect(electronViteConfig.renderer?.build?.minify).toBe('oxc')
+    expect(electronViteConfig.main?.esbuild).toBeUndefined()
+    expect(electronViteConfig.renderer?.esbuild).toBeUndefined()
+  })
+
+  it('emits hidden main source maps that packaging strips from app.asar', () => {
+    // Hidden maps decode minified crash traces without the bundle referencing
+    // files that the packaged app never ships.
+    expect(electronViteConfig.main?.build?.sourcemap).toBe('hidden')
+    expect(electronBuilderConfig.files).toContain('!out/**/*.map')
+  })
+
   it('keeps main-process and plain-Node entries at stable CommonJS paths', () => {
     const output = electronViteConfig.main?.build?.rollupOptions?.output
     if (!output || Array.isArray(output)) {

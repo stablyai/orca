@@ -388,6 +388,9 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing exact ref'), { code: 1 })
+        }
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
@@ -479,6 +482,9 @@ describe('registerWorktreeHandlers', () => {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing exact ref'), { code: 1 })
         }
         return { stdout: '', stderr: '' }
       }),

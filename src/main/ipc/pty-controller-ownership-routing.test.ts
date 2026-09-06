@@ -94,6 +94,15 @@ describe('registerPtyHandlers', () => {
     unregisterSshPtyProvider(connectionId)
     clearProviderPtyState(ptyId)
   })
+  it('preserves a provider write refusal for callers that gate follow-up input', () => {
+    const provider = createAgentClaimProvider({})
+    provider.write.mockReturnValue(false)
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController()
+
+    expect(controller.write('pty-refused', 'input')).toBe(false)
+    expect(provider.write).toHaveBeenCalledWith('pty-refused', 'input')
+  })
   describe('controller probePtyLiveness routing', () => {
     it('proves absence for an id the in-process local provider never owned', async () => {
       setLocalPtyProvider(new LocalPtyProvider())
@@ -315,6 +324,7 @@ describe('registerPtyHandlers', () => {
     }
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
       markSshRemotePtyLease: vi.fn(),

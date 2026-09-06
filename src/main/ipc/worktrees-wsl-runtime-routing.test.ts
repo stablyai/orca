@@ -13,9 +13,12 @@ import {
   createSetupRunnerScriptMock,
   getEffectiveHooksFromConfigMock,
   shouldRunSetupForCreateMock,
+  getBaseRefDefaultMock,
   gitExecFileAsyncMock
 } from './worktrees-test-module-mocks'
-import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { materializeWorktreePushTargetRemote } from './worktree-remote'
+import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import {
   createdWorktreeList,
   mockKnownFeatureWorktree,
@@ -104,9 +107,65 @@ vi.mock('../runtime/worktree-teardown', async () =>
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
+/** Every create-path git call, including the base-ref probe now shared with the
+ *  speculative prefetch, must read the distro's ref store rather than host git's. */
+function expectEveryGitCallRoutedTo(wslDistro: string): void {
+  const callDistros = new Set(
+    gitExecFileAsyncMock.mock.calls.map(
+      ([, options]) => (options as { wslDistro?: string } | undefined)?.wslDistro
+    )
+  )
+  expect(callDistros).toEqual(new Set([wslDistro]))
+}
+
 describe('registerWorktreeHandlers', () => {
+  let runtimeStub: WorktreeRuntimeStub
+
   beforeEach(() => {
-    setupWorktreeHandlers()
+    runtimeStub = setupWorktreeHandlers()
+  })
+
+  it('routes the speculative create-base prefetch through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    const remoteTrackingBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteTrackingBase)
+
+    await handlers['worktrees:prefetchCreateBase'](null, { repoId: 'repo-1' })
+
+    expect(getBaseRefDefaultMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/main^{commit}'],
+      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+    )
+    expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'origin/main',
+      { wslDistro: 'Ubuntu' }
+    )
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
+      '/workspace/repo',
+      remoteTrackingBase,
+      { wslDistro: 'Ubuntu' }
+    )
+  })
+
+  it('routes the prefetch remote-fetch fallback through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-1',
+      baseBranch: 'feature/topic'
+    })
+
+    expect(runtimeStub.fetchRemoteWithCache).toHaveBeenCalledWith('/workspace/repo', 'origin', {
+      wslDistro: 'Ubuntu'
+    })
   })
 
   it('routes local worktree creation through the selected WSL project runtime', async () => {
@@ -153,9 +212,43 @@ describe('registerWorktreeHandlers', () => {
       { wslDistro: 'Ubuntu' }
     )
     expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo', { wslDistro: 'Ubuntu' })
+    expectEveryGitCallRoutedTo('Ubuntu')
   })
 
-  it('routes fork push target setup through the selected WSL project runtime', async () => {
+  it('routes local worktree creation with a remote tracking base through the selected WSL project runtime', async () => {
+    mockSelectedWslProjectRuntime()
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue({
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'abc123\n', stderr: '' })
+    // A persisted base that differs from the detected default also drives the usability probe.
+    store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: 'custom-base' })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'refs/heads/improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expectEveryGitCallRoutedTo('Ubuntu')
+  })
+
+  // Was "routes fork push target setup ... through create": create used to mint the
+  // fork remote (and route it to the selected WSL distro) unconditionally. It now
+  // defers to first sync (#17828) -- split in two so each half stays true to a single
+  // claim: create stays a no-op even for a WSL-routed repo, sync still routes to the distro.
+  it('does not mint a fork remote at create time for a WSL-routed worktree', async () => {
     mockSelectedWslProjectRuntime()
     listWorktreesMock.mockResolvedValue([
       {
@@ -178,26 +271,103 @@ describe('registerWorktreeHandlers', () => {
       }
     })
 
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    expect(calls).not.toContainEqual(['check-ref-format', '--branch', 'contributor/wsl-fork'])
+    expect(calls.some((args) => args[0] === 'remote' && args[1] === 'add')).toBe(false)
+    expect(calls.some((args) => args[0] === 'fetch')).toBe(false)
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        pushTarget: {
+          remoteName: 'pr-contributor-orca',
+          branchName: 'contributor/wsl-fork',
+          remoteUrl: 'git@github.com:contributor/orca.git'
+        }
+      })
+    )
+  })
+
+  // Companion to the deferral test above: `materializeWorktreePushTargetRemote` is
+  // exactly what `git:push`/`git:pull`'s local dispatch calls (with the repo's resolved
+  // wslDistro) before syncing, so this is "first sync" without needing that IPC handler
+  // registered in this harness.
+  it('routes fork push target materialization through the selected WSL project runtime', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    const target = {
+      remoteName: 'pr-contributor-orca',
+      branchName: 'contributor/wsl-fork',
+      remoteUrl: 'git@github.com:contributor/orca.git'
+    }
+
+    const result = await materializeWorktreePushTargetRemote(
+      '/workspace/repo',
+      target,
+      undefined,
+      undefined,
+      { wslDistro: 'Ubuntu' }
+    )
+
+    expect(result).toEqual({ ...target, remoteCreated: true })
+    const wslRoutingOptions = { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['check-ref-format', '--branch', 'contributor/wsl-fork'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      wslRoutingOptions
+    )
+    // Mint: `-t <branch> --no-tags` (see #17828) keeps the remote's own default off the
+    // wide wildcard, then `ensureRemoteTracksBranchNarrowly` rewrites it to the trailing-`*`
+    // form immediately after -- both routed through the same WSL project runtime.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'remote',
+        'add',
+        '-t',
+        'contributor/wsl-fork',
+        '--no-tags',
+        'pr-contributor-orca',
+        'git@github.com:contributor/orca.git'
+      ],
+      wslRoutingOptions
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['remote', 'add', 'pr-contributor-orca', 'git@github.com:contributor/orca.git'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      ['config', '--get-all', 'remote.pr-contributor-orca.fetch'],
+      wslRoutingOptions
     )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'config',
+        '--add',
+        'remote.pr-contributor-orca.fetch',
+        '+refs/heads/contributor/wsl-fork*:refs/remotes/pr-contributor-orca/contributor/wsl-fork*'
+      ],
+      wslRoutingOptions
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', 'remote.pr-contributor-orca.tagOpt', '--no-tags'],
+      wslRoutingOptions
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', 'remote.pr-contributor-orca.orca-created', 'true'],
+      wslRoutingOptions
+    )
+    // Why: the mint's fetch is the one call in this sequence that talks to the network --
+    // bounded the same as the deferred short-circuit's fetch (see DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS)
+    // so a hung credential prompt can't wedge it forever. Every other call here is local-only
+    // and stays untimed, per `wslRoutingOptions` above.
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
         'pr-contributor-orca',
-        '+refs/heads/contributor/wsl-fork:refs/remotes/pr-contributor-orca/contributor/wsl-fork'
+        '+refs/heads/contributor/wsl-fork*:refs/remotes/pr-contributor-orca/contributor/wsl-fork*'
       ],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      { ...wslRoutingOptions, timeout: expect.any(Number) }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/wsl-fork', 'wsl-fork'],
-      { cwd: '/workspace/wsl-fork', wslDistro: 'Ubuntu' }
+    // wslDistro threaded through every subprocess this materialize made, not just the adds.
+    const distros = new Set(
+      gitExecFileAsyncMock.mock.calls.map(
+        ([, options]) => (options as { wslDistro?: string } | undefined)?.wslDistro
+      )
     )
+    expect(distros).toEqual(new Set(['Ubuntu']))
   })
 
   it('routes selected PR branch conflict lookup through the selected WSL project runtime', async () => {

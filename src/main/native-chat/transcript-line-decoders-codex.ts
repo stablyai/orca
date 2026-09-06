@@ -202,6 +202,10 @@ function codexTurnItemBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
+/** The argument payload is passed through exactly as it arrived. Decoding it
+ *  here would change the shape every `.input` consumer sees — including the ask
+ *  surface, which reads a question shape out of any tool's input — so the one
+ *  consumer that needs structure decodes it for itself. */
 function codexCallInput(payload: Record<string, unknown>): unknown {
   if (payload.arguments !== undefined) {
     return payload.arguments

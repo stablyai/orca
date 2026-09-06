@@ -55,7 +55,7 @@ async function flush(): Promise<void> {
 // cutover). Records every call so tests can assert on the clientMutationId.
 function scriptedClient(
   outcomes: Array<
-    | { id: string }
+    | { id: string; displayName?: string }
     | { errorMessage: string }
     // takesMs models how long the ambiguity took to SURFACE — a clean close is
     // instant, a half-open socket waits out the liveness watchdog or the timeout.
@@ -103,7 +103,12 @@ function scriptedClient(
       return {
         id: '1',
         ok: true,
-        result: { worktree: { id: outcome.id } },
+        result: {
+          worktree: {
+            id: outcome.id,
+            ...(outcome.displayName !== undefined ? { displayName: outcome.displayName } : {})
+          }
+        },
         _meta: { runtimeId: 'r' }
       }
     }
@@ -225,6 +230,40 @@ describe('createWorktreeWithNameRetry', () => {
     expect(attempts[0]!.params.clientMutationId).toBe('key-1')
     expect(attempts[1]!.params.clientMutationId).toBe('key-2')
     expect(attempts[1]!.params.name).toBe('topic-2')
+  })
+
+  it('uses the host-selected display name after a collision retry', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient(
+      [{ errorMessage: 'already exists locally' }, { id: 'wt-host-name', displayName: 'topic-3' }],
+      attempts
+    )
+
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'topic',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        worktreeCreateIdempotency: false
+      })
+    ).resolves.toEqual({ worktreeId: 'wt-host-name', name: 'topic-3' })
+  })
+
+  it('falls back to the client candidate when an older host omits displayName', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient(
+      [{ errorMessage: 'already exists locally' }, { id: 'wt-legacy' }],
+      attempts
+    )
+
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'topic',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        worktreeCreateIdempotency: false
+      })
+    ).resolves.toEqual({ worktreeId: 'wt-legacy', name: 'topic-2' })
   })
 
   it('advances generated retries without nesting suffixes', async () => {

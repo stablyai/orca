@@ -174,7 +174,62 @@ describe('createWorkspaceFromComposerSource', () => {
     })
   })
 
-  it('suppresses displayName when the name is user-edited (not auto-managed)', async () => {
+  it('does not pin an automatically managed branch selection without a custom label', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-auto-branch' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'branch',
+      baseBranch: 'main',
+      refName: 'main',
+      localBranchName: 'topic',
+      reuse: false,
+      branchNameOverride: 'topic'
+    }
+    await createWorkspaceFromComposerSource({ client, selection, ...baseArgs })
+    expect(calls[0]!.params).not.toHaveProperty('displayName')
+    expect(calls[0]!.params).not.toHaveProperty('displayNameKind')
+  })
+
+  it('does not pin an auto-derived branch label even when the draft is populated', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-auto-branch-draft' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'new-branch',
+      branchName: 'topic'
+    }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      workspaceName: 'topic',
+      nameIsAutoManaged: true
+    })
+
+    expect(calls[0]!.params).not.toHaveProperty('displayName')
+    expect(calls[0]!.params).not.toHaveProperty('displayNameKind')
+  })
+
+  it('pins a custom label for a new branch selection', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-labeled-branch' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'new-branch',
+      branchName: 'feature/login'
+    }
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      workspaceName: '  Login work  '
+    })
+    expect(calls[0]!.params).toMatchObject({
+      displayName: 'Login work',
+      displayNameKind: 'user'
+    })
+  })
+
+  it('pins displayName when the name is user-edited (not auto-managed)', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-dn' } }), calls)
     const selection: MobileComposerCreateSelection = {
@@ -195,8 +250,12 @@ describe('createWorkspaceFromComposerSource', () => {
       workspaceName: 'my-name',
       nameIsAutoManaged: false
     })
-    expect(calls[0]!.params.displayName).toBeUndefined()
-    expect(calls[0]!.params).toMatchObject({ name: 'my-name', linkedIssue: 7 })
+    expect(calls[0]!.params).toMatchObject({
+      name: 'my-name',
+      displayName: 'my-name',
+      displayNameKind: 'user',
+      linkedIssue: 7
+    })
   })
 
   it('creates a new branch off a ref, bumping the branch on collision', async () => {

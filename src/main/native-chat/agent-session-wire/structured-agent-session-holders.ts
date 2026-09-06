@@ -7,16 +7,16 @@
 // because it records WHICH surface holds the session, not how many do.
 
 export class StructuredAgentSessionHolders {
-  private readonly bySession = new Map<string, Set<string>>()
+  private readonly bySession = new Map<string, Map<string, boolean>>()
 
   /** True when the session gained its FIRST holder — the edge that ends a pending release. */
-  add(sessionId: string, holderId: string): boolean {
+  add(sessionId: string, holderId: string, resumeCapable = true): boolean {
     const holders = this.bySession.get(sessionId)
     if (!holders) {
-      this.bySession.set(sessionId, new Set([holderId]))
+      this.bySession.set(sessionId, new Map([[holderId, resumeCapable]]))
       return true
     }
-    holders.add(holderId)
+    holders.set(holderId, (holders.get(holderId) ?? false) || resumeCapable)
     return false
   }
 
@@ -39,7 +39,11 @@ export class StructuredAgentSessionHolders {
   }
 
   holderIds(sessionId: string): string[] {
-    return [...(this.bySession.get(sessionId) ?? [])]
+    return [...(this.bySession.get(sessionId)?.keys() ?? [])]
+  }
+
+  hasResumeCapableHolder(sessionId: string): boolean {
+    return [...(this.bySession.get(sessionId)?.values() ?? [])].some(Boolean)
   }
 
   /** Drops every holder of one session without evaluating the edge, for a session that is gone. */

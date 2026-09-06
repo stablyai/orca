@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { TerminalSessionOwnerUnverifiedError } from '../../../daemon/daemon-errors'
 import {
   SSH_SESSION_EXPIRED_ERROR,
   SshPtyAbsentFromRelayError
@@ -157,6 +158,20 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
       )
 
       await expect(run()).rejects.toThrow('SSH connection lost')
+
+      expect(spawn).toHaveBeenCalledTimes(1)
+      expect(JSON.stringify(read())).toBe(before)
+    })
+
+    it('does not retire the binding when daemon attach-only cleanup is unverifiable', async () => {
+      const { store, read } = sessionStore([LEAF, SIBLING_LEAF])
+      const before = JSON.stringify(read())
+      const { run, spawn } = spawnAfterAttachRejection(
+        new TerminalSessionOwnerUnverifiedError(OWNER.ptyId),
+        { store, worktreeId: WORKTREE }
+      )
+
+      await expect(run()).rejects.toThrow('terminal_pane_owner_unverified')
 
       expect(spawn).toHaveBeenCalledTimes(1)
       expect(JSON.stringify(read())).toBe(before)

@@ -1,9 +1,13 @@
 import type { CodexAppServerServerRequest } from './codex-app-server-connection'
 import { disposeCodexServerRequest } from './codex-server-request-disposition'
+import type { CodexJournalTranslationAdmission } from './codex-structured-journal-translation'
 import type { CodexSession, CodexStructuredSessionEvent } from './codex-structured-session-state'
 import { readCodexThreadId, readCodexTurnId } from './codex-structured-thread-facts'
 
-type EmitCodexEvent = (session: CodexSession, event: CodexStructuredSessionEvent) => void
+type EmitCodexEvent = (
+  session: CodexSession,
+  event: CodexStructuredSessionEvent
+) => CodexJournalTranslationAdmission
 
 export function deliverCodexNotification(
   sessionId: string,
@@ -11,17 +15,22 @@ export function deliverCodexNotification(
   method: string,
   params: unknown,
   emit: EmitCodexEvent
-): void {
+): CodexJournalTranslationAdmission {
   if (!session) {
-    return
+    return { accepted: true }
   }
   const threadId = readCodexThreadId(params) ?? session.threadId
+  const turnId =
+    method === 'turn/started' && threadId === session.threadId ? readCodexTurnId(params) : null
+  const turnWaiter = turnId ? session.turnIdWaiters[0] : undefined
+  const admission = emit(session, { type: 'notification', sessionId, threadId, method, params })
   if (method === 'turn/started' && threadId === session.threadId) {
-    const turnId = readCodexTurnId(params)
-    const waiter = turnId ? session.turnIdWaiters.shift() : undefined
-    waiter?.(turnId as string)
+    if (admission.accepted && turnId && session.turnIdWaiters[0] === turnWaiter) {
+      session.turnIdWaiters.shift()
+      turnWaiter?.(turnId)
+    }
   }
-  emit(session, { type: 'notification', sessionId, threadId, method, params })
+  return admission
 }
 
 export function deliverCodexServerRequest(
@@ -29,24 +38,31 @@ export function deliverCodexServerRequest(
   session: CodexSession | undefined,
   request: CodexAppServerServerRequest,
   emit: EmitCodexEvent
-): void {
+): CodexJournalTranslationAdmission {
   if (!session) {
-    return
+    return { accepted: true }
   }
   const disposition = disposeCodexServerRequest(session.prompts, session.connection, request)
   const threadId = readCodexThreadId(request.params) ?? session.threadId
   if (disposition.kind === 'responded') {
-    emit(session, {
+    const admission = emit(session, {
       type: 'server-request',
       sessionId,
       threadId,
       method: request.method,
       params: request.params
     })
-    return
+    if (!admission.accepted) {
+      void session.forceCloseUnexpected?.(
+        new Error(
+          `Codex server request ${request.method} could not be durably recorded (${admission.reason})`
+        )
+      )
+    }
+    return admission
   }
   const prompt = disposition.prompt
-  emit(session, {
+  const admission = emit(session, {
     type: 'prompt',
     sessionId,
     threadId: prompt.threadId,
@@ -55,6 +71,15 @@ export function deliverCodexServerRequest(
     codexItemId: prompt.codexItemId,
     promptKey: prompt.promptKey
   })
+  if (!admission.accepted) {
+    session.prompts.forget(prompt)
+    session.connection.respondWithError(
+      request.id,
+      -32001,
+      `Orca could not durably record ${request.method} prompt (${admission.reason})`
+    )
+  }
+  return admission
 }
 
 export function deliverCodexUnhandledFrame(
@@ -63,15 +88,24 @@ export function deliverCodexUnhandledFrame(
   kind: string,
   payload: unknown,
   emit: EmitCodexEvent
-): void {
+): CodexJournalTranslationAdmission {
   if (!session) {
-    return
+    return { accepted: true }
   }
-  emit(session, {
+  const admission = emit(session, {
     type: 'provider-frame',
     sessionId,
     threadId: readCodexThreadId(payload) ?? session.threadId,
     kind,
     payload
   })
+  if (!admission.accepted) {
+    // There is no safe replay cursor for malformed/unhandled frames. Close the
+    // provider so host recovery records a truthful terminal failure instead of
+    // silently dropping the diagnostic under sink backpressure.
+    void session.forceCloseUnexpected?.(
+      new Error(`Codex provider frame ${kind} could not be durably recorded (${admission.reason})`)
+    )
+  }
+  return admission
 }

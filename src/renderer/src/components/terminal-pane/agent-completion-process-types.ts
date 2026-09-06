@@ -21,7 +21,7 @@ export type ProcessMonitorState = {
   pollTrackingStarted: boolean
   pollTimer: ReturnType<typeof setTimeout> | null
   pollTimerTier: PollCadenceTier | null
-  lastPaneActivityAt: number
+  lastPaneActivityAt: number | null
   hasAgentRunEvidence: boolean
   pendingProcessExitAgent: RecognizedAgentProcess | null
   lastForegroundAgent: RecognizedAgentProcess | null

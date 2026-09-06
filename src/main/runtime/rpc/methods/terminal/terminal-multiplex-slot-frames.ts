@@ -38,7 +38,7 @@ export function installMultiplexSlotFrames(
     }
     if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
       state.cancelPendingPtyWaits(stream.streamId)
-      state.detachStream(stream.streamId, false)
+      state.detachStream(stream.streamId, null)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Ack) {

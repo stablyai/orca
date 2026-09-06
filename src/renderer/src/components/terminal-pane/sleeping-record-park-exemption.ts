@@ -1,4 +1,5 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isPassiveCompletedHibernationEvidence } from '../../lib/sleeping-agent-pane-ownership'
 
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
@@ -26,7 +27,11 @@ export function selectSleepingRecordParkExemptTabIds(
     if (record.automaticResumeBlockedBy || isPassiveCompletedHibernationEvidence(record)) {
       continue
     }
-    const tabId = record.tabId ?? record.paneKey.slice(0, record.paneKey.indexOf(':'))
+    // Why: malformed pane keys must yield no owner instead of a truncated tab id.
+    const tabId =
+      record.tabId ??
+      parsePaneKey(record.paneKey)?.tabId ??
+      parseLegacyNumericPaneKey(record.paneKey)?.tabId
     if (tabId) {
       owned ??= new Set()
       owned.add(tabId)

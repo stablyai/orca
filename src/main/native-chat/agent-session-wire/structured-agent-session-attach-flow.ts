@@ -26,6 +26,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
@@ -47,7 +48,10 @@ export type AttachFlowInput = {
   /** Registers the opened journal and fans out to subscribers before the caller
    *  sees the result, so no client can send against a session the host has not
    *  finished publishing. */
-  onAttached: (attached: AttachedJournal) => void
+  onAttached: (
+    attached: AttachedJournal,
+    acquisitionGeneration: string | null
+  ) => Promise<void> | void
   /** Handed to the adapter so it can journal what the provider streams. The
    *  host owns it and binds it to the journal inside `onAttached`. */
   eventSink?: StructuredAgentSessionEventSink
@@ -55,8 +59,9 @@ export type AttachFlowInput = {
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** Removes any partial host publication after journal attachment fails. */
-  onAttachFailed?: () => void
+  /** Removes any partial host publication after journal attachment fails, and
+   *  closes the journal handle of the map entry it drops. Awaited: see eviction. */
+  onAttachFailed?: () => Promise<void>
 }
 
 export async function performAttach(
@@ -70,6 +75,7 @@ export async function performAttach(
   }
 
   let record: AgentSessionRecord
+  let acquisitionGeneration: string | null = null
   let reservedRecord: AgentSessionRecord | null = null
   let replayed = false
   try {
@@ -101,7 +107,9 @@ export async function performAttach(
     }
     reservedRecord = record
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
-      record = await acquireOwner(input, record)
+      const acquired = await acquireOwner(input, record)
+      record = acquired.record
+      acquisitionGeneration = acquired.acquisitionGeneration
     }
   } catch (error) {
     const spawnToken = reservedRecord?.lease.reservedSpawnToken
@@ -112,7 +120,9 @@ export async function performAttach(
         ? 'processless'
         : error instanceof AgentSessionAcquisitionExitUnprovenError
           ? 'unproven'
-          : 'exit-proven'
+          : error instanceof AgentSessionAcquisitionRootExitObservedError
+            ? 'root-exit-observed'
+            : 'exit-proven'
       const outcome =
         error instanceof AgentSessionAcquisitionExitUnprovenError
           ? {
@@ -171,7 +181,7 @@ export async function performAttach(
       journalRoot: input.journalRoot,
       adapter: input.adapter
     })
-    input.onAttached(attached)
+    await input.onAttached(attached, acquisitionGeneration)
     await store.recordOperationOutcome({
       callerKey: input.callerKey,
       operationId: params.envelope.clientOperationId,
@@ -202,15 +212,21 @@ async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
     cleanupError = error
     exitProof =
-      error instanceof AgentSessionAcquisitionExitUnprovenError ? 'unproven' : 'exit-proven'
+      error instanceof AgentSessionAcquisitionExitUnprovenError
+        ? 'unproven'
+        : error instanceof AgentSessionAcquisitionRootExitObservedError
+          ? 'root-exit-observed'
+          : 'exit-proven'
   }
-  input.onAttachFailed?.()
+  // Why: the close is awaited so the map entry is gone only once its handle is
+  // released, but a failed close must not also cost the store settlement below.
+  await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,
@@ -240,7 +256,7 @@ async function settlePostAcquisitionAttachFailure(
 async function acquireOwner(
   input: AttachFlowInput,
   record: AgentSessionRecord
-): Promise<AgentSessionRecord> {
+): Promise<{ record: AgentSessionRecord; acquisitionGeneration: string | null }> {
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
   if (!spawnToken) {
@@ -284,13 +300,17 @@ async function acquireOwner(
     } else if (!isDeepStrictEqual(record.lease.ownerProcess, acquired.process)) {
       throw new Error('agent_session_ownership_unknown')
     }
-    return await input.store.proveOwner({
+    const proved = await input.store.proveOwner({
       sessionId: record.sessionId,
       fence,
       link: acquired.link,
       now: input.now(),
       ...(options ? { options } : {})
     })
+    return {
+      record: proved,
+      acquisitionGeneration: acquired.acquisitionGeneration ?? null
+    }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {
       throw error

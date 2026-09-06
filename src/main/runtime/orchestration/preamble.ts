@@ -59,6 +59,7 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
 
+  // Why: fencing keeps shell comments executable to agents without turning them into Chat UI headings.
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
 Your task ID is: ${params.taskId}
@@ -68,6 +69,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
 === CLI COMMANDS ===
 
+\`\`\`sh
   # Report the terminal task outcome (REQUIRED exactly once).
   #
   # RULE: --body must be a 3-sentence executive summary (what you did,
@@ -129,6 +131,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
   # Check for messages from the coordinator:
   ${cli} orchestration check --terminal ${params.workerHandle}
+\`\`\`
 
 ${postDoneInstructions}`
 
@@ -193,6 +196,8 @@ work under the new Dispatch; ignore stale follow-ups from the settled task.`
 // Why the whole section is omitted rather than softened when nesting is off: a
 // worker told it "usually cannot" delegate still tries, then reports the refusal
 // as a blocker.
+// Why fenced + blank line before the closing `---`: unfenced `<placeholders>` are stripped as raw
+// HTML by the Chat UI, and a rule directly under a paragraph is a setext H2 (giant last sentence).
 function buildSubDispatchSection(cli: string): string {
   return `
 
@@ -200,13 +205,16 @@ function buildSubDispatchSection(cli: string): string {
 You may dispatch sub-workers for this task. Bind your own Run first, then create
 and start each one:
 
+\`\`\`sh
   ${cli} orchestration run-create --objective "<what the sub-workers are for>" --json
   ${cli} orchestration task-create --spec "<sub-task>" --json
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
+\`\`\`
 
 You own those sub-workers: wait for their worker_done, and do not report your own
 until they have settled. Nesting is capped, so a sub-worker of yours may not be
 able to dispatch further.
+
 ---`
 }
 
@@ -221,5 +229,6 @@ ${subjects}
 
 If any look relevant to your task, either pull them in (\`git pull --rebase
 ${drift.base}\` or equivalent) or escalate to the coordinator before starting.
+
 ---`
 }

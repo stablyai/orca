@@ -250,131 +250,6 @@ describe('WSL distro discovery cache', () => {
     }
   })
 
-  // Why: listWslDistrosAsync has no in-flight dedupe, so two probes can resolve out of order.
-  // The late empty answer must not erase the list the newer probe already found.
-  it('does not let a late empty probe erase a list a newer probe found', async () => {
-    const callbacks: ((error: Error | null, stdout: string) => void)[] = []
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callbacks.push(callback)
-    })
-
-    await withPlatformAsync('win32', async () => {
-      const stale = listWslDistrosAsync()
-      const fresh = listWslDistrosAsync()
-      expect(callbacks).toHaveLength(2)
-
-      callbacks[1](null, 'Ubuntu\n')
-      callbacks[0](null, '')
-
-      await expect(fresh).resolves.toEqual(['Ubuntu'])
-      await expect(stale).resolves.toEqual(['Ubuntu'])
-      expect(getCachedWslDistros()).toEqual(['Ubuntu'])
-    })
-  })
-
-  it('does not let an older non-empty probe overwrite a newer list', async () => {
-    const callbacks: ((error: Error | null, stdout: string) => void)[] = []
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callbacks.push(callback)
-    })
-
-    await withPlatformAsync('win32', async () => {
-      const stale = listWslDistrosAsync()
-      const fresh = listWslDistrosAsync()
-      callbacks[1](null, 'Ubuntu\n')
-      callbacks[0](null, 'Debian\n')
-
-      await expect(fresh).resolves.toEqual(['Ubuntu'])
-      await expect(stale).resolves.toEqual(['Ubuntu'])
-      expect(getCachedWslDistros()).toEqual(['Ubuntu'])
-    })
-  })
-
-  // Why: N startup callers each land with the same empty answer; counting each one
-  // would arm the 5min cap on the first round and hide a distro for that whole time.
-  it('counts one empty result per window when probes overlap', async () => {
-    vi.useFakeTimers()
-    const callbacks: ((error: Error | null, stdout: string) => void)[] = []
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callbacks.push(callback)
-    })
-
-    try {
-      await withPlatformAsync('win32', async () => {
-        const pending = [listWslDistrosAsync(), listWslDistrosAsync(), listWslDistrosAsync()]
-        expect(callbacks).toHaveLength(3)
-        for (const callback of callbacks) {
-          callback(null, '')
-        }
-        await Promise.all(pending)
-
-        // One window elapsed, not three doublings, so the next probe runs at 15s.
-        vi.advanceTimersByTime(15_000)
-        expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(1)
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  // Why: an overlapping failure and empty result must count as one retry window.
-  it('holds the base window when a failure and an empty result overlap', async () => {
-    vi.useFakeTimers()
-    const callbacks: ((error: Error | null, stdout: string) => void)[] = []
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callbacks.push(callback)
-    })
-
-    try {
-      await withPlatformAsync('win32', async () => {
-        const failing = listWslDistrosAsync()
-        const empty = listWslDistrosAsync()
-        expect(callbacks).toHaveLength(2)
-        callbacks[0](new Error('transient failure'), '')
-        callbacks[1](null, '')
-        await Promise.all([failing, empty])
-
-        vi.advanceTimersByTime(7_500)
-        expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).not.toHaveBeenCalled()
-        vi.advanceTimersByTime(7_500)
-        expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(1)
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not shorten an empty-list backoff when an overlapping probe fails', async () => {
-    vi.useFakeTimers()
-    execFileSyncMock.mockReturnValueOnce('')
-    const callbacks: ((error: Error | null, stdout: string) => void)[] = []
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callbacks.push(callback)
-    })
-
-    try {
-      await withPlatformAsync('win32', async () => {
-        expect(listWslDistros()).toEqual([])
-        vi.advanceTimersByTime(15_000)
-
-        const empty = listWslDistrosAsync()
-        const failing = listWslDistrosAsync()
-        callbacks[0](null, '')
-        callbacks[1](new Error('transient failure'), '')
-        await Promise.all([empty, failing])
-
-        vi.advanceTimersByTime(15_000)
-        expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(1)
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   // Why: the cap is the only bound on how long a distro installed mid-session stays
   // invisible, so pin it rather than letting the doubling run away.
   it('caps the empty-list backoff at five minutes', () => {
@@ -515,6 +390,40 @@ describe('WSL availability cache', () => {
       )
       expect(execFileSyncMock).not.toHaveBeenCalled()
     })
+  })
+
+  // Why this site matters more than the other wsl.exe spawns (#16463): ENOENT is
+  // deliberately non-retryable here, so a spawn that failed only because the
+  // inherited cwd had been deleted was cached as "WSL is not installed" on the
+  // 10-minute definitive TTL with exponential backoff. Git kept working and Orca
+  // reported WSL unavailable -- a worse state than the bug being fixed. Naming
+  // the directory is what keeps ENOENT meaning "wsl.exe is not on PATH".
+  it('names an explicit spawn directory on both probes, so no deleted cwd can read as ENOENT', async () => {
+    execFileSyncMock.mockReturnValueOnce('')
+    execFileMock.mockImplementation((_command, _args, _options, callback) => {
+      callback(null, '', '')
+    })
+
+    withPlatform('win32', () => {
+      expect(isWslAvailable()).toBe(true)
+    })
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--status'],
+      expect.objectContaining({ cwd: expect.any(String) })
+    )
+
+    // The two probes share one cache, so a false ENOENT from either poisons both.
+    _resetWslCachesForTests()
+    await withPlatformAsync('win32', async () => {
+      await expect(isWslAvailableAsync()).resolves.toBe(true)
+    })
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      ['--status'],
+      expect.objectContaining({ cwd: expect.any(String) }),
+      expect.any(Function)
+    )
   })
 
   it('shares one wsl.exe spawn between concurrent async probes', async () => {

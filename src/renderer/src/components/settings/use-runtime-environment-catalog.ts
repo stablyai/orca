@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 import { useAppStore } from '@/store'
 import {
   isUserManagedRuntimeEnvironment,
@@ -65,12 +66,14 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
                   ? {
                       status: 'ready',
                       runtimeStatus: verified.runtimeStatus,
+                      remoteControl: verified.runtimeStatus.remoteControl ?? null,
                       compatibility: evaluateHostDetails(verified.runtimeStatus),
                       error: null
                     }
                   : (current[environment.id] ?? {
                       status: 'loading',
                       runtimeStatus: null,
+                      remoteControl: null,
                       compatibility: null,
                       error: null
                     })
@@ -102,6 +105,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
                   [environment.id]: {
                     status: 'ready',
                     runtimeStatus,
+                    remoteControl: runtimeStatus.remoteControl ?? null,
                     compatibility: evaluateHostDetails(runtimeStatus),
                     error: null
                   }
@@ -109,8 +113,10 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
               } catch (error) {
                 // Why: record the failed probe (null status) so the sidebar can
                 // distinguish unreachable from never-checked.
+                const remoteControl = extractRuntimeTransportDiagnostics(error)
                 useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
                   status: null,
+                  ...(remoteControl ? { remoteControl } : {}),
                   checkedAt: Date.now()
                 })
                 if (!mountedRef.current) {
@@ -121,6 +127,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
                   [environment.id]: {
                     status: 'error',
                     runtimeStatus: null,
+                    remoteControl: remoteControl ?? null,
                     compatibility: null,
                     error: error instanceof Error ? error.message : String(error)
                   }

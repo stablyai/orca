@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
 
 const {
   appMock,
@@ -24,6 +25,8 @@ vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
+warmUpdaterModule()
+
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
@@ -40,7 +43,7 @@ describe('updater', () => {
       return Promise.resolve(undefined)
     })
 
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
 
     // Why: recent timestamp defers the startup check so the nudge check runs without hitting the 'checking' guard.
     setupAutoUpdater(mainWindow as never, {
@@ -93,7 +96,7 @@ describe('updater', () => {
       return Promise.resolve(undefined)
     })
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => null,
@@ -127,7 +130,7 @@ describe('updater', () => {
       return new Promise(() => {})
     })
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => null,
@@ -152,7 +155,7 @@ describe('updater', () => {
     shouldApplyNudgeMock.mockReturnValue(true)
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never)
 
@@ -188,7 +191,7 @@ describe('updater', () => {
       return Promise.resolve(undefined)
     })
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => Date.now(),
@@ -226,7 +229,7 @@ describe('updater', () => {
     fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'no-newer' })
     autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => Date.now(),
@@ -262,7 +265,7 @@ describe('updater', () => {
       return Promise.resolve(undefined)
     })
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => Date.now(),
@@ -300,7 +303,7 @@ describe('updater', () => {
       return Promise.reject(missingManifest)
     })
 
-    const { setupAutoUpdater } = await import('./updater')
+    const { setupAutoUpdater } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => Date.now(),
@@ -330,7 +333,7 @@ describe('updater', () => {
       return Promise.resolve(undefined)
     })
 
-    const { setupAutoUpdater, dismissNudge } = await import('./updater')
+    const { setupAutoUpdater, dismissNudge } = await loadUpdaterModule()
 
     setupAutoUpdater(mainWindow as never, {
       getLastUpdateCheckAt: () => Date.now(),

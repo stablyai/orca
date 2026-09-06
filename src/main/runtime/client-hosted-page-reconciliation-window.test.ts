@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   ClientHostedPageReconciliationWindow,
@@ -132,7 +133,7 @@ describe('holdFor', () => {
 // answer, which is invisible to any behavioral test that does not happen to cover that call site.
 describe('session-tabs projection census', () => {
   it('routes every client projection in orca-runtime through the per-client seam', () => {
-    const source = readFileSync(new URL('./orca-runtime.ts', import.meta.url), 'utf8')
+    const source = readOrcaRuntimeSourceFamily()
     const direct = source.match(/this\.clientSessionTabSelections\.project\(/g) ?? []
 
     // Exactly two: inside `projectMobileSessionTabsForClient` itself, and the removed-worktree
@@ -142,8 +143,24 @@ describe('session-tabs projection census', () => {
   })
 
   it('keeps the unreconciled flag out of every other runtime publication site', () => {
-    const source = readFileSync(new URL('./orca-runtime.ts', import.meta.url), 'utf8')
+    const source = readOrcaRuntimeSourceFamily()
 
     expect(source).not.toContain('clientHostedPagesUnreconciled')
   })
 })
+
+function readOrcaRuntimeSourceFamily(): string {
+  return readdirSync(import.meta.dirname)
+    .filter(
+      (name) =>
+        (name === 'orca-runtime.ts' || name.startsWith('orca-runtime-')) &&
+        name.endsWith('.ts') &&
+        !name.includes('.test.') &&
+        !name.endsWith('-fixtures.ts') &&
+        !name.endsWith('-test-harness.ts') &&
+        !name.endsWith('-mock-registry.ts')
+    )
+    .sort()
+    .map((name) => readFileSync(join(import.meta.dirname, name), 'utf8'))
+    .join('\n')
+}

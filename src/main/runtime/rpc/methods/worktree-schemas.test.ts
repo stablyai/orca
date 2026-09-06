@@ -3,6 +3,15 @@ import { WorktreeCreate } from './worktree-create-schemas'
 import { WorktreeActivate, WorktreeSet } from './worktree-schemas'
 
 describe('worktree RPC schemas', () => {
+  it('accepts optional display-name provenance values', () => {
+    expect(
+      WorktreeCreate.parse({ repo: 'repo-1', name: 'feature', displayNameKind: 'user' })
+    ).toMatchObject({ displayNameKind: 'user' })
+    expect(
+      WorktreeCreate.parse({ repo: 'repo-1', name: 'feature', displayNameKind: 'generated' })
+    ).toMatchObject({ displayNameKind: 'generated' })
+  })
+
   it('validates additive navigation intent', () => {
     expect(WorktreeActivate.parse({ worktree: 'id:wt-1', navigation: 'clients' }).navigation).toBe(
       'clients'

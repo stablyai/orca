@@ -1,9 +1,9 @@
 import { attachIpcPty } from './ipc-pty-attach'
-import { writeAcceptedIpcPtyInput } from './ipc-pty-accepted-input'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
+import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 
 export {
@@ -33,7 +33,6 @@ export type {
 export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTransport {
   const {
     connectionId,
-    cwd,
     shellOverride,
     onPtyExit,
     onTitleChange,
@@ -46,18 +45,31 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
+  let lifecycleGeneration = 0
+  let lastExitGeneration: number | null = null
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
+  const preconnectInputBuffer =
+    opts.bufferInputUntilConnect || opts.preconnectInput?.length
+      ? createPtyPreconnectInputBuffer(opts.preconnectInput)
+      : null
 
   const inputWriteQueue = createPtyInputWriteQueue({
-    isWritable: (id) => connected && ptyId === id,
+    isWritable: (id) => !destroyed && connected && ptyId === id,
     write: (id, data) => window.api.pty.write(id, data),
+    writeAccepted: (id, data) => window.api.pty.writeAccepted(id, data),
     onDrainFailure: (id) => {
       if (ptyId === id) {
         storedCallbacks.onWriteUnavailable?.()
       }
     }
   })
+  const advancePtyLifecycle = (): number => {
+    lifecycleGeneration += 1
+    lastExitGeneration = null
+    inputWriteQueue.clear()
+    return lifecycleGeneration
+  }
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -76,8 +88,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getCallbacks: () => storedCallbacks,
     getSuppressAttentionEvents: () => suppressAttentionEvents,
     markExited: () => {
+      advancePtyLifecycle()
+      lastExitGeneration = lifecycleGeneration
       connected = false
       ptyId = null
+      preconnectInputBuffer?.clear()
     },
     onPtyExit
   })
@@ -88,49 +103,101 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
   }
+  const flushPreconnectInput = async (): Promise<void> => {
+    if (!preconnectInputBuffer?.isBuffering()) {
+      return
+    }
+    const id = ptyId
+    if (destroyed || !connected || !id) {
+      preconnectInputBuffer.clear()
+      return
+    }
+    await preconnectInputBuffer.flush({
+      isCurrent: () => !destroyed && connected && ptyId === id,
+      sendInput: (data) => inputWriteQueue.enqueue(id, data),
+      sendInputImmediate: (data) => inputWriteQueue.enqueueQueryReply(id, data),
+      ...(connectionId
+        ? {}
+        : {
+            sendInputAccepted: (data: string) => inputWriteQueue.enqueueAccepted(id, data)
+          })
+    })
+  }
 
   return {
-    connect: (options) =>
-      connectIpcPty(options, {
-        transportOptions: opts,
-        handlers,
-        isDestroyed: () => destroyed,
-        bind,
-        isCurrent: (id) => connected && ptyId === id,
-        setCallbacks,
-        getCallbacks: () => storedCallbacks
-      }),
-
-    attach: (options) =>
-      attachIpcPty(options, {
-        handlers,
-        outputProcessor,
-        isDestroyed: () => destroyed,
-        bind,
-        isCurrent: (id) => connected && ptyId === id,
-        setCallbacks,
-        setSuppressAttentionEvents: (value) => {
-          suppressAttentionEvents = value
+    connect: async (options) => {
+      const connectGeneration = advancePtyLifecycle()
+      try {
+        return await connectIpcPty(options, {
+          transportOptions: opts,
+          handlers,
+          isDestroyed: () => destroyed || lifecycleGeneration !== connectGeneration,
+          isExpectedExitCurrent: () =>
+            !destroyed &&
+            lastExitGeneration === lifecycleGeneration &&
+            lifecycleGeneration === connectGeneration + 1,
+          ownsPtyId: (id) => !destroyed && connected && ptyId === id,
+          bind,
+          isCurrent: (id) => lifecycleGeneration === connectGeneration && connected && ptyId === id,
+          setCallbacks,
+          getCallbacks: () => storedCallbacks
+        })
+      } finally {
+        if (lifecycleGeneration === connectGeneration) {
+          await flushPreconnectInput()
         }
-      }),
+      }
+    },
+
+    attach: (options) => {
+      const attachGeneration = advancePtyLifecycle()
+      try {
+        attachIpcPty(options, {
+          handlers,
+          outputProcessor,
+          isDestroyed: () => destroyed || lifecycleGeneration !== attachGeneration,
+          bind,
+          isCurrent: (id) => lifecycleGeneration === attachGeneration && connected && ptyId === id,
+          setCallbacks,
+          setSuppressAttentionEvents: (value) => {
+            suppressAttentionEvents = value
+          }
+        })
+      } catch (error) {
+        preconnectInputBuffer?.clear()
+        throw error
+      }
+      if (lifecycleGeneration === attachGeneration) {
+        void flushPreconnectInput()
+      }
+    },
+
+    abandonPreconnectInput() {
+      preconnectInputBuffer?.clear()
+    },
 
     disconnect() {
+      advancePtyLifecycle()
+      preconnectInputBuffer?.clear()
+      const id = ptyId
+      connected = false
+      ptyId = null
       handlers.clearAccumulatedState()
-      inputWriteQueue.clear()
-      if (ptyId) {
-        const id = ptyId
-        window.api.pty.kill(id)
-        connected = false
-        ptyId = null
-        handlers.unregisterAll(id)
-        storedCallbacks.onDisconnect?.()
+      if (id) {
+        try {
+          window.api.pty.kill(id)
+        } finally {
+          handlers.unregisterAll(id)
+          storedCallbacks.onDisconnect?.()
+        }
       }
     },
 
     detach(options) {
+      advancePtyLifecycle()
       outputProcessor.disposePendingSideEffectGauge()
       handlers.clearAccumulatedState()
-      inputWriteQueue.clear()
+      preconnectInputBuffer?.clear()
       if (ptyId) {
         if (options?.preserveExitObserver === false) {
           handlers.unregisterAll(ptyId)
@@ -144,26 +211,32 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data) {
-      return connected && ptyId ? inputWriteQueue.enqueue(ptyId, data) : false
+      if (!destroyed && preconnectInputBuffer?.isBuffering()) {
+        return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput)
+      }
+      return !destroyed && connected && ptyId ? inputWriteQueue.enqueue(ptyId, data) : false
     },
 
     sendInputImmediate(data) {
-      return connected && ptyId ? inputWriteQueue.enqueueQueryReply(ptyId, data) : false
+      if (!destroyed && preconnectInputBuffer?.isBuffering()) {
+        return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput)
+      }
+      return !destroyed && connected && ptyId
+        ? inputWriteQueue.enqueueQueryReply(ptyId, data)
+        : false
     },
 
     ...(connectionId
       ? {}
       : {
           async sendInputAccepted(data: string): Promise<boolean> {
-            if (!connected || !ptyId) {
+            if (!destroyed && preconnectInputBuffer?.isBuffering()) {
+              return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput)
+            }
+            if (destroyed || !connected || !ptyId) {
               return false
             }
-            const id = ptyId
-            await inputWriteQueue.waitForDrain()
-            if (!connected || ptyId !== id) {
-              return false
-            }
-            return writeAcceptedIpcPtyInput(id, data, () => connected && ptyId === id)
+            return inputWriteQueue.enqueueAccepted(ptyId, data)
           }
         }),
 
@@ -192,7 +265,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getLocalSessionMetadata: () =>
       connectionId
         ? null
-        : { ...(cwd ? { cwd } : {}), ...(shellOverride ? { shellOverride } : {}) },
+        : { ...(opts.cwd ? { cwd: opts.cwd } : {}), ...(shellOverride ? { shellOverride } : {}) },
     resetCrossChunkParserState: outputProcessor.resetAgentStatusCarry,
 
     destroy() {

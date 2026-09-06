@@ -33,15 +33,31 @@ if (runtime.status !== 0) {
 //     all. Recorded as a real gap, not as coverage living somewhere else.
 //   ssh-codex-display-artifacts-repro.spec.ts — installs a real remote codex binary that CI
 //     runners do not have (observed as `spawn codex ENOENT`). Runs in no CI lane at all.
-//   ssh-docker-bulk-open-freeze-repro.spec.ts — two reasons, both disqualifying:
-//     (a) it is a perf oracle, not a correctness one: SOFT_FREEZE_LAG_MS=2500 /
-//         HARD_FREEZE_LAG_MS=5000 measured by a renderer lag probe under a deliberate
-//         5-pane output flood on a 420s budget. Same rule as ssh-docker-relay-perf above.
-//     (b) it is ROTTED: four call sites are out of date against terminal.ts's current
-//         helpers — execInTerminal gained a ptyId parameter and splitActiveTerminalPane
-//         gained a direction, so it cannot compile, let alone pass. Repairing it needs two
-//         semantic decisions (which ptyId to capture, which split direction) that change
-//         what the repro measures. Tracked in stablyai/orca#16764.
+//   ssh-docker-bulk-open-freeze-repro.spec.ts — un-rotted and now measurable, and marked
+//     `test.fixme` because its oracle cannot gate. Absent from this list AND skipped, so the
+//     two cannot drift: it is also reachable from the changed-specs lane whenever the spec
+//     itself is edited, and a wall-clock oracle that fails there is worth no more than one
+//     that fails here.
+//     The rot (#16764) is fixed: the stale call sites are repaired, it connects after session
+//     restore instead of before, and readiness keys on the repeating flood marker rather than
+//     a one-shot READY line the flood buries within ~16ms. It runs end to end and prints a
+//     measurement instead of dying on a call site.
+//     What it is NOT is portable. Three runs of the same measurement path:
+//       developer workstation:   hiddenFlood 2.1ms  bulkOpen   41.5ms  interaction   53.6ms
+//       GitHub ubuntu runner A:  hiddenFlood 1.5ms  bulkOpen 2575.6ms  interaction 3464.2ms
+//       GitHub ubuntu runner B:  hiddenFlood 0.2ms  bulkOpen  397.4ms  interaction 3386.7ms
+//     bulkOpen swings 6.5x between two CI runs of the same code, so a fixed threshold on it is
+//     a coin flip; interaction sits stably ~64x over the workstation figure because it times a
+//     view remount, not the renderer freeze the issue reports, and only shares the budget
+//     constant because both are milliseconds. Every failure so far is the soft budget; hard
+//     has never tripped, and the relay was still streaming each time — the budget failed, not
+//     the product. Same rule as ssh-docker-relay-perf above. Gating needs a distribution
+//     first, then a host-relative oracle; a bigger constant, or a ratio picked from three
+//     samples, is the same arbitrary number in different clothes.
+//     COVERAGE GAP, recorded as such: 5 simultaneously flooding SSH panes exercise writer
+//     saturation, ACK/credit accounting and per-pane polling together, and nothing else covers
+//     that combination. Flip `test.fixme` back to `test` to run it. Tracked in
+//     stablyai/orca#16764.
 //
 // Why both projects: ssh-port-forward-lifecycle is @headful, which the headless project
 // grep-inverts away.
@@ -71,7 +87,11 @@ const result = spawnSync(
     'tests/e2e/ssh-ai-vault-session-history.spec.ts',
     'tests/e2e/ssh-cold-activation-restore.spec.ts',
     'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts',
+    'tests/e2e/ssh-docker-half-open-link.spec.ts',
+    'tests/e2e/ssh-docker-quick-open-large-listing.spec.ts',
     'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+    'tests/e2e/ssh-docker-resource-accumulation.spec.ts',
+    'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',
     'tests/e2e/ssh-external-image-preview.spec.ts',
     'tests/e2e/ssh-lost-kill-tab-resurrection.spec.ts',
     'tests/e2e/ssh-pi-compatible-agent-title.spec.ts',

@@ -1,8 +1,8 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative } from 'node:path'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { toWindowsWslPath } from '../wsl'
+import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
 
 export type GitMarkerScanResult =
   | { status: 'valid'; rootPath: string }
@@ -128,24 +128,8 @@ function scanWorktreeMarkerSync(worktreePath: string): GitMarkerScanResult {
 }
 
 function parseGitdirFile(basePath: string, content: string): string | null {
-  const firstLine = content.split(/\r?\n/, 1)[0] ?? ''
-  const match = firstLine.match(/^gitdir:\s*(.+?)\s*$/i)
-  if (!match) {
-    return null
-  }
-  return resolveGitMetadataPath(basePath, match[1])
-}
-
-function resolveGitMetadataPath(basePath: string, rawPath: string): string | null {
-  const value = rawPath.trim()
-  if (!value) {
-    return null
-  }
-  const baseWsl = parseWslUncPath(basePath)
-  if (baseWsl && value.startsWith('/')) {
-    return toWindowsWslPath(value, baseWsl.distro)
-  }
-  return isAbsolute(value) ? value : resolve(basePath, value)
+  const payload = parseGitdirMarkerPayload(content)
+  return payload === null ? null : resolveGitMetadataPath(basePath, payload)
 }
 
 function hasValidGitDirectorySync(gitDir: string): boolean {

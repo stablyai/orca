@@ -5,12 +5,13 @@
 import * as path from 'node:path'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { parseUnmergedEntry } from './git-handler-utils'
+import { parseUnmergedEntry } from '../shared/git-status-conflict-entries'
 import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/git-status-types'
 import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
+import { collectGitStatusLineStatInputs } from '../shared/git-status-line-stat-inputs'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
   applyLineStats,
@@ -183,7 +184,7 @@ export async function getStatusOp(
       if (record.type === 'entry') {
         entries.push(record.entry as Record<string, unknown>)
       } else {
-        const entry = parseUnmergedEntry(worktreePath, record.line)
+        const entry = await parseUnmergedEntry(worktreePath, record.line)
         if (entry) {
           entries.push(entry)
         }
@@ -275,11 +276,7 @@ async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
-  const hasStaged = entries.some((entry) => entry.area === 'staged')
-  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
-  const untrackedPaths = entries
-    .filter((entry) => entry.area === 'untracked')
-    .map((entry) => entry.path as string)
+  const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(git, worktreePath, true, signal) : Promise.resolve(emptyStats),
@@ -288,11 +285,12 @@ async function attachLineStats(
   ])
   for (const entry of entries) {
     const filePath = entry.path as string
+    const area = entry.area
     applyLineStats(
       entry as { added?: number; removed?: number },
-      entry.area === 'staged'
+      area === 'staged'
         ? (stagedStats ?? emptyStats).get(filePath)
-        : entry.area === 'unstaged'
+        : area === 'unstaged'
           ? (unstagedStats ?? emptyStats).get(filePath)
           : untrackedStats.get(filePath)
     )

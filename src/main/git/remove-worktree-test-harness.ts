@@ -2,6 +2,7 @@ import { expect, type Mock } from 'vitest'
 
 import { clearGitCapabilityStateForTests } from './git-capability-state'
 import { _resetWorktreeScanCacheForTests } from './worktree'
+import { __resetSparseCheckoutStateCacheForTests } from './worktree-sparse-checkout-cache'
 
 export type MockResult = {
   error?: Error
@@ -89,6 +90,7 @@ export type WorktreeTrashMocks = {
 export function resetWorktreeRemovalState(trashMocks: WorktreeTrashMocks): void {
   clearGitCapabilityStateForTests()
   _resetWorktreeScanCacheForTests()
+  __resetSparseCheckoutStateCacheForTests()
   // Default: the checkout cannot be renamed aside, so removal deletes it in place.
   trashMocks.moveWorktreeDirectoryToTrashMock.mockReset()
   trashMocks.moveWorktreeDirectoryToTrashMock.mockResolvedValue(undefined)

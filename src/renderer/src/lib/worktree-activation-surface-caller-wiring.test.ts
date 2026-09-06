@@ -10,10 +10,16 @@ import { describe, expect, it } from 'vitest'
 const SURFACE_PROVIDING_CALLERS = [
   'src/renderer/src/components/editor/check-annotation-open.ts',
   'src/renderer/src/components/feature-wall/FeatureWallBrowserAction.tsx',
+  'src/renderer/src/components/sidebar/NonGitFolderDialog.tsx',
+  'src/renderer/src/components/sidebar/folder-workspace-composer-submit.ts',
   'src/renderer/src/components/sidebar/run-worktree-delete-with-toast.ts',
   'src/renderer/src/components/terminal-pane/terminal-file-open-routing.ts',
+  'src/renderer/src/hooks/composer-state/full-creation-execution.ts',
   'src/renderer/src/lib/fix-checks-agent-launch.ts',
-  'src/renderer/src/lib/workspace-port-actions.ts'
+  'src/renderer/src/lib/launch-work-item-direct.ts',
+  'src/renderer/src/lib/worktree-creation-flow-execute.ts',
+  'src/renderer/src/lib/workspace-port-actions.ts',
+  'src/renderer/src/store/repos/repo-add-actions.ts'
 ]
 
 // The activation seam itself: declares the option and forwards it into the tombstone gate.
@@ -36,7 +42,7 @@ function listSourceFiles(dir: string): string[] {
 // text cannot satisfy the census, and a variable-valued flag cannot hide in it. Comments
 // are stripped first — commenting the flag out in place must fail this test.
 const ACTIVATION_CALL_WITH_OPT_OUT =
-  /activateAndReveal(?:Worktree|FolderWorkspace|Workspace)\((?:[^()]|\([^()]*\))*?providesInitialSurface: true/
+  /activateAndReveal(?:Worktree|FolderWorkspace|Workspace)\([\s\S]*?providesInitialSurface: true/
 
 function stripComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1')

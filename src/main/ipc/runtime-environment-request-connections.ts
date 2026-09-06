@@ -12,6 +12,11 @@ import type {
 } from '../../shared/remote-runtime-shared-control-types'
 import { isRuntimeEnvironmentCapabilityPaused } from './runtime-environment-capability-evidence'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
+import { publishRuntimeEnvironmentDiagnostics } from './runtime-environment-diagnostics-broadcast'
+import {
+  advanceRuntimeEnvironmentTransportGeneration,
+  getRuntimeEnvironmentTransportGeneration
+} from './runtime-environment-transport-generation'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -142,14 +147,26 @@ function getSharedControlConnection(
   const pairingKey = getPairingKey(pairing)
   let cached = sharedControlConnections.get(environmentId)
   if (!cached || cached.pairingKey !== pairingKey) {
+    advanceRuntimeEnvironmentTransportGeneration(environmentId)
     cached?.connection.close()
+    const transportGeneration = getRuntimeEnvironmentTransportGeneration(environmentId)
     cached = {
       pairingKey,
       connection: new RemoteRuntimeSharedControlConnection(pairing, {
         environmentId,
         clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
         isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
-        isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId)
+        isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId),
+        onDiagnosticsChanged: (diagnostics) => {
+          if (getRuntimeEnvironmentTransportGeneration(environmentId) !== transportGeneration) {
+            return
+          }
+          publishRuntimeEnvironmentDiagnostics({
+            environmentId,
+            transportGeneration,
+            diagnostics
+          })
+        }
       })
     }
     sharedControlConnections.set(environmentId, cached)

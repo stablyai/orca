@@ -21,6 +21,7 @@ import {
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
+import { taskNotFoundError } from '../../orchestration/task-dispatch-refusal'
 import { resolveOrchestrationCaller } from './orchestration-run-scope'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -58,10 +59,10 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       const task = db.getTask(params.task)
       if (!task || task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${params.task} was not found in Run ${run.id}.`
-        )
+        throw taskNotFoundError(`Task ${params.task} was not found in Run ${run.id}.`, {
+          taskId: params.task,
+          runId: run.id
+        })
       }
 
       if (params.on) {

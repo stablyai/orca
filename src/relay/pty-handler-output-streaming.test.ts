@@ -35,6 +35,7 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
 import { PtyHandler } from './pty-handler'
 import { RelayDispatcher } from './dispatcher'
 import { encodeJsonRpcFrame } from './protocol'
+import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 import {
   beginPtyHandlerTest,
   createTestPtyHandler,
@@ -44,6 +45,19 @@ import {
 import type { MockDispatcher } from './pty-handler-test-harness'
 
 const PTY_1 = testPtyId(1)
+
+type PendingFlowState = {
+  pendingOutputByPty: Map<string, { data: string }[]>
+  pendingProducerBytesByPty: Map<string, number>
+}
+
+function pendingFlowState(handler: PtyHandler): PendingFlowState {
+  return handler as unknown as PendingFlowState
+}
+
+function chargedPendingBytes(data: string): number {
+  return Math.max(Buffer.byteLength(data, 'utf8'), 2 * data.length) + 128
+}
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -492,6 +506,113 @@ describe('PtyHandler', () => {
       id: PTY_1,
       data: 'hello world'
     })
+  })
+
+  it('tracks exact pending producer bytes through coalescing and sliced drains', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        dataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    const first = '界'.repeat(16_380)
+    const second = `${'界'.repeat(10)}tail`
+    dataCallback!(first)
+    dataCallback!(second)
+
+    const flow = pendingFlowState(handler)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes(first + second))
+
+    vi.advanceTimersByTime(8)
+    const remaining = `${'界'.repeat(6)}tail`
+    expect(flow.pendingOutputByPty.get(PTY_1)?.[0]?.data).toBe(remaining)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(chargedPendingBytes(remaining))
+
+    vi.advanceTimersByTime(1)
+    expect(flow.pendingOutputByPty.has(PTY_1)).toBe(false)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(false)
+  })
+
+  it('drops the pending producer counter with attach replay and disposal', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      onData: vi.fn((callback: (data: string) => void) => {
+        dataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    dataCallback!('replayed output')
+    const flow = pendingFlowState(handler)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(true)
+    await dispatcher.callRequest('pty.attach', {
+      id: PTY_1,
+      suppressReplayNotification: true
+    })
+    expect(flow.pendingOutputByPty.has(PTY_1)).toBe(false)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(false)
+
+    Object.assign(dispatcher, { tryNotifyPtyData: vi.fn(() => false) })
+    dataCallback!('blocked output')
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(true)
+    await handler.dispose({ waitForPhysicalExit: false })
+    expect(flow.pendingOutputByPty.size).toBe(0)
+    expect(flow.pendingProducerBytesByPty.size).toBe(0)
+  })
+
+  it('tracks each negotiated source entry without rescanning the queue', async () => {
+    let sourceDataCallback: ((data: string) => void) | undefined
+    const pause = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      pause,
+      onData: vi.fn((callback: (data: string) => void) => {
+        sourceDataCallback = callback
+      }),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    const publish = vi.fn(() => false)
+    handler.setSourcePublication({
+      accepts: () => true,
+      publish,
+      onCreditAvailable: () => {},
+      exitPublicationSettled: () => false,
+      sealAndPublishExit: () => false,
+      publishExitAfterRetire: () => null,
+      waitForPendingSend: async () => true,
+      activate: () => false,
+      receivingActivation: () => undefined,
+      getDebugSnapshot: () => ({}),
+      dispose: () => {}
+    } as unknown as RelayPtySourcePublication)
+
+    const entryCount = 2_000
+    for (let index = 0; index < entryCount; index += 1) {
+      sourceDataCallback!('x')
+    }
+
+    const flow = pendingFlowState(handler)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(entryCount * chargedPendingBytes('x'))
+    expect(pause).toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(8)
+    expect(publish).toHaveBeenCalledTimes(1)
+    expect(flow.pendingProducerBytesByPty.get(PTY_1)).toBe(entryCount * chargedPendingBytes('x'))
+
+    publish.mockReturnValue(true)
+    handler.handleSourcePublicationCapacity(PTY_1)
+    await vi.runAllTimersAsync()
+
+    expect(flow.pendingOutputByPty.has(PTY_1)).toBe(false)
+    expect(flow.pendingProducerBytesByPty.has(PTY_1)).toBe(false)
   })
 
   it('sends recent-input redraw output immediately', async () => {

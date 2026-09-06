@@ -164,14 +164,16 @@ describe('native chat transcript watcher errors', () => {
 
     // initialDrain stays true after the error, so a recovered read delivers the
     // real snapshot instead of stranding the client on the error frame.
-    tailReaderState.failure = null
+    // The content must land before reads recover: the capped rotation retry is
+    // still firing, and any drain that succeeds against a still-empty file
+    // legitimately consumes the pending initial drain with an empty snapshot.
     await writeFile(filePath, claudeLine('u-recovered', 'user', 'back'))
+    tailReaderState.failure = null
     watchCallbacks[0]!('change', 'transcript.jsonl')
-    await vi.waitFor(() =>
-      expect(onInitialSnapshot.mock.calls.flat(2)).toEqual(
-        expect.arrayContaining([expect.objectContaining({ id: 'u-recovered' })])
-      )
-    )
+    await vi.waitFor(() => expect(onInitialSnapshot).toHaveBeenCalledTimes(2))
+    expect(onInitialSnapshot.mock.calls[1]![0]).toEqual([
+      expect.objectContaining({ id: 'u-recovered' })
+    ])
 
     subscription.unsubscribe()
   })

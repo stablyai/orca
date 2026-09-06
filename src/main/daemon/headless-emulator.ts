@@ -231,6 +231,15 @@ export class HeadlessEmulator {
     if (this.disposed) {
       return
     }
+    // Why gated: restored OSC-8 ranges are row-indexed, so a reflow
+    // invalidates them — but a resize to the size already applied is not a
+    // reflow. Cold restore seeds the ranges and then replays records that
+    // resize, and same-size records reach the durable log because every
+    // attach re-asserts the pane's dimensions, so clearing unconditionally
+    // dropped the links a restore had just recovered.
+    if (this.terminal.cols === cols && this.terminal.rows === rows) {
+      return
+    }
     this.restoredOscLinks = []
     this.terminal.resize(cols, rows)
   }

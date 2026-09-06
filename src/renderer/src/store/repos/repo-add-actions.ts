@@ -3,9 +3,10 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { resolveDismissedOnboardingFolderAgentLaunch } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
@@ -24,6 +25,7 @@ import {
 } from './owner-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
+import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -128,6 +130,8 @@ export function createRepoAddActions(
           )
           // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
+          // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
+          warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
         }
         return repo
       } catch (err) {
@@ -184,17 +188,46 @@ export function createRepoAddActions(
           const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
           const onboarding = await window.api.onboarding.get().catch(() => null)
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
-          const startup = buildDismissedOnboardingFolderAgentStartup(
-            get().settings,
+          const launch = resolveDismissedOnboardingFolderAgentLaunch({
+            settings: get().settings,
             onboarding,
-            hadProjectBeforeAdd,
-            isNativeChatTranscriptLocalReadable(repo.connectionId)
-          )
+            hasExistingProject: hadProjectBeforeAdd,
+            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID,
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+              repo.connectionId
+            )
+          })
           activateAndRevealWorktree(folderWorktree.id, {
             sidebarRevealBehavior: 'auto',
             ...(executionHostId ? { executionHostId } : {}),
-            ...(startup ? { startup } : {})
+            ...(launch.startup ? { startup: launch.startup } : {}),
+            ...(launch.route === 'structured-native-chat' ? { providesInitialSurface: true } : {})
           })
+          if (
+            launch.route === 'structured-native-chat' &&
+            isAgentSessionHandleProvider(launch.agent)
+          ) {
+            const [{ startStructuredAgentLaunch }, { StructuredAgentSessionCreateRefusalError }] =
+              await Promise.all([
+                import('@/lib/structured-agent-session-launch'),
+                import('@/lib/launch-structured-agent-session')
+              ])
+            const structured = startStructuredAgentLaunch(folderWorktree.id, launch.agent)
+            const fallback = structured.claimDefinitiveRefusalFallback(() => {
+              activateAndRevealWorktree(folderWorktree.id, {
+                sidebarRevealBehavior: 'auto',
+                ...(executionHostId ? { executionHostId } : {}),
+                ...(launch.fallbackStartup ? { startup: launch.fallbackStartup } : {})
+              })
+            })
+            try {
+              await structured.launchResult
+            } catch (error) {
+              if (error instanceof StructuredAgentSessionCreateRefusalError) {
+                await fallback
+              }
+            }
+          }
         }
         return repo
       } catch (err) {

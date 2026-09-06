@@ -80,12 +80,32 @@ export type JournalDispatchRow = JournalRowBase & {
   reason: string | null
 }
 
+export type JournalLifecycleMutation =
+  | {
+      kind: 'item'
+      itemId: string
+      revision: number
+      body: AgentJournalItemBody
+    }
+  | { kind: 'tombstone'; itemId: string; revision: number }
+
+/** One durable append whose nested mutations share the outer ordering facts. */
+export type JournalLifecycleBatchRow = JournalRowBase & {
+  kind: 'lifecycle-batch'
+  settlementId: string
+  mutations: JournalLifecycleMutation[]
+}
+
+export const MAX_JOURNAL_LIFECYCLE_BATCH_BYTES = 1_500_000
+export const MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS = 200
+
 export type JournalRow =
   | JournalEpochRow
   | JournalItemRow
   | JournalTombstoneRow
   | JournalSubmissionRow
   | JournalDispatchRow
+  | JournalLifecycleBatchRow
 
 export type JournalRowParse =
   | { ok: true; row: JournalRow }
@@ -94,7 +114,14 @@ export type JournalRowParse =
   /** A future schema version. The host must not write or compact this journal. */
   | { ok: false; unreadable: true }
 
-const ROW_KINDS = new Set(['epoch', 'item', 'tombstone', 'submission', 'dispatch'])
+const ROW_KINDS = new Set([
+  'epoch',
+  'item',
+  'tombstone',
+  'submission',
+  'dispatch',
+  'lifecycle-batch'
+])
 
 export function serializeJournalRow(row: JournalRow): string {
   return JSON.stringify(row)
@@ -191,7 +218,32 @@ function isJournalRow(record: Record<string, unknown>): record is JournalRow {
       (record.reason === null || typeof record.reason === 'string')
     )
   }
+  if (record.kind === 'lifecycle-batch') {
+    return (
+      typeof record.settlementId === 'string' &&
+      record.settlementId.length > 0 &&
+      Array.isArray(record.mutations) &&
+      record.mutations.length > 0 &&
+      record.mutations.length <= MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS &&
+      Buffer.byteLength(JSON.stringify(record), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES &&
+      record.mutations.every(isLifecycleMutation)
+    )
+  }
   return typeof record.reason === 'string' && isPlainObject(record.providerHandle)
+}
+
+function isLifecycleMutation(value: unknown): value is JournalLifecycleMutation {
+  if (!isPlainObject(value) || typeof value.itemId !== 'string') {
+    return false
+  }
+  if (value.kind === 'tombstone') {
+    return Number.isInteger(value.revision)
+  }
+  return (
+    value.kind === 'item' &&
+    Number.isInteger(value.revision) &&
+    isAdmissibleAgentJournalItemBody(value.body)
+  )
 }
 
 /** Approximate on-disk cost of a row, used for the per-session size bound. */

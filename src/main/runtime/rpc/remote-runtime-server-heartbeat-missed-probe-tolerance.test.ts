@@ -19,7 +19,12 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     const socket = makeSocket()
     const heartbeat = new RemoteRuntimeServerHeartbeat(INTERVAL_MS, () => now)
     heartbeat.noteAlive(socket)
-    heartbeat.start(() => [socket]) // probe #1
+    heartbeat.start(() => [socket])
+
+    // Probe #1 goes out on the first interval tick.
+    now += INTERVAL_MS
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
+    expect(socket.ping).toHaveBeenCalledTimes(1)
     heartbeat.noteAlive(socket) // pongs probe #1
 
     // A transient blackhole: probe #2 goes out and its pong is stuck in the network.
@@ -47,6 +52,9 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     const heartbeat = new RemoteRuntimeServerHeartbeat(INTERVAL_MS, () => now)
     heartbeat.noteAlive(socket)
     heartbeat.start(() => [socket])
+    now += INTERVAL_MS
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
+    expect(socket.ping).toHaveBeenCalledTimes(1)
     heartbeat.noteAlive(socket)
 
     const missesBeforeReap: number[] = []
@@ -72,6 +80,9 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     const heartbeat = new RemoteRuntimeServerHeartbeat(INTERVAL_MS, () => now)
     heartbeat.noteAlive(socket)
     heartbeat.start(() => [socket])
+    now += INTERVAL_MS
+    await vi.advanceTimersByTimeAsync(INTERVAL_MS)
+    expect(socket.ping).toHaveBeenCalledTimes(1)
     heartbeat.noteAlive(socket)
 
     // Two silent probes, then a single inbound frame, repeated well past any fixed budget.

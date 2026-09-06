@@ -12,12 +12,23 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionState,
+  type RuntimeHostConnectionState
+} from '@/runtime/runtime-host-connection-state'
 
 export type RuntimeHostDetails = {
   status: 'loading' | 'ready' | 'error'
   runtimeStatus: RuntimeStatus | null
+  /** Independent control-transport evidence when the status probe fails. */
+  remoteControl?: RuntimeStatus['remoteControl'] | null
   compatibility: RuntimeCompatVerdict | null
   error: string | null
+}
+
+function isTransportConnected(details: RuntimeHostDetails): boolean {
+  return details.remoteControl?.state === 'ready'
 }
 
 export function evaluateHostDetails(status: RuntimeStatus): RuntimeCompatVerdict {
@@ -34,10 +45,16 @@ export function getHostDetailsSummary(details: RuntimeHostDetails | undefined): 
   if (!details || details.status === 'loading') {
     return translate('auto.components.settings.RuntimeEnvironmentsPane.5120beaac6', 'Checking…')
   }
-  if (details.status === 'error') {
+  if (details.status === 'error' && !isTransportConnected(details)) {
     return translate(
       'auto.components.settings.RuntimeEnvironmentsPane.c8791efc45',
       'Status unavailable'
+    )
+  }
+  if (details.runtimeStatus === null && details.compatibility === null) {
+    return translate(
+      'auto.components.settings.RuntimeEnvironmentsPane.serverRuntimeUnavailable',
+      'Orca unavailable'
     )
   }
   if (details.compatibility?.kind === 'blocked') {
@@ -52,11 +69,18 @@ export function getHostDetailsDescription(details: RuntimeHostDetails | undefine
   if (!details || details.status === 'loading') {
     return null
   }
-  if (details.status === 'error') {
+  if (details.status === 'error' && !isTransportConnected(details)) {
     return details.error
   }
   if (details.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(details.compatibility)
+  }
+  if (details.runtimeStatus === null && details.compatibility === null) {
+    const unavailableDescription = translate(
+      'auto.components.settings.RuntimeEnvironmentsPane.serverRuntimeUnavailableDescription',
+      'SSH transport is connected, but the Orca runtime did not answer. The host may still be running.'
+    )
+    return details.error ? `${unavailableDescription} ${details.error}` : unavailableDescription
   }
   return null
 }
@@ -147,7 +171,7 @@ export function isRuntimeEnvironmentRemovalBlocked(
   return activeRuntimeEnvironmentId === environmentId
 }
 
-export type RuntimeServerConnectionState = 'connected' | 'checking' | 'disconnected'
+export type RuntimeServerConnectionState = RuntimeHostConnectionState
 
 export function getRuntimeServerConnectionState(
   details: RuntimeHostDetails | undefined
@@ -155,14 +179,31 @@ export function getRuntimeServerConnectionState(
   if (!details || details.status === 'loading') {
     return 'checking'
   }
-  if (details.status !== 'ready' || details.compatibility?.kind === 'blocked') {
+  if (details.compatibility?.kind === 'blocked') {
     return 'disconnected'
   }
-  // Why: an attached, reachable, compatible host is "Connected" (and exposes
-  // Disconnect). Whether it is the default *active* server is a separate concept,
-  // surfaced by the Advanced > Active Server selector and the row's help text —
-  // it must not change this connection label, or the dot/label/button disagree.
-  return 'connected'
+  // A compatibility verdict is positive runtime evidence even when an older
+  // client omitted the full status payload.
+  if (
+    details.status === 'ready' &&
+    details.runtimeStatus === null &&
+    details.compatibility !== null
+  ) {
+    return 'connected'
+  }
+  return runtimeHostConnectionState({
+    hasStatusEntry: true,
+    status: details.runtimeStatus,
+    remoteControl: details.remoteControl,
+    // A ready details phase is transport evidence only; status.get may still
+    // have failed or been omitted by an older peer. Error details need
+    // diagnostics to prove transport reachability.
+    transportStatus: details.status === 'ready' ? 'connected' : 'disconnected'
+  })
+}
+
+export function isRuntimeServerTransportConnected(state: RuntimeServerConnectionState): boolean {
+  return isConnectedRuntimeHostState(state)
 }
 
 export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionState): string {
@@ -171,6 +212,21 @@ export function getRuntimeServerConnectionLabel(state: RuntimeServerConnectionSt
       return translate(
         'auto.components.settings.RuntimeEnvironmentsPane.serverConnected',
         'Connected'
+      )
+    case 'runtime-unavailable':
+      return translate(
+        'auto.components.settings.RuntimeEnvironmentsPane.serverRuntimeUnavailable',
+        'Orca unavailable'
+      )
+    case 'workspace-window-closed':
+      return translate(
+        'auto.components.settings.RuntimeEnvironmentsPane.serverWorkspaceWindowClosed',
+        'Workspace window closed'
+      )
+    case 'reconnecting':
+      return translate(
+        'auto.components.settings.RuntimeEnvironmentsPane.serverReconnecting',
+        'Reconnecting'
       )
     case 'checking':
       return translate(
@@ -189,7 +245,10 @@ export function getRuntimeServerDotClass(state: RuntimeServerConnectionState): s
   switch (state) {
     case 'connected':
       return 'bg-emerald-500'
+    case 'runtime-unavailable':
     case 'checking':
+    case 'workspace-window-closed':
+    case 'reconnecting':
       return 'bg-yellow-500'
     case 'disconnected':
       return 'bg-muted-foreground/40'

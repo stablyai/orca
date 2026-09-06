@@ -304,6 +304,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         ensureConnected: vi.fn(async () => {
           throw new Error('connect ENOENT')
         }),
+        ensureConnectedWithin: vi.fn(async () => {
+          throw new Error('connect ENOENT')
+        }),
         request: vi.fn(),
         disconnect: vi.fn()
       }

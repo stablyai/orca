@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 
 import {
   mkTempProject,
@@ -36,7 +37,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'download attempted\n'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -60,7 +61,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'Continuing postinstall because Electron binary installation failed'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -81,7 +82,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'Continuing postinstall because Electron binary installation failed'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -117,7 +118,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'stale-path'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -141,7 +142,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'platform=linux arch=arm64\ndownload attempted\n'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -162,7 +163,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
       expect(result.status, result.stderr).toBe(0)
       expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -188,7 +189,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'electron.exe'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -209,7 +210,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
         'platform=linux arch=x64'
       )
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -230,7 +231,7 @@ describe('rebuild-native-deps Electron install fallback', () => {
       expect(result.stdout).toContain('Repaired Electron path.txt -> electron')
       expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 })

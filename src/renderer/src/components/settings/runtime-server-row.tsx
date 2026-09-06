@@ -3,13 +3,16 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-e
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import {
   getHostDetailsDescription,
   getHostDetailsSummary,
+  evaluateHostDetails,
   getRuntimeServerConnectionLabel,
   getRuntimeServerConnectionState,
   getRuntimeServerDotClass,
+  isRuntimeServerTransportConnected,
   type RuntimeHostDetails
 } from './runtime-environment-host-details'
 import {
@@ -50,10 +53,33 @@ export function RuntimeServerRow({
   onConnect,
   onRemove
 }: RuntimeServerRowProps): React.JSX.Element {
-  const detailsDescription = getHostDetailsDescription(details)
-  const connectionState = getRuntimeServerConnectionState(details)
+  const runtimeStatusEntry = useAppStore((state) =>
+    state.runtimeStatusByEnvironmentId.get(environment.id)
+  )
+  const effectiveDetails = runtimeStatusEntry
+    ? {
+        ...(details ?? {
+          status: runtimeStatusEntry.status ? ('ready' as const) : ('error' as const),
+          runtimeStatus: null,
+          compatibility: null,
+          error: null
+        }),
+        status: runtimeStatusEntry.status ? ('ready' as const) : ('error' as const),
+        runtimeStatus: runtimeStatusEntry.status,
+        compatibility: runtimeStatusEntry.status
+          ? evaluateHostDetails(runtimeStatusEntry.status)
+          : null,
+        remoteControl:
+          runtimeStatusEntry.remoteControl ?? runtimeStatusEntry.status?.remoteControl ?? null
+      }
+    : details
+  const detailsDescription = getHostDetailsDescription(effectiveDetails)
+  const connectionState =
+    details?.status === 'loading' && !runtimeStatusEntry?.status
+      ? 'checking'
+      : getRuntimeServerConnectionState(effectiveDetails)
   // A connected host exposes Disconnect; otherwise Connect.
-  const isReachable = connectionState === 'connected'
+  const isReachable = isRuntimeServerTransportConnected(connectionState)
   const actionBusy = connecting || switching || disconnecting || removing
 
   return (
@@ -71,9 +97,9 @@ export function RuntimeServerRow({
           <span className="text-[11px] text-muted-foreground">
             {getRuntimeServerConnectionLabel(connectionState)}
           </span>
-          {details?.compatibility?.kind === 'blocked' ? (
+          {effectiveDetails?.compatibility?.kind === 'blocked' ? (
             <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
-          ) : details?.status === 'loading' ? (
+          ) : effectiveDetails?.status === 'loading' ? (
             <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
           ) : null}
         </div>
@@ -88,13 +114,13 @@ export function RuntimeServerRow({
                   'auto.components.settings.RuntimeEnvironmentsPane.activeServerRowHelp',
                   'Active server for server-routed projects, terminals, and provider checks.'
                 )
-              : getHostDetailsSummary(details)}
+              : getHostDetailsSummary(effectiveDetails)}
         </p>
         {detailsDescription ? (
           <p
             className={cn(
               'mt-0.5 truncate text-xs',
-              details?.compatibility?.kind === 'blocked'
+              effectiveDetails?.compatibility?.kind === 'blocked'
                 ? 'text-destructive'
                 : 'text-muted-foreground'
             )}

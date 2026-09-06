@@ -15,6 +15,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
+import type { PtyPreconnectInputEntry } from './pty-preconnect-input-buffer'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -59,6 +60,10 @@ export type PtyReplayDataMeta = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** Grid the payload was serialized at. Present only when the producer proved
+   *  it; the drain replays there and fits back to the pane afterwards. */
+  snapshotCols?: number
+  snapshotRows?: number
 }
 
 export type LocalPtySessionMetadata = {
@@ -68,6 +73,8 @@ export type LocalPtySessionMetadata = {
 
 export type PtyConnectResult = {
   id: string
+  /** Host-owned PTY incarnation used to fence remote identity observations. */
+  incarnationId?: string
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
@@ -116,6 +123,7 @@ type PtyCallbacks = {
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
+  onErrorCleared?: (message: string) => void
   onExit?: (code: number) => void
   onWriteUnavailable?: () => void
   onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
@@ -179,6 +187,8 @@ export type PtyTransport = {
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
+  /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
+  abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean
   /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
   setOutputPaused?: (paused: boolean) => boolean
@@ -227,6 +237,12 @@ export type PtyTransport = {
 
 export type IpcPtyTransportOptions = {
   cwd?: string
+  /** Retain bounded user input while a visible split waits to start its PTY. */
+  bufferInputUntilConnect?: boolean
+  /** Seed a fresh transport with input handed off from a remounted deferred split. */
+  preconnectInput?: readonly PtyPreconnectInputEntry[]
+  /** Records newly retained input against a remount-safe deferred split handoff. */
+  onPreconnectInput?: (input: PtyPreconnectInputEntry) => void
   cwdFallback?: 'worktree'
   env?: Record<string, string>
   envToDelete?: string[]
@@ -255,7 +271,7 @@ export type IpcPtyTransportOptions = {
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */
-  onPtyRebind?: (ptyId: string, replacedPtyId: string) => void
+  onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: string | null) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
   onAgentBecameWorking?: () => void

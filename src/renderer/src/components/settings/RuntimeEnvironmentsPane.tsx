@@ -36,6 +36,7 @@ export {
   getHostModelCapabilitySummary,
   getRuntimeCapabilitiesSummary,
   getRuntimeServerConnectionState,
+  isRuntimeServerTransportConnected,
   isRuntimeEnvironmentRemovalBlocked
 } from './runtime-environment-host-details'
 export type { RuntimeHostDetails } from './runtime-environment-host-details'
