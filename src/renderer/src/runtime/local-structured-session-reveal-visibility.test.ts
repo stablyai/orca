@@ -153,6 +153,21 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
     expect(chatTabIds(state)).toEqual([])
   })
 
+  it('does not retire the renderer\u2019s own epoch when a reveal republishes under a new one', () => {
+    // The consumer is also the publisher here. If the retraction leaves its epoch history behind,
+    // recording the reveal's fresh epoch retires the renderer's own, and the NEXT chat it
+    // publishes under that epoch is dropped — the same symptom, one cycle later.
+    let state = apply(baseState(), chatFrame(RENDERER_EPOCH, 120))
+    state = apply(state, emptyFrame(RENDERER_EPOCH, 121))
+    state = apply(state, { ...emptyFrame('removed:abc', 0), removed: true } as never)
+    state = apply(state, chatFrame('structured:mf3k1', 1)) // reveal, fresh lineage
+
+    state = apply(state, emptyFrame('structured:mf3k1', 2)) // closed again
+    state = apply(state, chatFrame(RENDERER_EPOCH, 130)) // renderer publishes a new chat
+
+    expect(chatTabIds(state)).toEqual([SESSION_TAB])
+  })
+
   it('still prunes the mirrored rows when the host retracts the worktree', () => {
     // The retraction must not merely stop fencing later frames — it has to take the rows with it,
     // or a worktree the host no longer publishes keeps a chat on screen that nothing backs.

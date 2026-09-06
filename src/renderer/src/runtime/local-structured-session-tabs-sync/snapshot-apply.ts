@@ -110,10 +110,15 @@ export function applyLocalStructuredSessionTabSnapshots<
       // is one string for the whole process lifetime, and every republication afterwards would be
       // dropped until a reload minted a new one. That is what left a revealed chat invisible.
       //
-      // Only the recording is skipped: the cursor and the epoch history stay. The host mints a
-      // fresh epoch when it rebuilds a pruned entry, so a republication is never gated by the
-      // retained cursor — while dropping it would leave an in-flight frame from before the close
-      // free to re-apply and strand a row for a worktree the host no longer publishes.
+      // The cursor stays: the host mints a fresh epoch when it rebuilds a pruned entry, so a
+      // republication is never gated by it, while dropping it would leave a frame issued before
+      // the close free to land afterwards and strand a row nothing republishes.
+      //
+      // The epoch history goes. Unlike the mainstream path — where the epochs belong to a remote
+      // publisher and the history is a useful tombstone — here the consumer IS the publisher, and
+      // `current` is the renderer's own lifetime epoch. Keep it, and the next frame under any
+      // other epoch retires that one for good, which is this bug again one cycle later.
+      localStructuredSessionEpochHistoryByWorktree.delete(snapshot.worktree)
       continue
     }
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
