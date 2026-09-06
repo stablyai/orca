@@ -38,6 +38,19 @@ describe('resolvePnpmCliInvocation', () => {
     })
   })
 
+  it('ignores the npx CLI that `npx vitest` exports as npm_execpath', () => {
+    // Why: npx-cli.js is npm's runner, not pnpm's; routing through it makes npm exec
+    // try to execute a package named "install" and fail with "could not determine
+    // executable to run". Falling through to PATH resolution finds the real pnpm.
+    expect(
+      resolvePnpmCliInvocation({
+        npmExecPath: '/usr/share/nodejs/npm/bin/npx-cli.js',
+        nodeExecPath,
+        platform: 'linux'
+      })
+    ).toEqual({ command: 'pnpm', prefixArgs: [], shell: false })
+  })
+
   it('does not wrap a Windows native pnpm.exe in node', () => {
     expect(
       resolvePnpmCliInvocation({
