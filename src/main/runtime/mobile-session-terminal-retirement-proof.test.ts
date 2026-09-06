@@ -1,7 +1,67 @@
 import { describe, expect, it } from 'vitest'
-import { appendRetiredTerminalSurfaceProofs } from './mobile-session-terminal-retirement-proof'
+import {
+  appendRetiredTerminalSurfaceProofs,
+  preserveTerminalRetirementProofs
+} from './mobile-session-terminal-retirement-proof'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+
+const retired = {
+  parentTabId: 'tab',
+  leafId: 'leaf',
+  ptyId: 'pty',
+  terminal: 'term',
+  incarnationId: 'inc'
+}
+function snapshot(
+  overrides: Partial<RuntimeMobileSessionTabsSnapshot> = {}
+): RuntimeMobileSessionTabsSnapshot {
+  return {
+    worktree: 'worktree',
+    worktreeInstanceId: 'instance',
+    publicationEpoch: 'epoch',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: [],
+    ...overrides
+  }
+}
 
 describe('mobile session terminal retirement proofs', () => {
+  it.each([{ worktree: 'another-worktree' }, { worktreeInstanceId: 'successor-instance' }])(
+    'does not copy retirement proof into a different workspace: %j',
+    (identity) => {
+      const next = snapshot(identity)
+      expect(
+        preserveTerminalRetirementProofs(next, snapshot({ retiredTerminalSurfaces: [retired] }))
+      ).toBe(next)
+    }
+  )
+
+  it('drops an old proof when its surface is published again', () => {
+    const existing = snapshot({ retiredTerminalSurfaces: [retired] })
+    const revived = preserveTerminalRetirementProofs(
+      snapshot({
+        tabs: [
+          {
+            type: 'terminal',
+            id: 'tab::leaf',
+            parentTabId: 'tab',
+            leafId: 'leaf',
+            ptyId: 'successor-pty',
+            title: 'Successor',
+            isActive: false
+          }
+        ]
+      }),
+      existing
+    )
+    expect(revived.retiredTerminalSurfaces).toEqual([])
+    expect(
+      preserveTerminalRetirementProofs(snapshot(), revived).retiredTerminalSurfaces
+    ).toBeUndefined()
+  })
   it('keeps the newest 64 exact identities', () => {
     let proofs = appendRetiredTerminalSurfaceProofs(
       undefined,

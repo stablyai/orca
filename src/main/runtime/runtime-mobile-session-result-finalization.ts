@@ -1,4 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import { dropRetirementProofsForLiveSurfaces } from './mobile-session-terminal-retirement-proof'
 import type {
   RuntimeMobileSessionProjectionHost,
   RuntimeMobileSessionProjectionInput
@@ -41,14 +42,9 @@ export function finalizeRuntimeMobileSessionTabsResult(
     ...(snapshot.tabGroupLayout !== undefined ? { tabGroupLayout } : {}),
     ...(snapshot.retiredTerminalSurfaces
       ? {
-          retiredTerminalSurfaces: snapshot.retiredTerminalSurfaces.filter(
-            (retired) =>
-              !snapshot.tabs.some(
-                (tab) =>
-                  tab.type === 'terminal' &&
-                  tab.parentTabId === retired.parentTabId &&
-                  tab.leafId === retired.leafId
-              )
+          retiredTerminalSurfaces: dropRetirementProofsForLiveSurfaces(
+            snapshot.retiredTerminalSurfaces,
+            snapshot.tabs
           )
         }
       : {}),
