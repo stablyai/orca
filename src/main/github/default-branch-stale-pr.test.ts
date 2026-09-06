@@ -277,8 +277,15 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
 
     expect(pr?.number).toBe(8)
     expect(pr?.state).toBe('open')
-    // Open results never consult git for the default branch (lazy resolution).
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    // Open results never resolve the default branch (lazy resolution). The
+    // head-remote probe (#12956) is a different question and may still run, so
+    // assert on the default-branch plumbing rather than on git as a whole.
+    const defaultBranchCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) =>
+      (args as string[]).some(
+        (arg) => arg === 'symbolic-ref' || arg === 'rev-parse' || arg.includes('refs/heads')
+      )
+    )
+    expect(defaultBranchCalls).toHaveLength(0)
   })
 
   it('keeps a CLOSED PR on a feature branch visible (behavior preserved)', async () => {

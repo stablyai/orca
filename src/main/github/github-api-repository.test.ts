@@ -8,13 +8,27 @@ const {
   getOwnerRepoMock,
   getOwnerRepoForRemoteMock,
   getSshGitProviderGenerationMock,
-  isGitHubHostAuthenticatedMock
+  isGitHubHostAuthenticatedMock,
+  resolveBranchHeadRemoteNameMock
 } = vi.hoisted(() => ({
   getEnterpriseGitHubRepoSlugMock: vi.fn(),
   getOwnerRepoMock: vi.fn(),
   getOwnerRepoForRemoteMock: vi.fn(),
   getSshGitProviderGenerationMock: vi.fn(() => 0),
-  isGitHubHostAuthenticatedMock: vi.fn()
+  isGitHubHostAuthenticatedMock: vi.fn(),
+  resolveBranchHeadRemoteNameMock: vi.fn()
+}))
+
+vi.mock('./github-branch-head-remote', () => ({
+  // Keeps these tests expressed as "which remote holds the branch" while still
+  // exercising the real injection contract.
+  resolveBranchHeadRepository: async (
+    query: { branchName: string },
+    getRepositoryForRemote: (remoteName: string) => Promise<unknown>
+  ) => {
+    const remoteName = await resolveBranchHeadRemoteNameMock(query)
+    return remoteName ? getRepositoryForRemote(remoteName) : null
+  }
 }))
 
 vi.mock('../providers/ssh-git-dispatch', async (importOriginal) => ({
@@ -41,6 +55,7 @@ import {
   getOriginGitHubApiRepository,
   githubHostExecOptions,
   resolveGitHubApiRepository,
+  resolveGitHubApiRepositoryCandidates,
   resolveGitHubRepoExecution
 } from './github-api-repository'
 
@@ -51,6 +66,7 @@ beforeEach(() => {
   getOwnerRepoForRemoteMock.mockReset().mockResolvedValue(null)
   getSshGitProviderGenerationMock.mockReset().mockReturnValue(0)
   isGitHubHostAuthenticatedMock.mockReset().mockResolvedValue(false)
+  resolveBranchHeadRemoteNameMock.mockReset().mockResolvedValue(null)
 })
 
 describe('githubHostExecOptions', () => {
@@ -344,5 +360,64 @@ describe('origin repository cache', () => {
     await expect(oldProbe).resolves.toEqual(oldRepository)
     await expect(getOriginGitHubApiRepository('/repo', 'ssh-1')).resolves.toEqual(newRepository)
     expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('resolveGitHubApiRepositoryCandidates head repository', () => {
+  const CANONICAL = { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+  const FORK = { owner: 'dcieslak19973', repo: 'orca', host: 'github.com' }
+  const BRANCH = 'dcieslak19973/feature'
+
+  function stubRemotes(byRemote: Record<string, { owner: string; repo: string } | null>): void {
+    getOwnerRepoForRemoteMock.mockImplementation(
+      async (_path: string, remote: string) => byRemote[remote] ?? null
+    )
+  }
+
+  // Why: every caller that is not doing a branch lookup keeps origin.
+  it('keeps origin as the head repository when no branch is supplied', async () => {
+    stubRemotes({ origin: CANONICAL })
+
+    const { headRepo } = await resolveGitHubApiRepositoryCandidates('/repo')
+
+    expect(headRepo).toEqual(CANONICAL)
+    expect(resolveBranchHeadRemoteNameMock).not.toHaveBeenCalled()
+  })
+
+  // #12956: origin is the canonical repo and the branch lives on a
+  // differently-named fork remote, so the head owner must be the fork's.
+  it('uses the fork that holds the branch as the head repository', async () => {
+    stubRemotes({ origin: CANONICAL, fork: FORK })
+    resolveBranchHeadRemoteNameMock.mockResolvedValue('fork')
+
+    const { candidates, headRepo } = await resolveGitHubApiRepositoryCandidates(
+      '/repo',
+      null,
+      {},
+      BRANCH
+    )
+
+    expect(headRepo).toEqual(FORK)
+    // The query still runs against the canonical repo that owns the PR.
+    expect(candidates).toEqual([CANONICAL])
+  })
+
+  it('leaves the head repository unset when no single remote holds the branch', async () => {
+    stubRemotes({ origin: CANONICAL })
+    resolveBranchHeadRemoteNameMock.mockResolvedValue(null)
+
+    const { headRepo } = await resolveGitHubApiRepositoryCandidates('/repo', null, {}, BRANCH)
+
+    // Null selects the head-owner-agnostic lookup instead of filtering on a guess.
+    expect(headRepo).toBeNull()
+  })
+
+  it('leaves the head repository unset when the branch remote is not a GitHub repo', async () => {
+    stubRemotes({ origin: CANONICAL, gitea: null })
+    resolveBranchHeadRemoteNameMock.mockResolvedValue('gitea')
+
+    const { headRepo } = await resolveGitHubApiRepositoryCandidates('/repo', null, {}, BRANCH)
+
+    expect(headRepo).toBeNull()
   })
 })
