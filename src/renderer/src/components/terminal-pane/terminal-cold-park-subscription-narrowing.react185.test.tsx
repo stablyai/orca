@@ -10,7 +10,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 const WORKTREE_ID = 'repo::/cold-park-narrowing'
 const OTHER_WORKTREE_ID = 'repo::/cold-park-narrowing-other'
 
-const harness = vi.hoisted(() => ({ renders: 0 }))
+const harness = vi.hoisted(() => ({ renders: 0, parked: [] as string[] }))
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
@@ -55,17 +55,19 @@ const activityTerminalPortals: never[] = []
 
 function ColdParkingHarness(): null {
   harness.renders += 1
-  useTerminalTabColdParking({
-    worktreeId: WORKTREE_ID,
-    terminalTabs,
-    assignments,
-    isWorktreeActive: false,
-    activeTerminalTabId: null,
-    coldParkTerminalPanes: false,
-    shouldMeasureHiddenWorktree: false,
-    activityTerminalPortals,
-    activationDeferredMountTabIds: null
-  })
+  harness.parked = [
+    ...useTerminalTabColdParking({
+      worktreeId: WORKTREE_ID,
+      terminalTabs,
+      assignments,
+      isWorktreeActive: false,
+      activeTerminalTabId: null,
+      coldParkTerminalPanes: false,
+      shouldMeasureHiddenWorktree: false,
+      activityTerminalPortals,
+      activationDeferredMountTabIds: null
+    })
+  ]
   return null
 }
 
@@ -74,8 +76,14 @@ describe('cold-park store subscription narrowing', () => {
   let root: Root | undefined
 
   beforeEach(() => {
+    vi.useFakeTimers()
     harness.renders = 0
-    useAppStore.setState({ pendingStartupByTabId: {}, sleepingAgentSessionsByPaneKey: {} })
+    useAppStore.setState({
+      pendingStartupByTabId: {},
+      sleepingAgentSessionsByPaneKey: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -89,6 +97,7 @@ describe('cold-park store subscription narrowing', () => {
     act(() => root?.unmount())
     root = undefined
     container.remove()
+    vi.useRealTimers()
   })
 
   // Why: these two maps are app-global, so before narrowing any write re-rendered
@@ -144,5 +153,50 @@ describe('cold-park store subscription narrowing', () => {
       })
     })
     expect(harness.renders).toBeGreaterThan(0)
+  })
+  it('keeps a live parked pane parked across agent turns, but mounts when its PTY is lost', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `tab-2:${leafId}`
+    const record = sleepingRecord(paneKey, WORKTREE_ID, {
+      tabId: 'tab-2',
+      origin: 'live',
+      state: 'done',
+      agent: 'codex'
+    })
+    act(() => {
+      useAppStore.setState({
+        sleepingAgentSessionsByPaneKey: { [paneKey]: record },
+        ptyIdsByTabId: { 'tab-2': [terminalTabs[1].ptyId!] },
+        terminalLayoutsByTabId: {
+          'tab-2': {
+            root: { type: 'leaf', leafId },
+            activeLeafId: leafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [leafId]: terminalTabs[1].ptyId! }
+          }
+        }
+      })
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6 * 60_000)
+    })
+    expect(harness.parked).toContain('tab-2')
+    for (const state of ['working', 'done', 'working'] as const) {
+      act(() => {
+        useAppStore.setState({
+          sleepingAgentSessionsByPaneKey: {
+            [paneKey]: { ...record, state }
+          }
+        })
+      })
+      expect(harness.parked).toContain('tab-2')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
+    }
+    act(() => {
+      useAppStore.setState({ ptyIdsByTabId: {} })
+    })
+    expect(harness.parked).not.toContain('tab-2')
   })
 })
