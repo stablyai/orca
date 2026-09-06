@@ -2,14 +2,18 @@ import { existsSync, readFileSync } from 'node:fs'
 import {
   getSelectedClaudeAccountIdForTarget,
   normalizeClaudeAccountSelectionTarget,
-  normalizeClaudeRuntimeSelection,
-  setSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from '../runtime-selection'
 import { hasLiveClaudePtys } from '../live-pty-gate'
 import { isOauthTokenExpiring } from '../oauth-refresh'
 import { writeActiveClaudeKeychainCredentialsForRuntime } from '../keychain'
 import { ClaudeRuntimeAuthPreparationService } from './runtime-auth-preparation'
+import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
+import type { ClaudeManagedOauthRead } from './runtime-auth-managed-credentials'
+import {
+  clearClaudeSelectionForTarget,
+  shouldDeferOnUnreadableOauth
+} from './runtime-auth-selection-teardown'
 
 export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
   protected async doSyncForCurrentSelection(target?: ClaudeAccountSelectionTarget): Promise<void> {
@@ -26,9 +30,11 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     const previousManagedCredentialsJson = previousAccount
       ? await this.readManagedCredentials(previousAccount)
       : null
-    const previousManagedOauthAccount = previousAccount
-      ? await this.readManagedOauthAccount(previousAccount)
+    const previousManagedOauthRead = previousAccount
+      ? await this.readManagedOauthAccountResult(previousAccount)
       : null
+    const previousManagedOauthAccount =
+      previousManagedOauthRead?.kind === 'present' ? previousManagedOauthRead.value : null
     if (previousAccount && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
         const outgoingReadBackResult = await this.readBackRefreshedTokens(
@@ -67,16 +73,7 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     }
     if (!activeAccount) {
       if (activeAccountId) {
-        const nextSelection = setSelectedClaudeAccountIdForTarget(
-          normalizeClaudeRuntimeSelection(settings),
-          null,
-          normalizedTarget
-        )
-        this.store.updateSettings({
-          activeClaudeManagedAccountId:
-            normalizedTarget.runtime === 'host' ? null : settings.activeClaudeManagedAccountId,
-          activeClaudeManagedAccountIdsByRuntime: nextSelection
-        })
+        clearClaudeSelectionForTarget(this.store, settings, normalizedTarget)
       }
       if (normalizedTarget.runtime === 'wsl') {
         return
@@ -94,37 +91,41 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     }
 
     if (activeAccount.managedAuthRuntime === 'wsl') {
-      if (!(await this.getOwnedManagedAuthPath(activeAccount))) {
+      const wslOwnership = await this.resolveManagedAuthVerdict(activeAccount)
+      if (wslOwnership.kind === 'indeterminate') {
+        // Why return rather than clear: a distro that would not start, or a
+        // probe that timed out, is not evidence about the account. Clearing here
+        // is how a cold distro used to log the user out (STA-5674).
+        console.warn(
+          '[claude-runtime-auth] Could not verify the active WSL managed account; leaving the selection in place',
+          wslOwnership.error
+        )
+        return
+      }
+      if (wslOwnership.kind === 'untrusted') {
         console.warn(
           '[claude-runtime-auth] Active WSL managed account is not owned by Orca, restoring system default'
         )
-        const nextSelection = setSelectedClaudeAccountIdForTarget(
-          normalizeClaudeRuntimeSelection(settings),
-          null,
-          normalizedTarget
-        )
-        this.store.updateSettings({
-          activeClaudeManagedAccountId:
-            normalizedTarget.runtime === 'host' ? null : settings.activeClaudeManagedAccountId,
-          activeClaudeManagedAccountIdsByRuntime: nextSelection
-        })
+        clearClaudeSelectionForTarget(this.store, settings, normalizedTarget)
         return
       }
-      const credentialsJson = await this.readManagedCredentials(activeAccount)
+      const wslCredentials = await this.readManagedCredentialsResultAt(
+        activeAccount,
+        wslOwnership.authPath
+      )
+      if (wslCredentials.kind === 'indeterminate') {
+        console.warn(
+          '[claude-runtime-auth] Could not read the active WSL managed credentials; leaving the selection in place',
+          wslCredentials.error
+        )
+        return
+      }
+      const credentialsJson = wslCredentials.kind === 'present' ? wslCredentials.contents : null
       if (!credentialsJson || !this.isValidCredentialsJsonObject(credentialsJson)) {
         console.warn(
           '[claude-runtime-auth] Active WSL managed account is missing or has invalid credentials, restoring system default'
         )
-        const nextSelection = setSelectedClaudeAccountIdForTarget(
-          normalizeClaudeRuntimeSelection(settings),
-          null,
-          normalizedTarget
-        )
-        this.store.updateSettings({
-          activeClaudeManagedAccountId:
-            normalizedTarget.runtime === 'host' ? null : settings.activeClaudeManagedAccountId,
-          activeClaudeManagedAccountIdsByRuntime: nextSelection
-        })
+        clearClaudeSelectionForTarget(this.store, settings, normalizedTarget)
         return
       }
       // Why: WSL managed accounts are isolated by their Linux CLAUDE_CONFIG_DIR; materializing into Windows ~/.claude would mix two auth stores.
@@ -132,52 +133,49 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
       return
     }
 
-    if (!(await this.getOwnedManagedAuthPath(activeAccount))) {
+    const hostOwnership = await this.resolveManagedAuthVerdict(activeAccount)
+    if (hostOwnership.kind === 'indeterminate') {
+      console.warn(
+        '[claude-runtime-auth] Could not verify the active managed account; leaving the selection in place',
+        hostOwnership.error
+      )
+      return
+    }
+    if (hostOwnership.kind === 'untrusted') {
       console.warn(
         '[claude-runtime-auth] Active managed account is not owned by Orca, restoring system default'
       )
-      if (this.lastSyncedAccountId !== null) {
-        if (
-          previousAccount &&
-          (previousAccount.id !== activeAccount.id ||
-            this.hasMaterializedRuntimeAuth ||
-            this.runtimeOauthAccountMatches(await this.readManagedOauthAccount(previousAccount)))
-        ) {
-          await this.restoreSystemDefaultSnapshotForMissingManagedCredentials(
-            previousAccount,
-            previousManagedOauthAccount
-          )
-        } else if (!previousAccount && this.hasMaterializedRuntimeAuth) {
-          await this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined)
-        }
-      }
-      this.store.updateSettings({ activeClaudeManagedAccountId: null })
-      this.lastSyncedAccountId = null
+      await this.restoreDefaultAndDropHostSelection(
+        activeAccount,
+        previousAccount,
+        previousManagedOauthRead,
+        previousManagedOauthAccount
+      )
       return
     }
 
-    let credentialsJson = await this.readManagedCredentials(activeAccount)
+    const hostCredentials = await this.readManagedCredentialsResultAt(
+      activeAccount,
+      hostOwnership.authPath
+    )
+    if (hostCredentials.kind === 'indeterminate') {
+      console.warn(
+        '[claude-runtime-auth] Could not read the active managed credentials; leaving the selection in place',
+        hostCredentials.error
+      )
+      return
+    }
+    let credentialsJson = hostCredentials.kind === 'present' ? hostCredentials.contents : null
     if (!credentialsJson || !this.isValidCredentialsJsonObject(credentialsJson)) {
       console.warn(
         '[claude-runtime-auth] Active managed account is missing or has invalid credentials, restoring system default'
       )
-      if (this.lastSyncedAccountId !== null) {
-        if (
-          previousAccount &&
-          (previousAccount.id !== activeAccount.id ||
-            this.hasMaterializedRuntimeAuth ||
-            this.runtimeOauthAccountMatches(previousManagedOauthAccount))
-        ) {
-          await this.restoreSystemDefaultSnapshotForMissingManagedCredentials(
-            previousAccount,
-            previousManagedOauthAccount
-          )
-        } else if (!previousAccount && this.hasMaterializedRuntimeAuth) {
-          await this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined)
-        }
-      }
-      this.store.updateSettings({ activeClaudeManagedAccountId: null })
-      this.lastSyncedAccountId = null
+      await this.restoreDefaultAndDropHostSelection(
+        activeAccount,
+        previousAccount,
+        previousManagedOauthRead,
+        previousManagedOauthAccount
+      )
       return
     }
 
@@ -280,5 +278,39 @@ export class ClaudeRuntimeAuthSync extends ClaudeRuntimeAuthPreparationService {
     }
     this.lastSyncedAccountId = activeAccount.id
     this.hasMaterializedRuntimeAuth = true
+  }
+
+  /**
+   * Undo the managed materialization, if we can establish that it happened, then
+   * drop the host selection. When the oauth identity cannot be read this does
+   * nothing at all -- neither the restore nor the clear -- so the next sync
+   * retries the whole transition rather than completing half of it.
+   */
+  private async restoreDefaultAndDropHostSelection(
+    activeAccount: ClaudeManagedAccount,
+    previousAccount: ClaudeManagedAccount | null,
+    previousManagedOauthRead: ClaudeManagedOauthRead | null,
+    previousManagedOauthAccount: unknown
+  ): Promise<void> {
+    if (this.lastSyncedAccountId !== null) {
+      if (shouldDeferOnUnreadableOauth(previousManagedOauthRead)) {
+        return
+      }
+      if (
+        previousAccount &&
+        (previousAccount.id !== activeAccount.id ||
+          this.hasMaterializedRuntimeAuth ||
+          this.runtimeOauthAccountMatches(previousManagedOauthAccount))
+      ) {
+        await this.restoreSystemDefaultSnapshotForMissingManagedCredentials(
+          previousAccount,
+          previousManagedOauthAccount
+        )
+      } else if (!previousAccount && this.hasMaterializedRuntimeAuth) {
+        await this.restoreSystemDefaultSnapshot(this.lastWrittenCredentialsJson, undefined)
+      }
+    }
+    this.store.updateSettings({ activeClaudeManagedAccountId: null })
+    this.lastSyncedAccountId = null
   }
 }

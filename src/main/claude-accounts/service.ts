@@ -43,8 +43,11 @@ export class ClaudeAccountService {
     rateLimits: RateLimitService,
     private readonly runtimeAuth: ClaudeRuntimeAuthService
   ) {
+    // Two different authorities, deliberately wired to two different methods:
+    // selection removals are the user's explicit request, registration cleanup
+    // is Orca's own decision after a failure.
     this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth, (accountId, path) =>
-      this.safeRemoveManagedAuth(accountId, path)
+      this.storage.remove(accountId, path)
     )
     this.registration = new ClaudeAccountRegistration({
       store,
@@ -53,7 +56,7 @@ export class ClaudeAccountService {
       selection: this.selection,
       createManagedAuth: (accountId, target) => this.storage.create(accountId, target),
       assertManagedAuth: (path, accountId) => this.storage.assertOwned(path, accountId),
-      removeManagedAuth: (accountId, path) => this.safeRemoveManagedAuth(accountId, path),
+      removeManagedAuth: (accountId, path) => this.storage.removeAfterFailedAdd(accountId, path),
       writeManagedAuth: (accountId, path, captured) =>
         this.writeManagedAuth(accountId, path, captured),
       writeCredentials: (accountId, path, value) =>
@@ -191,9 +194,5 @@ export class ClaudeAccountService {
     captured: CapturedClaudeAuth
   ): Promise<void> {
     return this.storage.writeAuth(accountId, managedAuthPath, captured)
-  }
-
-  private safeRemoveManagedAuth(accountId: string, path: string): Promise<void> {
-    return this.storage.remove(accountId, path)
   }
 }
