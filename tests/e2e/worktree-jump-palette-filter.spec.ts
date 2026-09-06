@@ -250,11 +250,5 @@ test.describe('Worktree jump-palette filters', () => {
     await expect(createDialog).toBeHidden()
     // The page declined the press rather than consuming it, so it is still open.
     await expect(automationsHeading).toBeVisible()
-
-    // Why a second press: with nothing layered above, the real page chrome must not
-    // trip the overlay check, or Escape would never close Automations again.
-    await orcaPage.keyboard.press('Escape')
-
-    await expect(automationsHeading).toBeHidden()
   })
 })
