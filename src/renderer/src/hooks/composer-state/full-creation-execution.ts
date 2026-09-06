@@ -175,7 +175,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
         smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
         effectiveBackendStartup,
-        structuredLaunch ? false : pendingFirstAgentMessageRename,
+        pendingFirstAgentMessageRename,
         undefined,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,

@@ -34,6 +34,9 @@ export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   now: () => number
+  /** Every projection change, whether or not anyone is subscribed. `replay` marks a re-projection
+   *  of state the host already knew (restore, an arriving subscriber) rather than a journal edge. */
+  onStatusChanged?: (summary: AgentSessionStatusSummary, options: { replay: boolean }) => void
 }
 
 function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSummary): boolean {
@@ -57,7 +60,7 @@ export class StructuredAgentSessionStatusFeed {
     // Re-project before registering: a change found here has to reach the subscribers that
     // already read the old value, and the arriving one carries it in its snapshot instead.
     for (const [sessionId] of this.deps.sessions) {
-      this.publish(sessionId)
+      this.publish(sessionId, undefined, { replay: true })
     }
     this.subscribers.set(subscriber.id, subscriber)
     this.emit(subscriber, { type: 'snapshot', sessions: [...this.published.values()] })
@@ -78,7 +81,7 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
-  publish(sessionId: string, journal?: AgentSessionJournal): void {
+  publish(sessionId: string, journal?: AgentSessionJournal, options?: { replay?: boolean }): void {
     const session = this.deps.sessions.get(sessionId)
     if (!session) {
       return
@@ -90,6 +93,12 @@ export class StructuredAgentSessionStatusFeed {
     }
     this.published.set(sessionId, summary)
     this.broadcast({ type: 'status', session: summary })
+    try {
+      this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
+    } catch (error) {
+      // An observer must never cost the subscribers their status event.
+      console.warn('[structured-session-status] status observer failed', error)
+    }
   }
 
   private summaryFor(

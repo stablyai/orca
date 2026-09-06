@@ -77,7 +77,7 @@ export async function executeWorktreeCreation(
         preparedRequest.linkedGitLabMR,
         preparedRequest.linkedGitLabIssue,
         backendStartup,
-        structuredLaunch ? false : preparedRequest.pendingFirstAgentMessageRename,
+        preparedRequest.pendingFirstAgentMessageRename,
         creationId,
         preparedRequest.linkedLinearIssueWorkspaceId,
         preparedRequest.linkedLinearIssueOrganizationUrlKey,

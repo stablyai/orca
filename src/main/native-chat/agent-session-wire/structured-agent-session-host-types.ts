@@ -1,6 +1,7 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -62,5 +63,11 @@ export type StructuredAgentSessionHostDeps = {
   /** How long a session outlives its last surface. Tests drive this; production takes the default. */
   releaseGraceMs?: number
   onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
+  /** Every status projection this host publishes. `replay` marks a re-projection of state the host
+   *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */
+  onSessionStatusChanged?: (
+    summary: AgentSessionStatusSummary,
+    options: { replay: boolean }
+  ) => void
   handoffTransport?: StructuredAgentSessionHandoffTransport
 }
