@@ -173,6 +173,45 @@ function resolveSelector(argument, state) {
   return name ? (state.namedSelectors.get(name) ?? null) : null
 }
 
+/**
+ * Allocation that happens on EVERY call, used when following a selector into a
+ * helper. Deliberately stricter than isAllocatingExpression: a helper that returns
+ * a cached reference on one branch and builds a fresh one on another is the normal
+ * identity-caching shape, and flagging it would be a false positive.
+ */
+function alwaysAllocates(expression) {
+  if (expression?.type === 'ConditionalExpression') {
+    return alwaysAllocates(expression.consequent) && alwaysAllocates(expression.alternate)
+  }
+  if (expression?.type === 'LogicalExpression') {
+    return alwaysAllocates(expression.left) && alwaysAllocates(expression.right)
+  }
+  return (
+    expression?.type === 'ArrayExpression' ||
+    expression?.type === 'ObjectExpression' ||
+    expression?.type === 'NewExpression' ||
+    (expression?.type === 'CallExpression' &&
+      ALLOCATING_METHODS.has(propertyName(expression.callee) ?? ''))
+  )
+}
+
+/**
+ * One hop: a selector that delegates to a module-scope helper is the idiomatic
+ * shape here, and neither the inline-body check nor a reviewer reading the call
+ * site can see what that helper returns.
+ */
+function expandThroughNamedHelper(expression, state) {
+  if (expression?.type !== 'CallExpression') {
+    return [expression]
+  }
+  const helper = state.namedSelectors.get(identifierName(expression.callee) ?? '')
+  if (!helper) {
+    return [expression]
+  }
+  const returned = returnedExpressions(helper)
+  return returned.length > 0 && returned.every(alwaysAllocates) ? returned : [expression]
+}
+
 function createRuleState() {
   return {
     appStoreHooks: new Set(),
@@ -270,7 +309,8 @@ function deferredSelectorRule(inspect) {
           selector: resolveSelector(argument, state),
           argument,
           shallow,
-          node
+          node,
+          state
         })
         if (report) {
           this.report(report)
@@ -293,11 +333,13 @@ function noIdentitySelectorRule() {
 }
 
 function noFreshSelectorResultRule() {
-  return deferredSelectorRule(({ selector, shallow }) => {
+  return deferredSelectorRule(({ selector, shallow, state }) => {
     if (shallow || !selector) {
       return null
     }
-    const freshResult = returnedExpressions(selector).find(isAllocatingExpression)
+    const freshResult = returnedExpressions(selector)
+      .flatMap((expression) => expandThroughNamedHelper(expression, state))
+      .find(isAllocatingExpression)
     return freshResult
       ? {
           node: freshResult,
@@ -322,12 +364,14 @@ function nestedFreshValues(expression) {
 }
 
 function noNestedFreshUnderShallowRule() {
-  return deferredSelectorRule(({ selector, shallow }) => {
+  return deferredSelectorRule(({ selector, shallow, state }) => {
     if (!shallow || !selector) {
       return null
     }
     const nestedFresh = returnedExpressions(selector)
+      .flatMap((expression) => expandThroughNamedHelper(expression, state))
       .flatMap(nestedFreshValues)
+      .flatMap((expression) => expandThroughNamedHelper(expression, state))
       .find(isAllocatingExpression)
     return nestedFresh
       ? {

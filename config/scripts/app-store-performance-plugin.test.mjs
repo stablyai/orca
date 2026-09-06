@@ -97,4 +97,34 @@ describe('app store performance Oxlint plugin', () => {
       'app-store-performance(no-nested-fresh-under-shallow)'
     ])
   })
+
+  it('follows a selector one hop into a module-scope helper', () => {
+    const diagnostics = lintSource(`
+      import { useAppStore } from '@/store'
+      import { useShallow } from 'zustand/react/shallow'
+      const buildRows = (state) => state.rows.map((row) => row.id)
+      const Delegating = () => useAppStore((state) => buildRows(state))
+      const NestedDelegating = () => useAppStore(useShallow((state) => ({ ids: buildRows(state) })))
+    `)
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'app-store-performance(no-fresh-selector-result)',
+      'app-store-performance(no-nested-fresh-under-shallow)'
+    ])
+  })
+
+  it('does not flag a helper that returns a cached reference on some branch', () => {
+    const diagnostics = lintSource(`
+      import { useAppStore } from '@/store'
+      import { useShallow } from 'zustand/react/shallow'
+      // The identity-caching shape: fresh only on a miss, cached otherwise.
+      const selectCachedRows = (state) => cache.get(state.key) ?? state.rows.filter(Boolean)
+      const Cached = () => useAppStore((state) => selectCachedRows(state))
+      const CachedNested = () => useAppStore(useShallow((state) => ({ rows: selectCachedRows(state) })))
+      // An unknown helper cannot be resolved, so it must not be guessed at.
+      const External = () => useAppStore((state) => externalBuild(state))
+    `)
+
+    expect(diagnostics).toEqual([])
+  })
 })
