@@ -39,6 +39,22 @@ function tabLocator(page: Page, tabId: string) {
   return page.locator(`${SORTABLE_TAB}[data-tab-id="${tabId}"]`).first()
 }
 
+async function closeTabFromTabBar(page: Page, tabId: string): Promise<void> {
+  const tab = tabLocator(page, tabId)
+  await tab.hover()
+  await tab.getByRole('button', { name: /^Close tab /i }).click()
+  const confirmation = page.getByRole('dialog', { name: 'Stop running command?' })
+  // A shell still starting under load may require the running-command confirmation.
+  await expect
+    .poll(async () => (await confirmation.isVisible()) || (await tab.count()) === 0, {
+      timeout: 5_000
+    })
+    .toBe(true)
+  if (await confirmation.isVisible()) {
+    await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
+  }
+}
+
 /** Count rendered tabs in the tab bar (user-visible, not store-level). */
 async function countRenderedTabs(page: Page): Promise<number> {
   return page.locator(SORTABLE_TAB).count()
@@ -73,6 +89,8 @@ test.describe('Tabs', () => {
     await waitForStartupWorktreeRefresh(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+    const initialTabId = (await getActiveTabId(orcaPage))!
+    await expect(tabLocator(orcaPage, initialTabId)).toBeVisible()
   })
 
   /**
@@ -519,12 +537,7 @@ test.describe('Tabs', () => {
     const tabsBefore = await countRenderedTabs(orcaPage)
     const activeId = await getActiveTabId(orcaPage)
     expect(activeId).not.toBeNull()
-    const activeTab = tabLocator(orcaPage, activeId!)
-    // Why: hover the tab first so the close button reveals its hover style.
-    // The button is interactive regardless but hovering matches real user
-    // behaviour and keeps click coordinates stable.
-    await activeTab.hover()
-    await activeTab.getByRole('button', { name: /^Close tab /i }).click()
+    await closeTabFromTabBar(orcaPage, activeId!)
 
     await expect
       .poll(() => countRenderedTabs(orcaPage), {
@@ -562,9 +575,7 @@ test.describe('Tabs', () => {
     const activeTabBefore = await getActiveTabId(orcaPage)
     expect(activeTabBefore).not.toBeNull()
 
-    const activeTab = tabLocator(orcaPage, activeTabBefore!)
-    await activeTab.hover()
-    await activeTab.getByRole('button', { name: /^Close tab /i }).click()
+    await closeTabFromTabBar(orcaPage, activeTabBefore!)
 
     // Final DOM assertion: some *other* tab element now carries data-active.
     await expect
