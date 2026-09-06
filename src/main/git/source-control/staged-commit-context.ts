@@ -1,7 +1,7 @@
 import type { CommitMessageDraftContext } from '../../../shared/commit-message-generation'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync } from '../runner'
+import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from '../max-buffer-overflow'
 import { MAX_STAGED_COMMIT_CONTEXT_BYTES } from './git-show-max-bytes'
 
@@ -10,10 +10,12 @@ export async function getStagedCommitContext(
   options: GitRuntimeOptions = {}
 ): Promise<CommitMessageDraftContext | null> {
   const branchPromise = gitExecFileAsync(['branch', '--show-current'], {
-    ...gitOptionsForWorktree(worktreePath, options)
+    ...gitOptionsForWorktree(worktreePath, options),
+    env: gitOptionalLocksDisabledEnv()
   }).catch(() => ({ stdout: '' }))
   const summaryPromise = gitExecFileAsync(['diff', '--cached', '--name-status'], {
     ...gitOptionsForWorktree(worktreePath, options),
+    env: gitOptionalLocksDisabledEnv(),
     maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
   })
 
@@ -29,6 +31,7 @@ export async function getStagedCommitContext(
       ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
       {
         ...gitOptionsForWorktree(worktreePath, options),
+        env: gitOptionalLocksDisabledEnv(),
         maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
       }
     )

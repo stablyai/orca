@@ -1,6 +1,8 @@
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
+import { runWithGitWorktreeOperationLock } from '../../../shared/git-worktree-operation-lock'
+import { runWithGitIndexLockRetry } from '../../../shared/git-index-lock-retry'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 
 export async function commitChanges(
@@ -10,7 +12,13 @@ export async function commitChanges(
 ): Promise<{ success: boolean; error?: string }> {
   invalidateGitReadCaches()
   try {
-    await gitExecFileAsync(['commit', '-m', message], gitOptionsForWorktree(worktreePath, options))
+    await runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
+      runWithGitIndexLockRetry(
+        () =>
+          gitExecFileAsync(['commit', '-m', message], gitOptionsForWorktree(worktreePath, options)),
+        options.signal
+      )
+    )
     return { success: true }
   } catch (error) {
     // Why: useful message may be on stderr (hook/GPG failures) or stdout ("nothing to commit"), so try both then message.

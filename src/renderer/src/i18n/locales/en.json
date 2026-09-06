@@ -12880,6 +12880,18 @@
                   "e7876a2bde": "Stage at least one file to generate a message.",
                   "0904be2505": "Clear the message to regenerate.",
                   "1ea9ba37aa": "Pick an agent in Settings -> Git -> Source Control AI."
+                },
+                "use": {
+                  "entry": {
+                    "mutations": {
+                      "stage": {
+                        "failed": "Stage failed"
+                      },
+                      "unstage": {
+                        "failed": "Unstage failed"
+                      }
+                    }
+                  }
                 }
               }
             }

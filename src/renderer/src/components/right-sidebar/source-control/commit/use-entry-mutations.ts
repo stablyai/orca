@@ -1,4 +1,6 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import {
   notifyEditorExternalFileChange,
   requestEditorSaveQuiesce
@@ -12,6 +14,23 @@ import {
   type RuntimeGitContext
 } from '@/runtime/runtime-git-client'
 import { useAppStore } from '@/store'
+
+// Why: a stage that waits on another process's index.lock and then fails must not look like a dead click.
+function reportEntryMutationFailure(action: 'stage' | 'unstage', error: unknown): void {
+  console.error(`[SourceControl] ${action} failed`, error)
+  toast.error(
+    action === 'stage'
+      ? translate(
+          'auto.components.right.sidebar.source.control.commit.use.entry.mutations.stage.failed',
+          'Stage failed'
+        )
+      : translate(
+          'auto.components.right.sidebar.source.control.commit.use.entry.mutations.unstage.failed',
+          'Unstage failed'
+        ),
+    { description: error instanceof Error ? error.message : undefined }
+  )
+}
 
 export function useSourceControlEntryMutations({
   activeRepoSettings,
@@ -43,7 +62,7 @@ export function useSourceControlEntryMutations({
         )
         await refreshActiveGitStatusAfterMutation()
       } catch (error) {
-        console.error('[SourceControl] stage failed', error)
+        reportEntryMutationFailure('stage', error)
       }
     },
     [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
@@ -68,7 +87,7 @@ export function useSourceControlEntryMutations({
         )
         await refreshActiveGitStatusAfterMutation()
       } catch (error) {
-        console.error('[SourceControl] unstage failed', error)
+        reportEntryMutationFailure('unstage', error)
       }
     },
     [activeRepoSettings, worktreePath, activeWorktreeId, refreshActiveGitStatusAfterMutation]
