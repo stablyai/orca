@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
+import { PaneManager } from './pane-manager'
 import {
   releaseHiddenWebglRetention,
   resetHiddenWebglRetentionForTest,
@@ -48,6 +49,22 @@ describe('terminal-webgl-hidden-retention', () => {
     suspendPaneRendering(panes)
     expect(addon?.dispose).toHaveBeenCalled()
     expect(panes[0].webglAddon).toBeNull()
+  })
+
+  it('disposes a floating manager context on hide so reopen cannot reuse a corrupt atlas', () => {
+    const pane = createPane()
+    const addon = pane.webglAddon
+    const manager = Object.create(PaneManager.prototype) as PaneManager
+    Object.assign(manager, {
+      panes: new Map([[1, pane]]),
+      options: { retainHiddenWebgl: false },
+      destroyed: false
+    })
+    manager.suspendRendering()
+    expect(addon?.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.webglAttachmentDeferred).toBe(true)
+    expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
   })
 
   // Why: the retained branch's blur is already pinned above; only the dispose branch changed.
