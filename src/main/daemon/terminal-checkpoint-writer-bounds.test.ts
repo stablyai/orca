@@ -162,4 +162,19 @@ describe('bounded terminal checkpoint writer', () => {
       closeSync(logFd)
     }
   })
+
+  it('rejects digit prefixes without a JSON token boundary and falls back to the full parse', async () => {
+    const sessionDir = join(dir, getHistorySessionDirName(SESSION_ID))
+    mkdirSync(sessionDir, { recursive: true })
+    // Truncated head: a digit run with no closing token — the probe must not
+    // accept "12" out of "123456789..." as a generation.
+    writeFileSync(join(sessionDir, 'checkpoint.json'), '{"generation":123456789')
+    expect(probeCheckpointGenerationHead(join(sessionDir, 'checkpoint.json'))).toBeNull()
+
+    // A malformed head must fall back to the full parse, which still fails to
+    // yield a number here (truncated JSON) — so the writer treats it as absent.
+    writeFileSync(join(sessionDir, 'checkpoint.json'), '{"generation":12,"snapshotAnsi"')
+    expect(probeCheckpointGenerationHead(join(sessionDir, 'checkpoint.json'))).toBe(12)
+    expect(probeCheckpointGenerationHead(join(dir, 'missing', 'checkpoint.json'))).toBeNull()
+  })
 })

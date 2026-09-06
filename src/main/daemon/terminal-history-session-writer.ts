@@ -33,7 +33,10 @@ export function probeCheckpointGenerationHead(path: string): number | null {
     fd = openSync(path, 'r')
     const head = Buffer.alloc(GENERATION_HEAD_PROBE_BYTES)
     const read = readSync(fd, head, 0, GENERATION_HEAD_PROBE_BYTES, 0)
-    const match = head.toString('utf8', 0, read).match(/^\{"generation":(\d+)/)
+    // The token boundary after the digits (`,"` next key, or `}` sole key) must
+    // close the match, or a truncated/corrupt head could accept a digit prefix
+    // of something that is not this file's generation.
+    const match = head.toString('utf8', 0, read).match(/^\{"generation":(\d+)(?:"|,|})/)
     return match ? Number(match[1]) : null
   } catch {
     return null
