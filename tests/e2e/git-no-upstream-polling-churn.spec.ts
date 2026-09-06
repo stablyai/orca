@@ -3,6 +3,13 @@ import { existsSync, readFileSync, realpathSync, unlinkSync, writeFileSync } fro
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 
+// This isolated app needs local trace files; network telemetry remains disabled.
+test.use({ orcaAppExtraEnv: {
+  CI: '', GITHUB_ACTIONS: '', GITLAB_CI: '', CIRCLECI: '', TRAVIS: '',
+  BUILDKITE: '', JENKINS_URL: '', TEAMCITY_VERSION: '',
+  ORCA_DIAGNOSTICS_DISABLED: '', DO_NOT_TRACK: '1', ORCA_TELEMETRY_DISABLED: '1'
+} })
+
 // Repro command:
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/git-no-upstream-polling-churn.spec.ts --config tests/playwright.config.ts --project electron-headless --reporter=json
 // Trigger: active worktree branch "Initi-Project" has no configured upstream
@@ -201,7 +208,8 @@ test.describe('Git no-upstream polling churn repro', () => {
     await selectRepoForActivePolling(orcaPage, testRepoPath, repoPath)
 
     const diagnostics = await readDiagnosticsStatus(orcaPage)
-    test.skip(!diagnostics.localFileEnabled, 'local diagnostic traces are disabled')
+    expect(diagnostics.localFileEnabled).toBe(true)
+    expect(diagnostics.bundleEnabled).toBe(false)
 
     clearTraceFile(diagnostics)
     const measurement = await measureRendererDuringPolling(orcaPage)
