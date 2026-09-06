@@ -547,6 +547,14 @@ running, so typing `exit` in a pane reaped a `start /b` server that used to
 survive. The job exists to make an _explicit_ teardown exact, not to redefine
 what a clean exit means.
 
+Git Bash needs one additional restriction: MSYS automatically requests
+`CREATE_BREAKAWAY_FROM_JOB` for ordinary children whenever the job permits it.
+The per-PTY job therefore omits `BREAKAWAY_OK` for `bash.exe` and `sh.exe`
+with an adjacent MSYS runtime, including Git's `bin` launcher beside `usr/bin`.
+Native shells retain explicit breakaway support. Inside an MSYS pane, a native
+program explicitly requesting breakaway can receive `ERROR_ACCESS_DENIED`;
+ordinary backgrounding remains supported. The daemon's host job is unchanged.
+
 Reaping a dead daemon's shells (#9195, #10415) is therefore a **second, nested
 job**, not this one. The terminal daemon assigns itself to a kill-on-close job
 at startup (`assignHostProcessToKillOnCloseJob`); children inherit membership,
