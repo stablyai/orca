@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Tab } from '../../../shared/tab-types'
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
@@ -30,11 +31,12 @@ const store = {
     ]
   },
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] as { id: string; launchAgent?: string }[] },
+  unifiedTabsByWorktree: {} as Record<string, Tab[]>,
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
   terminalLayoutsByTabId: {},
-  ptyIdsByTabId: {},
+  ptyIdsByTabId: {} as Record<string, string[]>,
   sshConnectionStates: new Map(),
   transientClearedAgentStatusConnectionIds: {},
   allWorktrees: vi.fn(() => store.worktreesByRepo['repo-1']),
@@ -63,6 +65,83 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 }))
 
 describe('launchAgentInNewTab paired web runtime', () => {
+  it('retains a same-host legacy row with a PTY binding', async () => {
+    store.tabsByWorktree['wt-1'] = [{ id: 'bound-agent', launchAgent: 'claude' }]
+    store.ptyIdsByTabId = { 'bound-agent': ['remote:chosen@@pty'] }
+    store.unifiedTabsByWorktree['wt-1'] = [
+      {
+        id: 'bound-agent',
+        entityId: 'bound-agent',
+        contentType: 'terminal',
+        executionHostId: 'runtime:chosen',
+        groupId: 'group-1',
+        worktreeId: 'wt-1',
+        label: 'Agent',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 1
+      }
+    ]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      executionHostId: 'runtime:chosen',
+      activate: false
+    })
+    await Promise.resolve()
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+  })
+
+  it('prunes only legacy rows owned by the chosen runtime', async () => {
+    const hosts = ['local', 'runtime:chosen', 'runtime:other'] as const
+    store.tabsByWorktree['wt-1'] = hosts.map((id) => ({ id, launchAgent: 'claude' }))
+    store.unifiedTabsByWorktree['wt-1'] = hosts.map((id) => ({
+      id,
+      entityId: id,
+      contentType: 'terminal',
+      executionHostId: id,
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      label: 'Agent',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }))
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      executionHostId: 'runtime:chosen',
+      activate: false
+    })
+    await Promise.resolve()
+    expect(mocks.closeTab).toHaveBeenCalledWith('runtime:chosen', { reason: 'cleanup' })
+    expect(mocks.closeTab).not.toHaveBeenCalledWith('local', expect.anything())
+    expect(mocks.closeTab).not.toHaveBeenCalledWith('runtime:other', expect.anything())
+  })
+  it('keeps a background launch on the chosen runtime without changing workspace selection', async () => {
+    store.tabsByWorktree['wt-1'].push({ id: 'local-agent-tab', launchAgent: 'claude' })
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      executionHostId: 'runtime:chosen',
+      activate: false
+    })
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        environmentId: 'chosen',
+        activate: false,
+        selectWorktree: false
+      })
+    )
+    await Promise.resolve()
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     store.settings = {
@@ -72,6 +151,8 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activeRuntimeEnvironmentId: 'web-runtime'
     }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
+    store.unifiedTabsByWorktree = {}
+    store.ptyIdsByTabId = {}
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
   })
 

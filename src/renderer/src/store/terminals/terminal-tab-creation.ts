@@ -193,6 +193,7 @@ export function createTerminalTabCreationActions(
           entityId: id,
           groupId: group.id,
           worktreeId,
+          ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
           contentType: 'terminal' as const,
           label: tab.title,
           ...(tab.quickCommandLabel?.trim()
