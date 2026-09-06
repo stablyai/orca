@@ -9,7 +9,7 @@ export const SERVE_UPDATE_SPOOL_SCHEMA_VERSION = 2
 
 export type ServeUpdateRequest = {
   schemaVersion: typeof SERVE_UPDATE_SPOOL_SCHEMA_VERSION
-  /** Echoed in the result so the app binds the verdict to THIS install attempt. */
+  /** Identifies the serving runtime instance that spooled the request. */
   runtimeId: string
   /** Random per-attempt id echoed in the result; fences a replayed/stale verdict. */
   attemptId: string
@@ -45,34 +45,6 @@ export function getResultPath(spoolDir: string): string {
 
 export function getHelperMarkerPath(spoolDir: string): string {
   return join(spoolDir, SERVE_UPDATE_HELPER_MARKER_FILE)
-}
-
-export function parseServeUpdateRequest(value: unknown): ServeUpdateRequest | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-  const state = value as Record<string, unknown>
-  if (
-    state.schemaVersion !== SERVE_UPDATE_SPOOL_SCHEMA_VERSION ||
-    typeof state.runtimeId !== 'string' ||
-    state.runtimeId.length === 0 ||
-    typeof state.attemptId !== 'string' ||
-    state.attemptId.length === 0 ||
-    typeof state.fromVersion !== 'string' ||
-    state.fromVersion.length === 0 ||
-    typeof state.targetVersion !== 'string' ||
-    state.targetVersion.length === 0 ||
-    typeof state.artifactPath !== 'string' ||
-    typeof state.sha512 !== 'string' ||
-    state.sha512.length === 0 ||
-    !Number.isInteger(state.servingPid) ||
-    (state.servingPid as number) <= 0 ||
-    typeof state.unitName !== 'string' ||
-    state.unitName.length === 0
-  ) {
-    return null
-  }
-  return state as ServeUpdateRequest
 }
 
 export function parseServeUpdateResult(value: unknown): ServeUpdateResult | null {
