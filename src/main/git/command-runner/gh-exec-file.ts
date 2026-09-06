@@ -23,6 +23,7 @@ import { execFileCaptureToTermination } from './exec-file-capture'
 import type { GitExecOptions } from './git-exec-options'
 import { argsLookIdempotent } from './gh-idempotency'
 import { applyGhHostToArgs, explicitGhHostname, explicitGhRepoHostname } from './gh-host-args'
+import { isGhBoundAccountError, resolveBoundGhExecEnv } from './gh-bound-account-env'
 import {
   defaultGhExecTimeoutMs,
   isTransientGhError,
@@ -43,6 +44,8 @@ export type GhExecOptions = Omit<GitExecOptions, 'cwd'> & {
   // runner qualify every spawn once, so call sites can't silently fall back
   // to github.com for GHES repos; it also scopes the rate-limit breaker.
   host?: string
+  /** Per-project account binding; the runner resolves and injects a child-only token. */
+  ghAccount?: { host: string; user: string }
 }
 
 function nonInteractiveGhEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -103,18 +106,66 @@ export async function ghExecFileAsync(
 ): Promise<{ stdout: string; stderr: string }> {
   // Why: retry safety must reflect the original call even when fallbacks replace the resolved command.
   const idempotent = options.idempotent ?? argsLookIdempotent(args)
+  // Why: legacy github.com ownerRepos omit `host`; bound calls still need a pinned
+  // options.host before token-var selection and argv qualification.
+  if (options.ghAccount && !options.host?.trim() && args[0] !== 'auth') {
+    options = { ...options, host: options.ghAccount.host.trim().toLowerCase() }
+  }
   args = applyGhHostToArgs(args, options.host)
   let resolved = resolveCommand('gh', args, options.cwd, options.wslDistro)
   // Why: while a bucket is rate-limited every spawn returns 403 — fail fast; the probe is exempt so the breaker can learn the reset.
   // Why: scope by runtime and host so unrelated github.com, GHES, and WSL quotas cannot block each other.
   const rateLimitBucket = classifyGhRateLimitBucket(args)
   const rateLimitProbe = isGhRateLimitProbe(args)
+  let boundEnv: NodeJS.ProcessEnv | undefined = options.env
+  let boundEnvResolvedKey: string | null = null
+  const boundEnvKeyFor = (command: ResolvedCommand): string =>
+    command.wsl ? `wsl:${command.wsl.distro}` : 'native'
+  // Why: unbound calls must reach the spawn in the same tick — callers that abort
+  // synchronously would otherwise never get a child to kill.
+  const ensureBoundEnv = (): Promise<void> | null => {
+    const key = boundEnvKeyFor(resolved)
+    if (boundEnvResolvedKey === key) {
+      return null
+    }
+    if (!options.ghAccount || args[0] === 'auth') {
+      boundEnv = options.env
+      boundEnvResolvedKey = key
+      return null
+    }
+    return resolveBoundGhExecEnv(options, resolved, args).then((env) => {
+      boundEnv = env
+      boundEnvResolvedKey = key
+    })
+  }
   assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
   let lastError: unknown
   let attemptedHostFallback = false
   let attemptedDefaultWslFallback = false
+  // Why: a bound resolve fails before any spawn when gh is missing inside WSL; reuse the
+  // host fallback and re-resolve the token for the host it now runs on.
+  const tryHostFallbackAfterBoundResolveFailure = (error: unknown): boolean => {
+    if (attemptedHostFallback) {
+      return false
+    }
+    const { stderr } = extractExecError(error)
+    if (!canFallBackToHostGitHubCli('gh', args, resolved, stderr)) {
+      return false
+    }
+    resolved = resolveHostGitHubCli('gh', args)
+    attemptedHostFallback = true
+    boundEnvResolvedKey = null
+    assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
+    return true
+  }
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
+      const boundEnvReady = ensureBoundEnv()
+      if (boundEnvReady) {
+        await boundEnvReady
+        // Why: the breaker may have tripped while the token resolved.
+        assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
+      }
       // Why to-termination and not execFileCapture: `gh` on PATH is routinely a
       // shim (mise, asdf, volta, a hand-written wrapper), so the deadline below
       // has a chain to reap, not one process. execFileCapture's POSIX kill only
@@ -129,7 +180,7 @@ export async function ghExecFileAsync(
           maxBuffer: options.maxBuffer,
           // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
           timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
-          env: nonInteractiveGhEnv(options.env),
+          env: nonInteractiveGhEnv(boundEnv ?? options.env),
           signal: options.signal
         },
         resolved.termination
@@ -137,6 +188,13 @@ export async function ghExecFileAsync(
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
       lastError = err
+      if (isGhBoundAccountError(err)) {
+        if (tryHostFallbackAfterBoundResolveFailure(err)) {
+          attempt = -1
+          continue
+        }
+        throw err
+      }
       const { stderr } = extractExecError(err)
       if (isGhPrimaryRateLimitStderr(stderr)) {
         notifyGhPrimaryRateLimit(rateLimitBucket, ghRateLimitScope(args, options, resolved))
@@ -154,6 +212,8 @@ export async function ghExecFileAsync(
           // Why: WSL-only Windows installs have no host gh.exe, and global calls (rate_limit/auth) carry no cwd to route by.
           resolved = wslResolved
           attemptedDefaultWslFallback = true
+          // Why: token and capability are per execution host — re-resolve after native→WSL.
+          boundEnvResolvedKey = null
           assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
           attempt = -1
           continue
@@ -162,6 +222,8 @@ export async function ghExecFileAsync(
       if (!attemptedHostFallback && canFallBackToHostGitHubCli('gh', args, resolved, stderr)) {
         resolved = resolveHostGitHubCli('gh', args)
         attemptedHostFallback = true
+        // Why: token and capability are per execution host — re-resolve after WSL→host.
+        boundEnvResolvedKey = null
         assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
         attempt = -1
         continue

@@ -17,7 +17,10 @@ import { createStackedHostedReview } from '../source-control/stacked-hosted-revi
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import {
+  getLocalProjectGhExecOptions,
+  getLocalProjectWorktreeGitOptions
+} from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
@@ -107,7 +110,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
     const repo = assertRegisteredRepoForBranch(args, store)
     const localGitOptions = {
-      ...getLocalProjectWorktreeGitOptions(store, repo),
+      ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: args.admissionTier ?? ('background' as const)
     }
     const review = await getHostedReviewForBranch({
@@ -140,7 +143,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
-      const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+      const localGitOptions = getLocalProjectGhExecOptions(store, repo)
       return getHostedReviewCreationEligibility({
         ...args,
         repoPath: worktreePath,
@@ -154,7 +157,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
     const localGitOptions = {
-      ...getLocalProjectWorktreeGitOptions(store, repo),
+      ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: 'interactive' as const
     }
     // Why: the dirty preflight must not count Orca's own shared symlinks as user work (issue #10451).
@@ -201,7 +204,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
       const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = {
-        ...getLocalProjectWorktreeGitOptions(store, repo),
+        ...getLocalProjectGhExecOptions(store, repo),
         admissionTier: 'interactive' as const
       }
       const sharedLinkPaths = getRepoSshConnectionId(repo) ? [] : getWorktreeSharedLinkPaths(repo)
