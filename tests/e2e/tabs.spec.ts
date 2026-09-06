@@ -91,6 +91,8 @@ test.describe('Tabs', () => {
     await ensureTerminalVisible(orcaPage)
     const initialTabId = (await getActiveTabId(orcaPage))!
     await expect(tabLocator(orcaPage, initialTabId)).toBeVisible()
+    // Initial terminal focus must settle before opening a menu that focus can dismiss.
+    await expect.poll(() => getFocusedTerminalTabId(orcaPage)).toBe(initialTabId)
   })
 
   /**
