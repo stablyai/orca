@@ -3,6 +3,8 @@ import { parseKaneoTaskUrl } from '../../../../shared/kaneo-task-url'
 import type { KaneoTask } from '../../../../shared/kaneo-types'
 import { lookupKaneoTask, type KaneoRuntimeSettings } from '@/runtime/runtime-kaneo-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { translate } from '@/i18n/i18n'
 
 export function useKaneoUrlSource(value: string, enabled: boolean, settings: KaneoRuntimeSettings) {
   const intent = useMemo(() => (enabled ? parseKaneoTaskUrl(value) : null), [value, enabled])
@@ -39,7 +41,10 @@ export function useKaneoUrlSource(value: string, enabled: boolean, settings: Kan
             setResult({
               requestKey,
               task: null,
-              error: error instanceof Error ? error.message : 'Could not load the Kaneo task.'
+              error: extractIpcErrorMessage(
+                error,
+                translate('kaneo.requestFailed', 'Kaneo request failed.')
+              )
             })
           }
         }

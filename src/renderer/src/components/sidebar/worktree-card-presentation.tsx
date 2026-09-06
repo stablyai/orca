@@ -128,8 +128,10 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       ? trimmedVisibleCardTitle
       : undefined
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
+  const hasKaneoTask = worktree.linkedWorkItem?.provider === 'kaneo'
+  const usesParentDetailsHover = newCardStyle || hasKaneoTask
   const hasHoverDetails =
-    newCardStyle &&
+    usesParentDetailsHover &&
     (hasWorktreeCardDetails({
       issue: hoverIssue,
       linearIssue: hoverLinearIssue,
@@ -139,11 +141,11 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       automationProvenance: metaAutomationProvenance,
       cliProvenance: metaCliProvenance
     }) ||
-      worktree.linkedWorkItem?.provider === 'kaneo' ||
+      hasKaneoTask ||
       workspacePorts.length > 0 ||
       hasHoverIdentity)
   // Why: the parent row owns metadata hover; don't stack the title's truncation tooltip on the details popover.
-  const titleWrapper = newCardStyle
+  const titleWrapper = usesParentDetailsHover
     ? hasHoverDetails
       ? (title: React.ReactElement): React.ReactElement => title
       : undefined

@@ -24,7 +24,9 @@ export function KaneoSourceStatus({
       id={id}
       role="status"
       aria-live="polite"
-      className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+      className={
+        source.task ? 'sr-only' : 'flex flex-wrap items-center gap-2 text-xs text-muted-foreground'
+      }
     >
       <span>
         {source.error ??
@@ -33,14 +35,14 @@ export function KaneoSourceStatus({
             : translate('kaneo.taskReady', 'Select the Kaneo task to link it to this workspace.'))}
       </span>
       {source.error ? (
-        <>
-          <Button type="button" size="sm" variant="ghost" onClick={source.retry}>
+        <div className="flex items-center gap-3">
+          <Button type="button" size="xs" variant="link" className="px-0" onClick={source.retry}>
             {translate('kaneo.retry', 'Retry')}
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={openSettings}>
+          <Button type="button" size="xs" variant="link" className="px-0" onClick={openSettings}>
             {translate('kaneo.openSettings', 'Open settings')}
           </Button>
-        </>
+        </div>
       ) : null}
     </div>
   )

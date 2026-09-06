@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getKaneoApi } from '@/runtime/runtime-kaneo-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import type { KaneoConnectionStatus } from '../../../../shared/kaneo-types'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 
@@ -47,7 +48,9 @@ function KaneoConnectionForm({
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setError(String(error instanceof Error ? error.message : error))
+          setError(
+            extractIpcErrorMessage(error, translate('kaneo.requestFailed', 'Kaneo request failed.'))
+          )
         }
       })
     return () => {
@@ -70,7 +73,9 @@ function KaneoConnectionForm({
       setApiKey('')
       setEditing(false)
     } catch (error) {
-      setError(error instanceof Error ? error.message : String(error))
+      setError(
+        extractIpcErrorMessage(error, translate('kaneo.requestFailed', 'Kaneo request failed.'))
+      )
     } finally {
       setBusy(false)
     }
