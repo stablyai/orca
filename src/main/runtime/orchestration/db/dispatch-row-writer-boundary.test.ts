@@ -100,6 +100,7 @@ describe('live-worker row insert boundary', () => {
     const exempt = [
       'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts',
       'src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts',
+      'src/main/runtime/orchestration/db/schema/migrate-v39.ts',
       'src/main/runtime/orchestration/db/reset/orchestration-reset.ts'
     ]
     for (const rel of exempt) {

@@ -1,5 +1,5 @@
-import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { OrchestrationAddressableAgent } from './structured-worker-group-addressing'
 
 // Why: group addresses enable broadcast messaging to logical groups of agents.
 // Resolution is done at send-time: one message record per recipient, same thread_id,
@@ -51,14 +51,17 @@ const GROUP_AGENT_IDS: Record<AgentNameGroup, TuiAgent> = {
  * delivering is visible and recoverable — the sender sees no recipients; delivering to the wrong
  * agent is neither.
  */
-function terminalIsAgent(terminal: RuntimeTerminalSummary, agentName: AgentNameGroup): boolean {
+function terminalIsAgent(
+  terminal: OrchestrationAddressableAgent,
+  agentName: AgentNameGroup
+): boolean {
   return terminal.agentIdentity === GROUP_AGENT_IDS[agentName]
 }
 
 export function resolveGroupAddress(
   to: string,
   senderHandle: string,
-  terminals: RuntimeTerminalSummary[],
+  terminals: readonly OrchestrationAddressableAgent[],
   getAgentStatus: (handle: string) => string | null
 ): string[] {
   if (!isGroupAddress(to)) {

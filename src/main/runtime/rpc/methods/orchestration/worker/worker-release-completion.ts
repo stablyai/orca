@@ -1,5 +1,6 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type {
+  WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
@@ -15,6 +16,9 @@ import { orchestrationTimestampToMs } from './worker-output'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
 import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
+import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
+import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
 
 export {
   archiveSummary,
@@ -88,6 +92,23 @@ async function completeWorkerTerminalReleaseOnce(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
   const { runtime, db, dispatchId, resource } = args
+  if (isStructuredWorkerHandle(resource.terminal_handle)) {
+    // Observation and archive capture both read the structured host, and after a restart nothing
+    // has installed it yet — the startup recovery reconciler runs exactly this path. Installing it
+    // here is what lets the release see the session instead of reporting it unreadable.
+    //
+    // NOT yet handled, and deliberately follow-up: rebinding a restarted runtime to a structured
+    // worker's hold and redrive subscription. Until that exists, a worker that survives a restart
+    // keeps no hold, so its child is evictable and its parked mail waits for the next arrival
+    // rather than a settle edge.
+    await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
+      console.warn(
+        '[orchestration] structured host install failed before release',
+        dispatchId,
+        error
+      )
+    })
+  }
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker || worker.agent_terminal_handle !== resource.terminal_handle) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
@@ -176,16 +197,18 @@ async function completeWorkerTerminalReleaseOnce(
   const archive = db.getWorkerTerminalArchive(dispatchId)
   let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
   let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
-  let capturedArchive: { kind: 'transcript_pin' | 'terminal_tail'; content: string } | undefined
+  let capturedArchive: { kind: WorkerTerminalArchiveKind; content: string } | undefined
+  const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
   if (!archive) {
     const captured = await captureWorkerOutputArchive({
       runtime,
       dispatchId,
       terminalHandle: resource.terminal_handle,
-      attachedAtMs: orchestrationTimestampToMs(worker.created_at)
+      attachedAtMs: orchestrationTimestampToMs(worker.created_at),
+      structuredWorker: structured
     })
     capturedArchive = { kind: captured.kind, content: JSON.stringify(captured.content) }
-    archiveSource = captured.kind === 'transcript_pin' ? 'transcript' : 'terminal'
+    archiveSource = captured.kind === 'terminal_tail' ? 'terminal' : 'transcript'
     archiveStatus = captured.status
   } else {
     const stored = summarizeWorkerOutputArchive(archive)
@@ -220,6 +243,17 @@ async function completeWorkerTerminalReleaseOnce(
   }
 
   try {
+    if (structured) {
+      return await stopStructuredWorkerForRelease({
+        structured,
+        dispatchId,
+        resource,
+        runtime,
+        db,
+        archiveSource,
+        archiveStatus
+      })
+    }
     const close = await runtime.closeTerminal(resource.terminal_handle)
     if (!close.ptyKilled) {
       const reason = describeUnconfirmedAgentStop(close)

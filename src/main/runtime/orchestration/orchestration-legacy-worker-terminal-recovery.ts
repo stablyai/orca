@@ -1,3 +1,4 @@
+import { sessionIdFromStructuredWorkerIncarnation } from '../structured-worker-identity'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../../shared/pty-incarnation'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { LegacyWorkerTerminalRecoveryRow } from './types'
@@ -41,6 +42,11 @@ function parseProcessIncarnation(
   }
   const ptyId = value.slice(0, separator)
   const incarnationId = value.slice(separator + 1)
+  // A structured worker's incarnation names a session lineage, not a PTY; adopting it as one
+  // would hand a live chat session's dispatch to the PTY recovery path.
+  if (sessionIdFromStructuredWorkerIncarnation(value)) {
+    return null
+  }
   return ptyId && isPtyIncarnationId(incarnationId) ? { ptyId, incarnationId } : null
 }
 

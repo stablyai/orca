@@ -1,17 +1,10 @@
-import type {
-  AgentStatusOrchestrationContext,
-  AgentType
-} from '../../../../shared/agent-status-types'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 
-type NativeChatOrchestrationProps = {
-  orchestrationDispatchStatus?: AgentStatusOrchestrationContext['dispatchStatus']
-}
-
-export type NativeChatBridgeViewProps = NativeChatOrchestrationProps & {
+export type NativeChatBridgeViewProps = {
   mode?: 'bridge'
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
   terminalTabId: string
@@ -34,7 +27,7 @@ export type NativeChatBridgeViewProps = NativeChatOrchestrationProps & {
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
-export type NativeChatStructuredViewProps = NativeChatOrchestrationProps & {
+export type NativeChatStructuredViewProps = {
   mode: 'structured'
   tabId: string
   groupId?: string
@@ -45,7 +38,7 @@ export type NativeChatStructuredViewProps = NativeChatOrchestrationProps & {
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
-export type NativeChatResolvedViewProps = NativeChatOrchestrationProps & {
+export type NativeChatResolvedViewProps = {
   paneKey: string
   agent: NativeChatSession['agent']
   sessionId: string | null

@@ -106,7 +106,7 @@ export async function acquireCodexStructuredSession(input: {
         command: launch.command,
         args: launch.args,
         cwd: launch.cwd,
-        env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken)
+        env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken, sessionId)
       },
       {
         onNotification: (method, params) =>

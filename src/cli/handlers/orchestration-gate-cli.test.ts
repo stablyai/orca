@@ -72,7 +72,7 @@ describe('orchestration gate commands carry caller identity', () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
     queueFixtures(
       callMock,
-      okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+      okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
       okFixture('req_gate', { gate: { id: 'gate_1', task_id: 'task_1', status: 'pending' } })
     )
 
@@ -91,8 +91,8 @@ describe('orchestration gate commands carry caller identity', () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
     process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
     callMock.mockImplementation(async (method: string) => {
-      if (method === 'terminal.show') {
-        throw new RuntimeClientError('terminal_handle_stale', 'stale')
+      if (method === 'terminal.resolveIdentity') {
+        return okFixture('req_identity', { identity: { handle: 'term_stale', live: false } })
       }
       if (method === 'terminal.resolvePane') {
         return okFixture('req_pane', { terminal: { handle: 'term_live' } })
@@ -146,7 +146,7 @@ describe('orchestration gate commands carry caller identity', () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
     queueFixtures(
       callMock,
-      okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+      okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
       okFixture('req_list', { gates: [], count: 0 })
     )
 
@@ -199,7 +199,9 @@ describe('orchestration gate commands carry caller identity', () => {
   it('reports idempotent recovery when a mutation connection drops', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
     callMock
-      .mockResolvedValueOnce(okFixture('req_show', { terminal: { handle: 'term_coord' } }))
+      .mockResolvedValueOnce(
+        okFixture('req_identity', { identity: { handle: 'term_coord', live: true } })
+      )
       .mockRejectedValueOnce(
         new RuntimeClientError(
           'runtime_unavailable',

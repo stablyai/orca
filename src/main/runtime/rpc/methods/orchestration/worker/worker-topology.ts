@@ -2,6 +2,8 @@ import type { AgentLaunchPreferences } from '../../../../../../shared/agent-sess
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { createStructuredWorkerSession } from '../../orchestration-structured-worker-session'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -81,6 +83,43 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     warning: terminal.warning
   })
   return { handle: terminal.handle, warning: terminal.warning }
+}
+
+/**
+ * A worker that IS a structured chat session, in the same shape the terminal path returns.
+ *
+ * `requireWorkerAuthority` needs no branch: the runtime's pane-key and process-incarnation getters
+ * consult the structured registry, so the handle minted here answers exactly like a PTY handle.
+ */
+export async function createStructuredWorkerSessionForWorktree(args: {
+  runtime: OrcaRuntimeService
+  worktreeId: string
+  agent: TuiAgent
+  dispatchId: string
+  effects: WorkerEffect[]
+}): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
+  if (args.agent !== 'claude' && args.agent !== 'codex') {
+    throw new OrchestrationError(
+      'agent_unconfigured',
+      `Structured workers support claude and codex; ${args.agent} has no structured session.`
+    )
+  }
+  const created = await createStructuredWorkerSession({
+    runtime: args.runtime,
+    worktreeId: args.worktreeId,
+    agent: args.agent,
+    dispatchId: args.dispatchId,
+    onJournalActivity: (sessionId) =>
+      args.runtime.notifyStructuredSessionJournalActivity?.(sessionId)
+  })
+  args.effects.push({
+    kind: 'terminal',
+    role: 'agent',
+    action: 'created',
+    id: created.identity.handle,
+    surface: 'background'
+  })
+  return created
 }
 
 export function applyWaitForSetupOutcome(

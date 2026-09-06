@@ -38,7 +38,9 @@ export const TerminalListParams = z.object({
 })
 
 export const TerminalResolveActive = z.object({
-  worktree: OptionalString
+  worktree: OptionalString,
+  /** Refuse instead of guessing when several leaves could be the caller's own terminal. */
+  requireUnambiguous: z.boolean().optional()
 })
 
 export const TerminalResolvePane = z.object({

@@ -4,6 +4,15 @@ import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-term
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { detectAgentStatusFromTitle, isClaudeManagementTitle } from '../../shared/agent-detection'
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
+import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
+import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
+import { structuredWorkerIdentities } from './structured-worker-identity'
+import { isSettledNativeOwner } from './orchestration/structured-session-pointer-delivery'
+import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
+import {
+  resolveTerminalIdentityFromProbes,
+  type RuntimeTerminalIdentity
+} from './terminal-identity-probe'
 
 export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
@@ -140,8 +149,149 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     }
   }
 
+  /**
+   * The identity seam: whether this handle still names a live agent identity, in either lane.
+   *
+   * Read-only by construction — a handle and a boolean — so it can serve the CLI's sender
+   * validation without `terminal.show`'s writable-looking pane payload.
+   */
+  resolveTerminalIdentity(handle: string): RuntimeTerminalIdentity {
+    return resolveTerminalIdentityFromProbes(handle, {
+      isLiveStructuredWorker: () =>
+        Boolean(resolveStructuredWorkerAuthority(handle, this._orchestrationDb)),
+      hasLivePty: () => Boolean(this.getLivePtyForHandle(handle)),
+      assertLiveLeaf: () => {
+        this.getLiveLeafForHandle(handle)
+      }
+    })
+  }
+
+  /**
+   * A structured worker's own pane key, for callers that can only name the session.
+   *
+   * Resolved HERE rather than published: the pane key is a random identity credential — anyone
+   * holding it can read and consume that worker's mailbox, and session ids are embedded in tab ids
+   * — so it must never travel to a renderer to be echoed back.
+   */
+  getStructuredWorkerPaneKeyForSession(sessionId: string): string | null {
+    const identity = structuredWorkerIdentities.getBySessionId(sessionId)
+    return identity && resolveStructuredWorkerAuthority(identity.handle, this._orchestrationDb)
+      ? identity.paneKey
+      : null
+  }
+
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
+  }
+
+  /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
+  notifyStructuredSessionJournalActivity(sessionId: string): void {
+    this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
+  }
+
+  /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
+  forgetStructuredSessionMail(sessionId: string): void {
+    this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
+  }
+
+  /**
+   * The session a mailbox must be nudged through, or null when a live PTY can take the bytes.
+   *
+   * All THREE address forms a structured session can own resolve here — its `dispatch:` address,
+   * its `run:` mailbox when it coordinates, and its own bearer handle for peer mail outside a
+   * dispatch. `run:` was the one that fell in a hole: the PTY lane declines because the owner is
+   * structured, and this lane used to decline anything that was not `dispatch:`, so each half
+   * believed the other owned it and a structured coordinator was never nudged.
+   */
+  protected resolveStructuredMailboxTarget(mailboxHandle: string): StructuredPointerTarget | null {
+    if (mailboxHandle.startsWith('run:')) {
+      return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
+    }
+    if (!mailboxHandle.startsWith('dispatch:')) {
+      return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
+    }
+    const dispatchId = mailboxHandle.slice('dispatch:'.length)
+    const assignee = this._orchestrationDb?.getDispatchContextById?.(dispatchId)?.assignee_handle
+    if (!assignee) {
+      return null
+    }
+    const identity = resolveStructuredWorkerAuthority(assignee, this._orchestrationDb)?.identity
+    if (identity) {
+      return { sessionId: identity.sessionId, dispatchId }
+    }
+    return this.resolveAdoptedStructuredMailboxTarget(assignee, dispatchId)
+  }
+
+  /**
+   * A Run's own mailbox, when the coordinator holding it is a structured session.
+   *
+   * A structured coordinator does NOT block in `check --wait` the way a PTY one does — it is a
+   * chat session, and its turn ends — so the waiter that used to preempt pointer delivery is not
+   * there to cover for the missing nudge. Session-scoped: a coordinator's run mailbox has no
+   * dispatch, and needs none, since the ledger bucket is all a dispatch id ever supplied.
+   */
+  protected resolveStructuredCoordinatorMailboxTarget(
+    runId: string
+  ): StructuredPointerTarget | null {
+    const coordinator = this._orchestrationDb?.getRun?.(runId)?.coordinator_handle
+    if (!coordinator) {
+      return null
+    }
+    const identity = resolveStructuredWorkerAuthority(coordinator, this._orchestrationDb)?.identity
+    return identity ? { sessionId: identity.sessionId, dispatchId: null } : null
+  }
+
+  /**
+   * Direct peer mail, addressed to the worker's own handle rather than to a dispatch.
+   *
+   * Nothing else can serve it: the PTY lane refuses a structured handle outright, so without this
+   * the send stores durably, reports success, and no lane ever nudges the worker — the sender sees
+   * success and the peer waiting on a reply hangs.
+   *
+   * The worker's ACTIVE dispatch is preferred when it has one, so peer and coordinator nudges share
+   * one operation-ledger budget and one set of retain rules. A worker BETWEEN dispatches is still
+   * nudged, under a session-scoped budget: the mail is durable, the session is live, and a dispatch
+   * says nothing about whether delivery is safe — the idle gate and the lease fence do that.
+   */
+  protected resolveStructuredWorkerDirectMailboxTarget(
+    handle: string
+  ): StructuredPointerTarget | null {
+    const db = this._orchestrationDb
+    // Answers null for anything that is not a live structured worker of THIS runtime, so `run:`
+    // and PTY handles fall through to the PTY lane exactly as before.
+    const identity = resolveStructuredWorkerAuthority(handle, db)?.identity
+    if (!identity) {
+      return null
+    }
+    const dispatchId = db?.findActiveDispatchForAssignee?.(handle, identity.paneKey)?.id ?? null
+    return { sessionId: identity.sessionId, dispatchId }
+  }
+
+  /**
+   * A PTY-born worker whose pane was since adopted by native chat.
+   *
+   * Its bytes cannot land — every runtime write path re-admits through the same gate — so the
+   * pointer has to travel as a session turn instead. Only a SETTLED native owner qualifies: a
+   * mid-handoff lease may become a TUI again, and redirecting there races the takeover.
+   */
+  protected resolveAdoptedStructuredMailboxTarget(
+    assignee: string,
+    dispatchId: string
+  ): StructuredPointerTarget | null {
+    let ptyId: string | null | undefined
+    try {
+      ptyId = this.getLiveLeafForHandle(assignee).leaf.ptyId
+    } catch {
+      return null
+    }
+    if (!ptyId) {
+      return null
+    }
+    const admission = agentSessionPtyWriteGate.admit(ptyId)
+    if (admission.admitted || !isSettledNativeOwner(admission.refusal)) {
+      return null
+    }
+    return { sessionId: admission.refusal.sessionId, dispatchId, refusal: admission.refusal }
   }
 
   protected scheduleRestoredMessageRepoints(): void {

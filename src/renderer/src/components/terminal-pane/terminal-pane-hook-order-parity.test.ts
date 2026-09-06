@@ -14,8 +14,10 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // Restoring the terminal/chat switcher added four `useCallback`s -- three in
 // chat-state (can-toggle, toggle-for-leaf, toggle-active) and the context-menu
 // toggle in projection (208 hooks, still 8 useMemo).
+// Then chat-state's orchestration dispatch-status subscription went with the
+// paused notice that read it (207 hooks, still 8 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  '983ad067c9feca82c5435eb1b865674344489c368ec2007dc7bb40c81aef037c'
+  '2bbb42427b61e3722114ac37c407230cb7daffbf9b899090c7a635f15731ccad'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
@@ -80,7 +82,7 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(208)
+    expect(hooks).toHaveLength(207)
     expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(8)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256

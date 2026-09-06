@@ -334,6 +334,59 @@ describe('orchestration worker-start CLI contract', () => {
     ).toContain('Warning: Terminal term_worker is running but could not be revealed.')
   })
 
+  it('states the worker mode that actually ran, so a fallback is never silent', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        mode: {
+          mode: 'terminal',
+          preferred: 'structured',
+          reason: 'reused_terminal',
+          detail:
+            'Your default is a structured chat session, but --terminal reuses a running terminal agent; started a terminal agent worker instead.'
+        },
+        effects: [],
+        residualResources: []
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-start']({
+      flags: new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['terminal', 'term_worker'],
+        ['from', 'term_coord']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
+      | ((result: {
+          taskId: string
+          dispatchId: string
+          state: string
+          mode?: { mode: string; preferred: string; reason: string; detail: string }
+        }) => string)
+      | undefined
+    expect(
+      formatter?.({
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        mode: {
+          mode: 'terminal',
+          preferred: 'structured',
+          reason: 'reused_terminal',
+          detail:
+            'Your default is a structured chat session, but --terminal reuses a running terminal agent; started a terminal agent worker instead.'
+        }
+      })
+    ).toContain('but --terminal reuses a running terminal agent')
+  })
+
   it('prints the retained-process warning for a manual worker-stop', async () => {
     callMock.mockResolvedValue({
       result: {

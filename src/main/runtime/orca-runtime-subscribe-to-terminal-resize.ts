@@ -1,4 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { sessionIdFromStructuredWorkerIncarnation } from './structured-worker-identity'
+import { observeStructuredWorker } from './rpc/methods/orchestration-structured-worker-lifecycle'
 import { OrcaRuntimeWithApplyMobileDisplayMode } from './orca-runtime-apply-mobile-display-mode'
 import { addListenerToMap } from './orca-runtime-core'
 import { notifyRuntimeListeners, withTimeoutResult } from './runtime-async-boundaries'
@@ -171,6 +173,16 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     processIncarnation: string,
     serializedHostScope: string | null
   ): Promise<'live' | 'exited' | 'unverifiable'> {
+    const structuredSessionId = sessionIdFromStructuredWorkerIncarnation(processIncarnation)
+    if (structuredSessionId) {
+      // A structured session has no PTY, so the process table can only ever fail to find it —
+      // answering `exited` from that absence would release a running provider child. The durable
+      // agent-session record is asked directly rather than through the in-memory identity
+      // registry: settlement forgets the registry entry, so gating on one made a stopped worker's
+      // resource answer `unverifiable` forever and stay in `worker-list --terminalState retained`
+      // for the life of the DB.
+      return observeStructuredWorker({ sessionId: structuredSessionId }).status
+    }
     const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
     if (!hostScope || !this.ptyController?.listProcesses) {
       return 'unverifiable'

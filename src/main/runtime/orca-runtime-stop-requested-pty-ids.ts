@@ -1,4 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { OrchestrationStructuredMailboxPointerDelivery } from './orchestration/structured-mailbox-pointer-delivery'
+import { createStructuredMailboxPointerHost } from './orchestration/structured-mailbox-pointer-host'
+import { isStructuredWorkerHandle } from './structured-worker-identity'
+import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithRuntimeId } from './orca-runtime-runtime-id'
 import { RuntimeTerminalAgentPresence } from './runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
@@ -37,6 +41,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
 
   protected readonly terminalAgentPresence = new RuntimeTerminalAgentPresence({
+    isLiveStructuredAgent: (handle) =>
+      Boolean(resolveStructuredWorkerAuthority(handle, this._orchestrationDb)),
     getLivePty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
     getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle).leaf,
     getPrimaryLeaf: (ptyId) => this.getLeavesForPty(ptyId)[0] ?? null,
@@ -184,6 +190,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getDb: () => this._orchestrationDb,
     getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     hasTerminalHandle: (handle) => this.handles.has(handle),
+    isStructuredWorkerHandle: (handle) => isStructuredWorkerHandle(handle),
     canProbePtyLiveness: () => Boolean(this.ptyController?.probePtyLiveness),
     controllerKnowsPtyIsLive: (ptyId) => this.controllerKnowsPtyIsLive(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId)
@@ -207,10 +214,20 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
   })
 
+  protected readonly orchestrationStructuredMailboxPointerDelivery =
+    new OrchestrationStructuredMailboxPointerDelivery<RuntimeMessageWaiter>({
+      getDb: () => this._orchestrationDb,
+      getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
+      resolveStructuredTarget: (mailboxHandle) =>
+        this.resolveStructuredMailboxTarget(mailboxHandle),
+      host: createStructuredMailboxPointerHost()
+    })
+
   protected readonly orchestrationMailboxNotifications =
     new OrchestrationMailboxNotificationCoordinator<RuntimeMessageWaiter>({
       mailboxOwner: this.orchestrationMailboxOwner,
       pointerDelivery: this.orchestrationMailboxPointerDelivery,
+      structuredPointerDelivery: this.orchestrationStructuredMailboxPointerDelivery,
       getDb: () => this._orchestrationDb,
       getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
       getPaneKeyForHandle: (handle) => {

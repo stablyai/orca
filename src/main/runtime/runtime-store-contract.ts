@@ -87,6 +87,8 @@ export type RuntimeStore = {
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
+    experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
+    openAgentTabsInChatByDefault?: GlobalSettings['openAgentTabsInChatByDefault']
     experimentalStructuredNativeChat?: GlobalSettings['experimentalStructuredNativeChat']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']

@@ -192,10 +192,21 @@ CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_identity
 CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_release
   ON worker_terminal_resources(release_state);
 
+-- One live agent-session operation id per structured worker mailbox. Persisted because the id is
+-- the send's idempotency key: re-minting it after a restart would re-deliver an already-queued
+-- pointer as a second turn.
+CREATE TABLE IF NOT EXISTS structured_pointer_operations (
+  mailbox_handle    TEXT PRIMARY KEY,
+  session_id        TEXT NOT NULL,
+  operation_id      TEXT NOT NULL,
+  batch_fingerprint  TEXT NOT NULL,
+  minted_at_ms      INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS worker_terminal_archives (
   dispatch_id   TEXT PRIMARY KEY,
   resource_id   TEXT NOT NULL,
-  kind          TEXT NOT NULL CHECK(kind IN ('transcript_pin', 'terminal_tail')),
+  kind          TEXT NOT NULL CHECK(kind IN ('transcript_pin', 'terminal_tail', 'structured_journal')),
   content       TEXT NOT NULL,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );

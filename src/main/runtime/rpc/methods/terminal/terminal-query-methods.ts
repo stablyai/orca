@@ -25,7 +25,10 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
     name: 'terminal.resolveActive',
     params: TerminalResolveActive,
     handler: async (params, { runtime }) => ({
-      handle: await runtime.resolveActiveTerminal(params.worktree)
+      handle: await runtime.resolveActiveTerminal(
+        params.worktree,
+        params.requireUnambiguous ? { requireUnambiguous: true } : {}
+      )
     })
   }),
   defineMethod({
@@ -51,6 +54,15 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       terminal: await runtime.showTerminal(params.terminal)
+    })
+  }),
+  defineMethod({
+    // Read-only identity probe. Deliberately NOT `terminal.show`: this one resolves a structured
+    // worker too, and must therefore never hand back anything that looks writable.
+    name: 'terminal.resolveIdentity',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      identity: runtime.resolveTerminalIdentity(params.terminal)
     })
   }),
   defineMethod({

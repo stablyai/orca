@@ -24,8 +24,7 @@ function NativeChatBridgeView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions,
-  orchestrationDispatchStatus
+  contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
     terminalTabId,
@@ -52,7 +51,6 @@ function NativeChatBridgeView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
-          orchestrationDispatchStatus={orchestrationDispatchStatus}
         />
       )}
     </NativeChatSessionGate>

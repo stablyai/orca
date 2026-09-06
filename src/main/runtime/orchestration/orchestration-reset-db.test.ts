@@ -53,6 +53,13 @@ describe('OrchestrationDb reset scopes', () => {
       messageId: 'question_1',
       remoteQuestion: true
     })
+    db.putStructuredPointerOperation({
+      mailbox_handle: `dispatch:${started.dispatch.id}`,
+      session_id: 'session_1',
+      operation_id: '1700000000000-00112233445566778899aabbccddeeff',
+      batch_fingerprint: 'fingerprint_1',
+      minted_at_ms: 1_700_000_000_000
+    })
     return { run, task, started, message, localQuestion }
   }
 
@@ -78,6 +85,9 @@ describe('OrchestrationDb reset scopes', () => {
         afterSequence: 0
       })
     ).toEqual([])
+    expect(
+      db!.getStructuredPointerOperation(`dispatch:${state.started.dispatch.id}`)
+    ).toBeUndefined()
   })
 
   it('resetTasks preserves Runs and messages while clearing every worker attachment', () => {
@@ -104,6 +114,10 @@ describe('OrchestrationDb reset scopes', () => {
         body: 'Yes'
       })
     ).toThrowError(expect.objectContaining({ code: 'dispatch_inactive' }))
+    // The dispatch its send was keyed to is gone; the pointer operation must not outlive it.
+    expect(
+      db!.getStructuredPointerOperation(`dispatch:${state.started.dispatch.id}`)
+    ).toBeUndefined()
   })
 
   it('resetMessages preserves active relay cursors while clearing the Run inbox', () => {
@@ -121,5 +135,9 @@ describe('OrchestrationDb reset scopes', () => {
         afterSequence: 0
       })
     ).toHaveLength(1)
+    // The row is one nudge's idempotency key over messages this scope deletes.
+    expect(
+      db!.getStructuredPointerOperation(`dispatch:${state.started.dispatch.id}`)
+    ).toBeUndefined()
   })
 })

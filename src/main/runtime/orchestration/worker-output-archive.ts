@@ -3,6 +3,7 @@ import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orch
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
 import type {
+  WorkerTerminalArchiveKind,
   WorkerTerminalArchiveRow,
   WorkerTerminalArchiveStatus
 } from './worker-terminal-ownership'
@@ -13,6 +14,10 @@ import {
 import { readWorkerTranscript } from './worker-transcript-read'
 import { getSshFilesystemProvider } from '../../providers/ssh-filesystem-dispatch'
 import { isWslHookRelayConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { captureStructuredWorkerArchive } from '../rpc/methods/orchestration-structured-worker-lifecycle'
+import type { WorkerStructuredJournalArchive } from './structured-worker-journal-archive'
+import { structuredWorkerAgent } from '../structured-worker-authority'
+import type { StructuredWorkerIdentity } from '../structured-worker-identity'
 
 // Bound the durable copy of raw terminal output; the tail end is the evidence that matters.
 const TERMINAL_ARCHIVE_MAX_CHARS = 262_144
@@ -44,6 +49,11 @@ export type WorkerOutputArchiveCapture =
       content: WorkerTranscriptSnapshotArchive
       status: 'captured'
     }
+  | {
+      kind: 'structured_journal'
+      content: WorkerStructuredJournalArchive
+      status: 'captured' | 'empty'
+    }
   | { kind: 'terminal_tail'; content: WorkerTerminalTailArchive; status: 'captured' | 'empty' }
 
 export function summarizeWorkerOutputArchive(archive: WorkerTerminalArchiveRow): {
@@ -52,6 +62,13 @@ export function summarizeWorkerOutputArchive(archive: WorkerTerminalArchiveRow):
 } {
   if (archive.kind === 'transcript_pin') {
     return { source: 'transcript', status: 'captured' }
+  }
+  if (archive.kind === 'structured_journal') {
+    // A structured session's journal IS its transcript, so it reports as one. A third `source`
+    // would leak the structured/terminal split into a CLI surface this PR keeps deliberately
+    // uniform, and would widen a shape that already reaches paired clients.
+    const journal = JSON.parse(archive.content) as WorkerStructuredJournalArchive
+    return { source: 'transcript', status: journal.messages.length > 0 ? 'captured' : 'empty' }
   }
   const content = JSON.parse(archive.content) as WorkerTerminalTailArchive
   const empty =
@@ -70,7 +87,20 @@ export async function captureWorkerOutputArchive(args: {
   dispatchId: string
   terminalHandle: string
   attachedAtMs: number
+  /** Present when the worker IS a structured session; its journal is the only output it has. */
+  structuredWorker?: StructuredWorkerIdentity | null
 }): Promise<WorkerOutputArchiveCapture> {
+  if (args.structuredWorker) {
+    const content = captureStructuredWorkerArchive(
+      args.structuredWorker,
+      structuredWorkerAgent(args.structuredWorker)
+    )
+    return {
+      kind: 'structured_journal',
+      status: content.messages.length > 0 ? 'captured' : 'empty',
+      content
+    }
+  }
   const session = args.runtime.getExactWorkerProviderSession(args.terminalHandle, args.attachedAtMs)
   let transcriptFallbackReason: OrchestrationWorkerReadFallbackReason = 'session_not_reported'
   if (session) {
@@ -182,3 +212,10 @@ export function boundArchiveLines(lines: string[]): { lines: string[]; truncated
   keptReversed.reverse()
   return { lines: keptReversed, truncated: true }
 }
+
+/** Errors at compile time if a capture kind is ever added that the durable row cannot store. */
+type AssertAssignable<TValue extends TBound, TBound> = TValue
+export type WorkerOutputArchiveCaptureKind = AssertAssignable<
+  WorkerOutputArchiveCapture['kind'],
+  WorkerTerminalArchiveKind
+>

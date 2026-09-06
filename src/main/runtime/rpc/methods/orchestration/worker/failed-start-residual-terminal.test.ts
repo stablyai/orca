@@ -147,6 +147,12 @@ describe('failed worker-start receipt for a residual terminal', () => {
     })
     return failWorkerStartWithReceipt({
       db: d,
+      mode: {
+        mode: 'terminal',
+        preferred: 'terminal',
+        reason: 'user_default',
+        detail: 'terminal by default'
+      } as const,
       runId: 'run_residual',
       taskId: task.id,
       dispatchId: started.dispatch.id,

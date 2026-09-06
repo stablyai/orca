@@ -41,6 +41,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       failedStage?: string
       lastError?: string
       warning?: string
+      mode?: { mode: string; preferred: string; reason: string; detail: string }
       effects: unknown[]
       residualResources: unknown[]
       nextCommands?: string[]
