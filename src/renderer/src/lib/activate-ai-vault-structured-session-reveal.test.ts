@@ -95,6 +95,24 @@ describe('revealStructuredSession', () => {
     expect(mocks.call).not.toHaveBeenCalled()
   })
 
+  it('gives up on a probe that never settles instead of hanging the row', async () => {
+    // The in-flight guard releases on settle, so a probe that never answers would otherwise hold
+    // this session's entry for the life of the process and leave the row permanently dead.
+    vi.useFakeTimers()
+    mocks.environmentIdFor.mockReturnValue('env-1')
+    mocks.supports.mockReturnValue(new Promise(() => {}))
+
+    try {
+      const outcome = revealStructuredSession(target)
+      await vi.advanceTimersByTimeAsync(10_000)
+
+      await expect(outcome).resolves.toBe('unreachable')
+      expect(mocks.call).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reports the chat gone only for the refusal that means the record is absent', async () => {
     mocks.call.mockResolvedValue({
       ok: false,

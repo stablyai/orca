@@ -62,14 +62,16 @@ const defaultDeps: StructuredSessionActivationDeps = {
       )
     )
   },
-  // Separate from `gone` because the chat is not gone — this host cannot open it, whether it is
-  // too old to know the method or its adapters do not cover that provider. Telling someone their
-  // work is lost when an update would bring it back is the worse of the two wrong answers.
+  // Separate from `gone` because the chat is not gone: something about this pairing cannot open
+  // it — a host too old to know the method, adapters that do not cover the provider, or a version
+  // block that can name EITHER side. Naming a machine here would point half of those at the wrong
+  // one, so the message names the remedy instead. Telling someone their work is lost when an
+  // update would bring it back is the worse of the two wrong answers.
   hostCannotOpen: () => {
     toast.error(
       translate(
         'auto.lib.activateAiVaultStructuredSession.hostCannotOpen',
-        "This host can't reopen that chat. It may need an Orca update."
+        "This chat can't be reopened until Orca is updated."
       )
     )
   }
@@ -179,10 +181,15 @@ export async function revealStructuredSession(target: {
   if (host.kind === 'environment') {
     let supported: boolean
     try {
-      supported = await runtimeEnvironmentSupportsCapability(
-        host.environmentId,
-        STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
-        STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
+      // Raced, not merely given a timeout argument: on a cache hit this awaits a promise created
+      // by an earlier probe that may carry no deadline of its own, and one that never settles
+      // would hold this session's in-flight entry for the life of the process.
+      supported = await withStructuredSessionRestoreTimeout(
+        runtimeEnvironmentSupportsCapability(
+          host.environmentId,
+          STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+          STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
+        )
       )
     } catch (error) {
       // A version block is the host's age, stated outright; anything else means we never got to
