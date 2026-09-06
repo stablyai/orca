@@ -265,6 +265,7 @@ describe('createDraftRelease', () => {
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
       .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'hand-written notes' }))
       .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'notes' }))
       .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'hand-written notes' }))
 
     await createDraftRelease({
@@ -275,9 +276,9 @@ describe('createDraftRelease', () => {
       log
     })
 
-    expect(fetchImpl).toHaveBeenCalledTimes(5)
+    expect(fetchImpl).toHaveBeenCalledTimes(6)
     expect(fetchImpl).toHaveBeenNthCalledWith(
-      5,
+      6,
       'https://api.github.com/repos/stablyai/orca/releases/42',
       expect.objectContaining({
         method: 'PATCH',
@@ -285,6 +286,30 @@ describe('createDraftRelease', () => {
       })
     )
     expect(log).toHaveBeenCalledWith(expect.stringContaining('restored its published body'))
+  })
+
+  it('leaves a body written after the patch in place instead of rolling it back', async () => {
+    const log = vi.fn()
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([release('v1.4.35'), release('v1.4.36', { draft: true, id: 42 })])
+      )
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'hand-written notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'newer published body' }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      fetchImpl,
+      log
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(5)
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('leaving the newer body in place'))
   })
 
   it('preserves notes on an existing published release', async () => {

@@ -189,6 +189,23 @@ export async function createDraftRelease({
     )
     if (patchedRelease?.draft !== true) {
       const publishedBody = typeof currentRelease.body === 'string' ? currentRelease.body : ''
+      if (publishedBody === body) {
+        log(`Release ${tag} was published while notes were patched; its body is unchanged.`)
+        return
+      }
+      // Why: the rollback must not clobber a body written after our PATCH, so
+      // restore only while the release still carries exactly what we wrote.
+      const releaseBeforeRollback = await githubJson(
+        fetchImpl,
+        `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
+        token
+      )
+      if (releaseBeforeRollback?.body !== body) {
+        log(
+          `Release ${tag} was published and its body changed again while notes were patched; leaving the newer body in place.`
+        )
+        return
+      }
       await githubJson(
         fetchImpl,
         `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
