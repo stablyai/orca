@@ -203,7 +203,9 @@ describe('NativeChatStructuredSession', () => {
     )
 
     expect(mocks.messageListProps?.allowFileUriLinks).toBe(true)
-    expect(mocks.messageListProps?.onLinkClick).toBe(mocks.fileLinkClick)
+    const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() }
+    mocks.messageListProps?.onLinkClick?.(event, 'file:///repo/src/a.ts')
+    expect(mocks.fileLinkClick).toHaveBeenCalledWith(event, 'file:///repo/src/a.ts')
   })
 
   // Turn status and transcript image previews shipped Codex-first. Every

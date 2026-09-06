@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import type { TerminalLinkActionRequest } from './terminal-link-action-request'
+import type { LinkActionRequest } from './link-action-request'
 
 const mocks = vi.hoisted(() => ({
   openSettingsPage: vi.fn(),
@@ -58,7 +58,7 @@ vi.mock('@/components/ui/popover', () => ({
   )
 }))
 
-import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
+import { LinkActionPopover } from './LinkActionPopover'
 
 afterEach(() => {
   cleanup()
@@ -66,24 +66,23 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('TerminalLinkActionPopover', () => {
+describe('LinkActionPopover', () => {
   it('shows the full destination and runs the selected action', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()
-    const focusTerminal = vi.fn()
+    const restoreFocus = vi.fn()
     const run = vi.fn()
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: 'https://example.com/full/hidden/destination?query=actual',
       kind: 'url',
       primary: { label: 'Open link', run },
       alternate: { external: true, label: 'System Browser', run: vi.fn() },
-      focusTerminal
+      restoreFocus
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={onClose} />)
+    render(<LinkActionPopover request={request} onClose={onClose} />)
 
     const destination = screen.getByText(request.destination)
     expect(destination.className).toContain('line-clamp-2')
@@ -102,24 +101,23 @@ describe('TerminalLinkActionPopover', () => {
 
     fireEvent.click(screen.getByText('Open link'))
     expect(onClose).toHaveBeenCalledOnce()
-    expect(focusTerminal).toHaveBeenCalledOnce()
+    expect(restoreFocus).toHaveBeenCalledOnce()
     expect(run).toHaveBeenCalledOnce()
   })
 
   it('identifies the dismissed request so a newer request can survive', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: 'https://example.com',
       kind: 'url',
       primary: { label: 'Open link', run: vi.fn() },
-      focusTerminal: vi.fn()
+      restoreFocus: vi.fn()
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={onClose} />)
+    render(<LinkActionPopover request={request} onClose={onClose} />)
     fireEvent.click(screen.getByTestId('dismiss-popover'))
 
     expect(onClose).toHaveBeenCalledWith(request)
@@ -127,18 +125,17 @@ describe('TerminalLinkActionPopover', () => {
 
   it('uses distinct icons for system and Orca browser actions', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: 'https://example.com',
       kind: 'url',
       primary: { external: false, label: 'Orca Browser', run: vi.fn() },
       alternate: { external: true, label: 'System Browser', run: vi.fn() },
-      focusTerminal: vi.fn()
+      restoreFocus: vi.fn()
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
+    render(<LinkActionPopover request={request} onClose={vi.fn()} />)
 
     expect(
       screen.getByText('Orca Browser').closest('button')?.querySelector('.lucide-globe')
@@ -153,25 +150,24 @@ describe('TerminalLinkActionPopover', () => {
     Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
     mocks.writeClipboardText.mockResolvedValue(undefined)
     const onClose = vi.fn()
-    const focusTerminal = vi.fn()
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const restoreFocus = vi.fn()
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: 'https://example.com/hidden-destination',
       kind: 'url',
       primary: { label: 'Open link', run: vi.fn() },
-      focusTerminal
+      restoreFocus
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={onClose} />)
+    render(<LinkActionPopover request={request} onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
 
     await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledWith(request.destination))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied link')
     expect(onClose).not.toHaveBeenCalled()
-    expect(focusTerminal).not.toHaveBeenCalled()
+    expect(restoreFocus).not.toHaveBeenCalled()
   })
 
   it('ignores duplicate copy clicks while the clipboard write is in flight', async () => {
@@ -183,17 +179,16 @@ describe('TerminalLinkActionPopover', () => {
         resolveWrite = resolve
       })
     )
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: 'https://example.com/hidden-destination',
       kind: 'url',
       primary: { label: 'Open link', run: vi.fn() },
-      focusTerminal: vi.fn()
+      restoreFocus: vi.fn()
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
+    render(<LinkActionPopover request={request} onClose={vi.fn()} />)
     const copyButton = screen.getByRole('button', { name: 'Copy link' })
     fireEvent.click(copyButton)
     fireEvent.click(copyButton)
@@ -209,17 +204,16 @@ describe('TerminalLinkActionPopover', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
     mocks.writeClipboardText.mockRejectedValue(new Error('denied'))
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: 'https://example.com/hidden-destination',
       kind: 'url',
       primary: { label: 'Open link', run: vi.fn() },
-      focusTerminal: vi.fn()
+      restoreFocus: vi.fn()
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
+    render(<LinkActionPopover request={request} onClose={vi.fn()} />)
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('Failed to copy link'))
@@ -229,17 +223,16 @@ describe('TerminalLinkActionPopover', () => {
 
   it('does not offer copy link for non-URL destinations', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: '/tmp/example.ts',
       kind: 'file',
       primary: { label: 'Open file', run: vi.fn() },
-      focusTerminal: vi.fn()
+      restoreFocus: vi.fn()
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
+    render(<LinkActionPopover request={request} onClose={vi.fn()} />)
 
     expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
   })
@@ -247,18 +240,17 @@ describe('TerminalLinkActionPopover', () => {
   it('opens the terminal link setting from the compact settings button', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()
-    const focusTerminal = vi.fn()
-    const request: TerminalLinkActionRequest = {
-      paneId: 1,
+    const restoreFocus = vi.fn()
+    const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
       destination: 'https://example.com',
       kind: 'url',
       primary: { label: 'System Browser', run: vi.fn() },
-      focusTerminal
+      restoreFocus
     }
 
-    render(<TerminalLinkActionPopover request={request} onClose={onClose} />)
+    render(<LinkActionPopover request={request} onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: 'Terminal link settings' }))
 
     expect(onClose).toHaveBeenCalledOnce()
@@ -268,6 +260,6 @@ describe('TerminalLinkActionPopover', () => {
       sectionId: BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID
     })
     expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
-    expect(focusTerminal).not.toHaveBeenCalled()
+    expect(restoreFocus).not.toHaveBeenCalled()
   })
 })

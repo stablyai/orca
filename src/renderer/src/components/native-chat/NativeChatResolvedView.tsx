@@ -48,7 +48,8 @@ import {
 } from './use-native-chat-context-menu'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
-import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
+import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
@@ -321,7 +322,11 @@ export function NativeChatResolvedView({
     setPending(writePendingSendCache(pendingScope, []))
     interactiveSend.cancel()
   }, [interactiveSend, pendingScope])
-  const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
+  const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
+    fileLinkContext,
+    rootRef,
+    { sessionId, isVisible }
+  )
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
@@ -394,7 +399,7 @@ export function NativeChatResolvedView({
             fontScale={fontScale.scale}
             workingStartedAt={hookWorkingEpoch}
             showTurnStatus={false}
-            onLinkClick={nativeChatFileLinkClick}
+            onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
           />
@@ -434,6 +439,7 @@ export function NativeChatResolvedView({
         />
       )}
       {contextMenu.menu}
+      <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>
   )
 }

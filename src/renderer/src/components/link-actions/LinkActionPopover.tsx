@@ -9,11 +9,11 @@ import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-fe
 import { translate } from '@/i18n/i18n'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { useAppStore } from '@/store'
-import type { TerminalLinkAction, TerminalLinkActionRequest } from './terminal-link-action-request'
+import type { LinkAction, LinkActionRequest } from './link-action-request'
 
-type TerminalLinkActionPopoverProps = {
-  request: TerminalLinkActionRequest | null
-  onClose: (dismissed?: TerminalLinkActionRequest) => void
+type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
+  request: TRequest | null
+  onClose: (dismissed?: TRequest) => void
 }
 
 function ActionRow({
@@ -21,7 +21,7 @@ function ActionRow({
   alternate,
   onRun
 }: {
-  action: TerminalLinkAction
+  action: LinkAction
   alternate: boolean
   onRun: () => void
 }): React.JSX.Element {
@@ -46,10 +46,11 @@ function ActionRow({
   )
 }
 
-export function TerminalLinkActionPopover({
+/** Shared by the terminal and native chat: pick where a clicked link opens. */
+export function LinkActionPopover<TRequest extends LinkActionRequest>({
   request,
   onClose
-}: TerminalLinkActionPopoverProps): React.JSX.Element {
+}: LinkActionPopoverProps<TRequest>): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const copyableDestination = request?.kind === 'url' ? request.destination : ''
@@ -64,9 +65,9 @@ export function TerminalLinkActionPopover({
     [request?.anchorX, request?.anchorY]
   )
 
-  const runAction = (action: TerminalLinkAction): void => {
+  const runAction = (action: LinkAction): void => {
     onClose()
-    request?.focusTerminal()
+    request?.restoreFocus()
     void action.run()
   }
 
@@ -128,10 +129,11 @@ export function TerminalLinkActionPopover({
           sideOffset={6}
           collisionPadding={8}
           className="w-max min-w-52 max-w-[min(21rem,calc(100vw-1rem))] p-1"
+          data-link-action-popover
           data-terminal-link-action-popover
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
-          onEscapeKeyDown={() => request.focusTerminal()}
+          onEscapeKeyDown={() => request.restoreFocus()}
         >
           <div className="mb-0.5 flex items-center gap-1 overflow-hidden border-b border-border px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
             <span

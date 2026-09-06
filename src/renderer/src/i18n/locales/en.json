@@ -9148,6 +9148,7 @@
             },
             "terminalLinkActions": {
               "terminal": "terminal",
+              "chat": "chat",
               "click": "click",
               "actions": "actions",
               "popover": "popover",
@@ -11176,8 +11177,8 @@
           "descriptionOrca": "Links open in your system browser. When enabled, {{chord}}+click opens one in Orca's built-in browser instead."
         },
         "BrowserTerminalLinkActionsSetting": {
-          "title": "Show terminal link actions",
-          "description": "Show available actions when you click a terminal link. Turn this off to require {{modifier}}-click."
+          "title": "Show link actions",
+          "description": "Show available actions when you click a link in the terminal or a chat transcript. Turn this off to require {{modifier}}-click in the terminal."
         },
         "PluginConsentDialog": {
           "workerTrust": "Background worker — runs its own process",
