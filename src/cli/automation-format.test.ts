@@ -36,6 +36,12 @@ function automation(overrides: Partial<Automation> = {}): Automation {
 // removal untouched, so printing only those renders a dead automation byte-for-byte
 // like a healthy one and the named recovery step cannot be completed.
 describe('formatAutomationShow reports the host the authority projects', () => {
+  it('shows a supported multi-day weekly recurrence as a custom schedule', () => {
+    const scheduled = automation({ rrule: 'FREQ=WEEKLY;BYDAY=MO,WE;BYHOUR=9;BYMINUTE=0' })
+    expect(formatAutomationShow({ automation: scheduled })).toContain('schedule: Custom schedule')
+    expect(formatAutomationList({ automations: [scheduled] })).toContain('Custom schedule')
+  })
+
   it('distinguishes a live SSH host from a replaced one by its incarnation', () => {
     const live = formatAutomationShow({
       automation: automation(),
