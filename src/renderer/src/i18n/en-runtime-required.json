@@ -1181,6 +1181,7 @@
           }
         },
         "GeneralRemoteServerUpdates": {
+          "description": "Check and update paired Orca servers from this client. Updating a server restarts it and terminates all terminals and agents on it.",
           "reviewUpdateOne": "1 update available",
           "reviewUpdates": "{{value0}} updates available"
         },
@@ -1380,6 +1381,9 @@
           "restartWarning": "Updating restarts these servers, terminating all terminals and agents on them. {{value0}} live tabs and {{value1}} terminal panes may briefly disconnect.",
           "updateOne": "Update server",
           "updating": "Updating servers…"
+        },
+        "RemoteServerUpdateStatus": {
+          "serviceManagerHelp": "Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it. A service restart terminates all terminals and agents on the server."
         },
         "RepositoryHooksSection": {
           "0e0dd5b9a5": "loaded",
