@@ -330,14 +330,25 @@ function logResult(result: ScenarioResult): ScenarioResult {
 
 async function seedScenario(
   client: PairedElectronClient,
-  worktreeId: string
+  worktreeId: string,
+  hostPage: Page
 ): Promise<{ target: HostTerminal; decoys: HostTerminal[] }> {
   const target = await createHostTerminal(client.page, client.environmentId, worktreeId)
   const decoys = [
     await createHostTerminal(client.page, client.environmentId, worktreeId),
     await createHostTerminal(client.page, client.environmentId, worktreeId)
   ]
-  await openClientTab(client.page, worktreeId, target.webTabId)
+  try {
+    await openClientTab(client.page, worktreeId, target.webTabId)
+  } catch (error) {
+    const hostTabs = await callEnvironment(client.page, client.environmentId, 'session.tabs.list', { worktree: `id:${worktreeId}` })
+    const readStore = (page: Page) => page.evaluate((id) => {
+      const state = window.__store!.getState()
+      return { activeWorktreeId: state.activeWorktreeId, tabs: state.tabsByWorktree[id], activeTabId: state.activeTabId, ptyIdsByTab: state.ptyIdsByTab }
+    }, worktreeId)
+    console.info(`[paired-reveal-tab-publication] ${JSON.stringify({ target, decoys, hostTabs, hostStore: await readStore(hostPage), clientStore: await readStore(client.page) })}`)
+    throw error
+  }
   await expect
     .poll(() => readPaneContent(client.page, target.webTabId), {
       timeout: 60_000,
@@ -389,7 +400,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
 
     // S1 — hidden tab that stays mounted, then revealed.
     {
-      const { target, decoys } = await seedScenario(client, worktreeId)
+      const { target, decoys } = await seedScenario(client, worktreeId, orcaPage)
       createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
       await openClientTab(client.page, worktreeId, decoys[0].webTabId)
       // Pins the scenario label: this reveal must not have gone through a park.
@@ -404,7 +415,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
 
     // S2 — cold-parked tab (renderer unmounted), then revealed.
     {
-      const { target, decoys } = await seedScenario(client, worktreeId)
+      const { target, decoys } = await seedScenario(client, worktreeId, orcaPage)
       createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
       await openClientTab(client.page, worktreeId, decoys[0].webTabId)
       await openClientTab(client.page, worktreeId, decoys[1].webTabId)
@@ -421,7 +432,7 @@ test('paired client keeps revealed remote terminals interactive', async ({
     // S3 — cold-parked tab whose runtime connection dropped and came back
     // while parked (the "returned after a while" report).
     {
-      const { target, decoys } = await seedScenario(client, worktreeId)
+      const { target, decoys } = await seedScenario(client, worktreeId, orcaPage)
       createdTerminals.push(target.terminal, ...decoys.map((decoy) => decoy.terminal))
       await openClientTab(client.page, worktreeId, decoys[0].webTabId)
       await openClientTab(client.page, worktreeId, decoys[1].webTabId)
