@@ -71,7 +71,7 @@ test.describe('five SSH panes under simultaneous output', () => {
     const visibleTerminals = orcaPage.locator('.xterm:visible')
     await expect(visibleTerminals).toHaveCount(5)
 
-    for (let round = 0; round < 2; round++) {
+    for (let round = 0; round < 10; round++) {
       await orcaPage.evaluate(() => window.__store!.getState().setActiveView('tasks'))
       await expect
         .poll(() => orcaPage.evaluate(() => window.__store!.getState().activeView))

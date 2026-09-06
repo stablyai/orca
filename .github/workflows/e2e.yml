@@ -21,7 +21,7 @@ jobs:
           pnpm run build:relay
           pnpm exec electron-vite build --mode e2e
       - name: Five panes under flood
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts --project=electron-headless --workers=1 --repeat-each=10
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts --project=electron-headless --workers=1 --repeat-each=3
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
