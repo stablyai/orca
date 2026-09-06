@@ -58,15 +58,27 @@ describe('pickNextTabAfterClose', () => {
     expect(pickNextTabAfterClose(remaining, 'c', ['a', 'c'])).toEqual({ id: 'a' })
     expect(pickNextTabAfterClose(remaining, 'c', [])).toEqual({ id: 'b' })
   })
+
+  it('selects by a top-level id and returns the matching leaf tab', () => {
+    const remaining = [
+      { id: 'parent-b::left', parentTabId: 'parent-b' },
+      { id: 'parent-c::left', parentTabId: 'parent-c' }
+    ]
+    expect(
+      pickNextTabAfterClose(
+        remaining,
+        'parent-a',
+        ['parent-c', 'parent-b'],
+        (tab) => tab.parentTabId
+      )
+    ).toEqual(remaining[0])
+  })
 })
 
 describe('collectRecentTabIdsFromGroups', () => {
   it('merges group MRU stacks in visit order', () => {
     expect(
-      collectRecentTabIdsFromGroups([
-        { recentTabIds: ['a', 'b'] },
-        { recentTabIds: ['c', 'a'] }
-      ])
+      collectRecentTabIdsFromGroups([{ recentTabIds: ['a', 'b'] }, { recentTabIds: ['c', 'a'] }])
     ).toEqual(['b', 'c', 'a'])
   })
 })

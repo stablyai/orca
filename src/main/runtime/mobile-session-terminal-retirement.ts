@@ -121,7 +121,9 @@ function chooseGroupActiveTab(
   }
   const recent = (group.recentTabIds ?? []).toReversed().find((tabId) => retainedTabIds.has(tabId))
   // Why: no previous visit → most recently added remaining tab, not the leftmost.
-  return recent ?? [...group.tabOrder].toReversed().find((tabId) => retainedTabIds.has(tabId)) ?? null
+  return (
+    recent ?? [...group.tabOrder].toReversed().find((tabId) => retainedTabIds.has(tabId)) ?? null
+  )
 }
 
 export function repairMobileSessionTabGroupsAfterRetirement(
@@ -176,7 +178,8 @@ function chooseActiveSurface(
     pickNextTabAfterClose(
       tabs,
       previousActiveId ?? '',
-      collectRecentTabIdsFromGroups(groups)
+      collectRecentTabIdsFromGroups(groups),
+      topLevelTabId
     )
   )
 }

@@ -1,5 +1,8 @@
 /** Push `tabId` to the tail of the MRU stack (most recently viewed). */
-export function rememberRecentTabId(recent: readonly string[] | undefined, tabId: string): string[] {
+export function rememberRecentTabId(
+  recent: readonly string[] | undefined,
+  tabId: string
+): string[] {
   const base = recent ?? []
   if (base.at(-1) === tabId) {
     return [...base]
@@ -29,17 +32,18 @@ export function pickNextTabIdAfterClose(args: {
   return args.remainingTabIds.at(-1) ?? null
 }
 
-export function pickNextTabAfterClose<T extends { id: string }>(
+export function pickNextTabAfterClose<T>(
   remaining: readonly T[],
   closingTabId: string,
-  recentTabIds?: readonly string[]
+  recentTabIds?: readonly string[],
+  getTabId: (tab: T) => string = (tab) => (tab as { id: string }).id
 ): T | null {
   const nextId = pickNextTabIdAfterClose({
-    remainingTabIds: remaining.map((tab) => tab.id),
+    remainingTabIds: remaining.map(getTabId),
     closingTabId,
     recentTabIds
   })
-  return nextId ? (remaining.find((tab) => tab.id === nextId) ?? null) : null
+  return nextId ? (remaining.find((tab) => getTabId(tab) === nextId) ?? null) : null
 }
 
 export function collectRecentTabIdsFromGroups(

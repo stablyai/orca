@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { MobileSessionTab } from './mobile-session-route-types'
+import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
+import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
 import { readMobileSessionRouteSourceFamily } from './mobile-session-route-source-family.test-support'
 
 const sessionRouteSource = readMobileSessionRouteSourceFamily()
@@ -46,5 +49,50 @@ describe('mobile session last-tab close', () => {
 
     expect(block).toContain('pickNextTabAfterClose')
     expect(block).toContain('switchSessionTab(nextTab)')
+  })
+
+  it('activates the MRU successor for an active close but leaves a background close alone', async () => {
+    const tab = (id: string, isActive: boolean): MobileSessionTab => ({
+      type: 'markdown',
+      id,
+      title: id,
+      filePath: `/${id}.md`,
+      relativePath: `${id}.md`,
+      isDirty: false,
+      isActive,
+      documentVersion: '1'
+    })
+    const tabs = [tab('a', false), tab('b', true), tab('c', false)]
+    const sessionTabsRef = { current: tabs }
+    const switchSessionTab = vi.fn()
+    const setActiveSessionTabId = vi.fn()
+    const scope = {
+      client: { sendRequest: vi.fn(async () => ({ ok: true })) },
+      worktreeId: 'worktree',
+      sessionTabsRef,
+      setSessionTabs: vi.fn(),
+      reconcileBufferedDraftsRef: { current: vi.fn() },
+      closedTabTombstonesRef: { current: new Map<string, number>() },
+      activeSessionTabIdRef: { current: 'b' },
+      recentSessionTabIdsRef: { current: ['a', 'b'] },
+      selectedSessionTabIdRef: { current: 'b' },
+      setActiveSessionTabId,
+      switchSessionTab
+    } as unknown as MobileSessionContentCreateActionsModel
+    const { handleCloseSessionTab } = useMobileSessionCloseActions(scope)
+
+    await handleCloseSessionTab(tabs[1])
+    expect(switchSessionTab).toHaveBeenCalledWith(tabs[0])
+    expect(setActiveSessionTabId).not.toHaveBeenCalledWith(null)
+
+    sessionTabsRef.current = tabs
+    scope.activeSessionTabIdRef.current = 'b'
+    scope.recentSessionTabIdsRef.current = ['a', 'b']
+    switchSessionTab.mockClear()
+    setActiveSessionTabId.mockClear()
+
+    await handleCloseSessionTab(tabs[0])
+    expect(switchSessionTab).not.toHaveBeenCalled()
+    expect(setActiveSessionTabId).not.toHaveBeenCalled()
   })
 })
