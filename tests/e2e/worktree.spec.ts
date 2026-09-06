@@ -406,12 +406,12 @@ test.describe('Create Workspace', () => {
     }
   })
 
-  test('names the workspace after the PR title when the pasted URL suggestion is selected', async ({
+  test('reuses pending PR resolution when creating from a pasted URL suggestion', async ({
     electronApp,
     orcaPage
   }) => {
     const title = `E2E selected URL resolution ${Date.now()}`
-    const url = 'https://github.com/stablyai/orca/pull/2050'
+    const url = 'https://github.com/stablyai/orca/pull/17128'
     const linkedWorkspacePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
 
     try {
@@ -440,17 +440,29 @@ test.describe('Create Workspace', () => {
             })
           )
           ipcMain.removeHandler('worktrees:resolvePrBase')
-          // Why: the fixture repo has no remote and its default branch name
-          // depends on the host's git init.defaultBranch (main vs master), so
-          // resolve the PR base to HEAD, which always exists regardless.
-          ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch: 'HEAD' }))
+          const fixture = globalThis as unknown as {
+            __smartResolvePrBaseCount?: number
+            __releaseSmartResolvePrBase?: () => void
+          }
+          fixture.__smartResolvePrBaseCount = 0
+          ipcMain.handle('worktrees:resolvePrBase', () => {
+            fixture.__smartResolvePrBaseCount = (fixture.__smartResolvePrBaseCount ?? 0) + 1
+            if (fixture.__smartResolvePrBaseCount > 1) {
+              return new Promise(() => {})
+            }
+            return new Promise<{ baseBranch: string }>((resolve) => {
+              fixture.__releaseSmartResolvePrBase = () => resolve({ baseBranch: 'HEAD' })
+            })
+          })
         },
         { title, url }
       )
 
       const nameInput = dialog.getByPlaceholder(/Type a name/i)
       await expect(nameInput).toBeVisible()
-      await nameInput.fill(url)
+      await orcaPage.evaluate((text) => window.api.ui.writeClipboardText(text), url)
+      await nameInput.focus()
+      await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
 
       // Why: this is the regression PR #4900 missed — selecting the resolved
       // suggestion row (instead of submitting the raw URL) must not leave the
@@ -459,17 +471,41 @@ test.describe('Create Workspace', () => {
       const suggestion = orcaPage.getByRole('option', { name: linkedWorkspacePattern })
       await expect(suggestion).toBeVisible()
       await suggestion.click()
+      await expect
+        .poll(() =>
+          electronApp.evaluate(
+            () =>
+              (globalThis as unknown as { __smartResolvePrBaseCount?: number })
+                .__smartResolvePrBaseCount ?? 0
+          )
+        )
+        .toBe(1)
 
       const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
       await expect(createButton).toBeEnabled()
       await createButton.click()
+      await electronApp.evaluate(() => {
+        const release = (globalThis as unknown as { __releaseSmartResolvePrBase?: () => void })
+          .__releaseSmartResolvePrBase
+        if (!release) {
+          throw new Error('PR base resolution was not held')
+        }
+        release()
+      })
 
       await expect(dialog).toBeHidden({ timeout: 15_000 })
       await expect(orcaPage.getByRole('option', { name: linkedWorkspacePattern })).toBeVisible({
         timeout: 10_000
       })
       await expect(orcaPage.getByRole('option', { name: /https-github/i })).toHaveCount(0)
-      await expect(orcaPage.getByText('Linked PR #2050')).toBeVisible()
+      await expect(orcaPage.getByText('Linked PR #17128')).toBeVisible()
+      expect(
+        await electronApp.evaluate(
+          () =>
+            (globalThis as unknown as { __smartResolvePrBaseCount?: number })
+              .__smartResolvePrBaseCount ?? 0
+        )
+      ).toBe(1)
     } finally {
       await orcaPage
         .evaluate(() => {

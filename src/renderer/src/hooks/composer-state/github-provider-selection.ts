@@ -42,7 +42,10 @@ import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import { getForkPushWarning } from '../fork-push-warning'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import {
+  resolveGitHubPrStartPointSelection,
+  type SmartGitHubPrStartPointSelection
+} from './source-selection-decisions'
 
 export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) {
   const {
@@ -129,22 +132,23 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
         { repos: [runRepo], settings },
         runRepo.id
       )
-      const resolvePrBase = resolveGitHubPrStartPointForRepo({
-        repoId: runRepo.id,
-        prNumber: identity.number,
-        settings: itemRepoSettings,
-        ...(normalizedItem.branchName ? { headRefName: normalizedItem.branchName } : {}),
-        ...(normalizedItem.baseRefName ? { baseRefName: normalizedItem.baseRefName } : {}),
-        ...(normalizedItem.isCrossRepository !== undefined
-          ? { isCrossRepository: normalizedItem.isCrossRepository }
-          : {})
-      })
+      const resolvePrBase = resolveGitHubPrStartPointSelection(startPointSelection, () =>
+        resolveGitHubPrStartPointForRepo({
+          repoId: runRepo.id,
+          prNumber: identity.number,
+          settings: itemRepoSettings,
+          ...(normalizedItem.branchName ? { headRefName: normalizedItem.branchName } : {}),
+          ...(normalizedItem.baseRefName ? { baseRefName: normalizedItem.baseRefName } : {}),
+          ...(normalizedItem.isCrossRepository !== undefined
+            ? { isCrossRepository: normalizedItem.isCrossRepository }
+            : {})
+        })
+      )
       void resolvePrBase
         .then((result) => {
           if (smartGitHubPrStartPointSelectionRef.current !== startPointSelection) {
             return
           }
-          startPointSelection.resolved = result
           handleBaseBranchPrSelect(
             result.baseBranch,
             normalizedItem,

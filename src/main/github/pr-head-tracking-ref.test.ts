@@ -30,7 +30,22 @@ describe('fetchPrHeadTrackingRef', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['fetch', 'origin', '+refs/heads/feature/x:refs/remotes/origin/feature/x'],
-      { cwd: '/repo' }
+      { cwd: '/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
+    )
+  })
+
+  it('keeps WSL routing while bounding the remote-tracking fetch', async () => {
+    await fetchPrHeadTrackingRef(
+      { path: '/repo', connectionId: null },
+      null,
+      'origin',
+      'feature/x',
+      { localGitExecOptions: { cwd: '/repo', wslDistro: 'Ubuntu' } }
+    )
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['fetch', 'origin', '+refs/heads/feature/x:refs/remotes/origin/feature/x'],
+      { cwd: '/repo', wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
   })
 
