@@ -56,9 +56,8 @@ jobs:
         # grep and worker flags positional filters instead of CLI options.
         run: >-
           pnpm run test:e2e
-          tests/e2e/golden-fresh-profile-terminal.spec.ts
           tests/e2e/golden-tab-bar-agent-launch.spec.ts
-          --repeat-each=3
+          --grep "under cmd.exe"
           --workers=1
 
       - name: Upload Playwright traces

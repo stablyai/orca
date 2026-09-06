@@ -1,3 +1,4 @@
+import { installTerminalPtyWriteSpy, readTerminalPtyWriteEntries } from './helpers/terminal-pty-write-spy'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
@@ -54,12 +55,24 @@ test.describe('Windows runtimes', () => {
 
   for (const shell of WINDOWS_SHELLS) {
     test(`tab-bar + menu launches an agent under ${shell} @tab-bar-agent-launch-golden`, async ({
-      orcaPage
+      orcaPage, electronApp
     }) => {
+      await installTerminalPtyWriteSpy(electronApp)
       await openWorkspaceTerminal(orcaPage)
       // Each shell family requires different launch-command quoting.
       await configureGoldenStubAgent(orcaPage, { agent: 'codex', windowsShell: shell })
-      await launchGoldenStubAgentFromNewTab(orcaPage)
+      try {
+        await launchGoldenStubAgentFromNewTab(orcaPage)
+      } catch (error) {
+        console.error('[cmd-pty-writes]', JSON.stringify(await readTerminalPtyWriteEntries(electronApp)))
+        console.error('[cmd-startup-state]', JSON.stringify(await orcaPage.evaluate(() => {
+          const state = window.__store!.getState()
+          const tabId = state.activeTabId
+          const tab = Object.values(state.tabsByWorktree).flat().find(tab => tab.id === tabId)
+          return { tab, pending: tabId ? state.pendingStartupByTabId?.[tabId] : null }
+        })))
+        throw error
+      }
 
       expect(await getTerminalContent(orcaPage)).toContain(GOLDEN_STUB_READY_MARKER)
     })
