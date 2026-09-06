@@ -207,8 +207,8 @@ describe('createDraftRelease', () => {
         jsonResponse([release('v1.4.35'), release('v1.4.36', { draft: true, id: 42 })])
       )
       .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
-      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true }))
-      .mockResolvedValueOnce(jsonResponse({ id: 42, body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'stale' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'notes' }))
 
     await createDraftRelease({
       repo: 'stablyai/orca',
@@ -248,6 +248,43 @@ describe('createDraftRelease', () => {
     })
 
     expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      'https://api.github.com/repos/stablyai/orca/releases/42',
+      expect.not.objectContaining({ method: expect.anything() })
+    )
+  })
+
+  it('restores the published body when publication lands between the check and the patch', async () => {
+    const log = vi.fn()
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse([release('v1.4.35'), release('v1.4.36', { draft: true, id: 42 })])
+      )
+      .mockResolvedValueOnce(jsonResponse({ name: 'v1.4.36', body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: true, body: 'hand-written notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'notes' }))
+      .mockResolvedValueOnce(jsonResponse({ id: 42, draft: false, body: 'hand-written notes' }))
+
+    await createDraftRelease({
+      repo: 'stablyai/orca',
+      tag: 'v1.4.36',
+      token: 'token',
+      fetchImpl,
+      log
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(5)
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      5,
+      'https://api.github.com/repos/stablyai/orca/releases/42',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ body: 'hand-written notes' })
+      })
+    )
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('restored its published body'))
   })
 
   it('preserves notes on an existing published release', async () => {
