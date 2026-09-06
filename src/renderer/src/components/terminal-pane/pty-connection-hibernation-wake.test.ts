@@ -556,13 +556,12 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const deps = createDeps()
     const pane = createPane(2)
-    let userInputListener: (() => void) | null = null
-    const userInputDispose = vi.fn()
+    const userInputListeners = new Set<() => void>()
     ;(pane.terminal as unknown as { _core: unknown })._core = {
       coreService: {
         onUserInput: vi.fn((listener: () => void) => {
-          userInputListener = listener
-          return { dispose: userInputDispose }
+          userInputListeners.add(listener)
+          return { dispose: () => userInputListeners.delete(listener) }
         })
       }
     }
@@ -571,7 +570,7 @@ describe('connectPanePty', () => {
       dispose: () => void
     }
     await flushAsyncTicks()
-    expect(userInputListener).toBeTypeOf('function')
+    expect(userInputListeners.size).toBeGreaterThan(0)
     ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
 
     // A focus-out report forwarded to the PTY must not count as activity.
@@ -581,11 +580,13 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O')
 
     // Real user input fires the core signal and records activity.
-    ;(userInputListener as unknown as () => void)()
+    for (const listener of userInputListeners) {
+      listener()
+    }
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)
 
     binding.dispose()
-    expect(userInputDispose).toHaveBeenCalled()
+    expect(userInputListeners.size).toBe(0)
   })
 
   it('falls back to onData hibernation recording when the core user-input signal is unavailable', async () => {

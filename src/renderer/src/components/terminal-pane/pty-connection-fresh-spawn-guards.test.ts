@@ -458,13 +458,13 @@ describe('connectPanePty', () => {
   it('preserves classified user input during replay while suppressing synthetic replies', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(1)
-    let userInput: (() => void) | undefined
+    const userInputListeners = new Set<() => void>()
     Object.assign(pane.terminal, {
       _core: {
         coreService: {
           onUserInput: (listener: () => void) => {
-            userInput = listener
-            return { dispose: vi.fn() }
+            userInputListeners.add(listener)
+            return { dispose: () => userInputListeners.delete(listener) }
           }
         }
       }
@@ -482,7 +482,9 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     transport.sendInput.mockClear()
     deps.replayingPanesRef.current.set(pane.id, 1)
-    userInput?.()
+    for (const listener of userInputListeners) {
+      listener()
+    }
     sendTerminalInputThroughPane(pane, 'input_under_flood\r')
     sendTerminalInputThroughPane(pane, '\x1b[?1;2c')
     for (const forward of deferred) {
