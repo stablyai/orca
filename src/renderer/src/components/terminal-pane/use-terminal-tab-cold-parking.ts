@@ -55,6 +55,7 @@ type TerminalOverlayTabAssignment = {
 
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
 
+/** Keep parking decisions and background watchers in sync so hidden live terminals remain usable. */
 export function useTerminalTabColdParking(args: {
   worktreeId: string
   terminalTabs: readonly TerminalTab[]
