@@ -320,45 +320,40 @@ describe('a cached elevate.exe miss is not silent', () => {
   })
 })
 
-describe('release-cut.yml swaps the cached elevate.exe through the resolver', () => {
-  function swapStep() {
-    const workflow = parse(
-      readFileSync(join(projectRoot, '.github/workflows/release-cut.yml'), 'utf8')
+describe('Windows signing swaps the cached elevate.exe through the resolver', () => {
+  const workflow = parse(
+    readFileSync(join(projectRoot, '.github/workflows/release-windows-signing.yml'), 'utf8')
+  )
+  const step = workflow.jobs.package.steps.find(
+    (candidate) => candidate.name === 'Replace cached elevate.exe with the signed copy'
+  )
+  const script = readFileSync(
+    join(projectRoot, 'config/windows-signing/replace-elevate.ps1'),
+    'utf8'
+  )
+  it('delegates to the authoritative toolset resolver', () => {
+    expect(step.run).toContain('replace-elevate.ps1')
+    expect(script).toContain('node config/scripts/replace-cached-nsis-elevate.mjs $signed')
+    expect(script).not.toContain('electron-builder\\Cache\\nsis')
+  })
+  it('blocks the rebuild when the resolver reports a miss', () => {
+    expect(script).toMatch(/if \(\$LASTEXITCODE -ne 0\) \{ throw /)
+    expect(step['continue-on-error']).toBeUndefined()
+  })
+  it('requires the correct certificate and isolates test caches from production', () => {
+    expect(script).toContain('Assert-SigningCertificate')
+    const policy = readFileSync(
+      join(projectRoot, 'config/windows-signing/signature-policy.ps1'),
+      'utf8'
     )
-    const step = workflow.jobs.build.steps.find(
-      (candidate) => candidate.name === 'Replace cached elevate.exe with the signed copy'
+    expect(policy).toContain("$signature.Status -ne 'Valid'")
+    expect(policy).toContain(
+      "$signature.SignerCertificate.Subject -notlike '*CN=SignPath Foundation*'"
     )
-    expect(step).toBeDefined()
-    return step
-  }
-
-  it('delegates the cache lookup to the script instead of an inline path', () => {
-    const step = swapStep()
-    expect(step.run).toContain('node config/scripts/replace-cached-nsis-elevate.mjs $signed')
-    // The hardcoded miss that shipped v1.4.193/v1.4.194 unsigned.
-    expect(step.run).not.toContain('electron-builder\\Cache\\nsis')
-    expect(step.run).not.toContain('-ErrorAction SilentlyContinue')
-  })
-
-  it('fails the step when the swap reports a miss', () => {
-    const step = swapStep()
-    // Matched as an executed statement: downgrading this to a Write-Host restores
-    // the silent fail-open that let the unsigned helper ship.
-    expect(step.run).toMatch(/if \(\$LASTEXITCODE -ne 0\) \{/)
-    expect(step.run).toMatch(/^\s*throw \$message\s*$/m)
-    expect(step.run).toContain('GITHUB_STEP_SUMMARY')
-  })
-
-  // Why kept: windows-signing-rehearsal.yml shares the electron-builder-win-<hash>
-  // cache key, so dropping this guard would let a test certificate reach a release cache.
-  it('still refuses to stage anything but a SignPath-signed helper', () => {
-    const step = swapStep()
-    expect(step.run).toContain("$signature.Status -ne 'Valid'")
-    expect(step.run).toContain("$subject -notlike '*CN=SignPath Foundation*'")
-  })
-
-  // The inner-signing chain stays fail-open: a loud red step, not an unbuildable release.
-  it('keeps the step unable to fail the release job', () => {
-    expect(swapStep()['continue-on-error']).toBe(true)
+    const cache = workflow.jobs.package.steps.find(
+      (s) => s.name === 'Cache electron-builder downloads'
+    )
+    expect(cache.with.key).toContain('${{ inputs.signing_policy }}')
+    expect(cache.with['restore-keys']).toContain('${{ inputs.signing_policy }}')
   })
 })
