@@ -15,6 +15,16 @@ const REF_MIRRORS = [
 ]
 
 describe('ref-mirroring vet steps', () => {
+  it('keeps the full-history adhoc checkout on the same case-safe backend', () => {
+    const steps = readWorkflow('.github/workflows/adhoc-mac-build.yml').jobs['build-adhoc-mac']
+      .steps
+    const checkout = steps.find((step) => step.name === 'Checkout the requested ref')
+    expect(checkout.env.GIT_DEFAULT_REF_FORMAT).toBe('reftable')
+    expect(checkout.with.ref).toBe('${{ steps.vetted.outputs.sha }}')
+    expect(checkout.with['fetch-depth']).toBe(0)
+    expect(checkout.with['persist-credentials']).toBe(false)
+  })
+
   // Why: macOS and Windows runner disks are case-insensitive, and this repo has
   // branches that differ only in casing. The files backend cannot store both, and
   // it fails the whole fetch rather than the one ref — so the vet step dies before
