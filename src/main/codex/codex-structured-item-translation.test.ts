@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
+  briefToolArg,
+  createToolInputDisplay,
+  describeToolInput
+} from '../../shared/native-chat-tool-summary'
+import {
   codexItemBody,
   codexItemIdentity,
   codexJournalItem,
@@ -12,6 +17,13 @@ import {
   readCodexThreadItem,
   type CodexThreadItem
 } from './codex-structured-item-translation'
+
+/** The tool-call input a Codex item lands on, which is what the row label and
+ *  the collapsed run header are both derived from. */
+function toolCallInput(item: CodexThreadItem): unknown {
+  const body = codexItemBody(item)
+  return body !== null && body.kind === 'tool-call' ? body.input : null
+}
 
 const THREAD_ID = 'thread-abc'
 const TURN_ID = 'turn-1'
@@ -195,6 +207,279 @@ describe('codex item bodies', () => {
     })
   })
 
+  it('names a classified read command by its class and keeps the raw command', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-read',
+      command: "sed -n '1,200p' notes.txt",
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [
+        {
+          type: 'read',
+          command: "sed -n '1,200p' notes.txt",
+          name: 'notes.txt',
+          path: '/repo/notes.txt'
+        }
+      ]
+    })
+
+    expect(body).toEqual({
+      kind: 'tool-call',
+      name: 'read',
+      // `name` is the target's basename, which `path` already carries and no
+      // label ever reads, so it stays out of the bounded journal payload.
+      input: { command: "sed -n '1,200p' notes.txt", cwd: '/repo', path: '/repo/notes.txt' },
+      state: 'completed'
+    })
+    // `read` is the one class that keeps `path`, so its row stays a tappable
+    // file on mobile — the other half of the rule `list`/`search` obey below.
+    const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
+    expect(display.filePath).toBe('/repo/notes.txt')
+    expect(display.label).toBe('/repo/notes.txt')
+  })
+
+  it('carries a classified search query so the row labels by term, not scan root', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-search',
+        command: 'rg -n --no-heading beta .',
+        cwd: '/repo',
+        status: 'inProgress',
+        commandActions: [
+          { type: 'search', command: 'rg -n --no-heading beta .', query: 'beta', path: '.' }
+        ]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'search',
+      input: { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', directory: '.' },
+      state: 'running'
+    })
+  })
+
+  it('omits a null classified field rather than standing it in as a target', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-search-bare',
+        command: 'rg beta',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [{ type: 'search', command: 'rg beta', query: null, path: null }]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'search',
+      input: { command: 'rg beta', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('names a classified listFiles command `list` and invents no target for a null path', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-list',
+      command: 'ls',
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [{ type: 'listFiles', command: 'ls', path: null }]
+    })
+
+    expect(body).toEqual({
+      kind: 'tool-call',
+      name: 'list',
+      input: { command: 'ls', cwd: '/repo' },
+      state: 'completed'
+    })
+    // A stand-in `.` reaches mobile as a tappable "open file" link onto a
+    // directory, which can only fail. The raw command is the honest label.
+    const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
+    expect(display.filePath).toBeNull()
+    expect(display.label).toBe('ls')
+  })
+
+  it('keeps the shell row when one command did two different classified things', () => {
+    // `cat a.txt && ls src` classifies as a read and a listing; naming the row
+    // after either drops the other.
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-mixed',
+        command: 'cat a.txt && ls src',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'read', command: 'cat a.txt', name: 'a.txt', path: 'a.txt' },
+          { type: 'listFiles', command: 'ls src', path: 'src' }
+        ]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'shell',
+      input: { command: 'cat a.txt && ls src', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('keeps one class run twice, naming no target when the two disagree', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-two-reads',
+        command: 'cat a.ts && cat b.ts',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'read', command: 'cat a.ts', path: 'a.ts' },
+          { type: 'read', command: 'cat b.ts', path: 'b.ts' }
+        ]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'read',
+      input: { command: 'cat a.ts && cat b.ts', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('keeps a target both entries of one class name', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-same-read',
+        command: 'head a.ts && tail a.ts',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'read', command: 'head a.ts', path: 'a.ts' },
+          { type: 'read', command: 'tail a.ts', path: 'a.ts' }
+        ]
+      })
+    ).toMatchObject({ name: 'read', input: { path: 'a.ts' } })
+  })
+
+  it('keeps the listed directory as a label, never as a file target', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-list-path',
+      command: 'ls src',
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [{ type: 'listFiles', command: 'ls src', path: 'src' }]
+    })
+
+    expect(body).toMatchObject({ name: 'list', input: { directory: 'src' } })
+    // Under `path` this reaches mobile as a tappable open-file link onto a
+    // directory — the same dead link a stand-in `.` would have produced.
+    const display = createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null)
+    expect(display.filePath).toBeNull()
+    expect(display.label).toBe('src')
+  })
+
+  it('keeps a scan root off the file-target key even when the search has no term', () => {
+    const body = codexItemBody({
+      type: 'commandExecution',
+      id: 'item-search-root',
+      command: 'rg --files src',
+      cwd: '/repo',
+      status: 'completed',
+      exitCode: 0,
+      commandActions: [{ type: 'search', command: 'rg --files src', query: null, path: 'src' }]
+    })
+
+    expect(body).toMatchObject({ name: 'search', input: { directory: 'src' } })
+    // `path` is only excluded from the file target while a query is present, so
+    // a term-less search under it would link to the folder it scanned.
+    expect(
+      createToolInputDisplay(body?.kind === 'tool-call' ? body.input : null).filePath
+    ).toBeNull()
+  })
+
+  it('leaves the other classes without a stand-in target', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-read-null',
+        command: 'cat',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [{ type: 'read', command: 'cat', path: null, name: null }]
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'read',
+      input: { command: 'cat', cwd: '/repo' },
+      state: 'completed'
+    })
+  })
+
+  it('skips unclassified actions to reach the first classified one', () => {
+    expect(
+      codexItemBody({
+        type: 'commandExecution',
+        id: 'item-piped',
+        command: 'true && cat a.ts',
+        cwd: '/repo',
+        status: 'completed',
+        exitCode: 0,
+        commandActions: [
+          { type: 'unknown', command: 'true' },
+          { type: 'read', command: 'cat a.ts', name: 'a.ts', path: 'a.ts' }
+        ]
+      })
+    ).toMatchObject({ name: 'read', input: { path: 'a.ts' } })
+  })
+
+  it('falls back to the unclassified shell row for absent or malformed commandActions', () => {
+    const shellRow = {
+      kind: 'tool-call',
+      name: 'shell',
+      input: { command: 'ls', cwd: '/tmp' },
+      state: 'completed'
+    }
+    const base = {
+      type: 'commandExecution',
+      id: 'item-fallback',
+      command: 'ls',
+      cwd: '/tmp',
+      status: 'completed',
+      exitCode: 0
+    }
+
+    expect(codexItemBody(base)).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: null })).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: [] })).toEqual(shellRow)
+    expect(
+      codexItemBody({ ...base, commandActions: [{ type: 'unknown', command: 'ls' }] })
+    ).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: 'read' })).toEqual(shellRow)
+    expect(codexItemBody({ ...base, commandActions: [null, 7, 'read', {}, { type: 5 }] })).toEqual(
+      shellRow
+    )
+    // The classification table is a Map because an object index answers
+    // `__proto__`/`constructor` with a truthy non-string tool name.
+    expect(
+      codexItemBody({ ...base, commandActions: [{ type: '__proto__', command: 'ls' }] })
+    ).toEqual(shellRow)
+    expect(
+      codexItemBody({ ...base, commandActions: [{ type: 'constructor', command: 'ls' }] })
+    ).toEqual(shellRow)
+    // The rollout-file shape is a different lane and never reaches app-server.
+    expect(
+      codexItemBody({ ...base, parsedCmd: [{ type: 'read', cmd: 'ls', path: 'a.ts' }] })
+    ).toEqual(shellRow)
+  })
+
   it('accepts snake-case command completion output and preserves blob evidence', () => {
     const output = 'x'.repeat(1_100_000)
     const translated = codexJournalItem({
@@ -298,10 +583,226 @@ describe('codex item bodies', () => {
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
-    expect(codexItemBody({ type: 'webSearch', id: 'w' })).toMatchObject({
+    expect(codexItemBody({ type: 'somethingCodexAddedLater', id: 'x' })).toMatchObject({
       kind: 'status',
-      text: 'codex · item:webSearch',
-      providerFrame: { provider: 'codex', kind: 'item:webSearch' }
+      text: 'codex · item:somethingCodexAddedLater',
+      providerFrame: { provider: 'codex', kind: 'item:somethingCodexAddedLater' }
+    })
+  })
+
+  it('gives an mcp tool call a typed body with its own arguments as input', () => {
+    expect(
+      codexItemBody({
+        type: 'mcpToolCall',
+        id: 'mcp-1',
+        server: 'weather',
+        tool: 'get_forecast',
+        status: 'completed',
+        arguments: { city: 'Oslo' },
+        result: { content: [{ type: 'text', text: '12C' }] }
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      // Server-qualified, and the arguments stay top level so the row label can
+      // read `query`/`command`/`file_path` out of them.
+      name: 'weather/get_forecast',
+      input: { city: 'Oslo' },
+      state: 'completed',
+      output: { head: '12C', byteLength: 3, truncated: false, digest: expect.any(String) }
+    })
+  })
+
+  it('passes an mcp tool name through with no casing transform', () => {
+    // Downstream dispatch is exact-match on raw identifiers, so every shape —
+    // bare snake_case included — has to survive byte-identical.
+    for (const tool of ['get_forecast', 'mcp__server__tool', 'ns.tool', 'urn:tool', 'listTools']) {
+      expect(
+        codexItemBody({ type: 'mcpToolCall', id: 'm', tool, status: 'inProgress' }),
+        tool
+      ).toMatchObject({ kind: 'tool-call', name: tool, state: 'running' })
+      expect(
+        codexItemBody({ type: 'mcpToolCall', id: 'm', server: 'srv', tool, status: 'inProgress' }),
+        tool
+      ).toMatchObject({ kind: 'tool-call', name: `srv/${tool}`, state: 'running' })
+    }
+  })
+
+  it('falls back to the bare tool, then to `mcp`, when the item is under-specified', () => {
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 'get_forecast', status: 'inProgress' })
+    ).toMatchObject({ name: 'get_forecast' })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', server: '', tool: 'ping', status: 'completed' })
+    ).toMatchObject({ name: 'ping' })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', server: 'weather', status: 'completed' })
+    ).toMatchObject({ name: 'mcp' })
+  })
+
+  it('keeps non-object mcp arguments addressable and empty ones off the label', () => {
+    // `arguments` is arbitrary JSON upstream; a scalar or array must still reach
+    // the row rather than being dropped or unwrapped into a bare value.
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: 'raw text' })
+    ).toMatchObject({ input: { arguments: 'raw text' } })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: [1, 2] })
+    ).toMatchObject({ input: { arguments: [1, 2] } })
+    // `arguments` is required on the wire, so `{}` — not an absent key — is what
+    // an argument-less MCP tool sends, and passing it through labels the row `{}`.
+    expect(codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: {} })).toEqual({
+      kind: 'tool-call',
+      name: 't',
+      input: null,
+      state: 'running'
+    })
+    expect(codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't' })).toMatchObject({
+      input: null
+    })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: null })
+    ).toMatchObject({ input: null })
+  })
+
+  it('renders an argument-less mcp call as a bare server/tool row', () => {
+    const input = toolCallInput({
+      type: 'mcpToolCall',
+      id: 'm',
+      server: 'srv',
+      tool: 'list_tools',
+      arguments: {}
+    })
+    expect(describeToolInput(input)).toBe('')
+    expect(briefToolArg(input)).toBe('')
+  })
+
+  it('reports an mcp error as a failed call carrying the server message', () => {
+    expect(
+      codexItemBody({
+        type: 'mcpToolCall',
+        id: 'mcp-2',
+        server: 's',
+        tool: 'ping',
+        status: 'completed',
+        error: { message: 'server unreachable' }
+      })
+    ).toMatchObject({
+      kind: 'tool-call',
+      name: 's/ping',
+      state: 'failed',
+      output: { head: 'server unreachable', truncated: false }
+    })
+  })
+
+  it('models a web search as a tool call that runs until codex sends the action', () => {
+    // The start frame Codex actually emits: empty query, no action. Nothing is
+    // labelable yet, so the input is absent rather than a hull of null keys.
+    expect(codexItemBody({ type: 'webSearch', id: 'w', query: '', action: null })).toEqual({
+      kind: 'tool-call',
+      name: 'web_search',
+      input: null,
+      state: 'running'
+    })
+    expect(
+      codexItemBody({
+        type: 'webSearch',
+        id: 'w',
+        query: 'orca release notes',
+        action: { type: 'search', query: 'orca release notes', queries: null },
+        results: null
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'web_search',
+      input: {
+        query: 'orca release notes',
+        description: 'search',
+        action: { type: 'search', query: 'orca release notes', queries: null }
+      },
+      state: 'completed'
+    })
+  })
+
+  it('carries the web search hits as the call output', () => {
+    const results = [{ title: 'Orca 1.0', url: 'https://example.com/notes' }]
+    expect(
+      codexItemBody({
+        type: 'webSearch',
+        id: 'w',
+        query: 'orca release notes',
+        action: { type: 'search', query: 'orca release notes', queries: null },
+        results
+      })
+    ).toMatchObject({
+      kind: 'tool-call',
+      name: 'web_search',
+      state: 'completed',
+      output: { head: JSON.stringify(results), truncated: false }
+    })
+    // Nothing to show is no output block at all, not an empty one.
+    for (const empty of [undefined, null, []]) {
+      expect(
+        codexItemBody({
+          type: 'webSearch',
+          id: 'w',
+          query: 'q',
+          action: { type: 'search' },
+          results: empty
+        }),
+        String(empty)
+      ).not.toHaveProperty('output')
+    }
+  })
+
+  it('labels every web search shape without falling back to raw JSON', () => {
+    // Both the row label and the run header read top-level input keys only, so a
+    // shape whose detail sits inside `action` renders as the input's raw JSON.
+    const url = 'https://example.com/docs/page'
+    const shapes: [string, unknown, string, string][] = [
+      ['started', null, '', ''],
+      [
+        'search',
+        { type: 'search', query: 'a sample query', queries: null },
+        'a sample query',
+        'a sample query'
+      ],
+      ['openPage', { type: 'openPage', url }, url, ''],
+      [
+        'findInPage',
+        { type: 'findInPage', url, pattern: 'a needle' },
+        'a sample query',
+        'a sample query'
+      ],
+      ['other', { type: 'other' }, 'other', '']
+    ]
+    for (const [name, action, label, brief] of shapes) {
+      // Codex leaves the item's own `query` empty on most completed searches.
+      const query = name === 'search' || name === 'findInPage' ? 'a sample query' : ''
+      const input = toolCallInput({ type: 'webSearch', id: 'w', query, action })
+      expect(describeToolInput(input), name).toBe(label)
+      expect(briefToolArg(input), name).toBe(brief)
+    }
+  })
+
+  it('leaves subagent items on the generic row until a real renderer exists', () => {
+    expect(
+      codexJournalItem({
+        type: 'subAgentActivity',
+        id: 'a-1',
+        kind: 'started',
+        agentThreadId: 'thread-child',
+        agentPath: '/root/list_directory'
+      })
+    ).toMatchObject({
+      handled: false,
+      body: { kind: 'status', providerFrame: { kind: 'item:subAgentActivity' } }
+    })
+  })
+
+  it('drops the sleep item, which codex itself renders as nothing', () => {
+    expect(codexJournalItem({ type: 'sleep', id: 's-1', durationMs: 20_000 })).toEqual({
+      body: null,
+      handled: true
     })
   })
 

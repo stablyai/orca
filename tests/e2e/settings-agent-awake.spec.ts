@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { runProcess } from '../../src/shared/child-process/run-process'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
@@ -104,6 +105,19 @@ async function readPowerSaveBlockerProbe(
   })
 }
 
+async function readMacosSleepAssertionPids(electronApp: ElectronApplication): Promise<number[]> {
+  const result = await runProcess({
+    program: '/usr/bin/pgrep',
+    args: ['-P', String(electronApp.process().pid), '-f', '^/usr/bin/caffeinate -i -s$'],
+    maxOutputBytes: 4_096
+  })
+  if (result.code === 1) {
+    return []
+  }
+  expect(result.code, result.stderr).toBe(0)
+  return result.stdout.trim().split(/\s+/).filter(Boolean).map(Number)
+}
+
 async function postCodexHookEvent(
   electronApp: ElectronApplication,
   options: {
@@ -176,7 +190,9 @@ test.describe('Agent awake setting', () => {
     electronApp,
     orcaPage
   }) => {
-    await installPowerSaveBlockerProbe(electronApp)
+    if (process.platform !== 'darwin') {
+      await installPowerSaveBlockerProbe(electronApp)
+    }
     await setKeepAwake(orcaPage, true)
 
     const tabId = 'e2e-awake-tab'
@@ -187,24 +203,33 @@ test.describe('Agent awake setting', () => {
       eventName: 'UserPromptSubmit'
     })
 
-    await expect
-      .poll(async () => await readPowerSaveBlockerProbe(electronApp), {
-        timeout: 5_000,
-        message: 'powerSaveBlocker did not start for the working agent'
-      })
-      .toEqual(
-        expect.objectContaining({
-          activeIds: expect.arrayContaining([expect.any(Number)]),
-          starts: expect.arrayContaining([
-            expect.objectContaining({ type: 'prevent-display-sleep' })
-          ])
+    await expect(
+      orcaPage.getByRole('button', { name: 'Keep computer awake, Agent · Active' })
+    ).toBeVisible()
+    let startedIds: number[] = []
+    if (process.platform === 'darwin') {
+      // macOS uses an app-owned caffeinate assertion instead of Electron's display blocker.
+      await expect
+        .poll(() => readMacosSleepAssertionPids(electronApp), { timeout: 5_000 })
+        .not.toEqual([])
+    } else {
+      await expect
+        .poll(async () => await readPowerSaveBlockerProbe(electronApp), {
+          timeout: 5_000,
+          message: 'powerSaveBlocker did not start for the working agent'
         })
-      )
+        .toEqual(
+          expect.objectContaining({
+            activeIds: expect.arrayContaining([expect.any(Number)]),
+            starts: expect.arrayContaining([
+              expect.objectContaining({ type: 'prevent-display-sleep' })
+            ])
+          })
+        )
 
-    const startedIds = (await readPowerSaveBlockerProbe(electronApp)).starts.map(
-      (start) => start.id
-    )
-    expect(startedIds.length).toBeGreaterThan(0)
+      startedIds = (await readPowerSaveBlockerProbe(electronApp)).starts.map((start) => start.id)
+      expect(startedIds.length).toBeGreaterThan(0)
+    }
 
     await postCodexHookEvent(electronApp, {
       paneKey,
@@ -212,6 +237,15 @@ test.describe('Agent awake setting', () => {
       eventName: 'Stop'
     })
 
+    await expect(
+      orcaPage.getByRole('button', { name: 'Keep computer awake, Agent · Inactive' })
+    ).toBeVisible()
+    if (process.platform === 'darwin') {
+      await expect
+        .poll(() => readMacosSleepAssertionPids(electronApp), { timeout: 5_000 })
+        .toEqual([])
+      return
+    }
     await expect
       .poll(async () => await readPowerSaveBlockerProbe(electronApp), {
         timeout: 5_000,

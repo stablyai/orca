@@ -37,7 +37,10 @@ function destructiveVerbs(specs: CommandSpec[]): Set<string> {
 // input token is itself a near-miss of a destructive verb. #6303
 function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
   for (const verb of verbs) {
-    if (levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD) {
+    if (
+      Math.abs(inputToken.length - verb.length) <= DESTRUCTIVE_INTENT_THRESHOLD &&
+      levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD
+    ) {
       return true
     }
   }
@@ -85,7 +88,9 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
         continue
       }
       seen.add(joined)
-      scored.push({ label: joined, distance: levenshtein(input, joined) })
+      if (Math.abs(input.length - joined.length) <= SUGGESTION_THRESHOLD) {
+        scored.push({ label: joined, distance: levenshtein(input, joined) })
+      }
     }
   }
   return rankByDistance(scored)
@@ -106,9 +111,13 @@ export type FlagErrorData = {
 }
 
 function suggestFlags(flag: string, validFlags: string[]): string[] {
-  return rankByDistance(
-    validFlags.map((candidate) => ({ label: candidate, distance: levenshtein(flag, candidate) }))
-  )
+  const scored: { label: string; distance: number }[] = []
+  for (const candidate of validFlags) {
+    if (Math.abs(flag.length - candidate.length) <= SUGGESTION_THRESHOLD) {
+      scored.push({ label: candidate, distance: levenshtein(flag, candidate) })
+    }
+  }
+  return rankByDistance(scored)
 }
 
 // Why: include the accepted set so agents can recover without another help call.

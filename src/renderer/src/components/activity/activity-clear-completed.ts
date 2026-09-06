@@ -96,6 +96,19 @@ function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[])
   }
 }
 
+/** Clear one completed thread immediately; bulk clearing owns the undo toast. */
+export function clearActivityThread(thread: AgentPaneThread): boolean {
+  const state = useAppStore.getState()
+  const plan = planClearCompletedActivity([thread], state)
+  if (plan.clearedThreadCount === 0) {
+    return false
+  }
+  state.applyActivityClearedAt(plan.cutoffPatch)
+  state.dismissRetainedAgents(plan.retainedSnapshots.map((retained) => retained.entry.paneKey))
+  evictPersistedStatuses(plan.cacheIdentities)
+  return true
+}
+
 /**
  * Clear completed/interrupted activity threads with an undo window.
  *

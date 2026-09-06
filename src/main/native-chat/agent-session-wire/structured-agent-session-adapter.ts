@@ -137,7 +137,11 @@ export type StructuredAgentSessionAdapter = {
     turnId: string
     fence: number
   }): Promise<{ cancelled: boolean }>
-  stopBackgroundTasks?(input: { sessionId: string; fence: number }): Promise<{ cancelled: boolean }>
+  stopBackgroundTasks?(input: {
+    sessionId: string
+    fence: number
+    taskId?: string
+  }): Promise<{ cancelled: boolean }>
   backgroundTaskState?(sessionId: string): AgentSessionBackgroundTaskState | null | undefined
   /** Fires the provider callback for an approval or a question. The wire calls
    *  this only after the durable compare-and-set won, so it runs exactly once. */

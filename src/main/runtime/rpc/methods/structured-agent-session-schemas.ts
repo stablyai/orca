@@ -152,9 +152,13 @@ export const CancelParams = z
   .object({
     envelope: MutationEnvelope,
     turnId: Identifier('Invalid turn id'),
-    scope: z.literal('background-tasks').optional()
+    scope: z.literal('background-tasks').optional(),
+    taskId: Identifier('Invalid task id').optional()
   })
   .strict()
+  .refine((value) => value.taskId === undefined || value.scope === 'background-tasks', {
+    message: 'A task id requires background-task scope'
+  })
 
 export const RespondParams = z
   .object({
