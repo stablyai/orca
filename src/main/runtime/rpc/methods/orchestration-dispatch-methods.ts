@@ -152,18 +152,69 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatchShow',
     params: DispatchShowParams,
-    handler: (params, { runtime }) => {
+    handler: (
+      params,
+      { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }
+    ) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
       }
       const ctx = db.getDispatchContext(params.task)
+      // Why: recapability implies preamble — the minted secret has nowhere
+      // to go except embedded in a regenerated preamble.
+      const wantPreamble = params.preamble || params.recapability
 
       // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
-      if (params.preamble) {
+      if (wantPreamble) {
         const task = db.getTask(params.task)
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
+        }
+        // Why: a crashed agent takes its capability to the grave; the replacement
+        // agent in the same terminal needs fresh authority, minted against the
+        // CURRENT pane/incarnation (not the dead one stored at dispatch time).
+        // Minting rotates the old secret, so a zombie holding it loses authority.
+        let dispatchCapability: string | undefined
+        if (params.recapability) {
+          if (!ctx || (ctx.status !== 'pending' && ctx.status !== 'dispatched')) {
+            throw new OrchestrationError(
+              'dispatch_not_active',
+              `Task ${params.task} has no active dispatch to re-authorize.`
+            )
+          }
+          // Why: same gate as orchestration.dispatch — only a terminal bound
+          // to the task's run may rotate its capability. Otherwise any
+          // terminal could DoS workers or un-fence deliberately fenced work.
+          const run = resolveRunScope(runtime, {
+            runId: task.run_id,
+            callerTerminalHandle: params.from,
+            requireCurrentConsumer: true,
+            legacyCoordinatorRunId,
+            callerEvidence: orchestrationCompatibilityEvidence
+          })
+          if (task.run_id !== run.id) {
+            throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {
+              taskId: task.id,
+              runId: run.id
+            })
+          }
+          const workerHandle = ctx.assignee_handle
+          const authority = runtime.getOrchestrationDispatchAuthority(workerHandle)
+          const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(workerHandle) ?? undefined
+          const incarnation =
+            authority?.paneKey && authority.processIncarnation ? authority.processIncarnation : undefined
+          if (!paneKey || !incarnation) {
+            throw new OrchestrationError(
+              'stable_pane_required',
+              `Terminal ${workerHandle} has no stable pane/process incarnation for lifecycle authority.`
+            )
+          }
+          dispatchCapability = db.mintDispatchCapability({
+            dispatchId: ctx.id,
+            paneKey,
+            processIncarnation: incarnation
+          })
         }
         const workerHandle = ctx?.assignee_handle ?? 'worker'
         const preamble = buildDispatchPreamble({
@@ -174,6 +225,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle,
+          dispatchCapability,
           devMode: params.devMode,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })

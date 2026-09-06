@@ -228,6 +228,7 @@ export const DispatchParams = z.object({
 export const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,
+  recapability: OptionalBoolean,
   from: OptionalString,
   devMode: OptionalBoolean
 })
