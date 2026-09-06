@@ -101,11 +101,11 @@ async function minimizeHeadedHost(electronApp: ElectronApplication, page: Page):
     .poll(() =>
       host.evaluate((window) => ({
         backgroundThrottling: window.webContents.getBackgroundThrottling(),
-        minimized: window.isMinimized(),
-        visible: window.isVisible()
+        minimized: window.isMinimized()
       }))
     )
-    .toEqual({ backgroundThrottling: true, minimized: true, visible: false })
+    .toEqual({ backgroundThrottling: true, minimized: true })
+  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('hidden')
 }
 
 async function restoreHeadedHost(electronApp: ElectronApplication, page: Page): Promise<void> {
