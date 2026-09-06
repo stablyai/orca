@@ -124,7 +124,8 @@ export function createFolderWorkspaceMutationActions(
         (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
           ? (state.activeWorkspaceExecutionHostId ?? undefined)
           : undefined)
-      if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
+      const folderWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+      if (!folderWorkspace) {
         return false
       }
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
@@ -136,22 +137,26 @@ export function createFolderWorkspaceMutationActions(
       const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
       const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
       const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
+      const changesKaneoLink =
+        updates.linkedTask !== undefined &&
+        (updates.linkedTask?.provider === 'kaneo' ||
+          folderWorkspace.linkedTask?.provider === 'kaneo')
       // Why: same gate as folderWorkspace.create — an older paired runtime would drop the link silently.
       if (
         target.kind === 'environment' &&
         (updates.linkedTask?.provider === 'jira' ||
-          updates.linkedTask?.provider === 'kaneo' ||
+          changesKaneoLink ||
           updates.linkedTaskSourceContext?.provider === 'jira')
       ) {
         await assertRuntimeEnvironmentCapability(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          updates.linkedTask?.provider === 'kaneo'
+          changesKaneoLink
             ? 'Update the remote runtime to link Kaneo tasks'
             : 'Update the remote runtime to link Jira'
         )
       }
-      if (target.kind === 'environment' && updates.linkedTask?.provider === 'kaneo') {
+      if (target.kind === 'environment' && changesKaneoLink) {
         await assertRuntimeEnvironmentCapability(
           target.environmentId,
           KANEO_TASK_LINK_RUNTIME_CAPABILITY,
