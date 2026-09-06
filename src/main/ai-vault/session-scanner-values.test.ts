@@ -92,6 +92,24 @@ describe('AI Vault session scanner text values', () => {
     )
   })
 
+  // Why: a non-absolute env value would resolve against the main-process cwd.
+  // 'C:\' strips to the drive-relative 'C:' and 'C:foo' already is one — both
+  // non-absolute on every platform, like '/', '.', or a bare relative path.
+  it('falls back to the default root for non-absolute env values, keeping absolute ones', () => {
+    for (const agentHomeDirName of ['.pi', '.omp'] as const) {
+      const fallback = join(homedir(), agentHomeDirName, 'agent', 'sessions')
+      for (const value of ['/', '//', '   ', '.', '..', 'rel/path', 'C:\\', 'C:/', 'C:foo']) {
+        expect(normalizeAgentSessionsDir(value, agentHomeDirName)).toBe(fallback)
+      }
+      // Positive controls: an absolute custom root survives the guard, and
+      // surrounding whitespace must not demote an absolute root to the fallback.
+      expect(normalizeAgentSessionsDir('/custom/root', agentHomeDirName)).toBe('/custom/root')
+      expect(normalizeAgentSessionsDir(`  /agents/${agentHomeDirName}  `, agentHomeDirName)).toBe(
+        join('/agents', agentHomeDirName, 'agent', 'sessions')
+      )
+    }
+  })
+
   // Prime Agent's env var is its agent dir verbatim and the CLI writes to
   // `<agentDir>/sessions`, so every configured dir maps to that child.
   it('maps any Prime Agent agent dir to its sessions child', () => {
