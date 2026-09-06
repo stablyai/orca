@@ -13,6 +13,7 @@ import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-option
 import type { AgentSessionAttachParams } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults'
+import { resolveStructuredLaunchSeedOptions } from '../../shared/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { homedir } from 'node:os'
@@ -161,6 +162,10 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     }
     const settings = this.requireStore().getSettings()
     const launchEnv = resolveTuiAgentLaunchEnv(input.agent, settings.agentDefaultEnv)
+    const options = resolveStructuredLaunchSeedOptions(
+      settings.nativeChatSessionOptions,
+      input.agent
+    )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const workspacePath = (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
     return {
@@ -177,6 +182,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         variable: input.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
         path: await resolveAccountHomePath({ workspacePath, launchEnv, location })
       },
+      ...(options ? { options } : {}),
       runtimeKind: 'native'
     }
   }

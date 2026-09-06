@@ -43,7 +43,13 @@ const store = {
     activeRuntimeEnvironmentId: null,
     experimentalNativeChat: true,
     experimentalStructuredNativeChat: true,
-    openAgentTabsInChatByDefault: true
+    openAgentTabsInChatByDefault: true,
+    nativeChatSessionOptions: undefined as
+      | Record<
+          string,
+          { model?: string; valuesByModel?: Record<string, Record<string, string | boolean>> }
+        >
+      | undefined
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
   repos: [{ id: 'repo-1', connectionId: null as string | null, path: '/repo' }],
@@ -153,6 +159,7 @@ describe('structured chat adoption guard on the launch path', () => {
     mockToastError.mockReset()
     hostCapabilities = STRUCTURED_HOST_CAPABILITIES
     store.settings.openAgentTabsInChatByDefault = true
+    store.settings.nativeChatSessionOptions = undefined
   })
 
   it('takes the structured path when the chat-default view is selected', async () => {
@@ -173,6 +180,23 @@ describe('structured chat adoption guard on the launch path', () => {
     )
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockWaitForAgentReady).not.toHaveBeenCalled()
+  })
+
+  // Routing only: the host seeds the saved values, so preservation is pinned there.
+  it('takes the structured path when a Codex model and effort are already saved', async () => {
+    store.settings.nativeChatSessionOptions = {
+      codex: {
+        model: 'gpt-5.6-sol',
+        valuesByModel: { 'gpt-5.6-sol': { effort: 'medium' } }
+      }
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+
+    expect(result).toMatchObject({ tabId: null, focusAfterMenuClose: 'structured-session' })
+    expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledWith('wt-1', 'codex')
+    expect(mockCreateTab).not.toHaveBeenCalled()
   })
 
   it('takes the structured path for Claude, naming Claude as the create provider', async () => {

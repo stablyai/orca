@@ -35,6 +35,29 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
   )
 }
 
+/** After the async activation gate reports an empty workspace: re-seed a shell unless the caller
+ *  promised its own surface or the user has already moved on. */
+export function reseedGatedEmptyWorkspace(
+  workspaceKey: string,
+  callerProvidesSurface: boolean | undefined
+): void {
+  const state = useAppStore.getState()
+  if (callerProvidesSurface === true || state.activeWorktreeId !== workspaceKey) {
+    return
+  }
+  ensureWorktreeHasInitialTerminal(
+    state,
+    workspaceKey,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      reseedEmptiedWorkspace: true
+    }
+  )
+}
+
 export function ensureWorktreeHasInitialTerminal(
   store: WorktreeActivationStore,
   worktreeId: string,

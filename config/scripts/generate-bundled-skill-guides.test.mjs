@@ -22,6 +22,15 @@ import {
 const projectDir = path.resolve(import.meta.dirname, '..', '..')
 const temporaryDirectories = []
 const execFileAsync = promisify(execFile)
+const ORCHESTRATION_REFERENCES = [
+  'coordinator-loop.md',
+  'legacy-contract-migration.md',
+  'low-level-topology.md',
+  'messaging-and-gates.md',
+  'placement-and-remote.md',
+  'recovery-and-cleanup.md',
+  'worker-contract.md'
+]
 
 async function createFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-bundled-skill-guides-'))
@@ -181,7 +190,7 @@ describe('bundled skill guide generator', () => {
     }
   )
 
-  it('embeds canonical names, discovery descriptions, Markdown, and append-only aliases', async () => {
+  it('embeds compact guides, version-matched reference packages, and append-only aliases', async () => {
     expect(BUNDLED_SKILL_GUIDES.map((guide) => guide.name)).toEqual(
       [...CANONICAL_GUIDE_NAMES].sort((left, right) => left.localeCompare(right, 'en'))
     )
@@ -194,8 +203,46 @@ describe('bundled skill guide generator', () => {
       const frontmatter = parseFrontmatter(source, `${guide.name}.md`)
       expect(guide.description).toBe(frontmatter.description)
       expect(guide.markdown).toBe(source)
-      expect(guide.fullMarkdown).toBe(source)
       expect(guide.aliases).toEqual(GUIDE_ALIASES[guide.name])
+      if (guide.name !== 'orchestration') {
+        expect(guide.fullMarkdown).toBe(source)
+        expect(guide.references).toEqual([])
+        continue
+      }
+      // Why: the per-reference selector serves these verbatim, so an entry that
+      // drifts from the file on disk ships a stale reference to every agent.
+      expect(guide.references.map((reference) => reference.name)).toEqual(
+        ORCHESTRATION_REFERENCES.map((reference) => reference.replace(/\.md$/u, ''))
+      )
+      for (const reference of guide.references) {
+        expect(reference.markdown).toBe(
+          normalizeMarkdown(
+            await readFile(
+              path.join(
+                projectDir,
+                'skill-guides',
+                'orchestration',
+                'references',
+                `${reference.name}.md`
+              ),
+              'utf8'
+            )
+          )
+        )
+      }
+      expect(guide.fullMarkdown).not.toBe(guide.markdown)
+      expect(guide.fullMarkdown.length).toBeGreaterThan(guide.markdown.length)
+      expect(guide.fullMarkdown.startsWith(source.trimEnd())).toBe(true)
+      for (const reference of ORCHESTRATION_REFERENCES) {
+        const marker = `<!-- bundled-reference: references/${reference} -->`
+        expect(guide.fullMarkdown.split(marker)).toHaveLength(2)
+        expect(guide.fullMarkdown).toContain(
+          await readFile(
+            path.join(projectDir, 'skill-guides', 'orchestration', 'references', reference),
+            'utf8'
+          )
+        )
+      }
     }
   })
 
@@ -236,6 +283,17 @@ describe('bundled skill guide generator', () => {
       const stubPath = path.join(root, 'skill-stubs', `${name}.md`)
       const stubSource = await readFile(stubPath, 'utf8')
       await writeFile(stubPath, stubSource.replaceAll('\n', '\r\n'))
+    }
+    for (const reference of ORCHESTRATION_REFERENCES) {
+      const referencePath = path.join(
+        root,
+        'skill-guides',
+        'orchestration',
+        'references',
+        reference
+      )
+      const source = await readFile(referencePath, 'utf8')
+      await writeFile(referencePath, source.replaceAll('\n', '\r\n'))
     }
 
     const actual = await buildArtifacts(root)
@@ -302,5 +360,16 @@ describe('bundled skill guide generator', () => {
         { name: 'second', aliases: [] }
       ])
     ).toThrow('collides with canonical name')
+  })
+
+  it('rejects non-Markdown and empty bundled references', async () => {
+    const root = await createFixture()
+    const referenceRoot = path.join(root, 'skill-guides', 'orchestration', 'references')
+
+    await writeFile(path.join(referenceRoot, 'notes.txt'), 'not a reference\n')
+    await expect(buildArtifacts(root)).rejects.toThrow('Guide references must be Markdown files')
+    await rm(path.join(referenceRoot, 'notes.txt'))
+    await writeFile(path.join(referenceRoot, 'empty.md'), '\n')
+    await expect(buildArtifacts(root)).rejects.toThrow('Guide reference is empty')
   })
 })

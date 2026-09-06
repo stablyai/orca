@@ -76,7 +76,7 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
         if (pty) {
           pty.connected = true
           pty.disconnectedAt = null
-          this.forgetPtyLivenessVerdict(ptyId)
+          this.markPtyLivenessLive(ptyId)
           this.refreshPtyForegroundAgent(ptyId)
         }
       } else if (pty && !this.leafExistsForPty(ptyId)) {

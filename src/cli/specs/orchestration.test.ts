@@ -15,3 +15,17 @@ describe('orchestration send command spec', () => {
     )
   })
 })
+
+describe('orchestration check command spec', () => {
+  it('documents --types as a wake condition rather than a batch filter', () => {
+    const checkSpec = ORCHESTRATION_COMMAND_SPECS.find(
+      (spec) => spec.path.join(' ') === 'orchestration check'
+    )
+
+    expect(checkSpec?.notes).toEqual(
+      expect.arrayContaining([
+        '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Only --peek and --all filter their rows.'
+      ])
+    )
+  })
+})

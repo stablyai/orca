@@ -167,11 +167,11 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
     }
   }
 
+  // Resolve through the retained handle record, not the liveness-gated agent-status lookup: that
+  // one throws `terminal_handle_stale` once the process is gone, which is exactly when the earned
+  // death certificate has to stay readable.
   getTerminalLivenessVerdict(handle: string): PtyLivenessVerdict | null {
-    try {
-      return this.getPtyLivenessVerdict(this.getTerminalAgentStatusPtyId(handle))
-    } catch {
-      return null
-    }
+    const record = this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle)
+    return record?.ptyId ? this.getPtyLivenessVerdict(record.ptyId) : null
   }
 }
