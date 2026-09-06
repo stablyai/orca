@@ -392,6 +392,26 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending.map((pending) => pending.text)).toEqual(['ping'])
   })
 
+  it('gives a caption-less photo its own ordinal after a marker-only caption', async () => {
+    await mount('a')
+    // Why: '[Image #1]' normalizes to empty, so it takes an image ordinal; counting it by a
+    // raw trim instead would hand the next photo ordinal 1 again and cross-match the echoes.
+    const first = state?.captureSendOrigin('[Image #1]')
+    act(() => {
+      if (first) {
+        state?.acceptSend(first, '[Image #1]', ['file:///a.jpg'])
+      }
+    })
+    const second = state?.captureSendOrigin('')
+    act(() => {
+      if (second) {
+        state?.acceptSend(second, '', ['file:///b.jpg'])
+      }
+    })
+
+    expect(state?.pending.map((pending) => pending.expectedOccurrence)).toEqual([1, 2])
+  })
+
   it('keeps an image-only echo through an agent reply, clearing only when the user turn lands', async () => {
     await mount('a')
     await act(async () =>

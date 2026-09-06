@@ -14,14 +14,18 @@ export type MobileNativeChatPendingMessage = {
   baselineResolved: boolean
 }
 
-export type MobileNativeChatSendOrigin = {
-  draftKey: string
-  draftEditGeneration: number
-  pendingKey: string | null
+/** The origin fields an echo's ordinal derives from; every send/delivery origin supplies these. */
+export type MobileNativeChatPendingEchoOrigin = {
   normalizedText: string
   baselineOccurrences: number
   baselineTailMessageId: string | null
   baselineResolved: boolean
+}
+
+export type MobileNativeChatSendOrigin = MobileNativeChatPendingEchoOrigin & {
+  draftKey: string
+  draftEditGeneration: number
+  pendingKey: string | null
 }
 
 type PendingByKey = Record<string, MobileNativeChatPendingMessage[]>
@@ -49,14 +53,12 @@ export function combineMobileNativeChatPending(
 }
 
 export function appendMobileNativeChatPending(
-  previous: PendingByKey,
-  key: string,
+  current: readonly MobileNativeChatPendingMessage[],
   id: string,
-  origin: MobileNativeChatSendOrigin,
+  origin: MobileNativeChatPendingEchoOrigin,
   text: string,
   images?: string[]
-): PendingByKey {
-  const current = previous[key] ?? []
+): MobileNativeChatPendingMessage[] {
   // Count outstanding repeats with the same normalized key.
   const earlierOutstanding = current.filter(
     (pending) =>
@@ -68,23 +70,20 @@ export function appendMobileNativeChatPending(
     current.filter(
       (pending) => normalizeReconcileText(pending.text) === '' && pending.images?.length
     ).length + 1
-  return {
-    ...previous,
-    [key]: [
-      ...current,
-      {
-        id,
-        text,
-        expectedOccurrence:
-          origin.normalizedText === ''
-            ? expectedImageEchoOrdinal
-            : origin.baselineOccurrences + earlierOutstanding + 1,
-        baselineTailMessageId: origin.baselineTailMessageId,
-        baselineResolved: origin.baselineResolved,
-        ...(images?.length ? { images } : {})
-      }
-    ]
-  }
+  return [
+    ...current,
+    {
+      id,
+      text,
+      expectedOccurrence:
+        origin.normalizedText === ''
+          ? expectedImageEchoOrdinal
+          : origin.baselineOccurrences + earlierOutstanding + 1,
+      baselineTailMessageId: origin.baselineTailMessageId,
+      baselineResolved: origin.baselineResolved,
+      ...(images?.length ? { images } : {})
+    }
+  ]
 }
 
 export function mergeWaitingSessionPending(
