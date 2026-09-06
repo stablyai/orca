@@ -103,7 +103,6 @@ export class OrcaRuntimeWithRuntimeId {
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
-    // Renderer snapshots do not carry the host's durable close acknowledgements.
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const snapshotVersion = existing
       ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
