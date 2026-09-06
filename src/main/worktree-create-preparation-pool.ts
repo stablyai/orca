@@ -11,7 +11,7 @@ import { prepareWorktreeCreateCheckout } from './git/worktree-create-preparation
 import { toHostFilesystemPath } from './host-tree-removal'
 import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
 import {
-  cleanupStalePreparations,
+  startStalePreparationCleanup,
   hasPendingStalePreparationCleanup,
   resetStalePreparationCleanupForTests
 } from './worktree-create-preparation-stale-cleanup'
@@ -193,7 +193,11 @@ export function startPreparation({
     controller,
     checkoutStarted: false,
     ready: (async () => {
-      await cleanupStalePreparations(preparationHostKey(repoPathKey, wslDistro), repoPath, options)
+      await startStalePreparationCleanup(
+        preparationHostKey(repoPathKey, wslDistro),
+        repoPath,
+        options
+      )
       signal.throwIfAborted()
       await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
       signal.throwIfAborted()
@@ -218,7 +222,7 @@ export function startPreparation({
 export async function _resetPreparationPoolForTests(): Promise<void> {
   const entries = [...preparations.values()]
   preparations.clear()
-  resetStalePreparationCleanupForTests()
+  await resetStalePreparationCleanupForTests()
   await Promise.all(
     entries.map(async (entry) => {
       clearTimeout(entry.expiration)
