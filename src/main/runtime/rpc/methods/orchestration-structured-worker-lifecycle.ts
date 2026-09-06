@@ -9,7 +9,6 @@
 
 import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { OrchestrationWorkerReadTranscriptResult } from '../../../../shared/orchestration-worker-output'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -35,10 +34,10 @@ import {
   structuredWorkerTerminalState,
   type StructuredWorkerObservation
 } from '../../structured-worker-authority'
-import { retireSettledStructuredWorkerTab } from '../../structured-agent-session-tab-retirement'
 import type { StructuredWorkerIdentity } from '../../structured-worker-identity'
 import type { WorkerTerminalReleaseState } from '../../orchestration/worker-terminal-ownership'
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
+import { closeStructuredAgentSessionChild } from '../../structured-agent-session-close'
 
 export { observeStructuredWorker, type StructuredWorkerObservation }
 
@@ -75,43 +74,12 @@ export async function stopStructuredWorker(
     'forgetStructuredSessionMail' | 'retireStructuredAgentSessionTabFromSnapshot'
   >
 ): Promise<StructuredWorkerStopOutcome> {
-  const host = getStructuredAgentSessionHost()
-  if (!host) {
-    // Nothing was reached, so nothing was acted on; the receipt must not claim a close.
-    return {
-      stopped: false,
-      closeAttempted: false,
-      reason: 'The structured agent-session host is not installed; no session was closed.'
-    }
-  }
-  // Set only once the close is actually issued: `setSessionTabVisibility` throwing first leaves a
-  // running child, and a receipt that still said `closed_agent_terminal` for it would be the
-  // close-that-never-happened this flag exists to rule out.
-  let closeAttempted = false
-  try {
-    await host.setSessionTabVisibility?.(identity.sessionId, false)
-    closeAttempted = true
-    await host.close(identity.sessionId)
-  } catch (error) {
-    return {
-      stopped: false,
-      closeAttempted,
-      reason: error instanceof Error ? error.message : String(error)
-    }
-  }
-  releaseStructuredWorkerSession(dispatchId, runtime)
-  const after = observeStructuredWorker(identity)
-  if (after.status === 'live') {
-    return {
-      stopped: false,
-      closeAttempted: true,
-      reason: 'The structured session is still attached after close.'
-    }
-  }
-  // Only past the proof, and structurally unable to throw: the worker's chat tab is retired from
-  // the live snapshot, which `setSessionTabVisibility(false)` above does not do.
-  retireSettledStructuredWorkerTab(identity.sessionId, runtime)
-  return { stopped: true, closeAttempted: true }
+  return closeStructuredAgentSessionChild(identity.sessionId, {
+    ...(runtime ? { runtime } : {}),
+    // Between the close and the proof, never after: an unsettled close returns early, and a
+    // surviving hold keeps the provider child un-evictable for the life of the app.
+    afterClose: () => releaseStructuredWorkerSession(dispatchId, runtime)
+  })
 }
 
 /** The structured half of `worker-read`, or null when a PTY worker owns the dispatch. */

@@ -7,8 +7,9 @@
  * everything below it is different — the nudge is a session turn, the idle edge is the journal,
  * and only an `accepted` dispatch may consume mail.
  *
- * Coordinators are deliberately out of scope: `run:` mail routes through a coordinator handle, and
- * a coordinator blocks in `check --wait`, where a waiter preempts pointer delivery anyway.
+ * Coordinators are in scope here, unlike the PTY lane's reasoning: a PTY coordinator blocks in
+ * `check --wait`, where a waiter preempts pointer delivery, but a structured coordinator is a chat
+ * session whose turn ends — so nothing else would ever wake it for its own `run:` mail.
  */
 
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
@@ -159,11 +160,18 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (!db || this.inFlight.has(mailboxHandle)) {
       return
     }
-    // No `hasOutstandingRunDelivery` gate, unlike the PTY lane: there it guards a COORDINATOR's
-    // own `run:` mailbox against re-notifying a batch already handed to that coordinator. This
-    // lane never resolves a `run:` mailbox, and a delivery row exists only for a `run:` address,
-    // so the run's outstanding delivery belongs to the coordinator that is replying — gating on
-    // it suppresses exactly the nudges a coordinator sends its workers.
+    // The `hasOutstandingRunDelivery` gate applies to a `run:` mailbox and ONLY to one, exactly as
+    // in the PTY lane: it guards a coordinator's own mailbox against re-notifying a batch already
+    // handed to that coordinator. A delivery row exists only for a `run:` address, so for a
+    // `dispatch:` or bare-handle mailbox the run's outstanding delivery belongs to the coordinator
+    // that is replying — gating there would suppress exactly the nudges a coordinator sends its
+    // workers.
+    if (
+      mailboxHandle.startsWith('run:') &&
+      db.hasOutstandingRunDelivery?.(mailboxHandle.slice('run:'.length))
+    ) {
+      return
+    }
     const unread = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,

@@ -57,6 +57,15 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    // Read-only identity probe. Deliberately NOT `terminal.show`: this one resolves a structured
+    // worker too, and must therefore never hand back anything that looks writable.
+    name: 'terminal.resolveIdentity',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      identity: runtime.resolveTerminalIdentity(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.read',
     params: TerminalRead,
     handler: async (params, { runtime }) => ({

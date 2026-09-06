@@ -35,7 +35,38 @@ export async function resolveOrchestrationTerminalHandle(
   return await getTerminalHandle(flags, cwd, client)
 }
 
+/**
+ * Whether the handle this process was born with still names a live identity.
+ *
+ * `terminal.resolveIdentity`, never `terminal.show`: `show` is a PTY verb, so it missed for a
+ * structured worker and reported `terminal_handle_stale` for a handle that was perfectly live —
+ * which then failed every coordinator verb, because the pane remint below needs an `ORCA_PANE_KEY`
+ * a structured child deliberately does not carry.
+ */
 async function isLiveTerminalHandle(handle: string, client: RuntimeClient): Promise<boolean> {
+  try {
+    const response = await client.call<{ identity?: { live?: boolean } }>(
+      'terminal.resolveIdentity',
+      { terminal: handle }
+    )
+    const live = response.result?.identity?.live
+    // An unrecognised shape is an older host answering something else, not a dead handle.
+    return typeof live === 'boolean' ? live : await showResolvesTerminalHandle(handle, client)
+  } catch (err) {
+    if (isStaleTerminalIdentityError(err)) {
+      return false
+    }
+    if (getClientErrorCode(err) === 'method_not_found') {
+      // Clients and remote hosts update independently, so a host that predates the identity probe
+      // is the normal mixed-version state. Fall back to what it does have — which is correct for
+      // that host, because a host without the probe also has no structured workers to miss.
+      return await showResolvesTerminalHandle(handle, client)
+    }
+    throw err
+  }
+}
+
+async function showResolvesTerminalHandle(handle: string, client: RuntimeClient): Promise<boolean> {
   try {
     await client.call('terminal.show', { terminal: handle })
     return true

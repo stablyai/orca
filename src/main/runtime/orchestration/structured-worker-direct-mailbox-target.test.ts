@@ -55,15 +55,16 @@ function registerWorker(): string {
   return handle
 }
 
-function probe(activeDispatch: { id: string } | undefined) {
+function probe(activeDispatch: { id: string } | undefined, run?: { coordinator_handle: string }) {
   const findActiveDispatchForAssignee = vi.fn(() => activeDispatch)
+  const getRun = vi.fn(() => run)
   const instance = Object.assign(Object.create(MailboxTargetProbe.prototype), {
-    _orchestrationDb: { findActiveDispatchForAssignee },
+    _orchestrationDb: { findActiveDispatchForAssignee, getRun },
     getLiveLeafForHandle: () => {
       throw new Error('no leaf backs a native-born structured worker')
     }
   }) as MailboxTargetProbe
-  return { instance, findActiveDispatchForAssignee }
+  return { instance, findActiveDispatchForAssignee, getRun }
 }
 
 describe('the mailbox target for direct peer mail to a structured worker', () => {
@@ -109,11 +110,43 @@ describe('the mailbox target for direct peer mail to a structured worker', () =>
     expect(probe({ id: 'd1' }).instance.probeResolveTarget(handle)).toBeNull()
   })
 
-  it('claims neither a PTY handle nor a coordinator mailbox', () => {
+  it('claims a PTY handle for neither lane', () => {
     installRecord({ runtimeKind: 'native', claimStatus: 'live' })
     const { instance, findActiveDispatchForAssignee } = probe({ id: 'd1' })
     expect(instance.probeResolveTarget('term_abc')).toBeNull()
-    expect(instance.probeResolveTarget('run:run_1')).toBeNull()
     expect(findActiveDispatchForAssignee).not.toHaveBeenCalled()
+  })
+})
+
+describe('the mailbox target for a Run whose coordinator is structured', () => {
+  beforeEach(() => {
+    structuredWorkerIdentities.clear()
+    hostRef.current = null
+  })
+
+  it('owns the run mailbox, which neither lane used to claim', () => {
+    // The defect this pins: the PTY lane declines because the owner is structured, and this lane
+    // used to decline anything that was not `dispatch:`. Each half believed the other owned it, so
+    // a structured coordinator was never nudged for its own Run mail and nothing logged. A PTY
+    // coordinator is covered by blocking in `check --wait`; a chat session's turn just ends.
+    const handle = registerWorker()
+    installRecord({ runtimeKind: 'native', claimStatus: 'live' })
+    expect(
+      probe(undefined, { coordinator_handle: handle }).instance.probeResolveTarget('run:run_1')
+    ).toEqual({ sessionId: SESSION_ID, dispatchId: null })
+  })
+
+  it('leaves the run mailbox of a PTY coordinator to the PTY lane', () => {
+    installRecord({ runtimeKind: 'native', claimStatus: 'live' })
+    expect(
+      probe(undefined, { coordinator_handle: 'term_coord' }).instance.probeResolveTarget(
+        'run:run_1'
+      )
+    ).toBeNull()
+  })
+
+  it('claims nothing for a run that does not resolve', () => {
+    installRecord({ runtimeKind: 'native', claimStatus: 'live' })
+    expect(probe(undefined).instance.probeResolveTarget('run:run_1')).toBeNull()
   })
 })

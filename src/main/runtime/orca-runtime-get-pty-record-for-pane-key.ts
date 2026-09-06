@@ -8,6 +8,10 @@ import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { isSettledNativeOwner } from './orchestration/structured-session-pointer-delivery'
 import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
+import {
+  resolveTerminalIdentityFromProbes,
+  type RuntimeTerminalIdentity
+} from './terminal-identity-probe'
 
 export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
@@ -144,6 +148,23 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     }
   }
 
+  /**
+   * The identity seam: whether this handle still names a live agent identity, in either lane.
+   *
+   * Read-only by construction — a handle and a boolean — so it can serve the CLI's sender
+   * validation without `terminal.show`'s writable-looking pane payload.
+   */
+  resolveTerminalIdentity(handle: string): RuntimeTerminalIdentity {
+    return resolveTerminalIdentityFromProbes(handle, {
+      isLiveStructuredWorker: () =>
+        Boolean(resolveStructuredWorkerAuthority(handle, this._orchestrationDb)),
+      hasLivePty: () => Boolean(this.getLivePtyForHandle(handle)),
+      assertLiveLeaf: () => {
+        this.getLiveLeafForHandle(handle)
+      }
+    })
+  }
+
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     this.orchestrationMailboxNotifications.deliverForHandle(handle, reservedTypes)
   }
@@ -161,12 +182,16 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   /**
    * The session a mailbox must be nudged through, or null when a live PTY can take the bytes.
    *
-   * Two mailbox shapes reach a structured worker: its `dispatch:` address, and its own bearer
-   * handle, which is how agents mail each other outside a dispatch. `run:` mail is coordinator
-   * mail and stays out of scope: a coordinator blocks in `check --wait`, where a waiter preempts
-   * pointer delivery anyway.
+   * All THREE address forms a structured session can own resolve here — its `dispatch:` address,
+   * its `run:` mailbox when it coordinates, and its own bearer handle for peer mail outside a
+   * dispatch. `run:` was the one that fell in a hole: the PTY lane declines because the owner is
+   * structured, and this lane used to decline anything that was not `dispatch:`, so each half
+   * believed the other owned it and a structured coordinator was never nudged.
    */
   protected resolveStructuredMailboxTarget(mailboxHandle: string): StructuredPointerTarget | null {
+    if (mailboxHandle.startsWith('run:')) {
+      return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
+    }
     if (!mailboxHandle.startsWith('dispatch:')) {
       return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
     }
@@ -180,6 +205,25 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       return { sessionId: identity.sessionId, dispatchId }
     }
     return this.resolveAdoptedStructuredMailboxTarget(assignee, dispatchId)
+  }
+
+  /**
+   * A Run's own mailbox, when the coordinator holding it is a structured session.
+   *
+   * A structured coordinator does NOT block in `check --wait` the way a PTY one does — it is a
+   * chat session, and its turn ends — so the waiter that used to preempt pointer delivery is not
+   * there to cover for the missing nudge. Session-scoped: a coordinator's run mailbox has no
+   * dispatch, and needs none, since the ledger bucket is all a dispatch id ever supplied.
+   */
+  protected resolveStructuredCoordinatorMailboxTarget(
+    runId: string
+  ): StructuredPointerTarget | null {
+    const coordinator = this._orchestrationDb?.getRun?.(runId)?.coordinator_handle
+    if (!coordinator) {
+      return null
+    }
+    const identity = resolveStructuredWorkerAuthority(coordinator, this._orchestrationDb)?.identity
+    return identity ? { sessionId: identity.sessionId, dispatchId: null } : null
   }
 
   /**
