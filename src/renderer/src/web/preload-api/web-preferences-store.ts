@@ -18,6 +18,11 @@ import {
 } from '../../../../shared/pr-bot-author-overrides'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
+import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/tui-agent-launch-defaults'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { readStoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import { mergeSettings, mergeWebUIState } from './web-preference-normalization'
@@ -208,6 +213,21 @@ export async function syncRuntimeBackedSettings(
     runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
       updates.prBotAuthorOverrides
     )
+  }
+  if ('agentDefaultArgs' in updates) {
+    runtimeUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+  }
+  if ('agentDefaultEnv' in updates) {
+    runtimeUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+  }
+  if ('defaultTuiAgent' in updates) {
+    runtimeUpdates.defaultTuiAgent = updates.defaultTuiAgent
+  }
+  if ('disabledTuiAgents' in updates) {
+    runtimeUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+  }
+  if (typeof updates.agentStatusHooksEnabled === 'boolean') {
+    runtimeUpdates.agentStatusHooksEnabled = updates.agentStatusHooksEnabled
   }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
