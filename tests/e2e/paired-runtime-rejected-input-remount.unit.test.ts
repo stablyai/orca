@@ -12,6 +12,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { captureTerminalInputArrivalTestTarget } from '../../src/main/runtime/rpc/terminal-input-arrival-test-target'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   TerminalStreamOpcode,
@@ -69,6 +70,7 @@ function startHost(): {
   // The host's whole reason to emit the opcode: the PTY refused the bytes.
   const sendTerminal = vi.fn().mockResolvedValue({ accepted: false })
   const runtime = {
+    captureTerminalInputArrivalTarget: captureTerminalInputArrivalTestTarget,
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
