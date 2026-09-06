@@ -1,3 +1,4 @@
+import { readWindowsProcessTableFresh } from '../../../src/main/windows/windows-process-table'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
@@ -53,10 +54,30 @@ export async function launchGoldenStubAgentFromNewTab(
   page: Page,
   menuItemName: RegExp = /^Codex(?:\s|$)/i
 ): Promise<void> {
+  let previous = ''
+  let reading = false
+  const sample = async (): Promise<void> => {
+    if (process.platform !== 'win32' || reading) return
+    reading = true
+    try {
+      const rows = await readWindowsProcessTableFresh()
+      const ids = new Set(rows.filter((row) => /^(?:sh|bash)\.exe$/i.test(row.name) || /golden-stub/.test(row.command)).map((row) => row.pid))
+      for (let depth = 0; depth < 5; depth++) {
+        for (const row of rows) if (ids.has(row.pid)) ids.add(row.ppid)
+      }
+      const state = JSON.stringify(rows.filter((row) => ids.has(row.pid)))
+      if (state !== previous) console.error('LAUNCH_PROCESS_TREE', state)
+      previous = state
+    } finally { reading = false }
+  }
+  const timer = setInterval(() => { void sample() }, 100)
+  try {
+  await sample()
   await page.getByRole('button', { name: 'New tab' }).click({ force: true })
   const launchOption = page.getByRole('menuitem', { name: menuItemName }).first()
   await expect(launchOption).toBeVisible({ timeout: 15_000 })
   await launchOption.click({ force: true })
   await focusActiveTerminalInput(page)
   await waitForTerminalOutput(page, GOLDEN_STUB_READY_MARKER, 20_000)
+  } finally { clearInterval(timer); await sample() }
 }
