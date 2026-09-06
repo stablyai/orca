@@ -81,6 +81,8 @@ export type WorktreeMeta = {
   orcaCreationWorkspaceLayout?: OrcaWorkspaceLayout
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
+  /** Collections this worktree belongs to (many-to-many). Absent = none; never persisted as []. */
+  collectionIds?: string[]
   diffComments?: DiffComment[]
   /** Path-derived worktree ids this worktree had before its folder was renamed
    *  on disk (the id embeds the path). Lets the daemon's session GC and registry

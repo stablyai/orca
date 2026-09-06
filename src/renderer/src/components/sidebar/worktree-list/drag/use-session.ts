@@ -3,6 +3,7 @@ import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../host-section-rows'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
+import { isCollectionSectionKey } from '../../worktree-list-collections'
 import { WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP } from '../viewport/virtual-rows'
 import { getWorkspaceStatusGroupKey } from '../../workspace-status'
 import { expandDraggedWorktreeIdsForVisibleLineage } from '../../worktree-manual-order'
@@ -54,9 +55,12 @@ export function useWorktreeDragSession(args: {
     () =>
       rows
         .filter((row): row is WorktreeItemRow => row.type === 'item')
+        // Why: collection rows duplicate natural rows and never reorder, so
+        // including them would repeat ids in the expanded lineage drag set.
         .filter(
           (row) =>
-            row.sectionKey !== PINNED_GROUP_KEY || !naturalDragWorktreeIds.has(row.worktree.id)
+            !isCollectionSectionKey(row.sectionKey) &&
+            (row.sectionKey !== PINNED_GROUP_KEY || !naturalDragWorktreeIds.has(row.worktree.id))
         )
         .map((row) => ({ worktreeId: row.worktree.id, depth: row.depth })),
     [naturalDragWorktreeIds, rows]

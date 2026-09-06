@@ -3,6 +3,7 @@ import type { AppState } from '@/store/types'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { Collection } from '../../../../../../shared/collection-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -49,6 +50,9 @@ export type VirtualizedWorktreeViewportProps = {
   handleRemoveProjectFromGroup: (repo: Repo) => void
   handleRenameProjectGroup: (groupId: string, currentName: string, hostId?: ExecutionHostId) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
+  handleRenameCollection: (collectionId: string, currentName: string) => void
+  handleDeleteCollection: (collectionId: string, name: string) => void
+  handleAddWorktreesToCollection: (collection: Collection) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
@@ -85,6 +89,7 @@ export type VirtualizedWorktreeViewportProps = {
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void
   onPinWorktree: (worktreeId: string) => void
   onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onDropWorktreesOnCollection: (worktreeIds: readonly string[], collectionId: string) => void
   onDropWorktreesOnWorkspaceBoard: (args: WorktreeStatusDropAtIndexArgs) => void
   workspaceBoardOpen: boolean
   onWorkspaceBoardDragPreviewStart: () => void

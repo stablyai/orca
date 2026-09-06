@@ -5292,6 +5292,7 @@
           "5c9c7c16aa": "Add a project to create workspaces",
           "ca6f729da2": "New workspace ({{value0}})",
           "a30e34eb5c": "Close workspace board",
+          "newCollection": "Add Collection",
           "views": "Sidebar view",
           "moreActions": "More workspace actions"
         },
@@ -5595,6 +5596,12 @@
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
           "deleteWorktree": "Delete Worktree",
+          "addToCollection": "Add to Collection",
+          "newCollection": "New Collection…",
+          "newCollectionDescription": "Create a collection and add this worktree to it.",
+          "newCollectionTitle": "New Collection",
+          "removeFromCollection": "Remove from Collection",
+          "moveToCollection": "Move to Collection",
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
           "deleteWithDescendants": "Delete with Descendants…"
@@ -5643,7 +5650,14 @@
           "groupRenameFailedDesc": "Orca could not confirm the new name with the group's host. Recheck the group after reconnecting.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "collectionActionsLabel": "Collection actions for {{value0}}",
+          "collectionDeleteFailed": "Failed to delete collection",
+          "collectionDeleteItem": "Delete collection",
+          "collectionRenameDescription": "Update the collection name shown in the sidebar.",
+          "collectionRenameItem": "Rename collection",
+          "collectionRenameTitle": "Rename Collection",
+          "collectionAddWorktreesItem": "Add worktrees…"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -6164,6 +6178,31 @@
           "3b7ea51793": "Clear search",
           "7f1c2e94a5": "Search text is too long — the board is unfiltered",
           "9a4d0f6b21": "Too long"
+        },
+        "CollectionDeleteDialog": {
+          "cancel": "Cancel",
+          "delete": "Delete",
+          "description": "The collection disappears from the sidebar. Worktrees are not affected and stay in their projects.",
+          "title": "Delete “{{value0}}”?"
+        },
+        "AddCollectionDialog": {
+          "title": "Add Collection",
+          "addTitle": "Add worktrees to “{{value0}}”",
+          "description": "Pick the projects this workstream spans — start a fresh worktree in each, or pick existing ones.",
+          "addDescription": "Start new worktrees or pick existing ones.",
+          "namePlaceholder": "Collection name",
+          "primaryBadge": "primary",
+          "cancel": "Cancel",
+          "add": "Add",
+          "create": "Create",
+          "newWorktree": "New worktree",
+          "noProjects": "No projects yet — add one first.",
+          "creating": "Creating worktrees…",
+          "createWorktreeFailed": "Could not create a worktree in {{value0}}",
+          "addWorktreeFailed": "Could not add {{value0}} to the collection",
+          "createFailed": "Could not create the collection",
+          "nameLabel": "Name",
+          "projectsLabel": "Projects"
         },
         "WorktreeIssueLinkField": {
           "25852bfc59": "Linear",

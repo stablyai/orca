@@ -28,6 +28,7 @@ import { RuntimeMobileDictationController } from './runtime-mobile-dictation-con
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
 import type { Store } from '../persistence'
+import { RuntimeCollectionController } from './runtime-collection-controller'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
@@ -211,6 +212,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       (this as RuntimeCommandSurfaceHost<this>).cloneRepo(url, destination, hostId),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
     invalidateWorktreeScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
+    notifyReposChanged: () => this.notifyReposChanged()
+  })
+
+  protected readonly collections = new RuntimeCollectionController({
+    getStore: () => this.store,
     notifyReposChanged: () => this.notifyReposChanged()
   })
 

@@ -48,4 +48,5 @@ export type WorktreeDropCommitContext = {
     dropIndex: number
   }) => void
   onPinWorktrees: (worktreeIds: readonly string[]) => void
+  onDropWorktreesOnCollection: (worktreeIds: readonly string[], collectionId: string) => void
 }

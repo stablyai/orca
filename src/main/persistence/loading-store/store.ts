@@ -19,6 +19,7 @@ import { scheduleSave } from './write-scheduling'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import type { ProjectCollectionOperations } from './project-collection-operations'
+import type { CollectionOperations } from './collection-operations'
 import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
 import type { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
 import type { SparsePresetPersistence } from './sparse-preset-persistence'
@@ -110,6 +111,7 @@ export interface Store
     WriteSchedulingOperations,
     PrimaryStateWriteOperations,
     ProjectCollectionOperations,
+    CollectionOperations,
     RepoLifecycleOperations,
     MobileTabSelectionPersistence,
     SparsePresetPersistence,

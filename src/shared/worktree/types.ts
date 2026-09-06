@@ -137,6 +137,8 @@ export type Worktree = {
   /** Path-derived worktree ids this worktree had before folder renames. */
   priorWorktreeIds?: string[]
   workspaceStatus?: WorkspaceStatus
+  /** Collections this worktree belongs to. Mirrors WorktreeMeta.collectionIds; absent = none. */
+  collectionIds?: string[]
   diffComments?: DiffComment[]
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance

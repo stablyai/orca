@@ -48,7 +48,12 @@ import type { PetApi } from './api/pet-api'
 import type { PluginsApi } from './api/plugin-host-api'
 import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
-import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/repository-api'
+import type {
+  CollectionsApi,
+  ProjectGroupsApi,
+  ProjectsApi,
+  RepositoryApi
+} from './api/repository-api'
 import type { RuntimeApi } from './api/runtime-api'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
@@ -74,6 +79,7 @@ export type PreloadApi = {
   repos: RepositoryApi
   projects: ProjectsApi
   projectGroups: ProjectGroupsApi
+  collections: CollectionsApi
   folderWorkspaces: FolderWorkspacesApi
   sparsePresets: SparsePresetsApi
   worktrees: WorktreeApi

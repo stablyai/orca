@@ -26,6 +26,7 @@ import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from './worktree-list/drag
 import { useAgentSendTargetWorktreeId } from './worktree-list/listing/use-agent-send-target'
 import { useEffectiveCollapsedGroups } from './worktree-list/listing/use-collapsed-groups'
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
+import { useCollectionDialogs } from './worktree-list/rows/use-collection-dialogs'
 import { useSidebarExternalWorktreeCards } from './worktree-list/listing/use-external-worktree-cards'
 import { useSidebarHostVisibleScope } from './worktree-list/listing/use-host-visible-scope'
 import { useSidebarRevealRequests } from './worktree-list/navigation/use-reveal-requests'
@@ -185,6 +186,7 @@ const WorktreeList = React.memo(function WorktreeList({
     sortBy
   })
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
+  const collectionDialogs = useCollectionDialogs({ worktreeMap })
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Why: re-rendering the virtualized sidebar on the pointer path adds visible latency; mutate the row directly and let store state reconcile after.
@@ -262,6 +264,7 @@ const WorktreeList = React.memo(function WorktreeList({
     <>
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
+        collectionDialogs={collectionDialogs}
         repos={repos}
         settings={settings}
         suppressExternalWorktreeInboxRepoId={
@@ -311,6 +314,10 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
+        handleRenameCollection={projectGroupDialogs.handleRenameCollection}
+        handleDeleteCollection={collectionDialogs.handleDeleteCollection}
+        handleAddWorktreesToCollection={collectionDialogs.handleAddWorktreesToCollection}
+        onDropWorktreesOnCollection={collectionDialogs.handleDropWorktreesOnCollection}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}

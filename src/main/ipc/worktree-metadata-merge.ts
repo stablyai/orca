@@ -102,6 +102,7 @@ export function mergeWorktree(
     ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
     ...(meta?.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
+    ...(meta?.collectionIds !== undefined ? { collectionIds: meta.collectionIds } : {}),
     // Why: diff comments are persisted on WorktreeMeta and forwarded verbatim
     // so the renderer store mirrors on-disk state.
     diffComments: meta?.diffComments,

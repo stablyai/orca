@@ -1,5 +1,6 @@
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from '../grouping/group-keys'
 import { getNaturalWorktreeIds } from '../../natural-worktree-ids'
+import { isCollectionSectionKey } from '../../worktree-list-collections'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { WorktreeDragGroup } from '../../worktree-manual-order'
 
@@ -21,6 +22,11 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
       row.type === 'pending-creation' ||
       row.type === 'folder-workspace'
     ) {
+      continue
+    }
+    // Why: collection rows are duplicates — reordering them would commit global
+    // manualOrder writes against the wrong neighbors.
+    if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {
@@ -50,6 +56,10 @@ export function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
       continue
     }
     if (row.type !== 'item') {
+      continue
+    }
+    // Why: no groupKeyByRowKey entry means collection rows never arm reorder drag.
+    if (isCollectionSectionKey(row.sectionKey)) {
       continue
     }
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {

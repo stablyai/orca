@@ -98,6 +98,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     installRuntimeRepositoryCommandSurface(runtime, {
       projectHostSetups: this.projectHostSetups,
       projectGroups: this.projectGroups,
+      collections: this.collections,
       nestedRepoImport: this.nestedRepoImport,
       serverEnvironment: this.serverEnvironment,
       repositorySparsePresets: this.repositorySparsePresets,

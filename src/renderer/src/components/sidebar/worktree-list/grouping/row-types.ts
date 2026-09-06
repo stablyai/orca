@@ -1,4 +1,5 @@
 import type React from 'react'
+import type { Collection } from '../../../../../../shared/collection-types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
@@ -22,6 +23,8 @@ export type GroupHeaderRow = {
   tone: string
   icon?: React.ComponentType<{ className?: string }>
   repo?: Repo
+  /** Set on collection section headers (and their repo sub-headers, together with `repo`). */
+  collection?: Collection
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId
