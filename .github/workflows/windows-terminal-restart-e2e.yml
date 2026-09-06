@@ -17,8 +17,8 @@ concurrency:
 
 jobs:
   windows-terminal-restart:
-    name: Windows terminal restart regressions
-    runs-on: windows-2022
+    name: macOS APFS alias regressions
+    runs-on: macos-15
     timeout-minutes: 30
     env:
       NODE_OPTIONS: --max-old-space-size=4096
@@ -48,18 +48,16 @@ jobs:
       - name: Build Electron app for Windows E2E
         run: pnpm exec electron-vite build --mode e2e
 
-      - name: Run Windows terminal restart regressions
+      - name: Run macOS APFS alias regressions
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_FORWARD_APP_LOGS: '1'
-          ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E: '1'
         # Why: pnpm forwards a literal `--` to Playwright, which makes the
         # grep and worker flags positional filters instead of CLI options.
         run: >-
           pnpm run test:e2e
-          tests/e2e/restart-restore-terminal-input.spec.ts
-          tests/e2e/terminal-restart-persistence.spec.ts
-          --grep "clean restart with a live daemon session|cold-restored pane accepts typing|daemon snapshot relaunch preserves"
+          tests/e2e/floating-tab-rename-filesystem-alias.spec.ts
+          --repeat-each=3
           --workers=1
 
       - name: Upload Playwright traces
