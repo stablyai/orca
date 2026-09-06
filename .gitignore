@@ -110,6 +110,7 @@ docs/**
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
 !docs/reference/relay-grace-time-reconfiguration.md
+!docs/reference/windows-daemon-host-relocation.md
 !docs/reference/windows-edr-posture.md
 !docs/reference/windows-process-enumeration.md
 !docs/reference/wsl-runner-verification.md

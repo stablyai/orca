@@ -84,14 +84,12 @@ describe('RuntimeClient module-graph deferral', () => {
     process.exitCode = 0
   })
 
-  // Why: the whole point of the change. These six modules load on EVERY
-  // invocation, so a value-import of the barrel from any of them drags the
-  // RuntimeClient graph (zod, ws, tweetnacl) back onto the --help path.
+  // These eager modules must not pull the RuntimeClient dependency graph into help.
   it.each([
     'args.ts',
     'flags.ts',
     'dispatch.ts',
-    'format.ts',
+    'cli-error.ts',
     'selectors.ts',
     'execution-host-flag.ts'
   ])('%s imports error classes from ./runtime/types, not the barrel', (file) => {
@@ -110,6 +108,7 @@ describe('RuntimeClient module-graph deferral', () => {
     expect(source).toContain("import type { RuntimeClient } from './runtime-client'")
     expect(source).not.toMatch(/^import \{[^}]*RuntimeClient[^}]*\} from '\.\/runtime-client'/m)
     expect(source).toContain("await import('./runtime-client.js')")
+    expect(source).toContain("import { reportCliError } from './cli-error'")
   })
 
   it('constructs no client for --help', async () => {
