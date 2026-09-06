@@ -267,6 +267,9 @@ export async function rePairPairedElectronClient(
       if (!store) {
         throw new Error('Paired desktop store is unavailable')
       }
+      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(null))) {
+        throw new Error('Paired desktop could not select local before replacing the HUB')
+      }
       await window.api.runtimeEnvironments.remove({ selector: currentEnvironmentId })
       const result = await window.api.runtimeEnvironments.addFromPairingCode({
         name,
@@ -290,10 +293,11 @@ export async function rePairPairedElectronClient(
   client.environmentId = environmentId
   // Why: removing and re-adding the same HUB changes the environment identity; remount so no pane keeps the retired transport wrapper.
   await client.page.reload()
+  // Hidden windows can pause animation frames after reload.
   await client.page.waitForFunction(
     () => window.__store?.getState().workspaceSessionReady === true,
     null,
-    { timeout: 30_000 }
+    { timeout: 30_000, polling: 100 }
   )
   await client.installDirectSshAttemptProbe()
   const reachable = await client.page.evaluate(async (nextEnvironmentId) => {
