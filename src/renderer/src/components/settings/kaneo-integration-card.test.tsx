@@ -83,4 +83,21 @@ describe('Kaneo connection settings', () => {
     )
     expect(status).toHaveBeenCalledTimes(2)
   })
+  it('restores the saved instance and clears the key when edits are cancelled', async () => {
+    vi.mocked(getKaneoApi).mockReturnValue({
+      status: async () => ({ connected: true, siteUrl: 'https://tasks.example.com' })
+    } as never)
+    render(<KaneoIntegrationCard />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure' }))
+    fireEvent.change(screen.getByLabelText('Instance URL'), {
+      target: { value: 'https://unsaved.example' }
+    })
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'unsaved-key' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Configure' }))
+    expect((screen.getByLabelText('Instance URL') as HTMLInputElement).value).toBe(
+      'https://tasks.example.com'
+    )
+    expect((screen.getByLabelText('API key') as HTMLInputElement).value).toBe('')
+  })
 })

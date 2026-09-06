@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -63,12 +63,36 @@ export function readKaneoCredential(): KaneoConnectArgs | null {
 export function saveKaneoCredential(credential: KaneoConnectArgs): void {
   const files = paths()
   mkdirSync(files.dir, { recursive: true, mode: 0o700 })
-  // The encrypted envelope binds the key to its origin even if metadata writes fail.
-  writeEncryptedCredential('Kaneo', files.secret, JSON.stringify(credential))
-  writeCredentialFileAtomic(
-    files.metadata,
-    Buffer.from(JSON.stringify({ siteUrl: credential.siteUrl }))
-  )
+  const pendingSecret = `${files.secret}.pending`
+  const pendingMetadata = `${files.metadata}.pending`
+  const previousSecret = existsSync(files.secret) ? readFileSync(files.secret) : null
+  let secretPublished = false
+  try {
+    // Stage both writes before replacing either half of the saved connection.
+    writeEncryptedCredential('Kaneo', pendingSecret, JSON.stringify(credential))
+    writeCredentialFileAtomic(
+      pendingMetadata,
+      Buffer.from(JSON.stringify({ siteUrl: credential.siteUrl }))
+    )
+    renameSync(pendingSecret, files.secret)
+    secretPublished = true
+    renameSync(pendingMetadata, files.metadata)
+  } catch (error) {
+    if (secretPublished) {
+      if (previousSecret) {
+        writeCredentialFileAtomic(files.secret, previousSecret)
+      } else {
+        unlinkSync(files.secret)
+      }
+    }
+    throw error
+  } finally {
+    for (const file of [pendingSecret, pendingMetadata]) {
+      if (existsSync(file)) {
+        unlinkSync(file)
+      }
+    }
+  }
 }
 
 export function disconnectKaneo(): void {

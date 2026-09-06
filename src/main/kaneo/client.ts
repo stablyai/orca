@@ -106,14 +106,19 @@ export async function getKaneoTask(url: string, signal?: AbortSignal): Promise<K
   if (!credential || credential.siteUrl !== link.siteUrl) {
     throw new Error('Reconnect this Kaneo instance in Settings → Integrations.')
   }
+  const controller = new AbortController()
+  const lookupSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
   const [taskValue, projectsValue] = await Promise.all([
-    request(credential, `/task/${encodeURIComponent(link.taskId)}`, signal),
+    request(credential, `/task/${encodeURIComponent(link.taskId)}`, lookupSignal),
     request(
       credential,
       `/project?workspaceId=${encodeURIComponent(link.workspaceId)}&includeArchived=true`,
-      signal
+      lookupSignal
     )
-  ])
+  ]).catch((error: unknown) => {
+    controller.abort()
+    throw error
+  })
   const task = record(taskValue)
   const project = Array.isArray(projectsValue)
     ? (projectsValue.find(

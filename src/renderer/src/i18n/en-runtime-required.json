@@ -1230,6 +1230,7 @@
           "35a3379372": "Install the GitLab CLI to enable merge requests, issues, and pipelines.",
           "3614887c40": "checking",
           "399cf46867": "Install GitHub CLI",
+          "3ba07f933b": "Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.",
           "3c3cf05c63": "Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart Orca if environment variables changed.",
           "44cde4aa01": "ORCA_BITBUCKET_API_TOKEN",
           "45bf5e6e4b": "Auth failed",

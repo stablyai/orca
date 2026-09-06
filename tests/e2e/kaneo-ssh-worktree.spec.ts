@@ -7,6 +7,10 @@ import {
 } from './helpers/docker-ssh-relay-connection'
 import { waitForSessionReady } from './helpers/store'
 
+test.afterEach(async ({ orcaPage }) => {
+  await orcaPage.evaluate(() => window.api.kaneo.disconnect())
+})
+
 test('Kaneo Smart selection persists on an SSH worktree', async ({
   electronApp,
   orcaPage,
@@ -17,6 +21,8 @@ test('Kaneo Smart selection persists on an SSH worktree', async ({
     process.env.ORCA_E2E_SSH_USER !== 'root',
     'The shared SSH fixture uses a root test account'
   )
+  const identityFile = process.env.ORCA_E2E_SSH_IDENTITY_FILE?.trim()
+  test.skip(!identityFile, 'Requires a fixture SSH identity file')
   await waitForSessionReady(orcaPage)
   await installKaneoApiFixture(electronApp)
   await orcaPage.evaluate(
@@ -28,7 +34,7 @@ test('Kaneo Smart selection persists on an SSH worktree', async ({
     {
       host: process.env.ORCA_E2E_SSH_HOST ?? '127.0.0.1',
       port: Number(process.env.ORCA_E2E_SSH_PORT ?? '22'),
-      identityFile: process.env.ORCA_E2E_SSH_IDENTITY_FILE ?? ''
+      identityFile: identityFile!
     },
     { remotePath: testRepoPath }
   )

@@ -108,4 +108,26 @@ describe('persistWorktreeMeta GitHub PR suppression compatibility', () => {
     })
     expect(mocks.assertCapability).not.toHaveBeenCalled()
   })
+  it.each(['kaneo.task-link.v1', 'worktree.linked-work-item-context.v1'])(
+    'reports Kaneo when %s is missing',
+    async (missing) => {
+      mocks.assertCapability.mockImplementation(async (_id, capability, message) => {
+        if (capability === missing) {
+          throw new Error(message)
+        }
+      })
+      await expect(
+        persistWorktreeMeta({} as never, 'repo::/feature', {
+          linkedWorkItem: {
+            provider: 'kaneo',
+            type: 'issue',
+            number: 42,
+            title: 'Task',
+            url: 'https://tasks.example.com'
+          }
+        })
+      ).rejects.toThrow('Update the remote runtime to link Kaneo tasks')
+      expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+    }
+  )
 })

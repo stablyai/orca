@@ -176,12 +176,15 @@ export function createCreateWorktree(
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
+          options?.linkedWorkItem?.provider === 'kaneo' ||
           options?.linkedTaskSourceContext?.provider === 'jira')
       ) {
         await assertRuntimeEnvironmentCapability(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
+          options?.linkedWorkItem?.provider === 'kaneo'
+            ? 'Update the remote runtime to link Kaneo tasks'
+            : 'Update the remote runtime to link Jira'
         )
       }
       if (target.kind === 'environment' && options?.linkedWorkItem?.provider === 'kaneo') {
