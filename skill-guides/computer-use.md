@@ -13,13 +13,6 @@ description: >-
 
 Use this skill for desktop UI through `orca computer`. For a website or web app, use it only when the page is in an external desktop browser window that needs desktop-level control. Do not use it for page-only automation: use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages.
 
-## Done
-
-An action is done when you read its verification class and reported it. Any `unverified`
-result is unproven: re-read the UI before the next step and never call it success. If an
-unverified action could have sent, submitted, bought, or deleted something, say the effect
-is unproven.
-
 ## Preconditions
 
 - `ORCA` in every example, including the shell-specific ones, is the executable you used to run
@@ -99,6 +92,7 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
   - `unverified (accessibility action unasserted)` means the accessibility call succeeded but no post-state assertion was made.
   - `unverified (synthetic input)` means input was fired into the void and is unverifiable.
   - Missing verification metadata is unverified, including responses from older runtimes.
+  - Never report an unverified action as success. If it could have sent, submitted, bought, or deleted something, say the effect is unproven.
 - Prefer semantic actions: `set-value` for editable fields, `click` for controls, `perform-secondary-action` only for listed action names.
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
@@ -161,7 +155,3 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 - `accessibility_error`: run `ORCA computer capabilities --json`; if the message names Accessibility permission, run `ORCA computer permissions --id accessibility --json`.
 - Empty tree or no screenshot: app may have no visible window, be minimized, or need permissions.
 - Permission errors: run `ORCA computer permissions --json`, or `ORCA computer permissions --id accessibility --json` / `--id screenshots --json` when the message names one permission, use the setup UI, then retry.
-
-## Next Action
-
-Confirm Orca status unless already checked, then run `ORCA computer capabilities --json`. For external browser targets such as Gmail, identify the desktop browser app/window that contains the page, then get that target app state with `ORCA computer get-app-state --app <app> --json`.
