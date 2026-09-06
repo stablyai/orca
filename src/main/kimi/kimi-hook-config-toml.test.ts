@@ -132,6 +132,30 @@ describe('kimi managed hooks TOML block', () => {
     expect(reinstalled).toContain('node my-own-hook.mjs')
   })
 
+  it('recovers a CRLF-saved orphaned block and keeps the user tail (#18861)', () => {
+    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+    // The BLOCK_END hand-edit happened before an editor resaved the file with
+    // Windows line endings.
+    const orphanedCrlf = installed
+      .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, '\r\n')
+      .concat(
+        '[[hooks]]\r\n',
+        'event = "SessionStart"\r\n',
+        'command = "node my-own-hook.mjs"\r\n',
+        '\r\n',
+        '[[tools]]\r\n',
+        'name = "user-tool"\r\n'
+      )
+
+    const removed = removeManagedKimiHooks(orphanedCrlf)
+    expect(removed.changed).toBe(true)
+    expect(removed.text).toContain('node my-own-hook.mjs')
+    expect(removed.text).toContain('[[tools]]')
+    expect(removed.text).not.toContain(COMMAND)
+    // Orphaned installer tables behind CRLF are still recognized as managed.
+    expect(readManagedKimiHookEvents(orphanedCrlf, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
+  })
+
   it('treats stale managed entries pointing at a moved script path as managed', () => {
     const staleCommand =
       "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"

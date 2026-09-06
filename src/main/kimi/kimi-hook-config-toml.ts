@@ -32,16 +32,18 @@ const BLOCK_END = '# <<< orca-managed-kimi-hooks <<<'
 //    bounded to the contiguous installer-shaped `[[hooks]]` tables (header +
 //    event/command/timeout lines), so user TOML appended after the orphaned
 //    tables survives remove/reinstall instead of being swallowed to EOF (#18861).
+//    Line boundaries accept CRLF: an editor saving the config with Windows
+//    endings after deleting BLOCK_END must still be recoverable.
 //    A user table that happens to mirror the exact installer shape remains
 //    indistinguishable by form alone — stopping at the first non-managed table
 //    is the accepted bound of orphan recovery.
 const MANAGED_HOOK_TABLE =
-  '\\[\\[hooks\\]\\]\\n' +
-  'event\\s*=\\s*"[^"\\n]*"\\n' +
-  'command\\s*=\\s*"(?:[^"\\\\]|\\\\.)*"\\n' +
+  '\\[\\[hooks\\]\\]\\r?\\n' +
+  'event\\s*=\\s*"[^"\\n]*"\\r?\\n' +
+  'command\\s*=\\s*"(?:[^"\\\\]|\\\\.)*"\\r?\\n' +
   'timeout\\s*=\\s*\\d+'
 const MANAGED_BLOCK_RE = new RegExp(
-  `\\n*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\n(?:${MANAGED_HOOK_TABLE}(?:\\n|$))+)`,
+  `(?:\\r?\\n)*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\r?\\n(?:${MANAGED_HOOK_TABLE}(?:\\r?\\n|$))+)`,
   'g'
 )
 
