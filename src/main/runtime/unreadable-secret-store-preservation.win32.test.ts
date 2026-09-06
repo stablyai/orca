@@ -24,7 +24,41 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
  * These assert the file still holds its original bytes afterwards. Runs only on win32, where a
  * DACL is the mechanism; skipped elsewhere.
  */
-const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
+
+/** Whether a DACL that omits this token actually denies it a read. */
+function readDenied(filePath: string): boolean {
+  try {
+    readFileSync(filePath, 'utf8')
+    return false
+  } catch (error) {
+    return /^(?:EPERM|EACCES)$/.test((error as NodeJS.ErrnoException).code ?? '')
+  }
+}
+
+/**
+ * An elevated token logged in as the built-in Administrator reads straight through a DACL that
+ * grants it nothing, so on such a host every assertion here would pass while proving nothing.
+ * Probe once and skip rather than assert vacuously -- the same trade the ACL suite makes for its
+ * unelevated-only case. `isUnreadableError` has its own unit tests on every platform; this suite
+ * carries the stores' refusal wherever a denial is actually reproducible.
+ */
+function canDenyReads(): boolean {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  const probeRoot = mkdtempSync(join(tmpdir(), 'orca-deny-probe-'))
+  const probe = join(probeRoot, 'probe.json')
+  try {
+    writeFileSync(probe, '{}')
+    icacls(probe, '/inheritance:r', '/q')
+    icacls(probe, '/grant:r', `*${FOREIGN_SID}:(F)`, '/q')
+    return readDenied(probe)
+  } finally {
+    icacls(probe, '/reset', '/q')
+    icacls(probeRoot, '/reset', '/t', '/q')
+    removeTreeSync(probeRoot)
+  }
+}
 
 /**
  * BUILTIN\Guests: a real, always-resolvable group that no interactive token is a member of.
@@ -50,17 +84,10 @@ function makeUnreadable(filePath: string): void {
   // readable and every assertion below vacuous. Remove inheritance first, then grant.
   expect(icacls(filePath, '/inheritance:r', '/q')).toBe(0)
   expect(icacls(filePath, '/grant:r', `*${FOREIGN_SID}:(F)`, '/q')).toBe(0)
-  let code: string | undefined
-  try {
-    readFileSync(filePath, 'utf8')
-  } catch (error) {
-    code = (error as NodeJS.ErrnoException).code
-  }
-  // The whole premise. Elevated, the grant is readable and every assertion below would be vacuous.
-  expect(code, 'expected the hardened file to be unreadable; are you running elevated?').toMatch(
-    /^(?:EPERM|EACCES)$/
-  )
+  expect(readDenied(filePath), 'fixture should be unreadable').toBe(true)
 }
+
+const describeOnWindows = process.platform === 'win32' && canDenyReads() ? describe : describe.skip
 
 describeOnWindows('a secure store that exists but cannot be read', () => {
   let root: string
