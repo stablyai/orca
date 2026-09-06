@@ -3,20 +3,18 @@
  * the pty. Written to reproduce #15299, where a digit typed straight after a Hangul syllable was
  * dropped under Wayland but not under X11.
  *
- * THIS DOES NOT RUN IN CI. It is gated on ORCA_E2E_NATIVE_IBUS_HANGUL=1 and needs a compositor
- * session that CI does not have, so it is a manual reproduction harness rather than coverage.
- * That is stated plainly because this repo already carries native IME specs that are skipped
- * everywhere and were mistaken for coverage they never provided.
+ * CI runs the default xdotool injector under X11, checking exact Hangul-plus-digit PTY bytes.
+ * That path passed even before the Wayland fix; it does not prove #15299 is fixed.
+ * Reproducing #15299 still requires the nested Wayland session below.
  *
- * To run it, on a machine with gnome-shell and ibus-hangul:
+ * To run the Wayland reproduction on a machine with gnome-shell and ibus-hangul:
  *
  *   Xvfb :65 -extension GLX &
  *   DISPLAY=:65 gnome-shell --nested --wayland     # nested, NOT --headless
  *   ORCA_E2E_NATIVE_IBUS_HANGUL=1 ORCA_E2E_IME_INJECTOR=nested npx playwright test \
  *     tests/e2e/terminal-hangul-terminating-digit-native.spec.ts
  *
- * Eight things that decide whether a run is real or a silent false negative, each of which cost a
- * failed attempt:
+ * Nested Wayland prerequisites:
  *
  *  - Nested, not headless. A headless mutter never answers RemoteDesktop.CreateSession, so there
  *    is no way to inject input; nested makes the whole compositor an X window that xdotool can
