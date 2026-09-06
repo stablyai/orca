@@ -33,7 +33,7 @@ function createResponse(slug: string): Response {
         renderedContentType: 'text/html',
         createdAt: '2026-08-06T00:00:00.000Z',
         updatedAt: '2026-08-06T00:00:00.000Z',
-        expiresAt: '2026-09-06T00:00:00.000Z',
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         byteSize: 12,
         deletedAt: null
       },
