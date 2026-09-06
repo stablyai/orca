@@ -3,6 +3,10 @@ const OVERLAY_SELECTOR = '[role="dialog"], [role="alertdialog"], [role="listbox"
 type VisibleOverlayOptions = {
   /** Overlays inside a match are treated as page content, not as a layer above it. */
   ignoreSelector?: string
+  /** Ignore matching chrome itself while retaining overlays nested within it. */
+  ignoreMatches?: string
+  /** A terminal hosted inside an overlay may still take focus within that overlay. */
+  ignoreContaining?: Element
 }
 
 /**
@@ -23,6 +27,12 @@ export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
       return false
     }
     if (options?.ignoreSelector && element.closest(options.ignoreSelector)) {
+      return false
+    }
+    if (options?.ignoreMatches && element.matches(options.ignoreMatches)) {
+      return false
+    }
+    if (options?.ignoreContaining && element.contains(options.ignoreContaining)) {
       return false
     }
     const style = window.getComputedStyle(element)

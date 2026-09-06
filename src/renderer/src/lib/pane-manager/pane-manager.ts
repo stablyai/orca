@@ -1,3 +1,4 @@
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
@@ -232,7 +233,7 @@ export class PaneManager {
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
     if (opts?.focus !== false) {
-      pane.terminal.focus()
+      focusPanePreservingOverlays(pane)
     }
 
     if (changed) {

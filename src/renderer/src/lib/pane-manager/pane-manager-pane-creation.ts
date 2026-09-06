@@ -1,3 +1,4 @@
+import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type { ManagedPane, ManagedPaneInternal, PaneManagerOptions } from './pane-manager-types'
 import type { PaneManagerHost } from './pane-manager-host'
 import { applyPaneOpacity } from './pane-divider'
@@ -23,7 +24,7 @@ export function createInitialManagedPane(
   applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions())
 
   if (opts?.focus !== false) {
-    pane.terminal.focus()
+    focusPanePreservingOverlays(pane)
   }
 
   host.publishPaneCreated(pane)
