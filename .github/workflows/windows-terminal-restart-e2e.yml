@@ -58,8 +58,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "WSL apt update failed: $LASTEXITCODE" }
           wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get install --yes git
           if ($LASTEXITCODE -ne 0) { throw "WSL git install failed: $LASTEXITCODE" }
+          $kernelMsi = Join-Path $env:RUNNER_TEMP 'wsl_update_x64.msi'
+          Invoke-WebRequest 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $kernelMsi
+          $installer = Start-Process msiexec.exe -ArgumentList @('/i', $kernelMsi, '/quiet', '/norestart') -Wait -PassThru
+          if ($installer.ExitCode -ne 0) { throw "WSL kernel installation failed: $($installer.ExitCode)" }
           wsl.exe --status
-          Write-Output "WSL_STATUS_EXIT=$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw "WSL status failed: $LASTEXITCODE" }
           wsl.exe --list --verbose
           if ($LASTEXITCODE -ne 0) { throw "WSL enumeration failed: $LASTEXITCODE" }
 
@@ -78,7 +82,7 @@ jobs:
         run: >-
           pnpm run test:e2e
           tests/e2e/windows-terminal-env-icons.spec.ts
-          --grep "WSL project"
+          --repeat-each=3
           --workers=1
 
       - name: Upload Playwright traces
