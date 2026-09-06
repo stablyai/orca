@@ -39,7 +39,7 @@ import { restoreLocalStructuredSessionTabsOnce } from '../runtime/local-structur
 
 async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]> {
   try {
-    return (await window.api.runtimeEnvironments.list()).map((environment) =>
+    return (await window.api.runtimeEnvironments.list()).environments.map((environment) =>
       toRuntimeExecutionHostId(environment.id)
     )
   } catch (err) {

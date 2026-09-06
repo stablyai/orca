@@ -281,7 +281,7 @@ export function AddRemoteHostDialog({
         )
         return
       }
-      const environments = await window.api.runtimeEnvironments.list()
+      const { environments } = await window.api.runtimeEnvironments.list()
       setRuntimeEnvironments(environments)
       setRuntimeEnvironmentStatus(result.environment.id, {
         status: result.runtimeStatus,

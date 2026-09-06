@@ -15,13 +15,16 @@ export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'e
   }[]
 }
 
-const ENVIRONMENT_STORAGE_KEY = 'orca.web.runtimeEnvironment.v1'
+export type StoredWebRuntimeEnvironments = {
+  environments: StoredWebRuntimeEnvironment[]
+  activeEnvironmentId: string | null
+}
 
-export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment | null {
-  const raw = window.localStorage.getItem(ENVIRONMENT_STORAGE_KEY)
-  if (!raw) {
-    return null
-  }
+const ENVIRONMENT_STORAGE_KEY = 'orca.web.runtimeEnvironment.v1'
+const ENVIRONMENTS_STORAGE_KEY = 'orca.web.runtimeEnvironments.v2'
+
+// Per-entry validation shared by v1 and v2 reads
+function parseStoredWebRuntimeEnvironment(raw: string): StoredWebRuntimeEnvironment | null {
   try {
     const parsed = JSON.parse(raw) as StoredWebRuntimeEnvironment
     if (
@@ -56,12 +59,96 @@ export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment |
   }
 }
 
+function writeStoredWebRuntimeEnvironments(state: StoredWebRuntimeEnvironments): void {
+  if (state.environments.length === 0) {
+    window.localStorage.removeItem(ENVIRONMENTS_STORAGE_KEY)
+    return
+  }
+  window.localStorage.setItem(ENVIRONMENTS_STORAGE_KEY, JSON.stringify(state))
+}
+
+export function readStoredWebRuntimeEnvironments(): StoredWebRuntimeEnvironments {
+  const rawV2 = window.localStorage.getItem(ENVIRONMENTS_STORAGE_KEY)
+  if (!rawV2) {
+    return migrateLegacyStoredWebRuntimeEnvironment()
+  }
+  const empty: StoredWebRuntimeEnvironments = { environments: [], activeEnvironmentId: null }
+  try {
+    const parsed = JSON.parse(rawV2) as StoredWebRuntimeEnvironments
+    if (!Array.isArray(parsed.environments)) {
+      return empty
+    }
+    const environments = parsed.environments
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => parseStoredWebRuntimeEnvironment(JSON.stringify(entry)))
+      .filter((entry): entry is StoredWebRuntimeEnvironment => entry !== null)
+    const byId = new Map(environments.map((entry) => [entry.id, entry]))
+    let activeEnvironmentId =
+      typeof parsed.activeEnvironmentId === 'string' && byId.has(parsed.activeEnvironmentId)
+        ? parsed.activeEnvironmentId
+        : null
+    if (activeEnvironmentId === null && environments.length > 0) {
+      // Stale active id falls back to the first entry and the fix is persisted
+      activeEnvironmentId = environments[0].id
+      writeStoredWebRuntimeEnvironments({ environments, activeEnvironmentId })
+    }
+    return { environments, activeEnvironmentId }
+  } catch {
+    return empty
+  }
+}
+
+function migrateLegacyStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironments {
+  const empty: StoredWebRuntimeEnvironments = { environments: [], activeEnvironmentId: null }
+  const rawV1 = window.localStorage.getItem(ENVIRONMENT_STORAGE_KEY)
+  if (!rawV1) {
+    return empty
+  }
+  window.localStorage.removeItem(ENVIRONMENT_STORAGE_KEY)
+  const environment = parseStoredWebRuntimeEnvironment(rawV1)
+  if (!environment) {
+    return empty
+  }
+  const state: StoredWebRuntimeEnvironments = {
+    environments: [environment],
+    activeEnvironmentId: environment.id
+  }
+  writeStoredWebRuntimeEnvironments(state)
+  return state
+}
+
+export function readStoredWebRuntimeEnvironment(): StoredWebRuntimeEnvironment | null {
+  const state = readStoredWebRuntimeEnvironments()
+  return state.environments.find((entry) => entry.id === state.activeEnvironmentId) ?? null
+}
+
 export function saveStoredWebRuntimeEnvironment(environment: StoredWebRuntimeEnvironment): void {
-  window.localStorage.setItem(ENVIRONMENT_STORAGE_KEY, JSON.stringify(environment))
+  const state = readStoredWebRuntimeEnvironments()
+  const existingIndex = state.environments.findIndex((entry) => entry.id === environment.id)
+  const environments =
+    existingIndex !== -1
+      ? state.environments.map((entry, index) => (index === existingIndex ? environment : entry))
+      : [...state.environments, environment]
+  writeStoredWebRuntimeEnvironments({
+    environments,
+    activeEnvironmentId: state.activeEnvironmentId ?? environment.id
+  })
+}
+
+export function saveStoredWebRuntimeEnvironments(state: StoredWebRuntimeEnvironments): void {
+  writeStoredWebRuntimeEnvironments(state)
 }
 
 export function clearStoredWebRuntimeEnvironment(): void {
-  window.localStorage.removeItem(ENVIRONMENT_STORAGE_KEY)
+  const state = readStoredWebRuntimeEnvironments()
+  if (!state.activeEnvironmentId) {
+    return
+  }
+  const environments = state.environments.filter((entry) => entry.id !== state.activeEnvironmentId)
+  writeStoredWebRuntimeEnvironments({
+    environments,
+    activeEnvironmentId: environments[0]?.id ?? null
+  })
 }
 
 export function createStoredWebRuntimeEnvironment(args: {

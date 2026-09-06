@@ -306,7 +306,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     }),
 
   hydrateRuntimeEnvironmentStatuses: createRuntimeStatusHydration({
-    listEnvironments: () => window.api.runtimeEnvironments.list(),
+    listEnvironments: async () => (await window.api.runtimeEnvironments.list()).environments,
     getCurrentEnvironments: () => get().runtimeEnvironments,
     publishEnvironments: (environments) => get().setRuntimeEnvironments(environments),
     refreshEnvironmentStatus: (environmentId) =>

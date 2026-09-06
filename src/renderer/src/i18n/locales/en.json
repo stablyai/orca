@@ -335,7 +335,13 @@
         "cb4d287238": "Server name",
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
         "e3bcd082ac": "Connect to Orca",
-        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
+        "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.",
+        "savedServers": "Saved servers",
+        "activeBadge": "Active",
+        "missingOffer": "Enter a valid Orca pairing URL or code.",
+        "mixedContent": "This HTTPS page cannot connect to a plain ws:// Orca server. Open the web client over HTTP or pair with a wss:// endpoint.",
+        "9bee6bbeeb": "Add Server",
+        "aeb26635d2": "Remove {{value0}}"
       },
       "webPreloadApi": {
         "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host.",
@@ -7977,6 +7983,8 @@
           "6e1280ca55": "Share this Orca server",
           "9a3758d983": "No saved servers.",
           "9bee6bbeeb": "Add Server",
+          "activeBadge": "Active",
+          "activate": "Activate",
           "55fcc964cd": "on the server and paste the printed pairing URL.",
           "960e901ae4": "orca serve --pairing-address <host>",
           "163671f7b5": "Run",

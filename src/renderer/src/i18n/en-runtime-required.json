@@ -1428,6 +1428,8 @@
           "e038625857": "Dev box",
           "f3a3d6d834": "{{value0}} capabilities",
           "f75ce1c7a5": "Local keeps today's desktop behavior. Saved servers route supported client calls through the remote runtime.",
+          "activeBadge": "Active",
+          "activate": "Activate",
           "updateAvailableOne": "1 update available",
           "updatesAvailable": "{{value0}} updates available"
         },

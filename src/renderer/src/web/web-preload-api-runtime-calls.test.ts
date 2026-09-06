@@ -51,7 +51,7 @@ describe('web preload runtime calls', () => {
       _meta: { runtimeId: 'runtime-success' }
     })
     expect(
-      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
+      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironments.v2') ?? '{}').environments[0]
     ).toMatchObject({ runtimeId: 'runtime-success' })
 
     await expect(globals.window.api.runtime.call({ method: 'runtime.failure' })).resolves.toEqual({
@@ -61,7 +61,7 @@ describe('web preload runtime calls', () => {
       _meta: { runtimeId: 'runtime-failure' }
     })
     expect(
-      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
+      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironments.v2') ?? '{}').environments[0]
     ).toMatchObject({ runtimeId: 'runtime-failure' })
   })
 
@@ -104,7 +104,7 @@ describe('web preload runtime calls', () => {
     }
     expect(Reflect.get(rejection, 'code')).toBe('repo_unavailable')
     expect(
-      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
+      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironments.v2') ?? '{}').environments[0]
     ).toMatchObject({ runtimeId: 'runtime-domain-failure' })
   })
 

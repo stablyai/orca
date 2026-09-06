@@ -14,6 +14,7 @@ import {
 import {
   createStoredWebRuntimeEnvironment,
   readStoredWebRuntimeEnvironment,
+  readStoredWebRuntimeEnvironments,
   saveStoredWebRuntimeEnvironment
 } from './web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
@@ -27,6 +28,12 @@ function WebRoot(): React.JSX.Element {
   // Why: current runtime links carry scope metadata. Runtime-scope offers keep
   // the instant save path; mobile/legacy-unknown offers must be shown/probed.
   const startupDecision = useMemo(() => {
+    // Why: an active id pointing at a removed host falls back to the first env
+    // so existing pairings still boot instead of landing on the pairing form.
+    const storedState = readStoredWebRuntimeEnvironments()
+    if (storedState.environments.length > 0 && !storedState.activeEnvironmentId) {
+      saveStoredWebRuntimeEnvironment(storedState.environments[0])
+    }
     const decision = decideWebPairingStartup({
       initialPairingInput,
       hasStoredEnvironment: readStoredWebRuntimeEnvironment() !== null

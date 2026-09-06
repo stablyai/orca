@@ -735,18 +735,20 @@ describe('runtime-status slice', () => {
 
   it('hydrates saved environments through the single-environment refresh path', async () => {
     const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
-    const list = vi.fn().mockResolvedValue([
-      {
-        id: 'env-a',
-        name: 'Dev Box',
-        createdAt: 1,
-        updatedAt: 1,
-        lastUsedAt: null,
-        runtimeId: null,
-        endpoints: [{ id: 'ws-a', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://x' }],
-        preferredEndpointId: 'ws-a'
-      }
-    ])
+    const list = vi.fn().mockResolvedValue({
+      environments: [
+        {
+          id: 'env-a',
+          name: 'Dev Box',
+          createdAt: 1,
+          updatedAt: 1,
+          lastUsedAt: null,
+          runtimeId: null,
+          endpoints: [{ id: 'ws-a', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://x' }],
+          preferredEndpointId: 'ws-a'
+        }
+      ]
+    })
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
 
@@ -768,7 +770,7 @@ describe('runtime-status slice', () => {
     const getStatus = vi.fn(({ selector }: { selector: string }) =>
       selector === 'env-a' ? probeA.promise : probeB.promise
     )
-    const list = vi.fn().mockResolvedValue(environments)
+    const list = vi.fn().mockResolvedValue({ environments })
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
     let publications = 0
@@ -802,7 +804,7 @@ describe('runtime-status slice', () => {
       .fn()
       .mockResolvedValueOnce(createCompatibleRuntimeStatusResponse('runtime-1'))
       .mockResolvedValueOnce(createCompatibleRuntimeStatusResponse('runtime-2'))
-    const list = vi.fn().mockResolvedValue([makeEnvironment()])
+    const list = vi.fn().mockResolvedValue({ environments: [makeEnvironment()] })
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
     let publications = 0
@@ -823,7 +825,7 @@ describe('runtime-status slice', () => {
   })
 
   it('does not share hydration work between stores', async () => {
-    const list = vi.fn().mockResolvedValue([])
+    const list = vi.fn().mockResolvedValue({ environments: [] })
     stubRuntimeEnvironmentApi({ getStatus: vi.fn(), list })
     const firstStore = createSliceStore()
     const secondStore = createSliceStore()
@@ -839,8 +841,8 @@ describe('runtime-status slice', () => {
   it('queues a current-catalog sweep when the catalog changes during listing', async () => {
     const environmentA = makeEnvironment({ pairingRevision: 1 })
     const repairedEnvironmentA = makeEnvironment({ pairingRevision: 2 })
-    const firstCatalog = deferred<PublicKnownRuntimeEnvironment[]>()
-    const secondCatalog = deferred<PublicKnownRuntimeEnvironment[]>()
+    const firstCatalog = deferred<{ environments: PublicKnownRuntimeEnvironment[] }>()
+    const secondCatalog = deferred<{ environments: PublicKnownRuntimeEnvironment[] }>()
     const getStatus = vi
       .fn()
       .mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-current'))
@@ -854,13 +856,13 @@ describe('runtime-status slice', () => {
 
     const hydration = store.getState().hydrateRuntimeEnvironmentStatuses()
     store.getState().setRuntimeEnvironments([repairedEnvironmentA])
-    firstCatalog.resolve([environmentA])
+    firstCatalog.resolve({ environments: [environmentA] })
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2))
 
     expect(getStatus).not.toHaveBeenCalled()
     expect(store.getState().runtimeEnvironments).toEqual([repairedEnvironmentA])
 
-    secondCatalog.resolve([repairedEnvironmentA])
+    secondCatalog.resolve({ environments: [repairedEnvironmentA] })
     await hydration
 
     expect(list).toHaveBeenCalledTimes(2)
@@ -878,8 +880,8 @@ describe('runtime-status slice', () => {
       .mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-current'))
     const list = vi
       .fn()
-      .mockResolvedValueOnce([environmentA, environmentB])
-      .mockResolvedValueOnce([environmentA])
+      .mockResolvedValueOnce({ environments: [environmentA, environmentB] })
+      .mockResolvedValueOnce({ environments: [environmentA] })
     stubRuntimeEnvironmentApi({ getStatus, list })
     const store = createSliceStore()
 
@@ -906,7 +908,7 @@ describe('runtime-status slice', () => {
     const list = vi
       .fn()
       .mockRejectedValueOnce(new Error('unreadable environments.json'))
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ environments: [] })
     stubRuntimeEnvironmentApi({ getStatus: vi.fn(), list })
     const store = createSliceStore()
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
@@ -927,7 +929,7 @@ describe('runtime-status slice', () => {
   })
 
   it('both settles and hydrates the catalog on a successful read', async () => {
-    const list = vi.fn().mockResolvedValue([])
+    const list = vi.fn().mockResolvedValue({ environments: [] })
     stubRuntimeEnvironmentApi({ getStatus: vi.fn(), list })
     const store = createSliceStore()
 

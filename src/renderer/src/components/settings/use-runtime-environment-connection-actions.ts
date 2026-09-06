@@ -210,6 +210,47 @@ export function useRuntimeEnvironmentConnectionActions({
     }
   }
 
+  // Why: row-level Activate commits the multi-host active id via
+  // runtimeEnvironments.setActive, then reuses the reachability flow; the
+  // Advanced selector keeps its settings-preference switch path above.
+  const activateEnvironment = async (
+    environment: PublicKnownRuntimeEnvironment
+  ): Promise<boolean> => {
+    setSwitchingValue(environment.id)
+    setSwitchError(null)
+    try {
+      await window.api.runtimeEnvironments.setActive({ id: environment.id })
+      useAppStore
+        .getState()
+        .setRuntimeEnvironmentStatus(
+          environment.id,
+          { status: null, checkedAt: Date.now() },
+          { suppressDisconnectToast: true }
+        )
+      if (mountedRef.current) {
+        toast.success(
+          translate(
+            'auto.components.settings.RuntimeEnvironmentsPane.99ac81fb43',
+            'Switched to {{value0}}.',
+            { value0: environment.name }
+          )
+        )
+      }
+      return await connectEnvironment(environment)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to switch servers.'
+      if (mountedRef.current) {
+        setSwitchError(message)
+        toast.error(message)
+      }
+      return false
+    } finally {
+      if (mountedRef.current) {
+        setSwitchingValue(null)
+      }
+    }
+  }
+
   return {
     connectingId,
     switchingValue,
@@ -218,6 +259,7 @@ export function useRuntimeEnvironmentConnectionActions({
     setSwitchError,
     connectEnvironment,
     disconnectEnvironment,
-    switchToValue
+    switchToValue,
+    activateEnvironment
   }
 }

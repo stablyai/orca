@@ -83,7 +83,7 @@ beforeEach(() => {
     _meta: { runtimeId: 'runtime-2' }
   })
   settingsGet.mockResolvedValue({ notifications: {} })
-  runtimeEnvironmentList.mockResolvedValue([])
+  runtimeEnvironmentList.mockResolvedValue({ environments: [], activeEnvironmentId: null })
   runtimeEnvironmentCall.mockImplementation(
     ({ method, params }: { method: string; params?: { repo?: string } }) => {
       const detectedRepoId = params?.repo ?? 'repo-env-2'
@@ -732,7 +732,7 @@ describe('fetchSettings runtime catalog probe', () => {
 
   it('coalesces concurrent settings refreshes into one all-host sweep', async () => {
     const environments = [makeRuntimeEnvironment('env-a'), makeRuntimeEnvironment('env-b')]
-    const catalog = deferred<PublicKnownRuntimeEnvironment[]>()
+    const catalog = deferred<{ environments: PublicKnownRuntimeEnvironment[] }>()
     runtimeEnvironmentList.mockReturnValueOnce(catalog.promise)
     const store = createTestStore()
 
@@ -742,7 +742,7 @@ describe('fetchSettings runtime catalog probe', () => {
     expect(runtimeEnvironmentList).toHaveBeenCalledTimes(1)
     expect(runtimeEnvironmentGetStatus).not.toHaveBeenCalled()
 
-    catalog.resolve(environments)
+    catalog.resolve({ environments })
     await vi.waitFor(() => expect(runtimeEnvironmentGetStatus).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(store.getState().runtimeStatusByEnvironmentId.size).toBe(2))
 
@@ -754,7 +754,10 @@ describe('fetchSettings runtime catalog probe', () => {
 
   it('fills status coverage after another path publishes only part of the catalog', async () => {
     const environments = [makeRuntimeEnvironment('env-a'), makeRuntimeEnvironment('env-b')]
-    runtimeEnvironmentList.mockResolvedValue(environments)
+    runtimeEnvironmentList.mockResolvedValue({
+      environments,
+      activeEnvironmentId: environments[0]?.id ?? null
+    })
     const store = createTestStore()
     store.getState().setRuntimeEnvironments(environments)
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
@@ -768,7 +771,10 @@ describe('fetchSettings runtime catalog probe', () => {
 
   it('treats an offline result as checked on later settings refreshes', async () => {
     const environments = [makeRuntimeEnvironment('env-a'), makeRuntimeEnvironment('env-b')]
-    runtimeEnvironmentList.mockResolvedValue(environments)
+    runtimeEnvironmentList.mockResolvedValue({
+      environments,
+      activeEnvironmentId: environments[0]?.id ?? null
+    })
     runtimeEnvironmentGetStatus.mockImplementation(({ selector }: { selector: string }) =>
       selector === 'env-b'
         ? Promise.reject(new Error('offline'))
@@ -798,10 +804,10 @@ describe('fetchSettings runtime catalog probe', () => {
   })
 
   it('retries a failed catalog read on the next settings refresh', async () => {
-    const firstCatalog = deferred<PublicKnownRuntimeEnvironment[]>()
+    const firstCatalog = deferred<{ environments: PublicKnownRuntimeEnvironment[] }>()
     runtimeEnvironmentList
       .mockReturnValueOnce(firstCatalog.promise)
-      .mockResolvedValueOnce([makeRuntimeEnvironment('env-a')])
+      .mockResolvedValueOnce({ environments: [makeRuntimeEnvironment('env-a')] })
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const store = createTestStore()
 
@@ -836,7 +842,10 @@ describe('fetchSettings runtime catalog probe', () => {
   })
 
   it('picks up an externally added host once the listing goes stale', async () => {
-    runtimeEnvironmentList.mockResolvedValue([makeRuntimeEnvironment('env-a')])
+    runtimeEnvironmentList.mockResolvedValue({
+      environments: [makeRuntimeEnvironment('env-a')],
+      activeEnvironmentId: 'env-a'
+    })
     const store = createTestStore()
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
 
@@ -845,10 +854,10 @@ describe('fetchSettings runtime catalog probe', () => {
       await vi.waitFor(() => expect(store.getState().runtimeStatusByEnvironmentId.size).toBe(1))
 
       // Another client adds a host; coverage still matches, so only staleness can reveal it.
-      runtimeEnvironmentList.mockResolvedValue([
-        makeRuntimeEnvironment('env-a'),
-        makeRuntimeEnvironment('env-b')
-      ])
+      runtimeEnvironmentList.mockResolvedValue({
+        environments: [makeRuntimeEnvironment('env-a'), makeRuntimeEnvironment('env-b')],
+        activeEnvironmentId: 'env-a'
+      })
       await store.getState().fetchSettings()
       expect(runtimeEnvironmentList).toHaveBeenCalledTimes(1)
       expect(store.getState().runtimeEnvironments.map(({ id }) => id)).toEqual(['env-a'])

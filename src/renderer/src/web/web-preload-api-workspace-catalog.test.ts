@@ -134,9 +134,9 @@ describe('web repos preload API', () => {
     await expect(catalogPromise).resolves.toMatchObject([
       { id: 'repo-a', executionHostId: 'runtime:web-server-a' }
     ])
-    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
-      { id: paired.environment.id, name: 'Server B' }
-    ])
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject({
+      environments: [{ id: 'web-server-a' }, { id: paired.environment.id, name: 'Server B' }]
+    })
   })
 
   it.each([

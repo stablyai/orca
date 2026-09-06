@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Cable, Loader2, Server, Trash2 } from 'lucide-react'
+import { Cable, Check, Loader2, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 import {
   clearStoredWebRuntimeEnvironment,
   createStoredWebRuntimeEnvironment,
   isMixedContentWebSocket,
-  readStoredWebRuntimeEnvironment,
-  saveStoredWebRuntimeEnvironment
+  readStoredWebRuntimeEnvironments,
+  saveStoredWebRuntimeEnvironment,
+  saveStoredWebRuntimeEnvironments
 } from './web-runtime-environment'
+import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
@@ -24,21 +27,31 @@ export default function WebConnect({
   initialPairingInput,
   onConnected
 }: WebConnectProps): React.JSX.Element {
-  const existingEnvironment = readStoredWebRuntimeEnvironment()
+  const savedState = useMemo(() => readStoredWebRuntimeEnvironments(), [])
+  const existingEnvironment =
+    savedState.environments.find((env) => env.id === savedState.activeEnvironmentId) ?? null
   const [name, setName] = useState(existingEnvironment?.name ?? 'Orca Server')
   const [pairingCode, setPairingCode] = useState(initialPairingInput ?? '')
   const [error, setError] = useState<string | null>(null)
-  const [connecting, setConnecting] = useState(false)
+  const [connectingId, setConnectingId] = useState<string | null>(null)
+  const [addFormOpen, setAddFormOpen] = useState(savedState.environments.length === 0)
   const parsedOffer = useMemo(() => parseWebPairingInput(pairingCode), [pairingCode])
   const autoConnectAttempted = useRef(false)
 
-  const connect = async (): Promise<void> => {
+  // Why: probe-and-save is shared by per-row reconnect and the pairing form;
+  // the caller decides whether the offer must parse first.
+  const connectEnvironment = async (
+    environment: StoredWebRuntimeEnvironment,
+    offer = parsedOffer
+  ): Promise<void> => {
     setError(null)
-    if (!parsedOffer) {
-      setError('Enter a valid Orca pairing URL or pairing code.')
+    if (!offer) {
+      setError(
+        translate('auto.web.WebConnect.missingOffer', 'Enter a valid Orca pairing URL or code.')
+      )
       return
     }
-    if (parsedOffer.scope === 'mobile') {
+    if (offer.scope === 'mobile') {
       setError(
         translate(
           'auto.web.WebConnect.mobileScopeRejected',
@@ -47,19 +60,17 @@ export default function WebConnect({
       )
       return
     }
-    if (isMixedContentWebSocket(parsedOffer.endpoint)) {
+    if (isMixedContentWebSocket(offer.endpoint)) {
       setError(
-        'This HTTPS page cannot connect to a plain ws:// Orca server. Open the web client over HTTP or pair with a wss:// endpoint.'
+        translate(
+          'auto.web.WebConnect.mixedContent',
+          'This HTTPS page cannot connect to a plain ws:// Orca server. Open the web client over HTTP or pair with a wss:// endpoint.'
+        )
       )
       return
     }
-    setConnecting(true)
-    const environment = createStoredWebRuntimeEnvironment({
-      name,
-      offer: parsedOffer,
-      previousEnvironment: existingEnvironment
-    })
-    const client = new WebRuntimeClient(parsedOffer)
+    setConnectingId(environment.id)
+    const client = new WebRuntimeClient(offer)
     try {
       const response = await client.call('status.get', undefined, { timeoutMs: 15_000 })
       if (!response.ok) {
@@ -76,18 +87,41 @@ export default function WebConnect({
         )
         return
       }
-      saveStoredWebRuntimeEnvironment({
-        ...environment,
-        runtimeId: response._meta.runtimeId,
-        lastUsedAt: Date.now()
-      })
+      const nextEnvironment =
+        offer === parsedOffer
+          ? {
+              ...environment,
+              runtimeId: response._meta.runtimeId,
+              lastUsedAt: Date.now()
+            }
+          : createStoredWebRuntimeEnvironment({
+              name,
+              offer,
+              previousEnvironment: environment
+            })
+      saveStoredWebRuntimeEnvironment(nextEnvironment)
       onConnected()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       client.close()
-      setConnecting(false)
+      setConnectingId(null)
     }
+  }
+
+  const connectSaved = async (environment: StoredWebRuntimeEnvironment): Promise<void> => {
+    // Why: saved rows reconnect through their stored endpoint token, not the
+    // pairing form draft.
+    const preferred =
+      environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
+      environment.endpoints[0]
+    await connectEnvironment(environment, {
+      v: 2,
+      endpoint: preferred.endpoint,
+      deviceToken: preferred.deviceToken,
+      publicKeyB64: preferred.publicKeyB64,
+      ...(environment.pairedDeviceId ? { pairedDeviceId: environment.pairedDeviceId } : {})
+    })
   }
 
   // Why: a deep-linked offer that reaches this screen either has mobile scope
@@ -97,16 +131,18 @@ export default function WebConnect({
       return
     }
     autoConnectAttempted.current = true
-    void connect()
+    void connectEnvironment(existingEnvironment ?? createDraftEnvironment(name, parsedOffer))
     // Why: run once for the deep-linked offer; connect() reads current refs/state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPairingInput, parsedOffer])
 
-  const clear = (): void => {
+  const forget = (): void => {
     clearStoredWebRuntimeEnvironment()
     setPairingCode('')
     setError(null)
   }
+
+  const environments = savedState.environments
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-6 text-foreground">
@@ -128,36 +164,113 @@ export default function WebConnect({
           </div>
         </div>
 
-        <div className="grid gap-2">
-          <Label htmlFor="web-runtime-name">
-            {translate('auto.web.WebConnect.cb4d287238', 'Server name')}
-          </Label>
-          <Input
-            id="web-runtime-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            autoComplete="off"
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <Label htmlFor="web-runtime-pairing-code">
-            {translate('auto.web.WebConnect.7a566540de', 'Pairing URL or code')}
-          </Label>
-          <Input
-            id="web-runtime-pairing-code"
-            value={pairingCode}
-            onChange={(event) => setPairingCode(event.target.value)}
-            placeholder={translate('auto.web.WebConnect.27393856e4', 'orca://pair?code=...')}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-
-        {parsedOffer && (
-          <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            {translate('auto.web.WebConnect.4a4c017be1', 'Endpoint:')} {parsedOffer.endpoint}
+        {environments.length > 0 ? (
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+              {translate('auto.web.WebConnect.savedServers', 'Saved servers')}
+            </div>
+            <div className="divide-y divide-border/50 rounded-lg border border-border/50 bg-card/30">
+              {environments.map((environment) => (
+                <div
+                  key={environment.id}
+                  data-current={environment.id === savedState.activeEnvironmentId || undefined}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2.5',
+                    environment.id === savedState.activeEnvironmentId && 'bg-accent'
+                  )}
+                >
+                  <Server className="size-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="truncate text-sm font-medium">{environment.name}</div>
+                      {environment.id === savedState.activeEnvironmentId ? (
+                        <span className="flex shrink-0 items-center gap-1 rounded-full border border-border px-1.5 py-px text-[11px] text-muted-foreground">
+                          <Check className="size-3" aria-hidden />
+                          {translate('auto.web.WebConnect.activeBadge', 'Active')}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {environment.endpoints[0]?.endpoint}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="gap-1.5"
+                    onClick={() => void connectSaved(environment)}
+                    disabled={connectingId !== null}
+                  >
+                    {connectingId === environment.id ? (
+                      <Loader2 className="size-3 animate-spin" aria-hidden />
+                    ) : (
+                      <Cable className="size-3" aria-hidden />
+                    )}
+                    {translate('auto.web.WebConnect.b411ec0069', 'Connect')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground hover:text-red-400"
+                    onClick={() => forgetSaved(environment)}
+                    disabled={connectingId !== null}
+                    aria-label={translate('auto.web.WebConnect.aeb26635d2', 'Remove {{value0}}', {
+                      value0: environment.name
+                    })}
+                  >
+                    <Trash2 className="size-3" aria-hidden />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
+        ) : null}
+
+        {addFormOpen ? (
+          <>
+            <div className="grid gap-2">
+              <Label htmlFor="web-runtime-name">
+                {translate('auto.web.WebConnect.cb4d287238', 'Server name')}
+              </Label>
+              <Input
+                id="web-runtime-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                autoComplete="off"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="web-runtime-pairing-code">
+                {translate('auto.web.WebConnect.7a566540de', 'Pairing URL or code')}
+              </Label>
+              <Input
+                id="web-runtime-pairing-code"
+                value={pairingCode}
+                onChange={(event) => setPairingCode(event.target.value)}
+                placeholder={translate('auto.web.WebConnect.27393856e4', 'orca://pair?code=...')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+
+            {parsedOffer && (
+              <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                {translate('auto.web.WebConnect.4a4c017be1', 'Endpoint:')} {parsedOffer.endpoint}
+              </div>
+            )}
+          </>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setAddFormOpen(true)}
+            className="self-start"
+          >
+            {translate('auto.web.WebConnect.9bee6bbeeb', 'Add Server')}
+          </Button>
         )}
 
         {error && (
@@ -166,26 +279,64 @@ export default function WebConnect({
           </div>
         )}
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-          <Button type="button" variant="outline" onClick={clear} className="gap-2">
-            <Trash2 size={15} aria-hidden />
-            {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void connect()}
-            disabled={connecting || !parsedOffer}
-            className="gap-2"
-          >
-            {connecting ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden />
+        {addFormOpen ? (
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            {environments.length > 0 ? (
+              <Button type="button" variant="outline" onClick={forget} className="gap-2">
+                <Trash2 size={15} aria-hidden />
+                {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
+              </Button>
             ) : (
-              <Cable size={15} aria-hidden />
+              <span />
             )}
-            {translate('auto.web.WebConnect.b411ec0069', 'Connect')}
-          </Button>
-        </div>
+            <Button
+              type="button"
+              onClick={() =>
+                void connectEnvironment(
+                  existingEnvironment ?? createDraftEnvironment(name, parsedOffer)
+                )
+              }
+              disabled={connectingId !== null || !parsedOffer}
+              className="gap-2"
+            >
+              {connectingId !== null ? (
+                <Loader2 size={15} className="animate-spin" aria-hidden />
+              ) : (
+                <Cable size={15} aria-hidden />
+              )}
+              {translate('auto.web.WebConnect.b411ec0069', 'Connect')}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   )
+}
+
+function createDraftEnvironment(
+  name: string,
+  offer: ReturnType<typeof parseWebPairingInput>
+): StoredWebRuntimeEnvironment {
+  // Why: unsaved pairing offers need an id-carrying shell so the shared
+  // probe-and-save path stores a fresh environment on success.
+  return createStoredWebRuntimeEnvironment({ name, offer: offer! })
+}
+
+function forgetSaved(environment: StoredWebRuntimeEnvironment): void {
+  const state = readStoredWebRuntimeEnvironments()
+  const environments = state.environments.filter((entry) => entry.id !== environment.id)
+  if (environments.length === state.environments.length) {
+    return
+  }
+  if (environments.length === 0) {
+    clearStoredWebRuntimeEnvironment()
+  } else {
+    saveStoredWebRuntimeEnvironments({
+      environments,
+      activeEnvironmentId:
+        state.activeEnvironmentId === environment.id
+          ? environments[0].id
+          : state.activeEnvironmentId
+    })
+  }
 }
