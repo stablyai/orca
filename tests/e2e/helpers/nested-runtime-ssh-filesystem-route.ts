@@ -117,7 +117,7 @@ export async function assertNestedFilesystemRoute(
     const fileDeleteDialog = client.page.locator('[role="dialog"]:visible').last()
     const fileDeleteButton = fileDeleteDialog.getByRole('button', { name: 'Delete', exact: true })
     await expect(fileDeleteButton).toBeEnabled()
-    await fileDeleteButton.click({ force: true })
+    await fileDeleteButton.click()
     await expect(fileDeleteDialog).toBeHidden()
     await expect(row(renamedName)).toHaveCount(0, { timeout: 15_000 })
     await assertRemoteFilesystemMarker(
@@ -135,7 +135,7 @@ export async function assertNestedFilesystemRoute(
       exact: true
     })
     await expect(directoryDeleteButton).toBeEnabled()
-    await directoryDeleteButton.click({ force: true })
+    await directoryDeleteButton.click()
     await expect(directoryDeleteDialog).toBeHidden()
     await expect(row(directory)).toHaveCount(0, { timeout: 15_000 })
     await assertRemoteFilesystemMarker(
