@@ -31,6 +31,7 @@ import {
   removeLargeFileCountUntrackedTree
 } from './large-file-count-fixtures'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../src/shared/git-status-limit'
+import { RIGHT_SIDEBAR_MIN_WIDTH } from '../../src/renderer/src/components/right-sidebar/right-sidebar-width'
 
 // Matches the large-diff freeze budget: a blocking stall past 1s is the
 // "UI becomes unresponsive" symptom reported in #8013.
@@ -420,10 +421,10 @@ test.describe('Source Control large file count (#8013)', () => {
       await expect(tooManyChangesBanner).toBeVisible()
       if (process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH) {
         // Narrowest supported sidebar is where the banner layout is worst.
-        await orcaPage.evaluate(() => {
-          window.__store?.getState().setRightSidebarWidth(250)
+        await orcaPage.evaluate((minWidth) => {
+          window.__store?.getState().setRightSidebarWidth(minWidth)
           document.documentElement.classList.add('dark')
-        })
+        }, RIGHT_SIDEBAR_MIN_WIDTH)
         await tooManyChangesBanner.screenshot({
           path: process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH
         })
