@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import type {
   DashboardCard,
   DashboardCardTerminalInput
@@ -16,10 +17,12 @@ vi.mock('./AgentTerminalPreview', () => ({
   AgentTerminalPreview: ({
     ptyId,
     terminalInput,
+    onClose,
     className
   }: {
     ptyId: string
     terminalInput?: DashboardCardTerminalInput | null
+    onClose?: () => void
     className?: string
   }) => (
     <div
@@ -27,7 +30,10 @@ vi.mock('./AgentTerminalPreview', () => ({
       data-pty-id={ptyId}
       data-terminal-input={terminalInput === null ? 'null' : JSON.stringify(terminalInput)}
       className={className}
-    />
+    >
+      <textarea data-testid="preview-terminal-input" className="xterm" />
+      <button type="button" data-testid="preview-close-shortcut" onClick={onClose} />
+    </div>
   )
 }))
 
@@ -164,13 +170,63 @@ describe('AgentTerminalDialog', () => {
     })
   })
 
+  it('opens in inspection mode and lets bare Escape close the dialog', async () => {
+    const onOpenChange = vi.fn()
+    render(<AgentTerminalDialog card={card()} onOpenChange={onOpenChange} onReveal={() => {}} />)
+
+    const title = screen.getByRole('heading', { name: 'wt' })
+    await waitFor(() => expect(title).toHaveFocus())
+
+    fireEvent.keyDown(title, { key: 'Escape' })
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('leaves Escape to the terminal after the user focuses it', () => {
+    const onOpenChange = vi.fn()
+    render(<AgentTerminalDialog card={card()} onOpenChange={onOpenChange} onReveal={() => {}} />)
+
+    const terminalInput = screen.getByTestId('preview-terminal-input')
+    terminalInput.focus()
+    fireEvent.keyDown(terminalInput, { key: 'Escape' })
+
+    expect(onOpenChange).not.toHaveBeenCalled()
+  })
+
   it('reuses the terminal surface as a non-modal adjacent panel', () => {
     render(<AgentTerminalPanel card={card()} onOpenChange={() => {}} onReveal={() => {}} />)
 
     expect(screen.getByRole('dialog', { name: 'wt' })).toHaveAttribute('data-state', 'open')
+
     expect(screen.getByTestId('preview')).toHaveClass('min-h-0', 'flex-1')
     expect(document.querySelector('[data-slot="dialog-overlay"]')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'wt' })).toBeInTheDocument()
+  })
+
+  it('restores the invoking map agent after the focused terminal closes by shortcut', () => {
+    function Host(): React.JSX.Element {
+      const [open, setOpen] = useState(false)
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Selected agent
+          </button>
+          {open ? (
+            <AgentTerminalPanel card={card()} onOpenChange={setOpen} onReveal={() => {}} />
+          ) : null}
+        </>
+      )
+    }
+    render(<Host />)
+    const agent = screen.getByRole('button', { name: 'Selected agent' })
+    agent.focus()
+    fireEvent.click(agent)
+    const terminal = screen.getByTestId('preview-terminal-input')
+    terminal.focus()
+
+    fireEvent.click(screen.getByTestId('preview-close-shortcut'))
+
+    expect(screen.queryByRole('dialog', { name: 'wt' })).not.toBeInTheDocument()
+    expect(agent).toHaveFocus()
   })
 
   it('lets a nested Radix layer consume Escape before closing the panel', () => {
