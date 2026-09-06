@@ -297,7 +297,9 @@ export class PaneManager {
   }
 
   scheduleRevealRepaint(): void {
-    // Repainting after hide/destroy can revive WebGL contexts and force unrelated panes to DOM.
+    // Why: the settled-frame callback can fire after hide/destroy; repainting
+    // hidden or disposed panes can revive WebGL contexts and latch attach
+    // backoff, downgrading unrelated new panes to the DOM renderer.
     schedulePaneRevealRepaint(() => (this.isVisibleForAtlasRecovery() ? this.panes.values() : []))
   }
 

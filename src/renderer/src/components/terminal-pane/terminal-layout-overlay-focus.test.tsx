@@ -75,6 +75,16 @@ describe('terminal layout preserves overlay focus', () => {
     expect(document.activeElement).toBe(textarea)
   })
 
+  it('hands focus back to a menu that is animating closed', () => {
+    const { manager, terminal, textarea } = createLayoutFixture()
+    mountOverlay('menu').setAttribute('data-state', 'closed')
+
+    fitAndFocusPanes(manager)
+
+    expect(terminal.focus).toHaveBeenCalledOnce()
+    expect(document.activeElement).toBe(textarea)
+  })
+
   it('does not treat the workspace sidebar as a focus-owning overlay', () => {
     const { manager, terminal } = createLayoutFixture()
     const sidebar = mountOverlay('listbox')
