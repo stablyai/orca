@@ -62,7 +62,9 @@ export function MobilePairingConnectionOptions({
   // CTA would be dead. Treat that case as unavailable (matching the prior UI)
   // and only offer Sign in when the build can actually reach Relay.
   const configured = authStatus?.configured !== false
-  const needsSignIn = value === 'automatic' && !signedIn && configured
+  const relayReconnectSuggested =
+    value === 'automatic' && signedIn && relayMintFailed && !relayMintRetrying
+  const needsSignIn = value === 'automatic' && configured && (!signedIn || relayReconnectSuggested)
   // Availability is a property of the build, not of the current selection.
   const relayUnavailable = !signedIn && !configured
   const relayDisabled = relayMintRetrying || relayUnavailable
@@ -198,10 +200,15 @@ export function MobilePairingConnectionOptions({
             data-testid="anywhere-sign-in-panel"
           >
             <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
-                'Relay only — LAN does not need an account.'
-              )}
+              {relayReconnectSuggested
+                ? translate(
+                    'auto.components.settings.MobilePairingConnectionOptions.signInAgainRequired',
+                    'Sign in again to refresh Orca Mobile Relay access.'
+                  )
+                : translate(
+                    'auto.components.settings.MobilePairingConnectionOptions.signInRequired',
+                    'Relay only — LAN does not need an account.'
+                  )}
             </p>
             <Button
               type="button"
@@ -214,7 +221,7 @@ export function MobilePairingConnectionOptions({
               }}
             >
               {connecting ? <Loader2 className="animate-spin" /> : null}
-              {reconnectRequired
+              {reconnectRequired || relayReconnectSuggested
                 ? translate(
                     'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
                     'Sign in again for Relay'
