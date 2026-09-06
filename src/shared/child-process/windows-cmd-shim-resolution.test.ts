@@ -270,6 +270,39 @@ describeOnWindows('resolveWindowsCmdShim', () => {
     }
   })
 
+  it('gives up when cmd would resolve `node` to a non-.exe PATHEXT spelling', () => {
+    // cmd stops at the first PATH directory holding ANY PATHEXT spelling, and
+    // `.COM` outranks `.EXE`, so `first\node.com` is what the shim actually
+    // runs. Scanning past it to `second\node.exe` would silently start a
+    // different binary -- so resolution gives up and cmd.exe keeps the job.
+    // Delete the PATHEXT loop and this returns the .exe instead of null.
+    const first = mkdtempSync(join(tmpdir(), 'orca-shim-ext-first-'))
+    const second = mkdtempSync(join(tmpdir(), 'orca-shim-ext-second-'))
+    const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-ext-'))
+    try {
+      writeFileSync(join(first, 'node.com'), '')
+      const nodeExe = join(second, 'node.exe')
+      writeFileSync(nodeExe, '')
+      writeFileSync(join(shimDir, 'cli.js'), '')
+      const shim = join(shimDir, 'pathext.cmd')
+      writeFileSync(shim, npmProgNodeShim('cli.js'))
+      const pathEnv = { ...env, Path: undefined, PATH: `${first};${second}` }
+
+      expect(resolveWindowsCmdShim(shim, { ...pathEnv, PATHEXT: undefined })).toBeNull()
+
+      // PATHEXT is honoured, not assumed: with `.COM` absent from it, cmd never
+      // considers the `node.com` and the `.exe` is the right answer again. This
+      // also pins PATHEXT into the cache key -- the two calls differ only there.
+      expect(resolveWindowsCmdShim(shim, { ...pathEnv, PATHEXT: '.EXE;.BAT' })?.program).toBe(
+        nodeExe
+      )
+    } finally {
+      removeTreeSync(first)
+      removeTreeSync(second)
+      removeTreeSync(shimDir)
+    }
+  })
+
   it('falls back to cmd.exe when the cached interpreter has been uninstalled', () => {
     // The mirror of the test above, and the direction that breaks: a cached
     // node.exe that is later removed must not still be handed to `resolveSpawn`,

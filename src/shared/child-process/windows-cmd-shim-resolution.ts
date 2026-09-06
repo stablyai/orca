@@ -242,26 +242,43 @@ function firstEnvKey(env: NodeJS.ProcessEnv, name: string): string | undefined {
   return Object.keys(env).find((key) => key.toLowerCase() === lower && env[key] !== undefined)
 }
 
+/** cmd's own default when PATHEXT is unset or empty. The order is the point:
+ * `.COM` outranks `.EXE`, so a `node.com` is what cmd runs even with a
+ * `node.exe` sitting beside it. */
+const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC'
+
 /**
  * The interpreter the shim itself would pick: a `node.exe` beside it, else
- * `node` from PATH.
+ * whatever a bare `node` resolves to on PATH.
+ *
+ * The sibling test is exact, matching the shim's own literal
+ * `IF EXIST "%~dp0\node.exe"`. The PATH scan follows cmd's rule instead: the
+ * first directory holding ANY PATHEXT spelling of `node` wins, and inside that
+ * directory PATHEXT order decides. So a `node.com` early on PATH beats a
+ * `node.exe` later, and only the `.exe` outcome is one we can start directly.
+ * Every other winning spelling returns null and keeps the cmd.exe path, which a
+ * `.bat`/`.cmd` node would have needed anyway.
+ *
+ * Scanning past a non-`.exe` winner to a `node.exe` further down PATH is the
+ * tempting shortcut and the one bug this module must never have: it silently
+ * runs a different binary than the shim does. Every decision here stays a
+ * strict subset of what cmd.exe would pick, or gives up.
  *
  * Not searched: the working directory, which cmd would consult first for a bare
  * name. Preferring a `node.exe` that happens to sit in the cwd over the
  * installed one is a Windows footgun, not a behaviour worth reproducing.
- *
- * Only `node.exe`, though cmd would also accept the `node.com`/`.bat`/`.cmd`
- * PATHEXT spellings. Those return null here, which is a clean fallback to the
- * cmd path — a `.cmd` node in particular is a hop we could not remove anyway.
  */
 function resolveShimNode(directory: string, env: NodeJS.ProcessEnv): string | null {
-  const path = firstEnvKey(env, 'PATH')
-  const pathValue = (path ? env[path] : undefined) ?? ''
-  // Both inputs are in the key because both decide the answer: the shim prefers
-  // its own directory, and falls back to PATH. A PATH edit between spawns
-  // therefore misses rather than serving the previous interpreter. A newline
-  // separates them because Windows allows one in neither a path nor a PATH.
-  const key = `${directory}\n${pathValue}`
+  const pathKey = firstEnvKey(env, 'PATH')
+  const pathValue = (pathKey ? env[pathKey] : undefined) ?? ''
+  const pathExtKey = firstEnvKey(env, 'PATHEXT')
+  const pathExtValue = (pathExtKey ? env[pathExtKey] : undefined) || DEFAULT_PATHEXT
+  // All three inputs are in the key because all three decide the answer: the
+  // shim prefers its own directory, falls back to PATH, and PATHEXT orders the
+  // spellings tried within each PATH entry. An edit to any of them therefore
+  // misses rather than serving the previous interpreter. Newlines separate them
+  // because Windows allows one in none of the three.
+  const key = `${directory}\n${pathValue}\n${pathExtValue}`
   const cached = nodeCache.get(key)
   // A hit is confirmed still on disk before it is used, because the two stale
   // directions are not symmetric. A stale `null` is safe and stays uncorrected:
@@ -273,7 +290,7 @@ function resolveShimNode(directory: string, env: NodeJS.ProcessEnv): string | nu
   if (cached !== undefined && (cached === null || statFile(cached))) {
     return cached
   }
-  const resolved = probeShimNode(directory, pathValue)
+  const resolved = probeShimNode(directory, pathValue, pathExtValue)
   // Same wholesale eviction as the parse cache, for the same reason: the cap is
   // per-process and one entry per distinct shim directory Orca ever spawns from.
   if (nodeCache.size >= NODE_CACHE_LIMIT) {
@@ -283,11 +300,15 @@ function resolveShimNode(directory: string, env: NodeJS.ProcessEnv): string | nu
   return resolved
 }
 
-function probeShimNode(directory: string, pathValue: string): string | null {
+function probeShimNode(directory: string, pathValue: string, pathExtValue: string): string | null {
   const sibling = win32.join(directory, 'node.exe')
   if (statFile(sibling)) {
     return sibling
   }
+  const extensions = pathExtValue
+    .split(';')
+    .map((extension) => extension.trim().toLowerCase())
+    .filter((extension) => extension.startsWith('.'))
   for (const entry of pathValue.split(';')) {
     const trimmed = entry.trim().replace(/^"(.*)"$/, '$1')
     // A relative PATH entry resolves against the child's working directory, so
@@ -295,9 +316,18 @@ function probeShimNode(directory: string, pathValue: string): string | null {
     if (!trimmed || !win32.isAbsolute(trimmed)) {
       continue
     }
-    const candidate = win32.join(trimmed, 'node.exe')
-    if (statFile(candidate)) {
-      return candidate
+    // Why every spelling and not just `.exe`: cmd stops at the first directory
+    // holding any of them, so passing over a `node.com` here and matching a
+    // `node.exe` further down PATH would run a binary the shim never would.
+    // Costs one `stat` per PATHEXT entry per node-less directory, paid once per
+    // process because of the cache above -- where the per-spawn walk it
+    // replaced paid its own stats on every single spawn.
+    for (const extension of extensions) {
+      const candidate = win32.join(trimmed, `node${extension}`)
+      if (!statFile(candidate)) {
+        continue
+      }
+      return extension === '.exe' ? candidate : null
     }
   }
   return null
