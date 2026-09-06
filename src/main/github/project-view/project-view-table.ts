@@ -90,7 +90,10 @@ export async function getProjectViewTable(
     // Why: `matchesSelector` only defaults to a table view, so a project whose
     // views are all roadmaps resolved to nothing even though we can now render
     // one. Table stays the preferred default; this is the empty-handed case.
-    selectedRaw = viewsSeen.find((v) => v.layout === 'ROADMAP_LAYOUT') ?? null
+    selectedRaw =
+      viewsSeen.find((v) => v.layout === 'ROADMAP_LAYOUT') ??
+      viewsSeen.find((v) => v.layout === 'BOARD_LAYOUT') ??
+      null
   }
   if (!selectedRaw) {
     return { ok: false, error: { type: 'not_found', message: 'Could not find the selected view.' } }
@@ -117,10 +120,14 @@ export async function getProjectViewTable(
   const effectiveQuery =
     typeof args.queryOverride === 'string' ? args.queryOverride : selectedView.filter
 
-  // Why: roadmaps read the same item stream as a table — only the renderer
-  // differs. Allowlist, not `=== 'BOARD_LAYOUT'`: raw.layout is cast unchecked,
-  // so a future GitHub layout must reject cleanly, not render as a table.
-  if (selectedView.layout !== 'TABLE_LAYOUT' && selectedView.layout !== 'ROADMAP_LAYOUT') {
+  // Why: boards and roadmaps read the same item stream as a table — only the
+  // renderer differs. Allowlist: raw.layout is cast unchecked, so a future
+  // GitHub layout must reject cleanly, not render as a table.
+  if (
+    selectedView.layout !== 'TABLE_LAYOUT' &&
+    selectedView.layout !== 'ROADMAP_LAYOUT' &&
+    selectedView.layout !== 'BOARD_LAYOUT'
+  ) {
     const count = await fetchItemsCountOnly({
       owner: args.owner,
       ownerType: args.ownerType,
@@ -132,7 +139,9 @@ export async function getProjectViewTable(
       ok: false,
       error: {
         type: 'unsupported_layout',
-        message: `Orca renders table and roadmap views. This is a ${selectedView.layout.replace('_LAYOUT', '').toLowerCase()} view.`
+        // Why: the branch is type-unreachable (closed union) but runtime-real —
+        // raw.layout is cast unchecked, so an unknown value lands here.
+        message: `Orca renders table, board, and roadmap views. This is a ${String(selectedView.layout).replace('_LAYOUT', '').toLowerCase()} view.`
       },
       ...(typeof count === 'number' ? { totalCount: count } : {})
     }

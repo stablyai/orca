@@ -6,6 +6,7 @@ import type {
   GitHubProjectViewLayout
 } from '../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
+import { githubProjectHost } from '../../../shared/github/project-identity'
 import { driftError } from './project-error-classification'
 import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
 import { normalizeField, type RawProjectV2Field } from './project-view-field-normalization'
@@ -37,9 +38,26 @@ export type RawProjectView = {
     nodes?: (RawProjectV2Field | null)[]
   }
   groupByFields?: { nodes?: (RawProjectV2Field | null)[] }
+  verticalGroupByFields?: { nodes?: (RawProjectV2Field | null)[] }
   sortByFields?: {
     nodes?: ({ direction?: string; field?: RawProjectV2Field | null } | null)[]
   }
+}
+
+// Why: older GHES ProjectV2 schemas predate `verticalGroupByFields`; one
+// unknown-field error there would break EVERY project view on that host. Track
+// the incapability per host and retry the views query without the selection —
+// the board renderer falls back to the Status field when config is absent.
+const hostsWithoutVerticalGroupBy = new Set<string>()
+
+function verticalGroupBySelection(host: string | undefined): string {
+  return hostsWithoutVerticalGroupBy.has(githubProjectHost(host) ?? 'github.com')
+    ? ''
+    : 'verticalGroupByFields(first:10) { nodes { ...FieldConfig } }'
+}
+
+function errorsIndicateVerticalGroupBy(raw: { stderr: string; stdout: string }): boolean {
+  return `${raw.stdout}\n${raw.stderr}`.includes('verticalGroupByFields')
 }
 
 export function ownerQueryRoot(ownerType: GitHubProjectOwnerType): string {
@@ -65,7 +83,7 @@ export async function fetchProjectViewsPage(args: {
   const root = ownerQueryRoot(args.ownerType)
   const afterArg = args.after ? `, after: $after` : ''
   const afterVar = args.after ? `$after:String!, ` : ''
-  const query = `
+  const buildQuery = (): string => `
     query(${afterVar}$owner:String!, $num:Int!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
@@ -79,6 +97,7 @@ export async function fetchProjectViewsPage(args: {
                 nodes { ...FieldConfig }
               }
               groupByFields(first:10) { nodes { ...FieldConfig } }
+              ${verticalGroupBySelection(args.host)}
               sortByFields(first:10) {
                 nodes { direction field { ...FieldConfig } }
               }
@@ -93,11 +112,19 @@ export async function fetchProjectViewsPage(args: {
   if (args.after) {
     vars.after = args.after
   }
-  const res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
-    query,
+  let res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
+    buildQuery(),
     vars,
     projectGhExecOptions(args.host)
   )
+  if (!res.ok && errorsIndicateVerticalGroupBy(res.raw)) {
+    hostsWithoutVerticalGroupBy.add(githubProjectHost(args.host) ?? 'github.com')
+    res = await runGraphql<Record<string, { projectV2?: RawProjectConfig | null } | null>>(
+      buildQuery(),
+      vars,
+      projectGhExecOptions(args.host)
+    )
+  }
   if (!res.ok) {
     return res
   }
@@ -189,6 +216,13 @@ export function finalizeView(
       groupByFields.push(n)
     }
   }
+  const verticalGroupByFields: GitHubProjectField[] = []
+  for (const f of raw.verticalGroupByFields?.nodes ?? []) {
+    const n = normalizeField(f)
+    if (n) {
+      verticalGroupByFields.push(n)
+    }
+  }
   const sortByFields: GitHubProjectSort[] = []
   for (const s of raw.sortByFields?.nodes ?? []) {
     if (!s || (s.direction !== 'ASC' && s.direction !== 'DESC')) {
@@ -210,7 +244,10 @@ export function finalizeView(
       filter: typeof raw.filter === 'string' ? raw.filter : '',
       fields,
       groupByFields,
-      sortByFields
+      sortByFields,
+      // Why: only attach when present so old cached payloads and schema-less
+      // hosts keep the exact shape the optional wire field promises.
+      ...(raw.verticalGroupByFields ? { verticalGroupByFields } : {})
     }
   }
 }

@@ -123,6 +123,18 @@ export function groupRows(
   if (!groupField) {
     return [{ key: 'all', label: '', iteration: null, rows: rowsInOrder }]
   }
+  return groupRowsByField(groupField, rowsInOrder)
+}
+
+/** Sentinel key of the trailing no-value group/column. */
+export const EMPTY_PROJECT_GROUP_KEY = EMPTY_GROUP_KEY
+
+/** Buckets rows by an explicit field — the table view's groupBy and the board
+ *  view's column field share this so both order and label groups identically. */
+export function groupRowsByField(
+  groupField: GitHubProjectField,
+  rowsInOrder: GitHubProjectRow[]
+): ProjectGroup[] {
   const buckets = new Map<
     string,
     {

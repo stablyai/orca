@@ -4,6 +4,7 @@ import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
+import ProjectBoard from './ProjectBoard'
 import ProjectRoadmap from './ProjectRoadmap'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { ProjectMissingRepoDialog } from './ProjectMissingRepoDialog'
@@ -144,6 +145,16 @@ function ProjectViewBody({
   if (visibleTable.selectedView.layout === 'ROADMAP_LAYOUT') {
     return (
       <ProjectRoadmap table={visibleTable} onOpenDialog={rowActions.openDialog} fallback={list} />
+    )
+  }
+  if (visibleTable.selectedView.layout === 'BOARD_LAYOUT') {
+    return (
+      <ProjectBoard
+        table={visibleTable}
+        onOpenDialog={rowActions.openDialog}
+        onEditField={(row, fieldId, value) => void rowActions.editField(row, fieldId, value)}
+        fallback={list}
+      />
     )
   }
   return list
