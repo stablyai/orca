@@ -69,7 +69,10 @@ mv -f ${q(`${SERVE_UPDATE_SUDOERS_PATH}.new`)} ${q(SERVE_UPDATE_SUDOERS_PATH)}
 mkdir -p ${q(input.spoolDir)}
 chown root:${q(input.serviceUser)} ${q(input.spoolDir)}
 chmod 0775 ${q(input.spoolDir)}
-printf '{"helperVersion":1,"unitName":"%s"}' ${q(input.unitName)} > ${q(`${input.spoolDir}/helper.json`)}
+# unitName is JSON-encoded via jq -Rs (not shell-quoted): a quote or backslash in
+# --unit must not produce a helper.json that fails to parse, because the reader
+# treats a malformed marker as "helper absent" and disables the feature.
+printf '{"helperVersion":1,"unitName":%s}' "$(printf '%s' ${q(input.unitName)} | jq -Rs .)" > ${q(`${input.spoolDir}/helper.json`)}
 chown root:root ${q(`${input.spoolDir}/helper.json`)}
 chmod 0644 ${q(`${input.spoolDir}/helper.json`)}
 echo "orca-serve-update-helper installed"
