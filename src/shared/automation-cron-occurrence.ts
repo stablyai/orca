@@ -1,6 +1,5 @@
 import type { ParsedCron } from './automation-schedule-parsing'
 
-const DAY_MS = 24 * 60 * 60 * 1000
 const CRON_SCAN_DAYS = 9 * 366
 
 export function startOfLocalDay(timestamp: number): number {
@@ -42,7 +41,9 @@ export function cronHasPossibleOccurrence(rule: ParsedCron, anchor: number): boo
     if (cronDateMatches(rule, day)) {
       return true
     }
-    day += DAY_MS
+    const nextDay = new Date(day)
+    nextDay.setDate(nextDay.getDate() + 1)
+    day = startOfLocalDay(nextDay.getTime())
   }
   return false
 }
