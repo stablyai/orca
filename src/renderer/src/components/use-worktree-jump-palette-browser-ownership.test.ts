@@ -10,7 +10,7 @@ import { useWorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open
 
 afterEach(cleanup)
 
-it('keeps same-id browser results on their owner and updates when tab ownership changes', () => {
+it('keeps same-id browser results on their owner with recency, and follows ownership changes', () => {
   const worktrees = [
     makeWorktree('same-id', 'Local workspace', { hostId: 'local' }),
     makeWorktree('same-id', 'Remote workspace', { hostId: 'runtime:paired' })
@@ -37,11 +37,13 @@ it('keeps same-id browser results on their owner and updates when tab ownership 
   const tab: Tab = {
     ...makeUnifiedTab('tab', 'same-id', 'browser', 'Browser proof'),
     contentType: 'browser',
-    executionHostId: 'runtime:paired'
+    executionHostId: 'runtime:paired',
+    lastFocusedAt: 5_000
   }
   type PaletteInput = Parameters<typeof useWorktreeJumpPaletteOpenTabs>[0]
   const input: Partial<PaletteInput> = {
     ...useAppStore.getInitialState(),
+    // The store holds {key, result}; the hook takes the unwrapped result.
     workspacePortScan: null,
     paletteStatusInputsActive: true,
     allWorktrees: worktrees,
@@ -60,10 +62,15 @@ it('keeps same-id browser results on their owner and updates when tab ownership 
     (props: Partial<PaletteInput>) => useWorktreeJumpPaletteOpenTabs(props as PaletteInput),
     { initialProps: input }
   )
+  // lastActiveAt rides the same map: without it every browser row sorts as never-focused.
   const owners = () =>
-    result.current.browserItems.map(({ result: entry }) => [entry.pageId, entry.executionHostId])
+    result.current.browserItems.map(({ result: entry }) => [
+      entry.pageId,
+      entry.executionHostId,
+      entry.lastActiveAt
+    ])
 
-  expect(owners()).toEqual([['page', 'runtime:paired']])
+  expect(owners()).toEqual([['page', 'runtime:paired', 5_000]])
 
   rerender({
     ...input,
@@ -71,5 +78,5 @@ it('keeps same-id browser results on their owner and updates when tab ownership 
       'same-id': [{ ...tab, executionHostId: 'local' }]
     }
   })
-  expect(owners()).toEqual([['page', 'local']])
+  expect(owners()).toEqual([['page', 'local', 5_000]])
 })
