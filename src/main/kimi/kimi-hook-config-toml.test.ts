@@ -156,6 +156,63 @@ describe('kimi managed hooks TOML block', () => {
     expect(readManagedKimiHookEvents(orphanedCrlf, isManaged)).toEqual(new Set(KIMI_HOOK_EVENTS))
   })
 
+  it('keeps a user hook table that extends the installer shape intact (#18861)', () => {
+    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+    // A user table reusing the installer field order (event/command/timeout)
+    // but carrying extra keys must not be read as installer-shaped: recovery
+    // would otherwise delete its header and known fields and detach the rest.
+    const orphanedWithExtendedTable = installed
+      .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, '\n')
+      .concat(
+        '[[hooks]]\n',
+        'event = "SessionStart"\n',
+        'command = "node my-own-hook.mjs"\n',
+        'timeout = 120\n',
+        'priority = 1\n'
+      )
+
+    const removed = removeManagedKimiHooks(orphanedWithExtendedTable)
+    expect(removed.changed).toBe(true)
+    // The orphaned installer-shaped tables are still stripped...
+    expect(removed.text).not.toContain(COMMAND)
+    expect(removed.text).not.toContain('orca-managed-kimi-hooks')
+    // ...while the extended user table survives complete, header included.
+    expect(removed.text).toContain('[[hooks]]')
+    expect(removed.text).toContain('event = "SessionStart"')
+    expect(removed.text).toContain('command = "node my-own-hook.mjs"')
+    expect(removed.text).toContain('timeout = 120')
+    expect(removed.text).toContain('priority = 1')
+    expect(readManagedKimiHookEvents(removed.text, isManaged).size).toBe(0)
+
+    // Reinstall still converges to one block beside the extended user table.
+    const reinstalled = applyManagedKimiHooks(orphanedWithExtendedTable, COMMAND)
+    expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
+    expect(reinstalled).toContain('priority = 1')
+  })
+
+  it('declines orphan recovery when the first table after the marker extends the installer shape (#18861)', () => {
+    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+    // With no fully installer-shaped table after the orphaned marker, recovery
+    // must decline entirely rather than delete an extended table's prefix.
+    const blockStart = installed.match(/# >>> orca-managed-kimi-hooks[^\n]*/)?.[0] ?? ''
+    const orphanedExtendedOnly = [
+      'default_model = "x"',
+      '',
+      blockStart,
+      '[[hooks]]',
+      'event = "SessionStart"',
+      'command = "node my-own-hook.mjs"',
+      'timeout = 120',
+      'priority = 1',
+      ''
+    ].join('\n')
+
+    expect(removeManagedKimiHooks(orphanedExtendedOnly)).toEqual({
+      text: orphanedExtendedOnly,
+      changed: false
+    })
+  })
+
   it('treats stale managed entries pointing at a moved script path as managed', () => {
     const staleCommand =
       "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"

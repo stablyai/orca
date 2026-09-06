@@ -32,9 +32,13 @@ const BLOCK_END = '# <<< orca-managed-kimi-hooks <<<'
 //    bounded to the contiguous installer-shaped `[[hooks]]` tables (header +
 //    event/command/timeout lines), so user TOML appended after the orphaned
 //    tables survives remove/reinstall instead of being swallowed to EOF (#18861).
+//    Each recovered table must be followed by the next table header or EOF, so
+//    a user table that reuses the installer field order but carries extra keys
+//    ends recovery with the table intact instead of being truncated to its
+//    installer-shaped prefix.
 //    Line boundaries accept CRLF: an editor saving the config with Windows
 //    endings after deleting BLOCK_END must still be recoverable.
-//    A user table that happens to mirror the exact installer shape remains
+//    A user table that mirrors the exact installer shape remains
 //    indistinguishable by form alone — stopping at the first non-managed table
 //    is the accepted bound of orphan recovery.
 const MANAGED_HOOK_TABLE =
@@ -43,7 +47,7 @@ const MANAGED_HOOK_TABLE =
   'command\\s*=\\s*"(?:[^"\\\\]|\\\\.)*"\\r?\\n' +
   'timeout\\s*=\\s*\\d+'
 const MANAGED_BLOCK_RE = new RegExp(
-  `(?:\\r?\\n)*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\r?\\n(?:${MANAGED_HOOK_TABLE}(?:\\r?\\n|$))+)`,
+  `(?:\\r?\\n)*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\r?\\n(?:${MANAGED_HOOK_TABLE}(?:\\r?\\n(?=\\[)|\\r?\\n*$))+)`,
   'g'
 )
 
