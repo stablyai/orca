@@ -25,10 +25,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/setup@v2
+      - uses: pnpm/action-setup@v4
         with:
-          package-json-file: cloud/package.json
-          install: false
+          package_json_file: cloud/package.json
+          run_install: false
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
