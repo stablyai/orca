@@ -75,7 +75,10 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
           ...(splitRatio !== undefined && { ratio: splitRatio }),
           leafId: insertion.newLeafId,
           ptyId,
-          placement: insertion.placement
+          placement: insertion.placement,
+          // Why: the host owns this layout; mirror its sizes rather than
+          // re-balancing panes the host deliberately left uneven.
+          preserveSiblingSizes: true
         }
       )
       if (createdPane) {

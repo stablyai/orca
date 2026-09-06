@@ -27,6 +27,8 @@ export type PaneSpawnHints = {
 export type PaneSplitOptions = PaneSpawnHints & {
   ratio?: number
   leafId?: string
+  /** Keep the sizes the caller/host already chose instead of re-balancing the tree. */
+  preserveSiblingSizes?: boolean
 }
 
 export type ClosedPaneInfo = {

@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
+  arePaneSplitSizesEqualized,
   cancelPendingSafeFitContinuations,
   equalizePaneSplitSizes,
   safeFit,
@@ -850,5 +851,48 @@ describe('equalizePaneSplitSizes', () => {
   it('returns false when there is no split tree to change', () => {
     expect(equalizePaneSplitSizes(pane() as unknown as HTMLElement)).toBe(false)
     expect(equalizePaneSplitSizes(null)).toBe(false)
+  })
+})
+
+describe('arePaneSplitSizesEqualized', () => {
+  const pane = (flex = '1 1 0%'): MockHTMLElement => new MockHTMLElement(['pane'], [], flex)
+  const split = (
+    direction: 'vertical' | 'horizontal',
+    children: MockHTMLElement[],
+    flex = '1 1 0%'
+  ): MockHTMLElement =>
+    new MockHTMLElement(
+      ['pane-split', direction === 'vertical' ? 'is-vertical' : 'is-horizontal'],
+      children,
+      flex
+    )
+
+  it('treats a single pane and an even two-pane split as equalized', () => {
+    expect(arePaneSplitSizesEqualized(null)).toBe(true)
+    expect(arePaneSplitSizesEqualized(pane() as unknown as HTMLElement)).toBe(true)
+    const root = split('vertical', [pane(), pane()])
+    expect(arePaneSplitSizesEqualized(root as unknown as HTMLElement)).toBe(true)
+  })
+
+  it('reports a dragged divider as not equalized', () => {
+    const root = split('vertical', [pane('0.7 1 0%'), pane('0.3 1 0%')])
+    expect(arePaneSplitSizesEqualized(root as unknown as HTMLElement)).toBe(false)
+  })
+
+  it('reports an unweighted nested same-axis split as not equalized', () => {
+    const root = split('vertical', [pane(), split('vertical', [pane(), pane()])])
+    expect(arePaneSplitSizesEqualized(root as unknown as HTMLElement)).toBe(false)
+  })
+
+  it('reports a weighted nested same-axis split as equalized', () => {
+    const root = split('vertical', [pane(), split('vertical', [pane(), pane()], '2 1 0%')])
+    expect(arePaneSplitSizesEqualized(root as unknown as HTMLElement)).toBe(true)
+  })
+
+  it('does not mutate the tree it inspects', () => {
+    const left = pane('0.7 1 0%')
+    const root = split('vertical', [left, pane('0.3 1 0%')])
+    arePaneSplitSizesEqualized(root as unknown as HTMLElement)
+    expect(left.style.flex).toBe('0.7 1 0%')
   })
 })

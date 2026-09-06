@@ -15,7 +15,11 @@ export {
   type SafeFitContinuationHandle
 } from './pane-fit'
 export { captureScrollState, restoreScrollState } from './pane-scroll'
-export { equalizePaneSplitSizes, findPaneChildren } from './pane-tree-equalization'
+export {
+  arePaneSplitSizesEqualized,
+  equalizePaneSplitSizes,
+  findPaneChildren
+} from './pane-tree-equalization'
 
 // ---------------------------------------------------------------------------
 // Split-tree manipulation: detach, insert, promote sibling
@@ -242,6 +246,12 @@ export function removeDividers(parent: HTMLElement): void {
   }
 }
 
+/** A ratio only sizes a split when it leaves both panes on screen; anything
+ *  else falls through to an even split, so callers must agree on the test. */
+export function isExplicitSplitRatio(ratio: number | undefined): ratio is number {
+  return ratio !== undefined && ratio > 0 && ratio < 1
+}
+
 /**
  * Create a flex split wrapper that replaces `existingContainer` in the DOM,
  * then places [existing] [divider] [new] inside it.
@@ -284,7 +294,7 @@ export function wrapInSplit(
 
   // Apply custom ratio if provided
   const ratio = opts?.ratio
-  if (ratio !== undefined && ratio > 0 && ratio < 1) {
+  if (isExplicitSplitRatio(ratio)) {
     existingContainer.style.flex = `${ratio} 1 0%`
     newContainer.style.flex = `${1 - ratio} 1 0%`
   }
