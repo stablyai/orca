@@ -22,6 +22,7 @@ type UseEditorPanelContentReloadTriggersParams = {
   invalidateFileContent: (fileIds: string[]) => void
   loadDiffContent: EditorPanelDiffContentLoader
   loadFileContent: EditorPanelFileContentLoader
+  requestDiffContentReload: (fileId: string) => void
 }
 
 export function useEditorPanelContentReloadTriggers({
@@ -34,7 +35,8 @@ export function useEditorPanelContentReloadTriggers({
   invalidateDiffContent,
   invalidateFileContent,
   loadDiffContent,
-  loadFileContent
+  loadFileContent,
+  requestDiffContentReload
 }: UseEditorPanelContentReloadTriggersParams): void {
   const changesStatusEntries = activeFile?.worktreeId ? gitStatusEntries : undefined
   const activeFileGitStatusEntries = useMemo(() => {
@@ -83,7 +85,11 @@ export function useEditorPanelContentReloadTriggers({
     if (!cachedDiff || cachedDiff.isStale === true) {
       return
     }
-    void loadDiffContent(current, { force: true })
+    void loadDiffContent(current, { force: true }).then((replaced) => {
+      if (replaced) {
+        requestDiffContentReload(current.id)
+      }
+    })
   }, [
     activeFileShouldReloadOnGitStatusChange,
     activeFileGitStatusSignature,
@@ -93,11 +99,12 @@ export function useEditorPanelContentReloadTriggers({
     loadDiffContent,
     diffContentsRef,
     isVisibleRef,
-    openFilesRef
+    openFilesRef,
+    requestDiffContentReload
   ])
 
   useEffect(() => {
-    const nonce = activeFile?.diffContentReloadNonce
+    const nonce = activeFile?.diffContentRefreshNonce
     if (!activeFile?.id || nonce === undefined || nonce === 0) {
       return
     }
@@ -109,14 +116,21 @@ export function useEditorPanelContentReloadTriggers({
     if (!isVisibleRef.current) {
       return
     }
-    void loadDiffContent(current, { force: true })
+    // Why: re-opening a diff tab must refetch before rotating the model, else
+    // the new model is seeded from the cached body being replaced.
+    void loadDiffContent(current, { force: true }).then((replaced) => {
+      if (replaced) {
+        requestDiffContentReload(current.id)
+      }
+    })
   }, [
-    activeFile?.diffContentReloadNonce,
+    activeFile?.diffContentRefreshNonce,
     activeFile?.id,
     invalidateDiffContent,
     loadDiffContent,
     isVisibleRef,
-    openFilesRef
+    openFilesRef,
+    requestDiffContentReload
   ])
 
   useEffect(() => {
