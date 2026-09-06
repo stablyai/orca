@@ -7,6 +7,7 @@ import {
 } from '../shared/execution-host'
 import {
   ambiguousEnvironments,
+  ambiguousSshTargets,
   crossKindNextSteps,
   findEnvironmentByName,
   findSshTargetByName,
@@ -139,19 +140,27 @@ async function assertAliasNamesOneHost(
   selection: HostFlagRoutingSelection
 ): Promise<void> {
   const sshTargets = await selection.listSshTargets()
-  const sshTarget = findSshTargetByName(sshTargets, alias)
-  if (!sshTarget) {
+  // Why: findSshTargetByName collapses a duplicated label to undefined, which reads here as "no
+  // SSH target by that name" — so two colliding targets would have looked like no conflict at all
+  // and resolved to the server. Duplicates are more ambiguity, not less.
+  const matched = findSshTargetByName(sshTargets, alias)
+  const conflicts = matched ? [matched] : ambiguousSshTargets(sshTargets, alias)
+  if (conflicts.length === 0) {
     return
   }
+  const sshCount =
+    conflicts.length === 1 ? 'an SSH target' : `${conflicts.length} SSH targets sharing that label`
   throw new RuntimeClientError(
     'invalid_argument',
-    `Ambiguous --host ${alias}: it names both a paired Orca server and an SSH target on this machine.`,
+    `Ambiguous --host ${alias}: it names both a paired Orca server and ${sshCount} on this machine.`,
     {
       knownEnvironments: [environment],
-      knownSshTargets: [sshTarget],
+      knownSshTargets: conflicts,
       nextSteps: [
         `Use --host runtime:${environment.id} for the paired Orca server named ${environment.name}.`,
-        `Use --host ssh:${sshTarget.id} for the SSH target labeled ${sshTarget.label}.`
+        ...conflicts.map(
+          (target) => `Use --host ssh:${target.id} for the SSH target labeled ${target.label}.`
+        )
       ]
     }
   )

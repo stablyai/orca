@@ -256,6 +256,30 @@ describe('unprefixed --host aliases', () => {
     })
   })
 
+  // Why: findSshTargetByName returns undefined for a duplicated label, which reads the same as
+  // "no SSH target by that name" — so this case used to look conflict-free and resolve to the
+  // paired server, the one direction that still guessed.
+  it('refuses an alias naming a server and two SSH targets sharing a label', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
+    listSshTargetsMock.mockResolvedValue([
+      { id: 'ssh-1-a', label: 'awin' },
+      { id: 'ssh-2-b', label: 'awin' }
+    ])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'awin' }), NO_SELECTION)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      data: {
+        nextSteps: expect.arrayContaining([
+          expect.stringContaining('--host runtime:env-1'),
+          expect.stringContaining('--host ssh:ssh-1-a'),
+          expect.stringContaining('--host ssh:ssh-2-b')
+        ])
+      }
+    })
+  })
+
   it('refuses an alias two paired servers answer to', async () => {
     listEnvironmentsMock.mockReturnValue([
       environment('env-1', 'awin'),
