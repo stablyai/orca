@@ -19,6 +19,7 @@ import { getSidebarOrderedRepoHeaderIdsByBucket } from '../../project-header-dro
 import { useProjectGroupHeaderDrag } from '../../project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from '../../project-group-header-drop'
 import { USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS } from '../viewport/use-scroll-suppression'
+import { reportProjectGroupMoveFailure } from '../../project-group-menu-actions'
 
 export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHeaderDrag>
 
@@ -157,8 +158,14 @@ export function useWorktreeSidebarHeaderDrag(args: {
     [sidebarProjectGroupHeaderIdsByBucket]
   )
   const commitProjectGroupOrder = useCallback(
-    (repoId: string, projectGroupId: string | null, order: number) => {
-      void moveProjectToGroup(repoId, projectGroupId, order)
+    (repoId: string, projectGroupId: string | null, order: number, repoHostId: ExecutionHostId) => {
+      void moveProjectToGroup(repoId, projectGroupId, order, { hostId: repoHostId }).then(
+        (moved) => {
+          if (!moved) {
+            reportProjectGroupMoveFailure()
+          }
+        }
+      )
     },
     [moveProjectToGroup]
   )

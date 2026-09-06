@@ -1,9 +1,7 @@
 import React from 'react'
 import WorktreeContextMenuView from './WorktreeContextMenuView'
-import {
-  useWorktreeContextMenuModel,
-  type WorktreeContextMenuProps
-} from './use-worktree-context-menu-model'
+import { useWorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import type { WorktreeContextMenuProps } from './worktree-context-menu-props'
 
 const WorktreeContextMenu = React.memo(function WorktreeContextMenu(
   props: WorktreeContextMenuProps

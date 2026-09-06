@@ -11,11 +11,11 @@ import {
   type ProjectHeaderDragSession
 } from './project-header-drag-contract'
 import type { Repo } from '../../../../shared/repo-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export function createProjectHeaderDragSession(args: {
   event: PointerEvent<HTMLElement>
-  repoId: string
-  repoById: ReadonlyMap<string, Repo>
+  repo: Repo
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
   getScrollContainer: () => HTMLElement | null
 }): ProjectHeaderDragSession | null {
@@ -28,11 +28,7 @@ export function createProjectHeaderDragSession(args: {
   if (isRepoHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
-  const repo = args.repoById.get(args.repoId)
-  if (!repo) {
-    return null
-  }
-  const bucketKey = getProjectHeaderDragBucketKey(repo)
+  const bucketKey = getProjectHeaderDragBucketKey(args.repo)
   const sidebarRepoHeaderIds = args.sidebarRepoHeaderIdsByBucket.get(bucketKey) ?? []
   // Why: a single project in its bucket has nowhere to land, so skip arming
   // drag and let the header click toggle collapse instead.
@@ -47,7 +43,9 @@ export function createProjectHeaderDragSession(args: {
   // Why: defer setPointerCapture until the drag threshold is crossed so a
   // header click still reaches the inner collapse handler on pointerup.
   return {
-    repoId: args.repoId,
+    repoId: args.repo.id,
+    repoHostId: getRepoExecutionHostId(args.repo),
+    projectGroupId: args.repo.projectGroupId ?? null,
     bucketKey,
     sidebarRepoHeaderIds,
     pointerId: args.event.pointerId,

@@ -88,9 +88,10 @@ export function renderWorktreeSectionHeaderRow(args: {
 }): React.JSX.Element {
   const { ctx, row, vItem, isActiveStickyHeader } = args
   const { headerDrag } = ctx
-  const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
+  const repoForHeader = ctx.groupBy === 'repo' ? row.repo : undefined
+  const isRepoHeader = repoForHeader !== undefined
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
-  const projectIdForHeader = isRepoHeader ? row.repo!.id : undefined
+  const projectIdForHeader = repoForHeader?.id
   const projectGroupIdForHeader =
     isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
       ? row.projectGroup.id
@@ -273,8 +274,8 @@ export function renderWorktreeSectionHeaderRow(args: {
             : undefined
         }
         onPointerDown={
-          isDraggableRepoHeader && projectIdForHeader
-            ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, projectIdForHeader)
+          isDraggableRepoHeader && repoForHeader
+            ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, repoForHeader)
             : isDraggableProjectGroupHeader && projectGroupIdForHeader
               ? (event) =>
                   headerDrag.projectGroupDrag.onHandlePointerDown(event, projectGroupIdForHeader)
@@ -383,6 +384,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             <RepoHeaderProjectActionsMenu
               repo={row.repo}
               label={row.label}
+              projectGroupHostLabel={row.projectGroupHostLabel}
               projectGroups={ctx.projectGroups}
               actions={ctx.projectActions}
             />

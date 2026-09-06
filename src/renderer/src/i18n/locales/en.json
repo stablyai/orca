@@ -6270,6 +6270,20 @@
           "title": "Worktree scan failed for {{value0}}",
           "retry": "Retry scan",
           "retained": "Existing worktrees are kept until a scan succeeds. Click to retry."
+        },
+        "project-group-menu-label": {
+          "local": "Local",
+          "moveToGroup": "Move to group",
+          "moveToGroupForHost": "Move to group: {{hostLabel}}"
+        },
+        "project-group-menu-actions": {
+          "createFailed": "Failed to create group",
+          "createFailedDescription": "Orca could not confirm the new group with the project's host. Check the connection and try again.",
+          "initialMoveUnconfirmed": "Group created, but move was not confirmed",
+          "moveFailed": "Failed to move project",
+          "moveUnconfirmedDescription": "Orca could not confirm the move with the project's host. Recheck the project after reconnecting.",
+          "removeFailed": "Failed to remove project from group",
+          "removeFailedDescription": "Orca could not confirm the change with the project's host. Recheck the project after reconnecting."
         }
       },
       "shared": {

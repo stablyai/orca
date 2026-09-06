@@ -18,6 +18,8 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { getProjectGroupMenuHostLabelForWorktree } from './project-group-menu-label'
+import { selectHasMultipleVisibleProjectGroupCatalogHosts } from './worktree-list/listing/project-group-catalog-visibility'
 
 export function useWorktreeCardFoundation({
   worktree,
@@ -177,6 +179,13 @@ export function useWorktreeCardFoundation({
   const runtimeHostLabel = runtimeHostId
     ? (getHostDisplayLabelOverrides(settings).get(runtimeHostId) ?? runtimeEnvironmentName)
     : null
+  const showProjectGroupHostLabels = useAppStore(selectHasMultipleVisibleProjectGroupCatalogHosts)
+  const projectGroupHostLabel = getProjectGroupMenuHostLabelForWorktree(
+    worktree,
+    repo,
+    showProjectGroupHostLabels,
+    runtimeHostLabel
+  )
   // Why: runtime ("Orca server") hosts get the same disconnected dimming as SSH when their environment has no live status.
   const isRuntimeDisconnected = useAppStore((s) => {
     if (!runtimeOwnerEnvironmentId) {
@@ -224,6 +233,7 @@ export function useWorktreeCardFoundation({
     sshTargetRemoved,
     parsedRepoHost,
     runtimeHostLabel,
+    projectGroupHostLabel,
     isRuntimeDisconnected,
     titleRenaming,
     setTitleRenaming,

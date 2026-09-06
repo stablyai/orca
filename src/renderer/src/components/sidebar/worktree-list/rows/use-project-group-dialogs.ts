@@ -6,6 +6,11 @@ import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-r
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  createProjectGroupFromRepo,
+  moveProjectToGroupFromMenu,
+  removeProjectFromGroupFromMenu
+} from '../../project-group-menu-actions'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
@@ -86,14 +91,14 @@ export function useProjectGroupDialogs(args: {
       if (repo.projectGroupId === groupId) {
         return
       }
-      void moveProjectToGroup(repo.id, groupId)
+      void moveProjectToGroupFromMenu(repo, groupId, moveProjectToGroup)
     },
     [moveProjectToGroup]
   )
 
   const handleRemoveProjectFromGroup = useCallback(
     (repo: Repo) => {
-      void moveProjectToGroup(repo.id, null)
+      void removeProjectFromGroupFromMenu(repo, moveProjectToGroup)
     },
     [moveProjectToGroup]
   )
@@ -111,10 +116,10 @@ export function useProjectGroupDialogs(args: {
         return
       }
       if (nameDialog.type === 'create-from-repo') {
-        const group = await createProjectGroup(name)
-        if (group) {
-          await moveProjectToGroup(nameDialog.repo.id, group.id)
-        }
+        await createProjectGroupFromRepo(nameDialog.repo, name, {
+          createProjectGroup,
+          moveProjectToGroup
+        })
         return
       }
       const renamed = await updateProjectGroup(

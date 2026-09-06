@@ -13,6 +13,7 @@ import {
   resetFloatingVisibleTabCountSelectorCacheForTest,
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectRepoByIdForActiveWorkspace,
+  selectRepoForWorktree,
   selectFloatingVisibleTabCount,
   selectFloatingWorkspaceHasUnread
 } from './selectors'
@@ -320,6 +321,34 @@ describe('store selectors', () => {
       'hub-repo'
     )
     expect(activeRepo ? isGitRepoKind(activeRepo) : false).toBe(true)
+  })
+
+  it('resolves a context worktree repo through its catalog owner host', () => {
+    const local = makeRepo({
+      id: 'same-repo',
+      path: '/local/repo',
+      displayName: 'local',
+      executionHostId: 'local'
+    })
+    const runtime = makeRepo({
+      id: 'same-repo',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      executionHostId: toRuntimeExecutionHostId('hub-a')
+    })
+    const state = {
+      repos: [runtime, local],
+      settings: { activeRuntimeEnvironmentId: null } as AppState['settings']
+    }
+
+    expect(
+      selectRepoForWorktree(state, {
+        repoId: 'same-repo',
+        hostId: toSshExecutionHostId('hub-private-target'),
+        runtimeOwnerEnvironmentId: 'hub-a'
+      })
+    ).toBe(runtime)
+    expect(selectRepoForWorktree(state, { repoId: 'same-repo', hostId: 'local' })).toBe(local)
   })
 
   it('fails a paired-hub repo fallback closed when rival HUB rows share the repo ID', () => {

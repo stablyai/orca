@@ -130,6 +130,25 @@ describe('project group mutations route to the owning host', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('keeps the direct-SSH catalog owner through the contained-project delete flow', async () => {
+    projectGroupsDelete.mockResolvedValue(true)
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      projectGroups: [{ ...folderScanGroup, connectionId: 'conn-1' }]
+    })
+
+    await expect(
+      store.getState().deleteProjectGroupWithContainedProjects(folderScanGroup.id, {
+        removeContainedProjects: false,
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toMatchObject({ status: 'deleted-group' })
+
+    expect(projectGroupsDelete).toHaveBeenCalledWith({ groupId: folderScanGroup.id })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('prefers an explicit hostId over both the focused host and a colliding row', async () => {
     runtimeEnvironmentCall.mockResolvedValue(runtimeRpcResponse({ deleted: true }))
     const store = createTestStore()
@@ -244,6 +263,48 @@ describe('project group state cascades stay scoped to the owner host', () => {
     expect(store.getState().repos).toMatchObject([
       { id: 'local-repo', projectGroupId: null },
       { id: 'remote-repo', projectGroupId: folderScanGroup.id }
+    ])
+  })
+
+  it('clears every client-catalog project when deleting a direct-SSH-stamped group', async () => {
+    projectGroupsDelete.mockResolvedValue(true)
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      projectGroups: [
+        { ...folderScanGroup, connectionId: 'conn-1' },
+        { ...folderScanGroup, name: 'Runtime projects', executionHostId: 'runtime:env-1' }
+      ],
+      repos: [
+        { ...baseRepo, id: 'local-repo', projectGroupId: folderScanGroup.id },
+        {
+          ...baseRepo,
+          id: 'ssh-repo',
+          connectionId: 'conn-2',
+          projectGroupId: folderScanGroup.id
+        },
+        {
+          ...baseRepo,
+          id: 'runtime-repo',
+          executionHostId: 'runtime:env-1',
+          projectGroupId: folderScanGroup.id
+        }
+      ]
+    })
+
+    await expect(
+      store.getState().deleteProjectGroup(folderScanGroup.id, { hostId: 'ssh:conn-1' })
+    ).resolves.toBe(true)
+
+    expect(projectGroupsDelete).toHaveBeenCalledWith({ groupId: folderScanGroup.id })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(store.getState().projectGroups).toMatchObject([
+      { id: folderScanGroup.id, executionHostId: 'runtime:env-1' }
+    ])
+    expect(store.getState().repos).toMatchObject([
+      { id: 'local-repo', projectGroupId: null },
+      { id: 'ssh-repo', projectGroupId: null },
+      { id: 'runtime-repo', projectGroupId: folderScanGroup.id }
     ])
   })
 

@@ -1,7 +1,11 @@
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import { getProjectGroupMenuHostLabel } from '../../project-group-menu-label'
 import {
   getWorkspaceStatusFromGroupKey,
   getWorkspaceStatusVisualMeta
@@ -40,6 +44,7 @@ export type SectionAppendContext = {
   repoMap: Map<string, Repo>
   defaultHostId: ExecutionHostId
   hostLabelById: ReadonlyMap<string, string> | undefined
+  hasMultipleProjectGroupCatalogHosts: boolean
   projectIndex: ProjectGroupingIndex | null
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
@@ -65,6 +70,7 @@ export function appendOrderedGroups(
     repoMap,
     defaultHostId,
     hostLabelById,
+    hasMultipleProjectGroupCatalogHosts,
     projectIndex,
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
@@ -89,6 +95,13 @@ export function appendOrderedGroups(
             tone: PROJECT_GROUP_META.tone,
             icon: PROJECT_GROUP_META.icon,
             repo,
+            projectGroupHostLabel: repo
+              ? getProjectGroupMenuHostLabel(
+                  repo,
+                  hasMultipleProjectGroupCatalogHosts,
+                  hostLabelById?.get(getRepoExecutionHostId(repo))
+                )
+              : undefined,
             projectGroupDepth
           }
         : groupBy === 'workspace-status'

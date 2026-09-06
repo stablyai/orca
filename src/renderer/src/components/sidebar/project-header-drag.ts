@@ -5,6 +5,7 @@ import {
   measureProjectHeaderDragRects
 } from './project-header-drop'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   INITIAL_REPO_DRAG_STATE,
   PROJECT_HEADER_DRAG_THRESHOLD_PX,
@@ -296,23 +297,19 @@ export function useRepoHeaderDrag({
     }
   }, [state.draggingRepoId])
 
-  const onHandlePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLElement>, repoId: string) => {
-      const session = createProjectHeaderDragSession({
-        event,
-        repoId,
-        repoById: repoByIdRef.current,
-        sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
-        getScrollContainer: getContainerRef.current
-      })
-      if (!session) {
-        return
-      }
-      dragSessionRef.current = session
-      setSessionArmed(true)
-    },
-    []
-  )
+  const onHandlePointerDown = useCallback((event: React.PointerEvent<HTMLElement>, repo: Repo) => {
+    const session = createProjectHeaderDragSession({
+      event,
+      repo,
+      sidebarRepoHeaderIdsByBucket: sidebarRepoHeaderIdsByBucketRef.current,
+      getScrollContainer: getContainerRef.current
+    })
+    if (!session) {
+      return
+    }
+    dragSessionRef.current = session
+    setSessionArmed(true)
+  }, [])
 
   return { state, onHandlePointerDown }
 }

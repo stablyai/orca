@@ -128,6 +128,23 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).not.toContain('No workspaces found')
   })
 
+  it('keeps project group actions generic when the host filter shows one catalog', async () => {
+    setLineageFixtureState('repo', { projectGrouped: true })
+    mockStore.state = {
+      ...mockStore.state,
+      repos: [
+        ...(mockStore.state.repos as Repo[]),
+        { ...makeRepo(), id: 'remote-repo', executionHostId: 'runtime:work' }
+      ],
+      visibleWorkspaceHostIds: ['local']
+    }
+
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('Move to group')
+    expect(markup).not.toContain('Move to group:')
+  })
+
   it('renders a collapse chevron on project group headers with children', async () => {
     setProjectGroupWithoutWorktreeRowsState()
     const markup = await renderWorktreeListMarkup()

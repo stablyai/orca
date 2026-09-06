@@ -8,7 +8,6 @@ import {
   installReposRuntimeRoutingHarness,
   localRepo,
   orcaProfileFindProjectProfiles,
-  projectGroupsMoveProject,
   projectsSetupExistingFolder,
   ptyKill,
   remoteRepo,
@@ -603,33 +602,6 @@ describe('repo slice runtime routing', () => {
       displayName: 'Project',
       setupMethod: 'cloned'
     })
-  })
-
-  it('keeps runtime ownership when a runtime repo is moved between groups', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-move',
-      ok: true,
-      result: { repo: { ...remoteRepo, projectGroupId: 'group-1' } },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [{ ...remoteRepo, executionHostId: 'runtime:env-1' }]
-    })
-
-    await expect(store.getState().moveProjectToGroup(remoteRepo.id, 'group-1')).resolves.toBe(true)
-
-    expect(store.getState().repos).toEqual([
-      { ...remoteRepo, projectGroupId: 'group-1', executionHostId: 'runtime:env-1' }
-    ])
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'projectGroup.moveProject',
-      params: { repo: remoteRepo.id, groupId: 'group-1', order: undefined },
-      timeoutMs: 15_000
-    })
-    expect(projectGroupsMoveProject).not.toHaveBeenCalled()
   })
 
   it('does not open the client folder picker when a remote runtime environment is active', async () => {

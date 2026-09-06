@@ -8,6 +8,7 @@ import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspac
 import type { AppState } from '../../../../store/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { hasMultipleProjectGroupCatalogHosts as detectMultipleProjectGroupCatalogHosts } from '@/store/slices/project-group-owner-routing'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getCyclicProjectedWorktreeLineageIds } from '../../worktree-lineage-projection'
 import { ALL_GROUP_KEY, ALL_GROUP_META } from './group-keys'
@@ -70,7 +71,10 @@ export function buildRows(
   folderWorkspaces: readonly FolderWorkspace[] = [],
   hostLabelById?: ReadonlyMap<string, string>,
   defaultHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID,
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings),
+  hasMultipleProjectGroupCatalogHosts = detectMultipleProjectGroupCatalogHosts([
+    ...repoMap.values()
+  ])
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -216,6 +220,7 @@ export function buildRows(
     repoMap,
     defaultHostId,
     hostLabelById,
+    hasMultipleProjectGroupCatalogHosts,
     projectIndex,
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,

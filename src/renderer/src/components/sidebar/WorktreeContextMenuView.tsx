@@ -36,6 +36,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
+import { getMoveToGroupMenuLabel } from './project-group-menu-label'
 import {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
@@ -84,6 +85,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     menuOpen,
     menuPoint,
     onContextMenuSelect,
+    projectGroupHostLabel,
     projectGroups,
     removesProject,
     repo,
@@ -215,10 +217,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger disabled={isDeleting}>
                         <FolderInput className="size-3.5" />
-                        {translate(
-                          'auto.components.sidebar.WorktreeContextMenu.76865d827f',
-                          'Move to group'
-                        )}
+                        {getMoveToGroupMenuLabel(projectGroupHostLabel)}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
                         {projectGroups.map((group) => (
