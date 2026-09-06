@@ -7,7 +7,7 @@ import {
   resolveStartupShell,
   type AgentStartupShell
 } from '../../../shared/tui-agent-startup-shell'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getAiVaultResumeWorkspacePath } from './ai-vault-resume-cwd'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 
 type AiVaultResumeShellState = Pick<
@@ -50,27 +50,4 @@ export function resolveAiVaultResumeStartupShell(args: {
     : undefined
   const shell = shellOverride ? resolveWindowsShellStartupFamily(shellOverride) : undefined
   return resolveStartupShell(args.platform, shell)
-}
-
-export function getAiVaultResumeWorkspacePath(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
-  worktreeId: string | null | undefined
-): string | null {
-  if (!worktreeId) {
-    return null
-  }
-  const workspaceScope = parseWorkspaceKey(worktreeId)
-  if (workspaceScope?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
-  }
-  const targetWorktreeId =
-    workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
-  return (
-    Object.values(state.worktreesByRepo ?? {})
-      .flat()
-      .find((candidate) => candidate.id === targetWorktreeId)?.path ?? null
-  )
 }

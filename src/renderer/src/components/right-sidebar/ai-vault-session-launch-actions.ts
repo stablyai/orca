@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree
+  buildAiVaultResumeCopyCommandForWorktreeAsync,
+  buildAiVaultResumeStartupForWorktree,
+  buildAiVaultResumeStartupForWorktreeAsync
 } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import {
@@ -45,8 +46,8 @@ export function useAiVaultSessionLaunchActions({
     useState<AgentSessionContinuationRequest | null>(null)
 
   const buildResumeCommand = useCallback(
-    (session: AiVaultSession, worktreeId?: string | null): string =>
-      buildAiVaultResumeCopyCommandForWorktree({
+    async (session: AiVaultSession, worktreeId?: string | null): Promise<string> =>
+      buildAiVaultResumeCopyCommandForWorktreeAsync({
         state: useAppStore.getState(),
         worktreeId: worktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null,
         session,
@@ -70,7 +71,9 @@ export function useAiVaultSessionLaunchActions({
     async (session: AiVaultSession, worktreeId?: string | null): Promise<void> => {
       try {
         const preparedSession = await prepareAiVaultSessionForResume(session)
-        await window.api.ui.writeClipboardText(buildResumeCommand(preparedSession, worktreeId))
+        await window.api.ui.writeClipboardText(
+          await buildResumeCommand(preparedSession, worktreeId)
+        )
         toast.success(
           translate(
             'auto.components.right.sidebar.AiVaultPanel.resumeCommandCopied',
@@ -111,11 +114,16 @@ export function useAiVaultSessionLaunchActions({
         )
       }
       void prepareAiVaultSessionForResume(session)
-        .then((preparedSession) => {
+        .then(async (preparedSession) => {
           const launchResult = launchAiVaultSessionInNewTab({
             agent: session.agent,
             worktreeId: targetId.worktreeId,
-            ...buildResumeStartup(preparedSession, targetId.worktreeId)
+            ...(await buildAiVaultResumeStartupForWorktreeAsync({
+              state: useAppStore.getState(),
+              worktreeId: targetId.worktreeId,
+              session: preparedSession,
+              commandOverride: agentCmdOverrides?.[preparedSession.agent]
+            }))
           })
           if (launchResult.tabId === null) {
             void launchResult.runtimeLaunch.then((outcome) => {
@@ -144,7 +152,7 @@ export function useAiVaultSessionLaunchActions({
         })
         .catch(notifyAiVaultSessionPreparationFailure)
     },
-    [activeWorktree?.id, activeWorktreeId, buildResumeStartup, targetState]
+    [activeWorktree?.id, activeWorktreeId, agentCmdOverrides, targetState]
   )
 
   const handleContinueInNewSession = useCallback(
