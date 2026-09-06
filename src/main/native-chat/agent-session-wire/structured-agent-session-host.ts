@@ -267,7 +267,8 @@ export class StructuredAgentSessionHost {
           run: () => withTimeout(this.handoffs.drain(), HANDOFF_DRAIN_TIMEOUT_MS, undefined)
         },
         { name: 'drain-attaches', run: () => this.tasks.drainAttaches() },
-        { name: 'flush-event-sinks', run: () => this.runtimeState.flushAllEventSinks() }
+        { name: 'flush-event-sinks', run: () => this.runtimeState.flushAllEventSinks() },
+        { name: 'drain-sink-recoveries', run: () => this.eventRecovery.drainSinkRecoveries() }
       ],
       sessions: this.sessions
     })

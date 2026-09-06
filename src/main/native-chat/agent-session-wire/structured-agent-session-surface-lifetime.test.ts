@@ -273,6 +273,51 @@ describe('a session evicted and opened again', () => {
 })
 
 describe('an unexpected provider exit', () => {
+  it('drains sink-failure lease persistence before closing the host', async () => {
+    await attach()
+    const session = (
+      host as unknown as {
+        sessions: Map<string, { journal: { appendItem: (...args: never[]) => Promise<unknown> } }>
+      }
+    ).sessions.get(SESSION)!
+    const settlementStarted = Promise.withResolvers<void>()
+    const settlementGate = Promise.withResolvers<void>()
+    const originalTransition = store.transitionHandoff.bind(store)
+    vi.spyOn(store, 'transitionHandoff').mockImplementationOnce(async (...args) => {
+      settlementStarted.resolve()
+      await settlementGate.promise
+      return originalTransition(...args)
+    })
+    vi.spyOn(session.journal, 'appendItem').mockRejectedValueOnce(new Error('disk unavailable'))
+    sink?.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'lost write' }] }
+    )
+    await settlementStarted.promise
+    const runtimeState = (
+      host as unknown as {
+        runtimeState: { eventSinkFor: (id: string) => unknown }
+      }
+    ).runtimeState
+    runtimeState.eventSinkFor(SESSION)
+    let drained = false
+    const teardown = host.flushAllStreamedEvents().then(() => {
+      drained = true
+    })
+    try {
+      // Probe quiescence while persistence is held, matching the handoff teardown contract.
+      for (let tick = 0; tick < 20; tick += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      expect(drained).toBe(false)
+    } finally {
+      settlementGate.resolve()
+      await teardown
+    }
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+    expect(host.hasSession(SESSION)).toBe(false)
+  })
+
   it('turns a journal sink failure into observed-exit settlement and lease release', async () => {
     await attach()
     const session = (
