@@ -3,8 +3,72 @@ import {
   createWorktreeTabModelReconciliationBatch,
   writeBatchedWorkspaceRecordEntry
 } from './tabs-reconciliation-batch'
+import { projectWorktreeTabModelReconciliation } from './tabs-reconciliation'
+import { createTestStore } from '../store-test-helpers'
 
 const WORKTREE = 'repo::/tmp/app'
+
+describe('projectWorktreeTabModelReconciliation identity', () => {
+  it('keeps every tab-model map when only an orphan runtime terminal changed', () => {
+    const groupId = 'g-1'
+    const store = createTestStore()
+    store.setState({
+      unifiedTabsByWorktree: {
+        [WORKTREE]: [
+          {
+            id: 'sim-1',
+            entityId: 'sim-1',
+            groupId,
+            worktreeId: WORKTREE,
+            contentType: 'simulator',
+            label: 'Simulator',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      groupsByWorktree: {
+        [WORKTREE]: [
+          {
+            id: groupId,
+            worktreeId: WORKTREE,
+            activeTabId: 'sim-1',
+            tabOrder: ['sim-1']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [WORKTREE]: groupId },
+      layoutByWorktree: { [WORKTREE]: { type: 'leaf', groupId } },
+      // Orphan: a runtime terminal with no unified row and no live PTY.
+      tabsByWorktree: {
+        [WORKTREE]: [
+          {
+            id: 'orphan',
+            ptyId: null,
+            worktreeId: WORKTREE,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: { orphan: [] }
+    })
+    const before = store.getState()
+
+    const { patch } = projectWorktreeTabModelReconciliation(before, WORKTREE)
+
+    expect(patch.tabsByWorktree?.[WORKTREE]).toEqual([])
+    expect(patch.unifiedTabsByWorktree).toBe(before.unifiedTabsByWorktree)
+    expect(patch.groupsByWorktree).toBe(before.groupsByWorktree)
+    expect(patch.activeGroupIdByWorktree).toBe(before.activeGroupIdByWorktree)
+    expect(patch.layoutByWorktree).toBeUndefined()
+  })
+})
 
 describe('writeBatchedWorkspaceRecordEntry identity', () => {
   it('returns the same record when the entry already holds that value', () => {

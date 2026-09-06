@@ -49,11 +49,10 @@ export function writeBatchedWorkspaceRecordEntry<T>(
     ;(current as Record<string, T | undefined>)[worktreeId] = value
     return current
   }
-  // Why: the reconciliation gate fires when any one of tabs/groups/active-group/
-  // layout/orphans changed, then writes all of them. Spreading a map whose entry
-  // is already this value hands it a new identity for no data change, rerendering
-  // every component selecting it. The key must already exist — the spread also
-  // stored an absent key as undefined, and dropping that would change Object.keys.
+  // Why: the reconciliation gate writes every map when any one changed; spreading an
+  // already-equal entry would rerender its selectors for no data change. Nothing was
+  // cloned, so ownership is deliberately not claimed. Absent keys still get stored,
+  // matching the spread (`in` check).
   if (worktreeId in current && Object.is(current[worktreeId], value)) {
     return current
   }
