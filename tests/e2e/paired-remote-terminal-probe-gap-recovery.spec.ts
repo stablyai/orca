@@ -68,7 +68,8 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   ) as Promise<TResult>
 }
 
-test('replaces a stale paired stream when the PTY snapshot advanced @headful', async ({
+for (const repetition of [1, 2, 3, 4, 5]) {
+test(`replaces a stale paired stream when the PTY snapshot advanced ${repetition} @headful`, async ({
   electronApp,
   orcaPage
 }) => {
@@ -255,3 +256,5 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
     await client.dispose()
   }
 })
+
+}
