@@ -8,7 +8,7 @@ import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspace
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
   deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget
+  resolveWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
@@ -203,7 +203,7 @@ export function createAppCommandHandlers(
           return false
         }
         const store = useAppStore.getState()
-        const target = resolveHoveredWorkspaceDeleteTarget(store)
+        const target = resolveWorkspaceDeleteTarget(store)
         if (!target) {
           return false
         }
