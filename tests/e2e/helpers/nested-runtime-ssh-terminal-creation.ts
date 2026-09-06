@@ -1,13 +1,7 @@
 import { expect } from './orca-app'
 import type { PairedElectronClient } from './paired-electron-client'
 import { focusActiveTerminalInput, getTerminalContent, waitForActivePanePtyId } from './terminal'
-
-function terminalMarkerCommand(marker: string): string {
-  const encoded = [...marker]
-    .map((character) => `\\${character.charCodeAt(0).toString(8).padStart(3, '0')}`)
-    .join('')
-  return `printf '${encoded}\\n'`
-}
+import { terminalMarkerCommand } from './terminal-output-marker'
 
 export async function assertPairedTerminalCreation(
   client: PairedElectronClient,
@@ -43,8 +37,22 @@ export async function assertPairedTerminalCreation(
     .not.toBe('')
   const ptyId = await waitForActivePanePtyId(client.page, 30_000)
   await focusActiveTerminalInput(client.page)
-  await client.page.keyboard.insertText(terminalMarkerCommand(marker))
-  await client.page.keyboard.press('Enter')
-  await expect.poll(() => getTerminalContent(client.page), { timeout: 30_000 }).toContain(marker)
+  const trace = await client.page.evaluateHandle(() => {
+    const state = window.__store!.getState()
+    const manager = window.__paneManagers!.get(state.activeTabId!)!
+    const active = () => ({tag:document.activeElement?.tagName, className:document.activeElement?.className})
+    const entries = manager.getPanes().map((pane) => ({ptyId:pane.container.dataset.ptyId, data:'', focused:pane.container.contains(document.activeElement)}))
+    const subscriptions = manager.getPanes().map((pane,index) => pane.terminal.onData((data) => {entries[index].data=(entries[index].data+data).slice(-2048)}))
+    return {entries, before:active(), active, dispose:() => subscriptions.forEach((s) => s.dispose())}
+  })
+  try {
+    await client.page.keyboard.insertText(terminalMarkerCommand(marker))
+    await client.page.keyboard.press('Enter')
+    await expect.poll(() => getTerminalContent(client.page), { timeout: 30_000 }).toContain(marker)
+  } finally {
+    console.log('[nested-created-input]', marker, JSON.stringify(await trace.evaluate((t) => ({entries:t.entries,before:t.before,after:t.active()}))))
+    await trace.evaluate((t) => t.dispose())
+    await trace.dispose()
+  }
   return { ptyId, tabId }
 }
