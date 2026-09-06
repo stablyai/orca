@@ -8,16 +8,18 @@ import type { HostSectionRow } from '../../host-section-rows'
 import type { RenderRow } from '../listing/render-row'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 
-const activateAndRevealWorktree = vi.fn()
+const activateAndRevealWorkspace = vi.fn()
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: (...args: unknown[]) => activateAndRevealWorktree(...args)
+  activateAndRevealWorkspace: (...args: unknown[]) => activateAndRevealWorkspace(...args)
 }))
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: { keybindings: undefined }) => unknown) =>
-    selector({ keybindings: undefined })
-}))
+vi.mock('@/store', () => {
+  const state = { keybindings: undefined, worktreeNavHistory: [], worktreeNavHistoryIndex: -1 }
+  const useAppStore = (selector: (s: typeof state) => unknown) => selector(state)
+  useAppStore.getState = () => state
+  return { useAppStore }
+})
 
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')
 
@@ -82,7 +84,7 @@ function renderProbe(activeWorktreeId: string, activeHostId: 'local' | null): vo
 }
 
 beforeEach(() => {
-  activateAndRevealWorktree.mockClear()
+  activateAndRevealWorkspace.mockClear()
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -101,7 +103,7 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('down')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {})
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('c', {})
   })
 
   it('steps to the previous row when the active host resolved to local', () => {
@@ -109,7 +111,7 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('up')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('a', {})
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('a', {})
   })
 
   it('still steps normally when the active host is unqualified', () => {
@@ -117,6 +119,6 @@ describe('worktree keyboard cycling with a resolved active host', () => {
 
     press('down')
 
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('c', {})
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('c', {})
   })
 })

@@ -1,30 +1,109 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { HostSectionRow } from './host-section-rows'
 import {
   getCyclableWorktreeIds,
   getCyclableWorktrees,
+  resolveCycleAnchorWorktreeId,
   resolveCycledWorktreeId
 } from './worktree-keyboard-cycle'
+
+describe('resolveCycleAnchorWorktreeId', () => {
+  const worktreeIds = ['a', 'b', 'c']
+
+  it('prefers the active workspace over history', () => {
+    expect(
+      resolveCycleAnchorWorktreeId({
+        activeWorktreeId: 'b',
+        navHistory: ['a'],
+        navHistoryIndex: 0,
+        worktreeIds
+      })
+    ).toBe('b')
+  })
+
+  it('falls back to the history cursor when closing a workspace cleared the selection', () => {
+    expect(
+      resolveCycleAnchorWorktreeId({
+        activeWorktreeId: null,
+        navHistory: ['a', 'b'],
+        navHistoryIndex: 1,
+        worktreeIds
+      })
+    ).toBe('b')
+  })
+
+  it('ignores history entries ahead of the cursor', () => {
+    expect(
+      resolveCycleAnchorWorktreeId({
+        activeWorktreeId: null,
+        navHistory: ['a', 'b', 'c'],
+        navHistoryIndex: 1,
+        worktreeIds
+      })
+    ).toBe('b')
+  })
+
+  it('walks back past page entries and workspaces that are gone', () => {
+    expect(
+      resolveCycleAnchorWorktreeId({
+        activeWorktreeId: null,
+        navHistory: [
+          'a',
+          'deleted',
+          'tasks',
+          { kind: 'task-detail', source: 'linear', issue: { id: 'iss-1' } }
+        ] as never,
+        navHistoryIndex: 3,
+        worktreeIds
+      })
+    ).toBe('a')
+  })
+
+  it('keeps a collapsed-group anchor so it can still enter from the matching end', () => {
+    // Why: resolveCycledWorktreeId treats an uncyclable anchor as "enter from the far
+    // end"; resolving it away to a history hit would silently move the user's place.
+    expect(
+      resolveCycleAnchorWorktreeId({
+        activeWorktreeId: 'collapsed',
+        navHistory: ['a'],
+        navHistoryIndex: 0,
+        worktreeIds
+      })
+    ).toBe('collapsed')
+  })
+
+  it('returns null when neither selection nor history resolves', () => {
+    expect(
+      resolveCycleAnchorWorktreeId({
+        activeWorktreeId: null,
+        navHistory: [],
+        navHistoryIndex: -1,
+        worktreeIds
+      })
+    ).toBeNull()
+  })
+})
 
 describe('resolveCycledWorktreeId', () => {
   const worktreeIds = ['a', 'b', 'c']
 
   it('steps to the next and previous worktree', () => {
-    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'a', direction: 'down' })).toBe(
+    expect(resolveCycledWorktreeId({ worktreeIds, anchorWorktreeId: 'a', direction: 'down' })).toBe(
       'b'
     )
-    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'b', direction: 'up' })).toBe(
+    expect(resolveCycledWorktreeId({ worktreeIds, anchorWorktreeId: 'b', direction: 'up' })).toBe(
       'a'
     )
   })
 
   it('wraps around at both ends', () => {
-    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'c', direction: 'down' })).toBe(
+    expect(resolveCycledWorktreeId({ worktreeIds, anchorWorktreeId: 'c', direction: 'down' })).toBe(
       'a'
     )
-    expect(resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'a', direction: 'up' })).toBe(
+    expect(resolveCycledWorktreeId({ worktreeIds, anchorWorktreeId: 'a', direction: 'up' })).toBe(
       'c'
     )
   })
@@ -34,19 +113,19 @@ describe('resolveCycledWorktreeId', () => {
     // so it is absent from the cyclable list; arrowing should not always jump to
     // the top.
     expect(
-      resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'hidden', direction: 'down' })
+      resolveCycledWorktreeId({ worktreeIds, anchorWorktreeId: 'hidden', direction: 'down' })
     ).toBe('a')
     expect(
-      resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: 'hidden', direction: 'up' })
+      resolveCycledWorktreeId({ worktreeIds, anchorWorktreeId: 'hidden', direction: 'up' })
     ).toBe('c')
     expect(
-      resolveCycledWorktreeId({ worktreeIds, activeWorktreeId: null, direction: 'down' })
+      resolveCycledWorktreeId({ worktreeIds, anchorWorktreeId: null, direction: 'down' })
     ).toBe('a')
   })
 
   it('has nothing to cycle to when every group is collapsed', () => {
     expect(
-      resolveCycledWorktreeId({ worktreeIds: [], activeWorktreeId: 'a', direction: 'down' })
+      resolveCycledWorktreeId({ worktreeIds: [], anchorWorktreeId: 'a', direction: 'down' })
     ).toBe(null)
   })
 })
@@ -112,9 +191,9 @@ describe('getCyclableWorktreeIds', () => {
     ])
   })
 
-  it('leaves folder workspaces out of the rotation', () => {
-    // Why: their synthetic `folder:` id is not activatable through
-    // activateAndRevealWorktree, so arrowing onto one would be a dead keypress.
+  it('cycles folder workspaces in their rendered position', () => {
+    // Why: Cmd+1-9 already numbers them, so a visible folder workspace the arrow
+    // chord skipped was unreachable from the keyboard for no stated reason.
     const rows: HostSectionRow[] = [
       {
         type: 'folder-workspace',
@@ -127,7 +206,10 @@ describe('getCyclableWorktreeIds', () => {
       worktree('plain-b')
     ]
 
-    expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual(['plain-b'])
+    expect(getCyclableWorktreeIds(rows, 'single-location')).toEqual([
+      folderWorkspaceKey('folder-1'),
+      'plain-b'
+    ])
   })
 
   it('drops worktrees the sidebar elided inside a collapsed host section', () => {
