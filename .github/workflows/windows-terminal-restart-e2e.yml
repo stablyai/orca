@@ -46,7 +46,7 @@ jobs:
         timeout-minutes: 10
         shell: pwsh
         run: |
-          wsl.exe --install --distribution Ubuntu-24.04 --no-launch --web-download
+          wsl.exe --install --distribution Ubuntu-24.04 --no-launch
           if ($LASTEXITCODE -ne 0) { throw "WSL installation failed: $LASTEXITCODE" }
           wsl.exe --distribution Ubuntu-24.04 --user root --exec /usr/bin/true
           if ($LASTEXITCODE -ne 0) { throw "WSL guest did not start: $LASTEXITCODE" }
