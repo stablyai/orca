@@ -110,7 +110,7 @@ async function minimizeHeadedHost(electronApp: ElectronApplication, page: Page):
     const nativeId = await host.evaluate((window) => window.getNativeWindowHandle().readUInt32LE(0))
     await expect.poll(async () => {
       const result = await runProcess({
-        file: 'xprop', args: ['-id', String(nativeId), '_NET_WM_STATE'], timeoutMs: 5_000
+        program: 'xprop', args: ['-id', String(nativeId), '_NET_WM_STATE'], timeoutMs: 5_000
       })
       console.info('[host-minimized-x11] ' + result.stdout.trim())
       return result.stdout
