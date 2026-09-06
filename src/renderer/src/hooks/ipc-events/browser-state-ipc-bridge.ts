@@ -3,6 +3,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { resolveLinkTargetGroupId } from '@/lib/link-target-group'
 
 /**
  * A client-hosted page is a local Electron webview on this desktop that happens to belong to a
@@ -97,6 +98,7 @@ export function registerBrowserStateIpcBridge(
       store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
         activate: activate ?? true,
+        targetGroupId: resolveLinkTargetGroupId(store, sourcePage) ?? undefined,
         ...(sourceTab
           ? {
               sessionProfileId: sourceTab.sessionProfileId,

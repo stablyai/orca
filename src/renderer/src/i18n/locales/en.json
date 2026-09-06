@@ -6716,7 +6716,7 @@
           "64898ecdab": "Create",
           "7b649a578a": "Creating…",
           "4399c77caa": "Default",
-          "4af9a17947": "kagi"
+          "4af9a17947": "Kagi"
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profile \"{{value0}}\" removed.",
@@ -9206,7 +9206,9 @@
               "tunnel": "tunnel",
               "routing": "routing",
               "network": "network"
-            }
+            },
+            "7f3c1a9e5d": "Open Links Beside",
+            "2b8d4f6c01": "Open in-app links in the pane beside the one you clicked from, splitting to the right when there is no pane there yet."
           },
           "use": {
             "search": {
@@ -11780,6 +11782,11 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "BrowserLinkSidePaneSetting": {
+          "7f3c1a9e5d": "Open Links Beside",
+          "2b8d4f6c01": "Open in-app links in the pane beside the one you clicked from, splitting to the right when there is no pane there yet. Off opens another tab in the current pane.",
+          "3c5e7a9b1d": "Turn on Link Routing to open links in Orca before choosing where they land."
         }
       },
       "right": {

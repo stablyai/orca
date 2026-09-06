@@ -201,6 +201,8 @@ export type GlobalSettings = {
   openLinksInAppModifierInverts?: boolean
   /** Show terminal link actions on plain click; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
+  /** Opt-in: in-app links open beside the source pane (splitting right when there is no sibling) instead of as another tab in the active group. */
+  openLinksInSidePane?: boolean
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */

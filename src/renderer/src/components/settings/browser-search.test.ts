@@ -106,7 +106,9 @@ describe('browser link routing modifier copy', () => {
       'Localhost Worktree Labels',
       'Session & Cookies',
       'Remote server workspaces',
-      'SSH workspaces'
+      'SSH workspaces',
+      // Appended, never inserted: earlier indices are load-bearing.
+      'Open Links Beside'
     ])
   })
 
