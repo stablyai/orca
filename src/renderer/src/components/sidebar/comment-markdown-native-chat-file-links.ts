@@ -3,7 +3,10 @@ import {
   routeNativeChatHref
 } from '../../../../shared/native-chat-href-routing'
 import { parseFileLinkLocation } from '../../../../shared/file-link-location'
-import { extractTerminalFileLinks, type ParsedTerminalFileLink } from '@/lib/terminal-links'
+import {
+  extractTerminalFileLinks,
+  type ParsedTerminalFileLink
+} from '../../../../shared/terminal-links'
 
 type MarkdownNode = {
   type: string

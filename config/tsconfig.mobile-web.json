@@ -9,7 +9,6 @@
     "../src/shared/is-record.ts",
     "../src/shared/mobile-markdown-document.ts",
     "../src/shared/mobile-web/**/*",
-    "../src/shared/terminal-file-link-matcher.ts",
     "../src/shared/terminal-quick-command-limits.ts",
     "../src/shared/terminal-query-reply.ts",
     "../src/shared/utf8-byte-limits.ts"

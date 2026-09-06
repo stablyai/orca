@@ -20,6 +20,8 @@ export type ParsedTerminalFileLink = {
   displayText: string
 }
 
+export type TerminalFileLinkTarget = Pick<ParsedTerminalFileLink, 'pathText' | 'line' | 'column'>
+
 export type ResolvedTerminalFileLink = Pick<ParsedTerminalFileLink, 'line' | 'column'> & {
   absolutePath: string
 }
@@ -103,6 +105,18 @@ export function extractTerminalFileLinks(lineText: string): ParsedTerminalFileLi
 
 export function extractTerminalFileLinkCandidates(lineText: string): ParsedTerminalFileLink[] {
   return assembleFileLinks(lineText, true)
+}
+
+// Why: a tap names a cell, not a hover range, so it needs the one link spanning
+// a column rather than the whole line's list.
+export function matchTerminalFileLinkAtColumn(
+  lineText: string,
+  column: number
+): TerminalFileLinkTarget | null {
+  const link = extractTerminalFileLinks(lineText).find(
+    (candidate) => column >= candidate.startIndex && column < candidate.endIndex
+  )
+  return link ? { pathText: link.pathText, line: link.line, column: link.column } : null
 }
 
 export function resolveTerminalFileLink(

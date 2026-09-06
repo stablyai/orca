@@ -1,7 +1,4 @@
-import {
-  parseFileLinkLocation,
-  type ParsedFileLinkLocation
-} from '../../../shared/file-link-location'
+import { parseFileLinkLocation, type ParsedFileLinkLocation } from './file-link-location'
 import {
   joinAbsolutePath,
   normalizeAbsolutePath,

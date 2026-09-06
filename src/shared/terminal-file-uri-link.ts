@@ -1,4 +1,4 @@
-import { resolveTerminalFileUrlTarget } from '../../../shared/terminal-file-url-target'
+import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
 import type { ParsedTerminalFileLink } from './terminal-links'
 
 // Why: plain-text file URIs bypass both the HTTP and local-path detectors; use

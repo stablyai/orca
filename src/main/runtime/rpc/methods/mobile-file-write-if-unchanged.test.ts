@@ -40,6 +40,55 @@ describe('mobile conflict-safe file write RPC', () => {
     expect(content).toBe('first')
   })
 
+  it('rejects a queued save when an external writer changes the file mid-queue', async () => {
+    let content = 'before'
+    const runtime = fileRuntime(content)
+    vi.mocked(runtime.readFileExplorerChunk).mockImplementation(async () => {
+      const bytes = Buffer.from(content)
+      return { contentBase64: bytes.toString('base64'), bytesRead: bytes.length, eof: true }
+    })
+    let releaseFirstWrite = (): void => {}
+    const firstWriteStarted = new Promise<void>((resolveStarted) => {
+      let held = false
+      runtime.writeFileExplorerFile.mockImplementation(async (_worktree, _path, next) => {
+        content = next
+        if (held) {
+          return { ok: true }
+        }
+        held = true
+        resolveStarted()
+        await new Promise<void>((release) => {
+          releaseFirstWrite = release
+        })
+        return { ok: true }
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: MOBILE_FILE_WRITE_METHODS })
+    const first = dispatcher.dispatch(
+      request({
+        expectedRevision: revision('before'),
+        contentBase64: Buffer.from('first').toString('base64'),
+        expectedExecutionHostId: 'local'
+      })
+    )
+    await firstWriteStarted
+    const second = dispatcher.dispatch(
+      request({
+        expectedRevision: revision('first'),
+        contentBase64: Buffer.from('second').toString('base64'),
+        expectedExecutionHostId: 'local'
+      })
+    )
+    // The host queue only orders Orca's own writes, so an editor writing here must still be seen.
+    content = 'external'
+    releaseFirstWrite()
+
+    expect(await first).toMatchObject({ ok: true, result: { ok: true } })
+    expect(await second).toMatchObject({ ok: true, result: { ok: false, code: 'conflict' } })
+    expect(runtime.writeFileExplorerFile).toHaveBeenCalledOnce()
+    expect(content).toBe('external')
+  })
+
   it('releases a failed write so the next request can retry the same revision', async () => {
     const runtime = fileRuntime('before')
     runtime.writeFileExplorerFile.mockRejectedValueOnce(new Error('write failed'))

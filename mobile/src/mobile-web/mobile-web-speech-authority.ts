@@ -1,4 +1,4 @@
-import type { MobileWebSubscriptionClosure } from './mobile-web-subscription-closure'
+import type { MobileWebSubscriptionLedgerConfig } from './mobile-web-subscription-ledger'
 import type {
   MobileWebSpeechEvent,
   MobileWebSpeechStartResult,
@@ -20,7 +20,7 @@ import { MobileWebSpeechSubscriptions } from './mobile-web-speech-subscriptions'
 
 export class MobileWebSpeechAuthority {
   private readonly audio = new MobileWebSpeechAudioForwarder()
-  private readonly subscriptions = new MobileWebSpeechSubscriptions()
+  private readonly subscriptions: MobileWebSpeechSubscriptions
   private runtime: MobileWebSpeechRuntime | null = null
   private runtimePromise: Promise<MobileWebSpeechRuntime> | null = null
   private removeMicrophoneListener: (() => void) | null = null
@@ -32,19 +32,14 @@ export class MobileWebSpeechAuthority {
   private disposed = false
 
   constructor(
+    config: MobileWebSubscriptionLedgerConfig<MobileWebSpeechEvent>,
     private readonly loadRuntime: () => Promise<MobileWebSpeechRuntime> = async () =>
       (await import('./mobile-web-speech-native-runtime')).createMobileWebSpeechNativeRuntime()
-  ) {}
+  ) {
+    this.subscriptions = new MobileWebSpeechSubscriptions(config)
+  }
 
-  subscribe(args: {
-    requestId: string
-    subscriptionId: string
-    post: (sequence: number, event: MobileWebSpeechEvent) => Promise<void>
-    closed: (closure: MobileWebSubscriptionClosure) => void
-  }): void {
-    if (this.disposed) {
-      throw new MobileWebBrokerError('invalid_request')
-    }
+  subscribe(args: { requestId: string; subscriptionId: string }): void {
     this.subscriptions.start(args)
   }
 

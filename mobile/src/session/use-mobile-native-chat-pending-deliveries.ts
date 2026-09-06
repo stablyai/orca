@@ -6,12 +6,12 @@ import {
   countUserTextOccurrences,
   findLandedImagePreviewEchoes,
   mergeLandedImagePreviewEchoes,
-  migrateImagePreviewMessageIds,
-  normalizeReconcileText
+  migrateImagePreviewMessageIds
 } from './mobile-native-chat-draft-reconcile'
 import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pending-baseline'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import {
+  appendMobileNativeChatPending,
   combineMobileNativeChatPending,
   mergeWaitingSessionPending,
   nextMobileNativeChatPendingId,
@@ -191,29 +191,13 @@ export function useMobileNativeChatPendingDeliveries(args: {
         return
       }
       const current = pendingBySessionRef.current[storageKey] ?? NO_PENDING_MESSAGES
-      const earlierOutstanding = current.filter(
-        (pending) =>
-          normalizeReconcileText(pending.text) === origin.normalizedText &&
-          pending.expectedOccurrence > origin.baselineOccurrences
-      ).length
-      // Why: the ordinal names which caption-less TURN this echo is, so it must count pending
-      // turns, not the images inside them — three images in one send is still ordinal 1.
-      const expectedImageEchoOrdinal =
-        current.filter((pending) => pending.text.trim() === '' && pending.images?.length).length + 1
-      const next = [
-        ...current,
-        {
-          id: nextMobileNativeChatPendingId(nextMessageIdRef),
-          text,
-          expectedOccurrence:
-            origin.normalizedText === ''
-              ? expectedImageEchoOrdinal
-              : origin.baselineOccurrences + earlierOutstanding + 1,
-          baselineTailMessageId: origin.baselineTailMessageId,
-          baselineResolved: origin.baselineResolved,
-          ...(images && images.length > 0 ? { images } : {})
-        }
-      ].slice(-MOBILE_WEB_NATIVE_CHAT_PENDING_DELIVERY_LIMIT)
+      const next = appendMobileNativeChatPending(
+        current,
+        nextMobileNativeChatPendingId(nextMessageIdRef),
+        origin,
+        text,
+        images
+      ).slice(-MOBILE_WEB_NATIVE_CHAT_PENDING_DELIVERY_LIMIT)
       replacePending(storageKey, origin.pendingTarget, next)
     },
     [replacePending]

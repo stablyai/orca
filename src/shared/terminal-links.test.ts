@@ -3,33 +3,22 @@ import { describe, expect, it } from 'vitest'
 import {
   TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES,
   columnForTerminalFileLinkTap
-} from '../../../shared/terminal-file-link-conformance'
+} from './terminal-file-link-conformance'
 import {
   extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
   isPathInsideWorktree,
+  matchTerminalFileLinkAtColumn,
   resolveTerminalFileLink,
   resolveTerminalFileLinkText,
   toWorktreeRelativePath
 } from './terminal-links'
 
-function extractTerminalFileLinkAtColumn(lineText: string, column: number) {
-  return (
-    extractTerminalFileLinks(lineText).find(
-      (link) => column >= link.startIndex && column < link.endIndex
-    ) ?? null
-  )
-}
-
 describe('terminal path helpers', () => {
   describe('shared terminal file-link tap conformance', () => {
     it.each(TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES)('$name', (testCase) => {
-      const link = extractTerminalFileLinkAtColumn(
-        testCase.lineText,
-        columnForTerminalFileLinkTap(testCase)
-      )
       expect(
-        link ? { pathText: link.pathText, line: link.line, column: link.column } : null
+        matchTerminalFileLinkAtColumn(testCase.lineText, columnForTerminalFileLinkTap(testCase))
       ).toEqual(testCase.expected)
     })
   })

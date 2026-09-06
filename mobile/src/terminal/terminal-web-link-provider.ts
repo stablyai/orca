@@ -1,5 +1,5 @@
 import type { IBufferLine, ILink, Terminal } from '@xterm/xterm'
-import { findTerminalFileLinks } from '../../../src/shared/terminal-file-link-matcher'
+import { extractTerminalFileLinks } from '../../../src/shared/terminal-links'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import { resolveTerminalOscFileTap } from './terminal-file-url-tap'
 import {
@@ -168,7 +168,7 @@ export function terminalWebLinksForLine(
     addNonOverlappingLink(links, match, () => getProps().onOpenUrl?.(match.url))
   }
   for (const segment of unlinkedLineSegments(lineText, links)) {
-    for (const match of findTerminalFileLinks(segment.text)) {
+    for (const match of extractTerminalFileLinks(segment.text)) {
       const startIndex = segment.startIndex + match.startIndex
       const endIndex = segment.startIndex + match.endIndex
       addNonOverlappingLink(

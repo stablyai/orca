@@ -21,7 +21,6 @@ import { MobileWebCapabilityAuthorities } from './mobile-web-capability-authorit
 import type { MobileWebCapabilityBrokerOptions } from './mobile-web-capability-broker-options'
 import { MobileWebBrokerMessageSender } from './mobile-web-broker-message-sender'
 import { MobileWebBrokerReplayGuard } from './mobile-web-broker-replay-guard'
-import { mobileWebSubscriptionClosedPoster } from './mobile-web-subscription-closure'
 import { rememberMobileWebBrokerRoute } from './mobile-web-broker-route-memory'
 import { resolveMobileWebHostNavigationRoute } from './mobile-web-host-navigation-route'
 import {
@@ -46,7 +45,7 @@ export class MobileWebCapabilityBroker {
   private readonly replay = new MobileWebBrokerReplayGuard()
   private readonly subscriptions: MobileWebCapabilitySubscriptions
   private readonly terminalStreams: MobileWebTerminalStreams
-  private readonly speechAuthority = new MobileWebSpeechAuthority()
+  private readonly speechAuthority: MobileWebSpeechAuthority
   private readonly rateLimiter: MobileWebOperationRateLimiter
   private readonly commitMessageGeneration = new MobileWebCommitMessageGeneration()
   private readonly authorities: MobileWebCapabilityAuthorities
@@ -61,23 +60,22 @@ export class MobileWebCapabilityBroker {
       isActive: () => !this.disposed && options.isActive(),
       postMessage: options.postMessage
     })
+    const posts = this.messages.subscriptionPosts()
     this.subscriptions = new MobileWebCapabilitySubscriptions({
-      isActive: () => !this.disposed && this.options.isActive(),
-      messages: this.messages,
+      ...posts,
       browserAuthority: this.authorities.browser,
       nativeChatAuthority: this.authorities.nativeChat,
       workspaceAuthority: this.authorities.workspace
     })
     this.terminalStreams = new MobileWebTerminalStreams({
-      isActive: () => !this.disposed && this.options.isActive(),
+      ...posts,
       clientId: options.terminalClientId,
       now: options.now,
       onFlowMetrics: options.onTerminalFlowMetrics,
       onResync: options.onTerminalResync,
-      workspaceAuthority: this.authorities.workspace,
-      postEvent: this.messages.event.bind(this.messages),
-      postClosed: mobileWebSubscriptionClosedPoster(this.messages)
+      workspaceAuthority: this.authorities.workspace
     })
+    this.speechAuthority = new MobileWebSpeechAuthority(posts)
   }
 
   async handle(message: MobileWebBridgePageMessage): Promise<void> {
@@ -245,8 +243,6 @@ export class MobileWebCapabilityBroker {
       sourceControlSubscriptions: this.subscriptions.sourceControl,
       sourceControlBranchCompare: this.authorities.sourceControlBranchCompare,
       speechAuthority: this.speechAuthority,
-      postSpeechEvent: this.messages.event.bind(this.messages),
-      postSpeechClosed: mobileWebSubscriptionClosedPoster(this.messages),
       workspaceSubscriptions: this.subscriptions.workspace,
       terminalStreams: this.terminalStreams,
       commitMessageGeneration: this.commitMessageGeneration,

@@ -4,6 +4,8 @@ import type {
   MobileWebBridgeShellMessage
 } from '../../../src/shared/mobile-web/bridge-contract'
 import { mobileWebBrokerEnvelope } from './mobile-web-broker-envelope'
+import { mobileWebSubscriptionClosedPoster } from './mobile-web-subscription-closure'
+import type { MobileWebSubscriptionLedgerConfig } from './mobile-web-subscription-ledger'
 
 export class MobileWebBrokerMessageSender {
   constructor(
@@ -55,6 +57,15 @@ export class MobileWebBrokerMessageSender {
       subscriptionId,
       error: { code, retryable }
     })
+  }
+
+  /** A ledger only ever needs this channel's liveness, its event frame, and its closure frame. */
+  subscriptionPosts(): MobileWebSubscriptionLedgerConfig<unknown> {
+    return {
+      isActive: this.options.isActive,
+      postEvent: (subscriptionId, sequence, event) => this.event(subscriptionId, sequence, event),
+      postClosed: mobileWebSubscriptionClosedPoster(this)
+    }
   }
 
   private async post(message: MobileWebBridgeShellMessage): Promise<void> {

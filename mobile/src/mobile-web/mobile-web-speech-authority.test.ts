@@ -7,15 +7,7 @@ import type { MobileWebSpeechRuntime } from './mobile-web-speech-runtime'
 describe('MobileWebSpeechAuthority', () => {
   it('keeps PCM in the shell and finishes without cancelling a successful transcript', async () => {
     const harness = createHarness()
-    const events: unknown[] = []
-    harness.authority.subscribe({
-      requestId: 'request-1',
-      subscriptionId: 'subscription-1',
-      post: async (sequence, event) => {
-        events.push({ sequence, event })
-      },
-      closed: vi.fn()
-    })
+    harness.authority.subscribe({ requestId: 'request-1', subscriptionId: 'subscription-1' })
     harness.sendRequest.mockImplementation(async (method) => {
       if (method === 'speech.dictation.finish') {
         return success({ text: `  ${'a'.repeat(40_000)}  ` })
@@ -40,10 +32,10 @@ describe('MobileWebSpeechAuthority', () => {
       harness.sendRequest.mock.calls.filter(([method]) => method === 'speech.dictation.cancel')
     ).toHaveLength(0)
     await vi.waitFor(() =>
-      expect(events).toEqual([
-        { sequence: 0, event: { status: 'recording' } },
-        { sequence: 1, event: { status: 'processing' } },
-        { sequence: 2, event: { status: 'idle' } }
+      expect(harness.postEvent.mock.calls).toEqual([
+        ['subscription-1', 0, { status: 'recording' }],
+        ['subscription-1', 1, { status: 'processing' }],
+        ['subscription-1', 2, { status: 'idle' }]
       ])
     )
     expect(harness.runtime.releaseKeepAwake).toHaveBeenCalledOnce()
@@ -114,13 +106,7 @@ describe('MobileWebSpeechAuthority', () => {
 
   it('cancels recording when the native audio session is interrupted', async () => {
     const harness = createHarness()
-    const post = vi.fn(async () => {})
-    harness.authority.subscribe({
-      requestId: 'request-1',
-      subscriptionId: 'subscription-1',
-      post,
-      closed: vi.fn()
-    })
+    harness.authority.subscribe({ requestId: 'request-1', subscriptionId: 'subscription-1' })
     harness.sendRequest.mockResolvedValue(success({}))
     await harness.authority.start(harness.client)
 
@@ -133,7 +119,7 @@ describe('MobileWebSpeechAuthority', () => {
       )
     )
     await vi.waitFor(() =>
-      expect(post).toHaveBeenLastCalledWith(1, {
+      expect(harness.postEvent).toHaveBeenLastCalledWith('subscription-1', 1, {
         status: 'idle',
         reason: 'interrupted'
       })
@@ -187,11 +173,18 @@ function createHarness() {
   } satisfies MobileWebSpeechRuntime
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const client = { sendRequest } as unknown as RpcClient
+  const postEvent = vi.fn(async () => {})
+  const postClosed = vi.fn()
   return {
-    authority: new MobileWebSpeechAuthority(async () => runtime),
+    authority: new MobileWebSpeechAuthority(
+      { isActive: () => true, postEvent, postClosed },
+      async () => runtime
+    ),
     runtime,
     client,
     sendRequest,
+    postEvent,
+    postClosed,
     get microphone() {
       return microphone
     },

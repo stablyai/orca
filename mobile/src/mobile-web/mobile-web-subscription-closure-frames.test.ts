@@ -8,6 +8,8 @@ import { MobileWebNativeChatAuthority } from './mobile-web-native-chat-authority
 import { MobileWebNativeChatSubscriptions } from './mobile-web-native-chat-subscriptions'
 import { MobileWebSessionSubscriptions } from './mobile-web-session-subscriptions'
 import { MobileWebSourceControlSubscriptions } from './mobile-web-source-control-subscriptions'
+import { MobileWebSpeechSubscriptions } from './mobile-web-speech-subscriptions'
+import type { MobileWebSpeechEvent } from '../../../src/shared/mobile-web/speech-operation-contract'
 import { MobileWebWorkspaceSubscriptions } from './mobile-web-workspace-subscriptions'
 import {
   mobileWebHostWorkspaceIdFromHost,
@@ -209,6 +211,18 @@ const LEDGER_CASES: LedgerCase[] = [
         client: host.client
       })
       return host.emit
+    }
+  },
+  {
+    name: 'speech',
+    // Push-driven from the shell's dictation runtime, so no host frame can be unusable.
+    invalidCode: null,
+    invalid: { status: 'bogus' },
+    valid: { status: 'recording' },
+    open: async (posts) => {
+      const subscriptions = new MobileWebSpeechSubscriptions(posts)
+      subscriptions.start({ requestId: 'request-1', subscriptionId: SUBSCRIPTION_ID })
+      return (value) => subscriptions.post(value as MobileWebSpeechEvent)
     }
   }
 ]

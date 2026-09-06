@@ -1,4 +1,4 @@
-import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
+import { resolveTerminalFileLinkText } from '../../../../shared/terminal-links'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from '../../../../shared/terminal-file-url-target'

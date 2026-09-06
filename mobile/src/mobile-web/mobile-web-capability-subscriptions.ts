@@ -1,10 +1,11 @@
 import { MobileWebAccountSubscriptions } from './mobile-web-account-subscriptions'
-import { mobileWebSubscriptionClosedPoster } from './mobile-web-subscription-closure'
 import type { MobileWebSubscriptionClosure } from './mobile-web-subscription-closure'
-import type { MobileWebSubscriptionLedgerHandle } from './mobile-web-subscription-ledger'
+import type {
+  MobileWebSubscriptionLedgerConfig,
+  MobileWebSubscriptionLedgerHandle
+} from './mobile-web-subscription-ledger'
 import type { MobileWebBrowserAuthority } from './mobile-web-browser-authority'
 import { MobileWebBrowserStreams } from './mobile-web-browser-streams'
-import type { MobileWebBrokerMessageSender } from './mobile-web-broker-message-sender'
 import { MobileWebSessionSubscriptions } from './mobile-web-session-subscriptions'
 import type { MobileWebNativeChatAuthority } from './mobile-web-native-chat-authority'
 import { MobileWebNativeChatSubscriptions } from './mobile-web-native-chat-subscriptions'
@@ -21,17 +22,18 @@ export class MobileWebCapabilitySubscriptions {
   readonly workspace: MobileWebWorkspaceSubscriptions
   private readonly ledgers: MobileWebSubscriptionLedgerHandle[]
 
-  constructor(args: {
-    isActive: () => boolean
-    messages: MobileWebBrokerMessageSender
-    browserAuthority: MobileWebBrowserAuthority
-    nativeChatAuthority: MobileWebNativeChatAuthority
-    workspaceAuthority: MobileWebWorkspaceAuthority
-  }) {
-    const postEvent = (subscriptionId: string, sequence: number, event: unknown) =>
-      args.messages.event(subscriptionId, sequence, event)
-    const postClosed = mobileWebSubscriptionClosedPoster(args.messages)
-    const shared = { isActive: args.isActive, postEvent, postClosed }
+  constructor(
+    args: MobileWebSubscriptionLedgerConfig<unknown> & {
+      browserAuthority: MobileWebBrowserAuthority
+      nativeChatAuthority: MobileWebNativeChatAuthority
+      workspaceAuthority: MobileWebWorkspaceAuthority
+    }
+  ) {
+    const shared = {
+      isActive: args.isActive,
+      postEvent: args.postEvent,
+      postClosed: args.postClosed
+    }
     this.account = new MobileWebAccountSubscriptions(shared)
     this.browser = new MobileWebBrowserStreams({
       ...shared,
