@@ -15,7 +15,6 @@ import {
   type PaletteItem
 } from './worktree-jump-palette-model'
 import { shouldIncludeOpenTabInRecentSection } from './worktree-jump-palette-recent-inclusion'
-import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
@@ -24,8 +23,10 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteOpenTabs &
   Pick<WorktreeJumpPaletteWorktrees, 'resolveWorktree' | 'hasQuery'> &
-  Pick<WorktreeJumpPaletteFilter, 'filterActive'> &
-  Pick<WorktreeJumpPaletteLocalState, 'query' | 'autoSelectedItemIdRef' | 'setSelectedItemId'>
+  Pick<
+    WorktreeJumpPaletteLocalState,
+    'query' | 'filter' | 'autoSelectedItemIdRef' | 'setSelectedItemId'
+  >
 
 function getRecentTabOccurrenceBase(item: OpenTabRecentRow['item']): string {
   if (item.type === 'browser-page') {
@@ -74,7 +75,7 @@ export function useWorktreeJumpPaletteRecentTabs({
   visible,
   hasQuery,
   query,
-  filterActive,
+  filter,
   lastVisitedAtByWorktreeId,
   activeGroupIdByWorktree,
   groupsByWorktree,
@@ -172,6 +173,9 @@ export function useWorktreeJumpPaletteRecentTabs({
   const [recentTabOrder, setRecentTabOrder] = useState<readonly string[]>(EMPTY_RECENT_TAB_ORDER)
   const recentTabOrderCapturedRef = useRef(false)
   const recentTabOrderAttentionReadyRef = useRef(false)
+  // Why: recent rows are already narrowed by the filter, so a filter change mid-open must
+  // re-capture — a frozen order would otherwise hide rows a cleared chip brought back.
+  const capturedFilterRef = useRef(filter)
   const recentOrderAttentionIncomplete = useMemo(() => {
     for (const { item, worktree, row } of openTabRecentRows) {
       if (
@@ -194,8 +198,13 @@ export function useWorktreeJumpPaletteRecentTabs({
       setRecentTabOrder(EMPTY_RECENT_TAB_ORDER)
       return
     }
-    if (hasQuery || query.length > 0 || filterActive) {
+    if (hasQuery || query.length > 0) {
       return
+    }
+    if (capturedFilterRef.current !== filter) {
+      capturedFilterRef.current = filter
+      recentTabOrderCapturedRef.current = false
+      recentTabOrderAttentionReadyRef.current = false
     }
     if (
       recentTabOrderCapturedRef.current &&
@@ -225,7 +234,7 @@ export function useWorktreeJumpPaletteRecentTabs({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [
     activeGroupIdByWorktree,
-    filterActive,
+    filter,
     groupsByWorktree,
     hasQuery,
     lastVisitedAtByWorktreeId,

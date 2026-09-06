@@ -1,5 +1,7 @@
+import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import {
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -42,73 +44,59 @@ function toFilterOption({
 
 export type PaletteFilterModel = {
   hosts: readonly PaletteFilterOption[]
-  projects: readonly PaletteFilterOption[]
-  /** A project row can span several repos (Project.sourceRepoIds), so selection resolves through this. */
+  repositories: readonly PaletteFilterOption[]
+  /** Repository IDs represented by each project row in the sidebar grouping. */
   repoIdsByProjectKey: ReadonlyMap<string, readonly string[]>
-  /** Only repos that carry a host stamp; absent means "inherit defaultHostId". */
-  hostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
+  /** Every execution host that owns a repository ID. */
+  hostIdsByRepoId: ReadonlyMap<string, ReadonlySet<ExecutionHostId>>
+  /** Same last-row-wins repository index used by the sidebar. */
+  repoById: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
   /** The focused runtime host, which host-less repos and worktrees inherit. */
   defaultHostId: ExecutionHostId
 }
 
-/**
- * Precomputes only the repos that actually carry a host stamp so the lookup miss
- * below stays equivalent to getWorktreeExecutionHostId's `defaultHostId` branch.
- * Collapsing host-less repos to `local` here would disagree with the sidebar
- * whenever a runtime environment is focused.
- */
-function buildRepoHostIndex(repos: readonly Repo[]): Map<string, ExecutionHostId> {
-  const hostIdByRepoId = new Map<string, ExecutionHostId>()
+function buildRepoHostIndex(
+  repos: readonly Repo[],
+  defaultHostId: ExecutionHostId
+): Map<string, Set<ExecutionHostId>> {
+  const hostIdsByRepoId = new Map<string, Set<ExecutionHostId>>()
   for (const repo of repos) {
-    if (repo.connectionId || repo.executionHostId) {
-      hostIdByRepoId.set(repo.id, getRepoExecutionHostId(repo))
-    }
+    const hostIds = hostIdsByRepoId.get(repo.id) ?? new Set<ExecutionHostId>()
+    hostIds.add(
+      repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
+    )
+    hostIdsByRepoId.set(repo.id, hostIds)
   }
-  return hostIdByRepoId
+  return hostIdsByRepoId
 }
 
 export function resolveWorktreeFilterHostId(
   worktree: Pick<Worktree, 'repoId' | 'hostId'>,
-  hostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
+  repoById: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>,
   defaultHostId: ExecutionHostId
 ): ExecutionHostId {
-  // Why: same precedence as getWorktreeExecutionHostId without re-resolving the
-  // repo per worktree — the repo host is precomputed once for the whole pass.
-  return worktree.hostId ?? hostIdByRepoId.get(worktree.repoId) ?? defaultHostId
+  return getWorktreeExecutionHostId(worktree, repoById.get(worktree.repoId), defaultHostId)
 }
 
-/** Repo-derived host for a project row, which owns no worktree of its own. */
-export function resolveRepoFilterHostId(
-  repoId: string,
-  hostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
-  defaultHostId: ExecutionHostId
-): ExecutionHostId {
-  return hostIdByRepoId.get(repoId) ?? defaultHostId
-}
-
-type ProjectRow = { key: string; label: string; repoIds: string[] }
-
-function buildProjectRows(
+function buildRepoIdsByProjectKey(
   repos: readonly Repo[],
-  repoMap: Map<string, Repo>,
+  repoById: Map<string, Repo>,
   grouping: ProjectGroupingModel
-): { rows: ProjectRow[]; keyByRepoId: Map<string, string> } {
-  const rows = new Map<string, ProjectRow>()
-  const keyByRepoId = new Map<string, string>()
+): Map<string, string[]> {
+  const repoIdsByProjectKey = new Map<string, string[]>()
   for (const repo of repos) {
-    const target = getProjectHeaderRevealTarget(repo.id, repoMap, grouping)
+    const target = getProjectHeaderRevealTarget(repo.id, repoById, grouping)
     if (!target.repo) {
       continue
     }
-    const existing = rows.get(target.key)
-    if (existing) {
-      existing.repoIds.push(repo.id)
+    const repoIds = repoIdsByProjectKey.get(target.key)
+    if (repoIds) {
+      repoIds.push(repo.id)
     } else {
-      rows.set(target.key, { key: target.key, label: target.label, repoIds: [repo.id] })
+      repoIdsByProjectKey.set(target.key, [repo.id])
     }
-    keyByRepoId.set(repo.id, target.key)
   }
-  return { rows: [...rows.values()], keyByRepoId }
+  return repoIdsByProjectKey
 }
 
 export function buildPaletteFilterModel({
@@ -126,60 +114,56 @@ export function buildPaletteFilterModel({
   projectHostSetups: readonly ProjectHostSetup[]
   defaultHostId?: ExecutionHostId
 }): PaletteFilterModel {
-  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  const hostIdByRepoId = buildRepoHostIndex(repos)
-  const { rows, keyByRepoId } = buildProjectRows(repos, repoMap, { projects, projectHostSetups })
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  const hostIdsByRepoId = buildRepoHostIndex(repos, defaultHostId)
+  const repoIdsByProjectKey = buildRepoIdsByProjectKey([...repoById.values()], repoById, {
+    projects,
+    projectHostSetups
+  })
 
   const worktreeCountByHostId = new Map<string, number>()
-  const worktreeCountByProjectKey = new Map<string, number>()
+  const worktreeCountByRepoId = new Map<string, number>()
   for (const worktree of worktrees) {
     if (worktree.isArchived) {
       continue
     }
-    const hostId = resolveWorktreeFilterHostId(worktree, hostIdByRepoId, defaultHostId)
+    const hostId = resolveWorktreeFilterHostId(worktree, repoById, defaultHostId)
     worktreeCountByHostId.set(hostId, (worktreeCountByHostId.get(hostId) ?? 0) + 1)
-    const projectKey = keyByRepoId.get(worktree.repoId)
-    if (projectKey) {
-      worktreeCountByProjectKey.set(
-        projectKey,
-        (worktreeCountByProjectKey.get(projectKey) ?? 0) + 1
-      )
-    }
+    worktreeCountByRepoId.set(
+      worktree.repoId,
+      (worktreeCountByRepoId.get(worktree.repoId) ?? 0) + 1
+    )
   }
 
-  // Why: options are gated on a live workspace count, not on configuration — an
-  // option that can only ever yield an empty list is a trap, and it also keeps
-  // stale selections self-healing through reconcilePaletteFilter.
   // Registry order (local first, then SSH/runtime) matches the sidebar host headers.
-  const hosts = hostOptions
-    .filter((host) => (worktreeCountByHostId.get(host.id) ?? 0) > 0)
-    .map((host) =>
-      toFilterOption({
-        id: host.id,
-        label: host.label,
-        detail: host.detail,
-        count: worktreeCountByHostId.get(host.id) ?? 0
-      })
-    )
+  const hosts = hostOptions.map((host) =>
+    toFilterOption({
+      id: host.id,
+      label: host.label,
+      detail: host.detail,
+      count: worktreeCountByHostId.get(host.id) ?? 0
+    })
+  )
 
-  // Popularity first so a long project list surfaces busy workspaces without search.
-  const projectOptions = rows
-    .filter((row) => (worktreeCountByProjectKey.get(row.key) ?? 0) > 0)
-    .map((row) =>
+  // Keep repository IDs aligned with the sidebar; project grouping remains a row concern.
+  const repositoryLabels = getRepoDisplayLabelsByPath([...repoById.values()])
+  const repositories = [...repoById.values()]
+    .map((repo) =>
       toFilterOption({
-        id: row.key,
-        label: row.label,
-        detail: '',
-        count: worktreeCountByProjectKey.get(row.key) ?? 0
+        id: repo.id,
+        label: repositoryLabels.get(getRepoDisplayLabelKey(repo)) ?? repo.displayName,
+        detail: repo.path,
+        count: worktreeCountByRepoId.get(repo.id) ?? 0
       })
     )
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
 
   return {
     hosts,
-    projects: projectOptions,
-    repoIdsByProjectKey: new Map(rows.map((row) => [row.key, row.repoIds])),
-    hostIdByRepoId,
+    repositories,
+    repoIdsByProjectKey,
+    hostIdsByRepoId,
+    repoById,
     defaultHostId
   }
 }

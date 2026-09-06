@@ -97,6 +97,38 @@ describe('buildAgentRowLineageTree', () => {
     ])
   })
 
+  it('nests by parent pane key when the parent handles are stale after a restart', () => {
+    // Why: terminal handles are minted per process, so after an app restart the
+    // persisted coordinator handle names no live row; the durable pane key must win.
+    const parent = makeRow('parent:1', { terminalHandle: 'term-parent-reminted' })
+    const child = makeRow('child:1', {
+      parentPaneKey: 'parent:1',
+      parentTerminalHandle: 'term-parent-stale',
+      coordinatorHandle: 'term-parent-stale'
+    })
+
+    const tree = buildAgentRowLineageTree([parent, child])
+
+    expect(tree.rootRows.map((row) => row.paneKey)).toEqual(['parent:1'])
+    expect(tree.childrenByParentPaneKey.get('parent:1')?.map((row) => row.paneKey)).toEqual([
+      'child:1'
+    ])
+    expect(tree.childPaneKeys.has('child:1')).toBe(true)
+  })
+
+  it('keeps a child as a root when its parent pane key names no visible row', () => {
+    const unrelated = makeRow('other:1', { terminalHandle: 'term-other' })
+    const orphan = makeRow('child:1', {
+      parentPaneKey: 'parent-closed:1',
+      coordinatorHandle: 'term-parent-stale'
+    })
+
+    const tree = buildAgentRowLineageTree([unrelated, orphan])
+
+    expect(tree.rootRows.map((row) => row.paneKey)).toEqual(['other:1', 'child:1'])
+    expect(tree.childrenByParentPaneKey.size).toBe(0)
+  })
+
   it('keeps cyclic lineage rows visible as flat roots', () => {
     const root = makeRow('root:1')
     const firstCycleRow = makeRow('cycle-a:1', { parentPaneKey: 'cycle-b:1' })

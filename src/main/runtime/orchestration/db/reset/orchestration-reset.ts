@@ -35,6 +35,7 @@ export function resetAll(this: OrchestrationDb): void {
     DELETE FROM federated_dispatches;
     DELETE FROM worker_terminal_archives;
     DELETE FROM worker_terminal_resources;
+    DELETE FROM attempt_observation_facts;
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;
@@ -66,6 +67,7 @@ export function resetTasks(this: OrchestrationDb): void {
     DELETE FROM federated_dispatches;
     DELETE FROM worker_terminal_archives;
     DELETE FROM worker_terminal_resources;
+    DELETE FROM attempt_observation_facts;
     DELETE FROM worker_dispatches;
     DELETE FROM dispatch_contexts;
     DELETE FROM tasks;

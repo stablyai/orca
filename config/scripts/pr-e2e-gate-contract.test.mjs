@@ -39,7 +39,7 @@ const nativeImeSpec = readFileSync(
   'utf8'
 )
 
-const filterStep = prWorkflow.jobs['e2e-paths'].steps.find(
+const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
 const rollbackStep = prWorkflow.jobs.static_analysis.steps.find(
@@ -106,16 +106,16 @@ describe('PR E2E gate contract', () => {
     // Why: without this the job could lose its filter and run on every PR — the
     // cost the path filter exists to avoid — while the gate assertions above
     // stay green.
-    expect(prWorkflow.jobs.e2e.needs).toBe('e2e-paths')
-    expect(prWorkflow.jobs.e2e.if).toBe("needs.e2e-paths.outputs.should_run == 'true'")
-    expect(prWorkflow.jobs['e2e-paths'].outputs.should_run).toBe(
-      '${{ steps.filter.outputs.should_run }}'
+    expect(prWorkflow.jobs.e2e.needs).toBe('code_paths')
+    expect(prWorkflow.jobs.e2e.if).toBe("needs.code_paths.outputs.e2e_should_run == 'true'")
+    expect(prWorkflow.jobs.code_paths.outputs.e2e_should_run).toBe(
+      '${{ steps.e2e_filter.outputs.should_run }}'
     )
-    expect(prWorkflow.jobs['e2e-paths'].outputs.test_files).toBe(
-      '${{ steps.filter.outputs.test_files }}'
+    expect(prWorkflow.jobs.code_paths.outputs.test_files).toBe(
+      '${{ steps.e2e_filter.outputs.test_files }}'
     )
     expect(prWorkflow.jobs.e2e.with.ref).toBe('${{ github.event.pull_request.head.sha }}')
-    expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.e2e-paths.outputs.test_files }}')
+    expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.code_paths.outputs.test_files }}')
   })
 
   it('enforces every job verify depends on', () => {
@@ -168,6 +168,7 @@ describe('PR E2E gate contract', () => {
     expect(changedRun.env.TEST_FILES_JSON).toBe('${{ inputs.test_files }}')
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
+    expect(changedRun.run).toContain('. != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts"')
     expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
     expect(changedRun.run).toContain('grep -l \'@headful\' "${TEST_FILES[@]}"')
     expect(changedRun.run).toContain('E2E_PROJECT_ARGS+=(--project=electron-headful)')
@@ -360,11 +361,11 @@ describe('PR E2E gate contract', () => {
     expect(sshLaneCondition).toContain("inputs.ssh_source_changed == 'true' ||")
 
     expect(e2eWorkflow.on.workflow_call.inputs.ssh_source_changed.type).toBe('string')
-    expect(prWorkflow.jobs['e2e-paths'].outputs.ssh_source_changed).toBe(
-      '${{ steps.filter.outputs.ssh_source_changed }}'
+    expect(prWorkflow.jobs.code_paths.outputs.ssh_source_changed).toBe(
+      '${{ steps.e2e_filter.outputs.ssh_source_changed }}'
     )
     expect(prWorkflow.jobs.e2e.with.ssh_source_changed).toBe(
-      '${{ needs.e2e-paths.outputs.ssh_source_changed }}'
+      '${{ needs.code_paths.outputs.ssh_source_changed }}'
     )
     expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --ssh-source')
     expect(filterStep.run).toContain('ssh_source_changed=$SSH_SOURCE_CHANGED')
@@ -375,14 +376,10 @@ describe('PR E2E gate contract', () => {
     // that no runner names runs nowhere and still reports green — the silent skip this file
     // exists to prevent. Asserting reachability rather than a literal keeps that true when
     // the lanes move.
-    // Why these two are exempt: each needs something CI cannot give it, recorded in
+    // The remaining exemption needs performance validation before routine CI, recorded in
     // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
-    const unreachableSpecs = new Set([
-      'tests/e2e/ssh-docker-relay-perf.spec.ts',
-      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
-      'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts'
-    ])
-    // Why comments are stripped: this file's own runner lists the two exempt specs by name in a
+    const unreachableSpecs = new Set(['tests/e2e/ssh-docker-relay-perf.spec.ts'])
+    // Why comments are stripped: the runner documents the exempt spec by name in a
     // prose comment. A substring scan over raw text would count any spec merely *discussed* in a
     // runner as claimed by it -- the silent skip this assertion exists to catch, re-entering
     // through the documentation.
@@ -565,12 +562,12 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs.terminal_ime_native.uses).toBe(
       './.github/workflows/terminal-ime-e2e.yml'
     )
-    expect(prWorkflow.jobs.terminal_ime_native.needs).toBe('e2e-paths')
+    expect(prWorkflow.jobs.terminal_ime_native.needs).toBe('code_paths')
     expect(prWorkflow.jobs.terminal_ime_native.if).toBe(
-      "needs.e2e-paths.outputs.native_ime_source_changed == 'true'"
+      "needs.code_paths.outputs.native_ime_source_changed == 'true'"
     )
-    expect(prWorkflow.jobs['e2e-paths'].outputs.native_ime_source_changed).toBe(
-      '${{ steps.filter.outputs.native_ime_source_changed }}'
+    expect(prWorkflow.jobs.code_paths.outputs.native_ime_source_changed).toBe(
+      '${{ steps.e2e_filter.outputs.native_ime_source_changed }}'
     )
     expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --native-ime-source')
     expect(filterStep.run).toContain('native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED')
@@ -636,13 +633,8 @@ describe('PR E2E gate contract', () => {
       .filter((spec) => nativeGateExpression.test(readFileSync(join(projectDir, spec), 'utf8')))
     expect(nativeGatedSpecs.length).toBeGreaterThan(0)
 
-    // Why exempt: the digit repro needs a nested gnome-shell, which no hosted runner provides
-    // (headless mutter never answers RemoteDesktop.CreateSession); the macOS spec needs a real
-    // macOS input source, and no macOS runner exists on any PR or scheduled lane.
-    const unreachableSpecs = new Set([
-      'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts',
-      'tests/e2e/terminal-macos-2set-korean-native.spec.ts'
-    ])
+    // The macOS spec needs a native input source; PR and scheduled IME lanes use Linux.
+    const unreachableSpecs = new Set(['tests/e2e/terminal-macos-2set-korean-native.spec.ts'])
     const unclaimed = nativeGatedSpecs.filter(
       (spec) => !unreachableSpecs.has(spec) && !nativeImeRunner.includes(spec)
     )
@@ -682,8 +674,13 @@ describe('PR E2E gate contract', () => {
 
     // Why pin the titles: the runner requires one receipt per name, so a rename that nobody
     // mirrored here would fail the lane loudly instead of quietly halving it.
+    const nativeDigitSpec = readFileSync(
+      join(projectDir, 'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts'),
+      'utf8'
+    )
+    expect(nativeDigitSpec).toContain('appendImeEngagementReceipt(testInfo.title, trace)')
     for (const title of EXPECTED_NATIVE_IME_TESTS) {
-      expect(nativeImeSpec, title).toContain(title)
+      expect(nativeImeSpec + nativeDigitSpec, title).toContain(title)
     }
   })
 

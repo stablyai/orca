@@ -121,7 +121,6 @@ function repairSucceedsResponses(): ExecResponse[] {
     '', // rm -f probe stderr
     NPTY_CLOEXEC_PATCHED,
     'DEAD',
-    '', // publish the per-launch credential
     'READY'
   ]
 }
@@ -132,7 +131,6 @@ function lockUnavailableResponses(): ExecResponse[] {
     '/home/u',
     NODE_PTY_BROKEN, // health probe before the lock
     'DEAD',
-    '', // publish the per-launch credential
     'READY'
   ]
 }

@@ -762,4 +762,30 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     expect(getTabRowIds()).toContain('tab-alpha')
   })
+
+  it('keeps the recent section under a sidebar-seeded repository filter and refreshes on clear', async () => {
+    const secondRepo = { ...makeRepo(), id: 'repo-2', path: '/repos/repo-2', displayName: 'Repo 2' }
+    await renderPalette({
+      ...makeRecentTabState(),
+      repos: [makeRepo(), secondRepo],
+      worktreesByRepo: {
+        'repo-1': [makeWorktree('wt-alpha', 'Alpha workspace')],
+        'repo-2': [makeWorktree('wt-beta', 'Beta workspace', { repoId: 'repo-2' })]
+      },
+      filterRepoIds: ['repo-1']
+    })
+
+    // The seeded filter narrows the recent rows instead of dropping the section.
+    expect(testContainer.textContent).toContain('Recent Chats & Terminals')
+    expect(getTabRowIds()).toEqual(['tab-alpha'])
+
+    await act(async () => {
+      ;[...testContainer.querySelectorAll('button')]
+        .find((button) => button.textContent?.includes('Clear all'))
+        ?.click()
+    })
+    await flushEffects()
+
+    expect(getTabRowIds()).toEqual(expect.arrayContaining(['tab-alpha', 'tab-beta']))
+  })
 })

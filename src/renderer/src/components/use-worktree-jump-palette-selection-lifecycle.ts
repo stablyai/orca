@@ -4,7 +4,6 @@ import {
   queueBrowserFocusRequest
 } from '@/components/browser-pane/host-guest/browser-focus'
 import { captureCmdJActiveGroupSnapshot } from '@/components/cmd-j/quick-action-context'
-import { EMPTY_PALETTE_FILTER } from '@/components/cmd-j/palette-filter'
 import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
 import {
   CREATE_WORKTREE_ITEM_ID,
@@ -56,7 +55,6 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   latestQueryRef,
   setQuery,
   setSelectedItemId,
-  setRawFilter,
   selectionMovedByUserRef,
   taskSourceUrl,
   listRef,
@@ -81,10 +79,8 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     if (visible && !wasVisibleRef.current) {
       recordFeatureInteraction('cmd-j')
       createLookupGuard.invalidate()
-      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(
-        useAppStore.getState(),
-        activeWorktreeId
-      )
+      const appState = useAppStore.getState()
+      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(appState, activeWorktreeId)
       previousWorktreeIdRef.current = activeWorktreeId
       previousActiveTabTypeRef.current = activeTabType
       previousBrowserPageIdRef.current =
@@ -108,7 +104,6 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       setQuery('')
       setSelectedItemId('')
       selectionMovedByUserRef.current = false
-      setRawFilter(EMPTY_PALETTE_FILTER)
       listRef.current?.scrollTo(0, 0)
     }
     if (!visible && wasVisibleRef.current) {

@@ -73,23 +73,36 @@ export async function closeSettingsPage(page: Page): Promise<void> {
 
 export async function closeOpenDialogs(page: Page): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
+    // Nested dialogs can finish their exit animations in different frames.
+    await expect(page.locator('[role="dialog"][data-state="closed"]')).toHaveCount(0, {
+      timeout: 3_000
+    })
     const dialogCount = await page.getByRole('dialog').count()
     if (dialogCount === 0) {
       return
     }
-    const dialog = page.getByRole('dialog').last()
-    const cancelOrBack = dialog.getByRole('button', { name: /^(Cancel|Back)$/ })
-    await ((await cancelOrBack
-      .first()
-      .isVisible()
-      .catch(() => false))
-      ? cancelOrBack.first().click()
-      : page.keyboard.press('Escape'))
-    await expect
-      .poll(async () => page.getByRole('dialog').count(), { timeout: 3_000 })
-      .toBeLessThan(dialogCount)
-      .catch(() => undefined)
+    const dialogId = await page.getByRole('dialog').last().getAttribute('id')
+    if (!dialogId) {
+      throw new Error('Open dialog is missing its Radix identity')
+    }
+    const dialog = page.locator(`[role="dialog"][id=${JSON.stringify(dialogId)}]`)
+    const back = dialog.getByRole('button', { name: 'Back', exact: true })
+    if (await back.isVisible()) {
+      await back.click()
+      // The picker and host form reuse the same Radix dialog.
+      await expect(back).toBeHidden({ timeout: 3_000 })
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible({
+        timeout: 3_000
+      })
+      continue
+    }
+    const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true })
+    await ((await cancel.isVisible()) ? cancel.click() : page.keyboard.press('Escape'))
+    // Hidden Electron windows can park CSS exits before their first compositor frame.
+    await page.screenshot({ animations: 'disabled' })
+    await expect(dialog).toBeHidden({ timeout: 3_000 })
   }
+  await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
 }
 
 /** Leave settings / overlays so the main shell (Add Project) is reachable. */

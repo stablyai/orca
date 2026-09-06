@@ -16,6 +16,10 @@ export function projectIpcPtyConnectResult(
       snapshot: spawnResult.snapshot,
       snapshotCols: spawnResult.snapshotCols,
       snapshotRows: spawnResult.snapshotRows,
+      ...(spawnResult.snapshotSeq !== undefined ? { snapshotSeq: spawnResult.snapshotSeq } : {}),
+      ...(spawnResult.snapshotKittyKeyboardFlags !== undefined
+        ? { snapshotKittyKeyboardFlags: spawnResult.snapshotKittyKeyboardFlags }
+        : {}),
       ...(spawnResult.snapshotPrefixAnsi !== undefined
         ? { snapshotPrefixAnsi: spawnResult.snapshotPrefixAnsi }
         : {}),

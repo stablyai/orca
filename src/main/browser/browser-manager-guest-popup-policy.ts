@@ -9,7 +9,8 @@ import {
 import {
   BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
   buildBrowserClickedLinkRoutingScript,
-  buildBrowserIframeClickedLinkRoutingScript
+  buildBrowserIframeClickedLinkRoutingScript,
+  type BrowserClickedLinkFrameNames
 } from './browser-clicked-link-routing'
 import { isNewBrowserTabPopupIntent } from './browser-popup-new-tab-intent'
 import { SAFE_POPUP_WINDOW_OPTIONS, safeOrigin } from './browser-manager-types'
@@ -19,11 +20,18 @@ import { BrowserManagerNavigation } from './browser-manager-navigation'
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(
     guest: Electron.WebContents,
-    clickedLinkFrameName: string | null
+    routeClickedLinks: boolean
   ): () => void {
-    let clickedLinkRoutingActive = Boolean(clickedLinkFrameName)
+    // OAuth child windows keep native link behavior.
+    const clickedLinkFrameNames: BrowserClickedLinkFrameNames | null = routeClickedLinks
+      ? {
+          foreground: `__orca_clicked_link_foreground_${randomUUID()}`,
+          background: `__orca_clicked_link_background_${randomUUID()}`
+        }
+      : null
+    let clickedLinkRoutingActive = routeClickedLinks
     const installClickedLinkRouting = (): void => {
-      if (!clickedLinkRoutingActive || !clickedLinkFrameName || guest.isDestroyed()) {
+      if (!clickedLinkRoutingActive || !clickedLinkFrameNames || guest.isDestroyed()) {
         return
       }
       // Why: an isolated-world listener labels real anchor clicks without exposing the frame name to page scripts.
@@ -34,7 +42,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             {
               // Why: mobile emulation spoofs the UA as iOS, so use the real host platform from main for modifier routing.
               code: buildBrowserClickedLinkRoutingScript(
-                clickedLinkFrameName,
+                clickedLinkFrameNames.foreground,
+                clickedLinkFrameNames.background,
                 process.platform === 'darwin'
               )
             }
@@ -43,36 +52,50 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         )
         .catch(() => {})
     }
-    if (clickedLinkFrameName) {
+    if (clickedLinkFrameNames) {
       guest.on('dom-ready', installClickedLinkRouting)
     }
     const pendingIframeRoutingInstalls = new Map<Electron.WebFrameMain, () => void>()
-    const iframeFrameNameByFrame = new Map<Electron.WebFrameMain, string>()
-    const iframeFrameByFrameName = new Map<string, Electron.WebFrameMain>()
+    const iframeFrameNamesByFrame = new Map<Electron.WebFrameMain, BrowserClickedLinkFrameNames>()
+    const iframeRoutingByFrameName = new Map<
+      string,
+      { frame: Electron.WebFrameMain; activate: boolean }
+    >()
     const clearIframeFrameName = (frame: Electron.WebFrameMain): void => {
-      const name = iframeFrameNameByFrame.get(frame)
-      if (!name) {
+      const names = iframeFrameNamesByFrame.get(frame)
+      if (!names) {
         return
       }
-      iframeFrameNameByFrame.delete(frame)
-      iframeFrameByFrameName.delete(name)
+      iframeFrameNamesByFrame.delete(frame)
+      for (const name of [names.foreground, names.background]) {
+        iframeRoutingByFrameName.delete(name)
+      }
     }
     const installIframeClickedLinkRouting = (frame: Electron.WebFrameMain): void => {
       clearIframeFrameName(frame)
       if (!clickedLinkRoutingActive || frame.isDestroyed()) {
         return
       }
-      const name = `__orca_clicked_link_iframe_foreground_${randomUUID()}`
-      iframeFrameNameByFrame.set(frame, name)
-      iframeFrameByFrameName.set(name, frame)
+      const foregroundName = `__orca_clicked_link_iframe_foreground_${randomUUID()}`
+      const backgroundName = `__orca_clicked_link_iframe_background_${randomUUID()}`
+      iframeFrameNamesByFrame.set(frame, {
+        foreground: foregroundName,
+        background: backgroundName
+      })
+      iframeRoutingByFrameName.set(foregroundName, { frame, activate: true })
+      iframeRoutingByFrameName.set(backgroundName, { frame, activate: false })
       // Why: child-frame tokens live in the page world, so consume after one trusted click and replace before the next.
       void frame
         .executeJavaScript(
-          buildBrowserIframeClickedLinkRoutingScript(name, process.platform === 'darwin'),
+          buildBrowserIframeClickedLinkRoutingScript(
+            foregroundName,
+            backgroundName,
+            process.platform === 'darwin'
+          ),
           false
         )
         .catch(() => {
-          if (iframeFrameNameByFrame.get(frame) === name) {
+          if (iframeFrameNamesByFrame.get(frame)?.foreground === foregroundName) {
             clearIframeFrameName(frame)
           }
         })
@@ -81,10 +104,10 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       _event: Electron.Event,
       { frame }: Electron.FrameCreatedDetails
     ): void => {
-      if (!clickedLinkFrameName || !frame || frame.parent === null) {
+      if (!clickedLinkFrameNames || !frame || frame.parent === null) {
         return
       }
-      for (const knownFrame of iframeFrameNameByFrame.keys()) {
+      for (const knownFrame of iframeFrameNamesByFrame.keys()) {
         if (knownFrame.isDestroyed()) {
           clearIframeFrameName(knownFrame)
         }
@@ -96,7 +119,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       pendingIframeRoutingInstalls.set(frame, installAfterDomReady)
       frame.once('dom-ready', installAfterDomReady)
     }
-    if (clickedLinkFrameName) {
+    if (clickedLinkFrameNames) {
       guest.on('frame-created', handleFrameCreated)
     }
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
@@ -109,19 +132,28 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       const browserTabId = ownerContext?.browserTabId ?? null
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
-      const expectedClickedLinkFrameName = this.clickedLinkFrameNameByGuestId.get(guest.id)
-      const iframeFrame = frameName ? iframeFrameByFrameName.get(frameName) : undefined
-      let isClickedLink = Boolean(
-        expectedClickedLinkFrameName && frameName === expectedClickedLinkFrameName
-      )
-      if (!isClickedLink && iframeFrame) {
-        isClickedLink = true
-        clearIframeFrameName(iframeFrame)
-        queueMicrotask(() => installIframeClickedLinkRouting(iframeFrame))
+      const expectedClickedLinkFrameNames = clickedLinkRoutingActive ? clickedLinkFrameNames : null
+      const iframeRouting = frameName ? iframeRoutingByFrameName.get(frameName) : undefined
+      let clickedLinkActivate: boolean | null = null
+      if (expectedClickedLinkFrameNames && frameName === expectedClickedLinkFrameNames.foreground) {
+        clickedLinkActivate = true
+      } else if (
+        expectedClickedLinkFrameNames &&
+        frameName === expectedClickedLinkFrameNames.background
+      ) {
+        clickedLinkActivate = false
+      } else if (iframeRouting) {
+        clickedLinkActivate = iframeRouting.activate
+        clearIframeFrameName(iframeRouting.frame)
+        queueMicrotask(() => installIframeClickedLinkRouting(iframeRouting.frame))
       }
 
-      if (isClickedLink) {
-        if (browserTabId && browserUrl && this.openLinkInOrcaTab(browserTabId, browserUrl)) {
+      if (clickedLinkActivate !== null) {
+        if (
+          browserTabId &&
+          browserUrl &&
+          this.openLinkInOrcaTab(browserTabId, browserUrl, clickedLinkActivate)
+        ) {
           this.forwardOrQueuePopupEvent(guest.id, {
             origin: safeOrigin(browserUrl),
             action: 'opened-in-orca'
@@ -148,7 +180,13 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           })
           return { action: 'deny' }
         }
-        if (this.openLinkInOrcaTab(ownerContext.browserTabId, externalUrl)) {
+        if (
+          this.openLinkInOrcaTab(
+            ownerContext.browserTabId,
+            externalUrl,
+            disposition !== 'background-tab'
+          )
+        ) {
           this.forwardOrQueuePopupEvent(guest.id, {
             origin: safeOrigin(externalUrl),
             action: 'opened-in-orca'
@@ -190,7 +228,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       clickedLinkRoutingActive = false
       try {
         guest.off('did-create-window', handleDidCreateWindow)
-        if (clickedLinkFrameName) {
+        if (clickedLinkFrameNames) {
           guest.off('dom-ready', installClickedLinkRouting)
           guest.off('frame-created', handleFrameCreated)
           for (const [frame, install] of pendingIframeRoutingInstalls) {
@@ -199,8 +237,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             }
           }
           pendingIframeRoutingInstalls.clear()
-          iframeFrameNameByFrame.clear()
-          iframeFrameByFrameName.clear()
+          iframeFrameNamesByFrame.clear()
+          iframeRoutingByFrameName.clear()
         }
       } catch {
         // guest may already be destroyed
