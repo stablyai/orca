@@ -1,3 +1,4 @@
+import { KaneoSourceStatus } from './KaneoSourceStatus'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Command } from '@/components/ui/command'
@@ -208,6 +209,7 @@ export function renderSmartWorkspaceNameField(
           )}
         </div>
       ) : null}
+      <KaneoSourceStatus source={controller.kaneoSource} id={controller.kaneoStatusId} />
       <WorkspaceEmojiSuggestionPopover
         anchorRef={localInputRef}
         open={emojiMenuOpen}

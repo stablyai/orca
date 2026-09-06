@@ -7,13 +7,14 @@ export type SmartWorkspaceCommandRowKind =
   | 'linear'
   | 'jira'
   | 'jira-account'
+  | 'kaneo'
 
 export type SmartWorkspaceCommandRow = {
   kind: SmartWorkspaceCommandRowKind
   value: string
 }
 
-export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'jira' | null
+export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'jira' | 'kaneo' | null
 
 export function resolveSmartWorkspaceCommandValue({
   currentValue,
@@ -54,6 +55,11 @@ export function resolveSmartWorkspaceCommandValue({
     const linearRow = rows.find((row) => row.kind === 'linear')
     if (linearRow) {
       return linearRow.value
+    }
+  } else if (sourceIntent === 'kaneo') {
+    const row = rows.find((row) => row.kind === 'kaneo')
+    if (row) {
+      return row.value
     }
   } else if (sourceIntent === 'jira') {
     const jiraRow = rows.find((row) => row.kind === 'jira')

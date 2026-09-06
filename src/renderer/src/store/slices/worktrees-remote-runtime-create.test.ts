@@ -177,37 +177,46 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 
-  it('blocks Jira linking when the paired runtime lacks durable metadata capability', async () => {
-    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
-    if (oldRuntimeStatus.ok) {
-      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
-        (capability) => capability !== 'worktree.linked-work-item-context.v1'
-      )
-    }
-    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
-      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
-    )
-    const store = createTestStore()
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      worktreesByRepo: { repo1: [] }
-    } as Partial<AppState>)
-    const createWorktree = store.getState().createWorktree
-    const args: Parameters<typeof createWorktree> = ['repo1', 'jira-link']
-    args[25] = {
-      linkedWorkItem: {
-        provider: 'jira',
-        type: 'issue',
-        number: 0,
-        title: 'ORCA-123 Link Jira',
-        url: 'https://company.atlassian.net/browse/ORCA-123',
-        jiraIdentifier: 'ORCA-123'
+  it.each(['jira', 'kaneo'] as const)(
+    'blocks %s linking when the paired runtime lacks metadata support',
+    async (provider) => {
+      const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+      if (oldRuntimeStatus.ok) {
+        oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+          (capability) =>
+            capability !==
+            (provider === 'kaneo' ? 'kaneo.task-link.v1' : 'worktree.linked-work-item-context.v1')
+        )
       }
-    }
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+        args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+      )
+      const store = createTestStore()
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+        worktreesByRepo: { repo1: [] }
+      } as Partial<AppState>)
+      const createWorktree = store.getState().createWorktree
+      const args: Parameters<typeof createWorktree> = ['repo1', 'jira-link']
+      args[25] = {
+        linkedWorkItem: {
+          provider,
+          type: 'issue',
+          number: 0,
+          title: 'ORCA-123 Link Jira',
+          url: 'https://company.atlassian.net/browse/ORCA-123',
+          jiraIdentifier: 'ORCA-123'
+        }
+      }
 
-    await expect(createWorktree(...args)).rejects.toThrow('Update the remote runtime to link Jira')
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
+      await expect(createWorktree(...args)).rejects.toThrow(
+        provider === 'kaneo'
+          ? 'Update the remote runtime to link Kaneo'
+          : 'Update the remote runtime to link Jira'
+      )
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    }
+  )
 
   it('passes startup commands through remote runtime worktree creation', async () => {
     const store = createTestStore()

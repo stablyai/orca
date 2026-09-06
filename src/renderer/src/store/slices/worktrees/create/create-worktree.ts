@@ -12,7 +12,10 @@ import {
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from '../../../../runtime/runtime-rpc-client'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import {
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  KANEO_TASK_LINK_RUNTIME_CAPABILITY
+} from '../../../../../../shared/protocol-version'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
 import { showLocalBaseRefRefreshToast } from './local-base-ref-refresh-toast'
@@ -179,6 +182,13 @@ export function createCreateWorktree(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
           'Update the remote runtime to link Jira'
+        )
+      }
+      if (target.kind === 'environment' && options?.linkedWorkItem?.provider === 'kaneo') {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          KANEO_TASK_LINK_RUNTIME_CAPABILITY,
+          'Update the remote runtime to link Kaneo tasks'
         )
       }
       if (options?.provisionedRoot && target.kind !== 'local') {

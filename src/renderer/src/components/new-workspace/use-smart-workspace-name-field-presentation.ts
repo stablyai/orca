@@ -8,11 +8,7 @@ import {
   parseBoundedSmartWorkspaceLinearIssueUrlIntent,
   prioritizeSmartWorkspaceLinearIssueResults
 } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
-import {
-  getActiveWorkspaceEmojiShortcode,
-  searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+import { useSmartWorkspaceEmojiPresentation } from './use-smart-workspace-emoji-presentation'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
 import {
   buildSmartWorkspaceSourceRows,
@@ -40,6 +36,7 @@ export function useSmartWorkspaceNameFieldPresentation(
 ) {
   const {
     jiraSource,
+    kaneoSource,
     branches,
     mode,
     branchResultsSource,
@@ -93,6 +90,11 @@ export function useSmartWorkspaceNameFieldPresentation(
     [mode, value]
   )
   const rows = useMemo<RowEntry[]>(() => {
+    if (kaneoSource.intent) {
+      return kaneoSource.task
+        ? [{ kind: 'kaneo', value: `kaneo-${kaneoSource.task.url}`, task: kaneoSource.task }]
+        : []
+    }
     if (jiraSource.intent && jiraSource.accountChoices.length > 0) {
       return jiraSource.accountChoices.map((site) => ({
         kind: 'jira-account' as const,
@@ -152,6 +154,8 @@ export function useSmartWorkspaceNameFieldPresentation(
     gitlabSourceAvailable,
     gitlabItems,
     gitlabUrlIntent,
+    kaneoSource.intent,
+    kaneoSource.task,
     jiraSource.accountChoices,
     jiraSource.intent,
     jiraSource.issue,
@@ -178,15 +182,21 @@ export function useSmartWorkspaceNameFieldPresentation(
   const trimmedValue = valueWithinSourceLimit ? value.trim() : ''
   const trimmedDebouncedQuery = debouncedQueryWithinSourceLimit ? debouncedQuery.trim() : ''
   const isQueryStale =
-    !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
+    !kaneoSource.intent &&
+    !linearUrlIntentOwnsInput &&
+    trimmedValue.length > 0 &&
+    trimmedDebouncedQuery !== trimmedValue
   // Why: unambiguous refs highlight their source row instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
+  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | 'kaneo' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
     const trimmed = value.trim()
     if (!trimmed) {
       return null
+    }
+    if (kaneoSource.intent) {
+      return 'kaneo'
     }
     if (jiraSource.intent) {
       return 'jira'
@@ -210,18 +220,20 @@ export function useSmartWorkspaceNameFieldPresentation(
       }
     }
     return null
-  }, [jiraSource.intent, linearAvailable, rows, value])
+  }, [kaneoSource.intent, jiraSource.intent, linearAvailable, rows, value])
   const unresolvedLinearUrlIntent =
     linearUrlIntentOwnsInput &&
     linearAvailable &&
     sourceIntent !== 'linear' &&
     (linearLoading || settledLinearUrlQuery !== linearQuery.trim())
-  const blockingTaskUrlResolution = isBlockingTaskUrlResolution({
-    sourceIntent: sourceIntent === 'github' || sourceIntent === 'gitlab' ? sourceIntent : null,
-    isQueryStale,
-    githubLoading,
-    gitlabLoading
-  })
+  const blockingTaskUrlResolution =
+    Boolean(kaneoSource.intent && !kaneoSource.task) ||
+    isBlockingTaskUrlResolution({
+      sourceIntent: sourceIntent === 'github' || sourceIntent === 'gitlab' ? sourceIntent : null,
+      isQueryStale,
+      githubLoading,
+      gitlabLoading
+    })
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,
     rows,
@@ -235,40 +247,22 @@ export function useSmartWorkspaceNameFieldPresentation(
     }
     setCommandValue(resolvedCommandValue)
   }, [commandValue, resolvedCommandValue, setCommandValue])
-  const activeEmojiShortcode = useMemo(
-    () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
-    [emojiCursor, value]
-  )
-  const emojiSuggestions = useMemo(
-    () =>
-      activeEmojiShortcode
-        ? searchWorkspaceEmojiShortcodes(activeEmojiShortcode.query)
-        : ([] as WorkspaceEmojiSuggestion[]),
-    [activeEmojiShortcode]
-  )
-  const emojiMenuOpen =
-    !disabled &&
-    selectedSource === null &&
-    activeEmojiShortcode !== null &&
-    emojiSuggestions.length > 0
-  const resolvedEmojiCommandValue = emojiSuggestions.some(
-    (suggestion) => `emoji:${suggestion.shortcode}` === emojiCommandValue
-  )
-    ? emojiCommandValue
-    : emojiSuggestions[0]
-      ? `emoji:${emojiSuggestions[0].shortcode}`
-      : ''
-  const selectedEmojiSuggestion =
-    emojiSuggestions.find(
-      (suggestion) => `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
-    ) ?? null
+  const emojiPresentation = useSmartWorkspaceEmojiPresentation({
+    value,
+    emojiCursor,
+    disabled,
+    selectedSource,
+    emojiCommandValue
+  })
   const showLinearUrlLoadingFeedback =
     linearLoading && linearUrlIntentOwnsInput && linearUrlLoadingFeedbackQuery === linearQuery
   const visibleLinearLoading =
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
-  const loading = jiraSource.intent
-    ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+  const loading = kaneoSource.intent
+    ? kaneoSource.loading
+    : jiraSource.intent
+      ? jiraSource.loading
+      : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
   const ActiveInputIcon =
@@ -280,11 +274,7 @@ export function useSmartWorkspaceNameFieldPresentation(
     searchResultRows,
     isQueryStale,
     resolvedCommandValue,
-    activeEmojiShortcode,
-    emojiSuggestions,
-    emojiMenuOpen,
-    resolvedEmojiCommandValue,
-    selectedEmojiSuggestion,
+    ...emojiPresentation,
     loading,
     showSearchSpinner,
     linearUrlIntent,

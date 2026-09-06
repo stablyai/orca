@@ -1,5 +1,6 @@
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from './github-links'
 import { parseGitLabIssueOrMRLink } from './gitlab-links'
+import { parseKaneoTaskUrl } from '../kaneo-task-url'
 import { parseJiraIssueUrl } from '../jira-issue-url'
 
 const LINEAR_ISSUE_URL_RE = /^https?:\/\/(?:www\.)?linear\.app\/[^/\s]+\/issue\/[^/\s]+(?:\/\S*)?$/i
@@ -27,6 +28,7 @@ export function isWorkItemLookupText(value: string): boolean {
     hasGitHubLookup(trimmed) ||
     parseGitLabIssueOrMRLink(trimmed) !== null ||
     parseJiraIssueUrl(trimmed) !== null ||
+    parseKaneoTaskUrl(trimmed) !== null ||
     LINEAR_ISSUE_URL_RE.test(trimmed)
   )
 }

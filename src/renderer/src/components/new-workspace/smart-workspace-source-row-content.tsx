@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  KanbanSquare,
   CaseSensitive,
   CircleDot,
   GitBranch,
@@ -49,6 +50,9 @@ export function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
       <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
     )
   }
+  if (row.kind === 'kaneo') {
+    return <KanbanSquare className="size-3.5 shrink-0 text-muted-foreground" />
+  }
   if (row.kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
@@ -71,6 +75,9 @@ export function SelectionIcon({
   }
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
     return <CircleDot className="size-3.5 shrink-0 text-muted-foreground" />
+  }
+  if (kind === 'kaneo') {
+    return <KanbanSquare className="size-3.5 shrink-0 text-muted-foreground" />
   }
   if (kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
@@ -133,6 +140,16 @@ export function RowLabel({
           {row.item.number}
         </span>{' '}
         {row.item.title}
+      </span>
+    )
+  }
+  if (row.kind === 'kaneo') {
+    return (
+      <span className="min-w-0 truncate">
+        <span className="font-medium text-foreground">
+          Kaneo{row.task.number ? ` #${row.task.number}` : ''}
+        </span>{' '}
+        {row.task.title}
       </span>
     )
   }
