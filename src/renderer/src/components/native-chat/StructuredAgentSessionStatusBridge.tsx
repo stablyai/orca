@@ -75,6 +75,12 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
           : 'done',
     prompt: summary.latestPrompt,
     agentType: tab.agentSessionAgent,
+    // The host projects these from the journal so the row reads like a hook-reported one:
+    // the running tool while a turn is live, the agent's last words once it settles.
+    ...(summary.model ? { model: summary.model } : {}),
+    ...(summary.toolName ? { toolName: summary.toolName } : {}),
+    ...(summary.toolInput ? { toolInput: summary.toolInput } : {}),
+    ...(summary.lastAssistantMessage ? { lastAssistantMessage: summary.lastAssistantMessage } : {}),
     sessionBoundary: summary.status === 'idle'
   } as const
   const current = store.agentStatusByPaneKey?.[paneKey]
@@ -82,6 +88,11 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     current?.state === desired.state &&
     current.prompt === desired.prompt &&
     current.agentType === desired.agentType &&
+    // A row keeps the last model it was told about, so only a reported one can differ.
+    (summary.model === undefined || current.model === summary.model) &&
+    current.toolName === summary.toolName &&
+    current.toolInput === summary.toolInput &&
+    current.lastAssistantMessage === summary.lastAssistantMessage &&
     current.sessionBoundary === desired.sessionBoundary &&
     current.terminalTitle === tab.label &&
     current.tabId === tab.id &&

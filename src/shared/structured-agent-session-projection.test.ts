@@ -80,6 +80,120 @@ describe('structured agent session status projection', () => {
     })
   })
 
+  it('carries the running tool and the newest assistant prose the sidebar row shows', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'look at the sidebar' }]
+    })
+    const said = item('said', 2, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Reading the card first.' }]
+    })
+    const running = item('running', 3, {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId: 'turn-1', state: 'running' }
+    })
+    const tool = item('tool', 4, {
+      kind: 'tool-call',
+      name: 'Read',
+      input: { file_path: '/repo/src/WorktreeCard.tsx' },
+      state: 'running'
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([ask, said, running, tool])).toEqual({
+      status: 'working',
+      latestPrompt: 'look at the sidebar',
+      toolName: 'Read',
+      toolInput: '/repo/src/WorktreeCard.tsx',
+      lastAssistantMessage: 'Reading the card first.'
+    })
+  })
+
+  it('reports no tool line once the turn settles, even with an abandoned running call', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const abandoned = item('abandoned', 2, {
+      kind: 'tool-call',
+      name: 'Bash',
+      input: { command: 'sleep 600' },
+      state: 'running'
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([ask, abandoned])).toEqual({
+      status: 'idle',
+      latestPrompt: 'go'
+    })
+  })
+
+  it('never adopts a running call from a turn older than the live one', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const abandoned = item('abandoned', 2, {
+      kind: 'tool-call',
+      name: 'Bash',
+      input: { command: 'sleep 600' },
+      state: 'running'
+    })
+    const running = item('running', 3, {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId: 'turn-2', state: 'running' }
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([ask, abandoned, running])).toEqual({
+      status: 'working',
+      latestPrompt: 'go'
+    })
+  })
+
+  it('skips a tool-only assistant item to reach the newest prose', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const said = item('said', 2, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Done — the card now aligns.' }]
+    })
+    const wordless = item('wordless', 3, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'Read', input: {} }]
+    })
+
+    expect(
+      projectStructuredAgentSessionStatusSummary([ask, said, wordless]).lastAssistantMessage
+    ).toBe('Done — the card now aligns.')
+  })
+
+  it('bounds the assistant preview at the shared agent-status preview cap', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const rambled = item('rambled', 2, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'y'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH * 40) }]
+    })
+
+    expect(
+      projectStructuredAgentSessionStatusSummary([ask, rambled]).lastAssistantMessage
+    ).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
+  })
+
   it('bounds the wire prompt at the shared agent-status preview cap', () => {
     const pasted = item('pasted', 1, {
       kind: 'message',

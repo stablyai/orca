@@ -178,6 +178,13 @@ export type AgentSessionStatusSummary = {
   /** Null until the journal holds a persisted user or assistant message. */
   status: StructuredAgentSessionProjectedStatus | null
   latestPrompt: string
+  /** Provider model in force for the next turn; absent until the host has read the options. */
+  model?: string
+  /** The tool the running turn is inside. Absent unless `status` is 'working'. */
+  toolName?: string
+  toolInput?: string
+  /** Preview of the newest assistant prose, so a settled row says what the agent said. */
+  lastAssistantMessage?: string
   providerSession?: AgentProviderSessionMetadata
   updatedAt: number
 }

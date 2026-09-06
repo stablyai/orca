@@ -226,6 +226,71 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([expect.objectContaining({ state: 'blocked' })])
   })
 
+  it('carries the model, the running tool line, and the last assistant message', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() =>
+      feed().emit({
+        type: 'snapshot',
+        sessions: [
+          summary({
+            model: 'gpt-5-codex',
+            toolName: 'shell',
+            toolInput: 'pnpm test',
+            lastAssistantMessage: 'Running the suite now.'
+          })
+        ]
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        model: 'gpt-5-codex',
+        toolName: 'shell',
+        toolInput: 'pnpm test',
+        lastAssistantMessage: 'Running the suite now.'
+      })
+    ])
+
+    // The tool line describes live work, so a settled turn that omits it must clear it.
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'idle',
+          updatedAt: 2,
+          model: 'gpt-5-codex',
+          lastAssistantMessage: 'Suite is green.'
+        })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({
+        state: 'done',
+        model: 'gpt-5-codex',
+        lastAssistantMessage: 'Suite is green.'
+      })
+    ])
+    expect(statuses()[0]?.toolName).toBeUndefined()
+    expect(statuses()[0]?.toolInput).toBeUndefined()
+
+    // Only the message moves here, so the row updates only if the guard compares it.
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          status: 'idle',
+          updatedAt: 3,
+          model: 'gpt-5-codex',
+          lastAssistantMessage: 'Suite is green — 412 passed.'
+        })
+      })
+    )
+    expect(statuses()).toEqual([
+      expect.objectContaining({ lastAssistantMessage: 'Suite is green — 412 passed.' })
+    ])
+  })
+
   it('shows no status before a persisted turn', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
