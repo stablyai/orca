@@ -121,6 +121,63 @@ describe('Last-status persistence', () => {
     }
   })
 
+  // Why: the metadata-only contract is shared by pi, prime-agent, and polytoken; a persisted
+  // row for any of them survives hydrate when its agent can resume from it.
+  it('hydrates metadata-only entries for prime-agent and polytoken that can resume', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    const PANE_B = 'tab-1:22222222-2222-4222-8222-222222222222'
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            providerSessionOnly: true,
+            providerSession: {
+              key: 'session_id',
+              id: 'prime-session-1',
+              transcriptPath: '/tmp/prime-session-1.jsonl'
+            },
+            payload: { state: 'done', prompt: '', agentType: 'prime-agent' }
+          },
+          [PANE_B]: {
+            paneKey: PANE_B,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: receivedAt,
+            providerSessionOnly: true,
+            providerSession: { key: 'session_id', id: '0a6mht-drum' },
+            payload: { state: 'done', prompt: '', agentType: 'polytoken' }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(
+        server
+          .getStatusSnapshot()
+          .map((entry) => [entry.paneKey, entry.providerSession?.id])
+          .sort()
+      ).toEqual([
+        [PANE, 'prime-session-1'],
+        [PANE_B, '0a6mht-drum']
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
   it('rejects a stale version mismatch on hydrate', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     writeFileSync(

@@ -1,6 +1,7 @@
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgentEnabled } from './tui-agent-selection'
 import { labelFromModelId } from './model-id-label'
+import { parsePolytokenModelList } from './polytoken-model-list'
 import { buildPrimaryCommitMessageAgentSpecs } from './commit-message-agent-specs-primary'
 import { buildSecondaryCommitMessageAgentSpecs } from './commit-message-agent-specs-secondary'
 import {
@@ -101,7 +102,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     BASIC_THINKING_LEVELS,
     OPENAI_THINKING_LEVELS,
     parseCursorModels,
-    parseAntigravityModels
+    parseAntigravityModels,
+    parsePolytokenModels: parsePolytokenModelList
   })
 }
 

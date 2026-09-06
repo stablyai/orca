@@ -38,7 +38,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'cursor',
       'kimi',
       'opencode',
-      'pi'
+      'pi',
+      'polytoken'
     ])
   })
 
@@ -587,5 +588,26 @@ describe('buildArgs (Antigravity)', () => {
 
   it('uses Gemini 3.5 Flash (Medium) as default model', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.5 Flash (Medium)')
+  })
+
+  it('runs Polytoken through exec with the task on stdin and the effort inside --model', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.polytoken
+    expect(spec).toMatchObject({
+      binary: 'polytoken',
+      promptDelivery: 'stdin',
+      modelSource: 'dynamic',
+      defaultModelId: 'polytoken:configured-default'
+    })
+    expect(spec?.modelDiscovery?.args).toEqual(['models', '--format', 'json'])
+    expect(spec?.buildArgs({ prompt: 'ignored', model: 'polytoken:configured-default' })).toEqual([
+      'exec'
+    ])
+    expect(
+      spec?.buildArgs({
+        prompt: 'ignored',
+        model: 'anthropic/claude-opus-5',
+        thinkingLevel: 'high'
+      })
+    ).toEqual(['exec', '--model', 'anthropic/claude-opus-5(high)'])
   })
 })

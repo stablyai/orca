@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildClaudeResumeLaunchCommand } from './agent-resume-launch-command'
+import {
+  buildAgentResumeLaunchCommand,
+  buildClaudeResumeLaunchCommand,
+  buildPolytokenResumeLaunchCommand
+} from './agent-resume-launch-command'
 import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from './tui-agent-startup'
 import { tokenizeStartupCommand, type AgentStartupShell } from './tui-agent-startup-shell'
 
@@ -576,5 +580,86 @@ describe('buildAgentResumeStartupPlan claude selector guard', () => {
       platform: 'linux'
     })
     expect(restored?.launchConfig.agentCommand).toBe("claude '--resume'")
+  })
+})
+
+describe('buildPolytokenResumeLaunchCommand', () => {
+  const POLYTOKEN_ID = '0a6mht-drum'
+  const CONTINUE = ['continue', POLYTOKEN_ID] as const
+
+  function tokensOf(command: string, shell: AgentStartupShell): string[] {
+    const tokenized = tokenizeStartupCommand(command, shell)
+    expect(tokenized.ok).toBe(true)
+    return tokenized.ok ? tokenized.tokens : []
+  }
+
+  it('replaces the new subcommand with continue <id> on every shell', () => {
+    for (const { shell } of SHELLS) {
+      expect(
+        tokensOf(buildPolytokenResumeLaunchCommand('polytoken new', CONTINUE, shell), shell)
+      ).toEqual(['polytoken', 'continue', POLYTOKEN_ID])
+    }
+  })
+
+  it('keeps a custom executable path, global options, and trailing arguments', () => {
+    expect(
+      buildPolytokenResumeLaunchCommand(
+        '/opt/polytoken/bin/polytoken --working-dir /repo new --sessions-dir /tmp/s',
+        CONTINUE,
+        'posix'
+      )
+    ).toBe(
+      `/opt/polytoken/bin/polytoken --working-dir /repo continue '${POLYTOKEN_ID}' --sessions-dir /tmp/s`
+    )
+    expect(buildPolytokenResumeLaunchCommand('polytoken', CONTINUE, 'posix')).toBe(
+      `polytoken continue '${POLYTOKEN_ID}'`
+    )
+    expect(buildPolytokenResumeLaunchCommand('polytoken new -- literal', CONTINUE, 'posix')).toBe(
+      `polytoken continue '${POLYTOKEN_ID}' -- literal`
+    )
+  })
+
+  it('replaces a stale continue or attach locator with exactly one authoritative id', () => {
+    for (const stale of [
+      'polytoken continue old-session',
+      'polytoken attach old-session --sessions-dir /x'
+    ]) {
+      const tokens = tokensOf(buildPolytokenResumeLaunchCommand(stale, CONTINUE, 'posix'), 'posix')
+      expect(tokens.filter((token) => token === 'old-session')).toEqual([])
+      expect(tokens.slice(0, 3)).toEqual(['polytoken', 'continue', POLYTOKEN_ID])
+    }
+  })
+
+  it('falls back to the bare argv form instead of emitting polytoken new continue', () => {
+    for (const base of [
+      "bash -c 'polytoken new'",
+      'polytoken exec',
+      'polytoken -- new',
+      'POLYTOKEN_DATA_PATH=$(pwd) polytoken new',
+      'polytoken "new'
+    ]) {
+      const command = buildPolytokenResumeLaunchCommand(base, CONTINUE, 'posix')
+      expect(command).toBe(`polytoken continue '${POLYTOKEN_ID}'`)
+      expect(command).not.toContain('new')
+    }
+  })
+
+  it('is routed through buildAgentResumeLaunchCommand and the resume startup plan', () => {
+    expect(
+      buildAgentResumeLaunchCommand(
+        'polytoken',
+        'polytoken new',
+        ['polytoken', ...CONTINUE],
+        'posix'
+      )
+    ).toBe(`polytoken continue '${POLYTOKEN_ID}'`)
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'polytoken',
+      providerSession: { key: 'session_id', id: POLYTOKEN_ID },
+      cmdOverrides: {},
+      agentArgs: '',
+      platform: 'darwin'
+    })
+    expect(plan?.launchCommand).toBe(`polytoken continue '${POLYTOKEN_ID}'`)
   })
 })

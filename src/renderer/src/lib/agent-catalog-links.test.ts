@@ -10,4 +10,14 @@ describe('agent catalog documentation links', () => {
       'https://code.claude.com/docs/en/agent-teams'
     )
   })
+
+  it('points Polytoken at its installation guide', () => {
+    const entry = getAgentCatalog().find((candidate) => candidate.id === 'polytoken')
+
+    expect(entry).toMatchObject({
+      label: 'Polytoken',
+      cmd: 'polytoken',
+      homepageUrl: 'https://docs.polytoken.dev/installation/'
+    })
+  })
 })
