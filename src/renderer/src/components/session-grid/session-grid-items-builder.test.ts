@@ -81,6 +81,7 @@ function makeBucketState(overrides: Partial<SessionGridItemsState> = {}): Sessio
 function makeState(overrides: Partial<SessionGridItemsState> = {}): SessionGridItemsState {
   return {
     tabsByWorktree: { 'wt-1': [tab('tab-a', 'pty-a', 1), tab('tab-b', 'pty-b', 2)] },
+    unifiedTabsByWorktree: {},
     terminalLayoutsByTabId: {
       'tab-a': { activeLeafId: LEAF_A, ptyIdsByLeafId: { [LEAF_A]: 'pty-a' } },
       'tab-b': { activeLeafId: LEAF_B, ptyIdsByLeafId: { [LEAF_B]: 'pty-b' } }
@@ -538,6 +539,70 @@ describe('attention and the state buckets are different questions', () => {
 describe('buildSessionGridListing execution hosts', () => {
   beforeEach(() => {
     resetTerminalTabActivityFlagsCacheForTest()
+  })
+
+  it('resolves cold cards against their own host when workspace ids collide', () => {
+    const multiHostCatalog = buildSessionGridWorktreeCatalog({
+      repos: [
+        { id: 'local', displayName: 'Local project' } as Repo,
+        { id: 'remote', displayName: 'Remote project', connectionId: 'box' } as Repo
+      ],
+      worktreesByRepo: {
+        local: [
+          {
+            id: 'wt-1',
+            displayName: 'Local workspace',
+            branch: 'local-branch',
+            path: '/local'
+          } as Worktree
+        ],
+        remote: [
+          {
+            id: 'wt-1',
+            displayName: 'Remote workspace',
+            branch: 'remote-branch',
+            path: '/remote'
+          } as Worktree
+        ]
+      },
+      sshTargetLabels: new Map([['box', 'build box']])
+    })
+    const state = makeState({
+      ptyIdsByTabId: {},
+      unifiedTabsByWorktree: {
+        'wt-1': (['local', 'ssh:box'] as const).map((executionHostId, index) => ({
+          id: `tab-${index === 0 ? 'a' : 'b'}`,
+          entityId: `tab-${index === 0 ? 'a' : 'b'}`,
+          contentType: 'terminal',
+          executionHostId,
+          worktreeId: 'wt-1',
+          groupId: 'group',
+          label: 'Terminal',
+          customLabel: null,
+          color: null,
+          sortOrder: index,
+          createdAt: index
+        }))
+      }
+    })
+    const listing = buildSessionGridListing(state, multiHostCatalog)
+    expect(listing.allItems).toMatchObject([
+      {
+        executionHostId: 'local',
+        repoName: 'Local project',
+        worktreeName: 'Local workspace',
+        branch: 'local-branch',
+        cwd: '/local'
+      },
+      {
+        executionHostId: 'ssh:box',
+        repoName: 'Remote project',
+        worktreeName: 'Remote workspace',
+        branch: 'remote-branch',
+        cwd: '/remote',
+        hostLabel: 'build box'
+      }
+    ])
   })
 
   it('stamps every card with the host its workspace runs on', () => {

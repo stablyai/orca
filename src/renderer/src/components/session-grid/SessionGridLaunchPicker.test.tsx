@@ -252,7 +252,7 @@ describe('SessionGridLaunchPopoverContent', () => {
     const LOCAL_ROW = { id: 'wt-1', repoId: 'repo-1', displayName: 'sytio', path: '/s' }
     const SSH_ROW = { ...LOCAL_ROW, hostId: 'ssh:conn-1' }
 
-    function renderBothHosts(): void {
+    function renderBothHosts(gridWorktreeIds: string[] = [], activeFilter = 'all'): void {
       useAppStore.setState({
         repos: [
           { id: 'repo-1', displayName: 'sytio', path: '/s' },
@@ -275,9 +275,9 @@ describe('SessionGridLaunchPopoverContent', () => {
       })
       render(
         <SessionGridLaunchPopoverContent
-          activeFilter="all"
+          activeFilter={activeFilter}
           worktreeCatalog={worktreeCatalog}
-          gridWorktreeIds={[]}
+          gridWorktreeIds={gridWorktreeIds}
           onDone={harness.onDone}
         />
       )
@@ -299,6 +299,20 @@ describe('SessionGridLaunchPopoverContent', () => {
       expect(workspaceRows()).toHaveLength(2)
       // Two rows reading only "sytio" would be a coin flip; the remote one names its host.
       expect(rowForHost('ssh:conn-1').textContent).toContain('build box')
+    })
+
+    it('retains both launch hosts for a workspace already in the grid', () => {
+      renderBothHosts(['wt-1'])
+      expect(workspaceRows()).toHaveLength(2)
+      expect(rowForHost('local')).toBeTruthy()
+      expect(rowForHost('ssh:conn-1')).toBeTruthy()
+    })
+
+    it('asks for the host when the workspace filter is ambiguous', () => {
+      renderBothHosts(['wt-1'], 'wt-1')
+      expect(workspaceRows()).toHaveLength(2)
+      fireEvent.click(rowForHost('ssh:conn-1'))
+      expect(optionLabels()).toEqual(['Gemini', 'Terminal Shell', 'Agent settings…'])
     })
 
     it('lists the picked host’s own detected agents', () => {

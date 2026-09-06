@@ -25,8 +25,8 @@ function EmptyStateFrame({
       data-reason={reason}
       className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center select-none"
     >
-      <div className="flex size-12 items-center justify-center rounded-2xl bg-muted/50 text-muted-foreground">
-        <LayoutGrid className="size-6" />
+      <div className="flex size-12 items-center justify-center rounded-xl bg-muted/50 text-muted-foreground">
+        <LayoutGrid className="size-7" />
       </div>
       <div className="space-y-1">
         <h3 className="text-sm font-medium text-foreground">{title}</h3>
@@ -142,7 +142,7 @@ export function SessionGridEmptyState({
         <PopoverTrigger asChild>
           <Button size="sm" disabled={!canLaunchFirst} className="mt-2 gap-1.5 text-xs">
             <Plus className="size-3.5" />
-            {translate('auto.components.session.grid.SessionsGridPage.3b6b0870de', 'New Session')}
+            {translate('auto.components.session.grid.SessionsGridPage.3b6b0870de', 'New session')}
           </Button>
         </PopoverTrigger>
         <SessionGridLaunchPopoverContent

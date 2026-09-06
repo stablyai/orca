@@ -13,10 +13,10 @@ export function SessionGridCardOverlay({ item }: SessionGridCardOverlayProps): R
   const agent = useSessionGridCardAgent(item)
   const branchMeta = sessionGridBranchMeta(item)
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-primary/60 bg-card/90 shadow-floating ring-2 ring-primary/40 backdrop-blur-md cursor-grabbing select-none">
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-ring/60 bg-card/90 shadow-floating ring-2 ring-ring/40 backdrop-blur-md cursor-grabbing select-none">
       <div className="flex h-8 shrink-0 items-center justify-between border-b border-border/80 bg-muted/70 px-2 text-xs">
         <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-          <GripVertical className="size-3.5 shrink-0 text-primary/80" />
+          <GripVertical className="size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate max-w-[220px]">
             {item.worktreeName !== item.repoName ? (
               <span className="text-muted-foreground">{item.repoName} / </span>

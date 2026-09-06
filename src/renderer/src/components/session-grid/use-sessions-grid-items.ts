@@ -56,6 +56,7 @@ export function useSessionsGridItems(lenses: SessionGridLenses = {}): {
   const sessionInputs = useAppStore(
     useShallow((state) => ({
       tabsByWorktree: state.tabsByWorktree,
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,
       ptyIdsByTabId: state.ptyIdsByTabId,
       agentStatusByPaneKey: state.agentStatusByPaneKey,

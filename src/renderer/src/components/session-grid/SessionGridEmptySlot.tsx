@@ -75,11 +75,11 @@ export function SessionGridEmptySlot({
         onClick={openAtPointer}
         className="group flex h-full w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/70 bg-card/20 p-4 transition-all duration-150 hover:border-border hover:bg-card/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
-        <div className="flex size-9 items-center justify-center rounded-full bg-muted/50 text-muted-foreground transition-all duration-150 group-hover:bg-primary/10 group-hover:text-primary">
+        <div className="flex size-9 items-center justify-center rounded-full bg-muted/50 text-muted-foreground transition-all duration-150 group-hover:bg-accent group-hover:text-foreground">
           <Plus className="size-4" />
         </div>
         <span className="text-xs font-medium text-muted-foreground group-hover:text-foreground">
-          {translate('auto.components.session.grid.SessionGridEmptySlot.dbcddec0c0', 'New Session')}
+          {translate('auto.components.session.grid.SessionGridEmptySlot.dbcddec0c0', 'New session')}
         </span>
         <span className="text-[11px] text-muted-foreground/60">
           {translate(

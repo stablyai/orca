@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,20 +57,8 @@ function StateGlyph({
   }
   // The label sits right beside it, so the dot's own tooltip would only repeat it. And the
   // working glyph is an activity spinner: here it names a bucket, so over a zero it must not
-  // turn — a spinner claims work nobody does. Stopped, it also closes its ring: a frozen
-  // transparent-top ring reads as a broken spinner, the same call AgentWorkingSpinner makes
-  // under reduced motion (#9515).
-  return (
-    <AgentStateDot
-      state={BUCKET_GLYPH[filter]}
-      size="sm"
-      title={null}
-      className={cn(
-        count === 0 &&
-          '[&_.agent-working-spinner]:[animation-play-state:paused] [&_.agent-working-spinner]:border-t-yellow-500'
-      )}
-    />
-  )
+  // turn — a spinner claims work nobody does.
+  return <AgentStateDot state={BUCKET_GLYPH[filter]} size="sm" title={null} paused={count === 0} />
 }
 
 type SessionGridStateControlProps = {
@@ -104,35 +93,41 @@ export function SessionGridStateSegments({
         const isActive = activeStateFilter === filter
         const count = stateFilterCount(filter, stateCounts)
         const label = stateFilterLabel(filter)
+        // The word leaves the segment under 896 px; the tooltip is what names the glyph then.
         return (
-          <button
-            key={filter}
-            type="button"
-            data-testid="session-grid-state-chip"
-            data-value={filter}
-            data-current={isActive ? 'true' : undefined}
-            aria-pressed={isActive}
-            aria-label={`${label} ${count}`}
-            title={label}
-            onClick={() => setSessionsGridStateFilter(filter)}
-            className={cn(
-              'inline-flex items-center gap-1.5 border-r border-border/60 px-2 text-xs transition-colors last:border-r-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
-              isActive
-                ? 'bg-accent font-medium text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-            )}
-          >
-            <StateGlyph filter={filter} count={count} />
-            <span className={cn(filter !== 'all' && '@max-4xl/toolbar:!hidden')}>{label}</span>
-            <span
-              className={cn(
-                'font-mono text-[11px] tabular-nums',
-                count === 0 && !isActive && 'opacity-50'
-              )}
-            >
-              {count}
-            </span>
-          </button>
+          <Tooltip key={filter}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-testid="session-grid-state-chip"
+                data-value={filter}
+                data-current={isActive ? 'true' : undefined}
+                aria-pressed={isActive}
+                aria-label={`${label} ${count}`}
+                onClick={() => setSessionsGridStateFilter(filter)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 border-r border-border/60 px-2 text-xs transition-colors last:border-r-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring',
+                  isActive
+                    ? 'bg-accent font-medium text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+                )}
+              >
+                <StateGlyph filter={filter} count={count} />
+                <span className={cn(filter !== 'all' && '@max-4xl/toolbar:!hidden')}>{label}</span>
+                <span
+                  className={cn(
+                    'font-mono text-[11px] tabular-nums',
+                    count === 0 && !isActive && 'opacity-50'
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {label}
+            </TooltipContent>
+          </Tooltip>
         )
       })}
     </div>

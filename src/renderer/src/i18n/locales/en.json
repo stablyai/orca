@@ -7,6 +7,14 @@
       "cancel": "Keep filters"
     }
   },
+  "sessionGrid": {
+    "terminal": {
+      "notConnected": "Session not connected",
+      "reconnectTimedOut": "Reconnect timed out",
+      "load": "Load session",
+      "retry": "Try again"
+    }
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
@@ -16814,13 +16822,11 @@
       "session": {
         "grid": {
           "SessionGridCard": {
-            "765687dfd8": "Drag to reorder",
             "dcbfba372d": "Maximize to tabs view",
-            "56d88629a9": "Maximize (full tabs view)",
             "3cb420110d": "Close session"
           },
           "SessionGridEmptySlot": {
-            "dbcddec0c0": "New Session",
+            "dbcddec0c0": "New session",
             "ad86c2342f": "Launch a terminal or agent here"
           },
           "SessionGridOffscreenAttentionPill": {
@@ -16852,7 +16858,7 @@
           "SessionsGridPage": {
             "c406fd4604": "No active sessions",
             "02aa208e3c": "No terminal sessions open across any workspace.",
-            "3b6b0870de": "New Session",
+            "3b6b0870de": "New session",
             "emptyHiddenTitle": "Every session here is hidden",
             "emptyHiddenBody": "You took these cards out of the grid. Their sessions are still running.",
             "emptyRevealAction": "Reveal hidden sessions",
@@ -17648,7 +17654,8 @@
       "remotePreviewUnavailable": "No preview for this remote session — open the workspace to view the terminal.",
       "focusWorktree": "Open worktree",
       "close": "Close",
-      "starting": "Starting session…"
+      "starting": "Starting session…",
+      "unavailable": "Preview unavailable. Retrying…"
     },
     "filters": {
       "remove": "Remove {{label}} filter",

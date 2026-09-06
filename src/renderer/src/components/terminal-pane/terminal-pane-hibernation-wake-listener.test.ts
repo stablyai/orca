@@ -30,11 +30,15 @@ describe('installTerminalPaneHibernationWakeListener', () => {
     }
     const dispose = installTerminalPaneHibernationWakeListener({
       worktreeId: 'wt-1',
+      tabId: 'tab-1',
       panePtyBindingsRef
     })
 
     const wokenClaimKeys = new Set<string>()
     dispatchWake({ worktreeId: 'wt-other', wokenClaimKeys })
+    expect(armed.wakeHibernatedAgentIfArmed).not.toHaveBeenCalled()
+
+    dispatchWake({ worktreeId: 'wt-1', tabIds: ['tab-other'], wokenClaimKeys })
     expect(armed.wakeHibernatedAgentIfArmed).not.toHaveBeenCalled()
 
     dispatchWake({ worktreeId: 'wt-1', wokenClaimKeys })

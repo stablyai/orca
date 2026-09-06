@@ -2,10 +2,7 @@ import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { readDashboardClientHost } from '@/components/dashboard/dashboard-client-host'
-import {
-  resolveDashboardCardTerminalInput,
-  type DashboardCardTerminalInputState
-} from '@/components/dashboard/dashboard-card-terminal-input'
+import { resolveDashboardCardTerminalInput } from '@/components/dashboard/dashboard-card-terminal-input'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import type { SessionGridItem } from '../../../../shared/session-grid-types'
 
@@ -13,8 +10,9 @@ import type { SessionGridItem } from '../../../../shared/session-grid-types'
 export function useSessionGridCardTerminalInput(
   item: SessionGridItem
 ): DashboardCardTerminalInput | null {
+  const { ptyId, paneKey, worktreeId, cwd, shellOverride, launchAgent } = item
   const state = useAppStore(
-    useShallow((s): DashboardCardTerminalInputState => ({
+    useShallow((s) => ({
       repos: s.repos,
       worktreesByRepo: s.worktreesByRepo,
       detectedWorktreesByRepo: s.detectedWorktreesByRepo,
@@ -28,28 +26,37 @@ export function useSessionGridCardTerminalInput(
       runtimeEnvironments: s.runtimeEnvironments,
       runtimeEnvironmentCatalogHydrated: s.runtimeEnvironmentCatalogHydrated,
       removedRuntimeEnvironmentIds: s.removedRuntimeEnvironmentIds,
-      paneForegroundAgentByPaneKey: s.paneForegroundAgentByPaneKey,
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      agentLaunchConfigByPaneKey: s.agentLaunchConfigByPaneKey
+      foregroundAgent: paneKey ? s.paneForegroundAgentByPaneKey[paneKey] : undefined,
+      agentStatus: paneKey ? s.agentStatusByPaneKey[paneKey] : undefined,
+      launchConfig: paneKey ? s.agentLaunchConfigByPaneKey[paneKey] : undefined
     }))
   )
-  const { ptyId, paneKey, worktreeId, cwd, shellOverride, launchAgent } = item
 
   return useMemo(() => {
     if (!ptyId || !paneKey) {
       return null
     }
     const clientHost = readDashboardClientHost()
-    return resolveDashboardCardTerminalInput(state, {
-      ptyId,
-      worktreeId,
-      paneKey,
-      cwd,
-      shellOverride,
-      launchAgent,
-      clientPlatform: clientHost.platform,
-      userAgent: clientHost.userAgent,
-      osRelease: clientHost.osRelease
-    })
+    return resolveDashboardCardTerminalInput(
+      {
+        ...state,
+        paneForegroundAgentByPaneKey: state.foregroundAgent
+          ? { [paneKey]: state.foregroundAgent }
+          : {},
+        agentStatusByPaneKey: state.agentStatus ? { [paneKey]: state.agentStatus } : {},
+        agentLaunchConfigByPaneKey: state.launchConfig ? { [paneKey]: state.launchConfig } : {}
+      },
+      {
+        ptyId,
+        worktreeId,
+        paneKey,
+        cwd,
+        shellOverride,
+        launchAgent,
+        clientPlatform: clientHost.platform,
+        userAgent: clientHost.userAgent,
+        osRelease: clientHost.osRelease
+      }
+    )
   }, [state, ptyId, paneKey, worktreeId, cwd, shellOverride, launchAgent])
 }

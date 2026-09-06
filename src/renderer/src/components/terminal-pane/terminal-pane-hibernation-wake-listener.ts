@@ -15,11 +15,16 @@ type IDisposableWithWake = IDisposable & {
  */
 export function installTerminalPaneHibernationWakeListener(args: {
   worktreeId: string
+  tabId: string
   panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
 }): () => void {
   const onWakeHibernatedAgents = (event: Event): void => {
     const detail = (event as CustomEvent<WakeHibernatedAgentsWorktreeDetail>).detail
-    if (!detail || detail.worktreeId !== args.worktreeId) {
+    if (
+      !detail ||
+      detail.worktreeId !== args.worktreeId ||
+      (detail.tabIds && !detail.tabIds.includes(args.tabId))
+    ) {
       return
     }
     for (const panePtyBinding of args.panePtyBindingsRef.current?.values() ?? []) {

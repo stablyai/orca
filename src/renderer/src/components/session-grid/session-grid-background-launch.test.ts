@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { launchSessionGridTab } from './session-grid-launch-actions'
+import { installAgentIdleWorkingHandlers } from '@/components/terminal-pane/pty-connection/agent-idle-working-handlers'
+import type { ConnectPanePtySession } from '@/components/terminal-pane/pty-connection/connect-pane-pty-session'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 /**
  * "Launch in background" means the grid stays where it is. Against mocks that is trivially
@@ -68,6 +71,76 @@ afterEach(() => {
 })
 
 describe('launching from the session grid', () => {
+  it.each(
+    (['shell', 'agent'] as const).flatMap((kind) => [
+      {
+        kind,
+        host: 'ssh:chosen-host' as ExecutionHostId,
+        runtime: null,
+        connection: 'chosen-host'
+      },
+      { kind, host: 'local' as ExecutionHostId, runtime: null, connection: null },
+      ...(kind === 'shell'
+        ? [
+            { kind, host: 'runtime:hub' as ExecutionHostId, runtime: 'hub', connection: null },
+            { kind, host: 'ssh:chosen-host' as ExecutionHostId, runtime: 'hub', connection: null }
+          ]
+        : [])
+    ])
+  )(
+    'keeps $host through $kind pane connection (runtime $runtime)',
+    ({ kind, host, runtime, connection }) => {
+      const state = useAppStore.getState()
+      const target = state.worktreesByRepo['repo-1'].find((wt) => wt.id === TARGET_WT)!
+      useAppStore.setState({
+        worktreesByRepo: {
+          'repo-1': [
+            ...state.worktreesByRepo['repo-1'].filter((wt) => wt.id !== TARGET_WT),
+            { ...target, hostId: 'local' },
+            {
+              ...target,
+              hostId: 'ssh:chosen-host',
+              ...(runtime && host === 'ssh:chosen-host'
+                ? { runtimeOwnerEnvironmentId: runtime }
+                : {})
+            },
+            { ...target, hostId: 'runtime:hub', runtimeOwnerEnvironmentId: 'hub' }
+          ]
+        },
+        repos: [
+          ...state.repos,
+          { ...state.repos[0], connectionId: 'chosen-host', executionHostId: 'ssh:chosen-host' }
+        ]
+      })
+      if (kind === 'shell') {
+        launchSessionGridTab(TARGET_WT, host)
+      } else {
+        launchAgentInNewTab({
+          agent: 'claude',
+          worktreeId: TARGET_WT,
+          executionHostId: host,
+          activate: false
+        })
+      }
+      const tabId = targetTabIds()[0]
+      expect(tabId).toBeTruthy()
+      // Foreground changes before the staged pane mounts must not retarget the launch.
+      useAppStore.setState({
+        activeWorktreeId: TARGET_WT,
+        activeWorkspaceExecutionHostId: host === 'local' ? 'ssh:chosen-host' : 'local'
+      })
+      const session = {
+        deps: { tabId, worktreeId: TARGET_WT },
+        cacheKey: `${tabId}:pane`
+      } as unknown as ConnectPanePtySession
+      installAgentIdleWorkingHandlers(session)
+      expect(session.terminalOwnerUnresolved).toBe(false)
+      expect(session.connectionId).toBe(connection)
+      expect(session.runtimeEnvironmentId).toBe(runtime)
+      expect(session.worktree?.hostId).toBe(host)
+    }
+  )
+
   it('opens a shell in another workspace without moving the foreground', () => {
     const before = foreground()
 

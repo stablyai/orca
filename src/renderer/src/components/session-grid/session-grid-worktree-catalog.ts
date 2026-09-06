@@ -20,6 +20,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { SessionGridHostKind } from '../../../../shared/session-grid-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 /** Whatever names the host a workspace's worktree inherits: its repo, or its folder group. */
 type WorkspaceHostOwner = { connectionId?: string | null; executionHostId?: string | null }
@@ -49,6 +50,7 @@ export type SessionGridRepoGroup = {
 
 export type SessionGridWorktreeCatalog = {
   byWorktreeId: Map<string, SessionGridWorktreeEntry>
+  entriesByWorktreeId: Map<string, SessionGridWorktreeEntry[]>
   /** Repo-grouped, in catalog order; what the launch menus render. */
   byRepo: SessionGridRepoGroup[]
   /**
@@ -111,6 +113,8 @@ export function buildSessionGridWorktreeCatalog({
 } & ExecutionHostLabelSources): SessionGridWorktreeCatalog {
   const repoById = getIndexedRepoMap(repos)
   const byWorktreeId = new Map<string, SessionGridWorktreeEntry>()
+  const entriesByWorktreeId = new Map<string, SessionGridWorktreeEntry[]>()
+  const identities = new Set<string>()
   const byRepo: SessionGridRepoGroup[] = []
   const resolveHostLabel = createExecutionHostLabelResolver(hostLabelSources)
 
@@ -129,6 +133,11 @@ export function buildSessionGridWorktreeCatalog({
         connectionId: hostOwner?.connectionId ?? null,
         executionHostId: normalizeExecutionHostId(hostOwner?.executionHostId)
       })
+      const identity = composeWorktreeHostIdentity(executionHostId, wt.id)
+      if (identities.has(identity)) {
+        continue
+      }
+      identities.add(identity)
       const entry: SessionGridWorktreeEntry = {
         worktreeId: wt.id,
         worktreeName,
@@ -146,6 +155,9 @@ export function buildSessionGridWorktreeCatalog({
         hostLabel: resolveHostLabel(executionHostId)
       }
       byWorktreeId.set(wt.id, entry)
+      const entries = entriesByWorktreeId.get(wt.id) ?? []
+      entries.push(entry)
+      entriesByWorktreeId.set(wt.id, entries)
       group.worktrees.push(entry)
     }
     // Why only non-empty: `byRepo` is what the launch pickers render, and a repo
@@ -189,5 +201,5 @@ export function buildSessionGridWorktreeCatalog({
       (wt) => hostOwnerByWorktreeId.get(wt.id)
     )
   }
-  return { byWorktreeId, byRepo, resolveHostLabel }
+  return { byWorktreeId, entriesByWorktreeId, byRepo, resolveHostLabel }
 }

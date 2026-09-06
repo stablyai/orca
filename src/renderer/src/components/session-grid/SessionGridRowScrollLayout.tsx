@@ -24,6 +24,7 @@ export function SessionGridRowScrollLayout({
   rowHeight,
   isFreeMode,
   scrollContainerRef,
+  setScrollContainer,
   onScroll,
   ...slotProps
 }: SessionGridLayoutProps & {
@@ -70,7 +71,7 @@ export function SessionGridRowScrollLayout({
 
   return (
     <div
-      ref={scrollContainerRef}
+      ref={setScrollContainer}
       id={SESSION_GRID_SCROLL_CONTAINER_ID}
       onScroll={onScroll}
       className={cn(

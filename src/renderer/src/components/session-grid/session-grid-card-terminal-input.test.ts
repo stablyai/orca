@@ -83,4 +83,24 @@ describe('useSessionGridCardTerminalInput', () => {
     expect(result.current).not.toBe(before)
     expect(result.current?.ctrlEnterCsiU).toBe(true)
   })
+
+  it('does not rerender for another pane status publication', () => {
+    let renders = 0
+    const { result, unmount } = renderHook(() => {
+      renders++
+      return useSessionGridCardTerminalInput(item())
+    })
+    const before = result.current
+    act(() =>
+      useAppStore.setState({
+        agentStatusByPaneKey: {
+          ...useAppStore.getState().agentStatusByPaneKey,
+          'another-tab:another-pane': { status: 'working', agent: 'claude' }
+        } as never
+      })
+    )
+    expect(result.current).toBe(before)
+    expect(renders).toBe(1)
+    unmount()
+  })
 })

@@ -96,7 +96,7 @@ export function SessionGridCard({
   const sessionsGridWheelTarget = useAppStore((s) => s.sessionsGridWheelTarget)
   const settings = useAppStore((s) => s.settings)
   const terminalInput = useSessionGridCardTerminalInput(item)
-  const { restoring, onPtyGone } = useSessionGridCardRestore(item)
+  const { restoring, failed, timedOut, restore, onPtyGone } = useSessionGridCardRestore(item)
   const agent = useSessionGridCardAgent(item)
   const baseFontSize = settings?.terminalFontSize ?? 14
   const effectiveFontSize = Math.max(8, Math.min(32, Math.round(baseFontSize * sessionsGridZoom)))
@@ -145,9 +145,9 @@ export function SessionGridCard({
       className={cn(
         'group relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-card/95 transition-all duration-150',
         isActive
-          ? 'border-primary/80 ring-2 ring-primary/40 shadow-sm'
+          ? 'border-ring/80 ring-2 ring-ring/40 shadow-xs'
           : 'border-border hover:border-border/80',
-        isDragging && 'opacity-30 border-dashed border-primary/50 pointer-events-none',
+        isDragging && 'opacity-30 border-dashed border-ring/50 pointer-events-none',
         // Only reachable while the toolbar's reveal mode is on: dimmed so it reads as
         // "shown for management", not as part of the working set.
         item.isHiddenFromGrid && !isDragging && 'opacity-60 border-dashed'
@@ -155,10 +155,6 @@ export function SessionGridCard({
     >
       <div
         onDoubleClick={handleHeaderDoubleClick}
-        title={translate(
-          'auto.components.session.grid.SessionGridCard.765687dfd8',
-          'Drag to reorder'
-        )}
         className={cn(
           'flex h-8 shrink-0 items-center justify-between border-b border-border bg-muted/40 px-2 text-xs select-none',
           dragHandleProps ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
@@ -281,8 +277,8 @@ export function SessionGridCard({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
               {translate(
-                'auto.components.session.grid.SessionGridCard.56d88629a9',
-                'Maximize (full tabs view)'
+                'auto.components.session.grid.SessionGridCard.dcbfba372d',
+                'Maximize to tabs view'
               )}
             </TooltipContent>
           </Tooltip>
@@ -317,7 +313,29 @@ export function SessionGridCard({
         ref={viewportRef}
         className="relative flex-1 min-h-0 min-w-0 overflow-hidden bg-background"
       >
-        {item.ptyId && previewMounted && !restoring ? (
+        {previewMounted && !restoring && (failed || !item.ptyId) ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-3 text-center">
+            {/* A timeout is not a verdict on the session: it names the wait, never an exit. */}
+            <p role="status" className="text-xs text-muted-foreground">
+              {timedOut
+                ? translate('sessionGrid.terminal.reconnectTimedOut', 'Reconnect timed out')
+                : translate('sessionGrid.terminal.notConnected', 'Session not connected')}
+            </p>
+            <Button
+              data-testid="session-grid-load-session"
+              variant="outline"
+              size="sm"
+              onClick={(event) => {
+                event.stopPropagation()
+                restore()
+              }}
+            >
+              {timedOut
+                ? translate('sessionGrid.terminal.retry', 'Try again')
+                : translate('sessionGrid.terminal.load', 'Load session')}
+            </Button>
+          </div>
+        ) : item.ptyId && previewMounted && !restoring ? (
           <AgentTerminalPreview
             ptyId={item.ptyId}
             terminalInput={terminalInput}

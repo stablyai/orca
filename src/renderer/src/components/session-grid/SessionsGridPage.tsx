@@ -192,6 +192,7 @@ export default function SessionsGridPage(): React.JSX.Element {
     totalSlotCount,
     cols,
     scrollContainerRef: scroll.scrollContainerRef,
+    setScrollContainer: scroll.setScrollContainer,
     onScroll: scroll.handleScroll,
     activeSessionGridTabId,
     activeFilter,
@@ -202,7 +203,9 @@ export default function SessionsGridPage(): React.JSX.Element {
   }
 
   return (
-    <TooltipProvider delayDuration={200}>
+    // Its own provider only so the page renders standalone; the same 400 ms as the app root
+    // and the sidebar, so a pointer crossing from one to the other feels no seam.
+    <TooltipProvider delayDuration={400}>
       <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden bg-background">
         <SessionGridToolbar
           filterOptions={filterOptions}

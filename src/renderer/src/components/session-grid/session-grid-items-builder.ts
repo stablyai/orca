@@ -11,12 +11,13 @@ import type {
   SessionGridStateFilter
 } from '../../../../shared/session-grid-types'
 import { resolveRemoteExecutionHostKind } from '@/lib/workspace-execution-host'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { sessionGridBucket } from './session-grid-bucket'
 import { resolveSessionGridCardLivePane } from './session-grid-card-live-pane'
+import { extractContextPercent } from './session-grid-context-percent'
 import {
   commitSessionGridItemReuse,
   reuseSessionGridBucketCounts,
@@ -46,6 +47,7 @@ export type SessionGridBucketCounts = Record<Exclude<SessionGridStateFilter, 'al
 export type SessionGridItemsState = Pick<
   AppState,
   | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'agentStatusByPaneKey'
@@ -79,39 +81,17 @@ export type SessionGridListing = {
   hiddenCount: number
 }
 
-// Why anchored to the word: no agent currently reports context usage through
-// the tab title, and a bare `\d+%` matched any percentage in a task name —
-// "contrato 21%" showed up as 21% of context, red badge included.
-const CONTEXT_PERCENT_RE = /\bcontext\b[^\d%]{0,16}(\d{1,3})\s*%|\b(\d{1,3})\s*%\s*context\b/i
-
-function extractContextPercent(title: string): number | undefined {
-  const match = CONTEXT_PERCENT_RE.exec(title)
-  const raw = match?.[1] ?? match?.[2]
-  if (raw === undefined) {
-    return undefined
-  }
-  const val = Number.parseInt(raw, 10)
-  return Number.isFinite(val) && val >= 0 && val <= 100 ? val : undefined
-}
-
-/**
- * Where this card's session runs. The pty id is the authority — it embeds its owner —
- * and the workspace answers only for a card whose id names no host: parked, still
- * spawning, or a plain local pty. A malformed id ('foreign': off-host but unnameable)
- * falls back the same way, which is what the dashboard reports for it too.
- */
+/** PTY ownership wins, followed by the tab's host and then an unambiguous workspace. */
 function resolveSessionGridItemHost(
-  ptyId: string | null,
+  host: ExecutionHostId | undefined,
   entry: SessionGridWorktreeEntry | undefined,
   resolveHostLabel: SessionGridWorktreeCatalog['resolveHostLabel']
 ): Pick<SessionGridItem, 'hostKind' | 'executionHostId' | 'hostLabel'> {
-  const ptyHost = getPtyExecutionHost(ptyId)
-  if (ptyHost && ptyHost !== 'foreign') {
+  if (host) {
     return {
-      // Never 'local': getPtyExecutionHost returns null, not a host, for an id that names none.
-      hostKind: resolveRemoteExecutionHostKind(null, ptyHost) ?? 'local',
-      executionHostId: ptyHost,
-      hostLabel: resolveHostLabel(ptyHost)
+      hostKind: resolveRemoteExecutionHostKind(null, host) ?? 'local',
+      executionHostId: host,
+      hostLabel: resolveHostLabel(host)
     }
   }
   return {
@@ -125,7 +105,8 @@ function buildSessionGridItem(
   state: SessionGridItemsState,
   tab: TerminalTab,
   worktreeId: string,
-  entry: SessionGridWorktreeEntry | undefined,
+  entries: ReadonlyMap<ExecutionHostId, SessionGridWorktreeEntry>,
+  tabHost: ExecutionHostId | undefined,
   hiddenTabIds: ReadonlySet<string>,
   resolveHostLabel: SessionGridWorktreeCatalog['resolveHostLabel']
 ): SessionGridItem {
@@ -135,6 +116,14 @@ function buildSessionGridItem(
     terminalLayout,
     state.ptyIdsByTabId[tab.id] ?? []
   )
+  const ptyHost = getPtyExecutionHost(ptyId)
+  const host = ptyHost && ptyHost !== 'foreign' ? ptyHost : tabHost
+  // A known host must never borrow metadata from a same-id workspace elsewhere.
+  const entry = host
+    ? entries.get(host)
+    : entries.size === 1
+      ? entries.values().next().value
+      : undefined
   const title = resolveTerminalTabTitle(
     tab,
     state.generatedTitlesEnabled,
@@ -182,7 +171,7 @@ function buildSessionGridItem(
     // object AS A FIELD would cost every card its reuse. Both branches below write
     // `hostLabel` even when undefined, which is what keeps their `Object.keys().length`
     // equal — `reuseSessionGridItem` compares that count before any value.
-    ...resolveSessionGridItemHost(ptyId, entry, resolveHostLabel),
+    ...resolveSessionGridItemHost(host, entry, resolveHostLabel),
     cwd: tab.startupCwd ?? entry?.path ?? '',
     shellOverride: tab.shellOverride,
     launchAgent: tab.launchAgent
@@ -232,14 +221,25 @@ export function buildSessionGridListing(
     if (!tabs || tabs.length === 0) {
       continue
     }
-    const entry = worktreeLookup.get(worktreeId)
+    const entries = new Map(
+      (worktreeCatalog.entriesByWorktreeId.get(worktreeId) ?? []).map((entry) => [
+        entry.executionHostId,
+        entry
+      ])
+    )
+    const tabHosts = new Map(
+      (state.unifiedTabsByWorktree?.[worktreeId] ?? [])
+        .filter((tab) => tab.contentType === 'terminal')
+        .map((tab) => [tab.entityId, tab.executionHostId])
+    )
     let visibleInWorktree = 0
     for (const tab of tabs) {
       const item = buildSessionGridItem(
         state,
         tab,
         worktreeId,
-        entry,
+        entries,
+        tabHosts.get(tab.id),
         hiddenTabIds,
         worktreeCatalog.resolveHostLabel
       )

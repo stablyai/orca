@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactVirtual from '@tanstack/react-virtual'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useAppStore } from '@/store'
 import { readStoreListenerCount } from '@/store/store-listener-census'
 import SessionsGridPage from './SessionsGridPage'
@@ -58,10 +58,9 @@ function cardAttentionBadge(tabId: string): string | null {
   )
 }
 
-// The toolbar's icon-only launcher is aria-labelled "New session"; the empty
-// state's is labelled by its own text, so an exact name keeps the two apart.
+// The toolbar's icon-only launcher carries the same name, so the query stays inside the empty state.
 function emptyStateLaunchButton(): HTMLElement {
-  return screen.getByRole('button', { name: 'New Session' })
+  return within(emptyState()).getByRole('button', { name: 'New session' })
 }
 
 function emptyState(): HTMLElement {
@@ -125,7 +124,32 @@ describe('SessionsGridPage', () => {
     backgroundMountHarness.request.mockClear()
   })
 
-  it('respawns a card whose pty the last run left behind, and admits defeat after the grace', () => {
+  it('lets the user load one cold session while leaving the other cards parked', () => {
+    seedShells(3)
+    useAppStore.setState({
+      ptyIdsByTabId: {},
+      tabsByWorktree: {
+        'wt-1': useAppStore
+          .getState()
+          .tabsByWorktree['wt-1'].map((tab) => ({ ...tab, ptyId: null }))
+      }
+    })
+    render(<SessionsGridPage />)
+    expect(screen.queryByText('Starting session…')).toBeNull()
+    const loadButtons = screen.getAllByTestId('session-grid-load-session')
+    expect(loadButtons).toHaveLength(3)
+    expect(backgroundMountHarness.request).not.toHaveBeenCalled()
+    fireEvent.click(loadButtons[1]!)
+    expect(backgroundMountHarness.request).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: 'wt-1',
+      tabIds: ['tab-1']
+    })
+    expect(useAppStore.getState().activeView).toBe('sessions')
+    expect(screen.getAllByTestId('session-grid-load-session')).toHaveLength(2)
+    expect(screen.getByText('Starting session…')).toBeInTheDocument()
+  })
+
+  it('loads an exited pty only on request and offers a retry if no replacement binds', () => {
     // Only timeouts: the staged mount runs on the synchronous rAF stub above.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     const tabsByWorktree: Record<string, TerminalTab[]> = {
@@ -144,8 +168,11 @@ describe('SessionsGridPage', () => {
     render(<SessionsGridPage />)
     expect(screen.getByTestId('mock-terminal-preview')).toHaveAttribute('data-pty-id', 'pty-stale')
 
-    // Main knows no such pty: the card asks for the tab's pane to mount and shows the session starting.
+    // A saved id is not permission to spawn while browsing.
     act(() => previewHarness.ptyGoneByPtyId.get('pty-stale')!())
+    expect(backgroundMountHarness.request).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('mock-terminal-preview')).toBeNull()
+    fireEvent.click(screen.getByTestId('session-grid-load-session'))
     expect(backgroundMountHarness.request).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabIds: ['tab-1']
@@ -162,8 +189,7 @@ describe('SessionsGridPage', () => {
     })
     expect(screen.getByTestId('mock-terminal-preview')).toHaveAttribute('data-pty-id', 'pty-fresh')
 
-    // A pty that never gets replaced: after the grace the preview remounts and, told
-    // again, the card leaves the "closed" verdict to it instead of asking twice.
+    // A failed restore stops showing progress and offers an explicit retry.
     act(() => {
       useAppStore.setState({
         tabsByWorktree,
@@ -172,13 +198,17 @@ describe('SessionsGridPage', () => {
     })
     act(() => previewHarness.ptyGoneByPtyId.get('pty-stale')!())
     expect(screen.queryByTestId('mock-terminal-preview')).toBeNull()
+    fireEvent.click(screen.getByTestId('session-grid-load-session'))
     act(() => {
       vi.advanceTimersByTime(15_000)
     })
-    expect(screen.getByTestId('mock-terminal-preview')).toHaveAttribute('data-pty-id', 'pty-stale')
-    act(() => previewHarness.ptyGoneByPtyId.get('pty-stale')!())
-    expect(screen.getByTestId('mock-terminal-preview')).toHaveAttribute('data-pty-id', 'pty-stale')
-    expect(backgroundMountHarness.request).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('mock-terminal-preview')).toBeNull()
+    expect(screen.getByText('Reconnect timed out')).toBeInTheDocument()
+    expect(screen.getByTestId('session-grid-load-session')).toHaveTextContent('Try again')
+    expect(backgroundMountHarness.request).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByTestId('session-grid-load-session'))
+    expect(backgroundMountHarness.request).toHaveBeenCalledTimes(3)
+    expect(screen.getByText('Starting session…')).toBeInTheDocument()
     vi.useRealTimers()
   })
 
@@ -202,7 +232,7 @@ describe('SessionsGridPage', () => {
 
     expect(screen.queryAllByTestId('session-grid-card')).toHaveLength(0)
     expect(emptyState()).toHaveAttribute('data-reason', 'filtered')
-    expect(screen.queryByRole('button', { name: 'New Session' })).toBeNull()
+    expect(within(emptyState()).queryByRole('button', { name: 'New session' })).toBeNull()
 
     fireEvent.click(screen.getByTestId('session-grid-empty-clear-filters'))
 
@@ -217,7 +247,7 @@ describe('SessionsGridPage', () => {
     render(<SessionsGridPage />)
 
     expect(emptyState()).toHaveAttribute('data-reason', 'hidden')
-    expect(screen.queryByRole('button', { name: 'New Session' })).toBeNull()
+    expect(within(emptyState()).queryByRole('button', { name: 'New session' })).toBeNull()
 
     fireEvent.click(screen.getByTestId('session-grid-empty-reveal-hidden'))
 
@@ -333,7 +363,7 @@ describe('SessionsGridPage', () => {
 
     // One slot finishes the row and a full trailing row is always kept, so a
     // new session has somewhere to land without changing preset.
-    expect(screen.getAllByText('New Session')).toHaveLength(3)
+    expect(screen.getAllByText('New session')).toHaveLength(3)
 
     // Clicking anywhere on the card opens the menu, and it opens at the click
     // point rather than against the card's bounding box: a nested trigger used

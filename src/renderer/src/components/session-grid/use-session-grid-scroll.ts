@@ -47,6 +47,7 @@ export function useSessionGridScroll(args: {
   totalPageCount: number
 }): {
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  setScrollContainer: (element: HTMLDivElement | null) => void
   currentPosition: number
   currentPositionRef: React.RefObject<number>
   /**
@@ -73,6 +74,11 @@ export function useSessionGridScroll(args: {
   const [freeModeFirstRow, setFreeModeFirstRow] = useState(0)
   const [containerHeight, setContainerHeight] = useState(0)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
+  const bindScrollContainer = useCallback((element: HTMLDivElement | null) => {
+    scrollContainerRef.current = element
+    setScrollContainer(element)
+  }, [])
   const currentPositionRef = useRef(currentPosition)
   currentPositionRef.current = currentPosition
   // Why: while a smooth scroll is in flight the position read off scrollTop
@@ -80,7 +86,7 @@ export function useSessionGridScroll(args: {
   const pendingTargetRef = useRef<number | null>(null)
 
   useEffect(() => {
-    const el = scrollContainerRef.current
+    const el = scrollContainer
     if (!el) {
       return
     }
@@ -93,9 +99,7 @@ export function useSessionGridScroll(args: {
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-    // Why `mode` is a dep: page mode mounts its own scroll element, so without
-    // re-observing, the observer stays on the detached one and the height goes stale.
-  }, [mode])
+  }, [scrollContainer])
 
   const rowHeight = useMemo(
     () => computeSessionGridRowHeight(containerHeight, rowsPerView),
@@ -132,7 +136,10 @@ export function useSessionGridScroll(args: {
   // Why: a position counted in rows means something else once the step counts
   // pages, so a mode or preset change must re-derive it from where the
   // container actually sits rather than reinterpret the old number.
-  useEffect(syncPositionFromScroll, [syncPositionFromScroll])
+  useEffect(() => {
+    pendingTargetRef.current = null
+    syncPositionFromScroll()
+  }, [scrollContainer, syncPositionFromScroll])
 
   const scrollToPosition = useCallback(
     (targetIndex: number) => {
@@ -154,7 +161,7 @@ export function useSessionGridScroll(args: {
   )
 
   useEffect(() => {
-    const container = scrollContainerRef.current
+    const container = scrollContainer
     if (!container) {
       return
     }
@@ -225,10 +232,19 @@ export function useSessionGridScroll(args: {
       container.removeEventListener('wheel', handleWheel, { capture: true })
       container.removeEventListener(SESSION_GRID_WHEEL_EVENT, handleHandoff)
     }
-  }, [clampPosition, isFreeMode, isRowMode, positionStepPx, scrollToPosition, wheelTarget])
+  }, [
+    scrollContainer,
+    clampPosition,
+    isFreeMode,
+    isRowMode,
+    positionStepPx,
+    scrollToPosition,
+    wheelTarget
+  ])
 
   return {
     scrollContainerRef,
+    setScrollContainer: bindScrollContainer,
     currentPosition,
     currentPositionRef,
     firstVisibleRow: isRowMode

@@ -17,6 +17,7 @@ export type SessionGridLayoutProps = {
   totalSlotCount: number
   cols: number
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  setScrollContainer: (element: HTMLDivElement | null) => void
   onScroll: () => void
   activeSessionGridTabId: string | null
   activeFilter: SessionGridFilter

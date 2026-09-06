@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, Settings as SettingsIcon, Terminal as TerminalIcon } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { PopoverContent } from '@/components/ui/popover'
 import {
   Command,
@@ -8,7 +9,8 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator
+  CommandSeparator,
+  CommandShortcut
 } from '@/components/ui/command'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useQuickLaunchAgents } from '@/components/tab-bar/QuickLaunchButton'
@@ -56,10 +58,12 @@ function buildLaunchGroups(
     ? [defaultWorktreeId, ...gridWorktreeIds.filter((id) => id !== defaultWorktreeId)]
     : gridWorktreeIds
   for (const id of leadIds) {
-    const entry = worktreeCatalog.byWorktreeId.get(id)
-    if (entry && !listed.has(id)) {
-      inGrid.push(entry)
-      listed.add(id)
+    for (const entry of worktreeCatalog.entriesByWorktreeId.get(id) ?? []) {
+      const identity = composeWorktreeHostIdentity(entry.executionHostId, id)
+      if (!listed.has(identity)) {
+        inGrid.push(entry)
+        listed.add(identity)
+      }
     }
   }
   const groups: LaunchGroup[] = []
@@ -74,7 +78,9 @@ function buildLaunchGroups(
     })
   }
   for (const repo of worktreeCatalog.byRepo) {
-    const entries = repo.worktrees.filter((entry) => !listed.has(entry.worktreeId))
+    const entries = repo.worktrees.filter(
+      (entry) => !listed.has(composeWorktreeHostIdentity(entry.executionHostId, entry.worktreeId))
+    )
     if (entries.length > 0) {
       groups.push({ key: repo.repoId, heading: repo.repoName, entries })
     }
@@ -118,13 +124,24 @@ export function SessionGridLaunchPopoverContent({
     if (activeFilter === 'all') {
       return null
     }
-    return worktreeCatalog.byWorktreeId.get(activeFilter) ?? placeholderEntry(activeFilter)
+    const entries = worktreeCatalog.entriesByWorktreeId.get(activeFilter) ?? []
+    return entries.length > 1 ? null : (entries[0] ?? placeholderEntry(activeFilter))
   }, [activeFilter, worktreeCatalog])
   const target = direct ?? picked
-  const groups = useMemo(
-    () => (direct ? [] : buildLaunchGroups(worktreeCatalog, gridWorktreeIds, defaultWorktreeId)),
-    [direct, worktreeCatalog, gridWorktreeIds, defaultWorktreeId]
-  )
+  const groups = useMemo(() => {
+    if (direct) {
+      return []
+    }
+    const groups = buildLaunchGroups(worktreeCatalog, gridWorktreeIds, defaultWorktreeId)
+    return activeFilter === 'all'
+      ? groups
+      : groups
+          .map((group) => ({
+            ...group,
+            entries: group.entries.filter((entry) => entry.worktreeId === activeFilter)
+          }))
+          .filter((group) => group.entries.length > 0)
+  }, [direct, activeFilter, worktreeCatalog, gridWorktreeIds, defaultWorktreeId])
   const goBack = useCallback(() => setPicked(null), [])
 
   return (
@@ -347,17 +364,18 @@ export function SessionGridLaunchTargetList({
                 <AgentIcon agent={agent} size={14} />
                 <span className="flex-1 truncate">{label}</span>
                 {isDefault ? (
-                  <span className="rounded border border-border px-1 text-[10px] font-normal text-muted-foreground">
+                  <Badge
+                    variant="outline"
+                    className="px-1.5 py-0 text-[10px] font-normal text-muted-foreground"
+                  >
                     {translate(
                       'auto.components.session.grid.SessionGridLaunchPicker.default',
                       'Default'
                     )}
-                  </span>
+                  </Badge>
                 ) : null}
                 {isDefault && launch.newAgentShortcut ? (
-                  <span className="text-[10px] font-normal text-muted-foreground">
-                    {launch.newAgentShortcut}
-                  </span>
+                  <CommandShortcut>{launch.newAgentShortcut}</CommandShortcut>
                 ) : null}
               </CommandItem>
             )

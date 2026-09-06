@@ -1,44 +1,76 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import {
+  WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
+  type WakeHibernatedAgentsWorktreeDetail
+} from '@/constants/terminal'
 import type { SessionGridItem } from '../../../../shared/session-grid-types'
 
-// How long a background mount gets to bind a fresh pty before the card admits the pane is gone.
+// A timeout offers retry, never a process-exit verdict.
 const RESTORE_GRACE_MS = 15_000
+type RestoreTarget = Pick<SessionGridItem, 'ptyId' | 'tabId' | 'worktreeId'>
 
-/**
- * A pty the store advertises can be one the last run left behind: layouts and
- * `ptyIdsByTabId` survive a restart, the processes do not, and a pane only
- * respawns when its TerminalPane mounts. A card that learns its pty is unknown
- * asks for that mount in the background, as launching from the grid does, and
- * shows the session as starting until the store binds the replacement pty.
- */
-export function useSessionGridCardRestore(
-  item: Pick<SessionGridItem, 'ptyId' | 'tabId' | 'worktreeId'>
-): { restoring: boolean; onPtyGone: () => void } {
-  const attemptedPtyIdRef = useRef<string | null>(null)
-  const [restoringPtyId, setRestoringPtyId] = useState<string | null>(null)
+/** Reuse the pane's recovery path; browsing alone must not wake saved agents. */
+export function useSessionGridCardRestore(item: RestoreTarget): {
+  restoring: boolean
+  failed: boolean
+  /** The last attempt ran out the grace period; the card says so instead of "not connected". */
+  timedOut: boolean
+  restore: () => void
+  onPtyGone: () => void
+} {
+  const inFlightKeyRef = useRef<RestoreTarget | null>(null)
+  const [restoringKey, setRestoringKey] = useState<RestoreTarget | null>(null)
+  const [failedKey, setFailedKey] = useState<RestoreTarget | null>(null)
+  const [timedOutKey, setTimedOutKey] = useState<RestoreTarget | null>(null)
   const { ptyId, tabId, worktreeId } = item
+  // A binding change starts a new attempt even if an older PTY id later reappears.
+  const key = useMemo(() => ({ worktreeId, tabId, ptyId }), [worktreeId, tabId, ptyId])
 
-  const onPtyGone = useCallback(() => {
-    // A second report for the same pty means the mount did not replace it: the pane is really gone.
-    if (!ptyId || attemptedPtyIdRef.current === ptyId) {
+  const restore = useCallback(() => {
+    if (inFlightKeyRef.current === key) {
       return
     }
-    attemptedPtyIdRef.current = ptyId
+    inFlightKeyRef.current = key
+    setFailedKey(null)
+    setTimedOutKey(null)
+    setRestoringKey(key)
+    window.dispatchEvent(
+      new CustomEvent<WakeHibernatedAgentsWorktreeDetail>(WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT, {
+        detail: { worktreeId, tabIds: [tabId], wokenClaimKeys: new Set() }
+      })
+    )
     requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tabId] })
-    setRestoringPtyId(ptyId)
-  }, [ptyId, tabId, worktreeId])
+  }, [key, tabId, worktreeId])
+
+  const onPtyGone = useCallback(() => {
+    setFailedKey(key)
+  }, [key])
 
   // Restoring ends when the store swaps the pty — the preview then mounts on the new one.
-  const restoring = restoringPtyId !== null && restoringPtyId === ptyId
+  const restoring = restoringKey === key
 
   useEffect(() => {
     if (!restoring) {
       return
     }
-    const timer = window.setTimeout(() => setRestoringPtyId(null), RESTORE_GRACE_MS)
-    return () => window.clearTimeout(timer)
-  }, [restoring])
+    const timer = window.setTimeout(() => {
+      inFlightKeyRef.current = null
+      setRestoringKey(null)
+      setFailedKey(key)
+      setTimedOutKey(key)
+    }, RESTORE_GRACE_MS)
+    return () => {
+      window.clearTimeout(timer)
+      inFlightKeyRef.current = null
+    }
+  }, [restoring, key])
 
-  return { restoring, onPtyGone }
+  return {
+    restoring,
+    failed: failedKey === key,
+    timedOut: timedOutKey === key,
+    restore,
+    onPtyGone
+  }
 }

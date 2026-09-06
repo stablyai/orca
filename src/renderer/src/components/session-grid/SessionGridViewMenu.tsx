@@ -2,6 +2,7 @@ import React from 'react'
 import { ChevronDown, LayoutGrid, Minus, Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -132,18 +133,25 @@ export function SessionGridZoomStepper({ className }: { className?: string }): R
       >
         <Minus className="size-3" />
       </Button>
-      <button
-        type="button"
-        data-testid="session-grid-zoom-reset"
-        onClick={() => setSessionsGridZoom(SESSION_GRID_ZOOM_DEFAULT)}
-        title={translate(
-          'auto.components.session.grid.SessionGridViewMenu.zoomReset',
-          'Reset zoom'
-        )}
-        className="min-w-11 border-x border-border/60 px-1.5 font-mono text-[11px] tabular-nums text-muted-foreground hover:bg-accent hover:text-foreground"
-      >
-        {formatZoom(zoom)}
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            data-testid="session-grid-zoom-reset"
+            onClick={() => setSessionsGridZoom(SESSION_GRID_ZOOM_DEFAULT)}
+            aria-label={translate(
+              'auto.components.session.grid.SessionGridViewMenu.zoomReset',
+              'Reset zoom'
+            )}
+            className="min-w-11 border-x border-border/60 px-1.5 font-mono text-[11px] tabular-nums text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            {formatZoom(zoom)}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {translate('auto.components.session.grid.SessionGridViewMenu.zoomReset', 'Reset zoom')}
+        </TooltipContent>
+      </Tooltip>
       <Button
         variant="ghost"
         size="icon-xs"

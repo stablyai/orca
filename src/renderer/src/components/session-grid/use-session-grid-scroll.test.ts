@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
+import { useLayoutEffect } from 'react'
 import type {
   SessionGridScrollMode,
   SessionGridWheelTarget
@@ -71,9 +72,8 @@ function mount(mode: SessionGridScrollMode, wheelTarget: SessionGridWheelTarget 
         totalRowCount: 10,
         totalPageCount: 5
       })
-      // Stands in for the layout component that owns the scroll element.
-      ;(scroll.scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current =
-        container
+      const { setScrollContainer } = scroll
+      useLayoutEffect(() => setScrollContainer(container), [setScrollContainer])
       return scroll
     },
     { initialProps: { mode } }
@@ -105,6 +105,37 @@ describe('useSessionGridScroll', () => {
     expect(result.current.currentPosition).toBe(3)
   })
 
+  it.each(['row', 'page', 'free'] as const)(
+    'measures a container appearing after empty results in %s mode',
+    (mode) => {
+      const container = makeContainer()
+      const view = renderHook(
+        ({ present }) => {
+          const scroll = useSessionGridScroll({
+            mode,
+            rowsPerView: 2,
+            totalRowCount: 10,
+            totalPageCount: 5
+          })
+          const { setScrollContainer } = scroll
+          useLayoutEffect(
+            () => setScrollContainer(present ? container : null),
+            [present, setScrollContainer]
+          )
+          return scroll
+        },
+        { initialProps: { present: false } }
+      )
+
+      view.rerender({ present: true })
+      expect(view.result.current.rowHeight).toBe(282)
+      act(() => view.result.current.scrollToPosition(1))
+      expect(container.scrollTop).toBe(
+        mode === 'page' ? CONTAINER_HEIGHT : ROW_STEP * (mode === 'free' ? 2 : 1)
+      )
+    }
+  )
+
   it('steps one full container per page, which is taller than its rows', () => {
     const { container, result } = mount('page')
     act(() => result.current.scrollToPosition(2))
@@ -114,6 +145,46 @@ describe('useSessionGridScroll', () => {
     container.scrollTop = 3 * CONTAINER_HEIGHT
     act(() => result.current.handleScroll())
     expect(result.current.currentPosition).toBe(3)
+  })
+
+  it('moves wheel handling and measurement to a replacement container', () => {
+    const observe = vi.fn()
+    const disconnect = vi.fn()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe = observe
+        disconnect = disconnect
+      }
+    )
+    const first = makeContainer()
+    const second = makeContainer()
+    const view = renderHook(
+      ({ container }) => {
+        const scroll = useSessionGridScroll({
+          mode: 'row',
+          rowsPerView: 2,
+          totalRowCount: 10,
+          totalPageCount: 5
+        })
+        const { setScrollContainer } = scroll
+        useLayoutEffect(() => setScrollContainer(container), [container, setScrollContainer])
+        return scroll
+      },
+      { initialProps: { container: first as HTMLDivElement | null } }
+    )
+    wheel(first, 40)
+    expect(view.result.current.currentPosition).toBe(1)
+    view.rerender({ container: null })
+    expect(disconnect).toHaveBeenCalledTimes(1)
+    view.rerender({ container: second })
+    expect(observe).toHaveBeenLastCalledWith(second)
+    expect(view.result.current.currentPosition).toBe(0)
+    expect(wheel(first, 40).defaultPrevented).toBe(false)
+    expect(wheel(second, 40).defaultPrevented).toBe(true)
+    expect(second.scrollTop).toBe(ROW_STEP)
+    view.unmount()
+    expect(disconnect).toHaveBeenCalledTimes(2)
   })
 
   /**

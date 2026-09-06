@@ -57,9 +57,10 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     () =>
       installTerminalPaneHibernationWakeListener({
         worktreeId: deps.worktreeId,
+        tabId: deps.tabId,
         panePtyBindingsRef: deps.panePtyBindingsRef
       }),
-    [deps.worktreeId, deps.panePtyBindingsRef]
+    [deps.worktreeId, deps.tabId, deps.panePtyBindingsRef]
   )
 
   useEffect(() => {

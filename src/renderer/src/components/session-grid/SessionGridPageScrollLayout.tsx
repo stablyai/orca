@@ -20,7 +20,8 @@ export function SessionGridPageScrollLayout({
   cols,
   rowsPerView,
   currentPage,
-  scrollContainerRef,
+  scrollContainerRef: _scrollContainerRef,
+  setScrollContainer,
   onScroll,
   ...slotProps
 }: SessionGridLayoutProps & {
@@ -53,7 +54,7 @@ export function SessionGridPageScrollLayout({
 
   return (
     <div
-      ref={scrollContainerRef}
+      ref={setScrollContainer}
       id={SESSION_GRID_SCROLL_CONTAINER_ID}
       onScroll={onScroll}
       className="flex-1 min-h-0 overflow-y-auto scrollbar-sleek snap-y snap-mandatory"
