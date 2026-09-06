@@ -55,11 +55,22 @@ vi.mock('@/components/ui/popover', () => ({
 
 const context = { worktreeId: 'wt-1', worktreePath: '/repo', runtimeEnvironmentId: null }
 
-function Transcript({ markdown }: { markdown: string }): React.JSX.Element {
+function Transcript({
+  markdown,
+  sessionId = 'session-1',
+  isVisible = true,
+  linkContext = context
+}: {
+  markdown: string
+  sessionId?: string
+  isVisible?: boolean
+  linkContext?: typeof context | null
+}): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
-    context,
-    rootRef
+    linkContext,
+    rootRef,
+    { sessionId, isVisible }
   )
   return (
     <div ref={rootRef}>
@@ -81,6 +92,34 @@ afterEach(() => {
 })
 
 describe('native chat transcript links', () => {
+  it.each(['hidden', 'session', 'workspace', 'no-context'] as const)(
+    'dismisses a request when the transcript is %s',
+    async (change) => {
+      const markdown = '[link](https://example.com)'
+      const { rerender } = render(<Transcript markdown={markdown} />)
+      fireEvent.click(await screen.findByRole('link', { name: 'link' }))
+      expect(screen.getByText('System Browser')).toBeTruthy()
+      rerender(
+        <Transcript
+          markdown={markdown}
+          linkContext={
+            change === 'no-context'
+              ? null
+              : change === 'workspace'
+                ? { ...context, worktreeId: 'wt-2' }
+                : context
+          }
+          isVisible={change !== 'hidden'}
+          sessionId={change === 'session' ? 'session-2' : 'session-1'}
+        />
+      )
+      expect(screen.queryByText('System Browser')).toBeNull()
+      rerender(<Transcript markdown={markdown} />)
+      expect(screen.queryByText('System Browser')).toBeNull()
+      expect(mocks.openHttpLink).not.toHaveBeenCalled()
+    }
+  )
+
   it('offers both destinations when a rendered http link is clicked', async () => {
     render(<Transcript markdown="See [the PR](https://github.com/o/r/pull/1)." />)
 
@@ -90,6 +129,28 @@ describe('native chat transcript links', () => {
     expect(screen.getByText('Orca Browser')).toBeTruthy()
     expect(screen.getByText('System Browser')).toBeTruthy()
     expect(mocks.openHttpLink).not.toHaveBeenCalled()
+  })
+
+  it('keeps mailto links on the anchor default', async () => {
+    const { container } = render(<Transcript markdown="[email](mailto:hello@example.com)" />)
+    const anchorDefault = vi.fn((event: Event) => {
+      expect(event.defaultPrevented).toBe(false)
+      event.preventDefault()
+    })
+    container.addEventListener('click', anchorDefault)
+    fireEvent.click(await screen.findByRole('link', { name: 'email' }))
+    expect(anchorDefault).toHaveBeenCalledOnce()
+    expect(mocks.openHttpLink).not.toHaveBeenCalled()
+    expect(mocks.openFileLink).not.toHaveBeenCalled()
+    expect(screen.queryByText('System Browser')).toBeNull()
+  })
+
+  it('restores focus to the clicked transcript link', async () => {
+    render(<Transcript markdown="[link](https://example.com)" />)
+    const anchor = await screen.findByRole('link', { name: 'link' })
+    fireEvent.click(anchor)
+    fireEvent.click(screen.getByText('System Browser'))
+    expect(document.activeElement).toBe(anchor)
   })
 
   it('routes the chosen destination through the shared link opener', async () => {

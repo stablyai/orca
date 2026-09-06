@@ -94,7 +94,8 @@ export function NativeChatStructuredSession(
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
-    rootRef
+    rootRef,
+    { sessionId: props.sessionId, isVisible: props.isVisible }
   )
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null

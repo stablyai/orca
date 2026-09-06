@@ -130,6 +130,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           collisionPadding={8}
           className="w-max min-w-52 max-w-[min(21rem,calc(100vw-1rem))] p-1"
           data-link-action-popover
+          data-terminal-link-action-popover
           onOpenAutoFocus={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => event.preventDefault()}
           onEscapeKeyDown={() => request.restoreFocus()}

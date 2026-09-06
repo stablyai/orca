@@ -324,7 +324,8 @@ export function NativeChatResolvedView({
   }, [interactiveSend, pendingScope])
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
-    rootRef
+    rootRef,
+    { sessionId, isVisible }
   )
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so

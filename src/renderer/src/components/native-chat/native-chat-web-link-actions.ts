@@ -26,6 +26,8 @@ type ChatLinkMouseEvent = Pick<
   MouseEvent,
   'altKey' | 'clientX' | 'clientY' | 'ctrlKey' | 'metaKey' | 'shiftKey'
 > & {
+  detail?: number
+  currentTarget?: Pick<HTMLElement, 'getBoundingClientRect'>
   button?: number
   preventDefault: () => void
 }
@@ -62,9 +64,10 @@ export function handleNativeChatWebLink(
     open(deps.destinations.primary)
     return true
   }
+  const keyboardAnchor = event.detail === 0 ? event.currentTarget?.getBoundingClientRect() : null
   deps.request({
-    anchorX: event.clientX,
-    anchorY: event.clientY,
+    anchorX: keyboardAnchor?.left ?? event.clientX,
+    anchorY: keyboardAnchor?.bottom ?? event.clientY,
     destination: url,
     kind: 'url',
     restoreFocus: deps.restoreFocus,

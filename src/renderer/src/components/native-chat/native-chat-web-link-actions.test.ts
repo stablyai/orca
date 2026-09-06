@@ -63,6 +63,23 @@ afterEach(() => {
 })
 
 describe('handleNativeChatWebLink', () => {
+  it('anchors keyboard activation to the focused link', () => {
+    stubPlatform(true)
+    const { deps: d, requests } = deps()
+    handleNativeChatWebLink(
+      {
+        ...click(),
+        detail: 0,
+        currentTarget: {
+          getBoundingClientRect: () => ({ left: 80, bottom: 160 }) as DOMRect
+        }
+      },
+      'https://example.com',
+      d
+    )
+    expect(requests[0]).toMatchObject({ anchorX: 80, anchorY: 160 })
+  })
+
   it('opens the destination popover on a plain click', () => {
     stubPlatform(true)
     const { deps: d, requests } = deps()

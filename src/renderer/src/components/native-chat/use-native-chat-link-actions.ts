@@ -25,10 +25,21 @@ export type NativeChatLinkActions = {
  *  destination popover the terminal shows. */
 export function useNativeChatLinkActions(
   context: NativeChatFileLinkContext | null,
-  rootRef: RefObject<HTMLElement | null>
+  rootRef: RefObject<HTMLElement | null>,
+  scope: { sessionId: string | null; isVisible: boolean }
 ): NativeChatLinkActions {
   const openFileLink = useNativeChatFileLinkClick(context)
   const [linkActionRequest, setLinkActionRequest] = useState<LinkActionRequest | null>(null)
+  const scopeKey = JSON.stringify([
+    context?.worktreeId,
+    context?.runtimeEnvironmentId,
+    scope.sessionId
+  ])
+  const [previousScopeKey, setPreviousScopeKey] = useState(scopeKey)
+  if (previousScopeKey !== scopeKey || (!scope.isVisible && linkActionRequest !== null)) {
+    setPreviousScopeKey(scopeKey)
+    setLinkActionRequest(null)
+  }
   const closeLinkActions = useCallback((dismissed?: LinkActionRequest) => {
     setLinkActionRequest((current) => closeLinkActionRequest(current, dismissed))
   }, [])
@@ -50,6 +61,7 @@ export function useNativeChatLinkActions(
       // Read at click time: settings and workspace ownership must not re-render the transcript.
       const state = useAppStore.getState()
       const sourceOwner = resolveNativeChatHttpLinkSourceOwner(state, context.worktreeId)
+      const anchor = event.currentTarget
       handleNativeChatWebLink(event, route.url, {
         worktreeId: context.worktreeId,
         sourceOwner,
@@ -59,7 +71,8 @@ export function useNativeChatLinkActions(
           canNativeChatOpenOwnedBrowser(state, context.worktreeId, sourceOwner)
         ),
         actionsEnabled: state.settings?.terminalLinkActionPopoverEnabled !== false,
-        restoreFocus: () => rootRef.current?.focus({ preventScroll: true }),
+        restoreFocus: () =>
+          (anchor.isConnected ? anchor : rootRef.current)?.focus({ preventScroll: true }),
         request: setLinkActionRequest
       })
     },
