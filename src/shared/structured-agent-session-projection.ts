@@ -192,13 +192,16 @@ export function latestStructuredAgentSessionPrompt(
   return ''
 }
 
-/** The newest assistant prose. Tool-only assistant items are skipped — they carry
- *  no words, and stopping at one would blank a row that has something to say. */
+/** The newest assistant prose in the latest user turn. Tool-only assistant items
+ *  are skipped; the user boundary clears prose from the preceding turn. */
 export function latestStructuredAgentSessionAssistantMessage(
   items: readonly AgentJournalRenderItem[]
 ): string {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
+    if (body?.kind === 'message' && body.role === 'user') {
+      return ''
+    }
     if (body?.kind === 'message' && body.role === 'assistant') {
       const prose = messageProse(body.blocks)
       if (prose.trim()) {

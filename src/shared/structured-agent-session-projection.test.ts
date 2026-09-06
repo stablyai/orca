@@ -86,15 +86,15 @@ describe('structured agent session status projection', () => {
       role: 'user',
       blocks: [{ type: 'text', text: 'look at the sidebar' }]
     })
-    const said = item('said', 2, {
-      kind: 'message',
-      role: 'assistant',
-      blocks: [{ type: 'text', text: 'Reading the card first.' }]
-    })
-    const running = item('running', 3, {
+    const running = item('running', 2, {
       kind: 'status',
       text: 'Working',
       turnLifecycle: { turnId: 'turn-1', state: 'running' }
+    })
+    const said = item('said', 3, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Reading the card first.' }]
     })
     const tool = item('tool', 4, {
       kind: 'tool-call',
@@ -103,13 +103,37 @@ describe('structured agent session status projection', () => {
       state: 'running'
     })
 
-    expect(projectStructuredAgentSessionStatusSummary([ask, said, running, tool])).toEqual({
+    expect(projectStructuredAgentSessionStatusSummary([ask, running, said, tool])).toEqual({
       status: 'working',
       latestPrompt: 'look at the sidebar',
       toolName: 'Read',
       toolInput: '/repo/src/WorktreeCard.tsx',
       lastAssistantMessage: 'Reading the card first.'
     })
+  })
+
+  it('clears the previous answer as soon as the next prompt is persisted', () => {
+    const firstAsk = item('first-ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'first task' }]
+    })
+    const previousAnswer = item('previous-answer', 2, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'The first task is done.' }]
+    })
+    const nextAsk = item('next-ask', 3, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'second task' }]
+    })
+    expect(projectStructuredAgentSessionStatusSummary([firstAsk, previousAnswer, nextAsk])).toEqual(
+      {
+        status: 'idle',
+        latestPrompt: 'second task'
+      }
+    )
   })
 
   it('reports no tool line once the turn settles, even with an abandoned running call', () => {

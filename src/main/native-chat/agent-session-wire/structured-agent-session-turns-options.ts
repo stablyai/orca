@@ -23,5 +23,6 @@ export async function performSetOption(
     throw error
   }
   await ctx.persistOptions(applied ?? { [input.key]: input.value })
+  ctx.publish()
   return { ok: true, value: { ...input, ...(applied ? { options: { ...applied } } : {}) } }
 }
