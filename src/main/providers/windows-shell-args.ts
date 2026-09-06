@@ -188,9 +188,10 @@ export function resolveWindowsShellLaunchArgs(
     const shellArgStartupCommand = getCmdShellArgStartupCommand(startupCommand)
     const startupCommands = [
       CMD_UTF8_SETUP_COMMAND,
-      ...(codexLaunchPreflightCommand ? [CMD_CODEX_LAUNCH_PREFLIGHT] : []),
-      ...(shellArgStartupCommand ? [shellArgStartupCommand] : [])
+      ...(codexLaunchPreflightCommand ? ['echo ORCA_CMD_BEFORE_PREFLIGHT', CMD_CODEX_LAUNCH_PREFLIGHT, 'echo ORCA_CMD_AFTER_PREFLIGHT'] : []),
+      ...(shellArgStartupCommand ? [shellArgStartupCommand, 'echo ORCA_CMD_AFTER_AGENT'] : [])
     ]
+    console.info('[cmd-launch-args]', JSON.stringify({ startupCommands, startupCommand, codexLaunchPreflightCommand }))
     return {
       shellArgs: ['/K', startupCommands.join(' & ')],
       ...(shellArgStartupCommand ? { startupCommandDeliveredInShellArgs: true } : {}),
