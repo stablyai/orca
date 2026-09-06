@@ -77,6 +77,21 @@ describe('activateAiVaultStructuredSession', () => {
     expect(parts.gone).not.toHaveBeenCalled()
   })
 
+  it('still reveals when the inventory refresh itself fails', async () => {
+    // The refresh is an optimization. Letting its failure end the click reinstates the dead end
+    // this whole path exists to remove: a closed chat, and advice to retry that cannot come true.
+    const parts = deps({
+      activate: vi.fn().mockReturnValueOnce(false).mockReturnValue(true),
+      refresh: vi.fn().mockRejectedValueOnce(new Error('structured_session_restore_timeout'))
+    })
+
+    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
+
+    expect(parts.reveal).toHaveBeenCalledOnce()
+    expect(parts.unavailable).not.toHaveBeenCalled()
+    expect(parts.gone).not.toHaveBeenCalled()
+  })
+
   it('does not strand the click when the post-reveal refresh fails', async () => {
     const parts = deps({
       activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true),
@@ -121,6 +136,26 @@ describe('activateAiVaultStructuredSession', () => {
     expect(parts.unavailable).toHaveBeenCalledOnce()
     expect(parts.gone).not.toHaveBeenCalled()
     expect(parts.hostCannotOpen).not.toHaveBeenCalled()
+  })
+
+  it('runs one activation per session however many times the row is clicked', async () => {
+    // Three clicks on a slow row used to run three full sequences and land three toasts.
+    let release!: (outcome: 'gone') => void
+    const pending = new Promise<'gone'>((resolve) => {
+      release = resolve
+    })
+    const parts = deps({ activate: vi.fn(() => false), reveal: vi.fn(() => pending) })
+
+    const clicks = [
+      activateAiVaultStructuredSession(structuredSession, parts),
+      activateAiVaultStructuredSession(structuredSession, parts),
+      activateAiVaultStructuredSession(structuredSession, parts)
+    ]
+    release('gone')
+    await Promise.all(clicks)
+
+    expect(parts.reveal).toHaveBeenCalledOnce()
+    expect(parts.gone).toHaveBeenCalledOnce()
   })
 
   it('ignores a row that is not a structured chat', async () => {

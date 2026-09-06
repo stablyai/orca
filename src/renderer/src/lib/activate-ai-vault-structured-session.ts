@@ -88,15 +88,35 @@ export async function activateAiVaultStructuredSession(
   if (!structured) {
     return false
   }
+  // Why: the click can chain a refresh, a capability probe, a reveal and a second refresh, each
+  // with its own timeout, and nothing on the row says it is working. Without this, an impatient
+  // second click runs the whole sequence again and lands its own toast.
+  const inFlight = activationsInFlight.get(structured.sessionId)
+  if (inFlight) {
+    return inFlight
+  }
+  const activation = activateStructuredSession(structured, deps)
+  activationsInFlight.set(structured.sessionId, activation)
+  try {
+    return await activation
+  } finally {
+    activationsInFlight.delete(structured.sessionId)
+  }
+}
+
+const activationsInFlight = new Map<string, Promise<boolean>>()
+
+async function activateStructuredSession(
+  structured: NonNullable<AiVaultSession['structuredSession']>,
+  deps: StructuredSessionActivationDeps
+): Promise<boolean> {
   const target = { worktreeId: structured.workspaceId, sessionId: structured.sessionId }
   if (!deps.activate(target)) {
-    try {
-      await deps.refresh(structured.workspaceId)
-    } catch {
-      deps.unavailable()
-      return true
-    }
-    if (!deps.activate(target)) {
+    // A refresh alone can answer, and costs one call instead of two. It is only ever an
+    // optimization, so a refresh that fails must fall through to the reveal rather than end the
+    // click: the host republishing the tab is the repair, and it does not need this to have worked.
+    const refreshed = await refreshedWithoutThrowing(deps, structured.workspaceId)
+    if (!refreshed || !deps.activate(target)) {
       // The inventory genuinely does not carry this chat: it was closed, or this process never
       // published it. Ask the host to republish the tab from the record it still holds on disk.
       const revealed = await deps.reveal(target)
@@ -111,7 +131,7 @@ export async function activateAiVaultStructuredSession(
         }
         return true
       }
-      await deps.refresh(structured.workspaceId).catch(() => undefined)
+      await refreshedWithoutThrowing(deps, structured.workspaceId)
       if (!deps.activate(target)) {
         deps.unavailable()
         return true
@@ -122,6 +142,20 @@ export async function activateAiVaultStructuredSession(
     activateAndRevealWorktree(structured.workspaceId)
   }
   return true
+}
+
+/** The inventory refresh is advisory at every call site here, so its failure is a `false`, never a
+ *  thrown end to the click. */
+async function refreshedWithoutThrowing(
+  deps: StructuredSessionActivationDeps,
+  worktreeId: string
+): Promise<boolean> {
+  try {
+    await deps.refresh(worktreeId)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -196,10 +230,9 @@ async function refreshStructuredSessionTabs(worktreeId: string): Promise<void> {
       { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
     )
   )
-  applyStructuredSessionTabSnapshots(
-    [snapshot],
-    environmentId ? `structured-session:${environmentId}` : undefined
-  )
+  // No owner scope: the apply discards any worktree whose execution host is not local before it
+  // reads one, so a paired workspace is carried by the subscription, not by this call.
+  applyStructuredSessionTabSnapshots([snapshot])
 }
 
 async function withStructuredSessionRestoreTimeout<T>(promise: Promise<T>): Promise<T> {
