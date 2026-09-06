@@ -18,7 +18,10 @@ import {
   structuredCallerFor as callerFor,
   supportsStructuredSessions
 } from './structured-agent-session-gate'
-import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
+import {
+  attachFingerprintFields,
+  type AgentSessionAttachParams
+} from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './structured-agent-session-reveal'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
@@ -111,14 +114,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
           const hostFingerprint = computeAgentSessionPayloadFingerprint({
             method: 'agentSession.attach',
             sessionId: params.envelope.sessionId,
-            fields: {
-              location: resolved.location,
-              provider: resolved.provider,
-              agent: resolved.agent,
-              accountHome: resolved.accountHome,
-              runtimeKind: resolved.runtimeKind,
-              expectedRuntimeFence: null
-            }
+            fields: attachFingerprintFields({ ...resolved, envelope: params.envelope })
           })
           await ensureHostInstalled(ctx)
           const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved

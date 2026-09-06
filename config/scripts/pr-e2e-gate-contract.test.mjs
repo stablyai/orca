@@ -168,6 +168,7 @@ describe('PR E2E gate contract', () => {
     expect(changedRun.env.TEST_FILES_JSON).toBe('${{ inputs.test_files }}')
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
+    expect(changedRun.run).toContain('. != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts"')
     expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
     expect(changedRun.run).toContain('grep -l \'@headful\' "${TEST_FILES[@]}"')
     expect(changedRun.run).toContain('E2E_PROJECT_ARGS+=(--project=electron-headful)')
@@ -379,8 +380,7 @@ describe('PR E2E gate contract', () => {
     // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
     const unreachableSpecs = new Set([
       'tests/e2e/ssh-docker-relay-perf.spec.ts',
-      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
-      'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts'
+      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts'
     ])
     // Why comments are stripped: this file's own runner lists the two exempt specs by name in a
     // prose comment. A substring scan over raw text would count any spec merely *discussed* in a

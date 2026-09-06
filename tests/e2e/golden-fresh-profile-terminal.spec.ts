@@ -16,7 +16,7 @@ import {
 test.use({ dismissOnboarding: false, seedTestRepo: false })
 
 async function createGitRepo(): Promise<string> {
-  const root = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-golden-fresh-')))
+  const root = realpathSync.native(await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-golden-fresh-')))
   const repoPath = path.join(root, 'golden-fresh-project')
   mkdirSync(repoPath)
   execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
