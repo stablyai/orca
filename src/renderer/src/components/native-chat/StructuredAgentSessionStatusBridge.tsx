@@ -75,7 +75,7 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
           : 'done',
     prompt: summary.latestPrompt,
     agentType: tab.agentSessionAgent,
-    sessionBoundary: summary.status === 'idle'
+    sessionBoundary: false
   } as const
   const current = store.agentStatusByPaneKey?.[paneKey]
   if (
@@ -83,6 +83,7 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     current.prompt === desired.prompt &&
     current.agentType === desired.agentType &&
     current.sessionBoundary === desired.sessionBoundary &&
+    current.updatedAt === summary.updatedAt &&
     current.terminalTitle === tab.label &&
     current.tabId === tab.id &&
     current.worktreeId === tab.worktreeId &&
@@ -99,7 +100,11 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     paneKey,
     desired,
     tab.label,
-    undefined,
+    {
+      updatedAt: summary.updatedAt,
+      stateStartedAt: summary.updatedAt,
+      evidenceObservedAt: Date.now()
+    },
     { tabId: tab.id, worktreeId: tab.worktreeId },
     {
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),

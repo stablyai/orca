@@ -162,6 +162,9 @@ export class AgentSessionJournal {
 
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
 
+  /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
+  lastActivityAt = (): number => this.state.lastActivityAt
+
   submissions = (): AgentJournalSubmission[] => [...this.state.submissions.values()]
 
   pendingSubmissions = (): AgentJournalSubmission[] =>

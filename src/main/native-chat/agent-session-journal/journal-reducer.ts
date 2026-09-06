@@ -26,6 +26,7 @@ export type JournalReducerState = {
   sessionId: string
   epoch: string
   lastSequence: number
+  lastActivityAt: number
   /** Lowest sequence still individually replayable; rows below it were compacted. */
   oldestSequence: number
   highestFence: number
@@ -45,6 +46,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     sessionId,
     epoch,
     lastSequence: 0,
+    lastActivityAt: 0,
     oldestSequence: 1,
     highestFence: 0,
     items: new Map(),
@@ -62,6 +64,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   if (row.kind === 'epoch') {
     return
   }
+  state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
   if (row.kind === 'item') {
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
     upsertItem(state, itemId, row.revision, {

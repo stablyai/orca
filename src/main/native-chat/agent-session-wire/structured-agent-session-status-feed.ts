@@ -108,7 +108,7 @@ export class StructuredAgentSessionStatusFeed {
       agent: session.params.provider,
       ...projectStructuredAgentSessionStatusSummary(items),
       ...(providerSession ? { providerSession } : {}),
-      updatedAt: this.deps.now()
+      updatedAt: journal.lastActivityAt() || this.deps.now()
     }
   }
 
