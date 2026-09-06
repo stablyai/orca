@@ -93,9 +93,11 @@ export function activateTabNumberShortcut(index: number): boolean {
     return true
   }
 
-  if (target.contentType === 'simulator') {
-    store.setActiveTab(target.id)
-    store.setActiveTabType('simulator')
+  if (target.contentType === 'simulator' || target.contentType === 'canvas') {
+    if (target.contentType === 'simulator') {
+      store.setActiveTab(target.id)
+    }
+    store.setActiveTabType(target.contentType)
     return true
   }
 

@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { CANVAS_CONTEXT_RESPONSE_HEADER } from '../../../shared/canvas-agent-context'
+import { parseAgentHookJson } from '../../../shared/agent-hook-listener/request-body'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
@@ -14,6 +16,7 @@ import { drainAgentHookSpool, type SpoolRecord } from '../../../shared/agent-hoo
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
+import { resolveManagedOrcaCliCommand } from '../../cli/managed-orca-cli-command'
 
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
   /** Start the loopback listener after hydration and spool replay have settled. */
@@ -41,6 +44,17 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       this.hydrateLastStatusFromDisk()
     }
     this.captureHydratedAuthorityCommitments()
+    if (this.endpointDir) {
+      await this.canvasContexts.configure(this.endpointDir, () =>
+        options?.userDataPath
+          ? resolveManagedOrcaCliCommand({
+              isPackaged: this.env !== 'development',
+              userDataPath: options.userDataPath,
+              resourcesPath: process.resourcesPath
+            })
+          : null
+      )
+    }
     // Drain before binding the listener so replay cannot race a live hook during startup.
     if (this.endpointDir) {
       drainAgentHookSpool({
@@ -115,6 +129,19 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
           this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
+          if (req.headers[CANVAS_CONTEXT_RESPONSE_HEADER] === '1') {
+            const payload = (aliasedBody as { payload?: unknown }).payload
+            const raw = typeof payload === 'string' ? parseAgentHookJson(payload) : payload
+            const response =
+              raw && typeof raw === 'object'
+                ? await this.canvasContexts.response(source, event, raw as Record<string, unknown>)
+                : null
+            if (response) {
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify(response))
+              return
+            }
+          }
         }
         res.writeHead(204)
         res.end()

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { Suspense } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -70,6 +70,7 @@ import {
   selectClientHostedBrowserRow
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import BrowserPaneOverlayLayer, { RetainedBrowserPaneOverlayLayer } from './BrowserPaneOverlayLayer'
+import { setEmbeddedBrowserPlacement } from '../host-guest/embedded-browser-placement'
 
 const HOST_ROW = {
   browserPageId: 'page-hosted',
@@ -93,10 +94,37 @@ describe('BrowserPaneOverlayLayer', () => {
 
   afterEach(() => {
     cleanup()
+    setEmbeddedBrowserPlacement('browser-b', null)
     // The row store is module-level, so a leftover row would render an extra pane in every
     // sibling test.
     clearClientHostedBrowserRowSelection()
     applyClientHostedBrowserRows({ worktreeId: 'wt-1', rows: [] })
+  })
+
+  it('embeds the existing inactive pane and releases it without remounting', () => {
+    const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive />)
+    const pane = view.container.querySelector('[data-browser-pane-id="browser-b"]')!
+    const slot = view.container.querySelector<HTMLElement>(
+      '[data-browser-overlay-tab-id="browser-b"]'
+    )!
+    expect(pane.getAttribute('data-browser-pane-active')).toBe('false')
+    act(() =>
+      setEmbeddedBrowserPlacement('browser-b', {
+        left: 20,
+        top: 30,
+        width: 640,
+        height: 400,
+        clipPath: 'inset(0px)',
+        interactive: true
+      })
+    )
+    expect(pane.getAttribute('data-browser-pane-active')).toBe('true')
+    expect(pane.getAttribute('data-browser-find-shortcut-scope')).toBe('owned-target')
+    expect(slot.style.position).toBe('fixed')
+    expect(slot.style.width).toBe('640px')
+    act(() => setEmbeddedBrowserPlacement('browser-b', null))
+    expect(view.container.querySelector('[data-browser-pane-id="browser-b"]')).toBe(pane)
+    expect(pane.getAttribute('data-browser-pane-active')).toBe('false')
   })
 
   it('defers browser slots for a restricted hidden mount, then retains them after activation', () => {

@@ -34,7 +34,8 @@ const mocks = vi.hoisted(() => ({
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn(),
-  hasMaterializedWebRuntimeBrowserPage: vi.fn()
+  hasMaterializedWebRuntimeBrowserPage: vi.fn(),
+  findMaterializedWebRuntimeBrowserWorkspace: vi.fn()
 }))
 
 vi.mock('../store', () => ({
@@ -72,7 +73,8 @@ vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
 }))
 
 vi.mock('./web-runtime-browser-materialization', () => ({
-  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
+  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage,
+  findMaterializedWebRuntimeBrowserWorkspace: mocks.findMaterializedWebRuntimeBrowserWorkspace
 }))
 
 afterEach(() => resetWebSessionCloseIntentForTests())
@@ -87,6 +89,8 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   })
 
   it('applies an empty host snapshot without retaining delayed browser focus', async () => {
+    const onCreated = vi.fn()
+    mocks.findMaterializedWebRuntimeBrowserWorkspace.mockReturnValue({ id: 'adopted-workspace' })
     const snapshot = makeSnapshot()
     let resolveList!: (response: unknown) => void
     const listResponse = new Promise((resolve) => {
@@ -105,10 +109,12 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
     const pendingCreate = createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
-      url: 'https://example.com/'
+      url: 'https://example.com/',
+      onCreated
     })
 
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+    expect(onCreated).not.toHaveBeenCalled()
     expect(mocks.subscribe).toHaveBeenCalledOnce()
     expect(peekWebSessionFocusIntent({ environmentId: ENVIRONMENT_ID }, WORKTREE_ID)).toEqual({
       hostTabId: 'remote-browser-page-1',
@@ -116,6 +122,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     })
     resolveList({ id: 'list', ok: true, result: snapshot })
     await expect(pendingCreate).resolves.toBe(true)
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith('adopted-workspace')
     await vi.waitFor(() => expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
 
     expect(runtimeCall).toHaveBeenNthCalledWith(1, {

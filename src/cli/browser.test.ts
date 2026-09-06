@@ -41,10 +41,12 @@ import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './
 describe('orca cli browser page targeting', () => {
   beforeEach(() => {
     callMock.mockReset()
+    vi.stubEnv('ORCA_PANE_KEY', '')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('passes explicit page ids to snapshot without resolving the current worktree', async () => {
@@ -150,6 +152,18 @@ describe('orca cli browser page targeting', () => {
     const call = callMock.mock.calls[0]
     expect(call[0]).toBe('browser.tabSwitch')
     expect(call[1]).not.toHaveProperty('focus')
+  })
+
+  it('passes the calling pane to browser creation without changing page targeting', async () => {
+    vi.stubEnv('ORCA_PANE_KEY', 'terminal:11111111-1111-4111-8111-111111111111')
+    queueFixtures(callMock, okFixture('req_create', { browserPageId: 'page-3' }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['tab', 'create', '--worktree', 'all', '--json'], '/tmp/repo')
+    expect(callMock).toHaveBeenCalledWith(
+      'browser.tabCreate',
+      expect.objectContaining({ originPaneKey: process.env.ORCA_PANE_KEY }),
+      { timeoutMs: 60_000 }
+    )
   })
 
   it('passes explicit profile ids to tab create', async () => {

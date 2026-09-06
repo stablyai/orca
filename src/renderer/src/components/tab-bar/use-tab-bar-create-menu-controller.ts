@@ -12,10 +12,9 @@ import { useAppStore } from '../../store'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
-import {
-  buildWindowsShellMenuEntries,
-  type WindowsShellMenuEntry
-} from './tab-bar-windows-shell-options'
+import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
+import type { TabBarCreateMenuController } from './tab-bar-create-menu-controller-types'
+export type { TabBarCreateMenuController } from './tab-bar-create-menu-controller-types'
 import type {
   getProjectRuntimeShellMenuMode,
   resolveWindowsPowerShellImplementationSetting
@@ -23,22 +22,6 @@ import type {
 
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
-
-export type TabBarCreateMenuController = {
-  newTabMenuOpen: boolean
-  setNewTabMenuOpen: (open: boolean) => void
-  setCreateMenuQuery: (query: string) => void
-  createMenuOptions: TabCreateMenuOption[]
-  windowsShellEntries: WindowsShellMenuEntry[] | undefined
-  handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
-  launchAgentFromNewTabEntry: (agent: TuiAgent) => void
-  runPendingNewTabMenuFocusAfterClose: () => void
-  clearPendingNewTabMenuFocusOnUnmount: (node: HTMLDivElement | null) => void
-  queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
-  queueTerminalTabFocusAfterNewTabMenuClose: (tabId: string) => void
-  queueFocusAfterNewTabMenuClose: (focus: () => void) => void
-  showStaticCreateMenuItems: boolean
-}
 
 export function useTabBarCreateMenuController({
   worktreeId,
@@ -57,6 +40,7 @@ export function useTabBarCreateMenuController({
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
+  onNewCanvasTab,
   onNewSimulatorTab,
   onNewFileTab,
   onOpenFileTab
@@ -79,6 +63,7 @@ export function useTabBarCreateMenuController({
   onNewTerminalTab: () => void
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onNewCanvasTab?: () => void
   onNewSimulatorTab?: () => void
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
@@ -162,6 +147,7 @@ export function useTabBarCreateMenuController({
   const createMenuOptions = useMemo(
     () =>
       buildTabCreateMenuOptions({
+        hasNewCanvas: Boolean(onNewCanvasTab),
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
@@ -179,6 +165,7 @@ export function useTabBarCreateMenuController({
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       onNewFileTab,
+      onNewCanvasTab,
       onNewSimulatorTab,
       onOpenFileTab,
       terminalOnly,
@@ -207,6 +194,9 @@ export function useTabBarCreateMenuController({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-canvas':
+        onNewCanvasTab?.()
         break
       case 'new-markdown':
         onNewFileTab?.()

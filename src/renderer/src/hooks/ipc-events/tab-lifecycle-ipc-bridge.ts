@@ -100,6 +100,15 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
       const explicitTarget = payload?.sourceId
         ? resolveBrowserWorkspaceOwner(store, payload.sourceId)
         : null
+      if (!payload?.sourceId && store.activeTabType === 'canvas' && store.activeWorktreeId) {
+        const active = store.getActiveTab(store.activeWorktreeId)
+        if (active?.contentType === 'canvas') {
+          if (!active.isPinned) {
+            store.closeUnifiedTab(active.id)
+          }
+          return
+        }
+      }
       if (payload?.sourceId && !explicitTarget) {
         // Stale id (guest closed between keydown and IPC) = no-op, never the ambient fallback.
         return

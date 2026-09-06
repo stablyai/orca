@@ -1,5 +1,5 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { FilePlus, FileText, Globe, Smartphone, TerminalSquare, Network } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -55,6 +55,7 @@ export function renderTabBarStaticCreateMenu({
     onNewTerminalTab,
     onNewTerminalWithShell,
     onNewBrowserTab,
+    onNewCanvasTab,
     onNewSimulatorTab,
     onNewFileTab,
     onOpenFileTab
@@ -110,6 +111,16 @@ export function renderTabBarStaticCreateMenu({
         <Globe className="size-4 text-muted-foreground" />
         {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
         <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    ) : null
+  const newCanvasMenuItem =
+    !terminalOnly && onNewCanvasTab ? (
+      <DropdownMenuItem
+        onSelect={onNewCanvasTab}
+        className="gap-2 rounded-md px-2 py-1.5 text-xs font-medium"
+      >
+        <Network className="size-4 text-muted-foreground" />
+        {translate('agentCanvas.newTab', 'New Canvas')}
       </DropdownMenuItem>
     ) : null
   const newSimulatorMenuItem =
@@ -184,6 +195,7 @@ export function renderTabBarStaticCreateMenu({
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {newCanvasMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
     </>
@@ -191,6 +203,7 @@ export function renderTabBarStaticCreateMenu({
     <>
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {newCanvasMenuItem}
       {newMarkdownMenuItem}
       {openMarkdownMenuItem}
       {newSimulatorMenuItem}

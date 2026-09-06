@@ -22,6 +22,7 @@ import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-brow
 export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engine: SearchEngine }
 
 export type OpenWorkspaceBrowserTabRequest = {
+  onCreated?: (workspaceId: string) => void
   workspaceId: string
   targetGroupId?: string
   url: string
@@ -186,7 +187,7 @@ function createClientBrowserTab(
   presentation: { error: string; title: string }
 ): void {
   try {
-    state.createBrowserTab(request.workspaceId, request.url, {
+    const created = state.createBrowserTab(request.workspaceId, request.url, {
       activate: request.focusOnCreate !== false,
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
@@ -196,6 +197,7 @@ function createClientBrowserTab(
       targetGroupId: request.targetGroupId,
       title: presentation.title
     })
+    request.onCreated?.(created.id)
   } catch (error) {
     throw openFailure(presentation.error, 'client tab creation rejected', error)
   }
@@ -300,7 +302,8 @@ export async function openWorkspaceBrowserTab(
       selectWorktree: request.selectWorktree !== false,
       stagedTitle: presentation.title,
       stagedFocusAddressBar: false,
-      failureLogMode: 'operation-only'
+      failureLogMode: 'operation-only',
+      onCreated: request.onCreated
     })
   } catch (error) {
     throw openFailure(presentation.error, 'runtime browser tab creation failed', error)
