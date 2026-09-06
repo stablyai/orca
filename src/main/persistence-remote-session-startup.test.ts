@@ -100,6 +100,8 @@ describe('remote session startup ownership', () => {
     seed.setWorkspaceSession(browserSession(), HOST)
     seed.flush()
     const reloaded = createStore()
+    // Assert the row survived load first, or an empty partition below would prove nothing.
+    expect(reloaded.getWorkspaceSession(HOST).browserPagesByWorkspace).not.toEqual({})
     reloaded.removeProjectForHost(REPO, HOST)
     reloaded.flush()
     expect(createStore().getWorkspaceSession(HOST).browserPagesByWorkspace).toEqual({})

@@ -136,8 +136,9 @@ export class RepoLifecycleOperations {
   /**
    * Drop every persisted row owned by a repo id that is no longer registered.
    *
-   * Runs at load to reach leftover local rows after deregistration. Remote-owned rows await
-   * authoritative removal; their absence from the desktop catalog cannot establish deletion.
+   * Runs at load to reach leftover local rows after deregistration. Rows owned by a `runtime:*`
+   * host are exempt: this runs before pairing, so their absence from the local catalog cannot
+   * establish deletion. Only an explicit `removeProjectForHost` retires them.
    */
   sweepDeregisteredRepoResidue(): string[] {
     const state = this[repoLifecycleOperationsContext].runtime.state

@@ -209,7 +209,7 @@ export function collectWorkspaceSessionWorktreeOwners(
   return owners
 }
 
-function addWorkspaceSessionWorktreeOwners(
+export function addWorkspaceSessionWorktreeOwners(
   session: WorkspaceSessionState,
   collector: WorktreeOwnerCandidateCollector
 ): void {

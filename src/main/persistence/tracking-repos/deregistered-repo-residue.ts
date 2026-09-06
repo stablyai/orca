@@ -4,48 +4,56 @@ import {
   getWorktreeIdFromHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { addPersistedSessionWorktreeOwners } from '../restoring-sessions/session-worktree-ownership'
+import { addWorkspaceSessionWorktreeOwners } from '../restoring-sessions/session-worktree-ownership'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
 import { ownerKeyWorktreeIds } from '../../orca-profiles/profile-project-worktree-identity'
 
+/** A `runtime:*` host addresses a paired Orca desktop's rows, whose catalog lives on that host. */
+const isPairedHost = (hostId: string | null | undefined): boolean =>
+  parseExecutionHostId(hostId)?.kind === 'runtime'
+
+/** Repo ids an owner key can name, across both readings (see `ownerKeyWorktreeIds`). */
+function ownerKeyRepoIds(ownerKey: string | null | undefined): string[] {
+  return ownerKey
+    ? ownerKeyWorktreeIds(ownerKey).flatMap((worktreeId) => {
+        const repoId = splitWorktreeId(worktreeId)?.repoId
+        return repoId ? [repoId] : []
+      })
+    : []
+}
+
 /**
  * Repo ids that still own persisted rows but no longer appear in `state.repos`.
  *
- * Remote catalog absence is not removal evidence: paired repos are never locally registered.
+ * Rows owned by a `runtime:*` host are held live instead of swept: a paired client mirrors that
+ * host's sessions without ever registering its repos, and this runs in the Store constructor,
+ * before pairing, so catalog absence there proves nothing (#17776 read it as proof and deleted
+ * live sessions). The cost is that residue outliving a removal is no longer swept for those hosts.
  */
 export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
   const liveRepoIds = new Set(state.repos.map((repo) => repo.id))
-  const retainRemoteOwner = (ownerKey: string | null | undefined): void => {
-    if (!ownerKey) {
-      return
-    }
-    for (const worktreeId of ownerKeyWorktreeIds(ownerKey)) {
-      const repoId = splitWorktreeId(worktreeId)?.repoId
-      if (repoId) {
-        liveRepoIds.add(repoId)
-      }
+  const retainOwner = (ownerKey: string | null | undefined): void => {
+    for (const repoId of ownerKeyRepoIds(ownerKey)) {
+      liveRepoIds.add(repoId)
     }
   }
+  // `owners` goes unread: the walker only ever calls `addOwner`.
+  const retainCollector = { owners: new Set<string>(), addOwner: retainOwner }
   for (const [hostId, session] of Object.entries(state.workspaceSessionsByHostId ?? {})) {
-    if (session && parseExecutionHostId(hostId)?.kind === 'runtime') {
-      addPersistedSessionWorktreeOwners(
-        { workspaceSession: session },
-        { owners: new Set(), addOwner: retainRemoteOwner }
-      )
+    if (session && isPairedHost(hostId)) {
+      addWorkspaceSessionWorktreeOwners(session, retainCollector)
     }
   }
   for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
-    if (parseExecutionHostId(meta.hostId)?.kind === 'runtime') {
-      retainRemoteOwner(worktreeId)
+    if (isPairedHost(meta.hostId)) {
+      retainOwner(worktreeId)
     }
   }
   for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
-    if (
-      parseExecutionHostId(getExecutionHostIdFromWorktreeHostIdentity(alias))?.kind === 'runtime'
-    ) {
-      retainRemoteOwner(getWorktreeIdFromHostIdentity(alias))
+    if (isPairedHost(getExecutionHostIdFromWorktreeHostIdentity(alias))) {
+      retainOwner(getWorktreeIdFromHostIdentity(alias))
     }
   }
   const orphanRepoIds = new Set<string>()
@@ -64,10 +72,7 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
    * other reading would hand the removal pass -- which accepts either -- a live row to delete.
    */
   const addOwnerKey = (ownerKey: string): void => {
-    const repoIds = ownerKeyWorktreeIds(ownerKey).flatMap((worktreeId) => {
-      const repoId = splitWorktreeId(worktreeId)?.repoId
-      return repoId ? [repoId] : []
-    })
+    const repoIds = ownerKeyRepoIds(ownerKey)
     if (repoIds.length > 0 && repoIds.every((repoId) => !liveRepoIds.has(repoId))) {
       for (const repoId of repoIds) {
         orphanRepoIds.add(repoId)
