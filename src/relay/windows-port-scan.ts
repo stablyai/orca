@@ -128,8 +128,9 @@ export function resetWindowsPortScanDiagnosticsForTests(): void {
  *
  * Names are optional data — the panel renders host/port/pid without them — so a
  * host that cannot read the table keeps its rows. This shares whatever scan the
- * table already runs rather than avoiding one: without the native addon that
- * scan is itself a `powershell.exe` CIM query, just not a second one.
+ * table already runs rather than avoiding one, and on a relay that scan is a
+ * `powershell.exe` CIM query -- no released relay carries the native addon, so
+ * that is the path every SSH host takes, not a fallback.
  * See docs/reference/windows-process-enumeration.md.
  *
  * Only `name` is read here, so this wants `readWindowsProcessIdentityTable`
