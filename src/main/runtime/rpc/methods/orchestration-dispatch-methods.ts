@@ -199,12 +199,6 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
               runId: run.id
             })
           }
-          if (!ctx || (ctx.status !== 'pending' && ctx.status !== 'dispatched')) {
-            throw new OrchestrationError(
-              'dispatch_not_active',
-              `Task ${params.task} has no active dispatch to re-authorize.`
-            )
-          }
           const workerHandle = ctx.assignee_handle
           const authority = runtime.getOrchestrationDispatchAuthority(workerHandle)
           const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(workerHandle) ?? undefined
