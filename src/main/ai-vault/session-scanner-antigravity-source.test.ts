@@ -105,6 +105,44 @@ describe('Antigravity AI Vault discovery', () => {
     ).toEqual([sessionId])
   })
 
+  it('uses the conversation id when an earlier setup prompt became the session title', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-conversation-id-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const sessionId = 'dddddddd-eeee-4fff-8aaa-bbbbbbbbbbbb'
+    const workspace = join(root, 'active-workspace')
+    await writeAntigravityTranscript(roots.antigravityBrainDir, sessionId, [
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        created_at: '2026-07-15T11:39:10.000Z',
+        content: '<USER_REQUEST>Connectivity setup only</USER_REQUEST>'
+      },
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        created_at: '2026-07-15T11:40:00.000Z',
+        content: `<USER_REQUEST>${'long dispatched worker prompt '.repeat(8)}</USER_REQUEST>`
+      }
+    ])
+    await writeAntigravityHistory(roots.antigravityBrainDir, [
+      {
+        conversationId: sessionId,
+        display: 'A later prompt with a different title',
+        timestamp: Date.parse('2026-07-15T11:40:00.100Z'),
+        workspace
+      }
+    ])
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
+
+    expect(result.sessions[0]).toMatchObject({
+      sessionId,
+      title: 'Connectivity setup only',
+      cwd: workspace
+    })
+  })
+
   it('keeps workspace unknown when matching history rows are ambiguous', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-ambiguous-'))
     tempRoots.push(root)
