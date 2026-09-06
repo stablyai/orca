@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import { RelayDispatcher, type RelayClientSessionIdentity } from './dispatcher'
+import { boundedPtyRecoveryEnd } from './relay-pty-source-activation'
 import { encodeJsonRpcFrame, MessageType } from './protocol'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
@@ -118,7 +119,12 @@ it.each([0, 4])(
         acceptedSourceEndSu: checkpoint
       }
     )
-    expect(recovery).toMatchObject({ status: 'pending', checkpointSourceEndSu: checkpoint })
+    // The fence lands on the checkpoint itself: the tail drains live rather than behind it.
+    expect(recovery).toMatchObject({
+      status: 'pending',
+      checkpointSourceEndSu: checkpoint,
+      recoveryEndSu: checkpoint
+    })
     await flushRequests()
     // The receiver cannot ACK quarantined data until this fence arrives.
     expect(replacement.filter((frame) => frame.method === 'pty.recoveryComplete')).toHaveLength(1)
@@ -166,3 +172,10 @@ it.each([0, 4])(
     expect(publication.getDebugSnapshot().outstandingSourceUnits).toBe(0)
   }
 )
+
+it('fences at the checkpoint only once the tail outgrows the window', () => {
+  const tail = (receivedEndSu: number) => ({ receivedEndSu, creditedEndSu: 4, windowSu: 4 })
+  // Exactly one window is still deliverable without credit, so it keeps the ordinary fence.
+  expect(boundedPtyRecoveryEnd(tail(8))).toBe(8)
+  expect(boundedPtyRecoveryEnd(tail(9))).toBe(4)
+})
