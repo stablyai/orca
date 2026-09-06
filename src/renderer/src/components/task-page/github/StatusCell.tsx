@@ -31,6 +31,10 @@ import { cn } from '@/lib/utils'
 import { CircleDot, ChevronDown, Copy, CheckCircle2, Ban, ChevronRight } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
 import { TaskPageGitHubDuplicatePicker } from './DuplicatePicker'
+// Why a shared constant: this selector runs on every store write while the picker
+// is closed, which is nearly always; a fresh [] there is pure allocation.
+const NO_DUPLICATE_CANDIDATES: GitHubWorkItem[] = []
+
 export function GHStatusCell({
   item,
   repo,
@@ -53,7 +57,7 @@ export function GHStatusCell({
   const duplicateIssueCandidates = useAppStore(
     useShallow((s) => {
       if (!duplicatePickerOpen) {
-        return []
+        return NO_DUPLICATE_CANDIDATES
       }
       const deduped = new Map<number, GitHubWorkItem>()
       for (const entry of Object.values(s.workItemsCache)) {

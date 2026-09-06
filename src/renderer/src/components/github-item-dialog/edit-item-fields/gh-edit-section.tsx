@@ -28,6 +28,10 @@ import {
 import { GHEditSectionTopColumns } from './gh-edit-section-top-columns'
 import { GHEditSectionHorizontal } from './gh-edit-section-horizontal'
 
+// Why a shared constant: this selector runs on every store write while the picker
+// is closed, which is nearly always; a fresh [] there is pure allocation.
+const NO_DUPLICATE_CANDIDATES: GitHubWorkItem[] = []
+
 export function GHEditSection({
   item,
   repoPath,
@@ -77,7 +81,7 @@ export function GHEditSection({
   const duplicateIssueCandidates = useAppStore(
     useShallow((s) => {
       if (!duplicatePickerOpen) {
-        return []
+        return NO_DUPLICATE_CANDIDATES
       }
       const deduped = new Map<number, GitHubWorkItem>()
       for (const entry of Object.values(s.workItemsCache)) {
