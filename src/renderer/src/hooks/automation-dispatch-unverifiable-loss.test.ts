@@ -69,6 +69,34 @@ describe('automation dispatch completion on an unverifiable loss', () => {
     expect(releaseTerminalOwnership).not.toHaveBeenCalled()
   })
 
+  it('does not force-close a live process on done before its final output and natural exit', async () => {
+    const completion = await createCompletion()
+    finalizeTerminalOwnership.mockImplementation(() => {
+      completion.handleExit(-1)
+      return true
+    })
+    completion.appendOutput('mid-work sentence\n')
+    completion.handleAgentDone()
+    await Promise.resolve()
+    expect(finalizeTerminalOwnership).not.toHaveBeenCalled()
+    expect(markDispatchResult).not.toHaveBeenCalled()
+
+    completion.appendOutput('CONFIG_STAMP: ORCA-HEALTH-2026-09-04-R14\nSTATUS: DONE')
+    completion.handleExit(0)
+    await vi.waitFor(() => expect(markDispatchResult).toHaveBeenCalledOnce())
+    expect(markDispatchResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'completed',
+        terminalPtyId: null,
+        outputSnapshot: expect.objectContaining({
+          content: expect.stringContaining('STATUS: DONE')
+        })
+      })
+    )
+    expect(finalizeTerminalOwnership).toHaveBeenCalledOnce()
+    expect(releaseTerminalOwnership).not.toHaveBeenCalled()
+  })
+
   it('still reports a real automation failure as dispatch_failed', async () => {
     const completion = await createCompletion()
 
@@ -85,7 +113,7 @@ describe('automation dispatch completion on an unverifiable loss', () => {
     expect(finalizeTerminalOwnership).not.toHaveBeenCalled()
   })
 
-  it('lets a later done still complete a run whose contact was lost', async () => {
+  it('requires a proven exit even if a later done arrives after contact loss', async () => {
     // The loss withheld a verdict rather than settling one, so positive
     // evidence arriving afterwards must still be able to close the run.
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
@@ -94,6 +122,10 @@ describe('automation dispatch completion on an unverifiable loss', () => {
     completion.handleExit(-1)
     await vi.waitFor(() => expect(releaseTerminalOwnership).toHaveBeenCalledOnce())
     completion.handleAgentDone()
+    await Promise.resolve()
+    expect(markDispatchResult).not.toHaveBeenCalled()
+    expect(finalizeTerminalOwnership).not.toHaveBeenCalled()
+    completion.handleExit(0)
 
     await vi.waitFor(() =>
       expect(markDispatchResult).toHaveBeenCalledWith(

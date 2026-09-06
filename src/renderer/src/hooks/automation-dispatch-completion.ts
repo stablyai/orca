@@ -20,6 +20,7 @@ type MarkDispatchResult = (result: AutomationDispatchResult) => Promise<void>
 
 export function createAutomationDispatchCompletion(args: {
   run: AutomationRun
+  requireProcessExit?: boolean
   worktree: Worktree
   precheckResult: AutomationPrecheckResult | null
   markDispatchResult: MarkDispatchResult
@@ -50,6 +51,10 @@ export function createAutomationDispatchCompletion(args: {
     if (completionMarked) {
       return
     }
+    if (args.requireProcessExit !== false) {
+      // A turn can finish before the process; closing here would kill its final capture.
+      return
+    }
     completionMarked = true
     cleanupRunObservers()
     try {
@@ -65,26 +70,6 @@ export function createAutomationDispatchCompletion(args: {
     } catch (error) {
       args.releaseTerminalOwnership()
       throw error
-    }
-    if (args.finalizeTerminalOwnership()) {
-      await clearRetiredRunTerminalIdentity()
-    }
-  }
-  const clearRetiredRunTerminalIdentity = async (): Promise<void> => {
-    // Why: the owned terminal was just retired, so the run's pane/pty
-    // pointers now reference a closed tab. Drop them (best-effort) so
-    // "View run" resolves to the workspace/snapshot instead of dead-ending
-    // on an unavailable terminal.
-    try {
-      await args.markDispatchResult({
-        runId: args.run.id,
-        status: 'completed',
-        terminalSessionId: null,
-        terminalPaneKey: null,
-        terminalPtyId: null
-      })
-    } catch (error) {
-      console.error('[automations] Failed to clear retired terminal identity:', error)
     }
   }
   /**
@@ -119,10 +104,16 @@ export function createAutomationDispatchCompletion(args: {
     }
     completionMarked = true
     cleanupRunObservers()
+    if (code === 0) {
+      args.finalizeTerminalOwnership()
+    }
     try {
       await args.markDispatchResult({
         runId: args.run.id,
         status: code === 0 ? 'completed' : 'dispatch_failed',
+        ...(code === 0
+          ? { terminalSessionId: null, terminalPaneKey: null, terminalPtyId: null }
+          : {}),
         workspaceId: args.worktree.id,
         workspaceDisplayName: args.worktree.displayName,
         outputSnapshot: getOutputSnapshot(),
@@ -133,11 +124,7 @@ export function createAutomationDispatchCompletion(args: {
       args.releaseTerminalOwnership()
       throw error
     }
-    if (code === 0) {
-      if (args.finalizeTerminalOwnership()) {
-        await clearRetiredRunTerminalIdentity()
-      }
-    } else {
+    if (code !== 0) {
       args.releaseTerminalOwnership()
     }
   }
@@ -166,7 +153,7 @@ export function createAutomationDispatchCompletion(args: {
       pendingExitCode = code
       return
     }
-    settleLateResult(markExitResult(code))
+    settleLateResult(Promise.resolve().then(() => markExitResult(code)))
   }
   const observeAgentStatus = (
     targetPaneKey: string,
@@ -253,10 +240,10 @@ export function createAutomationDispatchCompletion(args: {
     },
     settlePendingAfterDispatch: async () => {
       dispatchMarked = true
-      if (pendingDone) {
-        await markCompletionResult()
-      } else if (pendingExitCode !== null) {
+      if (pendingExitCode !== null) {
         await markExitResult(pendingExitCode)
+      } else if (pendingDone) {
+        await markCompletionResult()
       }
     }
   }

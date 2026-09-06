@@ -26,6 +26,10 @@ function acquireReuseDispatchTab(tabId: string): (() => void) | null {
   return () => activeReuseDispatchTabIds.delete(tabId)
 }
 
+/**
+ * Dispatches one automation run into a background agent session and persists
+ * completion only after the submitted prompt reaches its own working state.
+ */
 export async function handleAutomationDispatchRequest({
   automation,
   run,
@@ -37,6 +41,7 @@ export async function handleAutomationDispatchRequest({
     // here would arrive second and invalidate every host in the catalog.
     await window.api.automations.markDispatchResult(result)
   }
+  const reuseSession = run.reuseSession ?? automation.reuseSession
   const state = useAppStore.getState()
   const focusBeforeDispatch = {
     activeView: state.activeView,
@@ -85,6 +90,7 @@ export async function handleAutomationDispatchRequest({
     }
     const completion = createAutomationDispatchCompletion({
       run,
+      requireProcessExit: !reuseSession,
       worktree,
       precheckResult: resolved.context.precheckResult,
       markDispatchResult,
@@ -92,7 +98,7 @@ export async function handleAutomationDispatchRequest({
       finalizeTerminalOwnership
     })
     const dispatchStartedAt = Date.now()
-    if (automation.reuseSession) {
+    if (reuseSession) {
       const reusableSession = findReusableAutomationSession({
         automationId: automation.id,
         agentId: automation.agentId,
@@ -164,6 +170,7 @@ export async function handleAutomationDispatchRequest({
         }
       }
     }
+    let backgroundSawWorking = false
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
@@ -173,8 +180,14 @@ export async function handleAutomationDispatchRequest({
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
         completion.captureAssistantMessage(payload.lastAssistantMessage)
-        // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
-        if (payload.state !== 'done' || payload.sessionBoundary === true) {
+        if (payload.state === 'working') {
+          backgroundSawWorking = true
+          return
+        }
+        // Why: fresh launches can replay a stale non-boundary done before the
+        // submitted automation prompt reaches working. Completion requires the
+        // prompt's own working edge, just like reuse-session dispatches.
+        if (payload.state !== 'done' || payload.sessionBoundary === true || !backgroundSawWorking) {
           return
         }
         completion.handleAgentDone()
@@ -187,13 +200,15 @@ export async function handleAutomationDispatchRequest({
       throw new Error('Unable to build an agent launch plan.')
     }
     terminalOwnership = result.terminalOwnership
-    if (automation.reuseSession) {
+    if (reuseSession) {
       // Why: the first fresh launch is the seed for later reuse and must
       // survive completion under the same policy as an already-reused tab.
       releaseTerminalOwnership()
     }
     const launchedTabId = result.tabId
-    completion.observeAgentStatus(result.paneKey, dispatchStartedAt)
+    completion.observeAgentStatus(result.paneKey, dispatchStartedAt, {
+      requireWorkingAfterStart: true
+    })
     try {
       await markDispatchResult({
         runId: run.id,
