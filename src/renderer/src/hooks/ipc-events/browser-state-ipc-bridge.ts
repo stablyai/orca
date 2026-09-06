@@ -81,7 +81,7 @@ export function registerBrowserStateIpcBridge(
     })
   )
   unsubs.push(
-    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url }) => {
+    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
       const store = useAppStore.getState()
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
@@ -96,6 +96,7 @@ export function registerBrowserStateIpcBridge(
       )
       store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
+        activate: activate ?? true,
         ...(sourceTab
           ? {
               sessionProfileId: sourceTab.sessionProfileId,
