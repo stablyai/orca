@@ -6,6 +6,7 @@ import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import { getRelativePathInsideRoot } from '@/lib/path'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
@@ -21,6 +22,13 @@ import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import {
+  getMonacoFileModelUri,
+  installMonacoTypeScriptDefinitionNavigation,
+  resolveMonacoTypeScriptWorkspaceRoot,
+  useMonacoTypeScriptWorkspaceModels
+} from './monaco-typescript-workspace-models'
+import { detectLanguage } from '@/lib/language-detect'
 
 type MonacoEditorProps = {
   fileId: string
@@ -38,6 +46,7 @@ type MonacoEditorProps = {
   revealMatchLength?: number
   markdownDocuments?: MarkdownDocument[]
   worktreeId?: string
+  runtimeEnvironmentId?: string | null
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
@@ -60,6 +69,7 @@ export default function MonacoEditor({
   revealMatchLength,
   markdownDocuments,
   worktreeId,
+  runtimeEnvironmentId,
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
@@ -88,6 +98,7 @@ export default function MonacoEditor({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine)
+  const openFile = useAppStore((s) => s.openFile)
   const editorFontSize = computeEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
@@ -104,6 +115,7 @@ export default function MonacoEditor({
     ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
     : null
   const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
+  const monacoModelPath = useMemo(() => getMonacoFileModelUri(filePath), [filePath])
   const autoHeightUsesInternalScroll =
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
   // Why: @monaco-editor/react skips its value→model sync on the first post-remount render, so retained models need an explicit sync or they show stale text.
@@ -136,6 +148,13 @@ export default function MonacoEditor({
     language,
     worktreeId,
     markdownAnnotationsEnabled
+  })
+  useMonacoTypeScriptWorkspaceModels({
+    filePath,
+    relativePath,
+    worktreeId,
+    runtimeEnvironmentId,
+    language
   })
 
   // Why useLayoutEffect: cleanup runs before @monaco-editor/react disposes the editor, so getScrollTop() still reads valid state on unmount.
@@ -201,6 +220,70 @@ export default function MonacoEditor({
     gutterMenu: { setGutterMenuOpen, setGutterMenuPoint, setGutterMenuLine }
   })
 
+  useEffect(() => {
+    if (!mountedEditor || !worktreeId || runtimeEnvironmentId?.trim()) {
+      return
+    }
+    const rootPath = resolveMonacoTypeScriptWorkspaceRoot(filePath, relativePath, worktreeId)
+    if (!rootPath) {
+      return
+    }
+    const disposable = installMonacoTypeScriptDefinitionNavigation({
+      editor: mountedEditor,
+      filePath,
+      modelUri: monacoModelPath,
+      worktreeId,
+      onDefinition: (definition) => {
+        const matchLength = Math.max(0, definition.range.endColumn - definition.range.startColumn)
+        if (definition.filePath === filePath) {
+          queueReveal(
+            mountedEditor,
+            definition.range.startLineNumber,
+            definition.range.startColumn,
+            matchLength,
+            () => {}
+          )
+          return
+        }
+        const definitionRelativePath =
+          getRelativePathInsideRoot(definition.filePath, rootPath) ?? definition.filePath
+        const definitionFileId = openFile(
+          {
+            filePath: definition.filePath,
+            relativePath: definitionRelativePath,
+            worktreeId,
+            language: detectLanguage(definitionRelativePath),
+            mode: 'edit'
+          },
+          { focusEditor: true }
+        )
+        setPendingEditorReveal(null)
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setPendingEditorReveal({
+              filePath: definition.filePath,
+              fileId: definitionFileId,
+              line: definition.range.startLineNumber,
+              column: definition.range.startColumn,
+              matchLength
+            })
+          })
+        })
+      }
+    })
+    return () => disposable.dispose()
+  }, [
+    filePath,
+    monacoModelPath,
+    mountedEditor,
+    openFile,
+    queueReveal,
+    relativePath,
+    runtimeEnvironmentId,
+    setPendingEditorReveal,
+    worktreeId
+  ])
+
   // Navigate to line and highlight match when requested (for already-mounted editor)
   useEffect(() => {
     if (!revealLine || !editorRef.current) {
@@ -259,7 +342,7 @@ export default function MonacoEditor({
           // Why: Monaco owns its rendered line surface, so align its selection-clipboard with the app opt-out (the global DOM hook can't).
           selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
         }}
-        path={filePath}
+        path={monacoModelPath}
         // Why: Orca owns cursor/scroll restoration, so disable @monaco-editor/react's competing view-state Map.
         saveViewState={false}
         keepCurrentModel
