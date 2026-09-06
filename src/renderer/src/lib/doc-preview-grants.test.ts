@@ -33,6 +33,15 @@ beforeEach(() => {
 })
 
 describe('buildDocPreviewGrantRequest', () => {
+  it('scopes a local grant to the workspace and document directory', () => {
+    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/report.html')).toEqual({
+      owner: { kind: 'local' },
+      requestBase: '/srv/repo',
+      root: '/srv/repo/docs',
+      entryRelativePath: 'docs/report.html'
+    })
+  })
+
   // A document outside every workspace resolves and authorizes from its own directory.
   it('roots an SSH grant outside the workspace at the document directory', () => {
     mocks.connectionId = 'ssh-1'
@@ -79,8 +88,19 @@ describe('buildDocPreviewGrantRequest', () => {
     expect(buildDocPreviewGrantRequest(state, 'wt-1', '/var/tmp/report.html')).toBeNull()
   })
 
-  it('refuses a local workspace, which has no remote channel to read over', () => {
-    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/tmp/report.html')).toBeNull()
+  it('makes an outside-workspace local grant entry-only in its document directory', () => {
+    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/tmp/report.html')).toEqual({
+      owner: { kind: 'local' },
+      requestBase: '/tmp',
+      root: '/tmp',
+      entryRelativePath: 'report.html'
+    })
+  })
+
+  it('refuses to assume a local owner while workspace ownership is unresolved', () => {
+    mocks.connectionId = undefined
+
+    expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/report.html')).toBeNull()
   })
 })
 

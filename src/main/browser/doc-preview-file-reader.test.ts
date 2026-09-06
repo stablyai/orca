@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeEnvironment: vi.fn(),
+  readAuthorizedDocPreviewFile: vi.fn(),
   readDocPreviewFile: vi.fn(),
   requireSshFilesystemProvider: vi.fn()
 }))
@@ -10,6 +11,9 @@ vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 vi.mock('../persistence', () => ({ getCanonicalUserDataPath: () => '/user-data' }))
+vi.mock('../../shared/doc-preview-file-access', () => ({
+  readAuthorizedDocPreviewFile: mocks.readAuthorizedDocPreviewFile
+}))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   requireSshFilesystemProvider: mocks.requireSshFilesystemProvider
 }))
@@ -50,6 +54,16 @@ function runtimeGrant(root = '/srv/repo/docs'): ReturnType<typeof mintDocPreview
   return grant
 }
 
+function localGrant(): ReturnType<typeof mintDocPreviewGrant> {
+  return mintDocPreviewGrant({
+    owner: { kind: 'local' },
+    requestBase: '/srv/repo',
+    root: '/srv/repo/docs',
+    entryRelativePath: 'docs/index.html',
+    browserPageId: 'page-1'
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   revokeAllDocPreviewGrants()
@@ -64,6 +78,53 @@ describe('docPreviewContentType', () => {
     expect(docPreviewContentType('assets/app.CSS')).toBe('text/css; charset=utf-8')
     expect(docPreviewContentType('assets/logo.png')).toBe('image/png')
     expect(docPreviewContentType('data.bin')).toBe('application/octet-stream')
+  })
+})
+
+describe('readDocPreviewFile — local owner', () => {
+  it('uses the bounded canonical filesystem reader', async () => {
+    mocks.readAuthorizedDocPreviewFile.mockResolvedValue({
+      content: '<h1>local</h1>',
+      isBinary: false
+    })
+
+    const outcome = await readDocPreviewFile(localGrant(), 'docs/index.html')
+
+    expect(mocks.readAuthorizedDocPreviewFile).toHaveBeenCalledWith({
+      boundaryPath: '/srv/repo',
+      entryPath: '/srv/repo/docs/index.html',
+      implicitRootPath: '/srv/repo/docs',
+      authorizedRootPaths: [],
+      targetPath: '/srv/repo/docs/index.html',
+      maxTextBytes: 10 * 1024 * 1024,
+      maxBinaryBytes: 10 * 1024 * 1024
+    })
+    expect(outcome).toEqual({
+      ok: true,
+      bytes: Buffer.from('<h1>local</h1>', 'utf8'),
+      contentType: 'text/html; charset=utf-8'
+    })
+  })
+
+  it('requires directory approval before touching a sibling local path', async () => {
+    const outcome = await readDocPreviewFile(localGrant(), 'assets/app.js')
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      status: 403,
+      reason: 'authorization-required'
+    })
+    expect(mocks.readAuthorizedDocPreviewFile).not.toHaveBeenCalled()
+  })
+
+  it('reports a local file above the bounded reader cap as too large', async () => {
+    mocks.readAuthorizedDocPreviewFile.mockRejectedValue(new Error('file_too_large'))
+
+    await expect(readDocPreviewFile(localGrant(), 'docs/index.html')).resolves.toMatchObject({
+      ok: false,
+      status: 413,
+      reason: 'too-large'
+    })
   })
 })
 

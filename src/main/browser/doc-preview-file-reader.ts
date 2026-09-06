@@ -3,6 +3,7 @@ import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contrac
 import type { DocPreviewFileFailureReason } from '../../shared/doc-preview-scheme'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import { FileReadCapExceededError } from '../ssh/ssh-filesystem-stream-reader'
+import { readAuthorizedDocPreviewFile } from '../../shared/doc-preview-file-access'
 import { getCanonicalUserDataPath } from '../persistence'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
@@ -15,8 +16,8 @@ import {
 } from './doc-preview-grant-registry'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
-const DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES = 10 * 1024 * 1024
-const DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES = 10 * 1024 * 1024
+const DIRECT_DOC_PREVIEW_TEXT_MAX_BYTES = 10 * 1024 * 1024
+const DIRECT_DOC_PREVIEW_BINARY_MAX_BYTES = 10 * 1024 * 1024
 
 /** Why not "needs a newer server": the SSH read path only ever serves images and PDFs as bytes, so
  *  a font is refused there by design, not by version. Name the file type, not the host's age. */
@@ -170,6 +171,24 @@ export async function readDocPreviewFile(
   }
   const contentType = docPreviewContentType(relativePath)
   try {
+    if (grant.owner.kind === 'local') {
+      const authority = resolveDocPreviewAuthorityPaths(grant)
+      if (!authority.entryPath) {
+        return notFoundOutcome()
+      }
+      return toOutcome(
+        await readAuthorizedDocPreviewFile({
+          boundaryPath: grant.requestBase,
+          entryPath: authority.entryPath,
+          implicitRootPath: authority.implicitRootPath,
+          authorizedRootPaths: authority.authorizedRootPaths,
+          targetPath: absolutePath,
+          maxTextBytes: DIRECT_DOC_PREVIEW_TEXT_MAX_BYTES,
+          maxBinaryBytes: DIRECT_DOC_PREVIEW_BINARY_MAX_BYTES
+        }),
+        contentType
+      )
+    }
     if (grant.owner.kind === 'ssh') {
       const provider = requireSshFilesystemProvider(grant.owner.connectionId)
       const authority = resolveDocPreviewAuthorityPaths(grant)
@@ -183,8 +202,8 @@ export async function readDocPreviewFile(
           implicitRootPath: authority.implicitRootPath,
           authorizedRootPaths: authority.authorizedRootPaths,
           targetPath: absolutePath,
-          maxTextBytes: DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES,
-          maxBinaryBytes: DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES
+          maxTextBytes: DIRECT_DOC_PREVIEW_TEXT_MAX_BYTES,
+          maxBinaryBytes: DIRECT_DOC_PREVIEW_BINARY_MAX_BYTES
         }),
         contentType
       )
