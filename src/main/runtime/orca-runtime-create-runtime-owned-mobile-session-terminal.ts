@@ -120,7 +120,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      // Why: a fresh epoch retires the current publisher, so clients drop its later tab updates.
+      publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
       // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
       activeGroupId:
