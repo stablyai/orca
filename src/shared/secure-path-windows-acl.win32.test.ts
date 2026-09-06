@@ -44,6 +44,17 @@ function currentUserSid(): string {
   return result.stdout.trim().split(/","/)[1]!.replace(/"$/, '')
 }
 
+/**
+ * Plants an exact DACL. Two invocations on purpose: combining `/inheritance:r` with `/grant:r`
+ * leaves the argument order to icacls, and on Windows Server the inherited ACEs survive the
+ * combined form as explicit ones -- which is a planted precondition that silently is not the
+ * one written down. Removing inheritance first makes the grant the whole DACL.
+ */
+function plantDacl(path: string, grants: string[]): void {
+  expect(icacls(path, '/inheritance:r', '/q').code).toBe(0)
+  expect(icacls(path, ...grants.flatMap((grant) => ['/grant:r', grant]), '/q').code).toBe(0)
+}
+
 function icacls(...args: string[]): { code: number | null; stdout: string } {
   const result = runProcessSync({
     program: windowsSystem32Binary('icacls.exe'),
@@ -116,6 +127,11 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
   beforeAll(() => {
     resetSecureFileWindowsUserSidForTests()
     root = mkdtempSync(join(tmpdir(), 'orca-acl-win32-'))
+    // %TEMP% grants [user, SYSTEM, Administrators] (OI)(CI)(F) by default, and those
+    // propagate into every fixture below. Strip them here so a planted DACL is exactly what
+    // the test planted: on a host where the running user is also one of the three principals
+    // a test grants, an inherited copy is otherwise indistinguishable from a planted one.
+    plantDacl(root, [`*${currentUserSid()}:(OI)(CI)(F)`])
   })
 
   afterAll(() => {
@@ -213,19 +229,7 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
   it('repairs a protected three-rule DACL that grants the wrong principal', () => {
     const file = join(root, 'substituted.json')
     writeFileSync(file, '{"token":"secret"}')
-    expect(
-      icacls(
-        file,
-        '/inheritance:r',
-        '/grant:r',
-        `*${EVERYONE_SID}:(F)`,
-        '/grant:r',
-        '*S-1-5-18:(F)',
-        '/grant:r',
-        '*S-1-5-32-544:(F)',
-        '/q'
-      ).code
-    ).toBe(0)
+    plantDacl(file, [`*${EVERYONE_SID}:(F)`, '*S-1-5-18:(F)', '*S-1-5-32-544:(F)'])
 
     const before = readAclEntries(file)
     expect(before, listed(before)).toHaveLength(3)
@@ -253,19 +257,11 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
   ])('repairs a directory whose rules are %s', (_label, rights) => {
     const dir = join(root, `wrong-flags-${rights.replace(/[^A-Z]/g, '')}`)
     mkdirSync(dir)
-    expect(
-      icacls(
-        dir,
-        '/inheritance:r',
-        '/grant:r',
-        `*${currentUserSid()}:${rights}`,
-        '/grant:r',
-        `*S-1-5-18:${rights}`,
-        '/grant:r',
-        `*S-1-5-32-544:${rights}`,
-        '/q'
-      ).code
-    ).toBe(0)
+    plantDacl(dir, [
+      `*${currentUserSid()}:${rights}`,
+      `*S-1-5-18:${rights}`,
+      `*S-1-5-32-544:${rights}`
+    ])
 
     const before = readAclEntries(dir)
     expect(before, listed(before)).toHaveLength(3)
