@@ -6,10 +6,22 @@ import type {
   ClaudeManagedAccountUsageOptions,
   ClaudeRateLimitFetchOptions
 } from './claude-usage-fetch-options'
+import { ConsoleBalanceFetcher } from './console-balance-fetcher'
+import type { ConsoleBalance } from '../../types/console-api'
 
 export type FetchClaudeRateLimitsOptions = ClaudeRateLimitFetchOptions
 export type FetchManagedAccountUsageOptions = ClaudeManagedAccountUsageOptions
 export type InactiveClaudeAccountInfo = InactiveClaudeAccount
+
+const consoleBalanceFetcher = new ConsoleBalanceFetcher()
+
+export async function fetchConsoleBalance(
+  apiKey: string,
+  endpoint?: string,
+  signal?: AbortSignal
+): Promise<ConsoleBalance> {
+  return consoleBalanceFetcher.fetch(apiKey, endpoint, signal)
+}
 
 export async function fetchClaudeRateLimits(
   options?: FetchClaudeRateLimitsOptions

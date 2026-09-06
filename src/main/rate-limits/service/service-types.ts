@@ -58,6 +58,7 @@ export type MiniMaxResolvedConfig = {
 }
 
 export type GeminiCliOAuthEnabledResolver = () => boolean
+export type ConsoleCredentialResolver = () => Promise<string | null>
 export type ActiveRateLimitProvider = ProviderRateLimits['provider']
 export type ActiveProviderState = {
   provider: ActiveRateLimitProvider

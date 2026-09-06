@@ -89,6 +89,9 @@ export function initializeMainProcessAccountServices(): void {
   state.rateLimits.setClaudeAuthPreparationResolver((target) =>
     state.claudeRuntimeAuth!.prepareForRateLimitFetch(target)
   )
+  state.rateLimits.setConsoleCredentialResolver(() =>
+    state.claudeRuntimeAuth!.getConsoleCredential()
+  )
   // Why: live Claude sessions stream usage windows through their statusLine command; feeding them here avoids OAuth usage-endpoint polling (and its 429s).
   agentHookServer.setClaudeStatusLineListener((event) => {
     state.rateLimits!.ingestLiveClaudeRateLimits(event)

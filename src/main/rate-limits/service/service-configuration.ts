@@ -10,6 +10,7 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
+  type ConsoleCredentialResolver,
   type InactiveCodexAccountInfo,
   type InactiveClaudeAccountInfo,
   type RateLimitState,
@@ -53,6 +54,10 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
     this.networkProxySettingsResolver = resolver
+  }
+
+  setConsoleCredentialResolver(resolver: ConsoleCredentialResolver): void {
+    this.consoleCredentialResolver = resolver
   }
 
   setInactiveClaudeAccountsResolver(resolver: () => InactiveClaudeAccountInfo[]): void {

@@ -61,6 +61,7 @@ import { registerCodexConfigSyncHandlers } from '../codex-config-sync'
 import { getPtyIdForPaneKey } from '../pty'
 import { registerAgentTrustHandlers } from '../agent-trust'
 import { registerClaudeAccountHandlers } from '../claude-accounts'
+import { registerConsoleCredentialHandlers } from '../console-credentials'
 import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
 import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
@@ -146,6 +147,7 @@ export function registerCoreHandlers(
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
+  registerConsoleCredentialHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
   registerRateLimitHandlers(rateLimits, codexAccounts)
