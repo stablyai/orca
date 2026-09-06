@@ -48,16 +48,27 @@ export function createTerminalShutdownGuardController({
   let partialRendererStopSettled = false
 
   const markShutdownPending = (): void => {
+    // Why the early return: tearing down a worktree whose panes already exited passes
+    // no guard ids, and the spreads below would still hand both maps a new identity.
+    if (exitGuardPtyIds.length === 0) {
+      return
+    }
     set((state) => {
       const pendingPtyShutdownIds = { ...state.pendingPtyShutdownIds }
       for (const ptyId of exitGuardPtyIds) {
         pendingPtyShutdownIds[ptyId] = (pendingPtyShutdownIds[ptyId] ?? 0) + 1
       }
+      // Why conditional: re-guarding an already-suppressed pty writes the same `true`.
+      const alreadySuppressed = exitGuardPtyIds.every(
+        (ptyId) => state.suppressedPtyExitIds[ptyId] === true
+      )
       return {
-        suppressedPtyExitIds: {
-          ...state.suppressedPtyExitIds,
-          ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
-        },
+        suppressedPtyExitIds: alreadySuppressed
+          ? state.suppressedPtyExitIds
+          : {
+              ...state.suppressedPtyExitIds,
+              ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
+            },
         pendingPtyShutdownIds
       }
     })

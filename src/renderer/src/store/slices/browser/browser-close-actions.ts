@@ -12,6 +12,7 @@ import { getFallbackTabTypeForWorktree, isLocalBrowserPageOwner } from './browse
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
+import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
@@ -231,10 +232,15 @@ export function createBrowserCloseActions(
         destroyWorkspaceWebviews(browserPagesByWorkspace, workspace.id)
       }
       set((s) => {
-        const nextBrowserTabsByWorktree = { ...s.browserTabsByWorktree }
-        delete nextBrowserTabsByWorktree[worktreeId]
-        const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
-        delete nextActiveBrowserTabIdByWorktree[worktreeId]
+        const removedWorktreeIds = [worktreeId]
+        const nextBrowserTabsByWorktree = omitRecordKeys(
+          s.browserTabsByWorktree,
+          removedWorktreeIds
+        )
+        const nextActiveBrowserTabIdByWorktree = omitRecordKeys(
+          s.activeBrowserTabIdByWorktree,
+          removedWorktreeIds
+        )
         // Why: reset the global browser surface only when the shut-down worktree is the active one AND had tabs.
         const shouldResetGlobalBrowser = s.activeWorktreeId === worktreeId && hadBrowserTabs
         return {
