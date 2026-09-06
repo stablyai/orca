@@ -22,6 +22,7 @@ import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../../../shared/orchestration-timing-budgets'
+import { formatWorkerBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
   defineMethod({
@@ -219,7 +220,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           }
           throw new Error(
             wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
+              ? formatWorkerBlockedReason(wait.blockedReason, agent)
               : `Agent did not become ready (${wait.status}).`
           )
         }

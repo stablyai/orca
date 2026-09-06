@@ -501,6 +501,34 @@ describe('orchestration RPC methods', () => {
       }
     )
 
+    it('attributes a trust block to the launching agent, not codex (#15123)', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
+        handle: 'term_worker',
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'running',
+        exitCode: null,
+        blockedReason: 'codex-trust-workspace'
+      })
+      const task = db.createTask({ spec: 'blocked antigravity trust' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'antigravity'
+      })) as { state: string; failedStage: string; lastError: string }
+
+      expect(result).toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        lastError:
+          'Agent startup blocked: antigravity workspace trust prompt (codex-trust-workspace)'
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    })
+
     it('creates a child worktree agent-first with setup run by default', async () => {
       setup()
       mockCurrentWorkerStart()

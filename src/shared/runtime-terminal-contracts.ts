@@ -331,3 +331,16 @@ export type RuntimeTerminalWait = {
   exitCause?: TerminalExitCause
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
+
+// Why (#15123): trust classifiers match screen text, so another agent's trust
+// prompt (e.g. Antigravity's) reports the codex-named reason. Attribute the
+// human message to the launching agent; the machine blockedReason is unchanged.
+export function formatWorkerBlockedReason(
+  blockedReason: RuntimeTerminalWaitBlockedReason,
+  agent?: string | null
+): string {
+  if (blockedReason === 'codex-trust-workspace' && agent && agent !== 'codex') {
+    return `Agent startup blocked: ${agent} workspace trust prompt (${blockedReason})`
+  }
+  return `Agent startup blocked: ${blockedReason}`
+}
