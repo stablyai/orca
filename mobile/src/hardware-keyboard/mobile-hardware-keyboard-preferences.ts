@@ -30,6 +30,10 @@ export function loadMobileHardwareKeyboardPreferences(): Promise<void> {
   }
   loadPromise = AsyncStorage.getItem(TERMINAL_POLICY_KEY)
     .then((stored) => {
+      // A completed save takes precedence over the initial storage snapshot.
+      if (snapshot.loaded) {
+        return
+      }
       publish({
         loaded: true,
         terminalShortcutPolicy: stored === 'terminal-first' ? 'terminal-first' : 'orca-first'

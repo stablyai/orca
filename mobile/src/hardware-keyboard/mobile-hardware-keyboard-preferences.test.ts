@@ -34,4 +34,26 @@ describe('mobile hardware keyboard preferences', () => {
     expect(listener).not.toHaveBeenCalled()
     unsubscribe()
   })
+
+  it('keeps a saved policy when the initial storage read finishes later', async () => {
+    vi.resetModules()
+    const preferences = await import('./mobile-hardware-keyboard-preferences')
+    let finishRead!: (value: string | null) => void
+    vi.mocked(AsyncStorage.getItem).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRead = resolve
+      })
+    )
+    vi.mocked(AsyncStorage.setItem).mockResolvedValueOnce()
+    const loading = preferences.loadMobileHardwareKeyboardPreferences()
+
+    await preferences.saveMobileTerminalShortcutPolicy('terminal-first')
+    finishRead('orca-first')
+    await loading
+
+    expect(preferences.getMobileHardwareKeyboardPreferences()).toEqual({
+      loaded: true,
+      terminalShortcutPolicy: 'terminal-first'
+    })
+  })
 })
