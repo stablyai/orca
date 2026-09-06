@@ -20,7 +20,8 @@ describe('ssh status segment copy', () => {
 
   it('distinguishes a sync conflict from a sync failure', () => {
     expect(connectingHostsLabel()).toBe('Connecting…')
-    expect(workspaceSyncProblemLabel('conflict')).toBe('Workspace conflict')
-    expect(workspaceSyncProblemLabel('error')).toBe('Workspace sync error')
+    expect(workspaceSyncProblemLabel('conflict')).toBe('Workspace layout conflict')
+    expect(workspaceSyncProblemLabel('error')).toBe('Workspace layout unavailable')
+    expect(workspaceSyncProblemLabel('offline')).toBe('Workspace layout unavailable')
   })
 })

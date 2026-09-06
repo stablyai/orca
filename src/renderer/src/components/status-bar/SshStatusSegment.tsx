@@ -184,7 +184,10 @@ export function SshStatusSegment({
   const connectedHostCount = statuses.filter((status) => status === 'connected').length
   const anyConnecting = overall === 'connecting'
   const syncProblem = targets.find(
-    (t) => t.syncStatus?.phase === 'conflict' || t.syncStatus?.phase === 'error'
+    (t) =>
+      t.syncStatus?.phase === 'conflict' ||
+      t.syncStatus?.phase === 'error' ||
+      t.syncStatus?.phase === 'offline'
   )
   const syncProblemLabel = syncProblem
     ? workspaceSyncProblemLabel(syncProblem.syncStatus?.phase)

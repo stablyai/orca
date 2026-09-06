@@ -3634,8 +3634,8 @@
             "connectedHostCount_one": "{{count}} host",
             "connectedHostCount_other": "{{count}} hosts",
             "connecting": "Connecting…",
-            "workspaceConflict": "Workspace conflict",
-            "workspaceSyncError": "Workspace sync error"
+            "workspaceConflict": "Workspace layout conflict",
+            "workspaceSyncError": "Workspace layout unavailable"
           },
           "StatusBar": {
             "9659e38343": "Ports",
@@ -3880,7 +3880,29 @@
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
-            "sshHost": "SSH Host"
+            "sshHost": "SSH Host",
+            "workspacePulling": "Workspace syncing",
+            "workspacePushing": "Workspace uploading",
+            "workspaceConflict": "Workspace layout conflict",
+            "workspaceError": "Workspace layout unavailable",
+            "workspaceOffline": "Workspace layout unavailable",
+            "workspaceSynced": "Workspace synced",
+            "workspaceReady": "Workspace ready",
+            "syncPullingSummary": "Orca is copying the workspace layout from this SSH host.",
+            "syncPushingSummary": "Orca is sending the workspace layout to this SSH host.",
+            "syncConflictSummary": "The workspace layout changed on another device, so this push used an older revision and lost the race.",
+            "syncConflictPullSummary": "The workspace layout could not be applied on this client, so sync is paused until it can be reconciled.",
+            "syncErrorSummary": "Orca could not sync the workspace layout to this SSH host.",
+            "syncOfflineSummary": "The SSH host is unavailable for workspace layout sync.",
+            "syncSyncedSummary": "The workspace layout is up to date on this SSH host.",
+            "syncIdleSummary": "This SSH host has no remote workspace layout yet.",
+            "syncExplanation": "Workspace sync mirrors worktrees, folder workspaces, project groups, and which host each restored session uses. It does not copy your files or Git state.",
+            "lastSynced": "Last synced {{value0}}",
+            "lastSyncAttempt": "Last sync attempt {{value0}}",
+            "direction": "Direction: {{value0}}",
+            "revision": "Revision {{value0}}",
+            "directionPull": "Pull",
+            "directionPush": "Push"
           },
           "usagePercentageLabel": {
             "used": "{{value0}}% used",

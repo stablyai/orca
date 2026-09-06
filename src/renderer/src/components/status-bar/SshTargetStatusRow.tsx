@@ -15,42 +15,12 @@ import {
 } from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteWorkspaceSyncStatus } from '../../store/slices/ssh'
-
-function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string | null {
-  switch (status?.phase) {
-    case 'pulling':
-    case 'pushing':
-      return 'Workspace syncing'
-    case 'conflict':
-      return 'Workspace sync conflict'
-    case 'error':
-      return 'Workspace sync error'
-    case 'offline':
-      return 'Workspace sync unavailable'
-    case 'synced':
-    case 'idle':
-    case undefined:
-      return null
-  }
-}
-
-function syncStatusTone(status: RemoteWorkspaceSyncStatus | undefined): string {
-  switch (status?.phase) {
-    case 'conflict':
-    case 'error':
-      return 'text-destructive'
-    case 'offline':
-      return 'text-muted-foreground'
-    case 'pulling':
-    case 'pushing':
-      return 'text-yellow-500'
-    case 'synced':
-      return 'text-emerald-500'
-    case 'idle':
-    case undefined:
-      return 'text-muted-foreground'
-  }
-}
+import {
+  hasSyncDetails,
+  SshTargetWorkspaceSyncSubmenu,
+  syncStatusLabel,
+  syncStatusTone
+} from './SshTargetWorkspaceSyncSubmenu'
 
 export function SshTargetStatusRow({
   targetId,
@@ -70,6 +40,7 @@ export function SshTargetStatusRow({
   // must disable those too, in the window before main broadcasts 'connecting'.
   const connectInFlight = useSshConnectInFlight(targetId)
   const visibleSyncStatusLabel = syncStatusLabel(syncStatus)
+  const hasDetails = hasSyncDetails(syncStatus)
 
   const handleConnect = useCallback(async () => {
     if (isSshConnectInFlight(targetId)) {
@@ -112,12 +83,12 @@ export function SshTargetStatusRow({
     }
   }, [mountedRef, recordFeatureInteraction, targetId])
 
-  return (
-    <div className="flex items-center gap-2.5 px-2 py-1.5">
+  const rowDetails = (
+    <>
       <span className={`size-1.5 shrink-0 rounded-full ${statusColor(status)}`} />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-medium">{label}</div>
-        <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="break-words text-[12px] font-medium [overflow-wrap:anywhere]">{label}</div>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
           <span>
             {translate('auto.components.status.bar.SshTargetStatusRow.sshHost', 'SSH Host')}
           </span>
@@ -136,31 +107,61 @@ export function SshTargetStatusRow({
                 ) : (
                   <Cloud className="size-2.5 shrink-0" />
                 )}
-                <span className="truncate">{visibleSyncStatusLabel}</span>
+                <span className="break-words [overflow-wrap:anywhere]">
+                  {visibleSyncStatusLabel}
+                </span>
               </span>
             </>
           ) : null}
         </div>
       </div>
-      {busy || connectInFlight ? (
-        <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-      ) : canConnectSshStatus(status) ? (
-        <button
-          type="button"
-          onClick={() => void handleConnect()}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-accent/70"
-        >
-          {sshConnectVerb(status)}
-        </button>
-      ) : status === 'connected' ? (
-        <button
-          type="button"
-          onClick={() => void handleDisconnect()}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-        >
-          {translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')}
-        </button>
-      ) : null}
-    </div>
+    </>
+  )
+
+  const action = canConnectSshStatus(status)
+    ? handleConnect
+    : status === 'connected'
+      ? handleDisconnect
+      : null
+  const actionLabel = canConnectSshStatus(status)
+    ? sshConnectVerb(status)
+    : status === 'connected'
+      ? translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')
+      : null
+  const actionButton =
+    busy || connectInFlight ? (
+      <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+    ) : action && actionLabel ? (
+      <button
+        type="button"
+        onClick={() => void action()}
+        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] hover:bg-accent/70 ${
+          canConnectSshStatus(status)
+            ? 'font-medium text-foreground'
+            : 'text-muted-foreground hover:text-foreground'
+        }`}
+      >
+        {actionLabel}
+      </button>
+    ) : null
+
+  if (!hasDetails) {
+    return (
+      <div className="flex items-center gap-2.5 px-2 py-1.5">
+        {rowDetails}
+        {actionButton}
+      </div>
+    )
+  }
+
+  return (
+    <SshTargetWorkspaceSyncSubmenu
+      syncStatus={syncStatus}
+      rowDetails={rowDetails}
+      action={action}
+      actionLabel={actionLabel}
+      busy={busy}
+      connectInFlight={connectInFlight}
+    />
   )
 }
