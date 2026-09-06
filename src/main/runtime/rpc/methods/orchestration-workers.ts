@@ -97,6 +97,12 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         : requestedWorktree === 'current'
           ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
           : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+      if (agent) {
+        const launchRepoSelector = createsWorktree
+          ? (params.repo ?? creationWorktree!.repoId)
+          : `id:${resolvedWorktree!.repoId}`
+        await runtime.validateOrchestrationAgentLauncherForRepo(agent, launchRepoSelector)
+      }
       let explicitTerminal
       if (params.terminal) {
         explicitTerminal = await runtime.showTerminal(params.terminal)

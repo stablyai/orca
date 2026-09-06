@@ -253,6 +253,8 @@ export async function startFederatedWorker(args: {
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
+      // Keep the failed dispatch durable: callers retry with the same mutation
+      // receipt, while the DB retains the failed attempt and its audit trail.
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
       return {
         runId,
@@ -277,6 +279,7 @@ function isKnownRemoteStartFailure(code: string): boolean {
   return [
     'invalid_argument',
     'agent_unconfigured',
+    'agent_not_available',
     'worktree_not_found_on_server',
     'terminal_worktree_mismatch',
     'capability_unsupported'

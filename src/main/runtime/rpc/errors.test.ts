@@ -70,17 +70,19 @@ describe('mapRuntimeError', () => {
     })
   })
 
-  it.each(['remote_runtime_unavailable', 'runtime_timeout', 'invalid_runtime_response'])(
-    'preserves structured remote transport failure %s',
-    (code) => {
-      const error = Object.assign(new Error(`Remote transport failed: ${code}`), { code })
+  it.each([
+    'remote_runtime_unavailable',
+    'runtime_timeout',
+    'invalid_runtime_response',
+    'agent_not_available'
+  ])('preserves structured remote transport failure %s', (code) => {
+    const error = Object.assign(new Error(`Remote transport failed: ${code}`), { code })
 
-      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
-        ok: false,
-        error: { code, message: `Remote transport failed: ${code}` }
-      })
-    }
-  )
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: { code, message: `Remote transport failed: ${code}` }
+    })
+  })
 
   it.each([
     ['window_not_focused', 'keyboard input requires focus', 'restore-window'],

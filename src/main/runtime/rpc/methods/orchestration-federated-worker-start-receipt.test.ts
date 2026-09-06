@@ -6,6 +6,7 @@ import {
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 
 describe('federated worker start receipt validation', () => {
   const databases: OrchestrationDb[] = []
@@ -80,5 +81,67 @@ describe('federated worker start receipt validation', () => {
       remote_worktree_id: null,
       remote_terminal_handle: null
     })
+  })
+
+  it('keeps an unavailable-agent dispatch durable for a retry', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    databases.push(db)
+    const run = db.createRun({
+      objective: 'federated worker',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_remote',
+      name: 'remote',
+      peerFingerprint: 'remote_peer'
+    })
+    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
+      async (_environmentId, method) => {
+        if (method === 'status.get') {
+          return {
+            capabilities: [
+              ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+              ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+            ]
+          }
+        }
+        throw new OrchestrationError(
+          'agent_not_available',
+          'Agent launcher codex is not installed on the execution host.'
+        )
+      }
+    )
+
+    const result = (await startFederatedWorker({
+      params: {
+        task: task.id,
+        from: 'term_coord',
+        on: 'remote',
+        worktree: 'id:worktree_remote',
+        agent: 'codex'
+      },
+      runtime,
+      db,
+      runId: run.id,
+      task,
+      orchestrationMutation: {
+        callerFingerprint: 'caller',
+        requestId: 'remote_start',
+        method: 'orchestration.workerStart',
+        payloadHash: 'payload'
+      }
+    })) as { dispatchId: string; state: string }
+
+    expect(result.state).toBe('failed')
+    expect(db.getWorkerDispatch(result.dispatchId)).toMatchObject({
+      state: 'failed',
+      stage: 'remote_attach',
+      last_error: expect.stringContaining('not installed')
+    })
+    expect(db.getTask(task.id)?.status).toBe('failed')
   })
 })
