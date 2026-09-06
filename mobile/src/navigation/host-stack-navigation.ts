@@ -7,7 +7,7 @@ export type HostStackNavigationState = Readonly<{
 export type HostStackNavigationRoute = Readonly<{
   key?: string
   name: string
-  params?: Readonly<{ hostId?: unknown }>
+  params?: Readonly<Record<string, unknown>>
   state?: HostStackNavigationState
 }>
 
@@ -64,17 +64,17 @@ export function hostStackRouteHref(target: HostStackRouteTarget): HostStackRoute
   return { pathname: `/h/${target.name}`, params: target.params }
 }
 
-// Why: the host is pushed as an encoded segment, so the committed route may hold
-// either form — an id with `/`, `#`, or `%` must still match its own push.
-function hostParamMatches(param: unknown, expectedHostId: string): boolean {
+// Why: pushed host segments may commit encoded; ids with `/`, `#`, or `%` must
+// still match the host mount that their encoded path created.
+function pushedHostParamMatches(param: unknown, expected: string): boolean {
   if (typeof param !== 'string') {
     return false
   }
-  if (param === expectedHostId) {
+  if (param === expected) {
     return true
   }
   try {
-    return decodeURIComponent(param) === expectedHostId
+    return decodeURIComponent(param) === expected
   } catch {
     return false // Lone `%` — not our encoding.
   }
@@ -108,11 +108,53 @@ function mountedHostStack(
     !hostState?.key ||
     hostRoute?.name !== '[hostId]/index' ||
     !hostRoute.key ||
-    !hostParamMatches(hostRoute.params?.hostId, expectedHostId)
+    !pushedHostParamMatches(hostRoute.params?.hostId, expectedHostId)
   ) {
     return null
   }
   return { key: hostState.key, routeKey: hostRoute.key }
+}
+
+function focusedHostStackRouteMatches(
+  state: HostStackNavigationState,
+  hostId: string,
+  target: HostStackRouteTarget
+): boolean {
+  const hostContainer = focusedHostRoute(state)
+  const hostState = hostContainer?.state
+  const route = hostState?.routes[hostState.index]
+  if (
+    hostContainer?.params?.hostId !== undefined &&
+    !pushedHostParamMatches(hostContainer.params.hostId, hostId)
+  ) {
+    return false
+  }
+  if (route?.name !== target.name || route.params?.hostId !== hostId) {
+    return false
+  }
+  // Session query params also carry presentation and one-shot creation state; only
+  // the execution host and worktree identify the mounted session and its input lease.
+  if (target.name === '[hostId]/session/[worktreeId]') {
+    return (
+      target.params.hostId === hostId &&
+      typeof target.params.worktreeId === 'string' &&
+      route.params.worktreeId === target.params.worktreeId
+    )
+  }
+  const targetParams = Object.entries(target.params)
+  const routeParams = Object.entries(route.params)
+  return (
+    routeParams.length === targetParams.length &&
+    targetParams.every(([key, value]) => route.params?.[key] === value)
+  )
+}
+
+function completedHostStackNavigation(): HostStackNavigationController {
+  return {
+    cancel: () => {},
+    isActive: () => false,
+    retarget: () => {}
+  }
 }
 
 /** Opens a deep host route by mounting `/h/[hostId]` first and replacing it once
@@ -124,6 +166,11 @@ export function navigateToHostStackRoute(
   hostId: string,
   target: HostStackRouteTarget
 ): HostStackNavigationController {
+  const initialState = navigation.getState()
+  if (initialState && focusedHostStackRouteMatches(initialState, hostId, target)) {
+    return completedHostStackNavigation()
+  }
+
   let active = true
   let hostRouteSeen = false
   let selectedTarget = target
@@ -145,6 +192,10 @@ export function navigateToHostStackRoute(
     if (!state) {
       return
     }
+    if (focusedHostStackRouteMatches(state, hostId, selectedTarget)) {
+      dispose()
+      return
+    }
     const hostContainer = focusedHostRoute(state)
     if (hostContainer) {
       hostRouteSeen = true
@@ -154,7 +205,7 @@ export function navigateToHostStackRoute(
     }
     const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
     if (!hostStack) {
-      if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
+      if (hostContainer && pushedHostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()
         router.replace(hostStackRouteHref(selectedTarget))
       }
@@ -182,6 +233,10 @@ export function navigateToHostStackRoute(
     retarget: (nextTarget) => {
       if (active) {
         selectedTarget = nextTarget
+        const state = navigation.getState()
+        if (state && focusedHostStackRouteMatches(state, hostId, selectedTarget)) {
+          dispose()
+        }
       }
     }
   }

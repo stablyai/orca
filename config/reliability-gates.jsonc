@@ -1341,6 +1341,109 @@
       "demotionRule": "Demote or quarantine if cancellation creates the shared install lock before transfer settlement, a split-SFTP transfer loses identity proof, recovery deletes a replacement/symlink/reparse/foreign stage, fixed-path work exceeds its eight-slot bound, cancellation leaks a local descriptor, or the focused gate flakes without a product or harness bug."
     },
     {
+      "id": "mobile-navigation.notification-input-lease-continuity",
+      "title": "Same-target mobile notification navigation preserves Native Chat input",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "mobile-runtime",
+      "layer": "shared-mobile-navigation-contract",
+      "surfaces": [
+        "iOS notification response",
+        "Android notification response",
+        "host-stack navigation",
+        "Native Chat terminal cache",
+        "Native Chat input lease"
+      ],
+      "platforms": ["ios", "android", "macos"],
+      "providers": ["provider-independent"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["provider-independent"],
+      "coverageNotes": "A deterministic macOS TypeScript/React harness drives the shared iOS/Android notification target builder through the production notification-opening hook, host-stack coordinator, and actual Native Chat input-lease hook. It covers exact same-target no-op behavior with session name/created/warning query state, cold start, different hosts and worktrees, stale, conflicting, percent-aliasing, or extra semantic identity, repeated taps, cancellation/disposal, and reconnect. Live iOS and Android notification delivery remain E2E gaps.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5821",
+        "https://github.com/stablyai/orca/issues/16995"
+      ],
+      "invariant": "A notification tap whose host, nested route, and identifying params match the already-focused mobile session must be an identity-preserving no-op: it must add no listener, push, replace, dispatch, detach, or terminal-cache clear, and the exact acknowledged Native Chat input lease must remain sendable. Cold start, a different host or worktree, unknown or conflicting route identity, and canceled transitions must retain their existing transition and cleanup semantics.",
+      "oracle": "Build a notification navigation target from the same payload consumed by app/_layout.tsx, invoke it through useOpenNotificationRoute and useOpenHostStackRoute, and seed the root-layout-scoped Expo state with an active host/worktree session, an exact terminal-cache object, and an acknowledged input lease, then tap twice. Require zero route operations, listeners, detach callbacks, and cache clears; require the same cache object and lease readyRef, ready=true, null lock reason, and enabled composer gate. Separately drive cold, different-host, different-worktree, missing/stale/conflicting/percent-aliasing identity, extra semantic params that must be cleared, retarget-to-current settlement, cancellation, disposal, and reconnect states without sleeps, and require only genuine transitions to push and listen.",
+      "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/notifications/notification-route-coordination.test.ts mobile/src/navigation/host-stack-navigation.test.ts mobile/src/session/use-mobile-native-chat-input-lease.test.ts mobile/src/session/MobileNativeChatView.test.ts"
+      ],
+      "testFiles": [
+        "mobile/src/notifications/notification-route-coordination.test.ts",
+        "mobile/src/navigation/host-stack-navigation.test.ts",
+        "mobile/src/session/use-mobile-native-chat-input-lease.test.ts",
+        "mobile/src/session/MobileNativeChatView.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "mobile/src/notifications/notification-route-coordination.test.ts",
+          "assertions": [
+            "the production notification-opening hook carries repeated same-session taps with name/created/warning query state into the coordinator with zero route or detach work and preserves the exact terminal cache and input lease",
+            "different host/worktree and missing, stale, conflicting, or percent-aliasing identities still transition",
+            "cold-start coordination, cancellation/disposal, and post-reconnect same-route preservation remain deterministic"
+          ]
+        },
+        {
+          "file": "mobile/src/navigation/host-stack-navigation.test.ts",
+          "assertions": [
+            "cold and encoded host routes still mount then replace through the committed host stack",
+            "exact semantic targets no-op while an extra current taskSource filter still transitions so it can be cleared",
+            "canceled transitions and pending retargets that become current settle immediately with bounded listener and operation counts"
+          ]
+        },
+        {
+          "file": "mobile/src/session/use-mobile-native-chat-input-lease.test.ts",
+          "assertions": [
+            "an acknowledged terminal lease is ready and clears only on explicit lease loss or disconnect"
+          ]
+        },
+        {
+          "file": "mobile/src/session/MobileNativeChatView.test.ts",
+          "assertions": [
+            "the composer unlocks only after the input lease remains ready"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-28",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/notifications/notification-route-coordination.test.ts mobile/src/navigation/host-stack-navigation.test.ts mobile/src/session/use-mobile-native-chat-input-lease.test.ts mobile/src/session/MobileNativeChatView.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.25,
+          "summary": "35 deterministic tests passed. The byte-identical oracle failed 4/35 on latest main and again with only the identity decision removed: the shared owner performed route work for exact targets, did not settle a retarget that became current, and the notification push detached the route, cleared the exact terminal cache/input lease, and left the composer waiting."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 5,
+        "scope": "focused shared mobile navigation, lease, and composer contracts"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Deterministic local runs use explicit navigation states and React updates with no sleeps, external services, or retry polling; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The final byte-identical 35-test oracle failed 4 tests on latest main, passed all 35 with the focused-route identity no-op, failed the same 4 after removing only that decision, and passed all 35 after restoration."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Each deep-route request performs bounded focused-state inspection plus a small route-identity comparison. A same-target tap now creates zero listeners, route operations, cache work, remote calls, retries, timers, polling, or fanout; genuine transitions retain bounded listener and route-operation counts."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak history.",
+        "Run real same-target and different-target notification taps on both iOS and Android with a paired host.",
+        "Exercise a paired remote host through disconnect/reconnect and preserve explicit host, worktree, terminal, and lease identities."
+      ],
+      "knownGaps": [
+        "No live iOS or Android notification-delivery run is registered yet.",
+        "No physical device run is registered.",
+        "No live paired remote, SSH-backed repository, or folder-workspace run is registered; the change is client-local and does not alter the remote wire or execution routing."
+      ],
+      "demotionRule": "Demote or quarantine if an exact same-target tap performs route work or loses cache/lease identity, a genuine target transition becomes a no-op, the focused contract flakes without a product defect, or navigation work grows beyond the focused-state/target-param bound."
+    },
+    {
       "id": "mobile-ui.drawer-close-continuity",
       "title": "Mobile drawers finish closing despite parent rerenders",
       "maturity": "experimental",
