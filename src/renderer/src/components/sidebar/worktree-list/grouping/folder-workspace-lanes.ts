@@ -6,7 +6,7 @@ import {
   getWorkspaceStatusGroupKey
 } from '../../../../../../shared/workspace-statuses'
 import { ALL_GROUP_KEY, getPRLaneKey } from './group-keys'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from './row-types'
+import type { WorktreeGroupBy } from './row-types'
 
 /** A folder workspace paired with the project group that owns it. The pair is
  *  carried through grouping because FolderWorkspaceRow needs a non-optional
@@ -74,23 +74,4 @@ export function compareFolderWorkspacesForDisplay(
   const leftOrder = left.manualOrder ?? left.sortOrder
   const rightOrder = right.manualOrder ?? right.sortOrder
   return rightOrder - leftOrder || left.name.localeCompare(right.name)
-}
-
-/** Pin is placement, not membership: every renderable folder workspace still
- *  renders, but a pinned one belongs in Pinned the same way a git worktree does. */
-export function partitionFolderWorkspacesForPinnedDisplay(
-  folderWorkspaces: readonly RenderableFolderWorkspace[],
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-): {
-  pinned: RenderableFolderWorkspace[]
-  natural: RenderableFolderWorkspace[]
-} {
-  const pinned = folderWorkspaces.filter((pair) => pair.folderWorkspace.isPinned)
-  if (pinnedDisplayPolicy === 'duplicate-in-groups') {
-    return { pinned, natural: [...folderWorkspaces] }
-  }
-  return {
-    pinned,
-    natural: folderWorkspaces.filter((pair) => !pair.folderWorkspace.isPinned)
-  }
 }

@@ -67,7 +67,8 @@ const PROJECT_GROUP: ProjectGroup = {
 
 const FOLDER_ROW: Extract<Row, { type: 'folder-workspace' }> = {
   type: 'folder-workspace',
-  key: 'folder-workspace:folder-1',
+  key: 'project-group:group-1:folder-workspace:folder-1',
+  sectionKey: 'project-group:group-1',
   folderWorkspace: {
     id: 'folder-1',
     projectGroupId: PROJECT_GROUP.id,

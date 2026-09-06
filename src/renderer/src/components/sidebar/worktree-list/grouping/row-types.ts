@@ -91,7 +91,9 @@ export type FolderWorkspaceRow = {
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
-  sectionKey?: string
+  /** The emitting section, as on WorktreeRow: a pinned workspace can render in
+   *  Pinned and in its group at once, and only this tells the two copies apart. */
+  sectionKey: string
 }
 
 /** Minimal shape buildRows needs for an in-flight create. Deliberately not the

@@ -16,7 +16,7 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
     return row.rowKey
   }
   if (row.type === 'folder-workspace') {
-    return folderWorkspaceKey(row.folderWorkspace.id)
+    return row.key
   }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
@@ -78,7 +78,22 @@ export function getRenderRowWorktreeItem(
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId) ? row : null
 }
 
-// Prefer the worktree's natural group row over its pinned duplicate when both are rendered.
+/** Whether this row is the Pinned-section copy of the workspace it renders.
+ *  Rows that do not render the workspace at all count as pinned so they are
+ *  never preferred over a real natural-group copy. */
+export function isPinnedSectionRenderRow(
+  row: RenderRow,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): boolean {
+  if (row.type === 'folder-workspace') {
+    return row.sectionKey === PINNED_GROUP_KEY
+  }
+  const itemRow = getRenderRowWorktreeItem(row, worktreeId, executionHostId)
+  return itemRow === null || isPinnedWorktreeRow(itemRow)
+}
+
+// Prefer the workspace's natural group row over its pinned duplicate when both are rendered.
 export function findPreferredRenderRowIndexForWorktree(
   renderRows: readonly RenderRow[],
   worktreeId: string,
@@ -93,14 +108,9 @@ export function findPreferredRenderRowIndexForWorktree(
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
-    const itemRow = getRenderRowWorktreeItem(row, worktreeId)
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
-      return index
-    }
     if (
       pinnedDisplayPolicy === 'duplicate-in-groups' &&
-      row.type === 'folder-workspace' &&
-      row.sectionKey !== PINNED_GROUP_KEY
+      !isPinnedSectionRenderRow(row, worktreeId)
     ) {
       return index
     }
@@ -126,7 +136,7 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
       if (fallbackIndex === -1) {
         fallbackIndex = index
       }
-      if (pinnedDisplayPolicy !== 'duplicate-in-groups' || row.sectionKey !== PINNED_GROUP_KEY) {
+      if (!isPinnedSectionRenderRow(row, worktree.id)) {
         return index
       }
       continue

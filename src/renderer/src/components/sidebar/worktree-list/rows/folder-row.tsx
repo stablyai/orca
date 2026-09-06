@@ -60,7 +60,6 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
-  const optionRowKey = row.sectionKey ? row.key : folderWorktree.id
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
     folderWorkspaceId: row.folderWorkspace.id
@@ -89,13 +88,13 @@ export function renderFolderWorkspaceVirtualRow(args: {
   return (
     <div
       key={vItem.key}
-      id={getWorktreeOptionId(optionRowKey)}
+      id={getWorktreeOptionId(row.key)}
       role="option"
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
       aria-current={ctx.activeWorktreeId === folderWorktree.id ? 'page' : undefined}
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
-      data-worktree-row-key={optionRowKey}
+      data-worktree-row-key={row.key}
       data-worktree-virtual-row
       data-worktree-virtual-row-key={String(vItem.key)}
       data-worktree-virtual-row-start={vItem.start}
@@ -104,7 +103,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
       className="absolute left-0 right-0 top-0"
       style={{ transform: getVirtualRowTransform(vItem.start) }}
       onClickCapture={ctx.onRowClickCapture}
-      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, optionRowKey)}
+      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, row.key)}
     >
       <div
         className="relative"
@@ -119,7 +118,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
           flushSurface
           nativeDragEnabled={false}
           onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-          activationRowKey={optionRowKey}
+          activationRowKey={row.key}
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}

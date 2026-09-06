@@ -109,7 +109,8 @@ describe('pinned folder workspaces land in the Pinned section', () => {
       })
       expect(rows[pinnedHeaderIndex + 1]).toMatchObject({
         type: 'folder-workspace',
-        key: 'folder-workspace:fw-1',
+        key: `${PINNED_GROUP_KEY}:folder-workspace:fw-1`,
+        sectionKey: PINNED_GROUP_KEY,
         folderWorkspace: { id: 'fw-1', isPinned: true }
       })
     })
@@ -164,7 +165,9 @@ describe('pinned folder workspaces follow the display policy', () => {
       sectionKey: PINNED_GROUP_KEY,
       folderWorkspace: { id: 'fw-1' }
     })
-    expect(folderRows(rows.slice(2)).map((row) => row.key)).toEqual(['folder-workspace:fw-1'])
+    expect(folderRows(rows.slice(2)).map((row) => row.sectionKey)).toEqual([
+      `project-group:${GROUP.id}`
+    ])
   })
 
   it('sits beside a pinned git worktree in Pinned', () => {

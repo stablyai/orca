@@ -94,7 +94,7 @@ describe('folder workspaces render under every Group by mode', () => {
 
   it('does not duplicate the row under repo grouping', () => {
     const rows = buildSidebarRows({ groupBy: 'repo' })
-    expect(folderRows(rows).map((row) => row.key)).toEqual(['folder-workspace:fw-1'])
+    expect(folderRows(rows).map((row) => row.sectionKey)).toEqual([`project-group:${GROUP.id}`])
   })
 })
 

@@ -31,8 +31,7 @@ import {
 } from './row-builders'
 import {
   compareFolderWorkspacesForDisplay,
-  getRenderableFolderWorkspaces,
-  partitionFolderWorkspacesForPinnedDisplay
+  getRenderableFolderWorkspaces
 } from './folder-workspace-lanes'
 import { getPinnedWorktreeDisplayPolicy } from './row-types'
 import type {
@@ -77,10 +76,7 @@ export function buildRows(
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
   // same set of folder workspaces and only chooses where they land (#15362).
-  // Pin is a later placement choice on that same set, matching git worktrees.
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
-  const { pinned: pinnedFolderWorkspaces, natural: naturalFolderWorkspaces } =
-    partitionFolderWorkspacesForPinnedDisplay(renderableFolderWorkspaces, pinnedDisplayPolicy)
   const cyclicLineageIds = nestLineage
     ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
     : new Set<string>()
@@ -109,6 +105,16 @@ export function buildRows(
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
       : worktrees.filter((worktree) => !pinnedSectionIds.has(getWorktreeHostIdentity(worktree)))
+  // Pin is placement, not membership, for folder workspaces too: the pinned ones
+  // always render under Pinned and only the policy decides whether their group
+  // keeps a second copy. Mirrors the worktree partition directly above.
+  const pinnedFolderWorkspaces = renderableFolderWorkspaces.filter(
+    (pair) => pair.folderWorkspace.isPinned
+  )
+  const naturalFolderWorkspaces =
+    pinnedDisplayPolicy === 'duplicate-in-groups'
+      ? renderableFolderWorkspaces
+      : renderableFolderWorkspaces.filter((pair) => !pair.folderWorkspace.isPinned)
   const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
     naturalWorktrees,
     repoMap,
@@ -136,23 +142,22 @@ export function buildRows(
     settings,
     projectGrouping
   })
-  emitPinnedGroup(
-    pinnedSectionWorktrees,
-    pinnedFolderWorkspaces,
+  emitPinnedGroup({
+    result,
+    worktrees: pinnedSectionWorktrees,
+    folderWorkspaces: pinnedFolderWorkspaces,
     repoMap,
     defaultHostId,
     collapsedGroups,
     renderedNaturalAnchorRepoIds,
     importedWorktreesByRepo,
-    groupBy !== 'repo',
-    result,
+    allowImportedFallback: groupBy !== 'repo',
     lineageById,
     worktreeMap,
     nestLineage,
     cyclicLineageIds,
-    noticeHostContextLabelByRepoId,
-    pinnedDisplayPolicy === 'duplicate-in-groups'
-  )
+    noticeHostContextLabelByRepoId
+  })
   if (groupBy === 'none') {
     // Why folder workspaces gate this too: an account with only folder
     // workspaces rendered nothing at all in flat mode before (#15362).
@@ -190,7 +195,7 @@ export function buildRows(
         for (const pair of [...naturalFolderWorkspaces].sort((left, right) =>
           compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
         )) {
-          result.push(buildFolderWorkspaceRow(pair, 0))
+          result.push(buildFolderWorkspaceRow(pair, ALL_GROUP_KEY, 0))
         }
       }
     }
