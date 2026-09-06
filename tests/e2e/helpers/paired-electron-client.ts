@@ -267,6 +267,9 @@ export async function rePairPairedElectronClient(
       if (!store) {
         throw new Error('Paired desktop store is unavailable')
       }
+      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(null))) {
+        throw new Error('Paired desktop could not select local before replacing the HUB')
+      }
       await window.api.runtimeEnvironments.remove({ selector: currentEnvironmentId })
       const result = await window.api.runtimeEnvironments.addFromPairingCode({
         name,
@@ -289,12 +292,39 @@ export async function rePairPairedElectronClient(
   )
   client.environmentId = environmentId
   // Why: removing and re-adding the same HUB changes the environment identity; remount so no pane keeps the retired transport wrapper.
-  await client.page.reload()
-  await client.page.waitForFunction(
-    () => window.__store?.getState().workspaceSessionReady === true,
-    null,
-    { timeout: 30_000 }
-  )
+  client.page.on('pageerror', (error) => console.log('[nested-repair-pageerror]', error.message))
+  try {
+    await client.page.reload()
+    await client.page.waitForFunction(
+      () => window.__store?.getState().workspaceSessionReady === true,
+      null,
+      { timeout: 30_000 }
+    )
+  } catch (error) {
+    console.log(
+      '[nested-repair-readiness]',
+      JSON.stringify(
+        await client.page.evaluate(() => {
+          const state = window.__store?.getState()
+          return {
+            url: location.pathname,
+            title: document.title,
+            storePresent: Boolean(state),
+            workspaceSessionReady: state?.workspaceSessionReady,
+            activeEnvironment: state?.settings?.activeRuntimeEnvironmentId,
+            activeWorktreeId: state?.activeWorktreeId,
+            tabs: state?.tabsByWorktree,
+            worktreeIds: Object.values(state?.worktreesByRepo ?? {})
+              .flat()
+              .map((w) => w.id),
+            statuses: [...(state?.runtimeStatusByEnvironmentId.entries() ?? [])],
+            text: document.body.innerText.slice(0, 3000)
+          }
+        })
+      )
+    )
+    throw error
+  }
   await client.installDirectSshAttemptProbe()
   const reachable = await client.page.evaluate(async (nextEnvironmentId) => {
     const store = window.__store
