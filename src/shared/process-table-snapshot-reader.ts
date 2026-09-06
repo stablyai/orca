@@ -250,28 +250,48 @@ async function readLinuxProcessStartTimes(
   return result
 }
 
+async function captureProcessTable(args: readonly string[]): Promise<string> {
+  let stdout: string
+  try {
+    ;({ stdout } = await execFile('ps', [...args], {
+      encoding: 'utf-8',
+      timeout: PS_TIMEOUT_MS,
+      maxBuffer: PS_MAX_BUFFER_BYTES
+    }))
+  } catch (error) {
+    // A ceiling hit is truncation, not absence: name it in the domain vocabulary.
+    if ((error as { code?: unknown } | null)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      throw new ProcessTableCaptureError('capture_truncated')
+    }
+    throw error
+  }
+  return assertWholeCapture(stdout)
+}
+
 const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>({
   runPs: async () => {
-    let stdout: string
-    try {
-      ;({ stdout } = await execFile('ps', [...PS_ARGS], {
-        encoding: 'utf-8',
-        timeout: PS_TIMEOUT_MS,
-        maxBuffer: PS_MAX_BUFFER_BYTES
-      }))
-    } catch (error) {
-      // A ceiling hit is truncation, not absence: name it in the domain vocabulary.
-      if ((error as { code?: unknown } | null)?.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-        throw new ProcessTableCaptureError('capture_truncated')
-      }
-      throw error
-    }
-    const baseCapture = createProcessTableCapture(assertWholeCapture(stdout))
+    const stdout = await captureProcessTable(PS_ARGS)
+    const baseCapture = createProcessTableCapture(stdout)
     const startTimesByPid = await readLinuxProcessStartTimes(baseCapture.lenient())
     return createProcessTableCapture(stdout, startTimesByPid, process.platform === 'linux')
   },
   now: () => Date.now()
 })
+
+// macOS terminal-name resolution dominates capture time; shell proof needs only job control and argv.
+const shellForegroundReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
+  runPs: async () =>
+    parseProcessTableRows(
+      await captureProcessTable(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command='])
+    ),
+  now: () => Date.now()
+})
+
+export async function getFreshShellForegroundSnapshot(): Promise<ProcessTableRow[]> {
+  return process.platform === 'darwin'
+    ? shellForegroundReader.getFreshSnapshot()
+    : getFreshProcessTableSnapshot()
+}
 
 export async function getProcessTableSnapshot(): Promise<ProcessTableRow[]> {
   return (await processTableReader.getSnapshot()).lenient()
@@ -334,4 +354,5 @@ export async function getStrictProcessTableSnapshotWithAge(): Promise<{
 
 export function resetProcessTableSnapshotForTests(): void {
   processTableReader.reset()
+  shellForegroundReader.reset()
 }

@@ -3,6 +3,7 @@ import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wr
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
+  getFreshShellForegroundSnapshot,
   getProcessTableSnapshot
 } from '../../shared/process-table-snapshot-reader'
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
@@ -76,7 +77,7 @@ export async function confirmShellForegroundProcess(
     }
   }
   try {
-    const index = getProcessTableIndex(await getFreshProcessTableSnapshot())
+    const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = index.byPid.get(shellPid)
     if (!root) {
       return false
