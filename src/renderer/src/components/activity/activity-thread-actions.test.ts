@@ -98,7 +98,9 @@ describe('activity thread host routing', () => {
     // Bare setActiveWorktree skips setActiveView('terminal'), initial-terminal seeding and
     // sleeping-session resume — the workspace dispatcher is the only path that runs them.
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
-      executionHostId: REMOTE_HOST
+      executionHostId: REMOTE_HOST,
+      revealInSidebar: false,
+      clearSidebarFilters: false
     })
     expect(setActiveWorktree).not.toHaveBeenCalled()
     expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith(
@@ -121,7 +123,9 @@ describe('activity thread host routing', () => {
 
     expect(setSelectedPaneKey).toHaveBeenCalledWith(thread.paneKey)
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
-      executionHostId: REMOTE_HOST
+      executionHostId: REMOTE_HOST,
+      revealInSidebar: false,
+      clearSidebarFilters: false
     })
     expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith(
       thread.tab.id,
@@ -136,7 +140,9 @@ describe('activity thread host routing', () => {
     makeActions().selectThread(thread)
 
     expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(thread.worktree.id, {
-      executionHostId: REMOTE_HOST
+      executionHostId: REMOTE_HOST,
+      revealInSidebar: false,
+      clearSidebarFilters: false
     })
     expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })

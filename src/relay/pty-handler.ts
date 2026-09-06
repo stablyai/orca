@@ -231,6 +231,10 @@ type ManagedPty = {
   gitCredentialPromptGuarded: boolean
   historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
+  /** Whether this host armed the shell-ready marker for a renderer-delivered startup command.
+   *  Kept off `startupCommand`, which is dropped once delivered; the client reads it from the
+   *  spawn reply to skip waiting for a marker that will never come (fish, sh, Windows). */
+  shellReadyArmed?: boolean
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
   gracefulKillSent?: boolean
@@ -253,6 +257,7 @@ type RelayAgentSessionCreateResult = {
   replay?: string
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
+  shellReadyArmed?: boolean
 }
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -1804,7 +1809,10 @@ export class PtyHandler {
         incarnationId: managed.incarnationId,
         agentSessionEnsure: result,
         ...(sourceActivation ? { sourceActivation } : {}),
-        ...(adoptedReplay ? { replay: adoptedReplay } : {})
+        ...(adoptedReplay ? { replay: adoptedReplay } : {}),
+        ...(managed.shellReadyArmed !== undefined
+          ? { shellReadyArmed: managed.shellReadyArmed }
+          : {})
       }
     } catch (error) {
       if (!physicalSpawnCommitted) {
@@ -1827,6 +1835,7 @@ export class PtyHandler {
     id: string
     incarnationId: string
     sourceActivation?: PtySourceReceivingActivation
+    shellReadyArmed?: boolean
   }> {
     const pty = await this.loadPty()
     if (!pty) {
@@ -1998,6 +2007,7 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
+      shellReadyArmed: rendererShellReadySupported,
       ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {
             startupCommand: {
@@ -2039,7 +2049,8 @@ export class PtyHandler {
     return {
       id,
       incarnationId: managed.incarnationId,
-      ...(sourceActivation ? { sourceActivation } : {})
+      ...(sourceActivation ? { sourceActivation } : {}),
+      shellReadyArmed: rendererShellReadySupported
     }
   }
 

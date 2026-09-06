@@ -3,7 +3,11 @@ import { useAppStore } from '../store'
 import { clearLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-apply'
 import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 
-export { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
+export {
+  isCurrentLocalStructuredSessionGeneration,
+  localStructuredSessionGeneration,
+  resetLocalStructuredSessionVersionForTests
+} from './local-structured-session-tabs-sync/inventory-generation-fence'
 export {
   refreshLocalStructuredSessionTabs,
   restoreLocalStructuredSessionTabsOnce

@@ -36,8 +36,16 @@ type Subscriber = {
   fence: number
 }
 
+export type AgentSessionSubscribersHooks = {
+  /** Fires after any publication that can change journal content, whether or not anyone
+   *  is subscribed to the transcript: session lists project status from this same edge. */
+  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
+}
+
 export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
+
+  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
   /** Opens the stream with a bounded tail page or, when the client's cursor
    *  still resolves, with the rows it missed. Returns the disposer. */
@@ -99,6 +107,7 @@ export class AgentSessionSubscribers {
     for (const subscriber of this.subscribers(sessionId)) {
       this.deliver(subscriber, journal)
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   /** Force every subscriber back to a bounded tail page — recovery, epoch
@@ -123,6 +132,7 @@ export class AgentSessionSubscribers {
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   snapshot(
@@ -143,6 +153,7 @@ export class AgentSessionSubscribers {
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   handoff(sessionId: string, fence: number, handoff: AgentSessionHandoffStatus): void {

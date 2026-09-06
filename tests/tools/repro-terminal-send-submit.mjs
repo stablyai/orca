@@ -186,7 +186,9 @@ async function parentMain() {
   const expectBlocked = hasFlag('expect-blocked')
   const providedHandle = argValue('terminal')
   await mkdir(tempDir, { recursive: true })
-  await rm(reportPath, { force: true })
+  if (!providedHandle) {
+    await rm(reportPath, { force: true })
+  }
 
   let handle = providedHandle
   if (!handle) {

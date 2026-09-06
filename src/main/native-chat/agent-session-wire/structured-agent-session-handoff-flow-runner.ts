@@ -28,7 +28,11 @@ export class StructuredAgentSessionHandoffFlowRunner {
 
   track(task: Promise<void>): void {
     this.active.add(task)
-    void task.finally(() => this.active.delete(task))
+    // Settle-only bookkeeping. `.finally` forwards a rejection onto a promise nobody awaits, so a
+    // failure notification that threw escaped as an unhandled rejection even though `drain` — the
+    // one consumer — settles the flow through `allSettled`.
+    const forget = (): void => void this.active.delete(task)
+    void task.then(forget, forget)
   }
 
   begin(input: {

@@ -162,6 +162,9 @@ export type ClaudeSessionExit = {
   closePromise?: Promise<boolean>
   /** Shared lifecycle settlement for concurrent proof retries. */
   settlementPromise?: Promise<void>
+  /** The whole ladder-then-settle tail, retained so a barrier can await an exit
+   *  that is observed but not yet published. Never rejects. */
+  publication?: Promise<void>
 }
 
 export type ClaudeAcquisitionAttempt = {

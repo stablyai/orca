@@ -1,4 +1,6 @@
-import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot-reader'
+// Why not the sibling reader that re-exports this: it imports `node:child_process`, which the
+// renderer cannot load — reaching it blanks the window at module evaluation.
+import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot'
 
 /**
  * Picks the delay until a pane's next cadence inspection.

@@ -1,3 +1,4 @@
+import type { RelayOpsRegion } from './environment-config.js'
 import {
   exactAdmissionSelector,
   type AdmissionSelector,
@@ -30,6 +31,15 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   relayLogMaxAgeMs: 180_000,
   heartbeatMaxAgeMs: 45_000,
   endpointLatencyMs: 2_000,
+  // Why: a cell's /ready fetches the auth JWKS and runs SELECT 1 against Cloud SQL,
+  // both in us-central1, so from the US runner asia-east2 cells measure p50 0.88 s /
+  // max 2.7 s against 0.08-0.5 s for us-central1. The flat 2 000 bar froze three
+  // healthy 15-minute gates on 2026-09-05 (c27 at 2568/2668/2685 ms); hard faults
+  // are still caught by the .health/.ready equal-1 checks and the 8 s fetch timeout.
+  cellEndpointLatencyMs: {
+    'us-central1': 2_000,
+    'asia-east2': 4_000
+  } as const satisfies Record<RelayOpsRegion, number>,
   cloudSqlCpuUtilization: 0.8,
   cloudSqlMemoryUtilization: 0.9,
   // Why: healthy latest-sum backends idle near 100 but spike to 216 in 1-minute
@@ -126,6 +136,7 @@ export type IncidentSource = {
 
 export type IncidentCellExpectation = {
   cellId: string
+  region: RelayOpsRegion
   runtimeKnown: boolean
   powered: boolean
   expectedAdmissionState: AdmissionState
@@ -405,7 +416,7 @@ function checkCell(
       'active-probe',
       probe,
       `cell.${cell.cellId}.latency_ms`,
-      INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs,
+      INCIDENT_MONITOR_THRESHOLDS.cellEndpointLatencyMs[cell.region],
       'max'
     ],
     [

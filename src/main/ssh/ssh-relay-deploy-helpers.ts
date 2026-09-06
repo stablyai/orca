@@ -209,6 +209,7 @@ export function waitForSentinel(
         const afterSentinelOffset =
           sentinelIdx + RELAY_SENTINEL_BUFFER.length - bufferedStdout.length
         const afterSentinel = data.subarray(Math.max(0, afterSentinelOffset))
+        bufferedStdout = Buffer.alloc(0)
 
         if (afterSentinel.length > 0) {
           pendingAfterSentinel = afterSentinel
@@ -258,7 +259,7 @@ export function waitForSentinel(
         return
       }
 
-      bufferedStdout = bufferedStdout.length === 0 ? data : Buffer.concat([bufferedStdout, data])
+      bufferedStdout = startupStdout
     })
   })
 }

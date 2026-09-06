@@ -283,6 +283,24 @@ async function expectTerminalInteractive(
 }
 
 async function moveHostAwayFromWorktree(page: Page, targetWorktreeId: string): Promise<string> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (targetId) => {
+          const state = window.__store?.getState()
+          const target = state?.allWorktrees().find((worktree) => worktree.id === targetId)
+          if (!state || !target) {
+            return false
+          }
+          await state.fetchWorktrees(target.repoId)
+          return window
+            .__store!.getState()
+            .allWorktrees()
+            .some((worktree) => worktree.repoId === target.repoId && worktree.id !== targetId)
+        }, targetWorktreeId),
+      { message: 'Seeded alternate host worktree never loaded' }
+    )
+    .toBe(true)
   const alternateWorktreeId = await page.evaluate((targetId) => {
     const state = window.__store?.getState()
     const alternate = state?.allWorktrees().find((worktree) => worktree.id !== targetId)
@@ -423,6 +441,9 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
     expect(reconnectControl.ptyId).not.toBe(target.ptyId)
     await openClientTab(client.page, worktreeId, reconnectControl.webTabId)
     await waitForPaneConnected(client.page, reconnectControl.webTabId)
+    await expect
+      .poll(() => readPaneContent(client!.page, reconnectControl.webTabId), { timeout: 30_000 })
+      .toContain('READY')
     await expectTerminalInteractive(client, reconnectControl, 'y')
   } finally {
     if (client) {

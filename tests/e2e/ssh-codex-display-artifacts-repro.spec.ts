@@ -48,7 +48,7 @@ import { resetWebglAndCaptureGraySlabAnalysis } from './terminal-webgl-reset-cap
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const RUN_REAL_REMOTE_CODEX = process.env.ORCA_E2E_REAL_REMOTE_CODEX === '1'
-const EXPECT_NO_ARTIFACTS = process.env.ORCA_E2E_EXPECT_NO_CODEX_ARTIFACTS === '1'
+const EXPECT_NO_ARTIFACTS = process.env.ORCA_E2E_EXPECT_NO_CODEX_ARTIFACTS !== '0'
 const CAPTURE_WHILE_REMOTE_TUI_RUNNING =
   process.env.ORCA_E2E_CAPTURE_WHILE_REMOTE_TUI_RUNNING === '1'
 const HIDE_UNTIL_REMOTE_TUI_DONE = process.env.ORCA_E2E_HIDE_UNTIL_REMOTE_TUI_DONE === '1'

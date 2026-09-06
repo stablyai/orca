@@ -121,6 +121,67 @@ describe('createSshBackgroundStartupDelivery shell-ready fallback', () => {
     expect(write.mock.calls[0]?.[1]).toContain('\x1b[200~')
   })
 
+  // The host answers in the spawn reply whether it armed the marker. `false` means
+  // none will ever come, so the pre-#18796 fast path applies; `true` keeps the wait;
+  // absent is an older host and leaves the client-side prediction alone.
+  describe('host shell-ready verdict', () => {
+    it('delivers immediately and raw when the host reports the marker was not armed', () => {
+      const { delivery, write } = createMultilineDelivery(true)
+
+      delivery.applyHostShellReadyArmed(false)
+      delivery.armFallback('pty-1')
+      // The launch flow schedules on every data chunk (launch-agent-background-session).
+      delivery.handleData('user@remote repo % ')
+      delivery.schedule('pty-1')
+      vi.advanceTimersByTime(50)
+
+      expect(write).toHaveBeenCalledTimes(1)
+      expect(write.mock.calls[0]?.[1]).not.toContain('\x1b[200~')
+    })
+
+    it('keeps the short silent-shell budget once the host says no marker is coming', () => {
+      const { delivery, write } = createDelivery()
+
+      delivery.applyHostShellReadyArmed(false)
+      delivery.armFallback('pty-1')
+      vi.advanceTimersByTime(1_550)
+
+      expect(write).toHaveBeenCalledTimes(1)
+    })
+
+    it('still waits for the marker when the host reports it armed one', () => {
+      const { delivery, write } = createDelivery()
+
+      delivery.applyHostShellReadyArmed(true)
+      delivery.armFallback('pty-1')
+      delivery.handleData('user@remote repo % ')
+      vi.advanceTimersByTime(1_400)
+
+      expect(write).not.toHaveBeenCalled()
+
+      delivery.handleData(`${SHELL_READY}user@remote repo % `)
+      vi.advanceTimersByTime(50)
+
+      expect(write).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the client-side prediction when an older host omits the verdict', () => {
+      const { delivery, write } = createDelivery()
+
+      delivery.applyHostShellReadyArmed(undefined)
+      delivery.armFallback('pty-1')
+      delivery.handleData('user@remote repo % ')
+      vi.advanceTimersByTime(1_400)
+
+      expect(write).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(150)
+      vi.advanceTimersByTime(50)
+
+      expect(write).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('submits raw when the wait ends at the fallback instead of the marker', () => {
     const { delivery, write } = createMultilineDelivery(true)
 

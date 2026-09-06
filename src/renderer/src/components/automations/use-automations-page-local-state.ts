@@ -12,7 +12,11 @@ import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationCreateDestination } from './automation-create-destination'
 import type { AutomationListRow } from './automation-list-row-identity'
-import { EMPTY_AUTOMATION_LIST_FILTER, type AutomationListFilter } from './automation-list-view'
+import {
+  EMPTY_AUTOMATION_LIST_FILTER,
+  type AutomationListFilter,
+  type AutomationListSort
+} from './automation-list-view'
 import type {
   AutomationPaneTab,
   AutomationRunPageOrigin,
@@ -54,6 +58,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [isSaving, setIsSaving] = useState(false)
   const [listSearchQuery, setListSearchQuery] = useState('')
   const [listFilter, setListFilter] = useState<AutomationListFilter>(EMPTY_AUTOMATION_LIST_FILTER)
+  const [listSort, setListSort] = useState<AutomationListSort | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createTarget, setCreateTarget] = useState<AutomationCreateTarget>('orca')
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null)
@@ -178,6 +183,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     setListSearchQuery,
     listFilter,
     setListFilter,
+    listSort,
+    setListSort,
     createOpen,
     setCreateOpen,
     createTarget,
