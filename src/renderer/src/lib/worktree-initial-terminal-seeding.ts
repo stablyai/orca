@@ -132,6 +132,32 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+  // Why: a caller opening its own primary surface (a structured native chat) asked for that surface
+  // alone. Setup launched in its own tab needs no shell to attach to, so seeding one leaves a stray
+  // "Terminal 1" beside the chat. Splits and issue automation still need a pane to split from.
+  const setupNeedsHostTerminal =
+    setup !== undefined &&
+    (useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab') !== 'new-tab'
+  if (
+    opts?.callerProvidesSurface === true &&
+    renderableTabCount === 0 &&
+    !sequencedStartup &&
+    !issueCommand &&
+    !setupNeedsHostTerminal &&
+    !defaultTabs?.tabs.length &&
+    opts?.createNewTerminalForStartup !== true
+  ) {
+    queueSetupAndIssueCommands(
+      store,
+      worktreeId,
+      null,
+      setup,
+      undefined,
+      wrappedSetupCommandStr,
+      opts
+    )
+    return null
+  }
   // Why: only startup hydration honours the closed-last-tab tombstone. Every explicit
   // activation (sidebar, palette, automation resume, wake) re-seeds a surface instead,
   // because closing the last terminal normally deactivates the workspace too

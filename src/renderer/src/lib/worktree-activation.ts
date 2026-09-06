@@ -286,6 +286,7 @@ export function activateAndRevealWorktree(
           {
             ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
+            ...(opts?.providesInitialSurface === true ? { callerProvidesSurface: true } : {}),
             reseedEmptiedWorkspace: opts?.providesInitialSurface !== true
           }
         )
