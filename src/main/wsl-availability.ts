@@ -1,5 +1,10 @@
 import { execFile, execFileSync } from 'node:child_process'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
+import {
+  canExecuteWslWithoutKernel,
+  canExecuteWslWithoutKernelSync,
+  isWslMissingKernelError
+} from './wsl-missing-kernel-probe'
 
 type WslAvailabilityCache =
   | { available: true }
@@ -147,6 +152,9 @@ export function isWslAvailable(): boolean {
     })
     return cacheWslAvailabilityProbeResult(null, startedAtGeneration)
   } catch (error) {
+    if (isWslMissingKernelError(error) && canExecuteWslWithoutKernelSync()) {
+      return cacheWslAvailabilityProbeResult(null, startedAtGeneration)
+    }
     return cacheWslAvailabilityProbeResult(error, startedAtGeneration)
   }
 }
@@ -176,7 +184,12 @@ export function isWslAvailableAsync(): Promise<boolean> {
   const startedAtGeneration = wslAvailabilityCacheGeneration
   wslAvailabilityProbeInFlight = probeWslStatus()
     .then(() => cacheWslAvailabilityProbeResult(null, startedAtGeneration))
-    .catch((error: unknown) => cacheWslAvailabilityProbeResult(error, startedAtGeneration))
+    .catch(async (error: unknown) => {
+      if (isWslMissingKernelError(error) && (await canExecuteWslWithoutKernel())) {
+        return cacheWslAvailabilityProbeResult(null, startedAtGeneration)
+      }
+      return cacheWslAvailabilityProbeResult(error, startedAtGeneration)
+    })
     .finally(() => {
       wslAvailabilityProbeInFlight = null
     })
