@@ -56,7 +56,9 @@ describe('real WSL terminal lane', () => {
       true
     )
     const exercise = steps.find((step) => step.name === 'Exercise real WSL launch and paste')
-    expect(exercise.run).toContain('--repeat-each=3')
+    expect(exercise.run.split(/\s+/).filter((arg) => arg.startsWith('--repeat-each='))).toEqual([
+      '--repeat-each=3'
+    ])
     expect(exercise.run).toContain('--grep "WSL"')
     const receipt = steps.find((step) => step.name === 'Require all nine WSL executions')
     expect(receipt.if).toBe('always()')
