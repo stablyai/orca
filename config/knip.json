@@ -4,6 +4,7 @@
     "src/main/index.ts",
     "src/preload/index.ts",
     "src/preload/browser-window-close.ts",
+    "src/preload/doc-preview-link.ts",
     "src/main/daemon/daemon-entry.ts",
     "src/main/plugins/plugin-host-entry.ts",
     "src/main/computer/sidecar-entry.ts",
@@ -13,9 +14,11 @@
     "src/main/ai-vault/session-scanner-worker-entry.ts",
     "src/main/ports/port-scan-command-worker-entry.ts",
     "src/main/ipc/parcel-watcher-process-entry.ts",
+    "src/main/native-chat/wsl-transcript-fs-process-entry.ts",
     "src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts",
     "src/main/agent-hooks/managed-agent-hook-controls.ts",
     "src/main/claude-accounts/keychain.ts",
+    "src/main/runtime/rpc/methods/ui-state-schema-parity-checks.ts",
     "src/renderer/src/main.tsx",
     "src/renderer/src/popout.tsx",
     "src/renderer/src/web/main.tsx",
@@ -23,6 +26,8 @@
     "src/cli/index.ts",
     "src/relay/relay.ts",
     "src/relay/wsl-agent-hook-relay.ts",
+    "src/relay/ai-vault-service-entry.ts",
+    "src/relay/wsl-browser-network-relay.ts",
     "config/scripts/**/*.{mjs,cjs,js,ts}",
     "config/build-plugins/**/*.ts",
     "electron.vite.config.ts",
@@ -32,14 +37,22 @@
     "config/electron-builder.config.cjs",
     "config/oxlint-plugins/**/*.{js,mjs,ts}",
     "tests/**/*.{ts,tsx,mjs}",
-    "**/*.test.{ts,tsx}"
+    "**/*.test.{ts,tsx}",
+    "src/**/*.bench.ts"
   ],
   "project": [
     "src/**/*.{ts,tsx}",
     "config/scripts/**/*.{mjs,cjs,js,ts}",
     "config/build-plugins/**/*.ts"
   ],
-  "ignore": ["mobile/**", "out/**", "dist/**", "node_modules/**", "resources/**"],
+  "ignore": [
+    "mobile/**",
+    "out/**",
+    "dist/**",
+    "node_modules/**",
+    "resources/**",
+    "tests/e2e/.cross-version-checkouts/**"
+  ],
   "ignoreDependencies": ["electron", "@types/*"],
   "ignoreExportsUsedInFile": true,
   "includeEntryExports": false
