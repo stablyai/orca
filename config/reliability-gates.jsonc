@@ -28,19 +28,23 @@
         "https://github.com/stablyai/orca/pull/15708",
         "https://github.com/stablyai/orca/pull/18901"
       ],
-      "invariant": "A chunked write completes before later input to the same PTY generation; queued stale or cancelled writes never reach a replacement PTY, and independent terminals remain independent with bounded retained work.",
-      "oracle": "Compare all 25,007 observed PTY stdin bytes against a 25,000-byte Unicode paste followed by Z, Tab, Up, Backspace and Return. Separately inspect write calls under lease/generation replacement, abort saturation, queue overload and independent-terminal progress.",
+      "invariant": "Mobile controls and subsequent text preserve event order across delayed receipts. A chunked write completes before later input to the same PTY generation; queued stale or cancelled writes never reach a replacement PTY, and independent terminals remain independent with bounded retained work.",
+      "oracle": "Compare all 25,007 observed PTY stdin bytes against a 25,000-byte Unicode paste followed by Z, Tab, Up, Backspace and Return. Hold mobile prefix/control receipts and assert subsequent Backspace and typing neither overtake controls nor pass a failed control. Separately inspect write calls under lease/generation replacement, abort saturation, queue overload and independent-terminal progress.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer.test.ts src/shared/runtime-rpc-call-queue.test.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
-        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/transport/terminal-ordered-input-history.test.ts mobile/src/transport/logical-terminal-stream-input-history.test.ts"
+        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/transport/terminal-ordered-input-history.test.ts mobile/src/transport/logical-terminal-stream-input-history.test.ts",
+        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/terminal/use-terminal-live-input-commit.test.ts mobile/src/terminal/terminal-live-control-barrier.test.ts mobile/src/session/mobile-attachment-retained-blur.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/runtime-terminal-writer.test.ts",
         "src/shared/runtime-rpc-call-queue.test.ts",
         "src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
         "mobile/src/transport/terminal-ordered-input-history.test.ts",
-        "mobile/src/transport/logical-terminal-stream-input-history.test.ts"
+        "mobile/src/transport/logical-terminal-stream-input-history.test.ts",
+        "mobile/src/terminal/use-terminal-live-input-commit.test.ts",
+        "mobile/src/terminal/terminal-live-control-barrier.test.ts",
+        "mobile/src/session/mobile-attachment-retained-blur.test.ts"
       ],
       "assertionRefs": [
         {
@@ -68,6 +72,14 @@
           "assertions": [
             "rejects stale candidates, old clients, and late completions across a fence and recovery"
           ]
+        },
+        {
+          "file": "mobile/src/terminal/use-terminal-live-input-commit.test.ts",
+          "assertions": [
+            "keeps Backspace after earlier Return and navigation while prefix receipts are delayed",
+            "keeps new typing after Return while the earlier prefix receipt is delayed",
+            "suppresses later typing when the earlier Return fails"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -92,7 +104,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Existing queue caps writes at 1,023 pending per PTY generation, 2,048 globally, and about 32 MiB retained text; deterministic tests cover saturated cancellation and retained-text admission. No polling or subprocess-per-key work is added. The test owns one short-lived PTY probe and closes its sockets and process."
+        "evidence": "Existing host queue caps writes at 1,023 pending per PTY generation, 2,048 globally, and about 32 MiB retained text. Mobile admission caps 64 requests and 1 MiB; controls preserve individual receipt barriers. A deterministic 500 ms receipt test measures 32 seconds for 64 controls and fail-closed admission at 65: bounded retention, not fast-repeat latency proof. No polling or subprocess-per-key work is added. The test owns one short-lived PTY probe and closes its sockets and process."
       },
       "promotionCriteria": [
         "Measure CI runtime and flake history before promotion.",
@@ -101,6 +113,8 @@
       ],
       "knownGaps": [
         "No native mobile-to-PTY or physical Bluetooth proof in this gate.",
+        "Manual native Android-to-PTY runs at 300/400/500 ms simulated application-frame RTT passed, but one initial 400 ms attempt was one byte short and remains unexplained; no native soak claim.",
+        "Receipt-serialized held controls retain an RTT-per-control latency cost.",
         "No real daemon, SSH, WSL, Linux or Windows stress run.",
         "Host acceptance is not shell execution; stream negotiation and user-visible recovery require separate evidence."
       ],

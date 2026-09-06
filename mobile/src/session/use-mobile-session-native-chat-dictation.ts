@@ -114,11 +114,11 @@ export function useMobileSessionNativeChatDictation(
           return
         }
         void (async () => {
-          const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(insertHandle)
-          if (!flushedPendingInput) {
-            return
-          }
-          const sent = await sendLiveTerminalInput(insertHandle, route.text)
+          const sent = await flushPendingLiveInputBeforeExternalSend(
+            insertHandle,
+            () => sendLiveTerminalInput(insertHandle, route.text),
+            route.text
+          )
           if (sent) {
             showToast('Dictation inserted')
           }

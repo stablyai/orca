@@ -5,8 +5,6 @@ import {
   getTerminalLiveAccessoryLocalEditText
 } from './terminal-live-text-commit'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
-import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
-import type { TerminalLiveInputSender } from './terminal-live-input-sender'
 
 export type TerminalLiveAccessoryInputCommitResult =
   | { readonly kind: 'allow-raw' }
@@ -27,7 +25,7 @@ type TerminalLiveAccessoryInputCommitOptions = {
     composing?: boolean
   ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
-  readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
+  readonly queueLiveInputControl: (handle: string, bytes: string) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
   readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly liveInputRef: RefObject<TextInput | null>
@@ -35,7 +33,6 @@ type TerminalLiveAccessoryInputCommitOptions = {
   readonly onInteraction: () => void
   readonly pendingLiveInputHandleRef: RefObject<string | null>
   readonly sentLiveInputTextRef: RefObject<string>
-  readonly sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender>
   readonly setLiveInputCapture: (text: string) => void
   readonly waitForPendingLiveInputFlush: () => Promise<boolean>
 }
@@ -44,7 +41,7 @@ export function useTerminalLiveAccessoryInputCommit({
   activeHandle,
   applyLiveInputMirror,
   clearPendingLiveInputCommit,
-  flushPendingLiveInputText,
+  queueLiveInputControl,
   heldLiveInputTextRef,
   liveInputComposingRef,
   liveInputRef,
@@ -52,7 +49,6 @@ export function useTerminalLiveAccessoryInputCommit({
   onInteraction,
   pendingLiveInputHandleRef,
   sentLiveInputTextRef,
-  sendLiveTerminalInputRef,
   setLiveInputCapture,
   waitForPendingLiveInputFlush
 }: TerminalLiveAccessoryInputCommitOptions): (
@@ -76,10 +72,8 @@ export function useTerminalLiveAccessoryInputCommit({
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, heldText, sentText })
       switch (decision.kind) {
         case 'send-now':
-          // Why: raw accessory bytes must wait behind any in-flight mirror send
-          // so composed Hangul reaches the PTY before follow-up controls.
-          return (await waitForPendingLiveInputFlush())
-            ? { kind: 'allow-raw' }
+          return (await queueLiveInputControl(activeHandle, decision.bytes))
+            ? { kind: 'handled' }
             : { kind: 'suppress-raw' }
         case 'local-edit': {
           const editedText = getTerminalLiveAccessoryLocalEditText({
@@ -99,10 +93,7 @@ export function useTerminalLiveAccessoryInputCommit({
           return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
         case 'commit-held-then-send': {
-          const sent = await sendTerminalLiveControlAfterPendingFlush(
-            () => flushPendingLiveInputText(activeHandle),
-            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
+          const sent = await queueLiveInputControl(activeHandle, decision.bytes)
           return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
         default:
@@ -114,7 +105,7 @@ export function useTerminalLiveAccessoryInputCommit({
       activeHandle,
       applyLiveInputMirror,
       clearPendingLiveInputCommit,
-      flushPendingLiveInputText,
+      queueLiveInputControl,
       heldLiveInputTextRef,
       liveInputComposingRef,
       liveInputRef,
@@ -122,7 +113,6 @@ export function useTerminalLiveAccessoryInputCommit({
       onInteraction,
       pendingLiveInputHandleRef,
       sentLiveInputTextRef,
-      sendLiveTerminalInputRef,
       setLiveInputCapture,
       waitForPendingLiveInputFlush
     ]

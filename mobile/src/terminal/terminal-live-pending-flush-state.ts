@@ -1,6 +1,10 @@
 import { TERMINAL_LIVE_INPUT_MAX_BYTES } from './terminal-live-input'
+import type { TerminalLiveDispatchResult } from './terminal-live-input-sender'
 
-type TerminalLiveMirrorSender = (handle: string, payload: string) => Promise<boolean>
+type TerminalLiveMirrorSender = (
+  handle: string,
+  payload: string
+) => Promise<TerminalLiveDispatchResult>
 
 type TerminalLivePendingRequest = {
   readonly resolve: (sent: boolean) => void
@@ -13,6 +17,7 @@ type TerminalLivePendingBatch = {
   readonly requests: TerminalLivePendingRequest[]
   readonly sender: TerminalLiveMirrorSender
   readonly pipeline: boolean
+  readonly barrier: boolean
 }
 
 const MAX_PENDING_REQUESTS = 64
@@ -99,13 +104,13 @@ function pumpMirrorSends(state: TerminalLivePendingFlushState): void {
     state.pendingBatches.shift()
     state.activeBatches.add(batch)
     const generation = state.generation
-    const settle = (sent: boolean): void => {
+    const settle = (sent: TerminalLiveDispatchResult): void => {
       if (state.generation !== generation) {
         return
       }
       state.activeBatches.delete(batch)
-      releaseBatch(state, batch, sent)
-      state.failed ||= !sent
+      releaseBatch(state, batch, sent === true)
+      state.failed ||= sent === false
       pumpMirrorSends(state)
     }
     try {
@@ -128,7 +133,7 @@ export function queueTerminalLiveMirrorSend(
   handle: string,
   payload: string,
   sender: TerminalLiveMirrorSender,
-  options: { pipeline?: boolean } = {}
+  options: { pipeline?: boolean; barrier?: boolean } = {}
 ): Promise<boolean> {
   if (state.failed) {
     return Promise.resolve(false)
@@ -154,6 +159,8 @@ export function queueTerminalLiveMirrorSend(
   const pendingTail = state.pendingBatches.at(-1)
   if (
     pendingTail?.handle === handle &&
+    !options.barrier &&
+    !pendingTail.barrier &&
     pendingTail.sender === sender &&
     pendingTail.pipeline === pipeline &&
     pendingTail.bytes + bytes <= TERMINAL_LIVE_INPUT_MAX_BYTES
@@ -168,7 +175,8 @@ export function queueTerminalLiveMirrorSend(
       bytes,
       requests: [{ resolve: resolveRequest }],
       sender,
-      pipeline
+      pipeline,
+      barrier: options.barrier === true
     })
   }
 

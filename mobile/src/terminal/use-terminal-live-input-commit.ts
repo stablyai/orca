@@ -5,9 +5,11 @@ import {
   type TerminalLiveHardwareKeyEvent
 } from './terminal-live-hardware-key-mapping'
 import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
-import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
-import type { TerminalLiveInputSender } from './terminal-live-input-sender'
+import type {
+  TerminalLiveInputSender,
+  TerminalLiveExternalSend
+} from './terminal-live-input-sender'
 import { normalizeTerminalTextInput } from './terminal-text-input-normalization'
 import { useTerminalLivePendingInputFlush } from './use-terminal-live-pending-input-flush'
 import {
@@ -46,7 +48,7 @@ type TerminalLiveInputCommitOptions<TTabType extends string> = {
 
 type TerminalLiveInputCommitHandlers = {
   readonly clearPendingLiveInputCommit: () => void
-  readonly flushPendingLiveInputBeforeExternalSend: (handle: string) => Promise<boolean>
+  readonly flushPendingLiveInputBeforeExternalSend: TerminalLiveExternalSend
   readonly getLiveInputInteractionGeneration: () => number
   readonly handleLiveInputAccessoryBytes: (
     input: TerminalLiveAccessoryInput
@@ -77,6 +79,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
+    queueLiveInputControl,
     heldLiveInputTextRef,
     liveInputComposingRef,
     pendingLiveInputHandleRef,
@@ -116,9 +119,12 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     }
   }, [activeHandle, activeSessionTabType, clearPendingLiveInputCommit, liveInputTerminalHandles])
 
-  const flushPendingLiveInputBeforeExternalSend = useCallback(
-    async (handle: string): Promise<boolean> => {
+  const flushPendingLiveInputBeforeExternalSend = useCallback<TerminalLiveExternalSend>(
+    async (handle, send, retainedText = ''): Promise<boolean> => {
       advanceLiveInputInteractionGeneration()
+      if (send) {
+        return queueLiveInputControl(handle, retainedText, send)
+      }
       const pendingHandle = pendingLiveInputHandleRef.current
       if (pendingHandle && pendingHandle !== handle) {
         clearPendingLiveInputCommit()
@@ -135,7 +141,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       advanceLiveInputInteractionGeneration,
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
-      waitForPendingLiveInputFlush
+      waitForPendingLiveInputFlush,
+      queueLiveInputControl
     ]
   )
 
@@ -191,15 +198,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         case 'local-edit':
           return
         case 'send-now':
-          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
-            sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
-          return
         case 'commit-held-then-send':
-          void sendTerminalLiveControlAfterPendingFlush(
-            () => flushPendingLiveInputText(activeHandle),
-            () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-          )
+          void queueLiveInputControl(activeHandle, decision.bytes)
           return
         default:
           decision satisfies never
@@ -212,7 +212,8 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       flushPendingLiveInputText,
       liveInputTerminalHandles,
       sendLiveTerminalInputRef,
-      waitForPendingLiveInputFlush
+      waitForPendingLiveInputFlush,
+      queueLiveInputControl
     ]
   )
 
@@ -220,7 +221,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     activeHandle,
     applyLiveInputMirror,
     clearPendingLiveInputCommit,
-    flushPendingLiveInputText,
+    queueLiveInputControl,
     heldLiveInputTextRef,
     liveInputComposingRef,
     liveInputRef,
@@ -228,7 +229,6 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     onInteraction: advanceLiveInputInteractionGeneration,
     pendingLiveInputHandleRef,
     sentLiveInputTextRef,
-    sendLiveTerminalInputRef,
     setLiveInputCapture,
     waitForPendingLiveInputFlush
   })
@@ -238,14 +238,11 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       return Promise.resolve(false)
     }
     advanceLiveInputInteractionGeneration()
-    return sendTerminalLiveControlAfterPendingFlush(
-      () => flushPendingLiveInputText(activeHandle),
-      () => sendLiveTerminalInputRef.current(activeHandle, '\r')
-    )
+    return queueLiveInputControl(activeHandle, '\r')
   }, [
     activeHandle,
     advanceLiveInputInteractionGeneration,
-    flushPendingLiveInputText,
+    queueLiveInputControl,
     liveInputTerminalHandles,
     sendLiveTerminalInputRef
   ])
@@ -272,16 +269,13 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       }
       advanceLiveInputInteractionGeneration()
       // Physical controls end the mirror baseline and share the existing send barrier.
-      void sendTerminalLiveControlAfterPendingFlush(
-        () => flushPendingLiveInputBeforeExternalSend(activeHandle),
-        () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
-      )
+      void queueLiveInputControl(activeHandle, decision.bytes)
     },
     [
       activeHandle,
       advanceLiveInputInteractionGeneration,
       connected,
-      flushPendingLiveInputBeforeExternalSend,
+      queueLiveInputControl,
       handleLiveInputAccessoryBytes,
       liveInputTerminalHandles,
       sendLiveTerminalInputRef

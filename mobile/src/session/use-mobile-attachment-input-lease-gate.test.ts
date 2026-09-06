@@ -27,7 +27,9 @@ describe('useMobileAttachmentInputLeaseGate', () => {
     let gate: Gate = () => Promise.resolve(false)
     function Probe(): null {
       gate = useMobileAttachmentInputLeaseGate({
-        flushPendingLiveInputBeforeExternalSend: () => Promise.resolve(true),
+        flushPendingLiveInputBeforeExternalSend: async (_handle, send) =>
+          send ? (await send(() => true)) === true : true,
+        getSendCompletionGeneration: () => 0,
         connStateRef: args.connState,
         activeHandleRef: args.activeHandle,
         activeSessionTabTypeRef: args.tabType,

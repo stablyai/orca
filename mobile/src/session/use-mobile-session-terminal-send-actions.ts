@@ -196,6 +196,10 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       inputRecovery.reportTerminalInputFailure(handle, rpc)
     }
   }
+  sendLiveTerminalInput.captureFailureReporter = (handle) => {
+    const rpc = clientRef.current
+    return rpc ? inputRecovery.captureTerminalInputFailureReporter(handle, rpc) : () => {}
+  }
   sendLiveTerminalInput.supportsPipeline = (handle: string) =>
     clientRef.current?.supportsTerminalStreamInput?.(handle) ?? false
   sendLiveTerminalInputRef.current = sendLiveTerminalInput

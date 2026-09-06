@@ -9,6 +9,63 @@ import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 type TerminalLiveInputCommitHandlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
 
 describe('physical terminal controls', () => {
+  it('keeps new typing after Return while the earlier prefix receipt is delayed', async () => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({
+      pipeline: true,
+      waitForSend: (bytes) => (bytes === 'first' ? pending : Promise.resolve())
+    })
+    changeLiveInput(handlers, 'first')
+    void handlers.handleLiveInputSubmit()
+    changeLiveInput(handlers, 'x')
+    release()
+    await vi.waitFor(() => expect(sent.join('')).toBe('first\rx'))
+  })
+
+  it('suppresses later typing when the earlier Return fails', async () => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const harness = createTerminalLiveInputCommitHarness({
+      pipeline: true,
+      waitForSend: (bytes) => (bytes === '\r' ? pending : Promise.resolve())
+    })
+    changeLiveInput(harness.handlers, 'first')
+    await vi.waitFor(() => expect(harness.sent).toEqual(['first']))
+    const submit = harness.handlers.handleLiveInputSubmit()
+    await vi.waitFor(() => expect(harness.sent.join('')).toBe('first\r'))
+    changeLiveInput(harness.handlers, 'x')
+    harness.setSendResult(false)
+    release()
+    expect(await submit).toBe(false)
+    expect(harness.sent.join('')).toBe('first\r')
+  })
+
+  it('keeps Backspace after earlier Return and navigation while prefix receipts are delayed', async () => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({
+      pipeline: true,
+      waitForSend: (bytes) => (bytes === 'native-proof' ? pending : Promise.resolve())
+    })
+    changeLiveInput(handlers, 'native-proof')
+    void handlers.handleLiveInputSubmit()
+    for (const key of ['Tab', 'ArrowUp', 'Backspace']) {
+      handlers.handleLiveInputHardwareKey({
+        key,
+        modifiers: { ctrl: false, alt: false, shift: false, meta: false },
+        repeat: false
+      })
+    }
+    release()
+    await vi.waitFor(() => expect(sent.join('')).toBe('native-proof\r\t\x1b[A\x7f'))
+  })
   it('holds physical controls behind an unresolved mirror send', async () => {
     let release: () => void = () => {}
     const pending = new Promise<void>((resolve) => {
@@ -89,11 +146,13 @@ type TerminalLiveInputCommitHarness = {
 }
 
 type TerminalLiveInputCommitHarnessOptions = {
+  readonly pipeline?: boolean
   readonly sendResult?: boolean
   readonly waitForSend?: (bytes: string) => Promise<void>
 }
 
 function createTerminalLiveInputCommitHarness({
+  pipeline = false,
   sendResult = true,
   waitForSend
 }: TerminalLiveInputCommitHarnessOptions = {}): TerminalLiveInputCommitHarness {
@@ -118,6 +177,7 @@ function createTerminalLiveInputCommitHarness({
       return currentSendResult
     }
   }
+  sendLiveTerminalInputRef.current.supportsPipeline = () => pipeline
   // Refs never re-render; only these variables re-run the hook's clear effects.
   let currentActiveSessionTabType: string | undefined = 'terminal'
   let currentConnected = true
@@ -516,8 +576,9 @@ describe('terminal live input commit hook', () => {
     setActiveSessionTabType('chat')
     handlers.handleLiveInputSubmit()
 
-    // Then: pending was dropped, so submit sends only the carriage return
-    await vi.waitFor(() => expect(sent).toEqual(['\r']))
+    // A stale submit must not send controls after leaving the terminal.
+    await Promise.resolve()
+    expect(sent).toEqual([])
   })
 
   it('Given bytes lost in a silent stall When the disconnect is detected Then the first post-recovery send carries no stale fragment or phantom erases', async () => {

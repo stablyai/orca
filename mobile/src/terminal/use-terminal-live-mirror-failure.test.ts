@@ -69,6 +69,56 @@ function harness(sender: TerminalLiveInputSender) {
 }
 
 describe('failed terminal live mirrors', () => {
+  it('reports an external queued-send failure without sending another byte', async () => {
+    const report = vi.fn()
+    const sender = Object.assign(
+      vi.fn(async () => true),
+      { captureFailureReporter: () => report }
+    )
+    const h = harness(sender)
+    const external = vi.fn(async () => false)
+    expect(await h.hook.queueLiveInputControl('terminal-a', 'paste', external)).toBe(false)
+    expect(report).toHaveBeenCalledOnce()
+    expect(sender).not.toHaveBeenCalled()
+    expect(await h.type('suffix')).toBe(false)
+    expect(sender).not.toHaveBeenCalled()
+  })
+  it('does not report a cancelled old external completion into the new mirror generation', async () => {
+    const report = vi.fn()
+    const sender = Object.assign(
+      vi.fn(async () => true),
+      { captureFailureReporter: () => report }
+    )
+    const h = harness(sender)
+    const receipt = deferred()
+    let isCurrent!: () => boolean
+    const external = h.hook.queueLiveInputControl('terminal-a', 'paste', async (current) => {
+      isCurrent = current
+      return receipt.promise
+    })
+    expect(isCurrent()).toBe(true)
+    h.hook.clearPendingLiveInputCommit()
+    expect(isCurrent()).toBe(false)
+    receipt.resolve(false)
+    expect(await external).toBe(false)
+    expect(report).not.toHaveBeenCalled()
+  })
+  it('reports local admission saturation even though no failing transport send was started', async () => {
+    const receipt = deferred()
+    const report = vi.fn()
+    const sender = Object.assign(
+      vi.fn(() => receipt.promise),
+      { captureFailureReporter: () => report, supportsPipeline: () => true }
+    )
+    const h = harness(sender)
+    const sends = Array.from({ length: 65 }, (_, i) => h.type('a'.repeat(i + 1)))
+    expect(await sends[64]).toBe(false)
+    expect(report).toHaveBeenCalled()
+    expect(sender).toHaveBeenCalledTimes(64)
+    h.hook.clearPendingLiveInputCommit()
+    receipt.resolve(false)
+    await Promise.all(sends)
+  })
   it.each([300, 400, 500])(
     'pipelines negotiated typing while retaining the %ims receipt barrier',
     async (delay) => {

@@ -3,6 +3,7 @@ import * as Clipboard from 'expo-clipboard'
 import { File as FsFile, Paths } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import type { TerminalModes } from '../terminal/terminal-webview-contract'
+import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
@@ -79,7 +80,7 @@ type UseMobileTerminalPasteOptions = {
   readonly connState: ConnectionState
   readonly connStateRef: RefObject<ConnectionState>
   readonly deviceTokenRef: RefObject<string | null>
-  readonly flushPendingLiveInputBeforeExternalSend: (handle: string) => Promise<boolean>
+  readonly flushPendingLiveInputBeforeExternalSend: import('../terminal/terminal-live-input-sender').TerminalLiveExternalSend
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
   readonly onError: () => void
   readonly onSuccess: () => void
@@ -142,27 +143,33 @@ export function useMobileTerminalPaste({
         return
       }
       // Why: paste lives in the accessory row and must not overtake pending IME text.
-      const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
-      if (!flushedPendingInput) {
+      const accepted = await flushPendingLiveInputBeforeExternalSend(
+        targetHandle,
+        async () => {
+          const currentClient = clientRef.current
+          if (
+            !currentClient ||
+            connStateRef.current !== 'connected' ||
+            targetHandle !== activeHandleRef.current ||
+            activeSessionTabTypeRef.current !== 'terminal'
+          ) {
+            return false
+          }
+          const response = await currentClient.sendRequest('terminal.send', {
+            terminal: targetHandle,
+            text: payload,
+            enter: false,
+            ...(deviceTokenRef.current
+              ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+              : {})
+          })
+          return isTerminalSendRpcAccepted(response)
+        },
+        payload
+      )
+      if (!accepted) {
         return
       }
-      const currentClient = clientRef.current
-      if (
-        !currentClient ||
-        connStateRef.current !== 'connected' ||
-        targetHandle !== activeHandleRef.current ||
-        activeSessionTabTypeRef.current !== 'terminal'
-      ) {
-        return
-      }
-      await currentClient.sendRequest('terminal.send', {
-        terminal: targetHandle,
-        text: payload,
-        enter: false,
-        ...(deviceTokenRef.current
-          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-          : {})
-      })
       onSuccess()
       refreshCanPaste()
     } catch (e) {
