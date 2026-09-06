@@ -537,6 +537,14 @@ describe('worktree create preparation registry', () => {
       expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
       expect(mocks.listWorktreeGraph).toHaveBeenCalledTimes(1)
       expect(hasPendingStalePreparationCleanup()).toBe(true)
+      mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
+      await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+      expect(mocks.prepareCheckout).toHaveBeenCalledTimes(3)
+      expect(mocks.listWorktreeGraph).toHaveBeenCalledTimes(2)
+      expect(mocks.listWorktreeGraph).toHaveBeenLastCalledWith(repo.path, {
+        wslDistro: 'Ubuntu',
+        includeCreatePreparations: true
+      })
       let resetFinished = false
       reset = _resetWorktreeCreatePreparationsForTests().then(() => {
         resetFinished = true

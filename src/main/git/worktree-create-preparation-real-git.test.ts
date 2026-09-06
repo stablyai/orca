@@ -17,6 +17,13 @@ import {
   prepareWorktreeCreateCheckout
 } from './worktree-create-preparation'
 import { areWorktreePathsEqual } from './worktree-path-comparison'
+import {
+  _resetPreparationPoolForTests,
+  listPreparations,
+  startPreparation,
+  takePreparation
+} from '../worktree-create-preparation-pool'
+import { hasPendingStalePreparationCleanup } from '../worktree-create-preparation-stale-cleanup'
 
 const tempRoots: string[] = []
 
@@ -48,6 +55,72 @@ afterEach(async () => {
 })
 
 describe('prepared worktree creation with real Git', () => {
+  it('creates and finalizes while dead-owner reclamation is stalled', async () => {
+    const fixture = await createRepo()
+    const repoPath = await realpath(fixture.repoPath)
+    const root = await realpath(fixture.root)
+    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
+    const stalePath = join(preparationRoot, '999999999-11111111-1111-4111-8111-111111111111')
+    await mkdir(preparationRoot, { recursive: true })
+    await prepareWorktreeCreateCheckout(
+      repoPath,
+      stalePath,
+      'main',
+      'orca-create-preparation:v1:999999999:stale'
+    )
+    let releaseRemoval!: () => void
+    const removalGate = new Promise<void>((resolve) => {
+      releaseRemoval = resolve
+    })
+    let markRemovalStarted!: () => void
+    const removalStarted = new Promise<void>((resolve) => {
+      markRemovalStarted = resolve
+    })
+    const original = gitRunner.gitExecFileAsync
+    const spy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockImplementation(async (args, options) => {
+        if (args.includes('remove') && args.includes(stalePath)) {
+          markRemovalStarted()
+          await removalGate
+        }
+        return original(args, options)
+      })
+    try {
+      const preparing = startPreparation({
+        repoPath,
+        workspaceRoot: root,
+        baseBranch: 'main',
+        canonicalBase: 'refs/heads/main',
+        options: {}
+      })
+      await removalStarted
+      expect(hasPendingStalePreparationCleanup()).toBe(true)
+      await preparing
+      const [entry] = listPreparations()
+      expect(entry).toBeDefined()
+      takePreparation(entry)
+      const finalPath = join(root, 'fresh-worktree')
+      await finalizePreparedWorktree(repoPath, entry.preparedPath, finalPath, 'fresh', 'main')
+      expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+      expect(git(finalPath, ['symbolic-ref', '--short', 'HEAD'])).toBe('fresh')
+      expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe('one\n')
+      expect(existsSync(stalePath)).toBe(true)
+      expect(hasPendingStalePreparationCleanup()).toBe(true)
+      releaseRemoval()
+      await _resetPreparationPoolForTests()
+      expect(existsSync(stalePath)).toBe(false)
+      const remaining = await listWorktrees(repoPath, { includeCreatePreparations: true })
+      expect(remaining).toHaveLength(2)
+      expect(remaining.map((w) => w.path)).toEqual(expect.arrayContaining([repoPath, finalPath]))
+      expect(hasPendingStalePreparationCleanup()).toBe(false)
+    } finally {
+      releaseRemoval()
+      await _resetPreparationPoolForTests()
+      spy.mockRestore()
+    }
+  })
+
   it('removes partial checkout files and registration after materialization is aborted', async () => {
     const { repoPath, root } = await createRepo()
     await Promise.all(
