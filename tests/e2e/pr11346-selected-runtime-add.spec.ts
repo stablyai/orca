@@ -117,15 +117,19 @@ async function runSelectedRuntimeAddJourney(
     measurements.runtimeSwitchMs = Date.now() - startedAt
 
     await client.page.evaluate(() => {
+      const target = window as typeof window & { __focusEvents?: unknown[] }
+      target.__focusEvents = []
       document.addEventListener('focusin', (event) => {
         const element = event.target as HTMLElement | null
-        console.info('[pr11346-focus] ' + JSON.stringify({
-          time: performance.now(), tag: element?.tagName,
+        target.__focusEvents!.push({
+          time: performance.now(),
+          tag: element?.tagName,
           role: element?.getAttribute('role'),
           label: element?.getAttribute('aria-label'),
           className: element?.className,
           menuOpen: Boolean(document.querySelector('[role="menu"]'))
-        }))
+        })
+        target.__focusEvents = target.__focusEvents!.slice(-120)
       })
     })
 
@@ -760,23 +764,33 @@ async function runSelectedRuntimeAddJourney(
       fullPage: true
     })
   } finally {
+    console.info(
+      '[pr11346-focus] ' +
+        JSON.stringify(
+          await client.page
+            .evaluate(() => (window as typeof window & { __focusEvents?: unknown[] }).__focusEvents)
+            .catch((error) => ({ diagnosticError: String(error) }))
+        )
+    )
     await client.dispose()
     rmSync(fixture.rootPath, { recursive: true, force: true })
   }
 }
 
-test('routes every Add Project path to a selected non-default headed runtime @headful', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(300_000)
-  await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
-})
+for (const repetition of [1, 2, 3]) {
+  test(`routes every Add Project path to a selected non-default headed runtime ${repetition} @headful`, async ({
+    electronApp,
+    orcaPage
+  }, testInfo) => {
+    test.setTimeout(300_000)
+    await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, true)
+  })
 
-test('keeps every selected-runtime Add Project path in hidden-window desktop parity', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(300_000)
-  await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, false)
-})
+  test(`keeps every selected-runtime Add Project path in hidden-window desktop parity ${repetition}`, async ({
+    electronApp,
+    orcaPage
+  }, testInfo) => {
+    test.setTimeout(300_000)
+    await runSelectedRuntimeAddJourney(electronApp, orcaPage, testInfo, false)
+  })
+}
