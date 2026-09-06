@@ -2,7 +2,10 @@ import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime/types'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
-import { configureChromeDevtools } from '../../main/agent-mcp/chrome-devtools-setup'
+import {
+  configureChromeDevtools,
+  isChromeDevtoolsTarget
+} from '../../main/agent-mcp/chrome-devtools-setup'
 
 const run =
   (setup: boolean): CommandHandler =>
@@ -23,10 +26,10 @@ const run =
       )
     }
     const agent = flags.get('agent')
-    if (agent !== 'codex' && agent !== 'opencode' && agent !== 'all') {
+    if (!isChromeDevtoolsTarget(agent)) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Provide --agent codex, --agent opencode, or --agent all.'
+        'Provide --agent codex, opencode, gemini, pi, or all.'
       )
     }
     const result = await configureChromeDevtools({ agent, apply: setup && !flags.has('dry-run') })

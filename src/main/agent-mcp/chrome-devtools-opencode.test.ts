@@ -38,6 +38,13 @@ describe('Chrome DevTools OpenCode config', () => {
     writeFileSync(file, plan.after)
     expect(planOpenCodeConfig(home, {}, 'linux').after).toBe(plan.after)
   })
+  it('preserves an earlier compatible registration without the optional CrUX privacy flag', () => {
+    const { home, file } = fixture()
+    const initial = planOpenCodeConfig(home, {}, 'linux').after
+    const previous = initial.replace(/,?\s*"--no-performance-crux"/, '')
+    writeFileSync(file, previous)
+    expect(planOpenCodeConfig(home, {}, 'linux').after).toBe(previous)
+  })
   it('uses XDG config and ignores a managed OpenCode overlay as a destination', () => {
     const { home } = fixture()
     const configRoot = join(home, 'xdg')

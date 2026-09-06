@@ -1,4 +1,5 @@
 import type { CommandSpec } from '../args'
+import { CHROME_DEVTOOLS_COMMAND_SPECS } from './chrome-devtools'
 import { AGENT_CHROME_DEVTOOLS_COMMAND_SPECS } from './agent-chrome-devtools'
 import { ACCOUNT_COMMAND_SPECS } from './account'
 import { BROWSER_ADVANCED_COMMAND_SPECS } from './browser-advanced'
@@ -32,6 +33,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
   ...AGENT_CHROME_DEVTOOLS_COMMAND_SPECS,
+  ...CHROME_DEVTOOLS_COMMAND_SPECS,
   ...DIAGNOSTICS_COMMAND_SPECS,
   ...INTROSPECTION_COMMAND_SPECS,
   ...ENVIRONMENT_COMMAND_SPECS,

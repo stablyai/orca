@@ -37,6 +37,7 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'host' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
+    commandPath[0] === 'chrome-devtools' ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context'
   )

@@ -1,4 +1,4 @@
-import { applyEdits, modify, parse, visit, type ParseError } from 'jsonc-parser'
+import { parseJsoncConfig, editJsoncConfig } from './chrome-devtools-jsonc'
 import { join, isAbsolute } from 'node:path'
 import {
   CHROME_DEVTOOLS_NAME,
@@ -11,31 +11,7 @@ import {
 } from './chrome-devtools-config'
 
 function parseConfig(contents: string, path: string): Record<string, unknown> {
-  const errors: ParseError[] = []
-  const parsed: unknown = parse(contents, errors, { allowTrailingComma: true })
-  const keys: Set<string>[] = []
-  let duplicate = false
-  visit(contents, {
-    onObjectBegin: () => {
-      keys.push(new Set())
-    },
-    onObjectProperty: (key) => {
-      const current = keys.at(-1)
-      if (!current) {
-        return
-      }
-      if (current.has(key)) {
-        duplicate = true
-      }
-      current.add(key)
-    },
-    onObjectEnd: () => {
-      keys.pop()
-    }
-  })
-  if (errors.length || duplicate || !isRecord(parsed)) {
-    throw new Error(`Invalid or ambiguous OpenCode JSON/JSONC config: ${path}`)
-  }
+  const parsed = parseJsoncConfig(contents, path, 'OpenCode')
   if (parsed.$schema !== undefined && parsed.$schema !== 'https://opencode.ai/config.json') {
     throw new Error(`Unsupported OpenCode schema in ${path}; this command supports OpenCode v1.`)
   }
@@ -96,26 +72,12 @@ export function planOpenCodeConfig(
     }
     return { agent: 'opencode', configPath, before, after: source }
   }
-  const after = applyEdits(
-    source,
-    modify(
-      source,
-      ['mcp', CHROME_DEVTOOLS_NAME],
-      {
-        type: 'local',
-        command,
-        enabled: true,
-        timeout: 60000
-      },
-      {
-        formattingOptions: {
-          insertSpaces: true,
-          tabSize: 2,
-          eol: source.includes('\r\n') ? '\r\n' : '\n'
-        }
-      }
-    )
-  )
+  const after = editJsoncConfig(source, ['mcp', CHROME_DEVTOOLS_NAME], {
+    type: 'local',
+    command,
+    enabled: true,
+    timeout: 60000
+  })
   parseConfig(after, configPath)
   return { agent: 'opencode', configPath, before, after }
 }

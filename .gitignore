@@ -104,6 +104,8 @@ docs/**
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/chrome-devtools-mcp.md
+!docs/reference/chrome-devtools-bridge.md
+!docs/reference/chrome-devtools-agent-coverage.md
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/ime-regression-checklist.md

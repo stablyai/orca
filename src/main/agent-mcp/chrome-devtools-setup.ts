@@ -5,10 +5,17 @@ import { dirname } from 'node:path'
 import { writeFileAtomically, writeFileAtomicallyIfUnchanged } from '../codex-accounts/fs-utils'
 import { planCodexConfig } from './chrome-devtools-codex'
 import { planOpenCodeConfig } from './chrome-devtools-opencode'
+import { planGeminiConfig } from './chrome-devtools-gemini'
+import { planPiConfig } from './chrome-devtools-pi'
 import { readConfig, type ConfigPlan } from './chrome-devtools-config'
 
+export const CHROME_DEVTOOLS_TARGETS = ['codex', 'opencode', 'gemini', 'pi'] as const
+export function isChromeDevtoolsTarget(value: unknown): value is ConfigPlan['agent'] | 'all' {
+  return value === 'all' || CHROME_DEVTOOLS_TARGETS.some((target) => target === value)
+}
+
 export type ChromeDevtoolsOptions = {
-  agent: 'codex' | 'opencode' | 'all'
+  agent: ConfigPlan['agent'] | 'all'
   apply: boolean
   home?: string
   env?: NodeJS.ProcessEnv
@@ -20,17 +27,27 @@ export async function configureChromeDevtools(options: ChromeDevtoolsOptions) {
   const env = options.env ?? process.env
   const platform = options.platform ?? process.platform
   const plans: ConfigPlan[] = []
-  if (options.agent !== 'opencode') {
-    plans.push(await planCodexConfig(home, env, platform))
-  }
-  if (options.agent !== 'codex') {
-    plans.push(planOpenCodeConfig(home, env, platform))
+  const targets = options.agent === 'all' ? CHROME_DEVTOOLS_TARGETS : [options.agent]
+  for (const agent of targets) {
+    if (agent === 'codex') {
+      plans.push(await planCodexConfig(home, env, platform))
+    }
+    if (agent === 'opencode') {
+      plans.push(planOpenCodeConfig(home, env, platform))
+    }
+    if (agent === 'gemini') {
+      plans.push(planGeminiConfig(home, env, platform))
+    }
+    if (agent === 'pi') {
+      plans.push(planPiConfig(home, env, platform))
+    }
   }
   const results = plans.map((plan) => ({
     agent: plan.agent,
     configPath: plan.configPath,
     state: plan.before === plan.after ? 'configured' : 'missing',
-    backupPath: null as string | null
+    backupPath: null as string | null,
+    prerequisite: plan.prerequisite
   }))
   if (options.apply) {
     for (const plan of plans) {
@@ -80,6 +97,6 @@ export async function configureChromeDevtools(options: ChromeDevtoolsOptions) {
     nextStep:
       'Enable remote debugging in Chrome 144+ at chrome://inspect/#remote-debugging, restart the agent session, and allow Chrome’s connection prompt.',
     scope:
-      'Global configuration on this execution host. Project settings and OpenCode managed overlays can override it; autoConnect requires Chrome on the same host.'
+      'Global configuration on this execution host. Project, system, extension, and managed overlay settings can override it; autoConnect requires Chrome on the same host.'
   }
 }

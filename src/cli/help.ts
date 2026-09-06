@@ -1,3 +1,4 @@
+import { formatChromeDevtoolsFlagHelp } from './chrome-devtools-help'
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
@@ -72,11 +73,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
-  if (command.startsWith('agent chrome-devtools ') && flag === 'agent') {
-    return '--agent <id>           Config target: codex, opencode, or all (required)'
-  }
-  if (command === 'agent chrome-devtools setup' && flag === 'dry-run') {
-    return '--dry-run              Validate and preview without changing canonical config'
+  const chromeDevtoolsHelp = formatChromeDevtoolsFlagHelp(command, flag)
+  if (chromeDevtoolsHelp) {
+    return chromeDevtoolsHelp
   }
   if (command === 'skills install' && flag === 'agent') {
     return '--agent <names>        Comma-separated install targets; default is detected agents'

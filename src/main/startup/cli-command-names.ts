@@ -8,6 +8,7 @@ export const CLI_COMMAND_NAMES = [
   'back',
   'capture',
   'check',
+  'chrome-devtools',
   'claude-teams',
   'clear',
   'click',

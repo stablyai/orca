@@ -179,6 +179,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/computer.js')).COMPUTER_HANDLERS
   },
   {
+    name: 'chrome-devtools',
+    keys: ['chrome-devtools tools', 'chrome-devtools call', 'chrome-devtools session'],
+    load: async () => (await import('./handlers/chrome-devtools.js')).CHROME_DEVTOOLS_HANDLERS
+  },
+  {
     name: 'agent-chrome-devtools',
     keys: ['agent chrome-devtools setup', 'agent chrome-devtools status'],
     load: async () =>

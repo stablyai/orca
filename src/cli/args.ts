@@ -96,7 +96,7 @@ export function matches(actual: string[], expected: string[]): boolean {
 
 export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   const joined = commandPath.join(' ')
-  if (['open', 'status'].includes(commandPath[0])) {
+  if (['open', 'status'].includes(commandPath[0]) || joined.startsWith('agent chrome-devtools ')) {
     return false
   }
   if (
@@ -111,6 +111,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'file',
       'orchestration',
       'computer',
+      'chrome-devtools',
       'emulator',
       'note',
       'diagnostics',
@@ -169,6 +170,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'storage',
         'orchestration',
         'computer',
+        'chrome-devtools',
         'emulator',
         'agent',
         'environment',

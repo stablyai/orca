@@ -2,8 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_CHROME_DEVTOOLS_HANDLERS } from './agent-chrome-devtools'
 import { configureChromeDevtools } from '../../main/agent-mcp/chrome-devtools-setup'
 import type { HandlerContext } from '../dispatch'
+import type * as ChromeDevtoolsSetup from '../../main/agent-mcp/chrome-devtools-setup'
 
-vi.mock('../../main/agent-mcp/chrome-devtools-setup', () => ({ configureChromeDevtools: vi.fn() }))
+vi.mock('../../main/agent-mcp/chrome-devtools-setup', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChromeDevtoolsSetup>()),
+  configureChromeDevtools: vi.fn()
+}))
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 function context(entries: [string, string | boolean][] = []): HandlerContext {
   return {

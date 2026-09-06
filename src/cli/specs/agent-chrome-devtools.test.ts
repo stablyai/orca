@@ -6,8 +6,11 @@ import { parseArgs, validateCommandAndFlags } from '../args'
 describe('Chrome DevTools command help and parsing', () => {
   it('describes config targeting and preview without terminal launch semantics', () => {
     for (const spec of AGENT_CHROME_DEVTOOLS_COMMAND_SPECS) {
-      expect(formatCommandHelp(spec)).toContain('Config target: codex, opencode, or all (required)')
+      expect(formatCommandHelp(spec)).toContain(
+        'Config target: codex, opencode, gemini, pi, or all (required)'
+      )
       expect(formatCommandHelp(spec)).not.toContain('TUI agent')
+      expect(formatCommandHelp(spec)).not.toContain('--page')
     }
     expect(formatCommandHelp(AGENT_CHROME_DEVTOOLS_COMMAND_SPECS[0])).toContain(
       'Validate and preview without changing canonical config'

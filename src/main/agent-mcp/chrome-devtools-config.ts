@@ -5,14 +5,16 @@ export const CHROME_DEVTOOLS_ARGS = [
   '-y',
   'chrome-devtools-mcp@latest',
   '--autoConnect',
-  '--no-usage-statistics'
+  '--no-usage-statistics',
+  '--no-performance-crux'
 ]
 
 export type ConfigPlan = {
-  agent: 'codex' | 'opencode'
+  agent: 'codex' | 'opencode' | 'gemini' | 'pi'
   configPath: string
   before: string | null
   after: string
+  prerequisite?: { hostVersion: string; adapterVersion: string; validation: string }
 }
 
 export function readConfig(path: string): string | null {
@@ -40,7 +42,12 @@ export function chromeDevtoolsCommand(platform: NodeJS.Platform): string[] {
 }
 
 export function matchesCommand(actual: unknown, expected: string[]): boolean {
-  return Array.isArray(actual) && JSON.stringify(actual) === JSON.stringify(expected)
+  if (!Array.isArray(actual) || !actual.every((value) => typeof value === 'string')) {
+    return false
+  }
+  // Older Orca registrations omit this optional privacy flag; preserve them unchanged.
+  const withoutCruxFlag = (args: string[]) => args.filter((arg) => arg !== '--no-performance-crux')
+  return JSON.stringify(withoutCruxFlag(actual)) === JSON.stringify(withoutCruxFlag(expected))
 }
 
 export function configConflict(path: string): Error {

@@ -15,6 +15,14 @@ import { configureChromeDevtools } from './chrome-devtools-setup'
 import { chromeDevtoolsCommand } from './chrome-devtools-config'
 
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: vi.fn() }))
+vi.mock('./chrome-devtools-pi', () => ({
+  planPiConfig: (home: string) => ({
+    agent: 'pi',
+    configPath: join(home, '.pi', 'agent', 'mcp.json'),
+    before: null,
+    after: '{}\n'
+  })
+}))
 const roots: string[] = []
 const stagedHomes: string[] = []
 function fixture() {
@@ -97,7 +105,12 @@ describe('Chrome DevTools setup', () => {
       env: {},
       platform: 'linux'
     })
-    expect(result.configs.map((config) => config.state)).toEqual(['missing', 'missing'])
+    expect(result.configs.map((config) => config.state)).toEqual([
+      'missing',
+      'missing',
+      'missing',
+      'missing'
+    ])
     expect(result).toMatchObject({ mcpHandshake: 'not-checked', browserConnection: 'not-checked' })
     expect(existsSync(codex)).toBe(false)
     expect(existsSync(join(home, '.config'))).toBe(false)
