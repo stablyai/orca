@@ -228,33 +228,65 @@ export const useActiveRepo = () =>
   useAppStore(useShallow((s) => selectRepoByIdForActiveWorkspace(s, s.activeRepoId)))
 export const useRepoMap = () => useAppStore((s) => getCachedRepoMap(s.repos))
 
+type ActiveWorkspaceRepoState = Pick<
+  AppState,
+  'repos' | 'activeRepoId' | 'activeWorkspaceExecutionHostId'
+>
+
+// Why: mirrors getIndexedRepoMap above — the host-scoped branch re-filtered every
+// repo on each store write even though its answer only moves when `repos` or the
+// active workspace host does.
+const activeWorkspaceRepoCache = new WeakMap<AppState['repos'], Map<string, Repo | null>>()
+
+function resolveRepoOnActiveWorkspaceHost(
+  state: ActiveWorkspaceRepoState,
+  repoId: string,
+  activeWorkspaceExecutionHostId: ExecutionHostId
+): Repo | null {
+  const repoCandidates = state.repos.filter((candidate) => candidate.id === repoId)
+  const hostMatch = repoCandidates.find(
+    (candidate) => getRepoExecutionHostId(candidate) === activeWorkspaceExecutionHostId
+  )
+  if (hostMatch) {
+    return hostMatch
+  }
+  // Why: withRepoHostOwnership keeps a paired-hub worktree on its own SSH host while the repo
+  // stays hub-owned, so that one mismatch still names the right repo; every other stays closed.
+  if (parseExecutionHostId(activeWorkspaceExecutionHostId)?.kind !== 'ssh') {
+    return null
+  }
+  const pairedHubRepos = repoCandidates.filter(
+    (candidate) => parseExecutionHostId(getRepoExecutionHostId(candidate))?.kind === 'runtime'
+  )
+  return pairedHubRepos.length === 1 ? pairedHubRepos[0] : null
+}
+
 export function selectRepoByIdForActiveWorkspace(
-  state: Pick<AppState, 'repos' | 'activeRepoId' | 'activeWorkspaceExecutionHostId'>,
+  state: ActiveWorkspaceRepoState,
   repoId: string | null
 ): Repo | null {
   if (!repoId) {
     return null
   }
   const repo = getCachedRepoMap(state.repos).get(repoId) ?? null
-  if (repoId === state.activeRepoId && state.activeWorkspaceExecutionHostId) {
-    const repoCandidates = state.repos.filter((candidate) => candidate.id === repoId)
-    const hostMatch = repoCandidates.find(
-      (candidate) => getRepoExecutionHostId(candidate) === state.activeWorkspaceExecutionHostId
-    )
-    if (hostMatch) {
-      return hostMatch
-    }
-    // Why: withRepoHostOwnership keeps a paired-hub worktree on its own SSH host while the repo
-    // stays hub-owned, so that one mismatch still names the right repo; every other stays closed.
-    if (parseExecutionHostId(state.activeWorkspaceExecutionHostId)?.kind !== 'ssh') {
-      return null
-    }
-    const pairedHubRepos = repoCandidates.filter(
-      (candidate) => parseExecutionHostId(getRepoExecutionHostId(candidate))?.kind === 'runtime'
-    )
-    return pairedHubRepos.length === 1 ? pairedHubRepos[0] : null
+  const activeWorkspaceExecutionHostId = state.activeWorkspaceExecutionHostId
+  if (repoId !== state.activeRepoId || !activeWorkspaceExecutionHostId) {
+    return repo
   }
-  return repo
+  // The branch below only fires for the active repo, so the host id fully keys it.
+  let byHost = activeWorkspaceRepoCache.get(state.repos)
+  if (!byHost) {
+    byHost = new Map()
+    activeWorkspaceRepoCache.set(state.repos, byHost)
+  }
+  const cacheKey = `${activeWorkspaceExecutionHostId}\u0000${repoId}`
+  const cached = byHost.get(cacheKey)
+  if (cached !== undefined) {
+    return cached
+  }
+  const resolved = resolveRepoOnActiveWorkspaceHost(state, repoId, activeWorkspaceExecutionHostId)
+  byHost.set(cacheKey, resolved)
+  return resolved
 }
 
 export const useRepoById = (repoId: string | null) =>

@@ -47,6 +47,25 @@ describe('createWorktreeContextMenuDeleteIntent', () => {
 
     expect(mocks.runBatchDelete).toHaveBeenCalledWith(worktrees)
   })
+
+  it('preserves the folder owner host in a context-menu delete intent', () => {
+    const intent = createWorktreeContextMenuDeleteIntent({
+      worktree: {
+        id: 'folder:shared',
+        instanceId: 'runtime-instance',
+        hostId: 'runtime:env-owner'
+      },
+      batchDeleteWorktrees: [],
+      isMultiContext: false,
+      folderWorkspaceId: 'shared'
+    })
+
+    expect(intent).toEqual({
+      kind: 'folder',
+      folderWorkspaceId: 'shared',
+      executionHostId: 'runtime:env-owner'
+    })
+  })
 })
 
 describe('deferWorktreeContextMenuDeleteIntent', () => {

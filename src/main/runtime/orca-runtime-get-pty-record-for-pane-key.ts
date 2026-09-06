@@ -112,13 +112,25 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       if (!ptyId || !trackedPty || !this.ptyController) {
         return false
       }
-      const agent = recognizeAgentProcess(
-        await this.ptyController.getForegroundProcess(ptyId)
-      )?.agent
+      let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
+      let agent = recognizeAgentProcess(foregroundProcess)?.agent
+      // Why: the cached foreground name can be an executable basename nothing recognizes
+      // (macOS p_comm reports the native Claude installer as `2.1.258`), and treating that
+      // as "no agent" silently downgrades the prompt to unframed chunks, which Claude's
+      // composer truncates. A fresh process-table scan reads the real command line.
+      if (agent === undefined && this.ptyController.confirmForegroundProcess) {
+        foregroundProcess = await this.ptyController.confirmForegroundProcess(ptyId)
+        agent = recognizeAgentProcess(foregroundProcess)?.agent
+      }
       if (agent !== 'claude' && agent !== 'codex') {
         return false
       }
-      if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
+      if (
+        !(await this.isTerminalRunningAgent(handle, {
+          retryForegroundWrappers: false,
+          foregroundProcess
+        }))
+      ) {
         return false
       }
       trackedPty.foregroundAgent = agent

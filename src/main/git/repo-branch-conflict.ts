@@ -3,9 +3,12 @@ import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-re
 import { gitExecFileAsync } from './runner'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import {
+  isShowRefNoMatchError,
   probeAnyExactRef,
+  probeAnyExactRefBatched,
   type ExactRefProbeExec,
-  type ExactRefProbeExecOptions
+  type ExactRefProbeExecOptions,
+  type ExactRefProbeStdinExec
 } from './exact-ref-probe'
 
 export type BranchConflictKind = 'local' | 'remote'
@@ -27,16 +30,17 @@ function canQueryRemoteBranchName(branchName: string): boolean {
   return !branchName.startsWith('-') && isSafeGitRefName(`refs/heads/${branchName}`)
 }
 
-async function hasGitRefAsync(
+async function probeLocalBranchRef(
   exec: ExactRefProbeExec,
   ref: string,
   options: ExactRefProbeExecOptions
-): Promise<boolean> {
+): Promise<'present' | 'absent' | 'unknown'> {
   try {
-    const { stdout } = await runGit(exec, ['rev-parse', '--verify', ref], options)
-    return stdout.trim().length > 0
-  } catch {
-    return false
+    // Quiet absence avoids retrying the WSL probe through a login shell.
+    const { stdout } = await runGit(exec, ['rev-parse', '--verify', '--quiet', ref], options)
+    return stdout.trim().length > 0 ? 'present' : 'unknown'
+  } catch (error) {
+    return isShowRefNoMatchError(error) ? 'absent' : 'unknown'
   }
 }
 
@@ -79,12 +83,32 @@ function buildRemoteBranchConflictRefs(
   return [...refs]
 }
 
+/** One batched child answers for every remote; the per-ref probes only run when the host cannot
+ *  feed stdin, or when the batch came back undecided. */
+async function probeAnyRemoteConflictRef(
+  exec: ExactRefProbeExec,
+  batchedExec: ExactRefProbeStdinExec | undefined,
+  candidateRefs: readonly string[],
+  probeOptions: ExactRefProbeExecOptions
+): Promise<{ found: boolean }> {
+  if (batchedExec) {
+    // A present ref is always decisive, so `found` never survives with `unknown` set.
+    const batched = await probeAnyExactRefBatched(batchedExec, candidateRefs, probeOptions)
+    if (!batched.unknown) {
+      return { found: batched.found }
+    }
+  }
+  return probeAnyExactRef(exec, candidateRefs, probeOptions)
+}
+
 /** Run branch-conflict policy through the host that owns Git execution. */
 export async function getBranchConflictKindViaExec(
   exec: ExactRefProbeExec,
   branchName: string,
   allowedBaseRef?: string,
-  options: ExactRefProbeExecOptions = {}
+  options: ExactRefProbeExecOptions = {},
+  batchedExec?: ExactRefProbeStdinExec,
+  allowLocalBranch?: () => Promise<boolean>
 ): Promise<BranchConflictKind | null> {
   if (!canQueryRemoteBranchName(branchName)) {
     return null
@@ -93,7 +117,16 @@ export async function getBranchConflictKindViaExec(
   // are quiet, so introducing a smaller implicit cap would only make a large
   // remote configuration look like a missing conflict.
   const probeOptions: ExactRefProbeExecOptions = options
-  if (await hasGitRefAsync(exec, `refs/heads/${branchName}`, probeOptions)) {
+  const localRef = `refs/heads/${branchName}`
+  let presence = await probeLocalBranchRef(exec, localRef, probeOptions)
+  if (allowLocalBranch && presence !== 'absent') {
+    if (await allowLocalBranch()) {
+      return null
+    }
+    // Adoption can span ref changes; preserve the fresh conflict check after it fails.
+    presence = await probeLocalBranchRef(exec, localRef, probeOptions)
+  }
+  if (presence === 'present') {
     return 'local'
   }
 
@@ -104,7 +137,12 @@ export async function getBranchConflictKindViaExec(
       return null
     }
 
-    const { found: hasRemoteConflict } = await probeAnyExactRef(exec, candidateRefs, probeOptions)
+    const { found: hasRemoteConflict } = await probeAnyRemoteConflictRef(
+      exec,
+      batchedExec,
+      candidateRefs,
+      probeOptions
+    )
 
     return hasRemoteConflict ? 'remote' : null
   } catch {
@@ -116,18 +154,35 @@ export function getBranchConflictKind(
   path: string,
   branchName: string,
   allowedBaseRef?: string,
-  options: LocalGitExecOptions = {}
+  options: LocalGitExecOptions = {},
+  allowLocalBranch?: () => Promise<boolean>
 ): Promise<BranchConflictKind | null> {
   const execOptions = gitExecOptions(path, options)
+  const runLocalGit = (
+    argv: string[],
+    commandOptions?: ExactRefProbeExecOptions & { stdin?: string },
+    captureWslLoginShellOutput = false
+  ): Promise<{ stdout: string }> =>
+    gitExecFileAsync(argv, {
+      ...execOptions,
+      ...(captureWslLoginShellOutput ? { captureWslLoginShellOutput: true } : {}),
+      ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
+      ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs }),
+      ...(commandOptions?.stdin === undefined ? {} : { stdin: commandOptions.stdin })
+    })
   return getBranchConflictKindViaExec(
-    (argv, commandOptions) =>
-      gitExecFileAsync(argv, {
-        ...execOptions,
-        ...(commandOptions?.maxBuffer === undefined ? {} : { maxBuffer: commandOptions.maxBuffer }),
-        ...(commandOptions?.timeoutMs === undefined ? {} : { timeout: commandOptions.timeoutMs })
-      }),
+    runLocalGit,
     branchName,
-    allowedBaseRef
+    allowedBaseRef,
+    {},
+    // Why fenced: the batch decides from stdout, and a WSL login-shell fallback writes
+    // the distro's rc/motd banner to that same stream. The extra lines break the
+    // one-line-per-ref contract, so every batch came back undecided and fell through to
+    // one `show-ref` subprocess per remote -- the exact cost the batch exists to remove.
+    // `show-ref --verify --quiet` prints nothing and is read by exit code, so it needs
+    // no fence; the capture wrapper preserves the payload's exit status either way.
+    (argv, commandOptions) => runLocalGit(argv, commandOptions, true),
+    allowLocalBranch
   )
 }
 

@@ -10,6 +10,7 @@ import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { Terminal, TerminalCreateResult } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
+import { createMobileStructuredCodexSession } from './mobile-structured-agent-session-launch'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
@@ -22,6 +23,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
     activeSessionTabId,
+    activeSessionTabIdRef,
     setActiveSessionTabId,
     setCreating,
     creatingTerminalRef,
@@ -61,6 +63,35 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       .slice(2, 10)}`
 
     try {
+      // Bare Codex launches follow structured support; prompted launches keep their startup semantics.
+      if (agent === 'codex' && options === undefined) {
+        const structured = await createMobileStructuredCodexSession(client, worktreeId)
+        if (structured.kind === 'created') {
+          const previous = activeHandleRef.current
+          if (previous) {
+            unsubscribeTerminal(previous)
+            initializedHandlesRef.current.delete(previous)
+          }
+          const tabId = `agent-session:${structured.sessionId}`
+          pendingActiveSessionTabIdRef.current = tabId
+          pendingActiveTerminalHandleRef.current = null
+          activeSessionTabTypeRef.current = 'agent-session'
+          activeSessionTabIdRef.current = tabId
+          setActiveSessionTabId(tabId)
+          activeHandleRef.current = null
+          setActiveHandle(null)
+          // Refresh if the create response beats its published tab frame.
+          scheduleDelayedAction(() => void fetchSessionTabs(), 500)
+          return
+        }
+        if (structured.kind === 'unknown') {
+          // Never create a legacy sibling when the host may already have committed.
+          setCreateError(structured.message)
+          triggerError()
+          showToast(structured.message, 1800)
+          return
+        }
+      }
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
         afterTabId: activeSessionTabId ?? undefined,

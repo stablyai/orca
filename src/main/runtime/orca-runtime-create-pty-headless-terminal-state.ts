@@ -163,6 +163,17 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
       })
   }
 
+  /** Public: reflow an already-created model onto a grid the PROVIDER proved — a reattach learns
+   *  the live session's real size only from its spawn reply, after live bytes may have lazily
+   *  created the model at the 80x24 default. Not onExternalPtyResize: nothing measured a pane
+   *  here, so the renderer-geometry baselines behind mobile take-back must stay untouched. */
+  reflowHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
+    if (cols <= 0 || rows <= 0) {
+      return
+    }
+    this.resizeHeadlessTerminal(ptyId, cols, rows)
+  }
+
   // Public: desktop-initiated clears (ipc/pty.ts) must also drop this mobile
   // mirror or a resubscribing mobile client resurrects the cleared scrollback.
   async clearHeadlessTerminalBuffer(ptyId: string): Promise<void> {

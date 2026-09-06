@@ -1,21 +1,10 @@
 import type { IPtyProvider } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
 import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
-import {
-  getProvider,
-  getProviderForPty,
-  localProvider,
-  registeredPtyProviders
-} from '../provider/registry'
+import { getProviderForPty, localProvider } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
@@ -127,8 +116,11 @@ export async function getForegroundProcessFromRuntimeController(ptyId: string) {
   }
 }
 
-export async function inspectProcessFromRuntimeController(ptyId: string) {
-  return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId)
+export async function inspectProcessFromRuntimeController(
+  ptyId: string,
+  options?: { expectedIncarnationId?: string }
+) {
+  return inspectPtyProviderProcess(getProviderForPty(ptyId), ptyId, options)
 }
 
 export async function confirmForegroundProcessFromRuntimeController(ptyId: string) {
@@ -214,68 +206,6 @@ export function hasPtyFromRuntimeController(
   }
 }
 
-function markSshInventoryUnverifiable(
-  runtime: PtyRuntimeControllerDeps['runtime'],
-  connectionId: string,
-  error: unknown
-): void {
-  const reason = error instanceof Error ? error.message : String(error)
-  for (const [ptyId, ownerConnectionId] of ptyOwnership) {
-    if (ownerConnectionId === connectionId) {
-      runtime?.markPtyLivenessUnverifiable?.(ptyId, reason)
-    }
-  }
-}
-
-export async function listProcessesWithHostScopeFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  opts?: { deadlineMs?: number }
-): Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }> {
-  const providerSessions = await Promise.all(
-    registeredPtyProviders().map(async ({ provider, connectionId }) => {
-      const hostId: ExecutionHostId = connectionId
-        ? toSshExecutionHostId(connectionId)
-        : LOCAL_EXECUTION_HOST_ID
-      try {
-        return {
-          processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),
-          hostId
-        }
-      } catch (error) {
-        if (!connectionId) {
-          throw error
-        }
-        markSshInventoryUnverifiable(deps.runtime, connectionId, error)
-        return null
-      }
-    })
-  )
-  const respondingSessions = providerSessions.filter((session) => session !== null)
-  return {
-    processes: respondingSessions.flatMap((session) => session.processes),
-    hostIds: respondingSessions.map((session) => session.hostId)
-  }
-}
-
-export async function listProcessesFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  connectionId?: string | null,
-  opts?: { deadlineMs?: number }
-) {
-  if (connectionId === null) {
-    return localProvider.listProcesses()
-  }
-  if (connectionId !== undefined) {
-    try {
-      return await getProvider(connectionId).listProcesses(opts)
-    } catch (error) {
-      markSshInventoryUnverifiable(deps.runtime, connectionId, error)
-      throw error
-    }
-  }
-  return (await listProcessesWithHostScopeFromRuntimeController(deps, opts)).processes
-}
-
 export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows: number): boolean {
   try {
     getProviderForPty(ptyId).resize(ptyId, cols, rows)
@@ -310,7 +240,7 @@ export function getSizeFromRuntimeController(ptyId: string) {
 
 export async function serializeProviderBufferFromRuntimeController(
   ptyId: string,
-  opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+  opts?: { scrollbackRows?: number }
 ) {
   try {
     // Why: restored daemon PTYs can be live while their desktop pane is unmounted; query the provider model so phone-local navigation works.

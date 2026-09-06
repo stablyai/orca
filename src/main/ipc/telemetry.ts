@@ -24,7 +24,9 @@ let storeRef: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'app_starred_orca',
+  'daemon_adopted',
   'daemon_audit_eligibility',
+  'daemon_pty_cwd_denied',
   'star_nag_outcome',
   'feature_interaction_usage_bucket_reached'
 ])

@@ -10,6 +10,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionBackgroundTaskState,
   type AgentSessionHandoffStatus,
   type AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
@@ -35,8 +36,16 @@ type Subscriber = {
   fence: number
 }
 
+export type AgentSessionSubscribersHooks = {
+  /** Fires after any publication that can change journal content, whether or not anyone
+   *  is subscribed to the transcript: session lists project status from this same edge. */
+  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
+}
+
 export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
+
+  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
   /** Opens the stream with a bounded tail page or, when the client's cursor
    *  still resolves, with the rows it missed. Returns the disposer. */
@@ -48,6 +57,7 @@ export class AgentSessionSubscribers {
     emit: AgentSessionSubscriberEmit
     cursor?: AgentJournalCursor
     handoff?: AgentSessionHandoffStatus
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
   }): () => void {
     const liveCursor = input.journal.cursor()
     const subscriber: Subscriber = {
@@ -62,7 +72,7 @@ export class AgentSessionSubscribers {
     this.bySession.set(input.sessionId, session)
 
     if (input.cursor) {
-      this.deliver(subscriber, input.journal, input.handoff, true)
+      this.deliver(subscriber, input.journal, input.handoff, true, input.backgroundTasks)
     } else {
       const page = readAgentSessionHydrationPage(input.journal, input.fence)
       this.emit(subscriber, {
@@ -70,7 +80,8 @@ export class AgentSessionSubscribers {
         sessionId: input.sessionId,
         page,
         fence: input.fence,
-        ...(input.handoff ? { handoff: input.handoff } : {})
+        ...(input.handoff ? { handoff: input.handoff } : {}),
+        ...(input.backgroundTasks !== undefined ? { backgroundTasks: input.backgroundTasks } : {})
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
     }
@@ -96,6 +107,7 @@ export class AgentSessionSubscribers {
     for (const subscriber of this.subscribers(sessionId)) {
       this.deliver(subscriber, journal)
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   /** Force every subscriber back to a bounded tail page — recovery, epoch
@@ -104,23 +116,44 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     reason: AgentJournalResetReason,
-    fence: number
+    fence: number,
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
   ): void {
     const page = readAgentSessionHydrationPage(journal, fence)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, { type: 'reset', sessionId, reset: reason, page, fence })
+      this.emit(subscriber, {
+        type: 'reset',
+        sessionId,
+        reset: reason,
+        page,
+        fence,
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
+      })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
-  snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
+  snapshot(
+    sessionId: string,
+    journal: AgentSessionJournal,
+    fence: number,
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
+  ): void {
     const page = readAgentSessionHydrationPage(journal, fence)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, { type: 'snapshot', sessionId, page, fence })
+      this.emit(subscriber, {
+        type: 'snapshot',
+        sessionId,
+        page,
+        fence,
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
+      })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   handoff(sessionId: string, fence: number, handoff: AgentSessionHandoffStatus): void {
@@ -141,6 +174,28 @@ export class AgentSessionSubscribers {
     }
   }
 
+  backgroundTasks(
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null,
+    fence: number
+  ): void {
+    for (const subscriber of this.subscribers(sessionId)) {
+      this.emit(subscriber, {
+        type: 'batch',
+        sessionId,
+        batch: {
+          cursor: subscriber.cursor,
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        fence,
+        backgroundTasks: state
+      })
+      subscriber.fence = fence
+    }
+  }
+
   private subscribers(sessionId: string): Subscriber[] {
     return [...(this.bySession.get(sessionId)?.values() ?? [])]
   }
@@ -149,7 +204,8 @@ export class AgentSessionSubscribers {
     subscriber: Subscriber,
     journal: AgentSessionJournal,
     handoff?: AgentSessionHandoffStatus,
-    emitCheckpoint = false
+    emitCheckpoint = false,
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
   ): void {
     while (true) {
       const result = readAgentSessionHistory(journal, {
@@ -166,7 +222,8 @@ export class AgentSessionSubscribers {
           reset: result.reset,
           page,
           fence: subscriber.fence,
-          ...(handoff ? { handoff } : {})
+          ...(handoff ? { handoff } : {}),
+          ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
         })
         subscriber.cursor = page.liveCursor ?? page.window.nextCursor
         return
@@ -185,7 +242,8 @@ export class AgentSessionSubscribers {
               submissions: []
             },
             fence: subscriber.fence,
-            ...(handoff ? { handoff } : {})
+            ...(handoff ? { handoff } : {}),
+            ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
           })
         }
         return
@@ -200,7 +258,8 @@ export class AgentSessionSubscribers {
           submissions: page.submissions
         },
         fence: subscriber.fence,
-        ...(handoff ? { handoff } : {})
+        ...(handoff ? { handoff } : {}),
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
       })
       subscriber.cursor = page.window.nextCursor
       if (!page.hasNewer || !this.isActive(subscriber)) {

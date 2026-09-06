@@ -28,7 +28,6 @@ async function renderRunsTab(historyUnavailable: boolean): Promise<HTMLButtonEle
         selected={makeAutomation()}
         selectedExternal={null}
         selectedExternalRunPage={null}
-        selectedAutomationRunPage={null}
         selectedRuns={[]}
         selectedRunsNotice={
           historyUnavailable
@@ -44,15 +43,10 @@ async function renderRunsTab(historyUnavailable: boolean): Promise<HTMLButtonEle
         selectedHostEntry={null}
         hostLabelById={new Map()}
         selectedRunNowAvailability={null}
-        selectedAutomationRunPageWorkspaceDisplay={null}
-        selectedAutomationRunPageViewState={null}
-        canRerunSelectedAutomationRunPage={false}
-        isSelectedAutomationRunPageRerunPending={false}
         worktreeMap={new Map()}
         fetchExternalAutomationRuns={vi.fn()}
         onActivePaneTabChange={vi.fn()}
         onClearExternalRunPage={vi.fn()}
-        onClearAutomationRunPage={vi.fn()}
         requestExternalAction={vi.fn()}
         openExternalRunPage={vi.fn()}
         openEditExternalDialog={vi.fn()}
@@ -60,8 +54,6 @@ async function renderRunsTab(historyUnavailable: boolean): Promise<HTMLButtonEle
         openEditDialog={vi.fn()}
         toggleAutomation={vi.fn()}
         requestDeleteAutomation={vi.fn()}
-        rerunAutomationRun={vi.fn()}
-        openRunWorkspace={vi.fn()}
         openAutomationRunPage={vi.fn()}
         onBackToList={vi.fn()}
         recoverSelectedRuns={vi.fn()}

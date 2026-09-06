@@ -57,7 +57,7 @@ function commands(
   return new RuntimeGitCommands({
     resolveRuntimeGitTarget: async () => ({
       worktree,
-      ...(connectionId ? { connectionId } : {}),
+      executionHostId: connectionId ? (`ssh:${connectionId}` as const) : ('local' as const),
       ...(localGitOptions ? { localGitOptions } : {})
     }),
     getRuntimeSettings: () => ({}) as GlobalSettings

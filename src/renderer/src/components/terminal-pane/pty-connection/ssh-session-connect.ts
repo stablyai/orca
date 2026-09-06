@@ -1,5 +1,4 @@
 import { useAppStore } from '@/store'
-import { SSH_SESSION_EXPIRED_ERROR } from './pty-connect-limits'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 // Why: when multiple panes/tabs need the same deferred SSH connection,
@@ -10,10 +9,6 @@ export type SshConnectResult = { connected: true } | { connected: false; error: 
 type UserInitiatedSshConnectOutcome = 'connected' | 'cancelled' | 'failed'
 
 const sshConnectPromises = new Map<string, Promise<SshConnectResult>>()
-
-export function isSshSessionExpiredError(err: unknown): boolean {
-  return (err instanceof Error ? err.message : String(err)).includes(SSH_SESSION_EXPIRED_ERROR)
-}
 
 function sshPromptConnectOutcomeForStatus(
   status: string | undefined,

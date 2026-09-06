@@ -1,0 +1,131 @@
+name: Publish Relay Production Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Publish a new production image or mirror an existing immutable image to staging
+        required: true
+        default: publish
+        type: choice
+        options: [publish, mirror-staging]
+      image-digest:
+        description: Exact existing production digest for mirror-staging mode
+        required: false
+        type: string
+      confirmation:
+        description: Enter MIRROR_RELAY_PRODUCTION_IMAGE_TO_STAGING for mirror-staging mode
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-relay-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  publish:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      REPOSITORY_ID: orca-cloud
+      IMAGE_NAME: relay
+      PUBLISH_MODE: ${{ inputs.mode }}
+      MIRROR_DIGEST: ${{ inputs.image-digest }}
+      MIRROR_CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the exact publish request before authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test "${PUBLISH_MODE}" = mirror-staging; then
+            [[ "${MIRROR_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
+            test "${MIRROR_CONFIRMATION}" = MIRROR_RELAY_PRODUCTION_IMAGE_TO_STAGING
+          else
+            test "${PUBLISH_MODE}" = publish
+            test -z "${MIRROR_DIGEST}"
+            test -z "${MIRROR_CONFIRMATION}"
+          fi
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and publish immutable image
+        if: ${{ inputs.mode == 'publish' }}
+        run: |
+          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}:sha-${GITHUB_SHA}"
+          docker build -f apps/relay/Dockerfile -t "${IMAGE_TAG}" .
+          docker push "${IMAGE_TAG}"
+          DIGEST="$(gcloud artifacts docker images describe "${IMAGE_TAG}" --format='value(image_summary.digest)')"
+          test -n "${DIGEST}"
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}@${DIGEST}"
+          {
+            echo '### Terraform candidate image'
+            echo
+            echo "\`${IMAGE}\`"
+            echo
+            echo 'Declare this digest on a distinct disabled candidate cell in a reviewed Terraform PR.'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Build and publish immutable fence broker
+        if: ${{ inputs.mode == 'publish' }}
+        run: |
+          IMAGE_TAG="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/relay-fence-broker:sha-${GITHUB_SHA}"
+          docker build \
+            --build-arg "ORCA_RELAY_FENCE_IMAGE_COMMIT=${GITHUB_SHA}" \
+            -f apps/relay-fence-broker/Dockerfile \
+            -t "${IMAGE_TAG}" .
+          docker push "${IMAGE_TAG}"
+          DIGEST="$(gcloud artifacts docker images describe "${IMAGE_TAG}" --format='value(image_summary.digest)')"
+          test -n "${DIGEST}"
+          IMAGE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/relay-fence-broker@${DIGEST}"
+          {
+            echo
+            echo '### Terraform fence broker image'
+            echo
+            echo "\`${IMAGE}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Mirror the exact production manifest to staging
+        if: ${{ inputs.mode == 'mirror-staging' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_image="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}@${MIRROR_DIGEST}"
+          target_tag="${GCP_REGION}-docker.pkg.dev/onorca-cloud-staging/${REPOSITORY_ID}/${IMAGE_NAME}:production-${MIRROR_DIGEST#sha256:}"
+          source_digest="$(gcloud artifacts docker images describe "${source_image}" \
+            --project "${GCP_PROJECT_ID}" --format='value(image_summary.digest)')"
+          test "${source_digest}" = "${MIRROR_DIGEST}"
+          docker pull "${source_image}"
+          docker tag "${source_image}" "${target_tag}"
+          docker push "${target_tag}"
+          target_digest="$(gcloud artifacts docker images describe "${target_tag}" \
+            --project onorca-cloud-staging --format='value(image_summary.digest)')"
+          test "${target_digest}" = "${MIRROR_DIGEST}"
+          {
+            echo '### Mirrored Relay image'
+            echo
+            printf 'Production and staging now resolve the same immutable digest: %s.\n' \
+              "${MIRROR_DIGEST}"
+          } >> "${GITHUB_STEP_SUMMARY}"

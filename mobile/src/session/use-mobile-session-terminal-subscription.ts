@@ -15,9 +15,9 @@ export function useMobileSessionTerminalSubscription(
 ) {
   const {
     client,
+    clientId,
     setTerminalModes,
     terminalCwdRef,
-    deviceTokenRef,
     viewportRef,
     viewportMeasuredRef,
     terminalUnsubsRef,
@@ -47,6 +47,10 @@ export function useMobileSessionTerminalSubscription(
         diagnostics.streamSkipped(handle, reason, handle === activeHandleRef.current)
       if (!client) {
         logSkippedGate('no-client')
+        return
+      }
+      if (clientId === null) {
+        logSkippedGate('no-client-identity')
         return
       }
       if (terminalUnsubsRef.current.has(handle)) {
@@ -89,7 +93,7 @@ export function useMobileSessionTerminalSubscription(
         client,
         {
           terminal: handle,
-          client: { id: deviceTokenRef.current!, type: 'mobile' as const },
+          client: { id: clientId, type: 'mobile' as const },
           viewport: nativeChatTerminalStream.mobileNativeChatSubscribeViewport(
             covered,
             viewportRef.current
@@ -263,6 +267,7 @@ export function useMobileSessionTerminalSubscription(
     },
     [
       client,
+      clientId,
       getTerminalRef,
       markNativeChatInputLeaseReady,
       scheduleDelayedAction,

@@ -116,6 +116,47 @@ describe('loading Store extraction seams', () => {
     })
   })
 
+  it('timestamps persistence-load-done before resolving its details closure', () => {
+    const sentinel = 'startup-diagnostics-workspace-session-sentinel-ordering'
+    vi.stubEnv('ORCA_STARTUP_DIAGNOSTICS', '1')
+    const state = getDefaultPersistedState(testState.dir)
+    state.workspaceSession = { ...state.workspaceSession, activeTabId: sentinel }
+    writeDataFile(state)
+
+    // Fake clock only the details closure advances, so a post-closure timestamp is unambiguous.
+    let clock = 0
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => clock)
+    const realStringify = JSON.stringify
+    const stringifySpy = vi.spyOn(JSON, 'stringify').mockImplementation(((
+      value: unknown,
+      ...rest: unknown[]
+    ) => {
+      if (
+        value &&
+        typeof value === 'object' &&
+        (value as { activeTabId?: unknown }).activeTabId === sentinel
+      ) {
+        clock += 1000
+      }
+      return (realStringify as (...args: unknown[]) => string)(value, ...rest)
+    }) as typeof JSON.stringify)
+
+    try {
+      const store = createStore()
+      store.freezeWrites()
+    } finally {
+      stringifySpy.mockRestore()
+      nowSpy.mockRestore()
+    }
+
+    const loadDoneCall = logStartupDiagnosticMock.mock.calls.find(
+      ([event]) => event === 'persistence-load-done'
+    )
+    const details = loadDoneCall?.[1] as Record<string, unknown> | undefined
+    expect(details?.workspaceSessionBytes).toEqual(expect.any(Number))
+    expect(details?.t).toBe(0)
+  })
+
   it('accepts the first JSON-parseable backup even when an older backup has richer state', async () => {
     mkdirSync(testState.dir, { recursive: true })
     writeFileSync(dataFile(), '{{corrupt-primary', 'utf-8')

@@ -108,11 +108,18 @@ describe('handleGpuFallbackRecoveredLaunch', () => {
 
 describe('recovered safe-graphics production wiring', () => {
   it('prompts only after the recovered window is shown and persists both consent states', () => {
-    const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
-    expect(source).toMatch(
+    const windowSource = readFileSync(
+      join(__dirname, '..', 'startup', 'main-window-controller.ts'),
+      'utf8'
+    )
+    const lifecycleSource = readFileSync(
+      join(__dirname, '..', 'startup', 'gpu-lifecycle.ts'),
+      'utf8'
+    )
+    expect(windowSource).toMatch(
       /window\.once\('show',[\s\S]*?presentGpuFallbackRecoveredLaunchPrompt\(window\)/
     )
-    expect(source).toMatch(
+    expect(lifecycleSource).toMatch(
       /persistMarker:[\s\S]*?userConfirmed: false[\s\S]*?confirmMarker:[\s\S]*?userConfirmed: true/
     )
   })

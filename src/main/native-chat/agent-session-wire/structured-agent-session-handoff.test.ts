@@ -12,7 +12,8 @@ import {
   setStoredAgentSessionHandoffStage,
   stopStoredAgentSessionOwnerForHandoff
 } from '../../runtime/agent-session-handoff-record-transitions'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import type { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
 import { createStructuredHandoffFlowContext } from './structured-agent-session-handoff-flow-context'
 import { handoffStructuredSessionToTui } from './structured-agent-session-handoff-forward'
@@ -20,6 +21,8 @@ import type {
   StructuredAgentSessionHandoffTransport,
   StructuredTuiOwner
 } from './structured-agent-session-handoff-types'
+
+const journals = createTrackedJournalOpener()
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-handoff'
@@ -211,7 +214,7 @@ beforeEach(async () => {
   stopRecoveredOwner = vi.fn(async () => undefined)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   await establishNativeOwner()
-  journal = await openAgentSessionJournal({
+  journal = await journals.open({
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -232,6 +235,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -426,7 +430,7 @@ describe('structured session ownership recovery on restore', () => {
           : { outcome: 'pid-absent' },
       now: NOW + 1_000
     })
-    journal = await openAgentSessionJournal({
+    journal = await journals.open({
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',

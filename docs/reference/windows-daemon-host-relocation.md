@@ -7,7 +7,7 @@ daemon, Orca materializes a trimmed copy of its own runtime under
 auto-update and across a crash of the main process.
 
 Read this before changing the copy plan, the host exe name, the LOCALAPPDATA layout, or
-`config/nsis/daemon-host-uninstall.nsh`.
+`config/nsis/orca-installer-hooks.nsh`.
 
 ## What the relocation actually escapes
 
@@ -92,7 +92,7 @@ stop being scored.
 - The daemon is identified by **PID and command line**, never by image name — in the product
   (`daemon-pid-file-parse`, `daemon-process-inspection`) and in the harness
   (`tests/tools/win-update-e2e/daemon-processes.mjs`). Nothing may start matching on the exe name.
-- `config/nsis/daemon-host-uninstall.nsh` kills the daemon by image name. That now also matches the
+- `config/nsis/orca-installer-hooks.nsh` kills the daemon by image name. That now also matches the
   app's own exe, which is correct on a genuine uninstall — the product is being removed — but its
   `${isUpdated}` guard must stay: electron-builder runs the uninstaller during every update's
   `uninstallOldVersion`, and killing the daemon there defeats the whole feature. The legacy

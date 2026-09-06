@@ -188,7 +188,11 @@ describe('local worktree filesystem runtime access', () => {
         1,
         expect.objectContaining({
           program: 'wsl.exe',
-          args: expect.arrayContaining(['-d', 'Ubuntu'])
+          args: expect.arrayContaining(['-d', 'Ubuntu']),
+          // Why a concrete directory (#16463): the guest path is inside the
+          // command, and these run while a worktree is being removed -- which is
+          // the cwd an omitted one would inherit.
+          cwd: expect.any(String)
         })
       )
       const removeArgs = runProcessMock.mock.calls[2]?.[0].args as string[]

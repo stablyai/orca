@@ -142,4 +142,31 @@ describe('useMobileFileTapHandlers', () => {
     )
     expect(options.reportChatTapFailure).toHaveBeenCalledWith("Couldn't open mobile/src/x.ts:12")
   })
+
+  it('lets structured chat file taps resolve without a backing terminal handle', async () => {
+    const sendRequest = vi.fn(async () => ok({ exists: false, isDirectory: false }))
+    const options = {
+      ...createOptions(sendRequest),
+      activeHandleRef: { current: null as string | null },
+      getActiveSessionTabId: () => 'agent-tab-1',
+      getActiveSessionTabType: () => 'agent-session'
+    }
+    act(() => {
+      renderer = create(createElement(Harness, { options }))
+    })
+
+    handlers!.handleNativeChatFileTap('src/app.ts')
+    await act(async () => {})
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'files.resolveTerminalPath',
+      {
+        worktree: 'id:wt-1',
+        pathText: 'src/app.ts',
+        crossWorkspace: true,
+        nativeChatContext: { tabId: 'agent-tab-1', sessionId: 'session-1' }
+      },
+      { timeoutMs: 10_000 }
+    )
+  })
 })
