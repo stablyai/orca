@@ -17,6 +17,7 @@ export function useHardwareKeyboardTextInputFocus(options: {
   const { enabled, inputRef, surfaceId } = options
   const [suppressSoftInput, setSuppressSoftInput] = useState(false)
   const touchFocusFrameRef = useRef<number | null>(null)
+  const cancelAutomaticFocusRef = useRef<(() => void) | null>(null)
   const [connected, setConnected] = useState(isHardwareKeyboardConnected)
 
   useEffect(() => {
@@ -58,15 +59,21 @@ export function useHardwareKeyboardTextInputFocus(options: {
           }
         }, 120)
       })
-      return () => {
+      const cancelAutomaticFocus = () => {
         cancelAnimationFrame(frame)
+        if (verifyTimer !== null) {
+          clearTimeout(verifyTimer)
+          verifyTimer = null
+        }
+      }
+      cancelAutomaticFocusRef.current = cancelAutomaticFocus
+      return () => {
+        cancelAutomaticFocus()
+        cancelAutomaticFocusRef.current = null
         if (touchFocusFrameRef.current !== null) {
           cancelAnimationFrame(touchFocusFrameRef.current)
         }
         inputRef.current?.setNativeProps({ showSoftInputOnFocus: true })
-        if (verifyTimer !== null) {
-          clearTimeout(verifyTimer)
-        }
       }
     }, [enabled, connected, inputRef, surfaceId])
   )
@@ -85,6 +92,8 @@ export function useHardwareKeyboardTextInputFocus(options: {
     if (!suppressSoftInput || !input) {
       return
     }
+    // A touch request supersedes both phases of automatic hardware focus.
+    cancelAutomaticFocusRef.current?.()
     setSuppressSoftInput(false)
     input.setNativeProps({ showSoftInputOnFocus: true })
     input.blur()
