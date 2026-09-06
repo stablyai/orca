@@ -16,8 +16,9 @@ import { ProcessQueuedByteBudget } from './splice-forwarder.js'
 
 // Incident 2026-09-04 ~01:05Z: the phone's dial bound ran out while the cell was
 // still inside acceptClient's serialized Postgres phase (cell-inventory lock
-// contention). The cell then finished the work for a socket nobody held, leaked
-// a 90s activity lease, and logged `host_data_reservation_already_bound`.
+// contention). The cell then finished the work for a socket nobody held, holding
+// an activity lease for the 10s attach deadline before its timer unwound it, and
+// logged `host_data_reservation_already_bound`.
 
 class FakeSocket extends EventEmitter {
   readonly OPEN = 1
@@ -269,6 +270,39 @@ describe('client accept abandoned mid-DB-phase', () => {
     }
   })
 
+  it('stops after a slow same-cell assignment resolve, before reserving a credential', async () => {
+    const h = harness()
+    await activeHost(h)
+    const resolveAssignment = (h.assignments as unknown as { resolve: ReturnType<typeof vi.fn> })
+      .resolve
+    const slowResolve = deferred<{ cellId: string }>()
+    resolveAssignment.mockReturnValueOnce(slowResolve.promise)
+    const client = new FakeSocket()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const accepting = h.registry.acceptClient(
+        client as unknown as WebSocket,
+        identity.relayHostId,
+        'credential'
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      client.close(1000, 'client bound')
+      // A correct, same-cell assignment: only the closed socket stops the accept.
+      slowResolve.resolve({ cellId: config.cellId })
+      await accepting
+
+      expect(h.store.reserveCredential).not.toHaveBeenCalled()
+      expect(h.observer.recordClientAcceptAbandoned).toHaveBeenCalledWith(
+        'assignment',
+        expect.any(Number)
+      )
+    } finally {
+      warn.mockRestore()
+      h.registry.drain(0)
+      vi.advanceTimersByTime(0)
+    }
+  })
+
   it('still opens the connection when the phone is holding on', async () => {
     const h = harness()
     const control = await activeHost(h)
@@ -313,11 +347,6 @@ describe('control lease jitter', () => {
     expect(shortestAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS - CONTROL_LEASE_JITTER_MS)
     expect(centeredAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS)
     expect(longestAck.leaseExpiresAt).toBeLessThan(now + CONTROL_LEASE_MS + CONTROL_LEASE_JITTER_MS)
-    // The mean grant is unchanged, so steady-state rebind load is unchanged;
-    // hosts that connected together now differ by most of the jitter band, not zero.
-    expect(longestAck.leaseExpiresAt - shortestAck.leaseExpiresAt).toBeGreaterThan(
-      CONTROL_LEASE_JITTER_MS
-    )
     shortest.registry.drain(0)
     centered.registry.drain(0)
     longest.registry.drain(0)

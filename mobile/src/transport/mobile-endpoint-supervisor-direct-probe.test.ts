@@ -39,8 +39,9 @@ describe('mobile endpoint supervisor direct probe', () => {
     direct.publishState('reconnecting')
     logical.publishState('disconnected')
 
-    // Relay recovery must not wait out the probe's 12s bound.
-    await vi.advanceTimersByTimeAsync(0)
+    // Relay recovery must not wait out the probe's 12s bound; the probe gives up
+    // one grace window after the redial fails to land.
+    await vi.advanceTimersByTimeAsync(2_000)
     expect(openRelay).toHaveBeenCalledOnce()
     expect(direct.close).toHaveBeenCalled()
     expect(logical.getState()).toBe('connected')

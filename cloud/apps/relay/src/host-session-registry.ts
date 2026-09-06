@@ -178,8 +178,8 @@ export class HostSessionRegistry {
     }
     // Why: the accept runs several serialized Postgres calls behind the contended
     // cell-inventory lock, and phones bound their dial. Finishing the work for a
-    // phone that already hung up used to acquire (and leak for 90s) an activity
-    // lease, then fail at bind with host_data_reservation_already_bound.
+    // phone that already hung up took an activity lease held for the 10s attach
+    // deadline, then failed at bind with host_data_reservation_already_bound.
     const acceptStartedAt = this.now()
     const abandonedByClient = (stage: RelayClientAcceptStage, cleanup?: () => void): boolean => {
       if (socket.readyState === socket.OPEN) return false

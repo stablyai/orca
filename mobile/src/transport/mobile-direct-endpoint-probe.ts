@@ -25,21 +25,33 @@ export function directPathForEndpoint(
   return 'lan'
 }
 
+// Why: 'reconnecting' is published on any socket close, so it cannot tell a dead
+// LAN (instant 1006, then doomed redials) from one access-point flap that the
+// first redial recovers. One redial fits here; a dead LAN still fails in ~2s
+// instead of holding the supervisor's operation mutex for the full outer bound.
+const RECONNECT_GRACE_MS = 2_000
+
 function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Promise<void> {
   if (session.getState() === 'connected') {
     return Promise.resolve()
   }
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | null = null
+    let graceTimer: ReturnType<typeof setTimeout> | null = null
     const unsubscribe = session.onStateChange((state) => {
       if (state === 'connected') {
         finish()
         resolve()
-      } else if (state === 'disconnected' || state === 'auth-failed' || state === 'reconnecting') {
-        // Why: a probe asks whether direct answers NOW. 'reconnecting' is the direct
-        // client's own backoff loop after a failed dial (an instant 1006 on a dead
-        // LAN); waiting it out held the supervisor's operation mutex for the full
-        // 12s bound and blocked relay recovery behind three doomed redials.
+        return
+      }
+      if (state === 'reconnecting' && !graceTimer) {
+        graceTimer = setTimeout(() => {
+          finish()
+          reject(new Error('probe session reconnecting'))
+        }, RECONNECT_GRACE_MS)
+        return
+      }
+      if (state === 'disconnected' || state === 'auth-failed' || state === 'reconnecting') {
         finish()
         reject(new Error(`probe session ${state}`))
       }
@@ -51,6 +63,9 @@ function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Pro
     function finish(): void {
       if (timer) {
         clearTimeout(timer)
+      }
+      if (graceTimer) {
+        clearTimeout(graceTimer)
       }
       unsubscribe()
     }

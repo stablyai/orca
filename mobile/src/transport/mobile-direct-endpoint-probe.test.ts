@@ -72,7 +72,7 @@ describe('mobile direct endpoint probe', () => {
     expect(result?.client.close).not.toHaveBeenCalled()
   })
 
-  it('fails as soon as every candidate falls into its own reconnect backoff', async () => {
+  it('fails a whole dead LAN in seconds instead of holding the 12s bound', async () => {
     // Incident 2026-09-04: foregrounding on a dead LAN produced an instant 1006 and
     // the direct client's 500/1000/2000ms redials, while the probe sat on the
     // 'connecting' phase and held the supervisor mutex for the whole 12s bound.
@@ -86,6 +86,7 @@ describe('mobile direct endpoint probe', () => {
 
     const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
     await vi.advanceTimersByTimeAsync(20)
+    await vi.advanceTimersByTimeAsync(2_000)
     await expect(probing).resolves.toBeNull()
 
     expect(clients).toHaveLength(2)
@@ -93,6 +94,47 @@ describe('mobile direct endpoint probe', () => {
       expect(client.close).toHaveBeenCalledOnce()
     }
     // No 12s timer is left behind to fire into a settled probe.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('rides out one access-point flap that the first redial recovers', async () => {
+    // 'reconnecting' is published on any socket close, so a single RST on the first
+    // dial must not book a direct failure and its 60s cooldown.
+    const openDirect = vi.fn((endpoint: string) => {
+      const client = new FakeClient('connecting')
+      if (endpoint.includes('100.64.0.2')) {
+        setTimeout(() => client.publishState('reconnecting'), 20)
+        setTimeout(() => client.publishState('connected'), 600)
+      }
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(600)
+    const result = await probing
+
+    expect(result?.path).toBe('tailscale')
+    expect(result?.client.close).not.toHaveBeenCalled()
+  })
+
+  it('gives up at the grace window when the redial never lands', async () => {
+    const openDirect = vi.fn(() => {
+      const client = new FakeClient('connecting')
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(2_019)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(probing).resolves.toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })
 })
