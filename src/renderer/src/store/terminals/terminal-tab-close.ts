@@ -17,7 +17,7 @@ import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './termin
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
-import { omitRecordKey } from '../slices/worktrees/teardown/record-key-omission'
+import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -44,6 +44,11 @@ export function createTerminalTabCloseActions(
         })
       }
       set((s) => {
+        // Why hoisted: omitRecordKeys takes an iterable, and this closes over one
+        // array instead of allocating a fresh [tabId] at each of the call sites below.
+        const closingTabIds = [tabId]
+        const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
+          omitRecordKeys(record, closingTabIds)
         const next = { ...s.tabsByWorktree }
         let closedTab: TerminalTab | null = null
         let closedWorktreeId: string | null = null
@@ -98,34 +103,22 @@ export function createTerminalTabCloseActions(
                 ...(closedPosition ? { position: closedPosition } : {})
               }
             : null
-        const nextExpanded = omitRecordKey(s.expandedPaneByTabId, tabId)
-        const nextCanExpand = omitRecordKey(s.canExpandPaneByTabId, tabId)
-        const nextLayouts = omitRecordKey(s.terminalLayoutsByTabId, tabId)
-        const nextPtyIdsByTabId = omitRecordKey(s.ptyIdsByTabId, tabId)
-        const nextLastKnownRelay = omitRecordKey(s.lastKnownRelayPtyIdByTabId, tabId)
-        const nextDeferredSshSessionIdsByTabId = omitRecordKey(
-          s.deferredSshSessionIdsByTabId,
-          tabId
-        )
-        const nextPendingReconnectPtyIdByTabId = omitRecordKey(
-          s.pendingReconnectPtyIdByTabId,
-          tabId
-        )
-        const nextRuntimePaneTitlesByTabId = omitRecordKey(s.runtimePaneTitlesByTabId, tabId)
-        const nextDirectSshPaneRetryByTabId = omitRecordKey(s.directSshPaneRetryByTabId, tabId)
-        const nextDirectSshLivePtyBindingByTabId = omitRecordKey(
-          s.directSshLivePtyBindingByTabId,
-          tabId
-        )
-        const nextDirectSshPaneRetryHistoryByTabId = omitRecordKey(
-          s.directSshPaneRetryHistoryByTabId,
-          tabId
-        )
+        const nextExpanded = omitByTabId(s.expandedPaneByTabId)
+        const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
+        const nextLayouts = omitByTabId(s.terminalLayoutsByTabId)
+        const nextPtyIdsByTabId = omitByTabId(s.ptyIdsByTabId)
+        const nextLastKnownRelay = omitByTabId(s.lastKnownRelayPtyIdByTabId)
+        const nextDeferredSshSessionIdsByTabId = omitByTabId(s.deferredSshSessionIdsByTabId)
+        const nextPendingReconnectPtyIdByTabId = omitByTabId(s.pendingReconnectPtyIdByTabId)
+        const nextRuntimePaneTitlesByTabId = omitByTabId(s.runtimePaneTitlesByTabId)
+        const nextDirectSshPaneRetryByTabId = omitByTabId(s.directSshPaneRetryByTabId)
+        const nextDirectSshLivePtyBindingByTabId = omitByTabId(s.directSshLivePtyBindingByTabId)
+        const nextDirectSshPaneRetryHistoryByTabId = omitByTabId(s.directSshPaneRetryHistoryByTabId)
         const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(s.unverifiedPtyLossTabIds, [
           tabId
         ])
         // Why: keep the same reference when the closing tab had no unread flag, so unrelated closes don't force full-state selector re-eval.
-        const nextUnreadTerminalTabs = omitRecordKey(s.unreadTerminalTabs, tabId)
+        const nextUnreadTerminalTabs = omitByTabId(s.unreadTerminalTabs)
         const nextUnreadTerminalPanes = removePaneKeysByTabPrefix(s.unreadTerminalPanes, tabId)
         const nextUnreadAgentCompletionPanes = removePaneKeysByTabPrefix(
           s.unreadAgentCompletionPanes,
@@ -138,25 +131,15 @@ export function createTerminalTabCloseActions(
         const nextSleepingAgentSessionsByPaneKey = retiresSession
           ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
           : s.sleepingAgentSessionsByPaneKey
-        const nextPendingStartupByTabId = omitRecordKey(s.pendingStartupByTabId, tabId)
-        const nextAutomaticAgentResumeClaimsByTabId = omitRecordKey(
-          s.automaticAgentResumeClaimsByTabId,
-          tabId
+        const nextPendingStartupByTabId = omitByTabId(s.pendingStartupByTabId)
+        const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(
+          s.automaticAgentResumeClaimsByTabId
         )
-        const nextNativeChatLaunchPromptByTabId = omitRecordKey(
-          s.nativeChatLaunchPromptByTabId,
-          tabId
-        )
-        const nextNativeChatLaunchDraftByTabId = omitRecordKey(
-          s.nativeChatLaunchDraftByTabId,
-          tabId
-        )
-        const nextPendingInitialCwdByTabId = omitRecordKey(s.pendingInitialCwdByTabId, tabId)
-        const nextPendingSetupSplitByTabId = omitRecordKey(s.pendingSetupSplitByTabId, tabId)
-        const nextPendingIssueCommandSplitByTabId = omitRecordKey(
-          s.pendingIssueCommandSplitByTabId,
-          tabId
-        )
+        const nextNativeChatLaunchPromptByTabId = omitByTabId(s.nativeChatLaunchPromptByTabId)
+        const nextNativeChatLaunchDraftByTabId = omitByTabId(s.nativeChatLaunchDraftByTabId)
+        const nextPendingInitialCwdByTabId = omitByTabId(s.pendingInitialCwdByTabId)
+        const nextPendingSetupSplitByTabId = omitByTabId(s.pendingSetupSplitByTabId)
+        const nextPendingIssueCommandSplitByTabId = omitByTabId(s.pendingIssueCommandSplitByTabId)
         // Why: cache timer keys are `${tabId}:${leafId}` composites; remove all entries for the closing tab.
         const nextCacheTimer = removePaneKeysByTabPrefix(s.cacheTimerByKey, tabId)
         // Why: keep activeTabIdByWorktree in sync when closing a background-worktree tab, else the stale remembered tab falls back to tabs[0] on switch.
