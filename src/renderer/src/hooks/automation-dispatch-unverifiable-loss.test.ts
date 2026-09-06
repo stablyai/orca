@@ -102,4 +102,47 @@ describe('automation dispatch completion on an unverifiable loss', () => {
     )
     warnSpy.mockRestore()
   })
+
+  it('prefers pending done over simultaneous unverifiable loss', async () => {
+    const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
+    const completion = createAutomationDispatchCompletion({
+      run: { id: 'run-1' } as never,
+      worktree: { id: 'wt-1', displayName: 'Automation worktree' } as never,
+      precheckResult: null,
+      markDispatchResult,
+      releaseTerminalOwnership,
+      finalizeTerminalOwnership
+    })
+
+    completion.handleAgentDone()
+    completion.handleExit(-1)
+    await completion.settlePendingAfterDispatch()
+
+    expect(markDispatchResult).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'completed', error: null })
+    )
+  })
+
+  it('prefers a pending process failure over a simultaneous done signal', async () => {
+    const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
+    const completion = createAutomationDispatchCompletion({
+      run: { id: 'run-1' } as never,
+      worktree: { id: 'wt-1', displayName: 'Automation worktree' } as never,
+      precheckResult: null,
+      markDispatchResult,
+      releaseTerminalOwnership,
+      finalizeTerminalOwnership
+    })
+
+    completion.handleAgentDone()
+    completion.handleExit(1)
+    await completion.settlePendingAfterDispatch()
+
+    expect(markDispatchResult).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: 'dispatch_failed',
+        error: 'Automation process exited with code 1.'
+      })
+    )
+  })
 })

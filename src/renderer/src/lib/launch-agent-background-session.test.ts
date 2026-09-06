@@ -90,6 +90,25 @@ describe('launchAgentBackgroundSession', () => {
     })
   })
 
+  it('routes isolated Codex state to the worktree without replacing its authenticated home', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    mockSpawn.mockResolvedValue({ id: 'pty-1', incarnationId: 'inc-fresh' })
+
+    await launchAgentBackgroundSession({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      agentArgsOverride:
+        "--dangerously-bypass-approvals-and-sandbox -c sqlite_home='~/.orca/tmp/codex-automation/run-1-proof'"
+    })
+
+    const spawnArgs = mockSpawn.mock.calls.at(-1)?.[0]
+    expect(spawnArgs?.command).toContain(
+      "'-c' 'sqlite_home=~/.orca/tmp/codex-automation/run-1-proof'"
+    )
+    expect(spawnArgs?.env?.CODEX_HOME).toBeUndefined()
+  })
+
   it('spawns a PTY first and creates the inactive tab already bound to it', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
     mockSpawn.mockResolvedValue({ id: 'pty-1', incarnationId: 'inc-fresh' })
