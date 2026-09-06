@@ -24,6 +24,7 @@ import {
 } from './nested-runtime-same-id-pairing'
 import { createPairedWebClientUrl, type PairedWebClientOptions } from './paired-web-client-url'
 import { selectPairedRuntimeEnvironment } from './paired-client-runtime-environment'
+import { revealPairedClientWindow } from './paired-client-window-reveal'
 
 export type { SameIdPairingReplacement } from './nested-runtime-same-id-pairing'
 
@@ -293,13 +294,15 @@ export async function rePairPairedElectronClient(
   client.environmentId = environmentId
   // Why: removing and re-adding the same HUB changes the environment identity; remount so no pane keeps the retired transport wrapper.
   await client.page.reload()
-  // Keep hidden-window frames running for Playwright's actionability checks after reload.
-  const clientWindow = await client.app.browserWindow(client.page)
-  await clientWindow.evaluate((window) => {
-    window.webContents.setBackgroundThrottling(false)
-    window.showInactive()
-  })
-  await clientWindow.dispose()
+  // Xvfb needs a mapped window to resume actionability frames after reload.
+  if (
+    process.env.GITHUB_ACTIONS === 'true' &&
+    process.platform === 'linux' &&
+    process.env.DISPLAY &&
+    process.env.ORCA_BACKGROUND_LAUNCH !== '1'
+  ) {
+    await revealPairedClientWindow(client)
+  }
   await client.page.waitForFunction(
     () => window.__store?.getState().workspaceSessionReady === true,
     null,
