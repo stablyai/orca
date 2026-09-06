@@ -1,4 +1,5 @@
 import { expect } from './orca-app'
+import { terminalMarkerCommand } from './terminal-output-marker'
 import type {
   createRuntimeDesktopPairingOffer,
   PairedElectronClient
@@ -19,12 +20,7 @@ export type ProjectedWorktreeRoute = {
 export { assertNestedFilesystemRoute } from './nested-runtime-ssh-filesystem-route'
 export { assertPairedTerminalCreation } from './nested-runtime-ssh-terminal-creation'
 
-export function terminalMarkerCommand(marker: string): string {
-  const encoded = [...marker]
-    .map((character) => `\\${character.charCodeAt(0).toString(8).padStart(3, '0')}`)
-    .join('')
-  return `printf '${encoded}\\n'`
-}
+export { terminalMarkerCommand } from './terminal-output-marker'
 
 export async function assertNestedTerminalDestination(
   client: PairedElectronClient,
@@ -71,7 +67,7 @@ async function captureNestedTerminalRouteDiagnostic(
           })
         : null
       return {
-        activeRuntimeEnvironmentId: state?.settings.activeRuntimeEnvironmentId ?? null,
+        activeRuntimeEnvironmentId: state?.settings?.activeRuntimeEnvironmentId ?? null,
         environmentId,
         environments: await window.api.runtimeEnvironments.list(),
         leafId,
@@ -114,7 +110,7 @@ async function captureNestedTerminalRouteDiagnostic(
           ([owner, bucket]) => ({
             owner,
             statuses: [...bucket.connectionStates.entries()],
-            targets: bucket.targets?.map((target) => target.id) ?? [],
+            targets: [...bucket.targetLabels.keys()],
             targetsHydrated: bucket.targetsHydrated
           })
         ),
@@ -157,7 +153,53 @@ async function activateRepoTerminal(
           ?.connectionStates.get(repo.connectionId ?? '')?.status ?? null
     }
   }, repoId)
-  await worktreeRowSurface(client.page, route.worktreeId).click()
+  const frames = await client.page.evaluateHandle(() => {
+    let frameId = 0
+    let count = 0
+    let ticks = 0
+    const frame = () => {
+      count += 1
+      frameId = requestAnimationFrame(frame)
+    }
+    frameId = requestAnimationFrame(frame)
+    const timer = setInterval(() => (ticks += 1), 100)
+    return {
+      read: () => ({
+        frames: count,
+        timerTicks: ticks,
+        hidden: document.hidden,
+        visibility: document.visibilityState
+      }),
+      dispose: () => {
+        cancelAnimationFrame(frameId)
+        clearInterval(timer)
+      }
+    }
+  })
+  const nativeWindow = await client.app.browserWindow(client.page)
+  try {
+    await worktreeRowSurface(client.page, route.worktreeId).click()
+  } finally {
+    console.log(
+      '[nested-click-frames]',
+      JSON.stringify({
+        frameState: await frames.evaluate((probe) => probe.read()),
+        native: await nativeWindow.evaluate((window) => ({
+          visible: window.isVisible(),
+          minimized: window.isMinimized(),
+          backgroundThrottling: window.webContents.getBackgroundThrottling()
+        })),
+        surface: await worktreeRowSurface(client.page, route.worktreeId).evaluate((element) => ({
+          box: element.getBoundingClientRect().toJSON(),
+          display: getComputedStyle(element).display,
+          visibility: getComputedStyle(element).visibility
+        }))
+      })
+    )
+    await frames.evaluate((probe) => probe.dispose())
+    await frames.dispose()
+    await nativeWindow.dispose()
+  }
   return route
 }
 
@@ -180,7 +222,55 @@ export async function assertInteractiveTerminal(
       }
     }, route.worktreeId)
     if (!state.active) {
-      await worktreeRowSurface(client.page, route.worktreeId).click()
+      const frames = await client.page.evaluateHandle(() => {
+        let frameId = 0
+        let count = 0
+        let ticks = 0
+        const frame = () => {
+          count += 1
+          frameId = requestAnimationFrame(frame)
+        }
+        frameId = requestAnimationFrame(frame)
+        const timer = setInterval(() => (ticks += 1), 100)
+        return {
+          read: () => ({
+            frames: count,
+            timerTicks: ticks,
+            hidden: document.hidden,
+            visibility: document.visibilityState
+          }),
+          dispose: () => {
+            cancelAnimationFrame(frameId)
+            clearInterval(timer)
+          }
+        }
+      })
+      const nativeWindow = await client.app.browserWindow(client.page)
+      try {
+        await worktreeRowSurface(client.page, route.worktreeId).click()
+      } finally {
+        console.log(
+          '[nested-click-frames]',
+          JSON.stringify({
+            frameState: await frames.evaluate((probe) => probe.read()),
+            native: await nativeWindow.evaluate((window) => ({
+              visible: window.isVisible(),
+              minimized: window.isMinimized(),
+              backgroundThrottling: window.webContents.getBackgroundThrottling()
+            })),
+            surface: await worktreeRowSurface(client.page, route.worktreeId).evaluate(
+              (element) => ({
+                box: element.getBoundingClientRect().toJSON(),
+                display: getComputedStyle(element).display,
+                visibility: getComputedStyle(element).visibility
+              })
+            )
+          })
+        )
+        await frames.evaluate((probe) => probe.dispose())
+        await frames.dispose()
+        await nativeWindow.dispose()
+      }
     }
     return state.active && state.hasBoundTerminal
   }
