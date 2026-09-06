@@ -30,6 +30,27 @@ function seedClosedLastTerminal(worktreeId: string): void {
 }
 
 describe('activating a workspace whose last terminal was closed', () => {
+  it('re-seeds after the asynchronous agent inventory confirms the workspace is empty', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      terminalStartupRestorationReady: true
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtime: { call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } })) },
+        pty: { listSessions: vi.fn(async () => []) }
+      }
+    })
+
+    activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+  })
+
   it('re-seeds a terminal when the workspace is opened from elsewhere', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)

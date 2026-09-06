@@ -1,3 +1,5 @@
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
@@ -213,4 +215,26 @@ export function ensureWorktreeHasInitialTerminal(
   )
 
   return terminalTab.id
+}
+
+export function ensureFolderWorkspaceInitialTerminal(
+  folderWorkspace: FolderWorkspace,
+  startup?: WorktreeStartupPayload,
+  providesInitialSurface?: boolean
+): string | null {
+  if (providesInitialSurface === true && startup === undefined) {
+    return null
+  }
+  const state = useAppStore.getState()
+  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
+  const primaryTabId = ensureWorktreeHasInitialTerminal(
+    state,
+    workspaceKey,
+    startup,
+    undefined,
+    undefined,
+    undefined,
+    { reseedEmptiedWorkspace: providesInitialSurface !== true }
+  )
+  return primaryTabId
 }
