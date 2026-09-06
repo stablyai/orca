@@ -61,6 +61,7 @@ describe('isProviderConfigured', () => {
         })
       )
     ).toBe(true)
+    expect(isProviderConfigured(provider('fetching', { isUnlimited: true }))).toBe(true)
     expect(isProviderConfigured(provider('idle'))).toBe(true)
   })
 })

@@ -29,7 +29,12 @@ type RpcResponse = {
 }
 
 type RpcRateLimitsResponse = {
-  rateLimits?: CodexRateLimitWindowsSnapshot | null
+  rateLimits?:
+    | (CodexRateLimitWindowsSnapshot & {
+        credits?: { unlimited?: boolean } | null
+        planType?: string | null
+      })
+    | null
   rateLimitResetCredits?: RpcRateLimitResetCredits
 }
 
@@ -242,14 +247,38 @@ export function readCodexRateLimitsViaRpc(
             return
           }
           const wrapper = message.result as RpcRateLimitsResponse | undefined
-          const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
+          const rateLimits = wrapper?.rateLimits
+          const classified = classifyCodexRateLimitWindows(rateLimits)
+          const session = mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES)
+          const weekly = mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
           const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
+          const planType =
+            typeof rateLimits?.planType === 'string' && rateLimits.planType.trim()
+              ? rateLimits.planType
+              : undefined
+          const isUnlimited = rateLimits?.credits?.unlimited === true
+          if (!session && !weekly && !isUnlimited) {
+            settle(
+              {
+                provider: 'codex',
+                session: null,
+                weekly: null,
+                updatedAt: Date.now(),
+                error: 'RPC response did not include rate-limit windows',
+                status: 'error'
+              },
+              { kill: true }
+            )
+            return
+          }
           settle(
             {
               provider: 'codex',
-              session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
-              weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
+              session,
+              weekly,
               ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
+              ...(planType !== undefined ? { planType } : {}),
+              ...(isUnlimited ? { isUnlimited: true } : {}),
               updatedAt: Date.now(),
               error: null,
               status: 'ok'

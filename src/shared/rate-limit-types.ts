@@ -80,6 +80,8 @@ export type ProviderRateLimits = {
   } | null
   /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
   planType?: string | null
+  /** Whether the provider reports unmetered usage instead of rate-limit windows. */
+  isUnlimited?: boolean
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */

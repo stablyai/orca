@@ -3,7 +3,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { getProviderUsageStatusLabel } from './usage-error-copy'
 
 export type UsageRosterRowState = {
-  kind: 'usage' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'
+  kind: 'usage' | 'unlimited' | 'loading' | 'sign-in' | 'unavailable' | 'error' | 'empty'
   statusLabel: string | null
 }
 
@@ -36,6 +36,15 @@ export function getUsageRosterRowState(
 ): UsageRosterRowState {
   if (hasUsage) {
     return { kind: 'usage', statusLabel: null }
+  }
+  if (provider.isUnlimited) {
+    return {
+      kind: 'unlimited',
+      statusLabel: translate(
+        'auto.components.status.bar.UsageRosterPanel.unlimitedUsage',
+        'Unlimited'
+      )
+    }
   }
   if (provider.status === 'idle' || provider.status === 'fetching') {
     return {

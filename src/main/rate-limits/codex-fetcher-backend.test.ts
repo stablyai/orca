@@ -97,6 +97,54 @@ describe('Codex backend rate-limit requests', () => {
     )
   })
 
+  it('maps unlimited usage from the backend response used by WSL', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          plan_type: 'business',
+          rate_limit: null,
+          credits: { unlimited: true }
+        })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ available_count: 0, credits: [] })
+      } as Response)
+
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+      })
+    ).resolves.toMatchObject({ planType: 'business', isUnlimited: true, status: 'ok' })
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects empty non-unlimited backend usage and continues to the CLI fallback', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ plan_type: 'plus', rate_limit: null })
+    } as Response)
+    childSpawnMock.mockImplementation(() => {
+      throw new Error('spawn failed')
+    })
+
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home',
+        allowPtyFallback: false
+      })
+    ).resolves.toMatchObject({ status: 'error', error: 'RPC failed' })
+    expect(childSpawnMock).toHaveBeenCalled()
+  })
+
   it('classifies a sole seven-day backend primary window as weekly', async () => {
     readFileMock.mockResolvedValue(
       JSON.stringify({

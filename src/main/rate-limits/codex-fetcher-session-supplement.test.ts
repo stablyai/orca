@@ -73,11 +73,12 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
   return child
 }
 
-function usageResponse(rateLimitResetCredits?: unknown): Response {
+function usageResponse(rateLimitResetCredits?: unknown, unlimited = false): Response {
   return {
     ok: true,
     json: async () => ({
-      plan_type: 'pro',
+      plan_type: unlimited ? 'business' : 'pro',
+      ...(unlimited ? { credits: { unlimited: true } } : {}),
       rate_limit: {
         primary_window: {
           used_percent: 23,
@@ -139,6 +140,19 @@ describe('Codex backend session supplement credits', () => {
       session: null,
       weekly: { usedPercent: 22, windowMinutes: 10_080 },
       rateLimitResetCredits: { availableCount: 0, nextExpiresAt: null }
+    })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves unlimited metadata from a weekly-only backend response', async () => {
+    vi.mocked(fetch).mockResolvedValue(usageResponse({ available_count: 0 }, true))
+
+    await expect(fetchWeeklyOnly()).resolves.toMatchObject({
+      status: 'ok',
+      session: null,
+      weekly: { usedPercent: 22, windowMinutes: 10_080 },
+      planType: 'business',
+      isUnlimited: true
     })
     expect(fetch).toHaveBeenCalledTimes(1)
   })

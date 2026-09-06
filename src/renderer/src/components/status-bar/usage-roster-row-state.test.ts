@@ -82,6 +82,15 @@ describe('getUsageRosterRowState', () => {
     ).toEqual({ kind: 'error', statusLabel: 'Refresh failed' })
   })
 
+  it('shows unlimited accounts as a successful unmetered state', () => {
+    expect(
+      getUsageRosterRowState(
+        provider({ provider: 'codex', planType: 'business', isUnlimited: true }),
+        false
+      )
+    ).toEqual({ kind: 'unlimited', statusLabel: 'Unlimited' })
+  })
+
   it('distinguishes unavailable and empty successful responses', () => {
     expect(
       getUsageRosterRowState(

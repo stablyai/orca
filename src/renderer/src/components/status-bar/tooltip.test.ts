@@ -470,6 +470,21 @@ describe('ProviderPanel reset rendering', () => {
     expect(markup).toContain('Resets in 6d 17h')
   })
 
+  it('renders stale unlimited usage alongside its refresh error', () => {
+    const p = provider({
+      provider: 'codex',
+      planType: 'business',
+      isUnlimited: true,
+      error: 'temporary failure'
+    })
+
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
+
+    expect(markup).toContain('Unlimited usage')
+    expect(markup).toContain('temporary failure')
+    expect(markup).toContain('Refresh failed — showing cached data')
+  })
+
   it('renders MiniMax session as usedPercent so the value matches the bar', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))

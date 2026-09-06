@@ -71,6 +71,7 @@ const unavailableUsage: ProviderRateLimits = {
   error: 'Not signed in',
   updatedAt: 1
 } as unknown as ProviderRateLimits
+let inactiveUsage = unavailableUsage
 
 vi.mock('sonner', () => ({
   toast: { success: toastSuccess, error: toastError }
@@ -158,7 +159,7 @@ vi.mock('../../store', () => {
     fetchInactiveCodexAccountUsage,
     rateLimits: {
       inactiveCodexAccounts: [
-        { accountId: 'account-2', isFetching: false, rateLimits: unavailableUsage }
+        { accountId: 'account-2', isFetching: false, rateLimits: inactiveUsage }
       ],
       codexTarget: { runtime: 'host', wslDistro: null }
     }
@@ -196,6 +197,7 @@ describe('status bar Codex sign-in action', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     storeSettings = settingsWithActive(null)
+    inactiveUsage = unavailableUsage
     Object.defineProperty(window, 'api', {
       configurable: true,
       writable: true,
@@ -205,6 +207,28 @@ describe('status bar Codex sign-in action', () => {
 
   afterEach(() => {
     cleanup()
+  })
+
+  it('does not offer sign-in for stale unlimited inactive usage', async () => {
+    inactiveUsage = {
+      ...unavailableUsage,
+      isUnlimited: true,
+      error: 'temporary failure'
+    }
+    const { CodexSwitcherMenu } = await import('./StatusBar')
+    render(
+      React.createElement(CodexSwitcherMenu, {
+        codex: codexProvider,
+        compact: false,
+        iconOnly: false
+      })
+    )
+
+    fireEvent.click(screen.getByText('System default'))
+
+    await waitFor(() => expect(screen.getByText('Unlimited')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: /Sign in/ })).toBeNull()
+    expect(screen.queryByText('Sign in to see usage')).toBeNull()
   })
 
   it('activates the signed-in account and runs the same restart workflow a switch runs', async () => {
