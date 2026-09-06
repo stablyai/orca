@@ -269,4 +269,33 @@ describe('SessionSearchStore', () => {
     const hits = store.search({ query: 'C++' }).hits
     expect(hits.map((hit) => hit.sessionId)).toEqual(['aaaaaaaa-0000-4000-8000-0000000000c1'])
   })
+
+  it('hands freed pages back to the file after a purge', async () => {
+    const root = await makeTempDir()
+    const filler = 'x'.repeat(4000)
+    for (let i = 0; i < 40; i += 1) {
+      const id = `aaaaaaaa-0000-4000-8000-0000000000${i.toString(16).padStart(2, '0')}`
+      const path = join(root, `${id}.jsonl`)
+      await writeFile(path, `${userRecord(0, `padding ${filler}`, id)}\n`)
+      await parse(path)
+    }
+    const pageCount = (): number => Number(store.db.pragma('page_count', { simple: true }))
+    const before = pageCount()
+
+    await store.purgeOlderThan(Date.now() + 60_000)
+
+    expect(store.coverage().sessionsIndexed).toBe(0)
+    expect(Number(store.db.pragma('freelist_count', { simple: true }))).toBe(0)
+    expect(pageCount()).toBeLessThan(before)
+  })
+
+  it('warms once and survives a close mid-way', async () => {
+    const root = await makeTempDir()
+    const path = join(root, `${SESSION_ID}.jsonl`)
+    await writeFile(path, `${userRecord(0, 'warm the pages')}\n`)
+    await parse(path)
+    const first = store.warm()
+    expect(store.warm()).toBe(first)
+    await expect(first).resolves.toBeUndefined()
+  })
 })

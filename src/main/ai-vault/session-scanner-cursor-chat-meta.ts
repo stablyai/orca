@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
@@ -30,9 +31,17 @@ type CursorChatMetaIndexEntry = {
 }
 
 const cursorChatMetaIndexCache = new Map<string, Promise<CursorChatMetaIndexEntry>>()
+// Why: validating the cache costs a readdir plus a stat per workspace, and
+// discovery asks once per transcript; one scan sees the tree once instead.
+const scanScopedIndex = new AsyncLocalStorage<Map<string, Promise<Map<string, string>>>>()
 
 export function resetCursorChatMetaIndexCacheForTests(): void {
   cursorChatMetaIndexCache.clear()
+}
+
+/** Runs one discovery scan; every Cursor transcript inside it shares a single validated index read. */
+export function withCursorChatMetaScan<T>(fn: () => Promise<T>): Promise<T> {
+  return scanScopedIndex.run(new Map(), fn)
 }
 
 /** Path a discovery stat can watch so a rewritten meta.json invalidates the parse cache. */
@@ -42,8 +51,21 @@ export async function cursorChatMetaPath(transcriptPath: string): Promise<string
   if (!chatsRoot || !chatId) {
     return undefined
   }
-  const index = await readCursorChatMetaIndex(chatsRoot)
+  const index = await readCursorChatMetaIndexOncePerScan(chatsRoot)
   return index.get(chatId)
+}
+
+function readCursorChatMetaIndexOncePerScan(chatsRoot: string): Promise<Map<string, string>> {
+  const scan = scanScopedIndex.getStore()
+  if (!scan) {
+    return readCursorChatMetaIndex(chatsRoot)
+  }
+  let pending = scan.get(chatsRoot)
+  if (!pending) {
+    pending = readCursorChatMetaIndex(chatsRoot)
+    scan.set(chatsRoot, pending)
+  }
+  return pending
 }
 
 export async function readCursorChatMeta(transcriptPath: string): Promise<CursorChatMeta | null> {

@@ -5,8 +5,10 @@ import type {
   AiVaultSearchCoverage,
   AiVaultSearchResult
 } from '../../shared/ai-vault-search-types'
+import { DISABLED_AI_VAULT_SEARCH_COVERAGE as DISABLED_COVERAGE } from '../../shared/ai-vault-search-coverage'
 import {
   aiVaultSearchHistoryCutoffMs,
+  narrowsAiVaultSearchHistory,
   widensAiVaultSearchHistory,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
@@ -43,16 +45,6 @@ export type SessionSearchServiceOptions = { databasePath: string } & AiVaultSear
 
 /** Scan roots the backfill enumerates; the parent resolves them so they match list scans. */
 export type SessionSearchScanRoots = Omit<AiVaultScanOptions, 'signal' | 'limit' | 'unlimited'>
-
-const DISABLED_COVERAGE: AiVaultSearchCoverage = {
-  enabled: false,
-  sessionsIndexed: 0,
-  messagesIndexed: 0,
-  providers: [],
-  backfill: 'idle',
-  filesPending: 0,
-  lastIndexedAt: null
-}
 
 /**
  * Runs inside the ai-vault scanner process. Owns the index, feeds it from every
@@ -129,6 +121,9 @@ export class SessionSearchService {
 
   /** Observational only: reading coverage must never be what starts an index build. */
   coverage(): AiVaultSearchCoverage {
+    // Why: the panel reads coverage when it opens, well before the first
+    // keystroke; that is the moment to pull the join's pages off disk.
+    void this.store?.warm()
     return this.store?.coverage() ?? DISABLED_COVERAGE
   }
 
@@ -157,8 +152,14 @@ export class SessionSearchService {
     if (!next.enabled) {
       return DISABLED_COVERAGE
     }
-    if (!this.store) {
-      this.open()
+    const store = this.store ?? this.open()
+    const cutoff = aiVaultSearchHistoryCutoffMs(next.historyDays)
+    if (
+      wasEnabled &&
+      cutoff !== null &&
+      narrowsAiVaultSearchHistory(previousDays, next.historyDays)
+    ) {
+      await store.purgeOlderThan(cutoff)
     }
     this.ensureBackfill(roots)
     return this.coverage()
@@ -204,10 +205,11 @@ export class SessionSearchService {
     this.closeStore()
   }
 
-  private open(): void {
+  private open(): SessionSearchStore {
     mkdirSync(dirname(this.databasePath), { recursive: true })
     this.store = new SessionSearchStore(this.databasePath)
     registerSessionSearchIndexSink(this.store)
+    return this.store
   }
 
   /** Waits for the aborted backfill so its last parse cannot write to a closed store. */

@@ -2,7 +2,7 @@ import { rmSync } from 'node:fs'
 import SyncDatabase from '../sqlite/sync-database'
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 5
+export const SESSION_SEARCH_SCHEMA_VERSION = 6
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -86,6 +86,9 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
 
 function openWithPragmas(path: string): SyncDatabase {
   const db = new SyncDatabase(path)
+  // Why: only takes effect on an empty file; it is what lets a purge hand pages
+  // back in bounded steps instead of a full VACUUM. Set before any table exists.
+  db.pragma('auto_vacuum = INCREMENTAL')
   db.pragma('journal_mode = WAL')
   db.pragma('synchronous = NORMAL')
   db.pragma('busy_timeout = 5000')

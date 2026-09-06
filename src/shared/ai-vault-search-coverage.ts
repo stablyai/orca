@@ -1,5 +1,16 @@
 import type { AiVaultSearchCoverage, AiVaultSearchProviderCoverage } from './ai-vault-search-types'
 
+/** What a host reports while transcript search is switched off. */
+export const DISABLED_AI_VAULT_SEARCH_COVERAGE: AiVaultSearchCoverage = {
+  enabled: false,
+  sessionsIndexed: 0,
+  messagesIndexed: 0,
+  providers: [],
+  backfill: 'idle',
+  filesPending: 0,
+  lastIndexedAt: null
+}
+
 /** Old hosts omit the flag; only an explicit `false` means the user opted out. */
 export function isAiVaultSearchDisabled(
   coverage: Pick<AiVaultSearchCoverage, 'enabled'> | null | undefined

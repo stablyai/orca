@@ -35,6 +35,8 @@ export type AiVaultSessionSearchView = {
   updating: boolean
   error: string | null
   coverage: AiVaultSearchCoverage | null
+  /** Terms the index corrected before searching; empty when the query ran as typed. */
+  repairedTerms: readonly string[]
   /** The host answered that the user has not turned transcript search on. */
   disabled: boolean
   /** Runs the settled tier immediately; bound to Enter in the search box. */
@@ -123,6 +125,7 @@ export function useAiVaultSessionSearchResults(input: {
         polledCoverage?.backfill === 'complete'
           ? polledCoverage
           : (result?.coverage ?? polledCoverage),
+      repairedTerms: result?.repairedTerms ?? [],
       disabled: isAiVaultSearchDisabled(result?.coverage),
       flush,
       groups,

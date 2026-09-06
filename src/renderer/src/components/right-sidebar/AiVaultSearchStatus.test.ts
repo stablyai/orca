@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSearchCoverage } from '../../../../shared/ai-vault-search-types'
-import { aiVaultSearchCoverageStatus } from './AiVaultSearchStatus'
+import { aiVaultSearchCoverageStatus, aiVaultSearchRepairedStatus } from './AiVaultSearchStatus'
 
 function coverage(overrides: Partial<AiVaultSearchCoverage> = {}): AiVaultSearchCoverage {
   return {
@@ -42,5 +42,15 @@ describe('aiVaultSearchCoverageStatus', () => {
     expect(aiVaultSearchCoverageStatus(coverage(), { hitCount: 7, hasQuery: true })).toBe(
       '7 matching · 1,200 conversations'
     )
+  })
+})
+
+describe('aiVaultSearchRepairedStatus', () => {
+  it('names the corrected words so a wrong guess is visible', () => {
+    expect(aiVaultSearchRepairedStatus(['coalesces'])).toBe('Showing results for coalesces ·')
+  })
+
+  it('says nothing when the query ran as typed', () => {
+    expect(aiVaultSearchRepairedStatus([])).toBeNull()
   })
 })

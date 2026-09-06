@@ -303,6 +303,22 @@ describe('SessionSearchService consent gate', () => {
     expect(getSessionSearchIndexSink()).toBeNull()
   })
 
+  it('purges indexed transcripts that fall outside a narrowed history bound', async () => {
+    const { roots, databasePath } = await scanRoots()
+    await writeClaudeTranscript(roots, 'recent-session', 'the vacuum quota never settles', 1)
+    await writeClaudeTranscript(roots, 'ancient-session', 'the vacuum quota never settles', 120)
+
+    const service = makeService(databasePath, { enabled: true, historyDays: null })
+    await service.ensureBackfill(roots)
+    expect(service.coverage().sessionsIndexed).toBe(2)
+
+    await service.configure({ enabled: true, historyDays: 30 }, roots)
+
+    const result = await service.search({ query: 'vacuum', refresh: false }, roots)
+    expect(result.hits.map((hit) => hit.sessionId)).toEqual(['recent-session'])
+    expect(service.coverage().sessionsIndexed).toBe(1)
+  })
+
   it('skips transcripts older than the history bound', async () => {
     const { roots, databasePath } = await scanRoots()
     await writeClaudeTranscript(roots, 'recent-session', 'the vacuum quota never settles', 1)

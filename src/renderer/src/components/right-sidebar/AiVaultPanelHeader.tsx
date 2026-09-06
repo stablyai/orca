@@ -225,6 +225,7 @@ export function AiVaultPanelHeader({
           coverage={search.coverage}
           hitCount={search.listCounts.filteredSessionsCount}
           hasQuery={search.active}
+          repairedTerms={search.repairedTerms}
           newestFirst={search.newestFirst}
           onNewestFirstChange={search.setNewestFirst}
         />

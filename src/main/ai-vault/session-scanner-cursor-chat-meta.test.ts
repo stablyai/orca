@@ -6,6 +6,7 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-error'
 
 // Why: a refused WSL read is the one build failure that must not be cached.
 let failNextChatsReaddir = false
+let chatsRootReads = 0
 vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
   const actual = await importOriginal<typeof WslTranscriptFsAccess>()
   return {
@@ -13,6 +14,9 @@ vi.mock('../native-chat/wsl-transcript-fs-access', async (importOriginal) => {
     wslGatedReaddir: (
       ...args: Parameters<typeof actual.wslGatedReaddir>
     ): ReturnType<typeof actual.wslGatedReaddir> => {
+      if (args[0].endsWith('chats')) {
+        chatsRootReads += 1
+      }
       if (failNextChatsReaddir && args[0].includes('workspace-hash')) {
         failNextChatsReaddir = false
         return Promise.reject(new WslTranscriptFsError('timeout', 'wsl fs timed out'))
@@ -25,7 +29,8 @@ import type * as WslTranscriptFsAccess from '../native-chat/wsl-transcript-fs-ac
 import {
   cursorChatMetaPath,
   readCursorChatMeta,
-  resetCursorChatMetaIndexCacheForTests
+  resetCursorChatMetaIndexCacheForTests,
+  withCursorChatMetaScan
 } from './session-scanner-cursor-chat-meta'
 import {
   createCursorSessionResumeState,
@@ -145,6 +150,27 @@ describe('cursor chat meta', () => {
     await expect(cursorChatMetaPath(transcriptPath)).rejects.toBeInstanceOf(WslTranscriptFsError)
     // The next scan rebuilds instead of replaying the rejected promise.
     await expect(cursorChatMetaPath(transcriptPath)).resolves.toBe(metaPath)
+  })
+
+  it('validates the index once per scan, not once per transcript', async () => {
+    const cursorHome = await createCursorHome()
+    const transcripts: string[] = []
+    for (const chatId of ['chat-a', 'chat-b', 'chat-c']) {
+      await writeChatMeta(cursorHome, 'workspace-hash', chatId)
+      transcripts.push(await writeTranscript(cursorHome, 'slug', chatId, []))
+    }
+    chatsRootReads = 0
+
+    const inScan = await withCursorChatMetaScan(() =>
+      Promise.all(transcripts.map((path) => cursorChatMetaPath(path)))
+    )
+    expect(inScan.every(Boolean)).toBe(true)
+    expect(chatsRootReads).toBe(1)
+
+    // Outside a scan every lookup re-validates, which is what the parse path needs.
+    chatsRootReads = 0
+    await Promise.all(transcripts.map((path) => cursorChatMetaPath(path)))
+    expect(chatsRootReads).toBe(3)
   })
 
   it('yields nothing and does not throw when there is no chats tree', async () => {

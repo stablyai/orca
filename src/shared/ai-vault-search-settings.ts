@@ -47,7 +47,7 @@ export type AiVaultSearchIndexStatus = AiVaultSearchSettings & {
   indexSizeBytes: number | null
 }
 
-/** Files older than the bound are skipped; already-indexed rows stay searchable until a clear. */
+/** Files older than the bound are skipped on enumeration and purged when the bound narrows. */
 export function aiVaultSearchHistoryCutoffMs(
   historyDays: number | null,
   now = Date.now()
@@ -61,4 +61,12 @@ export function widensAiVaultSearchHistory(previous: number | null, next: number
     return false
   }
   return next === null || next > previous
+}
+
+/** A finite bound tighter than before; rows outside it are purged. */
+export function narrowsAiVaultSearchHistory(previous: number | null, next: number | null): boolean {
+  if (next === null) {
+    return false
+  }
+  return previous === null || next < previous
 }

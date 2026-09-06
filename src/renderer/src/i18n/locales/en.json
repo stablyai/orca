@@ -11789,7 +11789,7 @@
           "enabledLabel": "Search inside conversations",
           "enabledDescription": "Builds a local index of your agent transcripts on this computer so the Session History panel and `orca search` can match on what was said, not just titles.",
           "historyLabel": "History to index",
-          "historyDescription": "Older transcripts are skipped when the index is built. Conversations already indexed stay searchable until you clear the index.",
+          "historyDescription": "Older transcripts are skipped when the index is built, and narrowing the range removes them from the index.",
           "historyAll": "All history",
           "history90": "Last 90 days",
           "history30": "Last 30 days",
@@ -13332,7 +13332,8 @@
             "newest": "Newest",
             "searchableAndPreparing": "{{value0}} conversations searchable · preparing older ones…",
             "matchingIncomplete": "{{value0}} matching · still preparing",
-            "matchingInConversations": "{{value0}} matching · {{value1}} conversations"
+            "matchingInConversations": "{{value0}} matching · {{value1}} conversations",
+            "showingResultsFor": "Showing results for {{value0}} ·"
           },
           "AiVaultSearchConsentCard": {
             "title": "Search inside conversations",

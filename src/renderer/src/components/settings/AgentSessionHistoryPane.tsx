@@ -110,7 +110,7 @@ export function AgentSessionHistoryPane({
         )}
         description={translate(
           'auto.components.settings.AgentSessionHistoryPane.historyDescription',
-          'Older transcripts are skipped when the index is built. Conversations already indexed stay searchable until you clear the index.'
+          'Older transcripts are skipped when the index is built, and narrowing the range removes them from the index.'
         )}
         control={
           <SettingsSegmentedControl<HistoryValue>

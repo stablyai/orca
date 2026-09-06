@@ -109,6 +109,15 @@ export class SessionSearchIndexWriter {
     }
   }
 
+  /** Paths of indexed files last modified before the cutoff, oldest first. */
+  filesOlderThan(cutoffMs: number): string[] {
+    return (
+      this.db
+        .prepare('SELECT path FROM files WHERE mtime_ms < ? ORDER BY mtime_ms')
+        .all(cutoffMs) as { path: string }[]
+    ).map((row) => row.path)
+  }
+
   removeFile(path: string): void {
     const existing = this.db
       .prepare('SELECT session_row_id FROM files WHERE path = ?')
