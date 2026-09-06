@@ -30,8 +30,21 @@ describe('mobile native baseline mode', () => {
     ).toBe(true)
   })
 
+  // Why the hybrid arm: without an explicit architecture a release build defaults to native, so
+  // that case passes with the developmentBuild guard deleted. Only a release build that opted
+  // into hybrid can show the flag being refused.
   it('does not allow the development baseline flag in production', () => {
     expect(mobileNativeBaselineMode({ developmentBuild: false, requested: '1' })).toBe(true)
+    expect(
+      mobileNativeBaselineMode({
+        developmentBuild: false,
+        requested: '1',
+        architecture: 'hybrid'
+      })
+    ).toBe(false)
+    expect(
+      mobileNativeBaselineMode({ developmentBuild: true, requested: '1', architecture: 'hybrid' })
+    ).toBe(true)
   })
 
   // The hosted E2E runner enables native baselines and then opens /hybrid in the same bundle, so
