@@ -4,24 +4,19 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { editorShortcutMatches } from '../editor-shortcuts'
 
 /**
- * Pierre renders into a shadow root, so `document.activeElement` stops at the
- * host. Walk shadow roots to reach the element that actually holds focus.
+ * Pierre only accepts key events whose target is its own content element, so
+ * reach into the shadow root rather than trusting whatever holds focus — at
+ * attach time focus has not landed there yet.
  */
-function getDeepActiveElement(): Element | null {
-  let active = document.activeElement
-  while (active?.shadowRoot?.activeElement) {
-    active = active.shadowRoot.activeElement
-  }
-  return active
+function findPierreContentElement(container: HTMLElement | null): HTMLElement | null {
+  const host = container?.querySelector('diffs-container')
+  const editable = host?.shadowRoot?.querySelector('[contenteditable]')
+  return editable instanceof HTMLElement ? editable : null
 }
 
 // Why: Pierre only ships its search panel with edit mode, and it has no
 // programmatic command dispatch — replay the shortcut its own listener expects.
-function dispatchPierreOpenSearchPanel(): void {
-  const target = getDeepActiveElement()
-  if (!target) {
-    return
-  }
+function dispatchPierreOpenSearchPanel(target: HTMLElement): void {
   const isMac = getShortcutPlatform() === 'darwin'
   target.dispatchEvent(
     new KeyboardEvent('keydown', {
@@ -57,7 +52,13 @@ export type PierreDiffFind = {
  * read-only diff the session exists only for find, and nothing is ever written
  * back, so dismissing it discards any stray keystrokes.
  */
-export function usePierreDiffFind({ isEditable }: { isEditable: boolean }): PierreDiffFind {
+export function usePierreDiffFind({
+  isEditable,
+  containerRef
+}: {
+  isEditable: boolean
+  containerRef: React.RefObject<HTMLElement | null>
+}): PierreDiffFind {
   const [findActive, setFindActive] = useState(false)
   const pendingFindRef = useRef(false)
 
@@ -93,14 +94,26 @@ export function usePierreDiffFind({ isEditable }: { isEditable: boolean }): Pier
     [findActive]
   )
 
-  const handleEditorAttach = useCallback((editor: FocusableEditor) => {
-    if (!pendingFindRef.current) {
-      return
-    }
-    pendingFindRef.current = false
-    editor.focus({ lineNumber: 'first-visible', preventScroll: true })
-    dispatchPierreOpenSearchPanel()
-  }, [])
+  const handleEditorAttach = useCallback(
+    (editor: FocusableEditor) => {
+      if (!pendingFindRef.current) {
+        return
+      }
+      pendingFindRef.current = false
+      editor.focus({ lineNumber: 'first-visible', preventScroll: true })
+      // Why: the editable DOM is not focusable until after this commit paints,
+      // so a same-tick dispatch misses Pierre's content element and the first
+      // Cmd+F is swallowed — which is why it used to take two presses.
+      requestAnimationFrame(() => {
+        const target = findPierreContentElement(containerRef.current)
+        if (target) {
+          target.focus()
+          dispatchPierreOpenSearchPanel(target)
+        }
+      })
+    },
+    [containerRef]
+  )
 
   const exitFind = useCallback(() => {
     pendingFindRef.current = false

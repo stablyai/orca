@@ -1,9 +1,10 @@
-import { useCallback, useMemo } from 'react'
-import { FileDiff, GutterUtilitySlotStyles } from '@pierre/diffs/react'
+import { useCallback, useMemo, useRef } from 'react'
+import { FileDiff } from '@pierre/diffs/react'
 import type { FileDiffMetadata, PostRenderPhase, SelectedLineRange } from '@pierre/diffs'
 import type { FileContents } from '@pierre/diffs'
 import type { EditorOptions } from '@pierre/diffs/edit'
 import { useAppStore } from '@/store'
+import { RecoverableRenderErrorBoundary } from '@/components/error-boundaries/RecoverableRenderErrorBoundary'
 import type { DecoratedDiffComment } from '../../diff-comments/decorated-diff-comment'
 import { buildPierreDiffOptions, buildPierreDiffStyle } from './pierre-diff-options'
 import type { PierreDiffSettings } from './pierre-diff-options'
@@ -74,8 +75,9 @@ export function PierreDiffSurface({
   const activeGroupId = useAppStore((s) =>
     worktreeId ? (s.activeGroupIdByWorktree[worktreeId] ?? worktreeId) : worktreeId
   )
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const { editEnabled, handleContainerKeyDown, handleContainerBlur, handleEditorAttach } =
-    usePierreDiffFind({ isEditable })
+    usePierreDiffFind({ isEditable, containerRef })
 
   const options = useMemo(
     () => ({
@@ -121,36 +123,6 @@ export function PierreDiffSurface({
     }),
     [handleEditorAttach, isEditable, onEditChange]
   )
-  // Why: Pierre's default utility button sits 14px into the line-number column.
-  // Render our own so the add-note affordance keeps the glyph-margin look and
-  // hit target it had under Monaco.
-  const renderGutterUtility = useCallback(
-    () =>
-      onAddComment ? (
-        <div style={GutterUtilitySlotStyles}>
-          <button
-            type="button"
-            className="orca-diff-comment-add-btn orca-diff-comment-add-btn-gutter"
-            title={addCommentLabel}
-            aria-label={addCommentLabel}
-          >
-            <svg
-              viewBox="0 0 16 16"
-              width="12"
-              height="12"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-            >
-              <path d="M8 3v10M3 8h10" />
-            </svg>
-          </button>
-        </div>
-      ) : null,
-    [addCommentLabel, onAddComment]
-  )
-
   const renderAnnotation = useCallback(
     (annotation: PierreDiffCommentAnnotation) =>
       renderPierreDiffCommentAnnotation(annotation, {
@@ -188,16 +160,28 @@ export function PierreDiffSurface({
       onKeyDownCapture={handleContainerKeyDown}
       onBlur={handleContainerBlur}
     >
-      <FileDiff<PierreDiffAnnotationData>
-        fileDiff={fileDiff}
-        options={options}
-        style={style}
-        edit={editEnabled}
-        editorOptions={editorOptions}
-        lineAnnotations={lineAnnotations}
-        renderAnnotation={renderAnnotation}
-        renderGutterUtility={renderGutterUtility}
-      />
+      {/* Why: @pierre/diffs throws from its own ref teardown on some remounts
+          ("A FileDiff instance should exist when unmounting"). Contain it to the
+          one file instead of letting an experimental dependency take down the
+          whole terminal workbench. */}
+      <RecoverableRenderErrorBoundary
+        boundaryId="editor.pierre-diff-surface"
+        surface="page"
+        compact
+        resetKey={fileDiff.name}
+        title="This diff could not be rendered"
+        description="Reopen the file or reload to try again."
+      >
+        <FileDiff<PierreDiffAnnotationData>
+          fileDiff={fileDiff}
+          options={options}
+          style={style}
+          edit={editEnabled}
+          editorOptions={editorOptions}
+          lineAnnotations={lineAnnotations}
+          renderAnnotation={renderAnnotation}
+          />
+      </RecoverableRenderErrorBoundary>
     </div>
   )
 }
