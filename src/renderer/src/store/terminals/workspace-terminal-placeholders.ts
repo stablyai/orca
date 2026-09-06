@@ -20,10 +20,15 @@ export function buildRuntimeSessionPlaceholders({
   runtimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   worktreesByRepo: Record<string, Worktree[]>
 }): {
-  repos: Repo[]
+  repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
 } {
-  let nextRepos = repos.slice()
+  // Why not `repos.slice()`: hydration writes this array straight back to the store, and
+  // sessions that add no placeholder repo are the common case. Copying unconditionally
+  // gave `repos` a new identity on every workspace hydration, rerendering every component
+  // that selects the whole array. Appends below already build a new array, as
+  // nextWorktreesByRepo does for its own copy-on-write.
+  let nextRepos: readonly Repo[] = repos
   let nextWorktreesByRepo = worktreesByRepo
   for (const workspaceSessionKey of Object.keys(runtimeHostIdByWorkspaceSessionKey)) {
     const hostId = runtimeHostIdByWorkspaceSessionKey[workspaceSessionKey]
