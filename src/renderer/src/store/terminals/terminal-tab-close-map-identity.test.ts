@@ -42,6 +42,9 @@ const UNTOUCHED_FIELDS = [
   'canExpandPaneByTabId',
   'cacheTimerByKey',
   'lastTerminalInputAtByPaneKey',
+  'unreadTerminalTabs',
+  'unreadTerminalPanes',
+  'unreadAgentCompletionPanes',
   'tabBarOrderByWorktree'
 ] as const
 
@@ -89,7 +92,9 @@ describe('closeTab map identity', () => {
     const store = storeWithTwoTabs()
     store.setState({
       expandedPaneByTabId: { 'tab-a': true, 'tab-b': false },
-      pendingStartupByTabId: { 'tab-a': true }
+      pendingStartupByTabId: { 'tab-a': true },
+      cacheTimerByKey: { 'tab-a:leaf': 1, 'tab-b:leaf': 2 },
+      unreadTerminalPanes: { 'tab-a:leaf': true }
     } as never)
     const before = store.getState()
 
@@ -99,5 +104,7 @@ describe('closeTab map identity', () => {
     expect(after.expandedPaneByTabId).not.toBe(before.expandedPaneByTabId)
     expect(after.expandedPaneByTabId).toEqual({ 'tab-b': false })
     expect(after.pendingStartupByTabId).toEqual({})
+    expect(after.cacheTimerByKey).toEqual({ 'tab-b:leaf': 2 })
+    expect(after.unreadTerminalPanes).toEqual({})
   })
 })

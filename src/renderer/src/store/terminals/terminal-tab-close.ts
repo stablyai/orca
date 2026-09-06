@@ -16,7 +16,8 @@ import {
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { startTerminalTabProviderRetirement } from './terminal-tab-close-providers'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
-import { omitRecordKey, omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { removePaneKeysByTabPrefix } from '../slices/agent-status-pane-keyed-records'
+import { omitRecordKey } from '../slices/worktrees/teardown/record-key-omission'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -124,34 +125,15 @@ export function createTerminalTabCloseActions(
           tabId
         ])
         // Why: keep the same reference when the closing tab had no unread flag, so unrelated closes don't force full-state selector re-eval.
-        let nextUnreadTerminalTabs = s.unreadTerminalTabs
-        if (s.unreadTerminalTabs[tabId]) {
-          nextUnreadTerminalTabs = { ...s.unreadTerminalTabs }
-          delete nextUnreadTerminalTabs[tabId]
-        }
-        let nextUnreadTerminalPanes = s.unreadTerminalPanes
-        for (const paneKey of Object.keys(s.unreadTerminalPanes)) {
-          if (paneKey.startsWith(`${tabId}:`)) {
-            if (nextUnreadTerminalPanes === s.unreadTerminalPanes) {
-              nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
-            }
-            delete nextUnreadTerminalPanes[paneKey]
-          }
-        }
-        let nextUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
-        for (const paneKey of Object.keys(s.unreadAgentCompletionPanes)) {
-          if (paneKey.startsWith(`${tabId}:`)) {
-            if (nextUnreadAgentCompletionPanes === s.unreadAgentCompletionPanes) {
-              nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
-            }
-            delete nextUnreadAgentCompletionPanes[paneKey]
-          }
-        }
-        const nextLastTerminalInputAtByPaneKey = omitRecordKeys(
+        const nextUnreadTerminalTabs = omitRecordKey(s.unreadTerminalTabs, tabId)
+        const nextUnreadTerminalPanes = removePaneKeysByTabPrefix(s.unreadTerminalPanes, tabId)
+        const nextUnreadAgentCompletionPanes = removePaneKeysByTabPrefix(
+          s.unreadAgentCompletionPanes,
+          tabId
+        )
+        const nextLastTerminalInputAtByPaneKey = removePaneKeysByTabPrefix(
           s.lastTerminalInputAtByPaneKey,
-          Object.keys(s.lastTerminalInputAtByPaneKey).filter((paneKey) =>
-            paneKey.startsWith(`${tabId}:`)
-          )
+          tabId
         )
         const nextSleepingAgentSessionsByPaneKey = retiresSession
           ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
@@ -176,10 +158,7 @@ export function createTerminalTabCloseActions(
           tabId
         )
         // Why: cache timer keys are `${tabId}:${leafId}` composites; remove all entries for the closing tab.
-        const nextCacheTimer = omitRecordKeys(
-          s.cacheTimerByKey,
-          Object.keys(s.cacheTimerByKey).filter((key) => key.startsWith(`${tabId}:`))
-        )
+        const nextCacheTimer = removePaneKeysByTabPrefix(s.cacheTimerByKey, tabId)
         // Why: keep activeTabIdByWorktree in sync when closing a background-worktree tab, else the stale remembered tab falls back to tabs[0] on switch.
         let nextActiveTabIdByWorktree = s.activeTabIdByWorktree
         for (const [wId, tabs] of Object.entries(next)) {
