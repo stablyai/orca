@@ -121,3 +121,98 @@ describe.each(['create', 'update'] as const)(
     })
   }
 )
+
+describe('changing an existing Kaneo folder link', () => {
+  const kaneoFolder = { ...folderWorkspace, linkedTask }
+  const replacement = {
+    ...linkedTask,
+    provider: 'linear' as const,
+    url: 'https://linear.app/example/issue/TEST-1'
+  }
+
+  it.each(['kaneo.task-link.v1', 'worktree.linked-work-item-context.v1'])(
+    'blocks removal and replacement when the owner lacks %s',
+    async (missingCapability) => {
+      configureRuntime(missingCapability)
+      const store = createTestStore()
+      store.setState({ folderWorkspaces: [kaneoFolder] })
+
+      for (const nextLink of [null, replacement]) {
+        await expect(
+          store.getState().updateFolderWorkspace(kaneoFolder.id, { linkedTask: nextLink })
+        ).rejects.toThrow('Update the remote runtime to link Kaneo tasks')
+      }
+
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(store.getState().folderWorkspaces).toEqual([kaneoFolder])
+    }
+  )
+
+  it.each([null, replacement])('persists a supported link change: %j', async (nextLink) => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'folder-update',
+      ok: true,
+      result: { folderWorkspace: { ...kaneoFolder, linkedTask: nextLink } },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+    const store = createTestStore()
+    store.setState({ folderWorkspaces: [kaneoFolder] })
+
+    await expect(
+      store.getState().updateFolderWorkspace(kaneoFolder.id, { linkedTask: nextLink })
+    ).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-owner',
+        method: 'folderWorkspace.update',
+        params: { folderWorkspaceId: kaneoFolder.id, updates: { linkedTask: nextLink } }
+      })
+    )
+    expect(store.getState().folderWorkspaces[0]?.linkedTask).toEqual(nextLink)
+  })
+
+  it('allows unrelated metadata updates without Kaneo support', async () => {
+    configureRuntime('kaneo.task-link.v1')
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'folder-update',
+      ok: true,
+      result: { folderWorkspace: { ...kaneoFolder, name: 'Renamed' } },
+      _meta: { runtimeId: 'runtime-owner' }
+    })
+    const store = createTestStore()
+    store.setState({ folderWorkspaces: [kaneoFolder] })
+
+    await expect(
+      store.getState().updateFolderWorkspace(kaneoFolder.id, { name: 'Renamed' })
+    ).resolves.toBe(true)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not gate a different owner with the same folder ID', async () => {
+    configureRuntime('kaneo.task-link.v1')
+    const otherFolder = { ...folderWorkspace, executionHostId: 'runtime:env-other' as const }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'folder-update',
+      ok: true,
+      result: { folderWorkspace: otherFolder },
+      _meta: { runtimeId: 'runtime-other' }
+    })
+    const store = createTestStore()
+    store.setState({ folderWorkspaces: [kaneoFolder, otherFolder] })
+
+    await expect(
+      store
+        .getState()
+        .updateFolderWorkspace(
+          otherFolder.id,
+          { linkedTask: null },
+          { executionHostId: 'runtime:env-other' }
+        )
+    ).resolves.toBe(true)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-other', method: 'folderWorkspace.update' })
+    )
+    expect(store.getState().folderWorkspaces[0]).toEqual(kaneoFolder)
+  })
+})
