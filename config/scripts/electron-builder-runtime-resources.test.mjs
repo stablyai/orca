@@ -50,7 +50,7 @@ describe('packaged runtime resources', () => {
       await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
 
       const sources = new Map([
-        ['out/main/index.js', 'import(`@anthropic-ai/claude-agent-sdk`)'],
+        ['out/main/index.js', 'import (`@anthropic-ai/claude-agent-sdk`)'],
         ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
       ])
       const asar = {

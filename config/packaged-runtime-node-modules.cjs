@@ -238,7 +238,7 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     // backslashes, and extractFile expects that same host-style path.
     const internalPath = entry.replace(/^[\\/]+/, '')
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
-    for (const match of source.matchAll(/\b(?:require|import)\(\s*(["'`])([^"'`$]+)\1\s*\)/g)) {
+    for (const match of source.matchAll(/\b(?:require|import)\s*\(\s*(["'`])([^"'`$]+)\1\s*\)/g)) {
       const specifier = match[2]
       if (!isPackagedExternalSpecifier(specifier)) {
         continue
