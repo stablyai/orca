@@ -138,11 +138,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
   const secondary = getCompactAgentSecondary(agent, now, stableMessage)
-  // Why: sidebar truncation must preserve the passive-vs-active distinction.
-  const leadingText = dotState === 'monitoring' ? secondary : primary
-  const trailingText =
-    dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
-  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
+  // Why: the name must survive default-width truncation; the state dot already names monitoring.
+  const trailingText = primary === secondary ? '' : secondary
+  const rowTitle = `${primary}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -234,7 +232,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
         <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
-          {leadingText}
+          {primary}
         </span>
         {trailingText && (
           <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
