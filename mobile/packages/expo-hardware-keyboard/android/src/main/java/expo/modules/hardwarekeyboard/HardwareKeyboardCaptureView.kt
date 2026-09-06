@@ -27,6 +27,7 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
 
   var captureEnabled: Boolean = true
   var captureMode: String = "terminal"
+  var submitWithPrimaryModifier: Boolean = false
   var nativeFieldBoundaries: Boolean = false
   private val capturedKeys = mutableSetOf<Pair<Int, Int>>()
 
@@ -86,13 +87,13 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     val repeat = event.repeatCount > 0
     if (captureMode == "submit") {
       val enter = event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
-      if (!enter || ctrl || alt || shift) {
+      if (!enter || ctrl != submitWithPrimaryModifier || alt || shift) {
         return fallback()
       }
       capturedKeys.add(identity)
       if (!repeat) {
         onHardwareKey(mapOf("key" to "Enter", "modifiers" to mapOf(
-          "ctrl" to false, "alt" to false, "shift" to false, "meta" to false
+          "ctrl" to ctrl, "alt" to false, "shift" to false, "meta" to false
         ), "repeat" to false))
       }
       return true

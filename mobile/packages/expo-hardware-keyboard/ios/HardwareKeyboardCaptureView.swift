@@ -7,6 +7,7 @@ public class HardwareKeyboardCaptureView: ExpoView {
   let onHardwareKey = EventDispatcher()
   var enabled: Bool = true
   var captureMode: String = "terminal"
+  var submitWithPrimaryModifier: Bool = false
 
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -38,7 +39,8 @@ public class HardwareKeyboardCaptureView: ExpoView {
       return nil
     }
     if captureMode == "submit" {
-      let command = UIKeyCommand(input: "\r", modifierFlags: [], action: #selector(handleKeyCommand(_:)))
+      let command = UIKeyCommand(input: "\r", modifierFlags: submitWithPrimaryModifier ? .command : [], action: #selector(handleKeyCommand(_:)))
+      if submitWithPrimaryModifier { command.discoverabilityTitle = "Send message" }
       command.wantsPriorityOverSystemBehavior = true
       return [command]
     }
@@ -49,6 +51,10 @@ public class HardwareKeyboardCaptureView: ExpoView {
 
   public override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
     if action == #selector(handleKeyCommand(_:)) {
+      if captureMode == "submit", let command = sender as? UIKeyCommand,
+         !isSubmitCommand(command) {
+        return false
+      }
       if captureMode == "terminal", let command = sender as? UIKeyCommand,
          HardwareKeyboardCommandRegistry.shared.owns(command, in: window) {
         return false
@@ -66,8 +72,11 @@ public class HardwareKeyboardCaptureView: ExpoView {
     guard enabled, let textInput = focusedTextInput(in: self), textInput.markedTextRange == nil else {
       return
     }
-    // Why: Meta/Command stays system-owned (copy/paste/select-all).
-    if sender.modifierFlags.contains(.command) {
+    if captureMode == "submit" && !isSubmitCommand(sender) {
+      return
+    }
+    // Terminal Command editing shortcuts remain system-owned.
+    if captureMode != "submit" && sender.modifierFlags.contains(.command) {
       return
     }
     let input = sender.input ?? ""
@@ -83,10 +92,14 @@ public class HardwareKeyboardCaptureView: ExpoView {
         "ctrl": sender.modifierFlags.contains(.control),
         "alt": sender.modifierFlags.contains(.alternate),
         "shift": sender.modifierFlags.contains(.shift),
-        "meta": false
+        "meta": sender.modifierFlags.contains(.command)
       ],
       "repeat": false
     ])
+  }
+
+  private func isSubmitCommand(_ command: UIKeyCommand) -> Bool {
+    command.input == "\r" && command.modifierFlags == (submitWithPrimaryModifier ? .command : [])
   }
 
   private static func buildTerminalKeyCommands(action: Selector) -> [UIKeyCommand] {

@@ -119,12 +119,13 @@ describe('MobileNativeChatComposer', () => {
     ) as { props: { onPress: () => Promise<void> } }
   }
 
-  it('submits a native hardware Return without dismissing the input responder', async () => {
+  it('requests primary-modifier Return and reuses send without dismissing the input responder', async () => {
     const onSend = vi.fn().mockResolvedValue(true)
     await render(onSend, vi.fn())
     vi.mocked(Keyboard.dismiss).mockClear()
     const capture = renderer!.root.findByType('HardwareKeyboardCaptureView')
     expect(capture.props.mode).toBe('submit')
+    expect(capture.props.submitWithPrimaryModifier).toBe(true)
     await act(async () =>
       capture.props.onHardwareKey({ nativeEvent: { key: 'Enter', repeat: false } })
     )

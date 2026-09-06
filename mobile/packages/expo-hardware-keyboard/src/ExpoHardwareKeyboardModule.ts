@@ -4,6 +4,13 @@ import type { HardwareKeyboardCaptureViewProps } from './ExpoHardwareKeyboard.ty
 
 type NativeCaptureView = ComponentType<HardwareKeyboardCaptureViewProps>
 
+export function supportsPrimaryModifierSubmit(): boolean {
+  return (
+    requireOptionalNativeModule<{ supportsPrimaryModifierSubmit?: boolean }>('ExpoHardwareKeyboard')
+      ?.supportsPrimaryModifierSubmit === true
+  )
+}
+
 export function supportsNativeFieldBoundaries(): boolean {
   return (
     requireOptionalNativeModule<{ supportsNativeFieldBoundaries?: boolean }>('ExpoHardwareKeyboard')

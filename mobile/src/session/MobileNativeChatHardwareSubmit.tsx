@@ -21,6 +21,7 @@ export function MobileNativeChatHardwareSubmit({
   return (
     <HardwareKeyboardCaptureView
       mode="submit"
+      submitWithPrimaryModifier
       enabled={enabled && routeFocused}
       onHardwareKey={({ nativeEvent }) => {
         if (enabled && routeFocused && nativeEvent.key === 'Enter' && !nativeEvent.repeat) {
