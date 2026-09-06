@@ -137,6 +137,10 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const canCompose = inputGate.canCompose
   const canSend = inputGate.canSend && clientId !== null
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
+  const reopenFocusedInputWhenKeyboardHidden = useCallback(
+    () => Platform.OS === 'android' && !isHardwareKeyboardConnected(),
+    []
+  )
   const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
@@ -145,8 +149,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     liveInputEnabled,
-    reopenFocusedInputWhenKeyboardHidden: () =>
-      Platform.OS === 'android' && !isHardwareKeyboardConnected(),
+    reopenFocusedInputWhenKeyboardHidden,
     timerRef: liveInputFocusTimerRef
   })
   useFocusEffect(

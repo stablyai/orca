@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, startTransition, Suspense } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Router } from 'expo-router'
@@ -181,6 +181,55 @@ describe('useMobileWorktreeKeyboardNavigation', () => {
 
     expect(setCachedWorktrees).toHaveBeenCalledWith('host-b', [worktree('worktree-b')], {
       proven: true
+    })
+  })
+
+  it('preserves pending committed navigation while another host render suspends', async () => {
+    const firstClient = { sendRequest: vi.fn().mockResolvedValue(null) } as unknown as RpcClient
+    const secondClient = {} as RpcClient
+    const router = { replace: vi.fn() } as unknown as Router
+    const suspended = new Promise<void>(() => {})
+    const renderedHosts: string[] = []
+
+    function Harness(props: { client: RpcClient; hostId: string }): null {
+      useMobileWorktreeKeyboardNavigation({
+        ...props,
+        connState: 'connected',
+        context: 'app',
+        router,
+        worktreeId: undefined
+      })
+      renderedHosts.push(props.hostId)
+      if (props.hostId === 'host-b') {
+        throw suspended
+      }
+      return null
+    }
+    const screen = (client: RpcClient, hostId: string) =>
+      createElement(Suspense, { fallback: null }, createElement(Harness, { client, hostId }))
+
+    await act(async () => {
+      renderer = create(screen(firstClient, 'host-a'))
+    })
+    act(() => keyboardCommandHandler()({ actionId: 'worktree.navigateDown', key: 'ArrowDown' }))
+    const pending = catalogRequest('host-a', 1)
+    await act(async () => {
+      startTransition(() => renderer?.update(screen(secondClient, 'host-b')))
+    })
+    expect(renderedHosts).toContain('host-b')
+    expect(catalogRuntime.requests.every((request) => request.hostId === 'host-a')).toBe(true)
+
+    await act(async () => {
+      pending.resolve({ kind: 'response', pending: { worktrees: [worktree('worktree-a')] } })
+    })
+    expect(setCachedWorktrees).toHaveBeenCalledWith('host-a', [worktree('worktree-a')], {
+      proven: true
+    })
+    expect(router.replace).toHaveBeenCalledWith('/h/host-a/session/worktree-a?name=worktree-a')
+    expect(firstClient.sendRequest).toHaveBeenCalledWith('worktree.activate', {
+      worktree: 'id:worktree-a',
+      notifyClients: false,
+      navigation: 'caller'
     })
   })
 

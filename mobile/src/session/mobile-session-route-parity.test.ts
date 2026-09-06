@@ -63,11 +63,11 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '8d30f0d8f02761c52690ad162d61a47befa35c2bbb61202e802a4cee4ab38a42'
-const HEAD_HOOK_BINDING_SHA256 = 'de164c375eb0317d8e3ac7b76ff636ea8bc12949297feed5c235c31e21349525'
+const HEAD_MAIN_HOOK_SHA256 = 'beeb096edcf5e8c871301b071e8adc829e641a4c34c5895260cea7bafaac7a42'
+const HEAD_HOOK_BINDING_SHA256 = '62b372b2987ec05d07292a3df02adb3f466d9d4a8d64636336acf197cfad8fd0'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '4324a33cfe4081380515ca1afddf50b1858fd34f72833cba426829edead92d57'
-const HEAD_CALLBACK_BODY_SHA256 = '15a2e663ddd70ea79677ab8486cf3753b38c349ab83150dd35dae4ed2d32bf0f'
+  '2e35ed937f16d3d52fa3e4e4eee4056f5763072b9ef06691966e80e104af03ce'
+const HEAD_CALLBACK_BODY_SHA256 = '3d1af73fc7c7d1d8d8a27433a9a60f3fd59567802ee6bae4f9c59cc1f1e29f16'
 const HEAD_EFFECT_SHA256 = 'd9ebfaabc1e79773cdada7ab370b20459ed972f1f8edce1652199f4d0391cd13'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
 const HEAD_NESTED_FUNCTION_SHA256 =
@@ -473,10 +473,10 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(269)
+    expect(main.hooks).toHaveLength(270)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(77)
+    expect(main.callbacks).toHaveLength(78)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)

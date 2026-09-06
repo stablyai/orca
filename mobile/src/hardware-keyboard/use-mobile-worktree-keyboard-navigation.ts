@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { HardwareKeyboardCommandEvent } from '@orca/expo-hardware-keyboard-navigation'
 import { useFocusEffect, type Router } from 'expo-router'
 import type { KeybindingContext } from '../../../src/shared/keybindings'
@@ -39,10 +39,12 @@ export function useMobileWorktreeKeyboardNavigation(options: {
   )
   const worktreesRef = useRef(worktrees)
   const routeRef = useRef({ client, hostId, generation: 0 })
-  worktreesRef.current = worktrees
-  if (routeRef.current.client !== client || routeRef.current.hostId !== hostId) {
-    routeRef.current = { client, hostId, generation: routeRef.current.generation + 1 }
-  }
+  useLayoutEffect(() => {
+    worktreesRef.current = worktrees
+    if (routeRef.current.client !== client || routeRef.current.hostId !== hostId) {
+      routeRef.current = { client, hostId, generation: routeRef.current.generation + 1 }
+    }
+  }, [client, hostId, worktrees])
 
   const refresh = useCallback(async (): Promise<Worktree[] | null> => {
     if (!client || connState !== 'connected' || !hostId) {

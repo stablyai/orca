@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { HardwareKeyboardCommandEvent } from '@orca/expo-hardware-keyboard-navigation'
 import type { KeybindingContext } from '../../../src/shared/keybindings'
@@ -11,7 +11,9 @@ export function useMobileHardwareKeyboardCommands(options: {
   onCommand: (event: HardwareKeyboardCommandEvent) => void
 }): void {
   const handlerRef = useRef(options.onCommand)
-  handlerRef.current = options.onCommand
+  useLayoutEffect(() => {
+    handlerRef.current = options.onCommand
+  }, [options.onCommand])
 
   useFocusEffect(
     useCallback(
