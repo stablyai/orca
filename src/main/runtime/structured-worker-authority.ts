@@ -8,6 +8,7 @@
  */
 
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import type { RuntimeTerminalState } from '../../shared/runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { OrchestrationDb } from './orchestration/db'
 import {
@@ -77,6 +78,18 @@ export function structuredWorkerAgent(identity: StructuredWorkerIdentity): 'clau
 export type StructuredWorkerObservation = {
   status: 'live' | 'unverifiable' | 'exited'
   reason?: string
+}
+
+/**
+ * The observation as the terminal state every read result reports.
+ *
+ * `unverifiable` must never render as `running`: losing sight of the structured host is not
+ * evidence its child is alive, and the PTY sibling maps the same verdict to `unknown`.
+ */
+export function structuredWorkerTerminalState(
+  liveness: StructuredWorkerObservation['status']
+): RuntimeTerminalState {
+  return liveness === 'exited' ? 'exited' : liveness === 'live' ? 'running' : 'unknown'
 }
 
 /**

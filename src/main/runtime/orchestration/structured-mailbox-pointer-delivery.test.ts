@@ -78,7 +78,12 @@ function harness(options: {
   refusal?: AgentSessionPtyWriteRefusal
   /** The coordinator of this worker's Run is mid-batch: it checked and has not acked yet. */
   outstandingRunDelivery?: boolean
+  /** The mailbox this worker owns; its own handle for direct peer mail outside a dispatch. */
+  mailbox?: string
+  dispatchId?: string | null
 }) {
+  const mailbox = options.mailbox ?? 'dispatch:d1'
+  const dispatchId = options.dispatchId === undefined ? 'd1' : options.dispatchId
   let journal = options.journal
   const markAsDelivered = vi.fn()
   const send: StructuredMailboxPointerHost['send'] = vi.fn(async () => ({
@@ -101,10 +106,10 @@ function harness(options: {
     getDb: () => db as never,
     getMessageWaiters: () => undefined,
     resolveStructuredTarget: (mailboxHandle) =>
-      mailboxHandle === 'dispatch:d1'
+      mailboxHandle === mailbox
         ? {
             sessionId: IDENTITY.sessionId,
-            dispatchId: 'd1',
+            dispatchId,
             ...(options.refusal ? { refusal: options.refusal } : {})
           }
         : null,
@@ -140,6 +145,25 @@ describe('structured mailbox pointer delivery', () => {
     await flush()
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]![0].operationId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
+    expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
+  })
+
+  it('nudges through the worker`s own handle for direct peer mail outside a dispatch', async () => {
+    const { delivery, send, markAsDelivered } = harness({
+      journal: idleJournal(),
+      mailbox: IDENTITY.handle,
+      dispatchId: null
+    })
+    expect(delivery.deliverForHandle(IDENTITY.handle)).toBe(true)
+    await flush()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]![0].dispatchId).toBeNull()
+    // A plain `check`, with no `--run`: the worker resolves its OWN mailbox by identity, and for a
+    // worker outside a dispatch that is the direct mailbox this mail is sitting in. Pointing it at
+    // a run would send it to read a coordinator mailbox that has nothing waiting.
+    expect(send.mock.calls[0]![0].body.blocks[0]).toMatchObject({
+      text: expect.not.stringContaining('--run')
+    })
     expect(markAsDelivered).toHaveBeenCalledWith(['m1'])
   })
 

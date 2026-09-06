@@ -161,14 +161,14 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   /**
    * The session a mailbox must be nudged through, or null when a live PTY can take the bytes.
    *
-   * DELIBERATELY only `dispatch:` mailboxes. `run:` mail is coordinator mail, and structured
-   * coordinators are out of scope: a coordinator blocks in `check --wait`, where a waiter preempts
-   * pointer delivery anyway. The asymmetry with the PTY lane — which serves both — is the scope
-   * line, not an oversight.
+   * Two mailbox shapes reach a structured worker: its `dispatch:` address, and its own bearer
+   * handle, which is how agents mail each other outside a dispatch. `run:` mail is coordinator
+   * mail and stays out of scope: a coordinator blocks in `check --wait`, where a waiter preempts
+   * pointer delivery anyway.
    */
   protected resolveStructuredMailboxTarget(mailboxHandle: string): StructuredPointerTarget | null {
     if (!mailboxHandle.startsWith('dispatch:')) {
-      return null
+      return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
     }
     const dispatchId = mailboxHandle.slice('dispatch:'.length)
     const assignee = this._orchestrationDb?.getDispatchContextById?.(dispatchId)?.assignee_handle
@@ -180,6 +180,32 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       return { sessionId: identity.sessionId, dispatchId }
     }
     return this.resolveAdoptedStructuredMailboxTarget(assignee, dispatchId)
+  }
+
+  /**
+   * Direct peer mail, addressed to the worker's own handle rather than to a dispatch.
+   *
+   * Nothing else can serve it: the PTY lane refuses a structured handle outright, so without this
+   * the send stores durably, reports success, and no lane ever nudges the worker — the sender sees
+   * success and the peer waiting on a reply hangs.
+   *
+   * The worker's ACTIVE dispatch is preferred when it has one, so peer and coordinator nudges share
+   * one operation-ledger budget and one set of retain rules. A worker BETWEEN dispatches is still
+   * nudged, under a session-scoped budget: the mail is durable, the session is live, and a dispatch
+   * says nothing about whether delivery is safe — the idle gate and the lease fence do that.
+   */
+  protected resolveStructuredWorkerDirectMailboxTarget(
+    handle: string
+  ): StructuredPointerTarget | null {
+    const db = this._orchestrationDb
+    // Answers null for anything that is not a live structured worker of THIS runtime, so `run:`
+    // and PTY handles fall through to the PTY lane exactly as before.
+    const identity = resolveStructuredWorkerAuthority(handle, db)?.identity
+    if (!identity) {
+      return null
+    }
+    const dispatchId = db?.findActiveDispatchForAssignee?.(handle, identity.paneKey)?.id ?? null
+    return { sessionId: identity.sessionId, dispatchId }
   }
 
   /**

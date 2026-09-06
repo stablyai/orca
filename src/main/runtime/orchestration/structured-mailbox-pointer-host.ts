@@ -16,6 +16,17 @@ export function structuredPointerCallerKey(dispatchId: string): string {
   return `trusted-local:orchestration:${dispatchId}`
 }
 
+/**
+ * The same budget for direct peer mail, which is addressed to the worker's own handle and has no
+ * dispatch to scope to.
+ *
+ * A separate key rather than a reshaped one: the ledger is keyed on (callerKey, operationId), so
+ * changing the dispatch key's shape would orphan every nudge already in flight under the old one.
+ */
+export function structuredSessionPointerCallerKey(sessionId: string): string {
+  return `trusted-local:orchestration:session:${sessionId}`
+}
+
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
     readGateFacts(sessionId) {
@@ -48,7 +59,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
         return { kind: 'unattached' }
       }
       const result = await host.send(
-        { callerKey: structuredPointerCallerKey(input.dispatchId) },
+        {
+          callerKey: input.dispatchId
+            ? structuredPointerCallerKey(input.dispatchId)
+            : structuredSessionPointerCallerKey(input.sessionId)
+        },
         {
           envelope: {
             sessionId: input.sessionId,

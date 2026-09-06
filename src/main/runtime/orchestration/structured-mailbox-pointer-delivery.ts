@@ -33,7 +33,12 @@ import type { AgentSessionPtyWriteRefusal } from '../../../shared/agent-session-
 
 export type StructuredPointerTarget = {
   sessionId: string
-  dispatchId: string
+  /**
+   * The dispatch whose mailbox this is, or null for direct peer mail addressed to the worker's own
+   * handle outside any dispatch. Nothing downstream needs a dispatch to deliver — it only scopes
+   * the operation-ledger budget — so a worker between dispatches is nudged, not dropped.
+   */
+  dispatchId: string | null
   /** Present only for an adopted pane, where a PTY write was refused in favour of this owner. */
   refusal?: AgentSessionPtyWriteRefusal
 }
@@ -52,7 +57,7 @@ export type StructuredMailboxPointerHost = {
   readGateFacts: (sessionId: string) => StructuredSessionGateFacts | null
   send: (input: {
     sessionId: string
-    dispatchId: string
+    dispatchId: string | null
     operationId: string
     payloadFingerprint: string
     expectedRuntimeFence: number
@@ -71,6 +76,9 @@ type StructuredPointerDeliveryDependencies<TWaiter extends OrchestrationMessageW
    * Two shapes reach here. A NATIVE-BORN worker carries no refusal: it never had a PTY. An
    * ADOPTED one does — its pane is bound to a session a native owner holds, so the PTY write is
    * refused and the refusal is what proves the owner is settled enough to redirect to.
+   *
+   * The mailbox is a `dispatch:` address or the worker's own bearer handle; the second is how
+   * agents mail each other outside a dispatch, and no other lane can serve it.
    */
   resolveStructuredTarget: (mailboxHandle: string) => StructuredPointerTarget | null
   host: StructuredMailboxPointerHost
@@ -153,9 +161,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     }
     // No `hasOutstandingRunDelivery` gate, unlike the PTY lane: there it guards a COORDINATOR's
     // own `run:` mailbox against re-notifying a batch already handed to that coordinator. This
-    // lane only ever resolves `dispatch:` mailboxes, and a delivery row exists only for a
-    // `run:` address, so the run's outstanding delivery belongs to the coordinator that is
-    // replying — gating on it suppresses exactly the nudges a coordinator sends its workers.
+    // lane never resolves a `run:` mailbox, and a delivery row exists only for a `run:` address,
+    // so the run's outstanding delivery belongs to the coordinator that is replying — gating on
+    // it suppresses exactly the nudges a coordinator sends its workers.
     const unread = selectOrchestrationPointerBatch({
       db,
       mailboxHandle,

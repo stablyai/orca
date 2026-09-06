@@ -7,8 +7,11 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
-const { createStructuredMailboxPointerHost, structuredPointerCallerKey } =
-  await import('./structured-mailbox-pointer-host')
+const {
+  createStructuredMailboxPointerHost,
+  structuredPointerCallerKey,
+  structuredSessionPointerCallerKey
+} = await import('./structured-mailbox-pointer-host')
 
 function runningTurn(): AgentJournalRenderItem {
   return {
@@ -102,6 +105,32 @@ describe('structured mailbox pointer host', () => {
     // Per-dispatch, so one worker's nudges cannot exhaust the shared operation-ledger budget.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
     expect(send.mock.calls[0]![1]!.retryUnknown).toBe(true)
+  })
+
+  it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {
+    // Direct mail is addressed to the worker's own handle, so there may be no dispatch at all.
+    // The ledger is keyed on (callerKey, operationId): a key derived from the session keeps that
+    // nudge's own retry lane, and leaves the dispatch key byte-identical so nudges already in
+    // flight under it still replay rather than being re-minted as a second turn.
+    const send = vi.fn(async (_caller: { callerKey: string }) => ({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    }))
+    hostRef.current = { send }
+    await expect(
+      createStructuredMailboxPointerHost().send({
+        sessionId: 's1',
+        dispatchId: null,
+        operationId: 'op1',
+        expectedRuntimeFence: 1,
+        payloadFingerprint: 'fp',
+        body: { kind: 'message', role: 'user', blocks: [] }
+      } as never)
+    ).resolves.toEqual({ kind: 'sent', state: 'accepted' })
+    expect(send.mock.calls[0]![0]).toEqual({
+      callerKey: structuredSessionPointerCallerKey('s1')
+    })
+    expect(structuredSessionPointerCallerKey('s1')).not.toBe(structuredPointerCallerKey('s1'))
   })
 
   it('separates a not-attached refusal from a real one', async () => {

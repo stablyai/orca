@@ -24,18 +24,34 @@ export type WorkerStructuredJournalArchive = {
   warnings: string[]
 }
 
+/**
+ * Project a journal page into messages and bound it NEWEST-first.
+ *
+ * One newest-first pass, never the forward wire bound first: that one keeps the HEAD, so a long
+ * worker's archive ended at its early exploration and dropped the answer it was released for —
+ * under a warning that said the OLDEST messages had gone. The same reasoning holds for any reader
+ * that wants a worker's RECENT output, which is why this is shared rather than inlined below.
+ *
+ * Redacts dispatch capabilities and clips oversized blocks, exactly as the transcript path does.
+ */
+export function boundStructuredJournalTail(items: readonly AgentJournalRenderItem[]): {
+  messages: NativeChatMessage[]
+  limited: boolean
+  warnings: string[]
+} {
+  return boundWorkerTranscriptTail(
+    projectStructuredItemsToNativeChat(items),
+    STRUCTURED_ARCHIVE_MAX_BYTES
+  )
+}
+
 export function buildStructuredJournalArchive(input: {
   agent: AgentType
   processIncarnation: string
   items: readonly AgentJournalRenderItem[]
   hasOlder: boolean
 }): WorkerStructuredJournalArchive {
-  const projected = projectStructuredItemsToNativeChat(input.items)
-  // One newest-first pass, never the forward wire bound first: that one keeps the HEAD, so a long
-  // worker's archive ended at its early exploration and dropped the answer it was released for —
-  // under a warning that said the OLDEST messages had gone.
-  // Redacts dispatch capabilities and clips oversized blocks, exactly as the transcript path does.
-  const bounded = boundWorkerTranscriptTail(projected, STRUCTURED_ARCHIVE_MAX_BYTES)
+  const bounded = boundStructuredJournalTail(input.items)
   const warnings = [...bounded.warnings]
   if (input.hasOlder) {
     warnings.push('Older journal items were omitted from the bounded archive.')

@@ -1,6 +1,6 @@
-import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import type { RuntimeTerminalRead } from '../../../shared/runtime-types'
 import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
+import { formatWorkerTranscriptMessage } from '../../../shared/worker-transcript-text'
 
 export type LegacyWorkerReadResult = {
   dispatchId: string
@@ -14,22 +14,6 @@ export function formatWorkerRead(
     return value.terminal.tail.join('\n')
   }
   return value.transcript.messages.map(formatWorkerTranscriptMessage).join('\n\n')
-}
-
-function formatWorkerTranscriptMessage(message: NativeChatMessage): string {
-  const blocks = message.blocks.map((block) => {
-    if (block.type === 'text') {
-      return block.text
-    }
-    if (block.type === 'tool-call') {
-      return `[tool ${block.name}] ${safeJson(block.input)}`
-    }
-    if (block.type === 'tool-result') {
-      return `[tool result${block.isError ? ' error' : ''}] ${block.output}`
-    }
-    return block.url ? `[image] ${block.url}` : `[image omitted]`
-  })
-  return `[${message.role}] ${blocks.join('\n')}`.trimEnd()
 }
 
 export type WorkerReleaseReceipt = {
@@ -57,12 +41,4 @@ export function formatWorkerRelease(value: WorkerReleaseReceipt): string {
     lines.push(value.recovery)
   }
   return lines.join('\n')
-}
-
-function safeJson(value: unknown): string {
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return '[unserializable input]'
-  }
 }

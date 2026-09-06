@@ -7,7 +7,6 @@
  * is `unverifiable`, never `exited`.
  */
 
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { OrchestrationWorkerReadTranscriptResult } from '../../../../shared/orchestration-worker-output'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -18,6 +17,7 @@ import {
   buildStructuredJournalArchive,
   type WorkerStructuredJournalArchive
 } from '../../orchestration/structured-worker-journal-archive'
+import { readStructuredJournalPage } from '../../orchestration/structured-worker-journal-page'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
@@ -32,6 +32,7 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerIdentity,
   structuredWorkerAgent,
+  structuredWorkerTerminalState,
   type StructuredWorkerObservation
 } from '../../structured-worker-authority'
 import { retireSettledStructuredWorkerTab } from '../../structured-agent-session-tab-retirement'
@@ -40,8 +41,6 @@ import type { WorkerTerminalReleaseState } from '../../orchestration/worker-term
 import { releaseStructuredWorkerSession } from './orchestration-structured-worker-session'
 
 export { observeStructuredWorker, type StructuredWorkerObservation }
-
-const JOURNAL_PAGE_LIMIT = 200
 
 /** The structured worker behind a dispatch, or null when a PTY worker owns it. */
 export function resolveStructuredWorkerForDispatch(
@@ -159,8 +158,7 @@ export function readStructuredWorkerJournal(args: {
   cursor?: string | number
   limit?: number
 }): OrchestrationWorkerReadTranscriptResult {
-  const host = getStructuredAgentSessionHost()
-  const page = host ? tryReadJournalPage(host, args.identity.sessionId) : null
+  const page = readStructuredJournalPage(args.identity.sessionId)
   if (!page) {
     throw new OrchestrationError(
       'transcript_required',
@@ -208,8 +206,7 @@ export function captureStructuredWorkerArchive(
   identity: StructuredWorkerIdentity,
   agent: AgentType
 ): WorkerStructuredJournalArchive {
-  const host = getStructuredAgentSessionHost()
-  const page = host ? tryReadJournalPage(host, identity.sessionId) : null
+  const page = readStructuredJournalPage(identity.sessionId)
   if (page) {
     return buildStructuredJournalArchive({
       agent,
@@ -326,26 +323,11 @@ function pageMessages(input: {
     cursor: nextCursor,
     status: {
       worker: input.workerState,
-      // `unverifiable` must never render as `running`: losing sight of the structured host is not
-      // evidence its child is alive, and the PTY sibling maps the same verdict to `unknown`.
-      terminal:
-        input.liveness === 'exited' ? 'exited' : input.liveness === 'live' ? 'running' : 'unknown',
+      terminal: structuredWorkerTerminalState(input.liveness),
       liveness: input.liveness
     },
     fallbackReason: null,
     warnings: input.warnings,
     ...(input.archived ? { archived: true } : {})
-  }
-}
-
-function tryReadJournalPage(
-  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
-  sessionId: string
-): { items: readonly AgentJournalRenderItem[]; hasOlder: boolean } | null {
-  try {
-    const result = host.history({ sessionId, direction: 'tail', limit: JOURNAL_PAGE_LIMIT })
-    return { items: result.page.items, hasOlder: result.page.hasOlder }
-  } catch {
-    return null
   }
 }
