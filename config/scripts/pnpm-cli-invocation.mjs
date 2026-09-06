@@ -4,6 +4,9 @@ import { statSync } from 'node:fs'
 import { win32 } from 'node:path'
 
 const JS_CLI_EXTENSION = /\.[cm]?js$/i
+// Why: `npx vitest` sets npm_execpath to npx's own CLI, not pnpm's. Routing through it
+// makes npm exec try to run a package named "install" ("could not determine executable").
+const NPM_NPX_CLI_PATH = /[/\\]npm[/\\](?:bin[/\\])?npx-cli\.(?:js|cjs|mjs)$/i
 
 function isFile(path) {
   try {
@@ -21,13 +24,15 @@ export function resolvePnpmCliInvocation({
   fileExists = isFile
 } = {}) {
   if (typeof npmExecPath === 'string' && npmExecPath.length > 0) {
-    if (JS_CLI_EXTENSION.test(npmExecPath)) {
+    if (JS_CLI_EXTENSION.test(npmExecPath) && !NPM_NPX_CLI_PATH.test(npmExecPath)) {
       return { command: nodeExecPath, prefixArgs: [npmExecPath], shell: false }
     }
-    return {
-      command: npmExecPath,
-      prefixArgs: [],
-      shell: platform === 'win32' && /\.(cmd|bat)$/i.test(npmExecPath)
+    if (!NPM_NPX_CLI_PATH.test(npmExecPath)) {
+      return {
+        command: npmExecPath,
+        prefixArgs: [],
+        shell: platform === 'win32' && /\.(cmd|bat)$/i.test(npmExecPath)
+      }
     }
   }
 
