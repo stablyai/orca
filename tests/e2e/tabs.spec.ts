@@ -112,7 +112,7 @@ test.describe('Tabs', () => {
     // Why: the "+" dropdown uses Radix <DropdownMenuItem>, which exposes the
     // label text as the accessible name once the menu is open.
     const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
-    await newTerminalMenuItem.click({ force: true })
+    await newTerminalMenuItem.click()
     await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
 
     // Final assertion is on the rendered tab count — the tab bar itself must
@@ -156,7 +156,7 @@ test.describe('Tabs', () => {
 
     await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
     const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
-    await newMarkdownMenuItem.click({ force: true })
+    await newMarkdownMenuItem.click()
     await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
 
     // Why: require an id that did not exist before the click, so an already-open
