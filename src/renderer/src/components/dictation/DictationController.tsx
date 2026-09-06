@@ -3,17 +3,14 @@ import { useAppStore } from '@/store'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { toast } from 'sonner'
 import { DictationIndicator } from './DictationIndicator'
-import {
-  captureInsertionTarget,
-  insertText,
-  type DictationInsertionTarget
-} from './dictation-insertion-target'
-import { formatFinalTranscriptSegment } from './dictation-final-segments'
-import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
+import { captureInsertionTarget, type DictationInsertionTarget } from './dictation-insertion-target'
+import { waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
 import { showDictationStartErrorToast } from './dictation-start-error-toast'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
-import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
+import { canStopDictationSession } from './dictation-control-actions'
+import { useDictationTranscriptListeners } from './use-dictation-transcript-listeners'
+import { useDictationUtteranceControls } from './use-dictation-utterance-controls'
 import { publishDictationMeter } from './dictation-meter-store'
 
 export function DictationController() {
@@ -26,8 +23,11 @@ export function DictationController() {
   const {
     start: startCapture,
     stop: stopCapture,
+    pause: pauseCapture,
+    resume: resumeCapture,
     flushBufferedAudio,
     discardBufferedAudio,
+    clearLiveAudio,
     getCapturedChunkCount
   } = useAudioCapture(publishDictationMeter)
 
@@ -40,6 +40,8 @@ export function DictationController() {
   const stoppedSessionIdsRef = useRef(new Set<string>())
   const stoppedResolversRef = useRef(new Map<string, () => void>())
   const stopRequestedDuringStartRef = useRef(false)
+  const pauseRequestedDuringStartRef = useRef(false)
+  const sessionReadyRef = useRef(false)
   const finalTranscriptReceivedRef = useRef(false)
   const erroredSessionIdsRef = useRef(new Set<string>())
   const intentionalTargetCancellationRef = useRef(false)
@@ -48,6 +50,7 @@ export function DictationController() {
   // not once per press, while the selected mic stays gone.
   const micFallbackNotifiedForRef = useRef<string | null>(null)
   const stopDictationRef = useRef<(() => void) | null>(null)
+  const clearingUtteranceRef = useRef(false)
 
   const drainStoppedSession = useCallback((sessionId: string) => {
     void waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
@@ -81,6 +84,9 @@ export function DictationController() {
       insertedFinalTranscriptRef.current = ''
       intentionalTargetCancellationRef.current = false
       stopRequestedDuringStartRef.current = false
+      pauseRequestedDuringStartRef.current = false
+      sessionReadyRef.current = false
+      clearingUtteranceRef.current = false
       if (activeSessionIdRef.current === sessionId) {
         activeSessionIdRef.current = null
       }
@@ -124,10 +130,13 @@ export function DictationController() {
     activeSessionIdRef.current = sessionId
     insertionTargetRef.current = captureInsertionTarget()
     stopRequestedDuringStartRef.current = false
+    pauseRequestedDuringStartRef.current = false
+    sessionReadyRef.current = false
     finalTranscriptReceivedRef.current = false
     erroredSessionIdsRef.current.clear()
     insertedFinalTranscriptRef.current = ''
     intentionalTargetCancellationRef.current = false
+    clearingUtteranceRef.current = false
     dictationStateRef.current = 'starting'
     setDictationState('starting')
 
@@ -156,6 +165,9 @@ export function DictationController() {
         }
       })
       captureStarted = true
+      if (pauseRequestedDuringStartRef.current) {
+        pauseCapture()
+      }
       if (captureResult?.fellBackToDefaultMicrophone) {
         // Why: a stop requested during startup tears this capture down below, so the
         // notice would describe a fallback that never records anything.
@@ -208,8 +220,15 @@ export function DictationController() {
         return
       }
 
-      dictationStateRef.current = 'listening'
-      setDictationState('listening')
+      sessionReadyRef.current = true
+      if (pauseRequestedDuringStartRef.current) {
+        pauseCapture()
+        dictationStateRef.current = 'paused'
+        setDictationState('paused')
+      } else {
+        dictationStateRef.current = 'listening'
+        setDictationState('listening')
+      }
       recordFeatureInteraction('voice-dictation')
     } catch (err) {
       if (dictationRunRef.current !== runId) {
@@ -225,6 +244,8 @@ export function DictationController() {
       insertionTargetRef.current = null
       intentionalTargetCancellationRef.current = false
       stopRequestedDuringStartRef.current = false
+      pauseRequestedDuringStartRef.current = false
+      sessionReadyRef.current = false
       finalTranscriptReceivedRef.current = false
       erroredSessionIdsRef.current.clear()
       insertedFinalTranscriptRef.current = ''
@@ -247,6 +268,7 @@ export function DictationController() {
     startCapture,
     flushBufferedAudio,
     discardBufferedAudio,
+    pauseCapture,
     stopCapture,
     finishDictationSession,
     drainStoppedSession,
@@ -255,7 +277,10 @@ export function DictationController() {
   ])
 
   const stopDictation = useCallback(async () => {
-    if (dictationStateRef.current === 'starting') {
+    const abortingUnreadySession =
+      dictationStateRef.current === 'starting' ||
+      (dictationStateRef.current === 'paused' && !sessionReadyRef.current)
+    if (abortingUnreadySession) {
       stopRequestedDuringStartRef.current = true
       dictationStateRef.current = 'stopping'
       setDictationState('stopping')
@@ -263,7 +288,7 @@ export function DictationController() {
       return
     }
 
-    if (dictationStateRef.current !== 'listening') {
+    if (dictationStateRef.current !== 'listening' && dictationStateRef.current !== 'paused') {
       return
     }
 
@@ -294,7 +319,7 @@ export function DictationController() {
       ) {
         return
       }
-      if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
+      if (canStopDictationSession(dictationStateRef.current)) {
         void stopDictation()
       } else {
         void startDictation()
@@ -311,34 +336,21 @@ export function DictationController() {
     stopDictation
   ])
 
-  useEffect(() => {
-    const canDictate = (): boolean => Boolean(settings?.voice?.enabled && settings.voice.sttModel)
-    const handleControl = (event: Event): void => {
-      if (!canDictate() || dictationStateRef.current === 'stopping') {
-        return
-      }
-      const action = (event as CustomEvent<DictationControlAction>).detail
-      if (action === 'start') {
-        if (dictationStateRef.current === 'idle') {
-          void startDictation()
-        }
-        return
-      }
-      if (action === 'stop') {
-        if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
-          void stopDictation()
-        }
-        return
-      }
-      if (dictationStateRef.current === 'listening' || dictationStateRef.current === 'starting') {
-        void stopDictation()
-      } else {
-        void startDictation()
-      }
-    }
-    document.addEventListener(DICTATION_CONTROL_EVENT, handleControl)
-    return () => document.removeEventListener(DICTATION_CONTROL_EVENT, handleControl)
-  }, [settings?.voice?.enabled, settings?.voice?.sttModel, startDictation, stopDictation])
+  useDictationUtteranceControls({
+    dictationStateRef,
+    activeSessionIdRef,
+    clearingUtteranceRef,
+    pauseRequestedDuringStartRef,
+    sessionReadyRef,
+    pauseCapture,
+    resumeCapture,
+    clearLiveAudio,
+    setDictationState,
+    setPartialTranscript,
+    startDictation,
+    stopDictation,
+    enabled: Boolean(settings?.voice?.enabled && settings.voice.sttModel)
+  })
 
   useHoldDictationGesture({
     dictationStateRef,
@@ -351,82 +363,26 @@ export function DictationController() {
     stopDictation
   })
 
-  useEffect(() => {
-    const cleanupPartial = window.api.speech.onPartialTranscript((data) => {
-      if (data.sessionId !== activeSessionIdRef.current) {
-        return
-      }
-      setPartialTranscript(data.text)
-    })
-
-    const cleanupFinal = window.api.speech.onFinalTranscript((data) => {
-      if (data.sessionId !== activeSessionIdRef.current || !data.text) {
-        return
-      }
-      setPartialTranscript('')
-      finalTranscriptReceivedRef.current = true
-      const target = insertionTargetRef.current
-      if (target) {
-        const textToInsert = formatFinalTranscriptSegment(
-          data.text,
-          insertedFinalTranscriptRef.current
-        )
-        insertText(textToInsert, target)
-        insertedFinalTranscriptRef.current += textToInsert
-      } else if (!intentionalTargetCancellationRef.current) {
-        toast.message(
-          translate(
-            'auto.components.dictation.DictationController.7afff43472',
-            'Dictation finished, but no text field was focused.'
-          )
-        )
-      }
-    })
-
-    const cleanupStopped = window.api.speech.onStopped((data) => {
-      recordStoppedSession(data.sessionId, stoppedSessionIdsRef, stoppedResolversRef)
-    })
-
-    const cleanupError = window.api.speech.onError((data) => {
-      if (data.sessionId !== activeSessionIdRef.current) {
-        return
-      }
-      const sessionId = data.sessionId
-      erroredSessionIdsRef.current.add(sessionId)
-      dictationRunRef.current += 1
-      activeSessionIdRef.current = null
-      toast.error(
-        translate(
-          'auto.components.dictation.DictationController.de136f1199',
-          'Speech error: {{value0}}',
-          { value0: data.error }
-        )
-      )
-      dictationStateRef.current = 'stopping'
-      setDictationState('stopping')
-      stopCapture()
-      discardBufferedAudio()
-      void (async () => {
-        await window.api.speech.stopDictation(sessionId).catch(() => undefined)
-        await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
-        insertionTargetRef.current = null
-        intentionalTargetCancellationRef.current = false
-        stopRequestedDuringStartRef.current = false
-        finalTranscriptReceivedRef.current = false
-        insertedFinalTranscriptRef.current = ''
-        dictationStateRef.current = 'idle'
-        setDictationState('idle')
-        setPartialTranscript('')
-      })()
-    })
-
-    return () => {
-      cleanupPartial()
-      cleanupFinal()
-      cleanupStopped()
-      cleanupError()
-    }
-  }, [setPartialTranscript, setDictationState, stopCapture, discardBufferedAudio])
+  useDictationTranscriptListeners({
+    activeSessionIdRef,
+    clearingUtteranceRef,
+    finalTranscriptReceivedRef,
+    insertionTargetRef,
+    insertedFinalTranscriptRef,
+    intentionalTargetCancellationRef,
+    erroredSessionIdsRef,
+    dictationRunRef,
+    dictationStateRef,
+    stoppedSessionIdsRef,
+    stoppedResolversRef,
+    stopRequestedDuringStartRef,
+    pauseRequestedDuringStartRef,
+    sessionReadyRef,
+    setPartialTranscript,
+    setDictationState,
+    stopCapture,
+    discardBufferedAudio
+  })
 
   return <DictationIndicator />
 }

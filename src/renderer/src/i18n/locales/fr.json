@@ -14655,12 +14655,17 @@
           "micDisconnected": "Micro déconnecté. Dictée arrêtée."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Arrêter la dictée",
           "7f3660a7ba": "Démarrage du micro…",
           "f082d0cb9d": "Traitement…",
           "3de5a129e7": "Écoute en cours",
           "4977162383": "Trop fort",
-          "25f2b7a6a5": "Vous parlez"
+          "25f2b7a6a5": "Vous parlez",
+          "74cc85c4c7": "En pause",
+          "88c56c1272": "Mettre en pause",
+          "7cbca0dff5": "Reprendre",
+          "f37f083700": "Enregistrer",
+          "72676ac689": "Effacer",
+          "c9db4ce67c": "Effacé"
         }
       },
       "dashboard": {

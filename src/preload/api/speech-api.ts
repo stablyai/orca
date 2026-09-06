@@ -22,6 +22,7 @@ export type SpeechApi = {
   ) => Promise<void>
   feedAudio: (samples: Float32Array, sampleRate: number, sessionId?: string) => Promise<void>
   stopDictation: (sessionId?: string) => Promise<void>
+  clearDictation: (sessionId?: string) => Promise<void>
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onDownloadProgress: (

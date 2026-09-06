@@ -9,7 +9,7 @@ type MeterFixture = {
 
 async function setDictationVisualState(
   page: Page,
-  state: 'listening' | 'stopping',
+  state: 'starting' | 'listening' | 'paused' | 'stopping',
   meter: MeterFixture,
   partialTranscript = ''
 ): Promise<void> {
@@ -40,6 +40,14 @@ async function pauseForRecordedProof(page: Page): Promise<void> {
 
 test('dictation grapes react across the visible recording lifecycle', async ({ orcaPage }) => {
   const quiet = { level: 0, isSpeaking: false, isClipping: false }
+  await setDictationVisualState(orcaPage, 'starting', quiet)
+
+  const startingIndicator = orcaPage.getByTestId('dictation-indicator')
+  await expect(startingIndicator.getByRole('status')).toHaveText('Starting mic…')
+  await expect(startingIndicator.getByRole('button', { name: 'Pause' })).toBeVisible()
+  await expect(startingIndicator.getByRole('button', { name: 'Save' })).toBeVisible()
+  await expect(startingIndicator.getByRole('button', { name: 'Clear' })).toBeVisible()
+
   await setDictationVisualState(orcaPage, 'listening', quiet)
 
   const indicator = orcaPage.getByTestId('dictation-indicator')
@@ -47,7 +55,9 @@ test('dictation grapes react across the visible recording lifecycle', async ({ o
   await expect(indicator).toBeVisible()
   await expect(status).toHaveText('Listening')
   await expect(indicator.getByTestId('dictation-grapes').locator('span')).toHaveCount(9)
-  await expect(indicator.getByRole('button', { name: 'Stop dictation' })).toBeVisible()
+  await expect(indicator.getByRole('button', { name: 'Save' })).toBeVisible()
+  await expect(indicator.getByRole('button', { name: 'Pause' })).toBeVisible()
+  await expect(indicator.getByRole('button', { name: 'Clear' })).toBeVisible()
   await orcaPage.emulateMedia({ reducedMotion: 'reduce' })
   await expect(indicator.getByTestId('dictation-grapes').locator('span').first()).toHaveCSS(
     'transition-property',
@@ -84,8 +94,15 @@ test('dictation grapes react across the visible recording lifecycle', async ({ o
   await expect(status).toHaveText('Listening')
   await pauseForRecordedProof(orcaPage)
 
+  await setDictationVisualState(orcaPage, 'paused', quiet)
+  await expect(status).toHaveText('Paused')
+  await expect(indicator.getByRole('button', { name: 'Resume' })).toBeVisible()
+  await expect(indicator.getByRole('button', { name: 'Save' })).toBeVisible()
+  await expect(indicator.getByRole('button', { name: 'Clear' })).toBeVisible()
+  await pauseForRecordedProof(orcaPage)
+
   await setDictationVisualState(orcaPage, 'stopping', quiet)
   await expect(status).toHaveText('Processing…')
-  await expect(indicator.getByRole('button', { name: 'Stop dictation' })).toHaveCount(0)
+  await expect(indicator.getByRole('button', { name: 'Save' })).toHaveCount(0)
   await pauseForRecordedProof(orcaPage)
 })

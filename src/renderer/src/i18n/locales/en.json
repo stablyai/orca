@@ -15189,12 +15189,17 @@
           "micDisconnected": "Microphone disconnected. Dictation stopped."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Stop dictation",
           "7f3660a7ba": "Starting mic…",
           "f082d0cb9d": "Processing…",
           "3de5a129e7": "Listening",
           "4977162383": "Too loud",
-          "25f2b7a6a5": "Speaking"
+          "25f2b7a6a5": "Speaking",
+          "74cc85c4c7": "Paused",
+          "88c56c1272": "Pause",
+          "7cbca0dff5": "Resume",
+          "f37f083700": "Save",
+          "72676ac689": "Clear",
+          "c9db4ce67c": "Cleared"
         }
       },
       "dashboard": {
