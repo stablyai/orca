@@ -101,7 +101,7 @@ Use `--json` for agent-friendly output. Coordinates are **normalized 0..1**
 | Launch an app       | `ORCA emulator launch com.acme.app --activity .MainActivity --device <serial>`             | Omit `--activity` to launch the default LAUNCHER activity.                      |
 | Grant a permission  | `ORCA emulator permissions grant com.acme.app android.permission.CAMERA --device <serial>` | grant / revoke / reset.                                                         |
 | Accessibility tree  | `ORCA emulator ax --device <serial> --json`                                                | `uiautomator dump` parsed to a node tree.                                       |
-| Logcat (one-shot)   | `ORCA emulator logcat --lines 200 --device <serial>`                                       | Dumps recent lines; parsed to entries.                                          |
+| Logcat (one-shot)   | `ORCA emulator logcat --filter MyTag:D --lines 200 --device <serial>`                      | Dumps recent lines with an optional adb filterspec; parsed to entries.          |
 | Raw adb shell       | `ORCA emulator exec --command "getprop ro.build.version.sdk" --device <serial>`            | Runs `adb -s <serial> shell <command>`.                                         |
 
 ## Critical gotchas (teach agents)
@@ -115,12 +115,15 @@ Use `--json` for agent-friendly output. Coordinates are **normalized 0..1**
   (Android Studio, or `emulator @<avd>`).
 - `type` uses `adb shell input text` — US ASCII, spaces are handled, newlines are
   not. For unicode-heavy input, use the app UI directly.
+- Android `--filter` is passed as an adb logcat filterspec such as `MyTag:D`; iOS
+  uses the same flag as a case-insensitive process/subsystem/category/message search.
 - `gesture` is a straight swipe between the first and last point (adb limitation);
   fine for scroll/swipe, not for true multi-touch paths.
-- Capability verbs `install/launch/permissions/logcat` are **Android-only** and
-  fail against an iOS device with `emulator_unsupported`. `ax` works on **both**,
+- Capability verbs `install/launch/permissions` are **Android-only** and fail
+  against an iOS device with `emulator_unsupported`. `ax` and `logcat` work on **both**,
   with backend-specific output (Android: `uiautomator` node tree; iOS: serve-sim
-  raw AX node tree with frames normalized to 0..1).
+  raw AX node tree with frames normalized to 0..1; Android: adb logcat; iOS:
+  a one-shot unified log dump).
 - No camera/sensor injection yet.
 
 ## Targeting devices & worktrees
@@ -143,7 +146,7 @@ ORCA emulator install ./app-debug.apk --reinstall --device emulator-5554 --json
 ORCA emulator launch com.acme.app --device emulator-5554 --json
 ORCA emulator permissions grant com.acme.app android.permission.CAMERA --device emulator-5554 --json
 ORCA emulator ax --device emulator-5554 --json
-ORCA emulator logcat --lines 100 --device emulator-5554 --json
+ORCA emulator logcat --filter MyTag:D --lines 100 --device emulator-5554 --json
 ```
 
 ## Next action

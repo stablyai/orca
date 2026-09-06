@@ -2,7 +2,7 @@
 name: orca-emulator
 description: >
   Control a mobile (iOS) emulator / simulator stream from inside Orca using the `orca` CLI.
-  Use for taps, gestures, typing, hardware buttons, camera injection, permissions, accessibility tree, and more — all while seeing the live view in Orca's emulator pane.
+  Use for taps, gestures, typing, hardware buttons, camera injection, permissions, accessibility tree, unified logs, and more — all while seeing the live view in Orca's emulator pane.
   Prefer this over raw `npx serve-sim` or direct simctl when running agents inside Orca (the orca surface handles device scoping, helper lifecycle, and worktree context).
   Complements the orca-cli skill for terminals, worktrees, and the built-in browser.
 license: Apache-2.0
@@ -31,6 +31,7 @@ shell-neutral for POSIX shells, PowerShell, and cmd.exe.
 - The user/agent wants to **tap, swipe, drag, pinch, or press hardware buttons** on a running iOS simulator while seeing the live result in Orca.
 - You want **camera injection** (placeholder, webcam, or file loop) for testing camera flows.
 - You need to **grant/revoke app permissions** (camera, photos, notifications, location, etc.) or read the **accessibility tree**.
+- You need a one-shot dump of recent **Apple Unified Logging** entries from the simulator.
 - Rotate the device, simulate memory warnings, toggle CoreAnimation debug overlays, etc.
 - You are inside an Orca worktree/terminal and want the emulator to be **workspace-scoped** (like browser tabs) with explicit targeting when needed.
 - The agent should use Orca's preview pane instead of external Simulator.app or raw serve-sim URLs.
@@ -102,6 +103,7 @@ Use `--json` for agent-friendly output. Commands are workspace-scoped by default
 | Camera injection         | `ORCA emulator camera com.acme.App --webcam`                        | Or --file, placeholder. Hot-swap with switch. May (re)launch app.                                                                                                                                                   |
 | Permissions              | `ORCA emulator permissions grant camera com.acme.App`               | grant/revoke/reset/list. See full subcommand help.                                                                                                                                                                  |
 | Accessibility tree       | `ORCA emulator ax [--device <id>]`                                  | Raw serve-sim AX node tree (labels, roles, nested children, capped at 500 nodes; frames normalized 0..1 with top-left origin — tap an element at its frame center: x+width/2, y+height/2). Needs an active session. |
+| Unified logs             | `ORCA emulator logcat --filter com.acme.App [--lines 500] [--device <id>]` | `--filter` is required; searches the last 10 minutes and returns at most 10,000 normalized entries.                                                                                                           |
 | Raw / advanced           | `ORCA emulator exec --command "tap 0.5 0.7"`                        | Or "ca-debug blended on", "memory-warning", full serve-sim subcommands (no "serve-sim" prefix needed in the command string). Bridge injects active device context.                                                  |
 | Stop                     | `ORCA emulator kill [--device <id>]`                                | Or let pane close / Orca quit clean up.                                                                                                                                                                             |
 
@@ -114,6 +116,7 @@ Most support `--worktree <selector>` and explicit `--device <udid|name>` or `--e
 - One "active" emulator per worktree for unqualified commands (like active browser tab). Discover ids with `list`, use explicit flags for multi-device or cross-worktree.
 - Type = US keyboard only. Unsupported chars error clearly.
 - Camera injection often requires (re)launching the target app bundle.
+- iOS `logcat` requires `--filter`, searches the last 10 minutes, and defaults to the latest 500 entries with a 10,000-entry maximum. The filter matches process, subsystem, category, and message fields; use the app bundle id, executable name, or logging subsystem. Debug and info messages not persisted at the default level cannot be recovered. It does not follow new output.
 - The visual pane and CLI share the same underlying stream/helper. Closing the pane can stop the stream (configurable).
 - Stale helpers / state are cleaned by Orca on quit, but agents should `kill` when done.
 - Private APIs under the hood (SimulatorKit etc.) — version sensitive (Xcode updates can affect).
@@ -157,6 +160,7 @@ ORCA emulator button home --json
 ORCA emulator camera com.acme.MyApp --file /tmp/test.mp4 --json
 ORCA emulator permissions grant camera com.acme.MyApp --json
 ORCA emulator ax --json
+ORCA emulator logcat --filter com.acme.MyApp --lines 100 --json
 ORCA emulator exec --command "ca-debug blended on" --json
 ```
 
