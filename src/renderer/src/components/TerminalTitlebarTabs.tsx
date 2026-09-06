@@ -1,7 +1,19 @@
 import { createPortal } from 'react-dom'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
 import TabBar from './tab-bar/TabBar'
 import type { TerminalController } from './use-terminal-controller'
+
+const EMPTY_TERMINAL_TABS: TerminalTab[] = []
+
+// Why: keeps title-only tab updates a leaf subscription so the Terminal root,
+// which reads the topology projection, does not re-render on every rename.
+function LiveTerminalTabBar(
+  props: Omit<React.ComponentProps<typeof TabBar>, 'tabs'>
+): React.JSX.Element {
+  const tabs = useAppStore((state) => state.tabsByWorktree[props.worktreeId] ?? EMPTY_TERMINAL_TABS)
+  return <TabBar {...props} tabs={tabs} />
+}
 
 export function TerminalTitlebarTabs({
   controller
@@ -41,17 +53,16 @@ export function TerminalTitlebarTabs({
     setTabColor,
     setTabCustomTitle,
     tabBarOrder,
-    tabs,
     titlebarTabsTarget,
     worktreeBrowserTabs,
+    worktreeClientHostedBrowserRows,
     worktreeFiles
   } = controller
   if (!renderedActiveWorktreeId || effectiveActiveLayout || !titlebarTabsTarget) {
     return null
   }
   return createPortal(
-    <TabBar
-      tabs={tabs}
+    <LiveTerminalTabBar
       activeTabId={activeTabId}
       worktreeId={renderedActiveWorktreeId}
       onActivate={handleActivateTab}
@@ -71,6 +82,7 @@ export function TerminalTitlebarTabs({
       onTogglePaneExpand={handleTogglePaneExpand}
       editorFiles={worktreeFiles}
       browserTabs={worktreeBrowserTabs}
+      clientHostedBrowserRows={worktreeClientHostedBrowserRows}
       activeFileId={activeFileId}
       activeBrowserTabId={activeBrowserTabId}
       activeSimulatorTabId={

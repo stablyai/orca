@@ -123,6 +123,23 @@ export function useAutomationsPageDestinationState({
     (row: { key: string }): AutomationHostTarget | null => automationHostTargetForRowKey(row.key),
     [automationHostTargetForRowKey]
   )
+  const automationAuthorityForRow = useCallback(
+    (row: { catalogRef?: StableAutomationCatalogRef | null }): AutomationAuthorityRef => {
+      const authority = row.catalogRef?.authority
+      if (authority?.kind === 'runtime') {
+        return {
+          kind: 'runtime',
+          environmentId: authority.environmentId,
+          pairingRevision: automationRuntimePairingRevision(
+            runtimeEnvironments,
+            authority.environmentId
+          )
+        }
+      }
+      return { kind: 'desktop' }
+    },
+    [runtimeEnvironments]
+  )
   const automationDispatchContext = useMemo<AutomationDispatchContext>(
     () => ({ capturedOwners: capturedAutomationOwners, authority: automationAuthority }),
     [automationAuthority, capturedAutomationOwners]
@@ -198,6 +215,7 @@ export function useAutomationsPageDestinationState({
     createDestinationHostId,
     automationHostTargetForRowKey,
     automationHostTargetFor,
+    automationAuthorityForRow,
     automationDispatchContext,
     rowRecoveryHost,
     reportOwnerAction,

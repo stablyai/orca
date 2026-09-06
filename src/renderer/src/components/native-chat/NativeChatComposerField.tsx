@@ -55,8 +55,14 @@ export type NativeChatComposerFieldProps = {
 
 export type NativeChatComposerImageAttachment = {
   id: string
+  /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
   path: string
   connectionId?: string
+  /** Clipboard thumbnail (blob/data URL) rendered before — and after — the file
+   *  lands, so the chip never waits on a disk round-trip to show something. */
+  previewUrl?: string
+  /** True while the pasted image is still being written to disk or uploaded. */
+  pending?: boolean
 }
 
 /**

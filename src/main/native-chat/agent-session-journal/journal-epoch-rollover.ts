@@ -1,29 +1,34 @@
 // Opening a new epoch.
 //
-// The snapshot is what names the live epoch, so it is published BEFORE the log
-// is reset. A crash mid-rollover therefore leaves stale-epoch rows behind the
-// new snapshot, which `loadJournal` drops — the reverse order would leave a
-// journal whose log no longer matches any epoch anyone can name.
+// One transaction: discard every row of the superseded epoch, insert the new
+// epoch row at sequence 1, move the session projection onto it, and retire any
+// repair marker the superseded epoch was carrying. Superseded rows are DELETED
+// rather than retained — nothing would ever shed them.
 
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandle } from '../../../shared/agent-session-journal-types'
-import { compactJournal } from './journal-compaction'
-import { applyJournalRow, createJournalReducerState } from './journal-reducer'
-import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
-import { journalRowByteLength } from './journal-row-schema'
+import type Database from '../../sqlite/sync-database'
 import type { JournalLoad } from './journal-open'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { clearJournalRepairMarker } from './journal-repair-marker'
+import { applyJournalRow, createJournalReducerState } from './journal-reducer'
+import {
+  deleteAllJournalRows,
+  insertJournalRow,
+  upsertJournalSessionRow
+} from './journal-row-table'
+import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
 
-export async function publishNewEpoch(input: {
-  journalDir: string
+export function publishNewEpoch(input: {
+  db: Database.Database
   sessionId: string
   providerHandle: AgentSessionProviderHandle
   epoch: string
   reason: AgentJournalEpochReason
   fence: number
   now: number
-  maxSessionBytes?: number
-}): Promise<JournalLoad> {
+  /** Called the instant the transaction commits, before any fallible follow-up. */
+  onPublished: (loaded: JournalLoad) => void
+}): void {
   const row: JournalRow = {
     kind: 'epoch',
     reason: input.reason,
@@ -34,25 +39,24 @@ export async function publishNewEpoch(input: {
     fence: input.fence,
     ts: input.now
   }
+
+  input.db.exec('BEGIN IMMEDIATE')
+  try {
+    deleteAllJournalRows(input.db)
+    clearJournalRepairMarker(input.db, input.sessionId)
+    insertJournalRow(input.db, input.sessionId, row)
+    upsertJournalSessionRow(input.db, input.sessionId, input.epoch, input.now)
+    input.db.exec('COMMIT')
+  } catch (error) {
+    input.db.exec('ROLLBACK')
+    throw error
+  }
+
+  // COMMIT landed: on disk the superseded prefix is gone and this epoch is the
+  // live one. The caller adopts that immediately, or a later failure leaves the
+  // store writing into an epoch that no longer exists.
   const state = createJournalReducerState(input.sessionId, input.epoch)
-  await compactJournal({
-    journalDir: input.journalDir,
-    state,
-    tailRows: [row],
-    policy: { minTailRows: 1, retainTailMs: Number.POSITIVE_INFINITY },
-    now: input.now,
-    maxSessionBytes: input.maxSessionBytes ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS.maxSessionBytes,
-    sessionId: input.sessionId
-  })
   applyJournalRow(state, row)
   state.oldestSequence = 1
-  return {
-    state,
-    tailRows: [row],
-    compactedThrough: 0,
-    readOnly: false,
-    corrupt: false,
-    malformedRows: 0,
-    sizeBytes: journalRowByteLength(row)
-  }
+  input.onPublished({ state, readOnly: false, corrupt: false, malformedRows: 0 })
 }

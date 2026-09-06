@@ -41,6 +41,10 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
       kittyKeyboardFlags?: number
       alternateScreen?: boolean
       terminalOwner?: 'shell'
+      /** Grid the host serialized this image at. Absent from hosts that omit
+       *  it, which must read as unknown so replay keeps the pane's own grid. */
+      cols?: number
+      rows?: number
     }
   ) => void
   onSubscribed?: () => void

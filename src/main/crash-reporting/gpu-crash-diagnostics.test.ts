@@ -226,16 +226,26 @@ describe('GpuCrashDiagnosticsRecorder', () => {
 
 describe('GPU crash diagnostics production wiring', () => {
   it('starts diagnostics without delaying safe-graphics fallback', () => {
-    const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
-    const listenerStart = source.indexOf("app.on('child-process-gone'")
+    const source = readFileSync(
+      join(__dirname, '..', 'startup', 'main-process-preflight.ts'),
+      'utf8'
+    )
+    const listenerSource = readFileSync(
+      join(__dirname, '..', 'startup', 'main-process-ready-runtime.ts'),
+      'utf8'
+    )
+    const listenerStart = listenerSource.indexOf("  app.on('child-process-gone'")
     expect(listenerStart).toBeGreaterThan(0)
-    const listener = source.slice(listenerStart, source.indexOf('\n  })', listenerStart))
+    const listener = listenerSource.slice(
+      listenerStart,
+      listenerSource.indexOf('\n  })', listenerStart)
+    )
     expect(source).toMatch(
       /recordBreadcrumb: \(data\) =>\s*recordDurableCrashBreadcrumb\('gpu_crash_hardware', data\)/
     )
     expect(listener).toMatch(
-      /const crashedAt = performance\.now\(\)[\s\S]*?void gpuCrashDiagnostics\?\.record\(\)[\s\S]*?void handleGpuChildCrash\(details\.reason, details\.exitCode \?\? null, crashedAt\)/
+      /const crashedAt = performance\.now\(\)[\s\S]*?void state\.gpuCrashDiagnostics\?\.record\(\)[\s\S]*?void handleGpuChildCrash\(details\.reason, details\.exitCode \?\? null, crashedAt\)/
     )
-    expect(listener).not.toMatch(/gpuCrashDiagnostics\?\.record\(\)[\s\S]*?\.then\(/)
+    expect(listener).not.toMatch(/state\.gpuCrashDiagnostics\?\.record\(\)[\s\S]*?\.then\(/)
   })
 })

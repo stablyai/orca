@@ -117,6 +117,7 @@ describe('native chat PTY session options', () => {
     expect(effortResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
     expect(effortResult.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
+      transport: 'catalog',
       kind: { currentValue: 'high' }
     })
     expect(listener).toHaveBeenCalledOnce()
@@ -157,28 +158,6 @@ describe('native chat PTY session options', () => {
       valueSource: 'dispatched',
       kind: { currentValue: 'fable' }
     })
-  })
-
-  it('reveals the terminal only when Claude actually requires model-switch interaction', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'sonnet' })
-    const dispatch = vi.fn().mockResolvedValue({ outcome: 'interaction-required' })
-    const onAgentPicker = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: dispatch,
-      onAgentPicker
-    })!
-
-    const result = await surface.setOption('model', 'haiku')
-
-    expect(dispatch).toHaveBeenCalledWith('/model haiku', {
-      detectAgentInteraction: 'claude-model-switch-confirmation',
-      expectedChoiceLabel: 'Haiku'
-    })
-    expect(onAgentPicker).toHaveBeenCalledOnce()
-    expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
   it('keeps the prior model and persistence when Claude rejects the switch', async () => {

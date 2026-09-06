@@ -12,6 +12,7 @@ vi.mock('fs/promises', () => ({ stat: statMock }))
 vi.mock('./parcel-watcher-process', () => ({ subscribeViaWatcherProcess: subscribeMock }))
 
 import { createLocalWatcher } from './filesystem-watcher-local-events'
+import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -129,6 +130,73 @@ describe('local filesystem watcher flush serialization', () => {
     firstStat.resolve({ isDirectory: () => true })
     await flushMicrotasks()
     expect(statMock).toHaveBeenCalledTimes(1)
+    expect(sender.send).not.toHaveBeenCalled()
+  })
+
+  it('caps concurrent stats at eight for a full batch and keeps result order', async () => {
+    const eventCount = 5_000
+    const paths = Array.from({ length: eventCount }, (_, index) => `/repo/file-${index}.ts`)
+    let inFlight = 0
+    let peakInFlight = 0
+    statMock.mockImplementation(async (statPath: string) => {
+      inFlight++
+      peakInFlight = Math.max(peakInFlight, inFlight)
+      await Promise.resolve()
+      inFlight--
+      return { isDirectory: () => statPath.endsWith('-0.ts') }
+    })
+    const root = await createLocalWatcher('/repo', '/repo')
+    root.listeners.set(1, sender as never)
+
+    watcherCallback?.(
+      null,
+      paths.map((path) => ({ type: 'update' as const, path }))
+    )
+    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    // Why a loop, not a fixed microtask count: 5,000 stats through 8 lanes take many turns.
+    for (let i = 0; i < eventCount * 4 && sender.send.mock.calls.length === 0; i++) {
+      await Promise.resolve()
+    }
+
+    expect(statMock).toHaveBeenCalledTimes(eventCount)
+    expect(peakInFlight).toBe(8)
+    expect(sender.send).toHaveBeenCalledTimes(1)
+    const { events } = sender.send.mock.calls[0][1] as FsChangedPayload
+    expect(events).toEqual(
+      paths.map((path) => ({
+        kind: 'update',
+        absolutePath: path,
+        isDirectory: path.endsWith('-0.ts')
+      }))
+    )
+  })
+
+  it('starts no further stats when a full inflight batch is cancelled', async () => {
+    const eventCount = 5_000
+    const pendingStats = deferred<{ isDirectory: () => boolean }>()
+    statMock.mockReturnValue(pendingStats.promise)
+    const root = await createLocalWatcher('/repo', '/repo')
+    root.listeners.set(1, sender as never)
+
+    watcherCallback?.(
+      null,
+      Array.from({ length: eventCount }, (_, index) => ({
+        type: 'update' as const,
+        path: `/repo/file-${index}.ts`
+      }))
+    )
+    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    await flushMicrotasks()
+    expect(statMock).toHaveBeenCalledTimes(8)
+
+    cancelLocalBatchFlush(root)
+    pendingStats.resolve({ isDirectory: () => false })
+    for (let i = 0; i < eventCount * 4 && root.batch.flushInFlight; i++) {
+      await Promise.resolve()
+    }
+
+    expect(root.batch.flushInFlight).toBe(false)
+    expect(statMock).toHaveBeenCalledTimes(8)
     expect(sender.send).not.toHaveBeenCalled()
   })
 

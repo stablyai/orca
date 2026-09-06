@@ -74,11 +74,19 @@ function sshMuxRequestTimeoutError(method: string, timeoutMs: number): Error {
   })
 }
 
-export function isSshMuxRequestTimeoutError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error as Error & { code?: unknown }).code === SSH_MUX_REQUEST_TIMEOUT_CODE
-  )
+/**
+ * True when a request may have run on the host despite failing here.
+ *
+ * A response deadline and a link declared lost are the same verdict: the frame reached the wire and
+ * the peer's answer did not come back, so the work is `unverifiable`, never absent. Declaring a
+ * wedged link lost at TIMEOUT_MS turned what used to surface as SSH_MUX_REQUEST_TIMEOUT into
+ * CONNECTION_LOST, so callers that phrase the verdict to a user must branch on this rather than on
+ * the timeout alone or they silently start reporting absence
+ * (docs/reference/ssh-execution-boundary.md).
+ */
+export function isSshRequestOutcomeUnverifiable(error: unknown): boolean {
+  const code = error instanceof Error ? (error as Error & { code?: unknown }).code : undefined
+  return code === SSH_MUX_REQUEST_TIMEOUT_CODE || code === 'CONNECTION_LOST'
 }
 
 export class SshChannelMultiplexer {
@@ -102,7 +110,6 @@ export class SshChannelMultiplexer {
   private disposed = false
   private disposeReason: 'shutdown' | 'connection_lost' | null = null
   private decoderReadPaused = false
-  private writerSaturated = false
 
   // Track the oldest unacked outgoing message timestamp
   private unackedTimestamps = new Map<number, number>()
@@ -587,7 +594,12 @@ export class SshChannelMultiplexer {
 
       this.sendKeepAlive()
 
-      if (this.disposed || resumedAfterWake || this.decoderReadPaused || this.writerSaturated) {
+      // Why: a saturated writer used to suppress this check outright, which wedged a half-open
+      // link forever — no drain, so no frame ever left, and the writer's single-outstanding
+      // liveness guard silenced the one probe that could have noticed. The relay sends its own
+      // keepalive every KEEPALIVE_SEND_MS, so a slow-but-alive peer still refreshes
+      // lastReceivedAt; only a link that delivers nothing inbound is declared lost.
+      if (this.disposed || resumedAfterWake || this.decoderReadPaused) {
         return
       }
 
@@ -650,7 +662,6 @@ export class SshChannelMultiplexer {
   }
 
   private handleWriterSaturationChange(saturated: boolean): void {
-    this.writerSaturated = saturated
     if (!saturated && !this.disposed) {
       this.rebaseHealthClocks(Date.now())
     }

@@ -13,6 +13,8 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   removedPushTarget: GitPushTarget | undefined
   store: RuntimeStore
   provider: SshGitProvider
+  /** From the resolved removal route; `repo.connectionId!` answered null for an `ssh:`-only row. */
+  connectionId: string
   force: boolean
   allowUnverifiedPtyStop: boolean
   deleteBranch: boolean
@@ -28,8 +30,7 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   ) => RemoveWorktreeResult
   finishRemoval: (result: RemoveWorktreeResult) => void
 }): Promise<RemoveWorktreeResult> {
-  const { repo, target, registeredWorktree, provider } = args
-  const connectionId = repo.connectionId!
+  const { repo, target, registeredWorktree, provider, connectionId } = args
   const removeOptions = !args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}
   const gate = await args.acquireWatcherRemoval(registeredWorktree.path, connectionId)
   let rawResult: RemoveWorktreeResult | undefined

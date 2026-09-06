@@ -88,10 +88,8 @@ export function findLastExtractedTranscriptLineText(
 ): string | undefined {
   let lineEnd = text.length
 
-  for (let index = text.length - 1; index >= -1; index--) {
-    if (index >= 0 && text.charCodeAt(index) !== 10) {
-      continue
-    }
+  while (lineEnd > 0) {
+    const index = text.lastIndexOf('\n', lineEnd - 1)
 
     const line = text.slice(index + 1, lineEnd).trim()
     if (line.length > 0) {

@@ -1,5 +1,4 @@
 import type { WebContents } from 'electron'
-import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { BrowserError } from './browser-error'
 import type { CdpTabState } from './cdp-auxiliary-commands'
 import type { CdpCommandSender } from './snapshot-engine'
@@ -60,11 +59,6 @@ export class CdpDebuggerLifecycle {
       autoAttach: true,
       waitForDebuggerOnStart: false,
       flatten: true
-    })
-
-    // Why: CDP attach exposes automation signals (navigator.webdriver) that Cloudflare checks; override per new document.
-    await sender('Page.addScriptToEvaluateOnNewDocument', {
-      source: ANTI_DETECTION_SCRIPT
     })
 
     // Why: only remove this bridge's listeners; screencast/proxy sessions share the debugger and own their teardown.

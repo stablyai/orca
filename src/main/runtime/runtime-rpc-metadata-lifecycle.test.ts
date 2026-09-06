@@ -7,6 +7,7 @@ import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 import type { DeviceRegistry } from './device-registry'
+import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -61,7 +62,7 @@ describe('OrcaRuntimeRpcServer', () => {
       authToken: 'second-instance-token',
       startedAt: 1
     })
-    server.checkRuntimeMetadataOwnership()
+    await server.checkRuntimeMetadataOwnership()
 
     expect(readRuntimeMetadata(userDataPath)).toEqual(published)
 
@@ -86,7 +87,7 @@ describe('OrcaRuntimeRpcServer', () => {
       authToken: 'sibling-token',
       startedAt: 1
     })
-    server.checkRuntimeMetadataOwnership()
+    await server.checkRuntimeMetadataOwnership()
 
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_live_sibling' })
 
@@ -112,10 +113,43 @@ describe('OrcaRuntimeRpcServer', () => {
       authToken: 'second-instance-token',
       startedAt: 1
     })
-    server.checkRuntimeMetadataOwnership()
+    await server.checkRuntimeMetadataOwnership()
 
     expect(watchStop).toHaveBeenCalledTimes(1)
     expect(server['metadataOwnershipWatch']).toBeNull()
+    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
+  })
+
+  it('drops a republish from an ownership read that lands after the server stopped', async () => {
+    // Why: the read is off-thread now, so a tick can outlive stop(); the cleared
+    // activeTransports guard — not the interval teardown — is what stops it republishing.
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, pid: 1001 })
+    await server.start()
+
+    let releaseRead: (record: RuntimeMetadata | null) => void = () => {}
+    vi.spyOn(runtimeMetadataModule, 'readRuntimeMetadataAsync').mockImplementationOnce(
+      () =>
+        new Promise<RuntimeMetadata | null>((resolve) => {
+          releaseRead = resolve
+        })
+    )
+    const heldCheck = server.checkRuntimeMetadataOwnership()
+
+    await server.stop()
+    writeRuntimeMetadata(userDataPath, {
+      runtimeId: 'rt_second_instance',
+      pid: 99999999,
+      transports: [],
+      authToken: 'second-instance-token',
+      startedAt: 1
+    })
+    // A missing record is the most reclaimable verdict there is, so an unguarded
+    // resume would rewrite the file the second instance just published.
+    releaseRead(null)
+    await heldCheck
+
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
   })
 

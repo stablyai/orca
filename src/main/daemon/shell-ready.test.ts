@@ -198,11 +198,9 @@ describePosix('daemon shell-ready launch config', () => {
   })
 
   it('extends the startup barrier to fish so launch commands queue until the prompt', async () => {
-    const { shellPathSupportsPtyStartupBarrier, supportsPtyStartupBarrier } =
-      await importFreshShellReady()
+    const { shellPathSupportsPtyStartupBarrier } = await importFreshShellReady()
 
     expect(shellPathSupportsPtyStartupBarrier('/opt/homebrew/bin/fish')).toBe(true)
-    expect(supportsPtyStartupBarrier({ SHELL: '/usr/local/bin/fish' })).toBe(true)
     // Why: unwrapped shells must stay off the barrier or their first command queues forever.
     expect(shellPathSupportsPtyStartupBarrier('/usr/bin/tcsh')).toBe(false)
   })

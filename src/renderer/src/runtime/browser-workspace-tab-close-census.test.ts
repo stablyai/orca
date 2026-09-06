@@ -129,15 +129,20 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
     why: 'Rolls back a client-staged row for a create that never reached a host page.'
   },
   {
-    path: 'src/renderer/src/store/slices/browser.ts',
+    path: 'src/renderer/src/store/slices/browser/browser-close-actions.ts',
     closeBrowserTabMentions: 3,
     reasonCarryingCloseCalls: 0,
     planReasonForwardings: 0,
     routesThroughPlan: false,
-    why:
-      'shutdownWorktreeBrowsers tears the whole worktree down; the slice is the seam itself. Same ' +
-      'carve-out for parked chrome as the staging rollback, and page ids are unique so a later ' +
-      "page cannot pick up a dead one's entry."
+    why: 'Slice-owned shutdown tears down every browser row directly.'
+  },
+  {
+    path: 'src/renderer/src/store/slices/browser/browser-slice-contract.ts',
+    closeBrowserTabMentions: 1,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'The extracted slice contract declares the close action consumed by browser controllers.'
   }
 ]
 

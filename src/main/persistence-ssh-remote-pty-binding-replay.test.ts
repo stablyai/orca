@@ -213,7 +213,9 @@ describe('Store', () => {
     })
   })
 
-  it('does not resurrect a host binding after its SSH lease expires', async () => {
+  // `expired` is the client admitting it lost its route; the remote shell may still be running,
+  // so the pane keeps the binding it needs to reattach.
+  it('restores a host binding after its SSH lease expires', async () => {
     const store = await createStore()
     const hostId = 'ssh:ssh-1'
     const session: WorkspaceSessionState = {
@@ -251,6 +253,64 @@ describe('Store', () => {
       tabId: 'tab1',
       leafId: TEST_LEAF_1,
       state: 'expired'
+    })
+    store.setWorkspaceSession(
+      {
+        ...session,
+        tabsByWorktree: {
+          wt1: [{ ...session.tabsByWorktree.wt1[0]!, ptyId: null }]
+        },
+        terminalLayoutsByTabId: {
+          tab1: { ...session.terminalLayoutsByTabId.tab1!, ptyIdsByLeafId: {} }
+        }
+      },
+      hostId
+    )
+    const persisted = store.getWorkspaceSession(hostId)
+    expect(persisted.tabsByWorktree.wt1[0]!.ptyId).toBe('ssh:ssh-1@@expired')
+    expect(persisted.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'ssh:ssh-1@@expired'
+    })
+  })
+
+  it('does not resurrect a host binding after its SSH lease was terminated', async () => {
+    const store = await createStore()
+    const hostId = 'ssh:ssh-1'
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'ssh:ssh-1@@expired'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@expired' }
+        }
+      }
+    }
+    store.setWorkspaceSession(session, hostId)
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'expired',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'terminated'
     })
     store.setWorkspaceSession(
       {

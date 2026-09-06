@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { listWorktrees, listWorktreesStrict } from '../git/worktree'
 import { scheduleWorktreeBaseNotification } from '../ipc/worktree-base-directory-notifications'
 import { createWorktreeHeadIdentityRefreshState } from '../ipc/worktree-head-identity-refresh'
+import { EMPTY_HEAD_IDENTITY_SCOPE } from '../ipc/worktree-head-identity-scope'
 import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
@@ -166,6 +167,7 @@ describe('external worktree discovery for paired clients', () => {
       pendingStructureRepoIds: new Set<string>(),
       pendingGitStatusRepoIds: new Set<string>(),
       pendingHeadIdentityRepoIds: new Set<string>(),
+      pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
@@ -352,6 +354,7 @@ describe('external worktree discovery for paired clients', () => {
       pendingStructureRepoIds: new Set<string>(),
       pendingGitStatusRepoIds: new Set<string>(),
       pendingHeadIdentityRepoIds: new Set<string>(),
+      pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
@@ -437,6 +440,7 @@ describe('external worktree discovery for paired clients', () => {
       pendingStructureRepoIds: new Set<string>(),
       pendingGitStatusRepoIds: new Set<string>(),
       pendingHeadIdentityRepoIds: new Set<string>(),
+      pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }
@@ -493,6 +497,7 @@ describe('external worktree discovery for paired clients', () => {
       pendingStructureRepoIds: new Set<string>(),
       pendingGitStatusRepoIds: new Set<string>(),
       pendingHeadIdentityRepoIds: new Set<string>(),
+      pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
       headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
       disposed: false
     }

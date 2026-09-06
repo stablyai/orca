@@ -104,6 +104,7 @@ function createMockDeps(): {
     upsertSshPtyConsumerRecovery: vi.fn(),
     removeSshPtyConsumerRecovery: vi.fn(),
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn(),
     markSshRemotePtyLease: vi.fn(),
     markSshRemotePtyLeases: vi.fn(),
     markSshRemotePtyLeasesAsync: vi.fn(),

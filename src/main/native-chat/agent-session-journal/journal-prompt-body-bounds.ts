@@ -12,10 +12,7 @@ import {
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
 
-const JOURNAL_PROMPT_OPTION_LIMITS = {
-  ...DEFAULT_JOURNAL_PAYLOAD_LIMITS,
-  inlineHeadBytes: 1024
-}
+const JOURNAL_PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
 
 export function cancelledJournalPromptBody(
@@ -78,11 +75,6 @@ function boundPromptIdentifier(value: string): string {
   if (Buffer.byteLength(value, 'utf8') <= JOURNAL_PROMPT_ID_MAX_BYTES) {
     return value
   }
-  const bounded = boundPayload(value, {
-    inlineHeadBytes: JOURNAL_PROMPT_ID_MAX_BYTES - 33,
-    maxSessionBytes: Number.MAX_SAFE_INTEGER,
-    maxAppendsPerWindow: Number.MAX_SAFE_INTEGER,
-    appendWindowMs: Number.MAX_SAFE_INTEGER
-  })
+  const bounded = boundPayload(value, { inlineHeadBytes: JOURNAL_PROMPT_ID_MAX_BYTES - 33 })
   return `${bounded.head}#${bounded.digest.slice(0, 32)}`
 }
