@@ -1,12 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react'
 import type React from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import type { MatchRange, PaletteSearchResult } from '@/lib/worktree-palette-search'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { Worktree } from '../../../shared/worktree/types'
-import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 
 export function PaletteRowShortcutBadge({
   index,
@@ -127,75 +123,6 @@ export function PaletteOpenTabPrimaryLine({
         </>
       ) : null}
     </div>
-  )
-}
-
-function resolveOpenTabWorktreeRailTooltip({
-  isBranch,
-  truncated,
-  name
-}: {
-  isBranch: boolean
-  truncated: boolean
-  name: string
-}): string {
-  if (truncated) {
-    return name
-  }
-  return isBranch
-    ? translate('auto.components.WorktreeJumpPalette.paletteOpenTabBranch', 'Branch name')
-    : translate('auto.components.WorktreeJumpPalette.paletteOpenTabWorkspace', 'Workspace name')
-}
-
-export function PaletteOpenTabWorktreeRailLabel({
-  name,
-  matchRanges,
-  worktree,
-  className,
-  slot = 'palette-open-tab-worktree'
-}: {
-  name: string
-  matchRanges: readonly MatchRange[]
-  worktree?: Pick<Worktree, 'branch'> | null
-  className?: string
-  slot?: string
-}): React.JSX.Element | null {
-  const [truncated, setTruncated] = useState(false)
-  const labelRef = useRef<HTMLSpanElement | null>(null)
-  useLayoutEffect(() => {
-    const node = labelRef.current
-    if (!node) {
-      setTruncated(false)
-      return
-    }
-    const updateTruncated = (): void => {
-      const next = node.scrollWidth > node.clientWidth
-      setTruncated((current) => (current === next ? current : next))
-    }
-    updateTruncated()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const observer = new ResizeObserver(updateTruncated)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [name])
-  if (name.trim().length === 0) {
-    return null
-  }
-  const isBranch = worktree != null && name === resolveWorktreeBranchLabel(worktree)
-  const tooltip = resolveOpenTabWorktreeRailTooltip({ isBranch, truncated, name })
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span ref={labelRef} data-slot={slot} tabIndex={-1} className={className}>
-          <HighlightedText text={name} matchRanges={matchRanges} />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6} className="max-w-80 break-all">
-        {tooltip}
-      </TooltipContent>
-    </Tooltip>
   )
 }
 

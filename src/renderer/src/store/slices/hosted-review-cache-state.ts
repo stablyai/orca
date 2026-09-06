@@ -142,10 +142,6 @@ export function shouldRefetchGitHubScopedResultForNoHint(
   )
 }
 
-export function canReuseInflightHint(inflightHintKey: string, nextHintKey: string): boolean {
-  return inflightHintKey === nextHintKey
-}
-
 export function isStaleMergedGitHubReviewForHead(
   cached: HostedReviewCacheEntry<HostedReviewInfo> | undefined,
   currentHeadOid: string | null | undefined

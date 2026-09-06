@@ -186,13 +186,6 @@ export function mapExplicitAgentStateToRuntimeTerminalStatus(
   }
 }
 
-export function mergeWorktreeStatus(
-  current: RuntimeWorktreeStatus,
-  next: RuntimeWorktreeStatus
-): RuntimeWorktreeStatus {
-  return WORKTREE_STATUS_PRIORITY[next] > WORKTREE_STATUS_PRIORITY[current] ? next : current
-}
-
 export function mergeWorktreeSummaryStatus(
   summary: RuntimeWorktreePsSummary,
   next: RuntimeWorktreeStatus,

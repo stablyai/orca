@@ -1,11 +1,7 @@
 import { registerPaneKeyTeardownListener, getPtyIdForPaneKey } from '../ipc/pty'
 import { agentHookServer } from '../agent-hooks/server'
 import type { AgentStatusState } from '../../shared/agent-status-types'
-import {
-  getSyntheticAgentTitleProfile,
-  shouldDriveSyntheticAgentTitleFromHook,
-  type SyntheticAgentTitleProfile
-} from '../../shared/synthetic-agent-title'
+import type { SyntheticAgentTitleProfile } from '../../shared/synthetic-agent-title'
 import {
   advanceSyntheticTitleSpinnerEntries,
   getSyntheticTitleSpinnerPaneKeyToStop,
@@ -187,15 +183,4 @@ export function initializeSyntheticTitleRuntime(): void {
     }
   })
   agentHookServer.subscribeStatusDrop(stopSyntheticTitleSpinner)
-}
-
-export function driveSyntheticTitleForAgentStatus(
-  paneKey: string,
-  agentType: string | null | undefined,
-  agentState: AgentStatusState
-): void {
-  const profile = getSyntheticAgentTitleProfile(agentType)
-  if (profile && shouldDriveSyntheticAgentTitleFromHook(agentType, agentState)) {
-    driveSyntheticTitleFromHook(paneKey, agentState, profile)
-  }
 }

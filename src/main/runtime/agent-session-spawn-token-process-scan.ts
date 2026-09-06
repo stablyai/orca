@@ -53,21 +53,6 @@ export async function scanAgentSessionSpawnTokenProcesses(
   return observed
 }
 
-/**
- * Diagnostic evidence only. A null result is deliberately typed as
- * `unverifiable`, not as an empty process set; callers must never use this
- * Linux read-back as ownership or orphan-reaping proof.
- */
-export async function scanAgentSessionSpawnTokenEvidence(
-  platform: NodeJS.Platform = process.platform,
-  variable: string = CODEX_SPAWN_TOKEN_ENV
-): Promise<AgentSessionSpawnTokenScanEvidence> {
-  const processes = await scanAgentSessionSpawnTokenProcesses(platform, variable)
-  return processes === null
-    ? { status: 'unverifiable', processes: null, platform }
-    : { status: 'verified', processes }
-}
-
 /** Pids carrying one specific token, or null when the host could not enumerate. */
 export async function findAgentSessionSpawnTokenProcesses(
   spawnToken: string,

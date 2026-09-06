@@ -55,9 +55,6 @@ export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
 }
 
 // Backward-compatible export for the legacy single-workspace storage path.
-export function saveToken(apiKey: string): void {
-  saveWorkspaceToken(LEGACY_WORKSPACE_ID, apiKey)
-}
 
 export function loadToken(options: { force?: boolean; workspaceId?: string } = {}): string | null {
   const workspaceId = options.workspaceId ?? resolveWorkspaceId()

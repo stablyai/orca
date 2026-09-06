@@ -7,9 +7,7 @@ import {
   normalizeCodexHookSourcePath,
   parseTrustKey,
   readHookTrustEntries,
-  readHookTrustEntriesFromContent,
   removeHookTrustEntries,
-  removeHookTrustEntriesFromContent,
   type CodexEventLabel,
   type CodexHookTrustState,
   type CodexTrustEntry
@@ -102,17 +100,6 @@ function getCodexManagedHookTrustEntryKeys(
     }
   }
   return ownedKeys
-}
-
-export function stripCodexManagedHookTrustEntriesFromConfig(
-  contents: string,
-  options: CodexManagedHookTrustOwnershipOptions
-): string {
-  const ownedKeys = getCodexManagedHookTrustEntryKeys(
-    readHookTrustEntriesFromContent(contents),
-    options
-  )
-  return removeHookTrustEntriesFromContent(contents, ownedKeys)
 }
 
 export function removeCodexManagedHookTrustEntries(

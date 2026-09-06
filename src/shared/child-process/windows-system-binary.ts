@@ -19,10 +19,3 @@ function systemRoot(env: NodeJS.ProcessEnv = process.env): string {
 export function windowsPowerShellPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(systemRoot(env), 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 }
-
-export function windowsSystem32Binary(
-  fileName: string,
-  env: NodeJS.ProcessEnv = process.env
-): string {
-  return join(systemRoot(env), 'System32', fileName)
-}

@@ -48,7 +48,6 @@ export function legacyMigrationUnsupportedRowsToAliasEntries(
 export const MAX_CLAUDE_LIVE_PTY_SESSION_IDS = 200
 
 // Why: bound removed-SSH-target history so remove/re-add churn can't grow the file unbounded.
-export const MAX_REMOVED_SSH_TARGET_TOMBSTONES = 50
 
 export function normalizeClaudeLivePtySessionIds(value: unknown): string[] {
   if (!Array.isArray(value)) {

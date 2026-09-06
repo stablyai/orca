@@ -12,8 +12,6 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import { getAppEnvironment } from '../../../shared/app-environment'
-
 const JOURNAL_DIR_NAME = 'agent-session-journal'
 
 /** Filesystem-safe, collision-resistant segment for an arbitrary id. Ids come
@@ -34,9 +32,4 @@ export function journalDirectoryFor(
     journalPathSegment(identity.workspaceId),
     journalPathSegment(identity.sessionId)
   )
-}
-
-/** Default host state root. */
-export function defaultJournalRoot(): Promise<string> {
-  return Promise.resolve(getAppEnvironment().getPath('userData'))
 }

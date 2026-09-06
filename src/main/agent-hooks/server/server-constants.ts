@@ -1,7 +1,6 @@
 import { AGENT_KIND_VALUES, type AgentKind } from '../../../shared/telemetry-events'
 
 // Why: co-located with the endpoint file in userData/agent-hooks/ so hook-server cross-restart artifacts stay together.
-export const LAST_STATUS_FILE_NAME = 'last-status.json'
 export const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 export const ASSISTANT_MESSAGE_RETRY_MS = 50
 export const CODEX_SUBAGENT_POLL_MS = 1_000

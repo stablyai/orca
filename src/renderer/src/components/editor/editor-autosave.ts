@@ -72,12 +72,6 @@ export function isExternalReloadableEditorTab(file: OpenFile): boolean {
 // root). The fs watcher must still notify them so terminal/agent edits reload
 // the affected section. Branch/commit combined diffs compare committed refs, so
 // working-tree changes don't affect them and are intentionally excluded.
-export function isWorkingTreeCombinedDiffTab(file: OpenFile): boolean {
-  return (
-    file.mode === 'diff' &&
-    (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-all')
-  )
-}
 
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
   // Why: read-only tabs (AI Vault View Log) must never autosave — writing an

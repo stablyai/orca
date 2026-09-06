@@ -67,8 +67,7 @@ import {
   markAgentSessionStoreLeasesUnreconciled
 } from './agent-session-store-transaction-queue'
 
-export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
-  AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
+export const AGENT_SESSION_LEASE_TTL_MS = 30_000
 /** Retired claim keys stay verifiable this long so a rotation cannot strand a running agent. */
 export const AGENT_SESSION_CLAIM_KEY_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 

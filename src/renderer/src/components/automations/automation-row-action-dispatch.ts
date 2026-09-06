@@ -65,10 +65,6 @@ export type AutomationDispatchResult<TValue> =
   | { ok: true; value: TValue }
   | { ok: false; notice: AutomationActionNotice }
 
-export function dispatched<TValue>(value: TValue): AutomationDispatchResult<TValue> {
-  return { ok: true, value }
-}
-
 export function toDispatchResult<TValue>(
   outcome: Exclude<AutomationActionResult<TValue>, { status: 'uncaptured' }>
 ): AutomationDispatchResult<TValue> {

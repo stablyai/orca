@@ -1,13 +1,3 @@
-/**
- * Folds query results back onto the catalog for display.
- *
- * Kept separate from the catalog the controller is given: this one changes on
- * every commit, and re-applying a catalog advances generations and cancels
- * in-flight requests. The picker, notice, and empty state read this projection;
- * the scheduler reads the store-derived one.
- */
-
-import type { AutomationHostCache } from './automation-host-cache'
 import type {
   AutomationHostCacheEntry,
   AutomationHostQueryErrorCode
@@ -122,11 +112,4 @@ export function automationHostLoadCounts(catalog: AutomationHostCatalog): Automa
     failedHostCount: counted.filter((entry) => FAILED_HEALTH.has(entry.authorityHealth)).length,
     totalHostCount: counted.length
   }
-}
-
-/** Adapter so callers can pass a live cache where a plain reader is expected. */
-export function automationHostCacheReader(
-  cache: AutomationHostCache
-): (stableKey: string) => AutomationHostCacheEntry | null {
-  return (stableKey) => cache.getByKey(stableKey)
 }

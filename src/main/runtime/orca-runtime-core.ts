@@ -145,11 +145,6 @@ export async function waitForAgentPromptPromise<T>(
 // atomic bracketed-paste write, so they do not rely on this scheduler.
 // Why the global and not node:timers/promises: only the global is intercepted by fake timers,
 // so a chunked paste stays observable on the test clock.
-export function yieldBetweenTerminalInputChunks(): Promise<void> {
-  return new Promise<void>((resolve) => {
-    setImmediate(resolve)
-  })
-}
 
 export async function waitForAgentPromptDelay(
   delayMs: number,

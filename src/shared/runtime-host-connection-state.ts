@@ -58,24 +58,4 @@ export function runtimeHostConnectionState({
   return 'connected'
 }
 
-export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
-  return (
-    state === 'connected' || state === 'runtime-unavailable' || state === 'workspace-window-closed'
-  )
-}
-
 export type HostStatus = 'connected' | 'disconnected' | 'connecting'
-
-export function runtimeStatusForOverall(state: RuntimeHostConnectionState): HostStatus {
-  switch (state) {
-    case 'connected':
-    case 'runtime-unavailable':
-    case 'workspace-window-closed':
-      return 'connected'
-    case 'checking':
-    case 'reconnecting':
-      return 'connecting'
-    case 'disconnected':
-      return 'disconnected'
-  }
-}

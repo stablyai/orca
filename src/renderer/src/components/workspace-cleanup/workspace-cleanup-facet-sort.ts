@@ -6,7 +6,6 @@ import {
   getWorkspaceCleanupReviewRank
 } from '../../../../shared/workspace-cleanup-facet-rankings'
 import type {
-  WorkspaceCleanupSortDirectionState,
   WorkspaceCleanupSortField,
   WorkspaceCleanupSortState
 } from '../../../../shared/workspace-cleanup-filter-model'
@@ -40,16 +39,6 @@ export function sortWorkspaceCleanupFacets(
     (left, right) =>
       comparePrimary(left, right, sort.field, multiplier) || compareTieBreaks(left, right)
   )
-}
-
-export function compareWorkspaceCleanupFacets(
-  left: WorkspaceCleanupFacets,
-  right: WorkspaceCleanupFacets,
-  field: WorkspaceCleanupSortField,
-  direction: WorkspaceCleanupSortDirectionState
-): number {
-  const multiplier = direction === 'asc' ? 1 : -1
-  return comparePrimary(left, right, field, multiplier) || compareTieBreaks(left, right)
 }
 
 function comparePrimary(

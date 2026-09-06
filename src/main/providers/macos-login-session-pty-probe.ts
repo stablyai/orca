@@ -1,4 +1,4 @@
-import { execFile, type ExecFileException } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
 const MACOS_EXPECT_PATH = '/usr/bin/expect'
@@ -14,18 +14,6 @@ export type LoginPreflightOutcome = {
   ok: boolean
   conclusive: boolean
   reason: 'accepted' | 'rejected' | 'timeout' | 'error'
-}
-
-export function classifyLoginPreflightError(error: ExecFileException): LoginPreflightOutcome {
-  // Why: a probe killed by our bound proves nothing about PAM and must not stick.
-  if (error.killed || error.code === 'ETIMEDOUT') {
-    return { ok: false, conclusive: false, reason: 'timeout' }
-  }
-  // Why: a natural nonzero exit is login(1)'s conclusive rejection verdict.
-  if (typeof error.code === 'number') {
-    return { ok: false, conclusive: true, reason: 'rejected' }
-  }
-  return { ok: false, conclusive: false, reason: 'error' }
 }
 
 /** Runs the login-session oracle under a real PTY when the pipe probe cannot decide. */

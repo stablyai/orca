@@ -27,7 +27,6 @@ import {
   resolvePrCreationDefaults,
   resolveSourceControlActionRecipe as resolveActionRecipe,
   resolveSourceControlAiEnabled as resolveEnabled,
-  resolveSourceControlAiInstructions as resolveInstructions,
   resolveSourceControlAiPrCreationDefaults as resolvePrDefaults
 } from './source-control-ai-operation-policy'
 import { normalizeRepoSourceControlAiOverrides as normalizeRepoOverrides } from './source-control-ai-repo-settings'
@@ -93,7 +92,6 @@ export const readSourceControlAiModelChoiceForHost = readModelChoice
 export const selectSourceControlAiModelChoiceForHost = selectModelChoice
 export const clearSourceControlAiModelChoiceForHost = clearModelChoice
 export const projectSourceControlAiToLegacyCommitMessageAi = projectLegacySettings
-export const resolveSourceControlAiInstructions = resolveInstructions
 export const hasConfiguredSourceControlAiInstructions = hasConfiguredInstructions
 export const resolveSourceControlAiPrCreationDefaults = resolvePrDefaults
 export const resolveSourceControlAiEnabled = resolveEnabled

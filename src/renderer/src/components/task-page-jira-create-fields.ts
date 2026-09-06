@@ -3,9 +3,6 @@ import type { JiraCreateField } from '../../../shared/jira-types'
 
 const JIRA_CREATE_SYSTEM_FIELD_KEYS = new Set(['project', 'issuetype', 'summary', 'description'])
 
-/** Jira's own create screen defaults only this field to the authenticated user. */
-export const JIRA_REPORTER_FIELD_KEY = 'reporter'
-
 /** True for required create fields the dialog must render (system fields excluded). */
 export function isVisibleJiraCreateField(field: JiraCreateField): boolean {
   return field.required && !JIRA_CREATE_SYSTEM_FIELD_KEYS.has(field.key)

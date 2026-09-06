@@ -54,20 +54,6 @@ export function createStructuredAgentSessionOutboxEntry(args: {
   }
 }
 
-export function updateStructuredAgentSessionOutboxEntry(
-  entries: readonly StructuredAgentSessionOutboxEntry[],
-  id: string,
-  update: (entry: StructuredAgentSessionOutboxEntry) => StructuredAgentSessionOutboxEntry | null
-): StructuredAgentSessionOutboxEntry[] {
-  return entries.flatMap((entry) => {
-    if (entry.clientMessageId !== id) {
-      return [entry]
-    }
-    const next = update(entry)
-    return next ? [next] : []
-  })
-}
-
 export function requeueStructuredAgentSessionSendRefusal(
   entry: StructuredAgentSessionOutboxEntry,
   code: AgentSessionWireRefusalCode,

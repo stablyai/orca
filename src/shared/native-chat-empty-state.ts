@@ -24,16 +24,3 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
     subtitle: 'This terminal is not running a recognized coding agent.'
   }
 } as const satisfies Record<string, NativeChatEmptyStateCopy>
-
-/** Resolve the empty-state copy with the agent label substituted for `{{value0}}`.
- *  For platforms without an i18n layer (mobile). */
-export function formatNativeChatEmptyStateCopy(
-  kind: keyof typeof NATIVE_CHAT_EMPTY_STATE_COPY,
-  agentLabel: string
-): NativeChatEmptyStateCopy {
-  const copy = NATIVE_CHAT_EMPTY_STATE_COPY[kind]
-  return {
-    title: copy.title.replaceAll('{{value0}}', agentLabel),
-    subtitle: copy.subtitle.replaceAll('{{value0}}', agentLabel)
-  }
-}

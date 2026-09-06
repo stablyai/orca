@@ -79,15 +79,3 @@ export function closeSharedControlSubscription(args: {
 }): void {
   closeSharedControlConnectionSubscription(args)
 }
-
-export function closeRuntimeControlSubscription(args: {
-  subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
-  retiredRequestIds: SharedControlRetiredRequestIds
-  requestId: string
-  deviceToken: string
-  send: (payload: unknown) => boolean
-  clearWhenIdle: (isIdle: boolean) => void
-}): void {
-  closeSharedControlSubscription(args)
-  args.clearWhenIdle(args.subscriptions.size === 0)
-}
