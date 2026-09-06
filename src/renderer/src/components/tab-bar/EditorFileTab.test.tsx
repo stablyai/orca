@@ -253,6 +253,7 @@ async function renderEditorFileTab(
     file,
     isActive: true,
     isPinned: false,
+    pinnedIconOnly: false,
     hasTabsToRight: false,
     hasTabsToLeft: false,
     tabCount: 1,

@@ -151,6 +151,21 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
       ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
     ]
+  },
+  {
+    title: translate('settings.general.pinnedTabsIconOnly.title', 'Show pinned tabs as icons only'),
+    description: translate(
+      'settings.general.pinnedTabsIconOnly.description',
+      'Hide the title on pinned tabs so they shrink to their icon and leave more room in the tab strip.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.867dddea41', 'pinned'),
+      ...translateSearchKeyword('auto.components.settings.general.search.5250cf0e48', 'pin'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('settings.general.pinnedTabsIconOnly.keyword.icon', 'icon'),
+      ...translateSearchKeyword('settings.general.pinnedTabsIconOnly.keyword.compact', 'compact'),
+      ...translateSearchKeyword('settings.general.pinnedTabsIconOnly.keyword.space', 'space')
+    ]
   }
 ])
 
