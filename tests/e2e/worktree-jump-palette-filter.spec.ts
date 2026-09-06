@@ -163,7 +163,7 @@ test.describe('Worktree jump-palette filters', () => {
     })
   })
 
-  test('filters workspace results by host, intersects project selection, and resets on close', async ({
+  test('filters results, intersects fields, and reseeds from the sidebar on reopen', async ({
     orcaPage
   }) => {
     const fixture = await seedPaletteFilterFixture(orcaPage)
@@ -177,7 +177,7 @@ test.describe('Worktree jump-palette filters', () => {
     await expect(worktreeRow(orcaPage, fixture.remoteWorktreeId)).toBeVisible()
     await expect(worktreeRow(orcaPage, fixture.localWorktreeId)).toHaveCount(0)
 
-    // P2: host and project fields intersect, with the filter-specific empty state.
+    // P2: host and repository fields intersect, with the filter-specific empty state.
     await palette(orcaPage).getByPlaceholder(SEARCH_PLACEHOLDER).fill('')
     await filterTrigger(orcaPage).click()
     await palette(orcaPage).getByText('Projects', { exact: true }).click()
@@ -191,7 +191,7 @@ test.describe('Worktree jump-palette filters', () => {
       palette(orcaPage).getByText('Clear the filter above, or widen it to more hosts and projects.')
     ).toBeVisible()
 
-    // P3: clear restores both rows; closing drops the ephemeral filter.
+    // P3: clear restores both rows; reopening replaces ephemeral state with the sidebar scope.
     await filterTrigger(orcaPage).click()
     await palette(orcaPage).getByRole('button', { name: 'Clear all' }).last().click()
     await filterTrigger(orcaPage).click()
@@ -199,11 +199,17 @@ test.describe('Worktree jump-palette filters', () => {
     await searchFixtureWorkspaces(orcaPage, fixture)
 
     await selectRemoteHost(orcaPage)
-    await orcaPage.evaluate(() => window.__store?.getState().closeModal())
+    await orcaPage.evaluate((repoId) => {
+      const store = window.__store?.getState()
+      store?.closeModal()
+      store?.setFilterRepoIds([repoId])
+    }, fixture.localRepoId)
     await expect(palette(orcaPage)).toBeHidden()
     await openPalette(orcaPage)
-    await searchFixtureWorkspaces(orcaPage, fixture)
-    await expect(filterTrigger(orcaPage)).not.toContainText('1')
+    await palette(orcaPage).getByPlaceholder(SEARCH_PLACEHOLDER).fill('E2E Palette')
+    await expect(filterTrigger(orcaPage)).toContainText('1')
+    await expect(worktreeRow(orcaPage, fixture.localWorktreeId)).toBeVisible()
+    await expect(worktreeRow(orcaPage, fixture.remoteWorktreeId)).toHaveCount(0)
   })
 
   test('opens with the sidebar repository scope without widening it', async ({ orcaPage }) => {

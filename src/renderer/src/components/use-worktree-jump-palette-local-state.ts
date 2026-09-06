@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
 import {
   buildPaletteFilterFromSidebarScope,
@@ -18,6 +19,13 @@ export function useWorktreeJumpPaletteLocalState({
   createLookupGuard: WorktreePaletteRequestGuard
   visible: boolean
 }) {
+  const sidebarScope = useAppStore(
+    useShallow((state) => ({
+      filterRepoIds: state.filterRepoIds,
+      visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+      workspaceHostScope: state.workspaceHostScope
+    }))
+  )
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const liveQueryRef = useRef(query)
@@ -38,8 +46,8 @@ export function useWorktreeJumpPaletteLocalState({
   // Create is armed by an explicit keyboard/pointer move, except for task URLs.
   const selectionMovedByUserRef = useRef(false)
   const digitShortcutItemsRef = useRef<readonly PaletteItem[]>([])
-  const [filterState, setFilterState] = useState<PaletteFilterState>(() =>
-    buildPaletteFilterFromSidebarScope(useAppStore.getState())
+  const [filter, setFilter] = useState<PaletteFilterState>(() =>
+    buildPaletteFilterFromSidebarScope(sidebarScope)
   )
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
@@ -57,7 +65,7 @@ export function useWorktreeJumpPaletteLocalState({
   const preserveCreateLookupOnCloseRef = useRef(false)
   const [expandedSectionCaps, setExpandedSectionCaps] = useState<Record<string, number>>({})
 
-  // Reset query/open state during render so the palette never paints stale results.
+  // Reset expansion and seed each open before the palette paints.
   const [previousQuery, setPreviousQuery] = useState(query)
   const [previousVisible, setPreviousVisible] = useState(visible)
   const visibilityChanged = previousVisible !== visible
@@ -66,7 +74,7 @@ export function useWorktreeJumpPaletteLocalState({
     setPreviousVisible(visible)
     setExpandedSectionCaps({})
     if (visibilityChanged && visible) {
-      setFilterState(buildPaletteFilterFromSidebarScope(useAppStore.getState()))
+      setFilter(buildPaletteFilterFromSidebarScope(sidebarScope))
     }
   }
 
@@ -85,8 +93,8 @@ export function useWorktreeJumpPaletteLocalState({
     autoSelectedItemIdRef,
     selectionMovedByUserRef,
     digitShortcutItemsRef,
-    filterState,
-    setFilterState,
+    filter,
+    setFilter,
     dialogElement,
     setDialogElement,
     previousWorktreeIdRef,
@@ -104,8 +112,7 @@ export function useWorktreeJumpPaletteLocalState({
     createLookupGuard,
     preserveCreateLookupOnCloseRef,
     expandedSectionCaps,
-    setExpandedSectionCaps,
-    previousVisible
+    setExpandedSectionCaps
   }
 }
 

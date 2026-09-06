@@ -1,13 +1,9 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getVisibleWorkspaceHostIdSet } from '../sidebar/visible-worktree-host-scope'
-import {
-  resolveRepoFilterHostId,
-  resolveWorktreeFilterHostId,
-  type PaletteFilterModel
-} from './palette-filter-options'
+import { resolveWorktreeFilterHostId, type PaletteFilterModel } from './palette-filter-options'
 
-export type PaletteFilterField = 'host' | 'project'
+export type PaletteFilterField = 'host' | 'repository'
 
 /**
  * Sorted arrays rather than Sets: identity is stable across renders and the
@@ -67,15 +63,21 @@ export function addPaletteFilterValues(
   field: PaletteFilterField,
   ids: readonly string[]
 ): PaletteFilterState {
-  return field === 'host'
-    ? { ...filter, hostIds: addValues(filter.hostIds, ids) }
-    : { ...filter, repoIds: addValues(filter.repoIds, ids) }
+  const values = field === 'host' ? filter.hostIds : filter.repoIds
+  const nextValues = addValues(values, ids)
+  if (nextValues === values) {
+    return filter
+  }
+  return field === 'host' ? { ...filter, hostIds: nextValues } : { ...filter, repoIds: nextValues }
 }
 
 export function clearPaletteFilterField(
   filter: PaletteFilterState,
   field: PaletteFilterField
 ): PaletteFilterState {
+  if ((field === 'host' ? filter.hostIds : filter.repoIds).length === 0) {
+    return filter
+  }
   return field === 'host' ? { ...filter, hostIds: [] } : { ...filter, repoIds: [] }
 }
 
@@ -123,22 +125,28 @@ export function buildPaletteFilterPredicate(
 
   const selectedHostIds = filter.hostIds.length > 0 ? new Set(filter.hostIds) : null
   const selectedRepoIds = filter.repoIds.length > 0 ? new Set(filter.repoIds) : null
+  const repoMatchesSelectedHost = (repoId: string): boolean => {
+    if (!selectedHostIds) {
+      return true
+    }
+    const repoHostIds = model.hostIdsByRepoId.get(repoId)
+    if (!repoHostIds) {
+      return selectedHostIds.has(model.defaultHostId)
+    }
+    for (const hostId of repoHostIds) {
+      if (selectedHostIds.has(hostId)) {
+        return true
+      }
+    }
+    return false
+  }
 
   return {
     matchesProjectRowKey: (rowKey) => {
       const rowRepoIds = model.repoIdsByProjectKey.get(rowKey) ?? []
-      if (selectedRepoIds && !rowRepoIds.some((repoId) => selectedRepoIds.has(repoId))) {
-        return false
-      }
-      if (!selectedHostIds) {
-        return true
-      }
-      // Why: the row survives if *any* of its repos is on a selected host — a
-      // project checked out on both local and SSH is still reachable from either.
-      return rowRepoIds.some((repoId) =>
-        selectedHostIds.has(
-          resolveRepoFilterHostId(repoId, model.hostIdByRepoId, model.defaultHostId)
-        )
+      return rowRepoIds.some(
+        (repoId) =>
+          (!selectedRepoIds || selectedRepoIds.has(repoId)) && repoMatchesSelectedHost(repoId)
       )
     },
     matchesWorktree: (worktree) => {
@@ -151,10 +159,10 @@ export function buildPaletteFilterPredicate(
       // Why: worktree.hostId wins over the repo fallback — a runtime-owned
       // workspace can live on a different host than the repo it came from.
       return selectedHostIds.has(
-        resolveWorktreeFilterHostId(worktree, model.hostIdByRepoId, model.defaultHostId)
+        resolveWorktreeFilterHostId(worktree, model.repoById, model.defaultHostId)
       )
     },
-    // Why: a group header is not a project, so an explicit project selection
+    // Why: a group header has no repository, so a repository selection
     // excludes every group row; only the host axis can keep one.
     matchesGroupHostId: (hostId) =>
       selectedRepoIds === null && (!selectedHostIds || selectedHostIds.has(hostId))

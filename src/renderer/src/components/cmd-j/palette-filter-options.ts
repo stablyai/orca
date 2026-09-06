@@ -1,5 +1,7 @@
+import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import {
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
@@ -43,57 +45,47 @@ function toFilterOption({
 export type PaletteFilterModel = {
   hosts: readonly PaletteFilterOption[]
   repositories: readonly PaletteFilterOption[]
-  /** A project row can span several repos (Project.sourceRepoIds), so selection resolves through this. */
+  /** Repository IDs represented by each project row in the sidebar grouping. */
   repoIdsByProjectKey: ReadonlyMap<string, readonly string[]>
-  /** Only repos that carry a host stamp; absent means "inherit defaultHostId". */
-  hostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
+  /** Every execution host that owns a repository ID. */
+  hostIdsByRepoId: ReadonlyMap<string, ReadonlySet<ExecutionHostId>>
+  /** Same last-row-wins repository index used by the sidebar. */
+  repoById: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
   /** The focused runtime host, which host-less repos and worktrees inherit. */
   defaultHostId: ExecutionHostId
 }
 
-/**
- * Precomputes only the repos that actually carry a host stamp so the lookup miss
- * below stays equivalent to getWorktreeExecutionHostId's `defaultHostId` branch.
- * Collapsing host-less repos to `local` here would disagree with the sidebar
- * whenever a runtime environment is focused.
- */
-function buildRepoHostIndex(repos: readonly Repo[]): Map<string, ExecutionHostId> {
-  const hostIdByRepoId = new Map<string, ExecutionHostId>()
+function buildRepoHostIndex(
+  repos: readonly Repo[],
+  defaultHostId: ExecutionHostId
+): Map<string, Set<ExecutionHostId>> {
+  const hostIdsByRepoId = new Map<string, Set<ExecutionHostId>>()
   for (const repo of repos) {
-    if (repo.connectionId || repo.executionHostId) {
-      hostIdByRepoId.set(repo.id, getRepoExecutionHostId(repo))
-    }
+    const hostIds = hostIdsByRepoId.get(repo.id) ?? new Set<ExecutionHostId>()
+    hostIds.add(
+      repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
+    )
+    hostIdsByRepoId.set(repo.id, hostIds)
   }
-  return hostIdByRepoId
+  return hostIdsByRepoId
 }
 
 export function resolveWorktreeFilterHostId(
   worktree: Pick<Worktree, 'repoId' | 'hostId'>,
-  hostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
+  repoById: ReadonlyMap<string, Pick<Repo, 'connectionId' | 'executionHostId'>>,
   defaultHostId: ExecutionHostId
 ): ExecutionHostId {
-  // Why: same precedence as getWorktreeExecutionHostId without re-resolving the
-  // repo per worktree — the repo host is precomputed once for the whole pass.
-  return worktree.hostId ?? hostIdByRepoId.get(worktree.repoId) ?? defaultHostId
-}
-
-/** Repo-derived host for a project row, which owns no worktree of its own. */
-export function resolveRepoFilterHostId(
-  repoId: string,
-  hostIdByRepoId: ReadonlyMap<string, ExecutionHostId>,
-  defaultHostId: ExecutionHostId
-): ExecutionHostId {
-  return hostIdByRepoId.get(repoId) ?? defaultHostId
+  return getWorktreeExecutionHostId(worktree, repoById.get(worktree.repoId), defaultHostId)
 }
 
 function buildRepoIdsByProjectKey(
   repos: readonly Repo[],
-  repoMap: Map<string, Repo>,
+  repoById: Map<string, Repo>,
   grouping: ProjectGroupingModel
 ): Map<string, string[]> {
   const repoIdsByProjectKey = new Map<string, string[]>()
   for (const repo of repos) {
-    const target = getProjectHeaderRevealTarget(repo.id, repoMap, grouping)
+    const target = getProjectHeaderRevealTarget(repo.id, repoById, grouping)
     if (!target.repo) {
       continue
     }
@@ -122,9 +114,9 @@ export function buildPaletteFilterModel({
   projectHostSetups: readonly ProjectHostSetup[]
   defaultHostId?: ExecutionHostId
 }): PaletteFilterModel {
-  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
-  const hostIdByRepoId = buildRepoHostIndex(repos)
-  const repoIdsByProjectKey = buildRepoIdsByProjectKey(repos, repoMap, {
+  const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+  const hostIdsByRepoId = buildRepoHostIndex(repos, defaultHostId)
+  const repoIdsByProjectKey = buildRepoIdsByProjectKey([...repoById.values()], repoById, {
     projects,
     projectHostSetups
   })
@@ -135,7 +127,7 @@ export function buildPaletteFilterModel({
     if (worktree.isArchived) {
       continue
     }
-    const hostId = resolveWorktreeFilterHostId(worktree, hostIdByRepoId, defaultHostId)
+    const hostId = resolveWorktreeFilterHostId(worktree, repoById, defaultHostId)
     worktreeCountByHostId.set(hostId, (worktreeCountByHostId.get(hostId) ?? 0) + 1)
     worktreeCountByRepoId.set(
       worktree.repoId,
@@ -154,11 +146,12 @@ export function buildPaletteFilterModel({
   )
 
   // Keep repository IDs aligned with the sidebar; project grouping remains a row concern.
-  const repositoryOptions = repos
+  const repositoryLabels = getRepoDisplayLabelsByPath([...repoById.values()])
+  const repositories = [...repoById.values()]
     .map((repo) =>
       toFilterOption({
         id: repo.id,
-        label: repo.displayName,
+        label: repositoryLabels.get(getRepoDisplayLabelKey(repo)) ?? repo.displayName,
         detail: repo.path,
         count: worktreeCountByRepoId.get(repo.id) ?? 0
       })
@@ -167,9 +160,10 @@ export function buildPaletteFilterModel({
 
   return {
     hosts,
-    repositories: repositoryOptions,
+    repositories,
     repoIdsByProjectKey,
-    hostIdByRepoId,
+    hostIdsByRepoId,
+    repoById,
     defaultHostId
   }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   addPaletteFilterValues,
   buildPaletteFilterFromSidebarScope,
@@ -31,10 +32,15 @@ const model: PaletteFilterModel = {
     ['project:p1', ['r1', 'r2']],
     ['repo:r3', ['r3']]
   ]),
-  hostIdByRepoId: new Map<string, ExecutionHostId>([
-    ['r1', 'local'],
-    ['r2', 'ssh:builder'],
-    ['r3', 'runtime:env-1']
+  hostIdsByRepoId: new Map<string, ReadonlySet<ExecutionHostId>>([
+    ['r1', new Set(['local'])],
+    ['r2', new Set(['ssh:builder'])],
+    ['r3', new Set(['runtime:env-1'])]
+  ]),
+  repoById: new Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>([
+    ['r1', {}],
+    ['r2', { connectionId: 'builder' }],
+    ['r3', { executionHostId: 'runtime:env-1' }]
   ]),
   defaultHostId: LOCAL_EXECUTION_HOST_ID
 }
@@ -66,22 +72,31 @@ describe('palette filter state', () => {
   it('keeps the two fields independent', () => {
     const filter = togglePaletteFilterValue(
       togglePaletteFilterValue(EMPTY_PALETTE_FILTER, 'host', 'local'),
-      'project',
+      'repository',
       'r1'
     )
 
-    expect(clearPaletteFilterField(filter, 'project')).toEqual(filterOf(['local'], []))
+    expect(clearPaletteFilterField(filter, 'repository')).toEqual(filterOf(['local'], []))
     expect(clearPaletteFilterField(filter, 'host')).toEqual(filterOf([], ['r1']))
   })
 
   it('bulk-adds every matching id without duplicating', () => {
-    const withOne = addPaletteFilterValues(EMPTY_PALETTE_FILTER, 'project', ['r1', 'r3', 'r1'])
+    const withOne = addPaletteFilterValues(EMPTY_PALETTE_FILTER, 'repository', ['r1', 'r3', 'r1'])
     expect(withOne.repoIds).toEqual(['r1', 'r3'])
 
     const manyIds = Array.from({ length: 501 }, (_, index) => `repo-${index}`)
-    expect(addPaletteFilterValues(EMPTY_PALETTE_FILTER, 'project', manyIds).repoIds).toHaveLength(
-      501
-    )
+    expect(
+      addPaletteFilterValues(EMPTY_PALETTE_FILTER, 'repository', manyIds).repoIds
+    ).toHaveLength(501)
+  })
+
+  it('preserves state identity when bulk-add and clear are no-ops', () => {
+    const filter = filterOf(['local'], ['r1'])
+    const repoOnly = filterOf([], ['r1'])
+
+    expect(addPaletteFilterValues(filter, 'repository', ['r1'])).toBe(filter)
+    expect(clearPaletteFilterField(filter, 'host')).not.toBe(filter)
+    expect(clearPaletteFilterField(repoOnly, 'host')).toBe(repoOnly)
   })
 })
 
@@ -139,6 +154,25 @@ describe('buildPaletteFilterPredicate', () => {
     expect(anded?.matchesWorktree({ repoId: 'r2' })).toBe(false)
     expect(anded?.matchesProjectRowKey('project:p1')).toBe(true)
     expect(anded?.matchesProjectRowKey('repo:r3')).toBe(false)
+
+    const disjoint = buildPaletteFilterPredicate(filterOf(['local'], ['r2']), model)
+    expect(disjoint?.matchesProjectRowKey('project:p1')).toBe(false)
+  })
+
+  it('matches every host that owns a shared repository ID', () => {
+    const sharedRepoModel: PaletteFilterModel = {
+      ...model,
+      repositories: [option('shared')],
+      repoIdsByProjectKey: new Map([['repo:shared', ['shared']]]),
+      hostIdsByRepoId: new Map([['shared', new Set(['local', 'ssh:builder'])]])
+    }
+
+    expect(
+      buildPaletteFilterPredicate(
+        filterOf(['ssh:builder'], ['shared']),
+        sharedRepoModel
+      )?.matchesProjectRowKey('repo:shared')
+    ).toBe(true)
   })
 
   it('never matches a stale repository id', () => {
@@ -153,7 +187,7 @@ describe('buildPaletteFilterPredicate', () => {
     expect(hostOnly?.matchesGroupHostId('ssh:builder')).toBe(true)
     expect(hostOnly?.matchesGroupHostId('local')).toBe(false)
 
-    // A group header belongs to no project, so any project selection excludes it.
+    // A group header belongs to no repository, so any repository selection excludes it.
     const withProject = buildPaletteFilterPredicate(filterOf(['ssh:builder'], ['r2']), model)
     expect(withProject?.matchesGroupHostId('ssh:builder')).toBe(false)
   })

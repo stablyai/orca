@@ -5,11 +5,7 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
-import {
-  buildPaletteFilterModel,
-  resolveRepoFilterHostId,
-  resolveWorktreeFilterHostId
-} from './palette-filter-options'
+import { buildPaletteFilterModel, resolveWorktreeFilterHostId } from './palette-filter-options'
 
 function repo(id: string, displayName: string, connectionId: string | null = null): Repo {
   return {
@@ -125,7 +121,48 @@ describe('buildPaletteFilterModel', () => {
       ['r3', 0]
     ])
     expect(model.repoIdsByProjectKey.get('project:p1')).toEqual(['r1', 'r2'])
-    expect(model.hostIdByRepoId.get('r2')).toBe('ssh:ssh-1')
+    expect(model.hostIdsByRepoId.get('r2')).toEqual(new Set(['ssh:ssh-1']))
+  })
+
+  it('deduplicates a repository ID shared by multiple hosts', () => {
+    const duplicateRepos = [repo('shared', 'Shared'), repo('shared', 'Shared remote', 'ssh-1')]
+    const model = buildPaletteFilterModel({
+      repos: duplicateRepos,
+      worktrees: [
+        worktree('local', 'shared', { hostId: 'local' }),
+        worktree('remote', 'shared', { hostId: 'ssh:ssh-1' })
+      ],
+      hostOptions: buildSidebarHostOptions({
+        repos: duplicateRepos,
+        sshTargetLabels: new Map([['ssh-1', 'Builder']]),
+        settings: { activeRuntimeEnvironmentId: null }
+      }),
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(model.repositories.map((option) => [option.id, option.count])).toEqual([['shared', 2]])
+    expect(model.hostIdsByRepoId.get('shared')).toEqual(new Set(['local', 'ssh:ssh-1']))
+    expect(model.repoIdsByProjectKey.get('repo:shared')).toEqual(['shared'])
+  })
+
+  it('disambiguates repositories with the same display name', () => {
+    const duplicateNames = [
+      { ...repo('payments', 'api'), path: path.join('/repos', 'payments', 'api') },
+      { ...repo('billing', 'api'), path: path.join('/repos', 'billing', 'api') }
+    ]
+    const model = buildPaletteFilterModel({
+      repos: duplicateNames,
+      worktrees: [],
+      hostOptions: [],
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(model.repositories.map((option) => option.label)).toEqual([
+      'billing/api',
+      'payments/api'
+    ])
   })
 
   it('sorts repository options by workspace count then label', () => {
@@ -138,7 +175,7 @@ describe('buildPaletteFilterModel', () => {
     ])
   })
 
-  it('prefers a busier project ahead of an alphabetically earlier quiet one', () => {
+  it('prefers a busier repository ahead of an alphabetically earlier quiet one', () => {
     const model = buildModel([
       worktree('w1', 'r3'),
       worktree('w2', 'r3'),
@@ -155,18 +192,32 @@ describe('buildPaletteFilterModel', () => {
 })
 
 describe('resolveWorktreeFilterHostId', () => {
-  const hostIdByRepoId = new Map<string, ExecutionHostId>([['r2', 'ssh:ssh-1']])
+  const repoById = new Map([['r2', repo('r2', 'Remote', 'ssh-1')]])
 
   it('prefers the worktree stamp, then the repo host, then the default host', () => {
-    expect(
-      resolveWorktreeFilterHostId({ repoId: 'r2', hostId: 'local' }, hostIdByRepoId, 'local')
-    ).toBe('local')
-    expect(resolveWorktreeFilterHostId({ repoId: 'r2' }, hostIdByRepoId, 'local')).toBe('ssh:ssh-1')
-    expect(resolveWorktreeFilterHostId({ repoId: 'unknown' }, hostIdByRepoId, 'local')).toBe(
+    expect(resolveWorktreeFilterHostId({ repoId: 'r2', hostId: 'local' }, repoById, 'local')).toBe(
       'local'
     )
+    expect(resolveWorktreeFilterHostId({ repoId: 'r2' }, repoById, 'local')).toBe('ssh:ssh-1')
+    expect(resolveWorktreeFilterHostId({ repoId: 'unknown' }, repoById, 'local')).toBe('local')
+    expect(resolveWorktreeFilterHostId({ repoId: 'unknown' }, repoById, 'runtime:env-1')).toBe(
+      'runtime:env-1'
+    )
+  })
+
+  it('uses the same last repository row as the sidebar for a shared legacy ID', () => {
+    const duplicateRepos = [repo('shared', 'Shared'), repo('shared', 'Shared remote', 'ssh-1')]
+    const sidebarRepoMap = new Map(duplicateRepos.map((entry) => [entry.id, entry]))
+
+    expect(resolveWorktreeFilterHostId({ repoId: 'shared' }, sidebarRepoMap, 'local')).toBe(
+      'ssh:ssh-1'
+    )
     expect(
-      resolveWorktreeFilterHostId({ repoId: 'unknown' }, hostIdByRepoId, 'runtime:env-1')
+      resolveWorktreeFilterHostId(
+        { repoId: 'shared', hostId: 'runtime:env-1' },
+        sidebarRepoMap,
+        'local'
+      )
     ).toBe('runtime:env-1')
   })
 
@@ -192,20 +243,10 @@ describe('resolveWorktreeFilterHostId', () => {
         defaultHostId
       })
       for (const entry of cases) {
-        expect(resolveWorktreeFilterHostId(entry, model.hostIdByRepoId, model.defaultHostId)).toBe(
+        expect(resolveWorktreeFilterHostId(entry, model.repoById, model.defaultHostId)).toBe(
           getWorktreeExecutionHostId(entry, repoMap.get(entry.repoId), defaultHostId)
         )
       }
     }
-  })
-})
-
-describe('resolveRepoFilterHostId', () => {
-  it('falls back to the default host when the repo has no stamp', () => {
-    const hostIdByRepoId = new Map<string, ExecutionHostId>([['r2', 'ssh:ssh-1']])
-    expect(resolveRepoFilterHostId('r2', hostIdByRepoId, 'local')).toBe('ssh:ssh-1')
-    expect(resolveRepoFilterHostId('missing', hostIdByRepoId, 'runtime:env-1')).toBe(
-      'runtime:env-1'
-    )
   })
 })

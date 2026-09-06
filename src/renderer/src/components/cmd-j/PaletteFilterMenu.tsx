@@ -78,7 +78,7 @@ export default function PaletteFilterMenu({
 
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
-    // Why: a single host (or single project) is nothing to disambiguate between,
+    // Why: a single host (or single repository) is nothing to disambiguate between,
     // so that axis stays hidden rather than offering a no-op checkbox.
     if (model.hosts.length > 1) {
       entries.push({
@@ -90,7 +90,7 @@ export default function PaletteFilterMenu({
     }
     if (model.repositories.length > 1) {
       entries.push({
-        field: 'project',
+        field: 'repository',
         heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
         options: model.repositories,
         selected: filter.repoIds
