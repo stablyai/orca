@@ -11,6 +11,99 @@
   },
   "gates": [
     {
+      "id": "ssh.localhost-terminal-agent-hooks",
+      "title": "Localhost SSH terminal and agent hooks reach the owning pane",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "electron-ssh-e2e",
+      "surfaces": ["SSH terminal", "remote agent status", "remote plugin installation"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "Ubuntu CI loopback sshd shares the runner filesystem. Fresh per-test repositories isolate retained relay workspace snapshots; existing Pi home supplies the documented bare-shell plugin prerequisite.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19097"],
+      "invariant": "A localhost SSH terminal executes on the SSH host and routes authenticated hook status to its owning pane without treating idle keyboard input as agent interruption.",
+      "oracle": "Require terminal output markers, exported hook identity, actual OpenCode/Pi plugin files, and matching pane/worktree/connection hook events; Ctrl-C and Escape in an idle shell must not interrupt a hook-owned agent.",
+      "commands": [
+        "gh run view 34045578306 --log",
+        "gh run view 34045975180 --log",
+        "gh run view 34046230389 --log",
+        "ORCA_E2E_SSH_LOCALHOST=1 ORCA_FEATURE_REMOTE_AGENT_HOOKS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-localhost.spec.ts --project=electron-headless --workers=1",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/ssh-localhost-e2e-routing.test.mjs"
+      ],
+      "testFiles": [
+        "tests/e2e/ssh-localhost.spec.ts",
+        "config/scripts/ssh-localhost-e2e-routing.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/ssh-localhost.spec.ts",
+          "assertions": ["routes a terminal and agent-hook status over localhost SSH"]
+        },
+        {
+          "file": "config/scripts/ssh-localhost-e2e-routing.test.mjs",
+          "assertions": ["selects the localhost journey for its remote hook authorities"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-06",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "gh run view 34045578306 --log",
+          "result": "failed",
+          "summary": "Shared repository:2passed1failed, active pane PTY binding timed out amid old SSH target ownership conflicts.",
+          "durationSeconds": 150
+        },
+        {
+          "date": "2026-09-06",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "gh run view 34045975180 --log",
+          "result": "passed",
+          "durationSeconds": 114,
+          "summary": "Fresh per-test repository:3passed,0skips0retries; original assertions retained."
+        },
+        {
+          "date": "2026-09-06",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "gh run view 34046230389 --log",
+          "result": "passed",
+          "summary": "Normal selective workflow with isolated repository executed the localhost journey successfully; generic lane filtered it out.",
+          "durationSeconds": 36.4
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 1200,
+        "scope": "CI job timeout; measured p95 not established"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Single baseline passed, shared-path repetitions exposed state leakage; isolated-path3/3 and normal workflow passed. Long-term history missing."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Same original scenario failed across shared-path repetitions and passed with unique paths; no application fault-mutation proof."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Functional terminal and hook routing coverage, not a performance oracle."
+      },
+      "promotionCriteria": [
+        "Collect repeated scheduled Linux runs without unexplained failures.",
+        "Preserve all original terminal, environment, plugin-file, and hook-status assertions."
+      ],
+      "knownGaps": [
+        "Different client profiles reopening one existing remote workspace can encounter old target-qualified PTY IDs; the fixture isolation does not fix that application behavior.",
+        "No macOS/Windows, remote network failure, folder-only, packaged, or mixed-version claim.",
+        "PR E2E is not part of required verify while broader reliability remains unresolved."
+      ],
+      "demotionRule": "Keep experimental on unexplained failures; do not mask them with retries, skips, or longer timeouts."
+    },
+    {
       "id": "terminal-output.prestarted-shell-snapshot-adoption",
       "title": "Prestarted shell adoption paints covered output once",
       "maturity": "experimental",
