@@ -1,4 +1,5 @@
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
+import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
@@ -24,15 +25,9 @@ import { isCodexPaneStale } from './codex-pane-stale'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
-  session.forwardPtyInput = (data: string): void => {
-    // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
-    // OSC 10/11, focus, CPR) via onData. When we replay recorded PTY bytes
-    // into xterm for scrollback/cold-restore/snapshot, those queries would
-    // otherwise pipe replies into the freshly spawned shell as stray input
-    // ("?1;2c", "2026;2$y", OSC color fragments, ...). The replay sites
-    // engage the guard via replayIntoTerminal; here we drop everything
-    // xterm emits while the guard is active. See replay-guard.ts.
-    if (isPaneReplaying(session.deps.replayingPanesRef, session.pane.id)) {
+  session.forwardPtyInput = (data: string, wasUserInput = false): void => {
+    // Replay-generated replies must not leak into the shell; real input must survive restore.
+    if (!wasUserInput && isPaneReplaying(session.deps.replayingPanesRef, session.pane.id)) {
       return
     }
     const currentPtyId = session.transport.getPtyId()
@@ -163,13 +158,17 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.requestRecoveryForUndeliverableInput()
     }
   }
-  session.onDataDisposable = session.pane.terminal.onData((data) => {
-    if (session.deps.deferPtyInput) {
-      session.deps.deferPtyInput(session.pane.id, data, session.forwardPtyInput)
-      return
+  session.onDataDisposable = subscribeToTerminalInputData(
+    session.pane.terminal,
+    (data, wasUserInput) => {
+      const forward = (input: string) => session.forwardPtyInput(input, wasUserInput)
+      if (session.deps.deferPtyInput) {
+        session.deps.deferPtyInput(session.pane.id, data, forward)
+        return
+      }
+      forward(data)
     }
-    session.forwardPtyInput(data)
-  })
+  )
   session.imeCompositionRouteDisposable = installTerminalImeCompositionRoute({
     terminalElement: session.pane.terminal.element,
     terminal: session.pane.terminal,
