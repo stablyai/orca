@@ -166,9 +166,16 @@ test.describe('Localhost SSH', () => {
     const target = readLocalhostSshTarget()
     const remote = await connectSshTestTarget(
       orcaPage,
+      // Limit orphan relay lifetime if the test app exits before cleanup.
       { ...target, relayGracePeriodSeconds: 1 },
       { remotePath: testRepoPath, displayName: 'Localhost SSH E2E' }
-    )
+    ).catch((error: unknown) => {
+      throw new Error(
+        `Failed to prepare localhost SSH target ${target.username}@${target.host || target.configHost}:${target.port}. ` +
+          `Ensure sshd is running and key/agent auth is non-interactive. ${String(error)}`,
+        { cause: error }
+      )
+    })
 
     await expect(remote.targetId).toBeTruthy()
     await ensureTerminalVisible(orcaPage, 30_000)
