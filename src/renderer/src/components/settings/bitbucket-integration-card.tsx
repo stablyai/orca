@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ExternalLink, GitPullRequestArrow, LoaderCircle, Unlink } from 'lucide-react'
+import { ExternalLink, GitPullRequestArrow } from 'lucide-react'
 import type { BitbucketConnectionStatus } from '../../../../shared/bitbucket-credentials'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { RemoveIntegrationButton } from './RemoveIntegrationButton'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import type { BitbucketStatus } from './integrations-pane-status'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
@@ -22,8 +24,6 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
   const [connection, setConnection] = useState<BitbucketConnectionStatus | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [disconnecting, setDisconnecting] = useState(false)
-  const [disconnectError, setDisconnectError] = useState<string | null>(null)
 
   // Reads plaintext metadata only — never the encrypted secret — so mounting the
   // pane cannot trigger a keychain prompt.
@@ -66,33 +66,6 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
     refresh()
   }
 
-  const handleDisconnect = async (): Promise<void> => {
-    setDisconnecting(true)
-    setDisconnectError(null)
-    try {
-      await window.api.bitbucket.disconnect()
-    } catch (error) {
-      // Why: disconnect rethrows when a credential file cannot be deleted.
-      // Unhandled, the card silently re-renders as still connected.
-      if (mountedRef.current) {
-        setDisconnectError(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.settings.bitbucket.integration.card.disconnectFailed',
-                'Could not remove the saved Bitbucket credential.'
-              )
-        )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setDisconnecting(false)
-      }
-      void loadConnection()
-      refresh()
-    }
-  }
-
   return (
     <IntegrationCardShell
       icon={<GitPullRequestArrow className="size-5" />}
@@ -119,18 +92,34 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
       statusLabel={tokenProviderStatusLabel({ configured: connected, status })}
       actions={
         status !== 'checking' && !envManaged ? (
-          <Button
-            variant={storedCredential ? 'outline' : 'default'}
-            size="sm"
-            onClick={() => setDialogOpen(true)}
-          >
-            {storedCredential
-              ? translate(
-                  'auto.components.settings.bitbucket.integration.card.edit',
-                  'Edit credentials'
-                )
-              : translate('auto.components.settings.bitbucket.integration.card.connect', 'Connect')}
-          </Button>
+          <>
+            <Button
+              variant={storedCredential ? 'outline' : 'default'}
+              size="sm"
+              onClick={() => setDialogOpen(true)}
+            >
+              {storedCredential
+                ? translate(
+                    'auto.components.settings.bitbucket.integration.card.edit',
+                    'Edit credentials'
+                  )
+                : translate(
+                    'auto.components.settings.bitbucket.integration.card.connect',
+                    'Connect'
+                  )}
+            </Button>
+            {storedCredential ? (
+              <RemoveIntegrationButton
+                integrationName="Bitbucket"
+                scopeLabel={getLocalExecutionHostLabel()}
+                onRemove={async () => {
+                  await window.api.bitbucket.disconnect()
+                  await loadConnection()
+                  refresh()
+                }}
+              />
+            ) : null}
+          </>
         ) : null
       }
     >
@@ -150,26 +139,8 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
                   <p className="truncate text-xs text-muted-foreground">{credentialSummary}</p>
                 ) : null}
               </div>
-              {storedCredential ? (
-                <button
-                  onClick={() => void handleDisconnect()}
-                  disabled={disconnecting}
-                  aria-label={translate(
-                    'auto.components.settings.bitbucket.integration.card.disconnect',
-                    'Disconnect Bitbucket'
-                  )}
-                  className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
-                >
-                  {disconnecting ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
-                  ) : (
-                    <Unlink className="size-3.5" />
-                  )}
-                </button>
-              ) : null}
             </div>
           ) : null}
-          {disconnectError ? <p className="text-xs text-destructive">{disconnectError}</p> : null}
           <BitbucketCardNote
             envManaged={envManaged}
             status={status}

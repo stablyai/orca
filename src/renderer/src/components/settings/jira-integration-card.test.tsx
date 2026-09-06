@@ -22,6 +22,7 @@ type StoreState = {
 }
 
 const mocks = vi.hoisted(() => ({
+  confirm: vi.fn(async () => true),
   store: { current: null as StoreState | null }
 }))
 
@@ -32,6 +33,13 @@ vi.mock('@/store', () => ({
     }
     return selector(mocks.store.current)
   }
+}))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => mocks.confirm
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() }
 }))
 
 vi.mock('@/components/jira-connect-dialog', () => ({
@@ -92,6 +100,7 @@ describe('JiraIntegrationCard account scope', () => {
     container?.remove()
     container = null
     mocks.store.current = null
+    mocks.confirm.mockClear()
   })
 
   it('shows remote-server account ownership and opens Hosts settings', async () => {
@@ -116,5 +125,25 @@ describe('JiraIntegrationCard account scope', () => {
       repoId: null,
       sectionId: 'default-runtime'
     })
+  })
+
+  it('removes all Jira access after destructive confirmation', async () => {
+    const state = installStore({ activeRuntimeEnvironmentId: 'runtime-1' })
+    const rendered = await renderCard()
+
+    await act(async () => {
+      Array.from(rendered.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Remove')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.confirm).toHaveBeenCalledWith({
+      title: 'Remove Jira integration?',
+      description:
+        'Orca will delete its saved credentials for this integration from Remote server: runtime-1. Credentials issued by Jira will not be revoked.',
+      confirmLabel: 'Remove',
+      confirmVariant: 'destructive'
+    })
+    expect(state.disconnectJira).toHaveBeenCalledWith(undefined)
   })
 })
