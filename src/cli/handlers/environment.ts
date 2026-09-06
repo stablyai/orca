@@ -4,6 +4,7 @@ import { listSshTargets } from '../host-selector-alternatives'
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeRpcSuccess } from '../runtime-client'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
+import { listPairedEnvironmentHosts } from './paired-host-inventory'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
 import {
   addEnvironmentFromPairingCode,
@@ -40,13 +41,17 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca host list`. It answers from this machine\u2019s own pairing store, so a routed answer would name servers paired with a different machine.',
       'Run `orca host list` on that machine to see the SSH targets registered there.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
-      kind: 'environment' as const,
-      name: environment.name,
-      id: environment.id,
-      selector: `--environment ${environment.name}`
-    }))
-    const sshTargets = (await listSshTargets(client)).map((target) => ({
+    const warnings: string[] = []
+    const [targets, environments] = await Promise.all([
+      listSshTargets(client, { inventory: true }).catch(() => {
+        warnings.push(
+          'SSH inventory unavailable; this listing is incomplete. Check the local Orca runtime and retry.'
+        )
+        return []
+      }),
+      listPairedEnvironmentHosts(getDefaultUserDataPath())
+    ])
+    const sshTargets = targets.map((target) => ({
       kind: 'ssh' as const,
       name: target.label,
       id: target.id,
@@ -66,7 +71,11 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       ...sshTargets,
       ...environments
     ]
-    printResult(localSuccess({ hosts }), json, formatHostList)
+    printResult(
+      localSuccess({ hosts, ...(warnings.length ? { warnings } : {}) }),
+      json,
+      formatHostList
+    )
   },
   'environment list': async ({ flags, json }) => {
     rejectLocalPairingStoreRetargeting(

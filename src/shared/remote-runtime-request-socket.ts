@@ -132,7 +132,12 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       clearTimeout(timeout)
       try {
         cleanupSocketListeners()
-        ws?.close()
+        if (result.ok) {
+          ws?.close()
+        } else {
+          // A failed or aborted probe must not linger waiting for a half-open peer's close reply.
+          ws?.terminate()
+        }
       } catch {
         // ignore best-effort close
       }

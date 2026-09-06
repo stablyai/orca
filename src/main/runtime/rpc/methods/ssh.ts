@@ -22,7 +22,7 @@ function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
       id,
       label,
       ...(generation === undefined ? {} : { generation }),
-      connected: state?.status === 'connected',
+      ...(state === undefined ? {} : { connected: state.status === 'connected' }),
       ...(state?.status === undefined ? {} : { connectionStatus: state.status }),
       ...(remotePlatform === undefined ? {} : { remotePlatform })
     }
