@@ -24,7 +24,15 @@ const CWD = '/repo/orca-app'
 const SESSION = 'omp-session'
 const IDLE_TITLE = `π - ${SESSION} - orca-app`
 
-function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {}): Harness {
+function createHarness(
+  options: {
+    paneKey?: string
+    isIdle?: () => boolean
+    kind?: 'pi' | 'omp'
+    title?: string
+    argv?: string[]
+  } = {}
+): Harness {
   const titles: string[] = []
   const ctx: TitlebarContext = {
     ui: {
@@ -49,7 +57,9 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
     exports: module.exports,
     process: {
       env: { ORCA_PANE_KEY: options.paneKey ?? 'pane-1' },
-      cwd: () => CWD
+      cwd: () => CWD,
+      title: options.title ?? 'node',
+      argv: options.argv ?? ['node', '/usr/local/bin/pi']
     },
     console: { warn: vi.fn(), error: vi.fn(), log: vi.fn() },
     Promise,
@@ -61,7 +71,7 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
   } as Record<string, unknown>
   context.globalThis = context
 
-  const output = ts.transpileModule(getPiTitlebarExtensionSource(), {
+  const output = ts.transpileModule(getPiTitlebarExtensionSource(options.kind), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
   }).outputText
   runInNewContext(output, context)
@@ -210,13 +220,29 @@ describe('getPiTitlebarExtensionSource', () => {
   })
 
   it('keeps spinning across a non-terminal OMP agent_end', async () => {
-    const harness = createHarness()
+    const harness = createHarness({ kind: 'omp' })
 
     await harness.callHook('agent_start')
     await harness.callHook('agent_end', { willContinue: true })
 
     expect(vi.getTimerCount()).toBe(1)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it.each([
+    ['configured OMP', { kind: 'omp' as const }],
+    ['process title', { title: 'omp' }],
+    ['argv', { argv: ['node', '/usr/local/bin/omp'] }]
+  ])('stops a terminal OMP spinner for %s', async (_name, runtime) => {
+    const isIdle = vi.fn(() => false)
+    const harness = createHarness({ ...runtime, isIdle })
+
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end', { willContinue: false })
+
+    expect(isIdle).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
   })
 
   it('waits for modern runtimes to become idle after agent_end', async () => {
