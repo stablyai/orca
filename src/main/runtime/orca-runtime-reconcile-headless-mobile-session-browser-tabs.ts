@@ -25,11 +25,19 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     worktreeId: string,
     existing: RuntimeMobileSessionTabsSnapshot
   ): void {
-    const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
-    const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserTabs = existing.tabs.filter(
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
+    // An attached renderer owns its browser rows; the client-page registry cannot retire them.
+    const rendererBrowserTabs =
+      this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
+        ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
+        : []
+    const liveBrowserTabs = [
+      ...rendererBrowserTabs,
+      ...this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
+    ]
+    const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
     if (headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
       return
@@ -53,7 +61,6 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
       : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
     this.storeMobileSessionSnapshot(worktreeId, {
       ...existing,
-      publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
       snapshotVersion: existing.snapshotVersion + 1,
       ...(activeStillPresent
         ? {}
