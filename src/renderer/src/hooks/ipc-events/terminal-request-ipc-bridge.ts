@@ -1,3 +1,7 @@
+import {
+  ensureTerminalWorktreeVisible,
+  hasTerminalWorktreeRow
+} from './terminal-worktree-visibility'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
@@ -13,9 +17,9 @@ import {
 
 export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
-    window.api.ui.onRequestTerminalCreate((data) => {
+    window.api.ui.onRequestTerminalCreate(async (data) => {
       try {
-        const store = useAppStore.getState()
+        let store = useAppStore.getState()
         const worktreeId = data.worktreeId ?? store.activeWorktreeId
         if (!worktreeId) {
           window.api.ui.replyTerminalCreate({
@@ -50,6 +54,10 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
         const shouldActivate = terminalPresentation === 'focused'
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
+        if (shouldActivate && !hasTerminalWorktreeRow(store, worktreeId)) {
+          await ensureTerminalWorktreeVisible(worktreeId)
+          store = useAppStore.getState()
+        }
         if (shouldActivate) {
           activateTerminalInitiatedWorktree(store, worktreeId)
         }
