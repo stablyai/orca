@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
+import { prepareScheduledAutomationOccurrence } from './scheduled-automation-occurrence'
 import {
   isFinalAutomationRunStatus,
   type Automation,
@@ -244,21 +245,14 @@ export class AutomationService {
   }
 
   private async evaluateAutomation(automation: Automation, now: number): Promise<void> {
-    const scheduledFor = this.store.getLatestAutomationOccurrence(automation, now)
+    const scheduledFor = prepareScheduledAutomationOccurrence(
+      this.store,
+      this.runs,
+      automation,
+      now,
+      this.publish
+    )
     if (scheduledFor === null) {
-      this.store.advanceAutomationNextRun(automation.id, now)
-      return
-    }
-    const graceMs = automation.missedRunGraceMinutes * 60 * 1000
-    if (now - scheduledFor > graceMs) {
-      const missed = this.runs.createRun(automation, scheduledFor)
-      this.runs.updateRun({
-        runId: missed.id,
-        status: 'skipped_missed',
-        workspaceId: automation.workspaceId,
-        error: 'Orca was unavailable during the missed-run grace window.'
-      })
-      this.store.advanceAutomationNextRun(automation.id, now)
       return
     }
 
