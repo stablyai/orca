@@ -4,8 +4,10 @@ import WebSocket from 'ws'
 import { WebSocketTransport } from './ws-transport'
 
 type TransportLifecycle = {
-  heartbeat: { timer: ReturnType<typeof setInterval> | null }
-  heartbeatConnections: Set<WebSocket>
+  liveness: {
+    heartbeat: { timer: ReturnType<typeof setInterval> | null }
+    accepted: Set<WebSocket>
+  }
   handleConnection(ws: WebSocket): void
   wss: { clients: Set<WebSocket> }
 }
@@ -69,15 +71,15 @@ describe('WebSocketTransport accepted socket ordering', () => {
     expect(firstProbeListeners).toEqual({ pong: 1, message: 1, close: 1, error: 1 })
     expect(events.slice(0, 4)).toEqual(['open', 'ping', 'ready', 'pong'])
     expect(socket.terminate).not.toHaveBeenCalled()
-    expect(lifecycle.heartbeatConnections.size).toBe(1)
+    expect(lifecycle.liveness.accepted.size).toBe(1)
     expect(vi.getTimerCount()).toBe(1)
 
     events.push('close')
     socket.emit('close')
 
     expect(events.at(-1)).toBe('close')
-    expect(lifecycle.heartbeatConnections.size).toBe(0)
-    expect(lifecycle.heartbeat.timer).toBeNull()
+    expect(lifecycle.liveness.accepted.size).toBe(0)
+    expect(lifecycle.liveness.heartbeat.timer).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
     expect(
       ['pong', 'message', 'close', 'error'].map((event) => socket.listenerCount(event))
@@ -112,8 +114,8 @@ describe('WebSocketTransport accepted socket ordering', () => {
 
     expect(socket.terminate).toHaveBeenCalledTimes(1)
     expect(events).toEqual(['open', 'ping', 'ping', 'ping', 'close'])
-    expect(lifecycle.heartbeatConnections.size).toBe(0)
-    expect(lifecycle.heartbeat.timer).toBeNull()
+    expect(lifecycle.liveness.accepted.size).toBe(0)
+    expect(lifecycle.liveness.heartbeat.timer).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -132,7 +134,7 @@ describe('WebSocketTransport accepted socket ordering', () => {
 
     lifecycle.handleConnection(firstSocket)
     transport.setClientId(firstSocket, 'first-client')
-    const sharedTimer = lifecycle.heartbeat.timer
+    const sharedTimer = lifecycle.liveness.heartbeat.timer
     expect(firstPingTimes).toEqual([])
 
     await vi.advanceTimersByTimeAsync(50)
@@ -149,7 +151,7 @@ describe('WebSocketTransport accepted socket ordering', () => {
     lifecycle.wss.clients.add(laterSocket)
     lifecycle.handleConnection(laterSocket)
 
-    expect(lifecycle.heartbeat.timer).toBe(sharedTimer)
+    expect(lifecycle.liveness.heartbeat.timer).toBe(sharedTimer)
     expect(laterPingTimes).toEqual([])
     expect(vi.getTimerCount()).toBe(2)
 
@@ -175,8 +177,8 @@ describe('WebSocketTransport accepted socket ordering', () => {
     ).toEqual([0, 0, 0, 0])
 
     firstSocket.emit('close')
-    expect(lifecycle.heartbeatConnections.size).toBe(0)
-    expect(lifecycle.heartbeat.timer).toBeNull()
+    expect(lifecycle.liveness.accepted.size).toBe(0)
+    expect(lifecycle.liveness.heartbeat.timer).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -202,8 +204,8 @@ describe('WebSocketTransport accepted socket ordering', () => {
 
     expect(events.slice(0, 4)).toEqual(['open', 'ping', 'error', 'close'])
     expect(socket.close).toHaveBeenCalledTimes(1)
-    expect(lifecycle.heartbeatConnections.size).toBe(0)
-    expect(lifecycle.heartbeat.timer).toBeNull()
+    expect(lifecycle.liveness.accepted.size).toBe(0)
+    expect(lifecycle.liveness.heartbeat.timer).toBeNull()
     expect(vi.getTimerCount()).toBe(0)
   })
 })
