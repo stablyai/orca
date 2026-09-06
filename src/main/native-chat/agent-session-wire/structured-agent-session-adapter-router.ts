@@ -60,6 +60,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     sessionId
   ) => this.owners.get(sessionId)?.backgroundTaskState?.(sessionId)
 
+  readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
+    this.owners.get(sessionId)?.readCommands?.(sessionId)
+
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.owner(input.sessionId).answerPrompt(input)
 
