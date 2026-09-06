@@ -114,11 +114,20 @@ export function applyLocalStructuredSessionTabSnapshots<
       // republication is never gated by it, while dropping it would leave a frame issued before
       // the close free to land afterwards and strand a row nothing republishes.
       //
-      // The epoch history goes. Unlike the mainstream path — where the epochs belong to a remote
-      // publisher and the history is a useful tombstone — here the consumer IS the publisher, and
-      // `current` is the renderer's own lifetime epoch. Keep it, and the next frame under any
-      // other epoch retires that one for good, which is this bug again one cycle later.
-      localStructuredSessionEpochHistoryByWorktree.delete(snapshot.worktree)
+      // The history keeps its tombstones but forgets what is current. Unlike the mainstream path —
+      // where the epochs belong to a remote publisher — here the consumer IS the publisher, and
+      // `current` is the renderer's own lifetime epoch: leave it set and the next frame under any
+      // other epoch retires it for good, which is this bug again one cycle later. Clearing the
+      // whole record would instead let a delayed frame from an already-superseded epoch back in,
+      // because the version cursor only fences within a lineage. Dropping `current` alone does
+      // neither: `noteRetiredValue` retires nothing when there is nothing current.
+      const history = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
+      if (history) {
+        localStructuredSessionEpochHistoryByWorktree.set(snapshot.worktree, {
+          current: null,
+          retired: history.retired
+        })
+      }
       continue
     }
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {

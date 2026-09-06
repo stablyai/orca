@@ -168,6 +168,20 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
     expect(chatTabIds(state)).toEqual([SESSION_TAB])
   })
 
+  it('still fences a delayed frame from an epoch that was already superseded', () => {
+    // The retraction keeps its tombstones. The version cursor only fences within a lineage, so
+    // without them a straggler under a long-dead epoch would put a chat row back on screen for a
+    // worktree the host no longer publishes.
+    let state = apply(baseState(), chatFrame('structured:old', 5))
+    state = apply(state, chatFrame(RENDERER_EPOCH, 120)) // retires structured:old
+    state = apply(state, emptyFrame(RENDERER_EPOCH, 121))
+    state = apply(state, { ...emptyFrame('removed:abc', 0), removed: true } as never)
+
+    state = apply(state, chatFrame('structured:old', 6)) // straggler from the dead epoch
+
+    expect(chatTabIds(state)).toEqual([])
+  })
+
   it('still prunes the mirrored rows when the host retracts the worktree', () => {
     // The retraction must not merely stop fencing later frames — it has to take the rows with it,
     // or a worktree the host no longer publishes keeps a chat on screen that nothing backs.
