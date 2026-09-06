@@ -1,5 +1,6 @@
 import type { AddWorktreeOptions } from './git/worktree'
 import { discardPreparedWorktree } from './git/worktree-create-preparation'
+import { isOrphanedWorktreeError } from './ipc/worktree-logic'
 
 // Stale cleanup only reclaims preparations whose owner pid is dead, so a discard that fails inside
 // the live process would strand its scratch checkout until the app restarts. Remember the failure
@@ -31,6 +32,11 @@ async function runDiscard(target: PreparationDiscardTarget, attempts: number): P
   try {
     await discardPreparedWorktree(target.repoPath, target.preparedPath, target.options)
   } catch (error) {
+    // An aborted or failed checkout self-discards first, so the registration is usually already
+    // gone by the time the pool discards; retrying that would only spawn Git to fail again.
+    if (isOrphanedWorktreeError(error)) {
+      return
+    }
     // Bounded: a path that never becomes removable must not tax every later preparation.
     if (attempts >= PREPARATION_DISCARD_ATTEMPT_LIMIT) {
       console.warn(

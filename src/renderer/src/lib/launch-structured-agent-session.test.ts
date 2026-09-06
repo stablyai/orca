@@ -5,7 +5,8 @@ import {
   createStructuredAgentSessionLaunchIntent,
   isDefinitiveStructuredAgentSessionCreateError,
   launchStructuredAgentSession,
-  StructuredAgentSessionCreateRefusalError
+  StructuredAgentSessionCreateRefusalError,
+  StructuredAgentSessionCreateUnknownOutcomeError
 } from './launch-structured-agent-session'
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -256,8 +257,28 @@ describe('structured agent session launch', () => {
       createStructuredAgentSessionLaunchIntent('workspace-unknown', 'codex')
     ).catch((caught: unknown) => caught)
 
+    expect(error).toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
     expect(error).not.toBeInstanceOf(StructuredAgentSessionCreateRefusalError)
     expect(error).toMatchObject({ code: 'agent_session_operation_unknown' })
+    expect(isDefinitiveStructuredAgentSessionCreateError(error)).toBe(false)
+  })
+
+  /** The class is the verdict, so a refusal message that happens to end in a definitive token
+   *  must not be re-read into one by the transport-error matcher. */
+  it('keeps an unknown outcome unknown even when its message ends in a definitive token', async () => {
+    vi.mocked(callStructuredAgentSession).mockResolvedValue({
+      ok: false,
+      refusal: {
+        code: 'agent_session_ownership_unknown',
+        message: 'Owner check failed: method_not_found'
+      }
+    })
+
+    const error = await launchStructuredAgentSession(
+      createStructuredAgentSessionLaunchIntent('workspace-unknown-token', 'codex')
+    ).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(StructuredAgentSessionCreateUnknownOutcomeError)
     expect(isDefinitiveStructuredAgentSessionCreateError(error)).toBe(false)
   })
 

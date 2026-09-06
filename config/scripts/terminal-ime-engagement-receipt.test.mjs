@@ -4,7 +4,7 @@ import {
   verifyImeEngagementReceipts
 } from './terminal-ime-engagement-receipt.mjs'
 
-const [firstTest, secondTest] = EXPECTED_NATIVE_IME_TESTS
+const [firstTest, secondTest, thirdTest] = EXPECTED_NATIVE_IME_TESTS
 
 function receipt(test, overrides = {}) {
   return JSON.stringify({
@@ -18,9 +18,11 @@ function receipt(test, overrides = {}) {
 
 describe('verifyImeEngagementReceipts', () => {
   it('accepts a run where every expected test observed real composition', () => {
-    expect(verifyImeEngagementReceipts(`${receipt(firstTest)}\n${receipt(secondTest)}\n`)).toEqual(
-      []
-    )
+    expect(
+      verifyImeEngagementReceipts(
+        `${receipt(firstTest)}\n${receipt(secondTest)}\n${receipt(thirdTest)}\n`
+      )
+    ).toEqual([])
   })
 
   // The failure this whole mechanism exists for: Playwright reports a skipped test as a pass, so
@@ -35,13 +37,20 @@ describe('verifyImeEngagementReceipts', () => {
 
   it('rejects a partial run where only one test reached the engine', () => {
     expect(verifyImeEngagementReceipts(`${receipt(firstTest)}\n`)).toEqual([
-      `no engagement receipt for "${secondTest}" — it was skipped, filtered out, or renamed`
+      `no engagement receipt for "${secondTest}" — it was skipped, filtered out, or renamed`,
+      `no engagement receipt for "${thirdTest}" — it was skipped, filtered out, or renamed`
+    ])
+  })
+
+  it('requires the digit receipt even when both original native tests passed', () => {
+    expect(verifyImeEngagementReceipts(`${receipt(firstTest)}\n${receipt(secondTest)}\n`)).toEqual([
+      `no engagement receipt for "${thirdTest}" — it was skipped, filtered out, or renamed`
     ])
   })
 
   it('rejects a run that typed keys but never opened a composition', () => {
     const problems = verifyImeEngagementReceipts(
-      `${receipt(firstTest, { compositionStart: 0 })}\n${receipt(secondTest)}\n`
+      `${receipt(firstTest, { compositionStart: 0 })}\n${receipt(secondTest)}\n${receipt(thirdTest)}\n`
     )
     expect(problems).toEqual([
       `"${firstTest}" recorded no compositionstart — the IME never engaged`
@@ -50,7 +59,7 @@ describe('verifyImeEngagementReceipts', () => {
 
   it('rejects a composition that produced no Hangul, which a latin passthrough would satisfy', () => {
     const problems = verifyImeEngagementReceipts(
-      `${receipt(firstTest, { hangulComposition: 0 })}\n${receipt(secondTest)}\n`
+      `${receipt(firstTest, { hangulComposition: 0 })}\n${receipt(secondTest)}\n${receipt(thirdTest)}\n`
     )
     expect(problems).toEqual([
       `"${firstTest}" recorded no Hangul composition data — the engine produced no syllables`
@@ -59,7 +68,7 @@ describe('verifyImeEngagementReceipts', () => {
 
   it('rejects a renamed test rather than counting it toward coverage', () => {
     const problems = verifyImeEngagementReceipts(
-      `${receipt(firstTest)}\n${receipt(secondTest)}\n${receipt('some new scenario')}\n`
+      `${receipt(firstTest)}\n${receipt(secondTest)}\n${receipt(thirdTest)}\n${receipt('some new scenario')}\n`
     )
     expect(problems).toEqual([
       'unexpected engagement receipt for "some new scenario" — update EXPECTED_NATIVE_IME_TESTS'
@@ -68,7 +77,7 @@ describe('verifyImeEngagementReceipts', () => {
 
   it('reports a truncated receipt rather than parsing around it', () => {
     const problems = verifyImeEngagementReceipts(
-      `${receipt(firstTest)}\n{"test":"trunc\n${receipt(secondTest)}\n`
+      `${receipt(firstTest)}\n{"test":"trunc\n${receipt(secondTest)}\n${receipt(thirdTest)}\n`
     )
     expect(problems).toEqual(['malformed receipt line: {"test":"trunc'])
   })

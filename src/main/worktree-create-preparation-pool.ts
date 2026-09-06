@@ -11,7 +11,7 @@ import { prepareWorktreeCreateCheckout } from './git/worktree-create-preparation
 import { toHostFilesystemPath } from './host-tree-removal'
 import { preparationEntryKey, preparationPathKey } from './worktree-create-preparation-claim'
 import {
-  cleanupStalePreparations,
+  startStalePreparationCleanup,
   hasPendingStalePreparationCleanup,
   resetStalePreparationCleanupForTests
 } from './worktree-create-preparation-stale-cleanup'
@@ -38,6 +38,8 @@ export type PreparationEntry = {
   createdAt: number
   ready: Promise<void>
   expiration: NodeJS.Timeout
+  controller: AbortController
+  checkoutStarted: boolean
 }
 
 export type StartPreparationArgs = {
@@ -68,6 +70,9 @@ async function discardEntry(entry: PreparationEntry): Promise<void> {
   // A failed checkout self-discards, but that self-discard is best-effort too, so it can strand the
   // registration for the same reason the discard here can. Enrol either way.
   await entry.ready.catch(() => {})
+  if (!entry.checkoutStarted) {
+    return
+  }
   await discardPreparationWithRetry({
     hostKey: preparationHostKey(entry.repoPathKey, entry.wslDistro),
     repoPath: entry.repoPath,
@@ -86,6 +91,7 @@ function expireEntry(entry: PreparationEntry): void {
     return
   }
   preparations.delete(entry.key)
+  entry.controller.abort()
   discardEntryInBackground(entry)
 }
 
@@ -118,6 +124,7 @@ function enforcePreparationLimit(
     }
     preparations.delete(victim.key)
     clearTimeout(victim.expiration)
+    victim.controller.abort()
     discardEntryInBackground(victim)
   }
 }
@@ -163,6 +170,10 @@ export function startPreparation({
     WORKTREE_CREATE_PREPARATION_DIRECTORY
   )
   const preparedPath = pathOps(workspaceRoot).join(preparationRoot, preparationId)
+  const controller = new AbortController()
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal])
+    : controller.signal
   const entry = {} as PreparationEntry
   const expiration = setTimeout(() => expireEntry(entry), WORKTREE_CREATE_PREPARATION_TTL_MS)
   expiration.unref()
@@ -179,17 +190,23 @@ export function startPreparation({
     options,
     createdAt: Date.now(),
     expiration,
+    controller,
+    checkoutStarted: false,
     ready: (async () => {
-      await cleanupStalePreparations(preparationHostKey(repoPathKey, wslDistro), repoPath, options)
-      await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
-      // Already canonical, so the add re-resolves nothing.
-      await prepareWorktreeCreateCheckout(
+      await startStalePreparationCleanup(
+        preparationHostKey(repoPathKey, wslDistro),
         repoPath,
-        preparedPath,
-        canonicalBase,
-        lockReason,
         options
       )
+      signal.throwIfAborted()
+      await mkdir(toHostFilesystemPath(preparationRoot), { recursive: true })
+      signal.throwIfAborted()
+      // Already canonical, so the add re-resolves nothing.
+      entry.checkoutStarted = true
+      await prepareWorktreeCreateCheckout(repoPath, preparedPath, canonicalBase, lockReason, {
+        ...options,
+        signal
+      })
     })()
   } satisfies PreparationEntry)
   preparations.set(key, entry)
@@ -205,7 +222,7 @@ export function startPreparation({
 export async function _resetPreparationPoolForTests(): Promise<void> {
   const entries = [...preparations.values()]
   preparations.clear()
-  resetStalePreparationCleanupForTests()
+  await resetStalePreparationCleanupForTests()
   await Promise.all(
     entries.map(async (entry) => {
       clearTimeout(entry.expiration)
