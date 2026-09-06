@@ -10,7 +10,10 @@ import { withSpan } from '../observability/tracer'
 import { getSessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import { AiVaultScannerWorkerClient } from './session-scanner-worker-client'
 import type { AiVaultWorkerData, AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
-import type { AiVaultServiceSearchRequest } from './session-scanner-service-protocol'
+import type {
+  AiVaultServiceSearchConfigureRequest,
+  AiVaultServiceSearchRequest
+} from './session-scanner-service-protocol'
 import { getSessionSearchInitOptions } from '../ai-vault-search/session-search-paths'
 import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 
@@ -66,6 +69,13 @@ export function readAiVaultSearchCoverageInWorker(
   request: Pick<AiVaultServiceSearchRequest, 'roots'>
 ): Promise<AiVaultSearchCoverage> {
   return getSharedClient().searchCoverage(request)
+}
+
+/** Null when no worker exists yet; the next one reads the new policy from its workerData. */
+export function configureAiVaultSearchInWorker(
+  request: AiVaultServiceSearchConfigureRequest
+): Promise<AiVaultSearchCoverage> | null {
+  return sharedClient?.searchConfigure(request) ?? null
 }
 
 export function resetAiVaultScannerWorkerForTests(): void {

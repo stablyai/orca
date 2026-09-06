@@ -25,6 +25,10 @@ export const aiVaultApi = {
     ipcRenderer.invoke('aiVault:searchSessions', args),
   searchCoverage: (): Promise<AiVaultSearchCoverage> =>
     ipcRenderer.invoke('aiVault:searchCoverage'),
+  searchIndexSize: (): Promise<{ bytes: number | null }> =>
+    ipcRenderer.invoke('aiVault:searchIndexSize'),
+  clearSearchIndex: (): Promise<AiVaultSearchCoverage | null> =>
+    ipcRenderer.invoke('aiVault:clearSearchIndex'),
   cancelListSessions: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('aiVault:cancelListSessions', args),
   prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>

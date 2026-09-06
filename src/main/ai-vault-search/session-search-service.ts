@@ -6,6 +6,10 @@ import type {
   AiVaultSearchCoverage,
   AiVaultSearchResult
 } from '../../shared/ai-vault-search-types'
+import {
+  aiVaultSearchHistoryCutoffMs,
+  type AiVaultSearchSettings
+} from '../../shared/ai-vault-search-settings'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
 import { ensureSessionParseCacheLoaded } from '../ai-vault/session-parse-cache-persistence'
 import { sessionCandidatesFromDiscoveries } from '../ai-vault/session-scanner-candidates'
@@ -24,6 +28,7 @@ import {
   registerSessionSearchIndexSink,
   withSessionSearchIndexRequired
 } from '../ai-vault/session-search-capture'
+import { removeSessionSearchDatabase } from './session-search-schema'
 import { SessionSearchStore } from './session-search-store'
 
 // Why: the backfill shares the scanner process's cache lane with list scans,
@@ -45,26 +50,42 @@ function backfillPauseMs(): number {
   return perCpu > BACKFILL_LOAD_PER_CPU_CEILING ? BACKFILL_LOAD_PAUSE_MS : BACKFILL_YIELD_MS
 }
 
-export type SessionSearchServiceOptions = {
-  databasePath: string
-}
+export type SessionSearchServiceOptions = { databasePath: string } & AiVaultSearchSettings
 
 /** Scan roots the backfill enumerates; the parent resolves them so they match list scans. */
 export type SessionSearchScanRoots = Omit<AiVaultScanOptions, 'signal' | 'limit' | 'unlimited'>
 
+const DISABLED_COVERAGE: AiVaultSearchCoverage = {
+  enabled: false,
+  sessionsIndexed: 0,
+  messagesIndexed: 0,
+  providers: [],
+  backfill: 'idle',
+  filesPending: 0,
+  lastIndexedAt: null
+}
+
 /**
  * Runs inside the ai-vault scanner process. Owns the index, feeds it from every
  * parse the list scan performs, and fills in the long tail in the background.
+ *
+ * Disabled is the real off switch, not a UI filter: with consent withheld the
+ * database is never opened, the capture sink is never registered (so ordinary
+ * list scans stop writing rows), and no backfill runs.
  */
 export class SessionSearchService {
-  private readonly store: SessionSearchStore
+  private readonly databasePath: string
+  private policy: AiVaultSearchSettings
+  private store: SessionSearchStore | null = null
   private backfillRun: Promise<void> | null = null
   private backfillController: AbortController | null = null
 
   constructor(options: SessionSearchServiceOptions) {
-    mkdirSync(dirname(options.databasePath), { recursive: true })
-    this.store = new SessionSearchStore(options.databasePath)
-    registerSessionSearchIndexSink(this.store)
+    this.databasePath = options.databasePath
+    this.policy = { enabled: options.enabled, historyDays: options.historyDays }
+    if (this.policy.enabled) {
+      this.open()
+    }
   }
 
   /** Starts the backfill if needed, folds any appends list scans noticed, then queries. */
@@ -73,22 +94,56 @@ export class SessionSearchService {
     roots: SessionSearchScanRoots,
     signal?: AbortSignal
   ): Promise<AiVaultSearchResult> {
+    const store = this.store
+    if (!store) {
+      return { hits: [], route: 'and', durationMs: 0, coverage: DISABLED_COVERAGE }
+    }
     const backfill = this.ensureBackfill(roots)
     if (args.refresh !== false) {
       await this.refreshRecent(roots, signal)
       await this.reindexStale(signal)
     }
     void backfill
-    return this.store.search(args)
+    return store.search(args)
   }
 
-  coverage(roots: SessionSearchScanRoots): AiVaultSearchCoverage {
+  /** Observational only: reading coverage must never be what starts an index build. */
+  coverage(): AiVaultSearchCoverage {
+    return this.store?.coverage() ?? DISABLED_COVERAGE
+  }
+
+  /**
+   * Applies a consent/retention change in place. Enabling opens the database and
+   * starts the backfill; disabling aborts it, drops the sink, and closes the file.
+   */
+  async configure(
+    next: AiVaultSearchSettings,
+    roots: SessionSearchScanRoots,
+    options: { clearIndex?: boolean } = {}
+  ): Promise<AiVaultSearchCoverage> {
+    const wasEnabled = this.policy.enabled
+    this.policy = { enabled: next.enabled, historyDays: next.historyDays }
+    if (options.clearIndex || (wasEnabled && !next.enabled)) {
+      await this.stop()
+    }
+    if (options.clearIndex) {
+      removeSessionSearchDatabase(this.databasePath)
+    }
+    if (!next.enabled) {
+      return DISABLED_COVERAGE
+    }
+    if (!this.store) {
+      this.open()
+    }
     this.ensureBackfill(roots)
-    return this.store.coverage()
+    return this.coverage()
   }
 
   /** Idempotent: a running backfill is reused, a finished one is not restarted. */
   ensureBackfill(roots: SessionSearchScanRoots): Promise<void> {
+    if (!this.store) {
+      return Promise.resolve()
+    }
     if (!this.backfillRun) {
       this.backfillController = new AbortController()
       this.backfillRun = this.runBackfill(roots, this.backfillController.signal)
@@ -102,14 +157,40 @@ export class SessionSearchService {
 
   invalidate(paths: readonly string[]): void {
     for (const path of paths) {
-      this.store.removeFile(path)
+      this.store?.removeFile(path)
     }
   }
 
   dispose(): void {
     this.backfillController?.abort()
+    this.closeStore()
+  }
+
+  private open(): void {
+    mkdirSync(dirname(this.databasePath), { recursive: true })
+    this.store = new SessionSearchStore(this.databasePath)
+    registerSessionSearchIndexSink(this.store)
+  }
+
+  /** Waits for the aborted backfill so its last parse cannot write to a closed store. */
+  private async stop(): Promise<void> {
+    this.backfillController?.abort()
+    const run = this.backfillRun
+    this.backfillRun = null
+    if (run) {
+      await run.catch(() => undefined)
+    }
+    this.closeStore()
+  }
+
+  private closeStore(): void {
+    const store = this.store
+    this.store = null
+    if (!store) {
+      return
+    }
     registerSessionSearchIndexSink(null)
-    this.store.close()
+    store.close()
   }
 
   private async refreshRecent(roots: SessionSearchScanRoots, signal?: AbortSignal): Promise<void> {
@@ -121,19 +202,31 @@ export class SessionSearchService {
       issues
     })
     const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
-    await this.parseAll(candidates, signal)
+    await this.parseAll(this.withinHistory(candidates), signal)
   }
 
   private async reindexStale(signal?: AbortSignal): Promise<void> {
-    const stale = this.store.takeStale()
+    const stale = this.store?.takeStale() ?? []
     if (stale.length === 0) {
       return
     }
     await this.parseAll(stale, signal)
   }
 
+  /** The retention bound is enforced on enumeration; already-indexed rows survive until a clear. */
+  private withinHistory(candidates: SessionFileCandidate[]): SessionFileCandidate[] {
+    const cutoff = aiVaultSearchHistoryCutoffMs(this.policy.historyDays)
+    return cutoff === null
+      ? candidates
+      : candidates.filter((candidate) => candidate.file.mtimeMs >= cutoff)
+  }
+
   private async runBackfill(roots: SessionSearchScanRoots, signal: AbortSignal): Promise<void> {
-    this.store.setBackfillState('running')
+    const store = this.store
+    if (!store) {
+      return
+    }
+    store.setBackfillState('running')
     try {
       await ensureSessionParseCacheLoaded()
       const issues: AiVaultScanIssue[] = []
@@ -145,10 +238,10 @@ export class SessionSearchService {
       })
       const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
       this.recordDiscovered(discoveries, issues)
-      await this.parseAll(candidates, signal)
-      this.store.setBackfillState('complete')
+      await this.parseAll(this.withinHistory(candidates), signal)
+      store.setBackfillState('complete')
     } catch (error) {
-      this.store.setBackfillState('idle')
+      this.store?.setBackfillState('idle')
       throw error
     }
   }
@@ -169,7 +262,7 @@ export class SessionSearchService {
       }
     }
     for (const agent of new Set([...files.keys(), ...failures.keys()])) {
-      this.store.setDiscovered(agent, files.get(agent) ?? 0, failures.get(agent) ?? 0)
+      this.store?.setDiscovered(agent, files.get(agent) ?? 0, failures.get(agent) ?? 0)
     }
   }
 
@@ -179,10 +272,14 @@ export class SessionSearchService {
     await withSessionSearchIndexRequired(async () => {
       for (const candidate of candidates) {
         throwIfAiVaultScanCancelled(signal)
+        // A concurrent disable closed the store; stop rather than parse into nothing.
+        if (!this.store) {
+          return
+        }
         try {
           await parseAgentSessionFileCached(candidate, process.platform, stats)
         } catch (error) {
-          this.store.recordParseFailure(candidate.agent)
+          this.store?.recordParseFailure(candidate.agent)
           console.warn('[ai-vault-search] backfill skipped', candidate.file.path, error)
         }
         sinceYield += 1

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import type {
   AiVaultSearchArgs,
@@ -14,12 +14,14 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostScope
 } from '../../../../shared/execution-host'
+import { isAiVaultSearchDisabled } from '../../../../shared/ai-vault-search-coverage'
 import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 import { aiVaultSearchHitSessions } from './ai-vault-search-hit-sessions'
 import {
   resolveAiVaultSearchScopePaths,
   splitAiVaultSearchQuery
 } from './ai-vault-session-search-query-split'
+import { useAiVaultSearchCoveragePoll } from './ai-vault-search-coverage-poll'
 import { useAiVaultSessionSearchRequest } from './ai-vault-session-search-request'
 
 // Deep enough for the sidebar without asking the index for a page nobody scrolls to.
@@ -29,8 +31,14 @@ export type AiVaultSessionSearchView = {
   /** True once the text half of the query is non-empty; the plain list is hidden. */
   active: boolean
   loading: boolean
+  /** Results are on screen but a newer query is still resolving. */
+  updating: boolean
   error: string | null
   coverage: AiVaultSearchCoverage | null
+  /** The host answered that the user has not turned transcript search on. */
+  disabled: boolean
+  /** Runs the settled tier immediately; bound to Enter in the search box. */
+  flush: () => void
   groups: readonly AiVaultSessionGroup[]
   /** What the list's loading/empty states should read while a search is active. */
   listCounts: { sessionsCount: number; filteredSessionsCount: number }
@@ -40,6 +48,8 @@ export type AiVaultSessionSearchView = {
 }
 
 export function useAiVaultSessionSearchResults(input: {
+  /** False until the user consents; the panel then falls back to its metadata filter. */
+  enabled: boolean
   query: string
   agents: readonly AiVaultAgent[]
   scopePaths: readonly string[]
@@ -49,11 +59,14 @@ export function useAiVaultSessionSearchResults(input: {
   repos: readonly Pick<Repo, 'id' | 'displayName' | 'path'>[]
 }): AiVaultSessionSearchView {
   const [newestFirst, setNewestFirst] = useState(false)
-  const { agents, executionHostScope, query, repos, scopePaths, sessions, worktrees } = input
+  const [flushSignal, setFlushSignal] = useState(0)
+  const flush = useCallback(() => setFlushSignal((value) => value + 1), [])
+  const { agents, enabled, executionHostScope, query, repos, scopePaths, sessions, worktrees } =
+    input
 
   const args = useMemo((): AiVaultSearchArgs | null => {
     const split = splitAiVaultSearchQuery(query)
-    if (!split.text) {
+    if (!enabled || !split.text) {
       return null
     }
     const operatorPaths = resolveAiVaultSearchScopePaths(split, { worktrees, repos })
@@ -65,9 +78,12 @@ export function useAiVaultSessionSearchResults(input: {
       ...(searchPaths.length > 0 ? { scopePaths: [...searchPaths] } : {}),
       sort: newestFirst ? 'newest' : 'relevance'
     }
-  }, [agents, newestFirst, query, repos, scopePaths, worktrees])
+  }, [agents, enabled, newestFirst, query, repos, scopePaths, worktrees])
 
-  const { error, loading, result } = useAiVaultSessionSearchRequest(args)
+  const { error, loading, result, updating } = useAiVaultSessionSearchRequest(args, flushSignal)
+  // With an empty box no search runs, so the panel reads coverage directly to
+  // report what is already searchable while the backfill is still going.
+  const polledCoverage = useAiVaultSearchCoveragePoll(enabled)
   // Desktop search always reads this machine's index; a paired web client's
   // reads its runtime host, which is the scope it is pinned to.
   const executionHostId =
@@ -99,8 +115,11 @@ export function useAiVaultSessionSearchResults(input: {
     () => ({
       active: args !== null,
       loading,
+      updating,
       error,
-      coverage: result?.coverage ?? null,
+      coverage: result?.coverage ?? polledCoverage,
+      disabled: isAiVaultSearchDisabled(result?.coverage),
+      flush,
       groups,
       listCounts: searchListCounts(sessions.length, hitSessions.sessions.length, loading),
       newestFirst,
@@ -108,7 +127,19 @@ export function useAiVaultSessionSearchResults(input: {
       evidenceFor: (session: AiVaultSession) =>
         hitSessions.evidenceBySessionId.get(session.id) ?? null
     }),
-    [args, error, groups, hitSessions, loading, newestFirst, result, sessions.length]
+    [
+      args,
+      error,
+      flush,
+      groups,
+      hitSessions,
+      loading,
+      newestFirst,
+      polledCoverage,
+      result,
+      sessions.length,
+      updating
+    ]
   )
 }
 

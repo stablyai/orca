@@ -16,6 +16,7 @@ import { AiVaultScannerServiceClient } from './session-scanner-service-client'
 import { getAiVaultServiceEntryPath } from './session-scanner-service-entry-path'
 import { lowerAiVaultServicePriority } from './session-scanner-service-priority'
 import type {
+  AiVaultServiceSearchConfigureRequest,
   AiVaultServiceSearchRequest,
   AiVaultServiceSubagentRequest
 } from './session-scanner-service-protocol'
@@ -44,10 +45,10 @@ let sharedClient: AiVaultScannerServiceClient | null = null
 function getSharedClient(): AiVaultScannerServiceClient {
   sharedClient ??= new AiVaultScannerServiceClient({
     processFactory: spawnAiVaultServiceProcess,
-    init: {
+    init: () => ({
       sessionParseCache: getSessionParseCachePersistenceOptions(),
       sessionSearch: getSessionSearchInitOptions()
-    },
+    }),
     onStderr: (text) => console.error('[ai-vault-service]', text.trimEnd())
   })
   return sharedClient
@@ -103,6 +104,20 @@ export function readAiVaultSearchCoverageInService(
   return getSharedClient().request(
     { type: 'request', operation: 'searchCoverage', request },
     signal
+  )
+}
+
+/**
+ * Null when no child has ever been started: a consent change has nothing to
+ * reach, and the next spawn reads the new policy from its init payload.
+ */
+export function configureAiVaultSearchInService(
+  request: AiVaultServiceSearchConfigureRequest,
+  signal?: AbortSignal
+): Promise<AiVaultSearchCoverage> | null {
+  return (
+    sharedClient?.request({ type: 'request', operation: 'searchConfigure', request }, signal) ??
+    null
   )
 }
 

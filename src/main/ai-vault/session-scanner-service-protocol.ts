@@ -10,6 +10,7 @@ import type {
   AiVaultSearchCoverage,
   AiVaultSearchResult
 } from '../../shared/ai-vault-search-types'
+import type { AiVaultSearchSettings } from '../../shared/ai-vault-search-settings'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 
@@ -23,13 +24,14 @@ export type AiVaultServiceOperation =
   | 'firstPrompt'
   | 'search'
   | 'searchCoverage'
+  | 'searchConfigure'
 
 export type AiVaultServiceSubagentRequest = {
   agent: 'claude' | 'omp'
   parentFilePath: string
 }
 
-export type AiVaultSessionSearchInit = { databasePath: string }
+export type AiVaultSessionSearchInit = { databasePath: string } & AiVaultSearchSettings
 
 export type AiVaultServiceInit = {
   type: 'init'
@@ -67,6 +69,17 @@ export type AiVaultServiceRequestBody =
       operation: 'searchCoverage'
       request: Pick<AiVaultServiceSearchRequest, 'roots'>
     }
+  | {
+      type: 'request'
+      operation: 'searchConfigure'
+      request: AiVaultServiceSearchConfigureRequest
+    }
+
+/** Applies a consent/retention change to the running child; `clearIndex` deletes the database first. */
+export type AiVaultServiceSearchConfigureRequest = {
+  init: AiVaultSessionSearchInit
+  clearIndex?: boolean
+} & Pick<AiVaultServiceSearchRequest, 'roots'>
 
 export type AiVaultServiceRequest = AiVaultServiceRequestBody & { id: number }
 
@@ -84,6 +97,7 @@ export type AiVaultServiceResultValue =
   | { operation: 'firstPrompt'; value: { prompt: string | null } }
   | { operation: 'search'; value: AiVaultSearchResult }
   | { operation: 'searchCoverage'; value: AiVaultSearchCoverage }
+  | { operation: 'searchConfigure'; value: AiVaultSearchCoverage }
 
 export type AiVaultServiceChildMessage =
   | {
@@ -112,7 +126,8 @@ export function isAiVaultServiceRequest(value: unknown): value is AiVaultService
       message.operation === 'subagents' ||
       message.operation === 'firstPrompt' ||
       message.operation === 'search' ||
-      message.operation === 'searchCoverage')
+      message.operation === 'searchCoverage' ||
+      message.operation === 'searchConfigure')
   )
 }
 

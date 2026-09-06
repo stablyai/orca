@@ -31,6 +31,10 @@ export type AiVaultApi = {
   searchSessions: (args: AiVaultSearchArgs) => Promise<AiVaultSearchResult>
   /** How much of the transcript corpus the search index currently covers. */
   searchCoverage: () => Promise<AiVaultSearchCoverage>
+  /** Disk the index occupies including WAL sidecars; null when it does not exist. */
+  searchIndexSize: () => Promise<{ bytes: number | null }>
+  /** Deletes the index files, then rebuilds when search is still enabled. */
+  clearSearchIndex: () => Promise<AiVaultSearchCoverage | null>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeArgs

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import {
   clearAiVaultBackgroundRestartCircuit,
+  configureAiVaultSearchInBackground,
   readAiVaultSearchCoverageInBackground,
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground,
@@ -16,6 +17,7 @@ import type {
 } from '../../shared/ai-vault-search-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import type { AiVaultSessionSearchInit } from './session-scanner-service-protocol'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 import {
   aiVaultSessionDepthCovers,
@@ -88,6 +90,23 @@ export async function readAiVaultSearchCoverage(
 ): Promise<AiVaultSearchCoverage> {
   const roots = await resolveAiVaultHostScanSources()
   return readAiVaultSearchCoverageInBackground({ roots }, options.signal)
+}
+
+/**
+ * Pushes a consent/retention change into whichever scanner is already running.
+ * Resolves null when none is: the next spawn reads the policy from its init.
+ */
+export async function configureAiVaultSearch(
+  init: AiVaultSessionSearchInit,
+  options: { clearIndex?: boolean; signal?: AbortSignal } = {}
+): Promise<AiVaultSearchCoverage | null> {
+  const roots = await resolveAiVaultHostScanSources()
+  return (
+    (await configureAiVaultSearchInBackground(
+      { init, roots, clearIndex: options.clearIndex },
+      options.signal
+    )) ?? null
+  )
 }
 
 export async function listAiVaultSessions(

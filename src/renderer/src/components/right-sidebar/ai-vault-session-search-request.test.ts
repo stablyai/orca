@@ -19,6 +19,7 @@ function searchResult(query: string): AiVaultSearchResult {
     route: 'and',
     durationMs: 1,
     coverage: {
+      enabled: true,
       sessionsIndexed: 0,
       messagesIndexed: 0,
       providers: [],
@@ -165,6 +166,51 @@ describe('useAiVaultSessionSearchRequest', () => {
       vi.advanceTimersByTime(AI_VAULT_SEARCH_SETTLED_DELAY_MS)
     })
     expect(searchSessions).not.toHaveBeenCalled()
-    expect(result.current).toEqual({ result: null, loading: false, error: null })
+    expect(result.current).toEqual({
+      result: null,
+      loading: false,
+      updating: false,
+      error: null
+    })
+  })
+
+  it('keeps the previous answer on screen while a newer query resolves', async () => {
+    const resolvers: ((result: AiVaultSearchResult) => void)[] = []
+    searchSessions.mockImplementation(
+      () => new Promise<AiVaultSearchResult>((resolve) => resolvers.push(resolve))
+    )
+    const { rerender, result } = renderHook(
+      ({ query }: { query: string }) => useAiVaultSessionSearchRequest(argsFor(query)),
+      { initialProps: { query: 'alpha' }, wrapper }
+    )
+    act(() => {
+      vi.advanceTimersByTime(AI_VAULT_SEARCH_SETTLED_DELAY_MS)
+    })
+    await act(async () => {
+      resolvers[1]?.(searchResult('alpha'))
+    })
+    expect(result.current.result?.repairedTerms).toEqual(['alpha'])
+
+    // The next query never settles; the list must not blank out between keystrokes.
+    rerender({ query: 'alpha beta' })
+    act(() => {
+      vi.advanceTimersByTime(AI_VAULT_SEARCH_SETTLED_DELAY_MS)
+    })
+
+    expect(result.current.result?.repairedTerms).toEqual(['alpha'])
+    expect(result.current.updating).toBe(true)
+    expect(result.current.loading).toBe(false)
+  })
+
+  it('runs the full tier at once when the flush signal is bumped', () => {
+    const { rerender } = renderHook(
+      ({ flush }: { flush: number }) => useAiVaultSessionSearchRequest(argsFor('alpha'), flush),
+      { initialProps: { flush: 0 }, wrapper }
+    )
+
+    rerender({ flush: 1 })
+
+    expect(searchSessions).toHaveBeenCalledTimes(1)
+    expect(searchSessions.mock.calls[0]?.[0]).toMatchObject({ query: 'alpha', tier: 'full' })
   })
 })

@@ -143,6 +143,7 @@ export class SessionSearchStore implements SessionSearchIndexSink {
       }
     })
     return {
+      enabled: true,
       sessionsIndexed: byProvider.reduce((sum, row) => sum + row.sessionsIndexed, 0),
       messagesIndexed: byProvider.reduce((sum, row) => sum + row.messagesIndexed, 0),
       providers: byProvider,

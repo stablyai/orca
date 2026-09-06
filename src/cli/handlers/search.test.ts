@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SEARCH_HANDLERS } from './search'
+import { SEARCH_DISABLED_MESSAGE, SEARCH_HANDLERS } from './search'
 import { REPEATED_FLAG_SEPARATOR } from '../args'
 import { RuntimeClientError } from '../runtime/types'
 import type { HandlerContext } from '../dispatch'
@@ -11,6 +11,7 @@ const RESULT: AiVaultSearchResult = {
   route: 'and',
   durationMs: 7,
   coverage: {
+    enabled: true,
     sessionsIndexed: 12,
     messagesIndexed: 340,
     providers: [],
@@ -179,5 +180,73 @@ describe('orca search --agent-session', () => {
     const printed = logSpy.mock.calls[0]?.[0] as string
     expect(printed).toContain('No sessions match "nothing here".')
     expect(printed).toContain('12 sessions indexed')
+  })
+})
+
+describe('orca search --agent-session with the index turned off', () => {
+  const DISABLED: AiVaultSearchResult = {
+    ...RESULT,
+    coverage: { ...RESULT.coverage, enabled: false, sessionsIndexed: 0, backfill: 'idle' }
+  }
+
+  it('fails with an actionable message instead of reporting an empty corpus', async () => {
+    callMock.mockResolvedValue({ id: 'r1', ok: true, result: DISABLED, _meta: { runtimeId: 'rt' } })
+
+    const error = await runSearch({ 'agent-session': 'q' }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(RuntimeClientError)
+    expect((error as Error).message).toBe(SEARCH_DISABLED_MESSAGE)
+    expect((error as RuntimeClientError).data).toMatchObject({ disabled: true })
+    expect(logSpy).not.toHaveBeenCalled()
+  })
+
+  it('turns the index on and reports the covered range for --enable', async () => {
+    callMock.mockResolvedValue({
+      id: 'r1',
+      ok: true,
+      result: { enabled: true, historyDays: 90, indexSizeBytes: null },
+      _meta: { runtimeId: 'rt' }
+    })
+
+    await runSearch({ enable: true })
+
+    expect(callMock).toHaveBeenCalledWith('aiVault.configureSessionSearch', { enabled: true })
+    expect(logSpy.mock.calls[0]?.[0] as string).toContain(
+      'Session search is on for the last 90 days.'
+    )
+  })
+
+  it('enables and then answers the query in one invocation', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        id: 'r1',
+        ok: true,
+        result: { enabled: true, historyDays: null, indexSizeBytes: 10 },
+        _meta: { runtimeId: 'rt' }
+      })
+      .mockResolvedValueOnce({ id: 'r2', ok: true, result: RESULT, _meta: { runtimeId: 'rt' } })
+
+    await runSearch({ enable: true, 'agent-session': 'q' })
+
+    expect(callMock.mock.calls.map((call) => call[0])).toEqual([
+      'aiVault.configureSessionSearch',
+      'aiVault.searchSessions'
+    ])
+  })
+
+  it('forwards the runtime host to the enable call', async () => {
+    callMock.mockResolvedValue({
+      id: 'r1',
+      ok: true,
+      result: { enabled: true, historyDays: null, indexSizeBytes: null },
+      _meta: { runtimeId: 'rt' }
+    })
+
+    await runSearch({ enable: true, host: 'runtime:env-1' })
+
+    expect(callMock).toHaveBeenCalledWith('aiVault.configureSessionSearch', {
+      enabled: true,
+      executionHostId: 'runtime:env-1'
+    })
   })
 })

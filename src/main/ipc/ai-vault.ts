@@ -1,5 +1,9 @@
 import { app, ipcMain } from 'electron'
 import {
+  clearAiVaultSearchIndex,
+  readAiVaultSearchIndexSizeBytes
+} from '../ai-vault-search/session-search-enablement'
+import {
   configureAiVaultSessionSources,
   readAiVaultSearchCoverage,
   resetAiVaultSessionListCacheForTests,
@@ -260,6 +264,10 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     searchAiVaultSessions(args)
   )
   ipcMain.handle('aiVault:searchCoverage', () => readAiVaultSearchCoverage())
+  ipcMain.handle('aiVault:searchIndexSize', () => ({
+    bytes: readAiVaultSearchIndexSizeBytes()
+  }))
+  ipcMain.handle('aiVault:clearSearchIndex', () => clearAiVaultSearchIndex())
   ipcMain.handle(
     'aiVault:resolveSessionTitles',
     (_event, args: AiVaultSessionTitlesArgs): Promise<AiVaultSessionTitlesResult> =>

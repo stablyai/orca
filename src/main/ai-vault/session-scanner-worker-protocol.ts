@@ -7,6 +7,7 @@ import type { AiVaultScanOptions } from './session-scanner-types'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 import type {
+  AiVaultServiceSearchConfigureRequest,
   AiVaultServiceSearchRequest,
   AiVaultSessionSearchInit
 } from './session-scanner-service-protocol'
@@ -23,6 +24,7 @@ export type AiVaultWorkerRequest =
   | { id: number; kind: 'titles'; requests: AiVaultSessionTitleRequest[] }
   | { id: number; kind: 'search'; request: AiVaultServiceSearchRequest }
   | { id: number; kind: 'searchCoverage'; request: Pick<AiVaultServiceSearchRequest, 'roots'> }
+  | { id: number; kind: 'searchConfigure'; request: AiVaultServiceSearchConfigureRequest }
 
 export type AiVaultWorkerControl = { id: number; kind: 'cancel' }
 
@@ -36,4 +38,5 @@ export type AiVaultWorkerResponse =
   | { id: number; ok: true; kind: 'titles'; value: AiVaultSessionTitlesResult }
   | { id: number; ok: true; kind: 'search'; value: AiVaultSearchResult }
   | { id: number; ok: true; kind: 'searchCoverage'; value: AiVaultSearchCoverage }
+  | { id: number; ok: true; kind: 'searchConfigure'; value: AiVaultSearchCoverage }
   | { id: number; ok: false; error: string }

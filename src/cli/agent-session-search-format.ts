@@ -1,4 +1,5 @@
 import { basename } from 'node:path'
+import type { AiVaultSearchIndexStatus } from '../shared/ai-vault-search-settings'
 import { aiVaultAgentLabel } from '../shared/ai-vault-types'
 import { aiVaultSearchUnindexedProviders } from '../shared/ai-vault-search-coverage'
 import type { AiVaultSearchHit, AiVaultSearchResult } from '../shared/ai-vault-search-types'
@@ -79,4 +80,15 @@ export function formatAgentSessionSearch(
     .join('')
   lines.push(`${scope}${pending} · ${result.durationMs.toFixed(0)} ms${unindexed}`)
   return lines.join('\n')
+}
+
+export function formatAgentSessionSearchEnabled(status: AiVaultSearchIndexStatus): string {
+  const scope =
+    status.historyDays === null
+      ? 'all history'
+      : `the last ${status.historyDays.toLocaleString()} days`
+  return [
+    `Session search is on for ${scope}.`,
+    'Indexing runs in the background; searches answer from what is covered so far.'
+  ].join('\n')
 }

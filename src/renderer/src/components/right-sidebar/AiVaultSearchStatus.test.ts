@@ -4,6 +4,7 @@ import { aiVaultSearchCoverageStatus } from './AiVaultSearchStatus'
 
 function coverage(overrides: Partial<AiVaultSearchCoverage> = {}): AiVaultSearchCoverage {
   return {
+    enabled: true,
     sessionsIndexed: 1200,
     messagesIndexed: 48000,
     providers: [],
@@ -15,42 +16,31 @@ function coverage(overrides: Partial<AiVaultSearchCoverage> = {}): AiVaultSearch
 }
 
 describe('aiVaultSearchCoverageStatus', () => {
-  it('reports the indexed session count on its own', () => {
-    expect(aiVaultSearchCoverageStatus(coverage())).toBe('Searching 1,200 sessions')
-  })
-
-  it('names the backfill and the pending-file backlog', () => {
-    expect(aiVaultSearchCoverageStatus(coverage({ backfill: 'running', filesPending: 3 }))).toBe(
-      'Searching 1,200 sessions · indexing older sessions… · 3 changed files pending'
-    )
-  })
-
-  it('names a provider that discovered files but indexed nothing', () => {
-    const status = aiVaultSearchCoverageStatus(
-      coverage({
-        providers: [
-          { agent: 'claude', sessionsIndexed: 1200, messagesIndexed: 48000, filesDiscovered: 1200 },
-          { agent: 'codex', sessionsIndexed: 0, messagesIndexed: 0, filesDiscovered: 42 }
-        ]
+  it('reports what is searchable while the backfill runs and the box is empty', () => {
+    expect(
+      aiVaultSearchCoverageStatus(coverage({ backfill: 'running' }), {
+        hitCount: 0,
+        hasQuery: false
       })
-    )
-    expect(status).toBe('Searching 1,200 sessions · Codex not indexed')
+    ).toBe('1,200 conversations searchable · preparing older ones…')
   })
 
-  it('stays quiet while the backfill has not finished', () => {
-    const status = aiVaultSearchCoverageStatus(
-      coverage({
-        backfill: 'running',
-        providers: [{ agent: 'codex', sessionsIndexed: 0, messagesIndexed: 0, filesDiscovered: 42 }]
+  it('says nothing once the backfill is done and the box is empty', () => {
+    expect(aiVaultSearchCoverageStatus(coverage(), { hitCount: 0, hasQuery: false })).toBeNull()
+  })
+
+  it('warns that a query answered mid-backfill is incomplete', () => {
+    expect(
+      aiVaultSearchCoverageStatus(coverage({ backfill: 'running' }), {
+        hitCount: 12,
+        hasQuery: true
       })
-    )
-    expect(status).not.toContain('not indexed')
+    ).toBe('12 matching · still preparing')
   })
 
-  it('says nothing for a provider that discovered no files', () => {
-    const status = aiVaultSearchCoverageStatus(
-      coverage({ providers: [{ agent: 'codex', sessionsIndexed: 0, messagesIndexed: 0 }] })
+  it('reports matches against the covered corpus once the backfill is done', () => {
+    expect(aiVaultSearchCoverageStatus(coverage(), { hitCount: 7, hasQuery: true })).toBe(
+      '7 matching · 1,200 conversations'
     )
-    expect(status).toBe('Searching 1,200 sessions')
   })
 })

@@ -10,7 +10,10 @@ import type {
   AiVaultWorkerResponse,
   AiVaultWorkerScanOptions
 } from './session-scanner-worker-protocol'
-import type { AiVaultServiceSearchRequest } from './session-scanner-service-protocol'
+import type {
+  AiVaultServiceSearchConfigureRequest,
+  AiVaultServiceSearchRequest
+} from './session-scanner-service-protocol'
 import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 
 const SCAN_TIMEOUT_MS = 130_000
@@ -84,6 +87,13 @@ export class AiVaultScannerWorkerClient {
     return this.dispatch(
       { kind: 'searchCoverage', request },
       TITLE_TIMEOUT_MS
+    ) as Promise<AiVaultSearchCoverage>
+  }
+
+  searchConfigure(request: AiVaultServiceSearchConfigureRequest): Promise<AiVaultSearchCoverage> {
+    return this.dispatch(
+      { kind: 'searchConfigure', request },
+      SEARCH_TIMEOUT_MS
     ) as Promise<AiVaultSearchCoverage>
   }
 

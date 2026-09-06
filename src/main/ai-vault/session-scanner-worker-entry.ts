@@ -68,27 +68,37 @@ async function handleRequest(request: AiVaultWorkerRequest): Promise<AiVaultWork
         })
       }
     }
-    if (request.kind === 'search' || request.kind === 'searchCoverage') {
+    if (
+      request.kind === 'search' ||
+      request.kind === 'searchCoverage' ||
+      request.kind === 'searchConfigure'
+    ) {
       if (!sessionSearch) {
-        throw new Error('Agent session search is not enabled on this host.')
+        throw new Error('Agent session search is not available on this host.')
       }
-      return request.kind === 'search'
-        ? {
-            id: request.id,
-            ok: true,
-            kind: 'search',
-            value: await sessionSearch.search(
-              request.request.args,
-              request.request.roots,
-              controller.signal
-            )
-          }
-        : {
-            id: request.id,
-            ok: true,
-            kind: 'searchCoverage',
-            value: sessionSearch.coverage(request.request.roots)
-          }
+      if (request.kind === 'search') {
+        return {
+          id: request.id,
+          ok: true,
+          kind: 'search',
+          value: await sessionSearch.search(
+            request.request.args,
+            request.request.roots,
+            controller.signal
+          )
+        }
+      }
+      if (request.kind === 'searchConfigure') {
+        return {
+          id: request.id,
+          ok: true,
+          kind: 'searchConfigure',
+          value: await sessionSearch.configure(request.request.init, request.request.roots, {
+            clearIndex: request.request.clearIndex
+          })
+        }
+      }
+      return { id: request.id, ok: true, kind: 'searchCoverage', value: sessionSearch.coverage() }
     }
     const startedAt = performance.now()
     const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })

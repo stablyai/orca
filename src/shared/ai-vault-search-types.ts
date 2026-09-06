@@ -70,6 +70,11 @@ export type AiVaultSearchProviderCoverage = {
 }
 
 export type AiVaultSearchCoverage = {
+  /**
+   * Absent on hosts that predate the consent gate, where search was always on;
+   * `false` means the user has not enabled the index and nothing was read.
+   */
+  enabled?: boolean
   sessionsIndexed: number
   messagesIndexed: number
   providers: AiVaultSearchProviderCoverage[]

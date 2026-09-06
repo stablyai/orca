@@ -18,6 +18,7 @@ import {
   normalizeExecutionHostScope,
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
+import type { AiVaultSearchIndexStatus } from '../../../../shared/ai-vault-search-settings'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment } from './web-runtime-session'
@@ -55,6 +56,22 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
       return callRuntimeResult<AiVaultSearchCoverage>('aiVault.searchCoverage', {
         executionHostId: toRuntimeExecutionHostId(environment.id)
       })
+    },
+    searchIndexSize: async () => {
+      const environment = requireActiveEnvironment()
+      const status = await callRuntimeResult<AiVaultSearchIndexStatus>(
+        'aiVault.searchIndexStatus',
+        { executionHostId: toRuntimeExecutionHostId(environment.id) }
+      )
+      return { bytes: status.indexSizeBytes }
+    },
+    clearSearchIndex: async () => {
+      const environment = requireActiveEnvironment()
+      await callRuntimeResult<AiVaultSearchIndexStatus>('aiVault.configureSessionSearch', {
+        clearIndex: true,
+        executionHostId: toRuntimeExecutionHostId(environment.id)
+      })
+      return null
     },
     resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
       const environment = requireActiveEnvironment()

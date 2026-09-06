@@ -2,21 +2,9 @@
 
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AiVaultSearchCoverage } from '../../../../shared/ai-vault-search-types'
 import { AiVaultSearchEvidenceLine, aiVaultSearchSnippetSegments } from './AiVaultSearchSnippet'
-import { aiVaultSearchCoverageStatus } from './AiVaultSearchStatus'
 
 afterEach(cleanup)
-
-const coverage = (overrides: Partial<AiVaultSearchCoverage> = {}): AiVaultSearchCoverage => ({
-  sessionsIndexed: 1240,
-  messagesIndexed: 0,
-  providers: [],
-  backfill: 'idle',
-  filesPending: 0,
-  lastIndexedAt: null,
-  ...overrides
-})
 
 describe('aiVaultSearchSnippetSegments', () => {
   it('splits a snippet on its match markers', () => {
@@ -51,23 +39,5 @@ describe('AiVaultSearchEvidenceLine', () => {
       <AiVaultSearchEvidenceLine evidence={{ role: 'assistant', timestamp: null, snippet: '' }} />
     )
     expect(container.firstChild).toBeNull()
-  })
-})
-
-describe('aiVaultSearchCoverageStatus', () => {
-  it('reports the indexed corpus size', () => {
-    expect(aiVaultSearchCoverageStatus(coverage())).toBe('Searching 1,240 sessions')
-  })
-
-  it('says older sessions are still being indexed while the backfill runs', () => {
-    expect(aiVaultSearchCoverageStatus(coverage({ backfill: 'running' }))).toBe(
-      'Searching 1,240 sessions · indexing older sessions…'
-    )
-  })
-
-  it('reports files the index has not re-read yet', () => {
-    expect(aiVaultSearchCoverageStatus(coverage({ filesPending: 7 }))).toBe(
-      'Searching 1,240 sessions · 7 changed files pending'
-    )
   })
 })

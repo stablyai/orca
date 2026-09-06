@@ -15,6 +15,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 const COVERAGE: AiVaultSearchCoverage = {
+  enabled: true,
   sessionsIndexed: 3,
   messagesIndexed: 9,
   providers: [],
@@ -30,14 +31,20 @@ const RESULT: AiVaultSearchResult = {
   coverage: COVERAGE
 }
 
+const INDEX_STATUS = { enabled: true, historyDays: 90, indexSizeBytes: 4096 }
+
 const searchAiVaultSessions = vi.fn()
 const readAiVaultSearchCoverage = vi.fn()
+const readAiVaultSearchIndexStatus = vi.fn()
+const configureAiVaultSessionSearch = vi.fn()
 
 function makeDispatcher(): RpcDispatcher {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     searchAiVaultSessions,
-    readAiVaultSearchCoverage
+    readAiVaultSearchCoverage,
+    readAiVaultSearchIndexStatus,
+    configureAiVaultSessionSearch
   } as unknown as OrcaRuntimeService
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
@@ -47,6 +54,10 @@ beforeEach(() => {
   searchAiVaultSessions.mockResolvedValue(RESULT)
   readAiVaultSearchCoverage.mockReset()
   readAiVaultSearchCoverage.mockResolvedValue(COVERAGE)
+  readAiVaultSearchIndexStatus.mockReset()
+  readAiVaultSearchIndexStatus.mockReturnValue(INDEX_STATUS)
+  configureAiVaultSessionSearch.mockReset()
+  configureAiVaultSessionSearch.mockResolvedValue(INDEX_STATUS)
 })
 
 describe('AiVaultSearchSessionsParams', () => {
@@ -233,5 +244,53 @@ describe('aiVault.searchCoverage handler', () => {
       dispatcher.dispatch(makeRequest('aiVault.searchCoverage', { executionHostId: 'ssh:box' }))
     ).resolves.toMatchObject({ ok: false })
     expect(readAiVaultSearchCoverage).not.toHaveBeenCalled()
+  })
+})
+
+describe('aiVault.configureSessionSearch handler', () => {
+  it('forwards the consent change without the host id it was addressed by', async () => {
+    const dispatcher = makeDispatcher()
+
+    await expect(
+      dispatcher.dispatch(
+        makeRequest('aiVault.configureSessionSearch', {
+          enabled: true,
+          historyDays: 90,
+          executionHostId: 'runtime:env-1'
+        })
+      )
+    ).resolves.toMatchObject({ ok: true, result: INDEX_STATUS })
+
+    expect(configureAiVaultSessionSearch).toHaveBeenCalledWith({ enabled: true, historyDays: 90 })
+  })
+
+  it('accepts a null historyDays as "all history"', async () => {
+    const dispatcher = makeDispatcher()
+
+    await dispatcher.dispatch(makeRequest('aiVault.configureSessionSearch', { historyDays: null }))
+
+    expect(configureAiVaultSessionSearch).toHaveBeenCalledWith({ historyDays: null })
+  })
+
+  it('rejects a negative or over-long history bound before reaching the runtime', async () => {
+    const dispatcher = makeDispatcher()
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.configureSessionSearch', { historyDays: -1 }))
+    ).resolves.toMatchObject({ ok: false })
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.configureSessionSearch', { historyDays: 100000 }))
+    ).resolves.toMatchObject({ ok: false })
+    expect(configureAiVaultSessionSearch).not.toHaveBeenCalled()
+  })
+})
+
+describe('aiVault.searchIndexStatus handler', () => {
+  it('reports the policy and the index footprint', async () => {
+    const dispatcher = makeDispatcher()
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.searchIndexStatus', {}))
+    ).resolves.toMatchObject({ ok: true, result: INDEX_STATUS })
   })
 })

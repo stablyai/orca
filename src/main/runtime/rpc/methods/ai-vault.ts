@@ -99,6 +99,13 @@ export const AiVaultSearchSessionsParams = z.object({
   executionHostId: executionHostIdSchema.optional()
 })
 
+export const AiVaultConfigureSessionSearchParams = z.object({
+  enabled: OptionalBoolean,
+  historyDays: z.number().int().positive().max(3650).nullable().optional(),
+  clearIndex: OptionalBoolean,
+  executionHostId: executionHostIdSchema.optional()
+})
+
 export const AI_VAULT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'aiVault.searchSessions',
@@ -112,6 +119,19 @@ export const AI_VAULT_METHODS: RpcMethod[] = [
     name: 'aiVault.searchCoverage',
     params: z.object({ executionHostId: executionHostIdSchema.optional() }),
     handler: (_params, { runtime, signal }) => runtime.readAiVaultSearchCoverage(signal)
+  }),
+  defineMethod({
+    name: 'aiVault.searchIndexStatus',
+    params: z.object({ executionHostId: executionHostIdSchema.optional() }),
+    handler: (_params, { runtime }) => runtime.readAiVaultSearchIndexStatus()
+  }),
+  defineMethod({
+    name: 'aiVault.configureSessionSearch',
+    params: AiVaultConfigureSessionSearchParams,
+    // Why: consent is per machine and the index lives with the transcripts, so
+    // this writes the addressed host's own setting; the id never redirects it.
+    handler: ({ executionHostId: _host, ...params }, { runtime }) =>
+      runtime.configureAiVaultSessionSearch(params)
   }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',

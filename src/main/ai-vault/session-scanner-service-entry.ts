@@ -46,7 +46,7 @@ function titleKey(request: { agent: string; sessionId: string }): string {
 
 function requireSessionSearch(): SessionSearchService {
   if (!sessionSearch) {
-    throw new Error('Agent session search is not enabled on this host.')
+    throw new Error('Agent session search is not available on this host.')
   }
   return sessionSearch
 }
@@ -99,7 +99,15 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     if (request.operation === 'searchCoverage') {
       return {
         operation: 'searchCoverage',
-        value: requireSessionSearch().coverage(request.request.roots)
+        value: requireSessionSearch().coverage()
+      }
+    }
+    if (request.operation === 'searchConfigure') {
+      return {
+        operation: 'searchConfigure',
+        value: await requireSessionSearch().configure(request.request.init, request.request.roots, {
+          clearIndex: request.request.clearIndex
+        })
       }
     }
     const startedAt = performance.now()

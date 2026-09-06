@@ -50,6 +50,7 @@ import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-op
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
+import { useAiVaultSearchConsent } from './ai-vault-search-consent'
 import { useAiVaultSessionSearchResults } from './ai-vault-session-search-results'
 
 export default function AiVaultPanel(): React.JSX.Element {
@@ -307,7 +308,9 @@ export default function AiVaultPanel(): React.JSX.Element {
   }, [])
 
   const requestDelete = useAiVaultSessionDeleteAction({ refresh })
+  const consent = useAiVaultSearchConsent()
   const search = useAiVaultSessionSearchResults({
+    enabled: consent.enabled,
     query,
     agents,
     // 'All' must not be narrowed; the scoped views restrict the index the same way they restrict the scan.
@@ -351,6 +354,7 @@ export default function AiVaultPanel(): React.JSX.Element {
         onReset={resetViewOptions}
         onRefresh={() => void refresh({ force: true })}
         search={search}
+        consent={consent}
       />
 
       {(error ?? search.error) ? (

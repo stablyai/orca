@@ -10,6 +10,7 @@ import {
 } from './session-first-user-prompt-read'
 import {
   clearAiVaultServiceRestartCircuit,
+  configureAiVaultSearchInService,
   invalidateAiVaultServiceCache,
   listAiVaultSubagentSessionsInService,
   readAiVaultFirstUserPromptInService,
@@ -20,10 +21,12 @@ import {
   searchAiVaultSessionsInService
 } from './session-scanner-service-spawn'
 import type {
+  AiVaultServiceSearchConfigureRequest,
   AiVaultServiceSearchRequest,
   AiVaultServiceSubagentRequest
 } from './session-scanner-service-protocol'
 import {
+  configureAiVaultSearchInWorker,
   readAiVaultSearchCoverageInWorker,
   resetAiVaultScannerWorkerForTests,
   resolveAiVaultSessionTitlesInWorker,
@@ -102,6 +105,16 @@ export function readAiVaultSearchCoverageInBackground(
   return shouldUseAiVaultServiceProcess()
     ? readAiVaultSearchCoverageInService(request, signal)
     : readAiVaultSearchCoverageInWorker(request)
+}
+
+/** Null when no scanner is running: the next spawn reads the policy from its init payload. */
+export function configureAiVaultSearchInBackground(
+  request: AiVaultServiceSearchConfigureRequest,
+  signal?: AbortSignal
+): Promise<AiVaultSearchCoverage> | null {
+  return shouldUseAiVaultServiceProcess()
+    ? configureAiVaultSearchInService(request, signal)
+    : configureAiVaultSearchInWorker(request)
 }
 
 export function invalidateAiVaultBackgroundCache(paths: string[]): Promise<void> {

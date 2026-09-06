@@ -1113,7 +1113,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "agentSessionHistoryTitle": "Agent Session History",
+        "agentSessionHistoryDescription": "Local index that lets you search inside past agent conversations."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -8185,7 +8187,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "agentSessionHistoryTitle": "Agent Session History",
+          "agentSessionHistoryDescription": "Local index that lets you search inside past agent conversations."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -11780,6 +11784,46 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "AgentSessionHistoryPane": {
+          "enabledLabel": "Search inside conversations",
+          "enabledDescription": "Builds a local index of your agent transcripts on this computer so the Session History panel and `orca search` can match on what was said, not just titles.",
+          "historyLabel": "History to index",
+          "historyDescription": "Older transcripts are skipped when the index is built. Conversations already indexed stay searchable until you clear the index.",
+          "historyAll": "All history",
+          "history90": "Last 90 days",
+          "history30": "Last 30 days",
+          "indexSizeLabel": "Index size",
+          "indexSizeDescription": "Disk used by the local transcript index on this computer.",
+          "clearIndex": "Clear index",
+          "clearTitle": "Clear the transcript index?",
+          "clearBodyEnabled": "Deletes the index files. Your transcripts are untouched, and Orca starts rebuilding the index right away.",
+          "clearBodyDisabled": "Deletes the index files. Your transcripts are untouched.",
+          "cancel": "Cancel",
+          "clearing": "Clearing…"
+        },
+        "agentSessionHistory": {
+          "search": {
+            "title": "Agent Session History",
+            "description": "Local transcript index that powers full-text search over past agent sessions.",
+            "keywordTranscript": "transcript",
+            "keywordSearch": "search",
+            "keywordIndex": "index",
+            "keywordHistory": "history",
+            "keywordSessions": "sessions",
+            "keywordFullText": "full text",
+            "enableTitle": "Search Inside Conversations",
+            "enableDescription": "Turn the local transcript index on or off and choose how much history it covers.",
+            "keywordEnable": "enable",
+            "keywordRetention": "retention",
+            "keywordDays": "days",
+            "clearTitle": "Clear Index",
+            "clearDescription": "Delete the transcript index files and reclaim the disk they use.",
+            "keywordClear": "clear",
+            "keywordDelete": "delete",
+            "keywordDisk": "disk",
+            "keywordSize": "size"
+          }
         }
       },
       "right": {
@@ -13280,11 +13324,20 @@
             "29732f2fb0": "new PR"
           },
           "AiVaultSearchStatus": {
-            "newestFirst": "Newest first",
-            "searchingSessions": "Searching {{value0}} sessions",
-            "indexingOlder": "indexing older sessions…",
-            "filesPending": "{{value0}} changed files pending",
-            "providerNotIndexed": "{{value0}} not indexed"
+            "providerNotIndexed": "{{value0}} not indexed",
+            "sortAriaLabel": "Sort search results",
+            "relevance": "Relevance",
+            "newest": "Newest",
+            "searchableAndPreparing": "{{value0}} conversations searchable · preparing older ones…",
+            "matchingIncomplete": "{{value0}} matching · still preparing",
+            "matchingInConversations": "{{value0}} matching · {{value1}} conversations"
+          },
+          "AiVaultSearchConsentCard": {
+            "title": "Search inside conversations",
+            "body": "Builds a local index of your agent transcripts on this computer. Large histories can take several minutes and use several GB of disk.",
+            "enable": "Enable",
+            "notNow": "Not now",
+            "titlesOnly": "Titles only · "
           }
         }
       },
