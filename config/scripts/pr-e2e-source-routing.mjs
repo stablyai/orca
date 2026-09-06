@@ -18,7 +18,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'],
     matches: (file) =>
       file === 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts' ||
-      /^tests\/e2e\/helpers\/docker-ssh-relay-[\w-]+\.ts$/.test(file) ||
+      /^tests\/e2e\/helpers\/docker-ssh-relay-(?:image|target)\.ts$/.test(file) ||
       (isProductSource(file) &&
         /^src\/main\/(?:browser\/(?:ssh-browser-network-execution-route|browser-network-deferred-socket|browser-network-execution-route|system-ssh-socks-client-socket)|ssh\/system-ssh-dynamic-forward-process)\.ts$/.test(
           file

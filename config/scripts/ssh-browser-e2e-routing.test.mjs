@@ -58,4 +58,7 @@ it('executes both Docker network routes in a Node job with their opt-in enabled'
     expect(selectPrE2eSpecs([changed])).toContain(spec)
   }
   expect(selectPrE2eSpecs(['src/renderer/src/components/Unrelated.tsx'])).not.toContain(spec)
+  expect(selectPrE2eSpecs(['tests/e2e/helpers/docker-ssh-relay-terminal-tabs.ts'])).not.toContain(
+    spec
+  )
 })

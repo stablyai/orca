@@ -368,6 +368,8 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+      - name: Install SSH client
+        run: sudo apt-get update && sudo apt-get install -y openssh-client
       - name: Run Docker SSH browser network route journeys
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
