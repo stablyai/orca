@@ -46,13 +46,15 @@ jobs:
         timeout-minutes: 10
         shell: pwsh
         run: |
-          wsl.exe --install --distribution Ubuntu-24.04 --no-launch
+          wsl.exe --list --online
+          if ($LASTEXITCODE -ne 0) { throw "WSL catalog lookup failed: $LASTEXITCODE" }
+          wsl.exe --install --distribution Ubuntu --no-launch
           if ($LASTEXITCODE -ne 0) { throw "WSL installation failed: $LASTEXITCODE" }
-          wsl.exe --distribution Ubuntu-24.04 --user root --exec /usr/bin/true
+          wsl.exe --distribution Ubuntu --user root --exec /usr/bin/true
           if ($LASTEXITCODE -ne 0) { throw "WSL guest did not start: $LASTEXITCODE" }
-          wsl.exe --distribution Ubuntu-24.04 --user root --exec /usr/bin/apt-get update
+          wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get update
           if ($LASTEXITCODE -ne 0) { throw "WSL apt update failed: $LASTEXITCODE" }
-          wsl.exe --distribution Ubuntu-24.04 --user root --exec /usr/bin/apt-get install --yes git
+          wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get install --yes git
           if ($LASTEXITCODE -ne 0) { throw "WSL git install failed: $LASTEXITCODE" }
           wsl.exe --list --verbose
           if ($LASTEXITCODE -ne 0) { throw "WSL enumeration failed: $LASTEXITCODE" }
