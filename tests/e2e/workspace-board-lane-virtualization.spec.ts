@@ -307,7 +307,6 @@ test.describe('Workspace board lane virtualization', () => {
   })
 
   test('selects the full lane across a single large marquee scroll jump', async ({ orcaPage }) => {
-    test.skip(true, 'Quarantined by https://github.com/stablyai/orca/issues/12415')
     const statusId = 'virtual-marquee'
     const emptyStatusId = 'virtual-marquee-start'
     await orcaPage.evaluate(

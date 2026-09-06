@@ -362,7 +362,7 @@ test('materializes a stopped terminal on reconnect from a headed paired host', a
 // reconnect-activation one. The recovery behavior itself was confirmed by hand in this topology
 // (the host materializes the pending surface and the client rebinds to the replacement PTY);
 // re-enable once exact stop settles deterministically against a serve host.
-test.fixme('materializes a stopped terminal on reconnect from a headless folder host', async ({
+test('materializes a stopped terminal on reconnect from a headless folder host', async ({
   testRepoPath
 }, testInfo) => {
   test.setTimeout(150_000)
