@@ -8,6 +8,11 @@
 /src/cli/bundled-skill-guides.ts text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
+# Relay assets are copied verbatim into the bundle and hashed byte-for-byte into
+# .version, which names the immutable remote install dir. A CRLF checkout makes a
+# Windows-built client disagree with a mac/Linux-built one on the same release,
+# so one host ends up with two relay trees (#17886 review).
+/config/relay-assets/** text eol=lf
 # Pin the bytes so a patch reads and diffs identically on every host. It is NOT
 # what makes the hash right: pnpm hashes a patch LF-normalized, so a CRLF checkout
 # cannot change it. Believing otherwise put a hand-computed raw digest in the
