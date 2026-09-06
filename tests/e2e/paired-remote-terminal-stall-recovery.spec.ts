@@ -1,3 +1,4 @@
+import { runProcess } from '../../src/shared/child-process/run-process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -105,7 +106,18 @@ async function minimizeHeadedHost(electronApp: ElectronApplication, page: Page):
       }))
     )
     .toEqual({ backgroundThrottling: true, minimized: true })
-  await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('hidden')
+  if (process.platform === 'linux') {
+    const nativeId = await host.evaluate((window) => window.getNativeWindowHandle().readUInt32LE(0))
+    await expect.poll(async () => {
+      const result = await runProcess({
+        file: 'xprop', args: ['-id', String(nativeId), '_NET_WM_STATE'], timeoutMs: 5_000
+      })
+      console.info('[host-minimized-x11] ' + result.stdout.trim())
+      return result.stdout
+    }).toContain('_NET_WM_STATE_HIDDEN')
+  } else {
+    await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe('hidden')
+  }
 }
 
 async function restoreHeadedHost(electronApp: ElectronApplication, page: Page): Promise<void> {
