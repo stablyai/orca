@@ -28,15 +28,17 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     const existingBrowserTabs = existing.tabs.filter(
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
+    const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
+    const publishedIds = new Set(publishedBrowserTabs.map((tab) => tab.id))
     // An attached renderer owns its browser rows; the client-page registry cannot retire them.
+    // Ids the live build already published still lose, so a row can never appear twice.
     const rendererBrowserTabs =
       this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
-        ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
+        ? existingBrowserTabs.filter(
+            (tab) => tab.placement?.kind !== 'client' && !publishedIds.has(tab.id)
+          )
         : []
-    const liveBrowserTabs = [
-      ...rendererBrowserTabs,
-      ...this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
-    ]
+    const liveBrowserTabs = [...rendererBrowserTabs, ...publishedBrowserTabs]
     const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
     if (headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {

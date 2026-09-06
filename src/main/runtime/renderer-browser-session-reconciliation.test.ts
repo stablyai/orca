@@ -102,6 +102,19 @@ it('removes retired client pages and publishes live ones while retaining rendere
   expect(published?.snapshotVersion).toBe(snapshot.snapshotVersion + 1)
 })
 
+it('never publishes a row twice when the live build reclaims a renderer-owned id', () => {
+  const reclaimed = {
+    ...clientPage,
+    id: rendererPage.id,
+    browserPageId: rendererPage.browserPageId
+  }
+
+  const published = reconcile({ live: [reclaimed] })
+
+  expect(published?.tabs).toEqual([reclaimed])
+  expect(published?.tabGroups?.[0].tabOrder).toEqual([rendererPage.id])
+})
+
 it('keeps the renderer publication epoch when selecting a client-hosted browser tab', () => {
   const storeMobileSessionSnapshot = vi.fn()
   const runtime = OrcaRuntimeWithCloseStructuredAgentSessionTab.prototype as unknown as {
