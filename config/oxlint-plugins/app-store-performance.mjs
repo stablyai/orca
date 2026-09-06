@@ -126,10 +126,59 @@ function importedLocalName(specifier, importedName) {
   return identifierName(specifier.local)
 }
 
+// Project-local zustand hooks follow the use<Name>Store convention; React's
+// useSyncExternalStore matches that shape but is not a store subscription.
+const STORE_HOOK_NAME = /^use[A-Z][A-Za-z0-9]*Store$/
+const NON_STORE_HOOKS = new Set(['useSyncExternalStore'])
+
+function isLocalModuleSource(source) {
+  return typeof source === 'string' && (source.startsWith('.') || source.startsWith('@/'))
+}
+
+function isStoreHookName(name) {
+  return typeof name === 'string' && STORE_HOOK_NAME.test(name) && !NON_STORE_HOOKS.has(name)
+}
+
+function selectorFunction(node) {
+  return node?.type === 'ArrowFunctionExpression' || node?.type === 'FunctionExpression'
+    ? node
+    : null
+}
+
+/** Records module-scope `const selectX = (state) => ...` so identifier selectors resolve. */
+function recordNamedSelector(node, state) {
+  if (node.type === 'FunctionDeclaration') {
+    const name = identifierName(node.id)
+    if (name) {
+      state.namedSelectors.set(name, node)
+    }
+    return
+  }
+  for (const declarator of node.declarations ?? []) {
+    const name = identifierName(declarator.id)
+    const initializer = selectorFunction(declarator.init)
+    if (name && initializer) {
+      state.namedSelectors.set(name, initializer)
+    }
+  }
+}
+
+/** Inline function, or a module-scope selector referenced by name. */
+function resolveSelector(argument, state) {
+  const inline = selectorFunction(argument)
+  if (inline) {
+    return inline
+  }
+  const name = identifierName(argument)
+  return name ? (state.namedSelectors.get(name) ?? null) : null
+}
+
 function createRuleState() {
   return {
     appStoreHooks: new Set(),
-    shallowHooks: new Set()
+    shallowHooks: new Set(),
+    namedSelectors: new Map(),
+    deferredCalls: []
   }
 }
 
@@ -146,6 +195,20 @@ function recordImports(node, state) {
     const localName = importedLocalName(specifier, 'useAppStore')
     if (localName) {
       state.appStoreHooks.add(localName)
+    }
+  }
+  if (!isLocalModuleSource(node.source?.value)) {
+    return
+  }
+  for (const specifier of node.specifiers) {
+    if (specifier.type !== 'ImportSpecifier') {
+      continue
+    }
+    if (isStoreHookName(identifierName(specifier.imported))) {
+      const localName = identifierName(specifier.local)
+      if (localName) {
+        state.appStoreHooks.add(localName)
+      }
     }
   }
 }
@@ -176,52 +239,104 @@ function requireSelectorRule() {
   }
 }
 
-function noIdentitySelectorRule() {
+/**
+ * Selector arguments are collected during traversal and judged at Program:exit so a
+ * selector hoisted below its call site still resolves.
+ */
+function deferredSelectorRule(inspect) {
   const state = createRuleState()
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
     },
+    FunctionDeclaration(node) {
+      recordNamedSelector(node, state)
+    },
+    VariableDeclaration(node) {
+      recordNamedSelector(node, state)
+    },
     CallExpression(node) {
-      if (!isAppStoreCall(node, state)) {
-        return
+      if (isAppStoreCall(node, state)) {
+        state.deferredCalls.push(node)
       }
-      const { selector } = unwrapShallowSelector(node.arguments[0], state.shallowHooks)
-      if (isIdentitySelector(selector)) {
-        this.report({
-          node: selector,
-          message:
-            'Select the smallest required fields instead of subscribing to the entire app store.'
+    },
+    'Program:exit'() {
+      for (const node of state.deferredCalls) {
+        const { selector: argument, shallow } = unwrapShallowSelector(
+          node.arguments[0],
+          state.shallowHooks
+        )
+        const report = inspect({
+          selector: resolveSelector(argument, state),
+          argument,
+          shallow,
+          node
         })
+        if (report) {
+          this.report(report)
+        }
       }
     }
   }
 }
 
+function noIdentitySelectorRule() {
+  return deferredSelectorRule(({ selector }) =>
+    isIdentitySelector(selector)
+      ? {
+          node: selector,
+          message:
+            'Select the smallest required fields instead of subscribing to the entire app store.'
+        }
+      : null
+  )
+}
+
 function noFreshSelectorResultRule() {
-  const state = createRuleState()
-  return {
-    ImportDeclaration(node) {
-      recordImports(node, state)
-    },
-    CallExpression(node) {
-      if (!isAppStoreCall(node, state)) {
-        return
-      }
-      const { selector, shallow } = unwrapShallowSelector(node.arguments[0], state.shallowHooks)
-      if (shallow) {
-        return
-      }
-      const freshResult = returnedExpressions(selector).find(isAllocatingExpression)
-      if (freshResult) {
-        this.report({
+  return deferredSelectorRule(({ selector, shallow }) => {
+    if (shallow || !selector) {
+      return null
+    }
+    const freshResult = returnedExpressions(selector).find(isAllocatingExpression)
+    return freshResult
+      ? {
           node: freshResult,
           message:
             'This selector returns a fresh reference on every store write; select a stable field, cache the result, or use useShallow.'
-        })
-      }
-    }
+        }
+      : null
+  })
+}
+
+/** useShallow compares one level deep, so a fresh reference nested inside its result never matches. */
+function nestedFreshValues(expression) {
+  if (expression?.type === 'ObjectExpression') {
+    return expression.properties
+      .map((property) => (property.type === 'Property' ? property.value : null))
+      .filter(Boolean)
   }
+  if (expression?.type === 'ArrayExpression') {
+    return expression.elements.filter(Boolean)
+  }
+  return []
+}
+
+function noNestedFreshUnderShallowRule() {
+  return deferredSelectorRule(({ selector, shallow }) => {
+    if (!shallow || !selector) {
+      return null
+    }
+    const nestedFresh = returnedExpressions(selector)
+      .flatMap(nestedFreshValues)
+      .find(isAllocatingExpression)
+    return nestedFresh
+      ? {
+          node: nestedFresh,
+          message:
+            'useShallow compares only one level deep, so this nested fresh reference changes on every store write and defeats the memo; project the primitives the component actually renders.'
+        }
+      : null
+  })
 }
 
 function bindContext(createVisitors) {
@@ -239,6 +354,7 @@ export default {
   rules: {
     'require-selector': { create: bindContext(requireSelectorRule) },
     'no-identity-selector': { create: bindContext(noIdentitySelectorRule) },
-    'no-fresh-selector-result': { create: bindContext(noFreshSelectorResultRule) }
+    'no-fresh-selector-result': { create: bindContext(noFreshSelectorResultRule) },
+    'no-nested-fresh-under-shallow': { create: bindContext(noNestedFreshUnderShallowRule) }
   }
 }

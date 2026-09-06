@@ -12,7 +12,8 @@ function lintSource(source) {
     rules: {
       'app-store-performance/require-selector': 'warn',
       'app-store-performance/no-identity-selector': 'warn',
-      'app-store-performance/no-fresh-selector-result': 'warn'
+      'app-store-performance/no-fresh-selector-result': 'warn',
+      'app-store-performance/no-nested-fresh-under-shallow': 'warn'
     }
   })
 }
@@ -51,5 +52,49 @@ describe('app store performance Oxlint plugin', () => {
     `)
 
     expect(diagnostics).toEqual([])
+  })
+
+  it('resolves selectors referenced by name, including ones hoisted below the call', () => {
+    const diagnostics = lintSource(`
+      import { useAppStore } from '@/store'
+      const EarlyFresh = () => useAppStore(selectFreshRows)
+      const selectFreshRows = (state) => state.rows.filter(Boolean)
+      const Stable = () => useAppStore(selectActiveId)
+      const selectActiveId = (state) => state.activeId
+    `)
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'app-store-performance(no-fresh-selector-result)'
+    ])
+  })
+
+  it('covers sibling store hooks but not useSyncExternalStore', () => {
+    const diagnostics = lintSource(`
+      import { usePluginPanelsStore } from '@/store/plugin-panels'
+      import { useSyncExternalStore } from 'react'
+      const WholePanels = () => usePluginPanelsStore()
+      const FreshPanels = () => usePluginPanelsStore((state) => ({ open: state.open }))
+      const External = () => useSyncExternalStore(subscribe, () => ({ open: true }))
+    `)
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'app-store-performance(require-selector)',
+      'app-store-performance(no-fresh-selector-result)'
+    ])
+  })
+
+  it('reports fresh references nested inside a useShallow projection', () => {
+    const diagnostics = lintSource(`
+      import { useAppStore } from '@/store'
+      import { useShallow } from 'zustand/react/shallow'
+      const NestedObject = () => useAppStore(useShallow((state) => ({ ids: state.rows.map((row) => row.id) })))
+      const NestedArray = () => useAppStore(useShallow((state) => [state.activeId, state.rows.filter(Boolean)]))
+      const Flat = () => useAppStore(useShallow((state) => ({ activeId: state.activeId, rows: state.rows })))
+    `)
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'app-store-performance(no-nested-fresh-under-shallow)',
+      'app-store-performance(no-nested-fresh-under-shallow)'
+    ])
   })
 })
