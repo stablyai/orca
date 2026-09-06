@@ -16,6 +16,7 @@ import {
   launchPairedElectronClient
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
+import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-materialize-'))
 const fixturePath = path.join(scratch, 'materialize-terminal.mjs')
@@ -316,18 +317,17 @@ async function runMaterializationJourney(
   await tab.click()
   await expect.poll(() => getTerminalContent(page), { timeout: 10_000 }).toContain(marker)
 
-  const listed = await callRuntime<RuntimeTerminalListResult>(
-    page,
-    environmentId,
-    'terminal.list',
-    {
-      worktree: `id:${worktreeId}`,
-      requireFreshPtyLiveness: true
-    }
-  )
-  expect(
-    listed.terminals.filter((terminal) => terminal.tabId === created.tab.parentTabId)
-  ).toHaveLength(1)
+  await expect
+    .poll(async () => {
+      const listed = await readFreshTerminalInventory(() =>
+        callRuntime<RuntimeTerminalListResult>(page, environmentId, 'terminal.list', {
+          worktree: `id:${worktreeId}`,
+          requireFreshPtyLiveness: true
+        })
+      )
+      return listed?.terminals.filter((terminal) => terminal.tabId === created.tab.parentTabId)
+    })
+    .toHaveLength(1)
   await callRuntime(page, environmentId, 'terminal.closeTab', { terminal: replacementHandle })
 }
 
