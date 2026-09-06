@@ -113,7 +113,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
           const hostFingerprint = computeAgentSessionPayloadFingerprint({
             method: 'agentSession.attach',
             sessionId: params.envelope.sessionId,
-            fields: attachFingerprintFields(resolved)
+            fields: attachFingerprintFields({ ...resolved, envelope: params.envelope })
           })
           await ensureHostInstalled(ctx)
           const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
