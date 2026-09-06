@@ -26,13 +26,40 @@ const BLOCK_START = '# >>> orca-managed-kimi-hooks (managed by Orca; do not edit
 const BLOCK_END = '# <<< orca-managed-kimi-hooks <<<'
 
 // Matches the managed block plus any blank lines immediately preceding it so
-// repeated install/remove cycles do not accumulate whitespace. The `|$`
-// fallback also matches from BLOCK_START to end-of-file when the trailing
-// BLOCK_END marker is missing (e.g. a hand-edit deleted it): the managed block
-// is always written last, so this recovers orphaned hook tables and lets
-// install re-converge in one step instead of appending a duplicate block.
+// repeated install/remove cycles do not accumulate whitespace. Two shapes:
+// 1. The complete block, from BLOCK_START through the trailing BLOCK_END line.
+// 2. An orphaned block whose trailing BLOCK_END was hand-deleted: recovery is
+//    bounded to the contiguous installer-shaped `[[hooks]]` tables (header +
+//    event/command/timeout lines), so user TOML appended after the orphaned
+//    tables survives remove/reinstall instead of being swallowed to EOF (#18861).
+//    Each recovered table must be followed — apart from blank lines and `#`
+//    comments, which never extend a TOML table — by the next `[` table header
+//    or EOF, so a user table that reuses the installer field order but carries
+//    extra keys ends recovery with the table intact instead of being truncated
+//    to its installer-shaped prefix. A key/value line, even behind a comment,
+//    extends the table and likewise ends recovery.
+//    Line boundaries accept CRLF: an editor saving the config with Windows
+//    endings after deleting BLOCK_END must still be recoverable.
+//    A user table that mirrors the exact installer shape remains
+//    indistinguishable by form alone — stopping at the first non-managed table
+//    is the accepted bound of orphan recovery.
+const MANAGED_HOOK_TABLE =
+  '\\[\\[hooks\\]\\]\\r?\\n' +
+  'event\\s*=\\s*"[^"\\n]*"\\r?\\n' +
+  'command\\s*=\\s*"(?:[^"\\\\]|\\\\.)*"\\r?\\n' +
+  'timeout\\s*=\\s*\\d+'
+// Consumed only BETWEEN recovered tables; the last table keeps its trailing
+// newline so removal never glues the surviving neighbors together.
+const RECOVERED_TABLE_SEPARATOR = '\\r?\\n(?:[ \\t]*\\r?\\n)*'
+// Zero-width end-of-recovery check: either EOF directly (the file may end on
+// the `timeout` line with no trailing newline), or past the last table's line
+// ending blank and comment lines may intervene before a `[` header or EOF —
+// anything else (a key/value continuation, even behind a comment) extends the
+// table and ends recovery with the table left intact.
+const RECOVERED_TABLE_BOUNDARY =
+  '(?=(?:$|\\r?\\n(?:[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n)*(?:\\[|(?:[ \\t]*#[^\\r\\n]*)?$)))'
 const MANAGED_BLOCK_RE = new RegExp(
-  `\\n*${escapeRegex(BLOCK_START)}[\\s\\S]*?(?:${escapeRegex(BLOCK_END)}[^\\n]*|$)`,
+  `(?:\\r?\\n)*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\r?\\n${MANAGED_HOOK_TABLE}(?:${RECOVERED_TABLE_SEPARATOR}${MANAGED_HOOK_TABLE})*${RECOVERED_TABLE_BOUNDARY})`,
   'g'
 )
 
