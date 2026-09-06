@@ -37,6 +37,10 @@ it('imports a retained host session under the receiving client SSH target', () =
     remoteSessionIdsByTabId: { tab: oldPtyId }
   }
   const snapshot = exportRemoteWorkspaceSession(oldSession, { isTargetWorktree: () => true })
+  // Previously published snapshots contain the publishing client's target IDs.
+  snapshot.tabsByWorktreePath['/srv/project'][0].ptyId = oldPtyId
+  snapshot.terminalLayoutsByTabId.tab.ptyIdsByLeafId = { leaf: oldPtyId }
+  snapshot.remoteSessionIdsByTabId = { tab: oldPtyId }
   const imported = importRemoteWorkspaceSession(snapshot, {
     executionHostId: 'ssh:new-client-target',
     resolveWorktreeId: () => 'new-repo::/srv/project'
@@ -85,4 +89,36 @@ it('preserves legacy, runtime, and malformed IDs while rebasing encoded SSH owne
     prior: toAppSshPtyId('new/client', 'pty2:leaf:4')
   })
   expect(snapshot.remoteSessionIdsByTabId.prior).toBe(toAppSshPtyId('old-client', 'pty2:leaf:4'))
+})
+
+it('publishes the same host session after either client imports it', () => {
+  const hostSession = {
+    activeWorktreePath: null,
+    activeTabId: null,
+    tabsByWorktreePath: {
+      '/srv/project': [
+        {
+          id: 'tab',
+          ptyId: toAppSshPtyId('client-a', 'pty-1'),
+          worktreePath: '/srv/project',
+          title: 'Shell',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {},
+    remoteSessionIdsByTabId: { tab: toAppSshPtyId('client-a', 'pty-1') }
+  }
+  const republish = (target: string) =>
+    exportRemoteWorkspaceSession(
+      importRemoteWorkspaceSession(hostSession, {
+        executionHostId: `ssh:${target}`,
+        resolveWorktreeId: () => `${target}::/srv/project`
+      }),
+      { isTargetWorktree: () => true }
+    )
+  expect(republish('client-a')).toEqual(republish('client-b'))
 })
