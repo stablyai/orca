@@ -88,10 +88,15 @@ export function compactDispatchPromptForStatus(
  * Locate the Orca task separator in a dispatch prompt scan window.
  * Why: base-drift commit subjects are repository-controlled and may mention
  * `=== TASK ===`. Raw multi-line preambles must use the standalone line Orca
- * emits; already-normalized single-line status previews intentionally keep the
- * marker inline so re-normalization and UI helpers stay consistent.
+ * emits; already-normalized single-line status previews fold newlines to spaces
+ * and intentionally keep the marker inline, so they anchor on the surrounding
+ * whitespace instead. Both paths reject a marker embedded mid-token.
  */
 export function findOrcaDispatchTaskMarkerIndex(value: string): number {
+  // Single-line previews have no line breaks; the marker Orca emits is surrounded
+  // by whitespace after folding, so anchor on that boundary rather than falling
+  // back to a raw indexOf that a decoy `=== TASK ===` earlier in the line wins.
+  const isSingleLine = !value.includes('\n') && !value.includes('\r')
   let searchFrom = 0
   while (searchFrom < value.length) {
     const markerIndex = value.indexOf(ORCA_DISPATCH_STATUS_TASK_MARKER, searchFrom)
@@ -99,19 +104,21 @@ export function findOrcaDispatchTaskMarkerIndex(value: string): number {
       break
     }
     const markerEnd = markerIndex + ORCA_DISPATCH_STATUS_TASK_MARKER.length
-    const startsLine = markerIndex === 0 || isLineBreak(value.charCodeAt(markerIndex - 1))
-    const endsLine = markerEnd === value.length || isLineBreak(value.charCodeAt(markerEnd))
-    if (startsLine && endsLine) {
+    const startsBoundary =
+      markerIndex === 0 || isMarkerBoundary(value.charCodeAt(markerIndex - 1), isSingleLine)
+    const endsBoundary =
+      markerEnd === value.length || isMarkerBoundary(value.charCodeAt(markerEnd), isSingleLine)
+    if (startsBoundary && endsBoundary) {
       return markerIndex
     }
     searchFrom = markerEnd
   }
 
-  // Already-normalized dispatch previews are single-line and intentionally
-  // carry the marker inline; normalization must stay idempotent across hops.
-  return value.includes('\n') || value.includes('\r')
-    ? -1
-    : value.indexOf(ORCA_DISPATCH_STATUS_TASK_MARKER)
+  return -1
+}
+
+function isMarkerBoundary(code: number, isSingleLine: boolean): boolean {
+  return isSingleLine ? isEcmaTrimWhitespace(code) : isLineBreak(code)
 }
 
 function isLineBreak(code: number): boolean {
