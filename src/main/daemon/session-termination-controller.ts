@@ -1,5 +1,6 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import { hasAgentTeardownEvidence } from './agent-teardown-evidence'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -55,7 +56,7 @@ export class SessionTerminationController {
     if (!this.beginTermination()) {
       return
     }
-    if (!this.deps.launchAgent) {
+    if (!hasAgentTeardownEvidence(this.deps.launchAgent, this.deps.subprocess)) {
       this.signalTerminationRoot()
     } else {
       // Why: agent tool children live in detached process groups a dying shell's SIGHUP never reaches, so sweep them.

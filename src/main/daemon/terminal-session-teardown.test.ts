@@ -10,6 +10,7 @@ vi.mock('../pty-descendant-termination', () => ({
 function createPlainShellSession(overrides: Partial<Session> = {}): Session {
   return {
     launchAgent: undefined,
+    getForegroundProcess: () => null,
     pid: 4242,
     isAlive: true,
     forceKillAndWaitForExit: vi.fn(async () => {}),
@@ -119,6 +120,31 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
     expect(session.kill).toHaveBeenCalled()
   })
+
+  it.each([
+    ['graceful', false],
+    ['immediate', true]
+  ])(
+    'hand-typed agent foreground routes %s kill through the agent sweep despite no launchAgent',
+    async (_case, immediate) => {
+      // Why: a `claude` the user typed into a plain shell has launchAgent unset, but its
+      // detached MCP children still outlive a root-only kill (the reported leak).
+      setPlatform('linux')
+      const session = createPlainShellSession({
+        getForegroundProcess: () => 'claude'
+      } as Partial<Session>)
+      const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
+
+      await teardown.killSession('s1', session, immediate)
+
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        4242,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+      expect(session.kill).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('pty job ownership reaches the daemon teardown path', () => {
