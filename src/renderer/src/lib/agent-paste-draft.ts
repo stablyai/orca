@@ -25,8 +25,9 @@ export {
 } from './agent-draft-paste-content'
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
-
 const POST_PASTE_SUBMIT_DELAY_MS = AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS
+const POST_PASTE_ENTER_INPUT = '\r'
+const POST_PASTE_CTRL_ENTER_INPUT = '\x1b[13;5u'
 
 // Budget PTY creation and composer readiness separately: slow spawn must neither consume composer grace nor delay failed-launch reporting (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
@@ -148,11 +149,13 @@ export async function submitPromptToAgentPty(args: {
   tabId: string
   ptyId: string
   content: string
+  agent?: TuiAgent
 }): Promise<boolean> {
   return await sendBracketedPasteToAgent({
     ptyId: args.ptyId,
     content: args.content,
     submit: true,
+    agent: args.agent,
     inputKind: 'driving'
   })
 }
@@ -160,6 +163,7 @@ export async function submitPromptToAgentPty(args: {
 export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
+  agent?: TuiAgent
 }): Promise<boolean> {
   return await sendBracketedPasteToAgent({ ...args, submit: true, inputKind: 'driving' })
 }
@@ -174,6 +178,7 @@ async function sendBracketedPasteToAgent(args: {
   const { ptyId, content, submit, agent } = args
   const { inputKind } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
+  const submitInput = resolvePostPasteSubmitInput(agent)
   try {
     // Keep paste, Enter and retry under one PTY lock or another paste could submit a half-written prompt.
     return await runTerminalPtyInputTransaction(ptyId, async () => {
@@ -184,15 +189,15 @@ async function sendBracketedPasteToAgent(args: {
 
       // Defer Enter to the next turn so Claude processes bracketed-paste termination before submission.
       await new Promise<void>((resolve) => window.setTimeout(resolve, POST_PASTE_SUBMIT_DELAY_MS))
-      const submitted = await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+      const submitted = await sendRuntimePtyInputVerified(ptyId, submitInput, inputKind)
 
       if (submitRetryDelayMs !== undefined) {
         // Some composers render before accepting Enter; retry best-effort without downgrading the first submission verdict.
         await new Promise<void>((resolve) => window.setTimeout(resolve, submitRetryDelayMs))
         try {
-          await sendRuntimePtyInputVerified(ptyId, '\r', inputKind)
+          await sendRuntimePtyInputVerified(ptyId, submitInput, inputKind)
         } catch {
-          // Why: a rejected retry leaves the first Enter's verdict untouched.
+          // Why: a rejected retry leaves the first submit verdict untouched.
         }
       }
 
@@ -201,6 +206,12 @@ async function sendBracketedPasteToAgent(args: {
   } catch {
     return false
   }
+}
+
+function resolvePostPasteSubmitInput(agent?: TuiAgent): string {
+  return agent && TUI_AGENT_CONFIG[agent]?.postPasteSubmitInput === 'ctrl-enter'
+    ? POST_PASTE_CTRL_ENTER_INPUT
+    : POST_PASTE_ENTER_INPUT
 }
 
 function waitForAgentDraftInputReadyOnTab(args: {
