@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
-import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { computeVisibleWorktrees } from '../../visible-worktrees'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
@@ -28,10 +28,12 @@ export function useVisibleSidebarWorktrees(args: {
   sortedIds: string[]
   repoMap: Map<string, Repo>
   worktreeLineageById: Record<string, WorktreeLineage>
-  settings: AppState['settings']
+  /** Pre-derived focused host; the whole `settings` object would re-key this
+   *  423-workspace scan on every unrelated settings write. */
+  defaultHostId: ExecutionHostId
   agentSendTargetWorktreeId: string | null
 }) {
-  const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, settings } = args
+  const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, defaultHostId } = args
   const {
     showSleepingWorkspaces,
     filterRepoIds,
@@ -46,6 +48,9 @@ export function useVisibleSidebarWorktrees(args: {
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
+  // sleeping-workspaces list cannot evict the sample the live lists share.
+  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedDeviceIdsByEnvironment = useMemo(
@@ -67,6 +72,8 @@ export function useVisibleSidebarWorktrees(args: {
   )
 
   const recomputedVisibleWorktrees = useMemo(() => {
+    // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
+    // share a sample, so the timestamp alone would not re-key this memo.
     void agentStatusEpoch
     return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
@@ -80,7 +87,7 @@ export function useVisibleSidebarWorktrees(args: {
         : getWorktreeIdsWithLiveAgent(
             useAppStore.getState().agentStatusByPaneKey,
             tabsByWorktree,
-            Date.now()
+            agentStatusNow
           ),
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
@@ -92,7 +99,7 @@ export function useVisibleSidebarWorktrees(args: {
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
-      defaultHostId: getSettingsFocusedExecutionHostId(settings),
+      defaultHostId,
       worktreeLineageById,
       forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
         ? [args.agentSendTargetWorktreeId]
@@ -101,6 +108,7 @@ export function useVisibleSidebarWorktrees(args: {
   }, [
     args.agentSendTargetWorktreeId,
     agentStatusEpoch,
+    agentStatusNow,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
@@ -111,7 +119,7 @@ export function useVisibleSidebarWorktrees(args: {
     alwaysShowDefaultBranchWorkspace,
     workspaceHostScope,
     visibleWorkspaceHostIds,
-    settings,
+    defaultHostId,
     repoMap,
     tabsByWorktree,
     ptyIdsByTabId,

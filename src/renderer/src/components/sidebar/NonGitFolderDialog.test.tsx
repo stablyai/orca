@@ -156,6 +156,55 @@ describe('NonGitFolderDialog', () => {
     expect(mocks.state.closeModal).toHaveBeenCalled()
   })
 
+  it('names the runtime folder project after the requested display name', () => {
+    mocks.state.modalData = {
+      folderPath: '/srv/non-git',
+      runtimeEnvironmentId: 'env-1',
+      displayName: 'inf-오케스트레이터'
+    }
+    renderToStaticMarkup(<NonGitFolderDialog />)
+
+    const button = mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))
+    button?.onClick?.()
+
+    expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith('/srv/non-git', {
+      runtimeEnvironmentId: 'env-1',
+      displayName: 'inf-오케스트레이터'
+    })
+  })
+
+  it('names the SSH folder project after the requested display name', async () => {
+    mocks.state.modalData = {
+      folderPath: '/srv/non-git',
+      connectionId: 'ssh-1',
+      displayName: 'inf-오케스트레이터'
+    }
+    mocks.addRemote.mockResolvedValue({
+      repo: {
+        id: 'ssh-repo',
+        path: '/srv/non-git',
+        displayName: 'inf-오케스트레이터',
+        badgeColor: '#111',
+        addedAt: 1,
+        kind: 'folder',
+        connectionId: 'ssh-1'
+      } satisfies Repo
+    })
+    renderToStaticMarkup(<NonGitFolderDialog />)
+
+    const button = mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))
+    button?.onClick?.()
+
+    await vi.waitFor(() =>
+      expect(mocks.addRemote).toHaveBeenCalledWith({
+        connectionId: 'ssh-1',
+        remotePath: '/srv/non-git',
+        kind: 'folder',
+        displayName: 'inf-오케스트레이터'
+      })
+    )
+  })
+
   it('activates only the selected SSH folder when repo IDs collide', async () => {
     const repo: Repo = {
       id: 'shared-repo',

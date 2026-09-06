@@ -205,13 +205,13 @@ describe('daemon endpoint ownership publication', () => {
       await server.start()
 
       const daemon = server as unknown as {
-        checkEndpointOwnership: () => void
-        retirementRequested: boolean
+        endpoint: { checkOwnership: () => void }
+        lifecycle: { retirementRequested: boolean }
       }
       // An inconclusive or matching probe must never retire a healthy daemon, however often it runs.
-      daemon.checkEndpointOwnership()
-      daemon.checkEndpointOwnership()
-      expect(daemon.retirementRequested).toBe(false)
+      daemon.endpoint.checkOwnership()
+      daemon.endpoint.checkOwnership()
+      expect(daemon.lifecycle.retirementRequested).toBe(false)
 
       // Another daemon takes the endpoint name.
       unlinkSync(socketPath)
@@ -224,13 +224,13 @@ describe('daemon endpoint ownership publication', () => {
       try {
         // A single observation can land inside a replacement's unlink-then-link gap, so the
         // first one must not retire anything.
-        daemon.checkEndpointOwnership()
-        expect(daemon.retirementRequested).toBe(false)
+        daemon.endpoint.checkOwnership()
+        expect(daemon.lifecycle.retirementRequested).toBe(false)
 
-        daemon.checkEndpointOwnership()
+        daemon.endpoint.checkOwnership()
         // Why: retirement drains rather than kills — an orphaned daemon stops being a
         // permanent unreachable host without tearing live sessions out from under the user.
-        expect(daemon.retirementRequested).toBe(true)
+        expect(daemon.lifecycle.retirementRequested).toBe(true)
       } finally {
         await new Promise<void>((resolve) => usurper.close(() => resolve()))
         try {

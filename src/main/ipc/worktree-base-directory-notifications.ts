@@ -5,7 +5,14 @@ import {
   refreshWorktreeHeadIdentities,
   type WorktreeHeadIdentityRefreshState
 } from './worktree-head-identity-refresh'
-import { notifyWorktreeGitStatusMetadataChanged, notifyWorktreesChanged } from './worktree-remote'
+import {
+  EMPTY_HEAD_IDENTITY_SCOPE,
+  FULL_HEAD_IDENTITY_SCOPE,
+  mergeHeadIdentityScopes,
+  type WorktreeHeadIdentityScope
+} from './worktree-head-identity-scope'
+import { notifyWorktreeGitStatusMetadataChanged } from './worktree-remote'
+import { notifyWatchedWorktreeCatalogChanged } from './watched-worktree-catalog-notification'
 
 export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -13,6 +20,7 @@ export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
   pendingStructureRepoIds: Set<string>
   pendingGitStatusRepoIds: Set<string>
   pendingHeadIdentityRepoIds: Set<string>
+  pendingHeadIdentityScope: WorktreeHeadIdentityScope
   headIdentityRefresh: WorktreeHeadIdentityRefreshState
   disposed: boolean
 }
@@ -23,6 +31,7 @@ export function clearPendingWorktreeBaseNotifications(watch: WorktreeBaseNotific
   watch.pendingStructureRepoIds.clear()
   watch.pendingGitStatusRepoIds.clear()
   watch.pendingHeadIdentityRepoIds.clear()
+  watch.pendingHeadIdentityScope = EMPTY_HEAD_IDENTITY_SCOPE
 }
 
 export function supportsWorktreeHeadIdentityRefresh(watch: WorktreeBaseNotificationWatch): boolean {
@@ -46,6 +55,13 @@ export function scheduleWorktreeBaseNotification(
   for (const repoId of changes.headIdentityRepoIds ?? []) {
     watch.pendingHeadIdentityRepoIds.add(repoId)
   }
+  // Why: callers that cannot attribute the burst to specific worktrees (watcher
+  // failure, event overflow) omit the scope entirely; that is a loss of
+  // knowledge, so it must widen to a full re-read rather than narrow to nothing.
+  watch.pendingHeadIdentityScope = mergeHeadIdentityScopes(
+    watch.pendingHeadIdentityScope,
+    changes.headIdentityScope ?? FULL_HEAD_IDENTITY_SCOPE
+  )
   clearTimeout(watch.notifyTimer ?? undefined)
   watch.notifyTimer = setTimeout(() => {
     watch.notifyTimer = null
@@ -61,9 +77,10 @@ export function scheduleWorktreeBaseNotification(
       )
     )
     const emitHeadIdentities = pendingStructure.length === 0
+    const headIdentityScope = watch.pendingHeadIdentityScope
     clearPendingWorktreeBaseNotifications(watch)
     for (const repoId of pendingStructure) {
-      notifyWorktreesChanged(watch.mainWindow, repoId)
+      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId, watch.connectionId)
     }
     for (const repoId of sourceControlRepoIds) {
       notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId)
@@ -72,7 +89,12 @@ export function scheduleWorktreeBaseNotification(
       supportsWorktreeHeadIdentityRefresh(watch) &&
       (pendingStructure.length > 0 || hasHeadIdentity)
     ) {
-      void refreshWorktreeHeadIdentities(watch, watch.headIdentityRefresh, emitHeadIdentities)
+      void refreshWorktreeHeadIdentities(
+        watch,
+        watch.headIdentityRefresh,
+        emitHeadIdentities,
+        headIdentityScope
+      )
     }
   }, WATCH_DEBOUNCE_MS)
 }

@@ -7,9 +7,9 @@ export type SentinelDivergence = {
 
 export type SentinelRendererState = {
   atlasPages: number
-  atlasClearModelGeneration: number | null
+  atlasPageLayoutVersion: number | null
   atlasPageVersions: number[]
-  glyphLastSeenClearModelGeneration: number | null
+  glyphLastSeenPageLayoutVersion: number | null
   glyphTextureVersions: number[]
   modelLineLengths: number[]
   vertexCount: number | null
@@ -56,14 +56,15 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
             value?: {
               _canvas?: HTMLCanvasElement
               _charAtlas?: {
-                clearModelGeneration?: number
+                pageLayoutVersion?: number
+                _pageLayoutVersion?: number
                 pages?: { version?: number }[]
               }
               _model?: { lineLengths?: number[] | Uint32Array }
               _glyphRenderer?: {
                 value?: {
                   _activeBuffer?: number
-                  _lastSeenClearModelGeneration?: number
+                  _lastSeenPageLayoutVersion?: number
                   _atlasTextures?: { version?: number }[]
                   _vertices?: { count?: number }
                 }
@@ -107,9 +108,10 @@ export function reachRenderInternals(terminal: unknown): SentinelRenderInternals
       ],
       rendererState: {
         atlasPages: renderer._charAtlas.pages?.length ?? -1,
-        atlasClearModelGeneration: renderer._charAtlas.clearModelGeneration ?? null,
+        atlasPageLayoutVersion:
+          renderer._charAtlas.pageLayoutVersion ?? renderer._charAtlas._pageLayoutVersion ?? null,
         atlasPageVersions: renderer._charAtlas.pages?.map((page) => page.version ?? -1) ?? [],
-        glyphLastSeenClearModelGeneration: glyphRenderer?._lastSeenClearModelGeneration ?? null,
+        glyphLastSeenPageLayoutVersion: glyphRenderer?._lastSeenPageLayoutVersion ?? null,
         glyphTextureVersions:
           glyphRenderer?._atlasTextures?.map((texture) => texture.version ?? -1) ?? [],
         modelLineLengths: Array.from(renderer._model?.lineLengths ?? []),

@@ -1,11 +1,12 @@
-import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { readMobileSessionRouteSource } from './mobile-session-route-source-family.test-support'
 
-const fileUrl = new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url)
-const source = readFileSync(fileUrl, 'utf8')
+const sourcePath = './MobileSessionHeader.tsx'
+const source = readMobileSessionRouteSource(sourcePath)
+const sheetsSource = readMobileSessionRouteSource('./MobileSessionSheets.tsx')
 const sourceFile = ts.createSourceFile(
-  fileUrl.href,
+  sourcePath,
   source,
   ts.ScriptTarget.Latest,
   true,
@@ -32,7 +33,7 @@ function findQuickCommandsTabButtons(): ts.JsxSelfClosingElement[] {
 function getQuickCommandsTabSource(): string {
   const start = source.indexOf('accessibilityLabel="New tab"')
   expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf('{/* Content-row host', start)
+  const end = source.indexOf('</SafeAreaView>', start)
   expect(end).toBeGreaterThan(start)
   return source.slice(start, end)
 }
@@ -61,6 +62,6 @@ describe('quick-commands tab stability', () => {
   })
 
   it('only presents the sheet after support is confirmed', () => {
-    expect(source).toContain('visible={showQuickCommands && quickCommandsSupported === true}')
+    expect(sheetsSource).toContain('visible={showQuickCommands && quickCommandsSupported === true}')
   })
 })

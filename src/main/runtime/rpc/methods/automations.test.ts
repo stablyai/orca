@@ -14,7 +14,12 @@ describe('automation RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listAutomations: vi.fn().mockReturnValue([{ id: 'auto-1', name: 'Daily review' }]),
+      listAutomationsForScope: vi.fn().mockReturnValue({
+        automations: [{ id: 'auto-1', name: 'Daily review' }],
+        items: [{ automationId: 'auto-1', selector: { kind: 'self' } }]
+      }),
       showAutomation: vi.fn().mockReturnValue({ id: 'auto-1', name: 'Daily review' }),
+      automationOwnerPrecondition: vi.fn().mockReturnValue(null),
       createAutomation: vi.fn().mockResolvedValue({ id: 'auto-2', name: 'New review' }),
       updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', name: 'Paused' }),
       deleteAutomation: vi.fn().mockReturnValue({ removed: true, id: 'auto-1' }),
@@ -71,8 +76,9 @@ describe('automation RPC methods', () => {
     await dispatcher.dispatch(makeRequest('automation.runNow', { id: 'auto-1' }))
     await dispatcher.dispatch(makeRequest('automation.runs', { automationId: 'auto-1' }))
 
-    expect(runtime.listAutomations).toHaveBeenCalled()
-    expect(runtime.showAutomation).toHaveBeenCalledWith('auto-1')
+    expect(runtime.listAutomationsForScope).toHaveBeenCalledWith({})
+    // A legacy client sends no precondition, so each call forwards an absent expected owner.
+    expect(runtime.showAutomation).toHaveBeenCalledWith('auto-1', undefined)
     expect(runtime.createAutomation).toHaveBeenCalledWith(
       expect.objectContaining({
         name: 'New review',
@@ -93,11 +99,31 @@ describe('automation RPC methods', () => {
         setupDecision: 'run',
         reuseSession: false,
         rrule: '0 9 * * 1-5'
-      })
+      }),
+      { expectedOwner: undefined, destination: undefined }
     )
-    expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1')
-    expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1')
-    expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1')
+    expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1', undefined)
+    expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1', undefined)
+    expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1', undefined)
+  })
+
+  it('returns a cursor page when the caller requests a bounded run history', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      listAutomationRunsPage: vi.fn().mockReturnValue({
+        runs: [{ id: 'run-100', automationId: 'auto-1' }],
+        nextCursor: '100'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    await expect(
+      dispatcher.dispatch(makeRequest('automation.runs', { automationId: 'auto-1', limit: 100 }))
+    ).resolves.toMatchObject({
+      ok: true,
+      result: { nextCursor: '100' }
+    })
+    expect(runtime.listAutomationRunsPage).toHaveBeenCalledWith('auto-1', undefined, 100, undefined)
   })
 
   it('preserves an explicit blank terminal when creating and updating an automation', async () => {
@@ -127,7 +153,11 @@ describe('automation RPC methods', () => {
     expect(runtime.createAutomation).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: null })
     )
-    expect(runtime.updateAutomation).toHaveBeenCalledWith('auto-1', { agentId: null })
+    expect(runtime.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      { agentId: null },
+      { expectedOwner: undefined, destination: undefined }
+    )
   })
 
   it('does not publish nullable agent IDs to paired clients that predate shell automations', () => {
@@ -135,22 +165,30 @@ describe('automation RPC methods', () => {
       { id: 'agent', agentId: 'codex' },
       { id: 'shell', agentId: null }
     ]
+    const items = automations.map((automation) => ({
+      automationId: automation.id,
+      selector: { kind: 'self' as const }
+    }))
     const runtime = {
-      listAutomations: () => automations,
-      showAutomation: () => automations[1]
+      listAutomationsForScope: () => ({ automations, items }),
+      showAutomation: () => automations[1],
+      automationOwnerPrecondition: () => null
     } as unknown as OrcaRuntimeService
     const context = { runtime, clientKind: 'runtime' as const, clientCapabilities: [] }
     const list = AUTOMATION_METHODS.find((method) => method.name === 'automation.list')!
     const show = AUTOMATION_METHODS.find((method) => method.name === 'automation.show')!
 
-    expect(list.handler(undefined, context)).toEqual({ automations: [automations[0]] })
+    expect(list.handler({}, context)).toEqual({
+      automations: [automations[0]],
+      items: [items[0]]
+    })
     expect(() => show.handler({ id: 'shell' }, context)).toThrow('newer Orca client')
     expect(
-      list.handler(undefined, {
+      list.handler({}, {
         ...context,
         clientCapabilities: [AUTOMATION_SHELL_RUNTIME_CAPABILITY]
       })
-    ).toEqual({ automations })
+    ).toEqual({ automations, items })
   })
 
   it('rejects unknown providers and invalid schedules', async () => {
@@ -201,6 +239,10 @@ describe('automation RPC methods', () => {
       })
     )
 
-    expect(runtime.updateAutomation).toHaveBeenCalledWith('auto-1', { baseBranch: null })
+    expect(runtime.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      { baseBranch: null },
+      { expectedOwner: undefined, destination: undefined }
+    )
   })
 })

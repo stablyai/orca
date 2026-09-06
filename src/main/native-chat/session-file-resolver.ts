@@ -14,17 +14,37 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
-import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
+import {
+  createWslTranscriptResolutionSnapshot,
+  needsWslHostResolution,
+  needsWslHostTranslation,
+  toHostReadableTranscriptPath,
+  wslCodexSessionsDirs,
+  type WslTranscriptResolutionSnapshot
+} from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
+import { proveClaudeTranscriptBranch } from '../claude/claude-transcript-branch-proof'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
 // run in the main process against the runtime's own home directory; over SSH
 // the remote main resolves its local home, so we never hardcode an absolute
 // user path — homedir()/CODEX_HOME resolution stays runtime-relative and is
 // computed per call (not at module load) so it tracks the live home.
-function claudeProjectsDir(): string {
-  return join(homedir(), '.claude', 'projects')
+// Why CLAUDE_CONFIG_DIR and not just homedir(): a structured Claude session pins its
+// account home to `CLAUDE_CONFIG_DIR || ~/.claude` (claude-accounts/runtime-paths.ts),
+// and the CLI writes its transcript under whatever home it was given. Mobile native chat
+// resolves with no root override, so a default that ignored the variable read a different
+// tree than the CLI wrote — a silent blackout, not an error.
+// Why both roots and not just that one: adopting the variable would otherwise hide every
+// transcript written before it was set. Same managed-then-default shape as
+// codexSessionsDirs below, de-duped so the usual case still scans once.
+function claudeProjectsDirs(): string[] {
+  const candidates = [
+    join(process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude'), 'projects'),
+    join(homedir(), '.claude', 'projects')
+  ]
+  return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
 }
 
 // Why: Orca launches Codex with ORCA_CODEX_HOME pointing at its own managed
@@ -72,6 +92,8 @@ export type ResolveSessionFileOptions = {
    *  directly — recent Claude Code names the transcript with a UUID that differs
    *  from the hook session_id, so the id-based glob below would miss it. */
   transcriptPath?: string
+  /** Internal running-distro view shared across one resolve attempt. */
+  wslSnapshot?: WslTranscriptResolutionSnapshot
 }
 
 /**
@@ -101,9 +123,15 @@ export async function resolveSessionFilePath(
   // stale/missing paths fall through to the id-based search.
   let unavailable: WslTranscriptFsError | undefined
   const hookPath = options.transcriptPath?.trim()
+  let wslSnapshot = options.wslSnapshot
   if (hookPath && extname(hookPath) === '.jsonl') {
     try {
-      const hostReadable = await toHostReadableTranscriptPath(hookPath, { signal })
+      if (!wslSnapshot && needsWslHostResolution(hookPath)) {
+        wslSnapshot = await createWslTranscriptResolutionSnapshot({
+          includeHomes: needsWslHostTranslation(hookPath)
+        })
+      }
+      const hostReadable = await toHostReadableTranscriptPath(hookPath, { signal, wslSnapshot })
       if (hostReadable) {
         return hostReadable
       }
@@ -114,13 +142,35 @@ export async function resolveSessionFilePath(
       // it does not, so a stalled distro reads as unavailable, never "missing".
       unavailable = wslTranscriptFsRefusal(error)
     }
+    if (needsWslHostResolution(hookPath)) {
+      if (unavailable) {
+        throw unavailable
+      }
+      return null
+    }
   }
 
-  const resolved = await resolveSessionFileById(transcriptAgent, sessionId, options, signal)
+  const resolveOptions = wslSnapshot === options.wslSnapshot ? options : { ...options, wslSnapshot }
+  const resolved = await resolveSessionFileById(transcriptAgent, sessionId, resolveOptions, signal)
   if (!resolved && unavailable) {
     throw unavailable
   }
   return resolved
+}
+
+/** Read and validate Claude's authoritative transcript branch marker. */
+export async function readClaudeTranscriptLeafUuid(
+  transcriptPath: string,
+  providerSessionId: string,
+  previousLeafUuid: string | null = null
+): Promise<string> {
+  return (
+    await proveClaudeTranscriptBranch({
+      transcriptPath,
+      providerSessionId,
+      previousLeafUuid
+    })
+  ).leafUuid
 }
 
 async function resolveSessionFileById(
@@ -135,9 +185,11 @@ async function resolveSessionFileById(
   }
 
   if (transcriptAgent === 'claude') {
+    // An explicit root is the caller naming the exact account tree its session pinned;
+    // adding a fallback there could resolve a different account's transcript.
     return resolveClaudeSessionFile(
       trimmedId,
-      options.claudeProjectsDir ?? claudeProjectsDir(),
+      options.claudeProjectsDir ? [options.claudeProjectsDir] : claudeProjectsDirs(),
       signal
     )
   }
@@ -148,7 +200,7 @@ async function resolveSessionFileById(
       overrideDirs ?? codexSessionsDirs(),
       // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
       // user left stopped. Only pay that after this host's own Codex roots miss.
-      overrideDirs ? undefined : wslCodexSessionsDirs,
+      overrideDirs ? undefined : () => wslCodexSessionsDirs({ wslSnapshot: options.wslSnapshot }),
       signal
     )
   }
@@ -167,16 +219,22 @@ async function resolveSessionFileById(
 
 async function resolveClaudeSessionFile(
   sessionId: string,
-  projectsDir: string,
+  projectsDirs: readonly string[],
   signal?: AbortSignal
 ): Promise<string | null> {
   const targetName = `${sessionId}.jsonl`
-  const files = await walkSessionFiles(projectsDir, 'claude', [], {
-    extensions: new Set(['.jsonl']),
-    filePredicate: (path) => basename(path) === targetName,
-    signal
-  })
-  return files[0] ?? null
+  for (const projectsDir of projectsDirs) {
+    // No existence pre-check: walkSessionFiles already yields [] for a missing root.
+    const files = await walkSessionFiles(projectsDir, 'claude', [], {
+      extensions: new Set(['.jsonl']),
+      filePredicate: (path) => basename(path) === targetName,
+      signal
+    })
+    if (files[0]) {
+      return files[0]
+    }
+  }
+  return null
 }
 
 async function resolveCodexSessionFile(

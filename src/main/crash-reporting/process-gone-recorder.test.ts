@@ -18,6 +18,7 @@ import {
 } from './crash-breadcrumb-store'
 import { ProcessGoneDedupe } from './process-gone-dedupe'
 import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-gone-recorder'
+import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-sibling-correlation'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../observability/tracer'
 
 type CapturingSink = TracerSink & { records: unknown[]; flushMock: ReturnType<typeof vi.fn> }
@@ -56,6 +57,7 @@ beforeEach(() => {
   sink = capturingSink()
   setActiveSink(sink)
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 afterEach(() => {
@@ -63,6 +65,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   _resetTracerForTests()
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 describe('recordProcessGoneCrash', () => {
@@ -112,6 +115,57 @@ describe('recordProcessGoneCrash', () => {
       })
     ])
     expect(sink.flushMock).toHaveBeenCalledOnce()
+  })
+
+  it('durably suppresses a Linux namespace-encoded renderer SIGTERM', () => {
+    const record = vi.fn()
+
+    withStubbedPlatform('linux', () => {
+      recordProcessGoneCrash(
+        { record } as never,
+        event({ reason: 'killed', exitCode: 61696 }),
+        new ProcessGoneDedupe()
+      )
+    })
+
+    expect(record).not.toHaveBeenCalled()
+    expect(getCrashBreadcrumbSnapshot()).toEqual([
+      expect.objectContaining({
+        name: 'process_gone_suppressed',
+        data: expect.objectContaining({
+          source: 'renderer',
+          reason: 'killed',
+          exitCode: 61696,
+          expectedTeardown: 'none'
+        })
+      })
+    ])
+    expect(sink.records).toEqual([
+      expect.objectContaining({
+        name: 'crash.breadcrumb',
+        attributes: expect.objectContaining({
+          'breadcrumb.name': 'process_gone_suppressed',
+          'breadcrumb.data': expect.objectContaining({ exitCode: 61696 })
+        })
+      })
+    ])
+    expect(sink.flushMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps suppressed renderer evidence scoped to its renderer', () => {
+    const dedupe = new ProcessGoneDedupe()
+    const suppressed = (webContentsId: number) =>
+      event({ reason: 'killed', exitCode: 1, expectedTeardown: 'renderer-reload', webContentsId })
+
+    recordProcessGoneCrash({ record: vi.fn() } as never, suppressed(11), dedupe)
+    recordProcessGoneCrash({ record: vi.fn() } as never, suppressed(22), dedupe)
+
+    expect(getCrashBreadcrumbSnapshot('renderer:11')).toEqual([
+      expect.objectContaining({ origin: 'renderer:11' })
+    ])
+    expect(getCrashBreadcrumbSnapshot('renderer:22')).toEqual([
+      expect.objectContaining({ origin: 'renderer:22' })
+    ])
   })
 
   it('coalesces a recoverable-service crash loop instead of flushing every event', () => {
@@ -314,6 +368,26 @@ describe('recordProcessGoneCrash', () => {
     expect(sink.flushMock).toHaveBeenCalledOnce()
   })
 
+  it('keeps simultaneous renderer reports distinct by webContents identity', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+    const dedupe = new ProcessGoneDedupe()
+
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      event({ webContentsId: 11 }),
+      dedupe,
+      noMinidump
+    )
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      event({ webContentsId: 22 }),
+      dedupe,
+      noMinidump
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2))
+  })
+
   it('still persists the report when the forced trace flush fails', async () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
     sink.flushMock.mockImplementation(() => {
@@ -436,10 +510,10 @@ describe('recordProcessGoneCrash', () => {
     }
   }
 
-  // Why child kills: the decode gate is source-agnostic and reads
+  // Why child exits: the decode gate is source-agnostic and reads
   // process.platform synchronously at record time, so the platform stub is
   // still in force when it runs.
-  const nonRecoverableChildKill = (
+  const nonRecoverableChildExit = (
     overrides: Partial<ProcessGoneCrashEvent>
   ): ProcessGoneCrashEvent =>
     event({
@@ -455,7 +529,7 @@ describe('recordProcessGoneCrash', () => {
     withStubbedPlatform('linux', () => {
       recordProcessGoneCrash(
         { record } as never,
-        nonRecoverableChildKill({ reason: 'killed', exitCode: 61696 }),
+        nonRecoverableChildExit({ reason: 'abnormal-exit', exitCode: 61696 }),
         new ProcessGoneDedupe()
       )
     })
@@ -479,14 +553,14 @@ describe('recordProcessGoneCrash', () => {
     withStubbedPlatform('win32', () => {
       recordProcessGoneCrash(
         { record } as never,
-        nonRecoverableChildKill({ reason: 'killed', exitCode: 1 }),
+        nonRecoverableChildExit({ reason: 'killed', exitCode: 1 }),
         new ProcessGoneDedupe()
       )
     })
     withStubbedPlatform('linux', () => {
       recordProcessGoneCrash(
         { record } as never,
-        nonRecoverableChildKill({ reason: 'launch-failed', exitCode: 18 }),
+        nonRecoverableChildExit({ reason: 'launch-failed', exitCode: 18 }),
         new ProcessGoneDedupe()
       )
     })

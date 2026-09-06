@@ -7,7 +7,7 @@ export function dismissStaleAgentRowByKey(paneKey: string): void {
   const store = useAppStore.getState()
   const liveExisted = paneKey in store.agentStatusByPaneKey
   const retainedExisted = paneKey in store.retainedAgentsByPaneKey
-  store.dropAgentStatus(paneKey)
+  store.dropAgentStatus(paneKey, { paneRemoved: true })
   store.dismissRetainedAgent(paneKey)
   if (liveExisted || retainedExisted) {
     toast.info(

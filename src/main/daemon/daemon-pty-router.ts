@@ -177,12 +177,19 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).getForegroundProcess(id)
   }
 
-  async inspectProcess(id: string): Promise<PtyProcessInspection> {
-    return this.adapterForInspection(id).inspectProcess(id)
+  async inspectProcess(
+    id: string,
+    options?: { expectedIncarnationId?: string; steadyState?: boolean }
+  ): Promise<PtyProcessInspection> {
+    return this.adapterForInspection(id).inspectProcess(id, options)
   }
 
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.adapterFor(id).confirmForegroundProcess(id)
+  }
+
+  async confirmShellForeground(id: string): Promise<boolean> {
+    return (await this.adapterFor(id).confirmShellForeground?.(id)) ?? false
   }
 
   async serialize(ids: string[]): Promise<string> {

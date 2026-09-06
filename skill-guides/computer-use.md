@@ -1,19 +1,17 @@
 ---
 name: computer-use
 description: >-
-  Use Orca's computer-use CLI to inspect and operate local desktop app windows
-  through accessibility trees, screenshots, and safe UI actions. Use for
-  desktop app interaction: list apps/windows, get app state, read visible UI,
-  click controls, type, press keys, scroll, drag, set values, or perform
-  accessibility actions. Also use for browser windows, webviews, Orca app UI,
-  or other desktop UI. Triggers include "computer use", "orca computer", "read
-  Spotify", "read Slack", "control/click/read in a desktop app", and "get app
-  state".
+  Use Orca's computer-use CLI for OS/window-level inspection and input in visible
+  local app windows. Use when a task must read or operate a native app or an
+  external browser window (for example, Chrome, Edge, or Safari) or an app
+  webview. Do not use for Orca's embedded browser or page-only browser
+  automation. Use `orca-cli` for Orca's embedded pages and a page-automation
+  tool such as Playwright or CDP for external pages.
 ---
 
 # Computer Use
 
-Use this skill for desktop UI through `orca computer`. When the requested target is a website or web app, operate the desktop browser app/window that contains the page.
+Use this skill for desktop UI through `orca computer`. For a website or web app, use it only when the page is in an external desktop browser window that needs desktop-level control. Do not use it for page-only automation: use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages.
 
 ## Preconditions
 
@@ -164,4 +162,4 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 
 ## Next Action
 
-Confirm Orca status unless already checked, then run `ORCA computer capabilities --json`. For website or web-app targets such as Gmail, identify the desktop browser app/window that contains the page, then get that target app state with `ORCA computer get-app-state --app <app> --json`.
+Confirm Orca status unless already checked, then run `ORCA computer capabilities --json`. For external browser targets such as Gmail, identify the desktop browser app/window that contains the page, then get that target app state with `ORCA computer get-app-state --app <app> --json`.

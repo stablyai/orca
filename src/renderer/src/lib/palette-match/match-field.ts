@@ -32,7 +32,7 @@ const SIGILS = new Set(['#', '!'])
 function allowedQualities(
   field: PaletteIndexedField,
   token: PaletteQueryToken
-): ReadonlySet<PaletteMatchQuality> {
+): readonly PaletteMatchQuality[] {
   let qualities = paletteProfileAllowedQualities(field.profile)
   if (field.identifier && !identifierKindAllowsPrefix(field.identifier.kind)) {
     qualities = qualities.filter((quality) => !PREFIX_QUALITIES.has(quality))
@@ -43,7 +43,7 @@ function allowedQualities(
   if (token.isIdentifierLike) {
     qualities = qualities.filter((quality) => quality !== 'typo')
   }
-  return new Set(qualities)
+  return qualities
 }
 
 /** `#123` must not reach a GitLab MR, and `!123` must not reach a GitHub PR. */
@@ -83,15 +83,15 @@ function toRanges(field: PaletteIndexedField, start: number, end: number): reado
 function matchLiteral(
   field: PaletteIndexedField,
   token: PaletteQueryToken,
-  qualities: ReadonlySet<PaletteMatchQuality>
+  qualities: readonly PaletteMatchQuality[]
 ): PaletteFieldMatch | null {
   const normalized = field.text.normalized
   const text = token.text
 
-  if (qualities.has('field-exact') && normalized === text) {
+  if (qualities.includes('field-exact') && normalized === text) {
     return { quality: 'field-exact', ranges: toRanges(field, 0, normalized.length) }
   }
-  if (qualities.has('word-exact')) {
+  if (qualities.includes('word-exact')) {
     const word = field.words.find((entry) => entry.text === text)
     if (word) {
       return { quality: 'word-exact', ranges: toRanges(field, word.start, word.end) }
@@ -101,10 +101,10 @@ function matchLiteral(
       return { quality: 'word-exact', ranges: toRanges(field, atom.start, atom.end) }
     }
   }
-  if (qualities.has('field-prefix') && normalized.startsWith(text)) {
+  if (qualities.includes('field-prefix') && normalized.startsWith(text)) {
     return { quality: 'field-prefix', ranges: toRanges(field, 0, text.length) }
   }
-  if (qualities.has('word-prefix')) {
+  if (qualities.includes('word-prefix')) {
     const word = field.words.find((entry) => entry.text.startsWith(text))
     const atom = field.atoms.find((entry) => normalized.startsWith(text, entry.start))
     const start = word && atom ? Math.min(word.start, atom.start) : (word?.start ?? atom?.start)
@@ -117,13 +117,13 @@ function matchLiteral(
   if (literalIndex === -1) {
     return null
   }
-  if (qualities.has('boundary-substring') && isWordStart(field, literalIndex)) {
+  if (qualities.includes('boundary-substring') && isWordStart(field, literalIndex)) {
     return {
       quality: 'boundary-substring',
       ranges: toRanges(field, literalIndex, literalIndex + text.length)
     }
   }
-  if (qualities.has('literal-substring')) {
+  if (qualities.includes('literal-substring')) {
     return {
       quality: 'literal-substring',
       ranges: toRanges(field, literalIndex, literalIndex + text.length)
@@ -135,9 +135,9 @@ function matchLiteral(
 function matchCompact(
   field: PaletteIndexedField,
   token: PaletteQueryToken,
-  qualities: ReadonlySet<PaletteMatchQuality>
+  qualities: readonly PaletteMatchQuality[]
 ): PaletteFieldMatch | null {
-  if (!qualities.has('compact') || token.compact.length < MIN_COMPACT_LENGTH) {
+  if (!qualities.includes('compact') || token.compact.length < MIN_COMPACT_LENGTH) {
     return null
   }
   for (const atom of field.atoms) {
@@ -152,9 +152,9 @@ function matchCompact(
 function matchTypo(
   field: PaletteIndexedField,
   token: PaletteQueryToken,
-  qualities: ReadonlySet<PaletteMatchQuality>
+  qualities: readonly PaletteMatchQuality[]
 ): PaletteFieldMatch | null {
-  if (!qualities.has('typo') || !token.isLetterOnly || !isPaletteTypoCandidate(token.text)) {
+  if (!qualities.includes('typo') || !token.isLetterOnly || !isPaletteTypoCandidate(token.text)) {
     return null
   }
   for (const word of field.words) {

@@ -4,16 +4,17 @@ import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../../../../shared/worktree/host-qualified-identity'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import type { RenderRow } from '../listing/render-row'
-import { getCyclableWorktrees, resolveCycledWorktreeId } from '../../worktree-keyboard-cycle'
+import {
+  getCyclableRowIdentity,
+  getCyclableWorktreeRows,
+  resolveActiveCycleIdentity,
+  resolveCycledWorktreeId
+} from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -65,24 +66,22 @@ export function useWorktreeListKeyboardNavigation(args: {
       // Why: cycle over the rows the sidebar actually rendered — collapsing a group
       // means "not now", and a rebuilt near-copy would drift from what is on screen
       // (host sections, pinned placement, folder workspaces).
-      const worktrees = getCyclableWorktrees(rows, pinnedDisplayPolicy)
-      const worktreeIdentities = worktrees.map(getWorktreeHostIdentity)
+      const worktreeRows = getCyclableWorktreeRows(rows, pinnedDisplayPolicy)
       const nextWorktreeIdentity = resolveCycledWorktreeId({
-        worktreeIds: worktreeIdentities,
-        activeWorktreeId: activeWorktreeId
-          ? composeWorktreeHostIdentity(
-              activeWorkspaceExecutionHostId ?? undefined,
-              activeWorktreeId
-            )
-          : null,
+        worktreeIds: worktreeRows.map(getCyclableRowIdentity),
+        activeWorktreeId: resolveActiveCycleIdentity({
+          rows: worktreeRows,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId
+        }),
         direction
       })
       if (nextWorktreeIdentity === null) {
         return
       }
-      const nextWorktree = worktrees.find(
-        (worktree) => getWorktreeHostIdentity(worktree) === nextWorktreeIdentity
-      )
+      const nextWorktree = worktreeRows.find(
+        (row) => getCyclableRowIdentity(row) === nextWorktreeIdentity
+      )?.worktree
       if (!nextWorktree) {
         return
       }

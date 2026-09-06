@@ -2,6 +2,7 @@ import { lstat, readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { checkIgnoredPaths } from './check-ignored-paths'
 import type { GitRuntimeOptions } from './git-runtime-options'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 /** Project-level list of gitignored paths to copy into each new worktree.
  *  Cross-tool convention (see issue #7549). */
@@ -16,6 +17,9 @@ export const WORKTREE_INCLUDE_FILE = '.worktreeinclude'
 const WORKTREE_INCLUDE_MAX_FILE_BYTES = 256 * 1024
 // Why: bound the work a single repo file can request; entries beyond this are ignored.
 const WORKTREE_INCLUDE_MAX_ENTRIES = 1000
+// Why: include files can name hundreds of independent paths; bound the local
+// stat fan-out while avoiding one serial filesystem round trip per entry.
+const WORKTREE_INCLUDE_PATH_STAT_CONCURRENCY = 8
 
 /** Parse `.worktreeinclude` into deduped, repo-root-relative literal paths.
  *  Blank lines and `#` comments are skipped; `\` is normalized to `/`, a `./`
@@ -109,16 +113,24 @@ export async function resolveWorktreeIncludePaths(
     }
 
     // Keep only entries present in the primary checkout — a listed but absent
-    // path (e.g. node_modules before install) has nothing to copy.
-    const existing: string[] = []
-    for (const relativePath of candidates) {
-      try {
-        await lstat(join(repoPath, relativePath))
-        existing.push(relativePath)
-      } catch {
-        // Absent in the primary checkout — nothing to copy.
+    // path (e.g. node_modules before install) has nothing to copy. The mapper
+    // retains candidate order for deterministic git-ignore input and output.
+    const existence = await mapWithConcurrency(
+      candidates,
+      WORKTREE_INCLUDE_PATH_STAT_CONCURRENCY,
+      async (relativePath) => {
+        try {
+          await lstat(join(repoPath, relativePath))
+          return relativePath
+        } catch {
+          // Absent in the primary checkout — nothing to copy.
+          return null
+        }
       }
-    }
+    )
+    const existing = existence.filter(
+      (relativePath): relativePath is string => relativePath !== null
+    )
     if (existing.length === 0) {
       return []
     }

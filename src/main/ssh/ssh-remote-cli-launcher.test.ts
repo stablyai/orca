@@ -7,11 +7,19 @@ import { describe, expect, it } from 'vitest'
 import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
-// Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
-// keep the larger allowance scoped to the real compiler integration test.
+// Why: the compile case is six process creations - powershell.exe -> csc.exe,
+// then the freshly built orca.exe -> node.exe, twice - and hosted Windows
+// runners periodically slow process creation down. Across 176 native-smoke runs
+// it spanned 1.9s-35.4s (p50 4.3s) while this file's powershell-only test held
+// its median, so the cost is the runner, not the assertions. The shared 30s
+// testTimeout still leaves 1.1% of those runs red; 60s clears all 176. The old
+// 15s was written when this job ran bare vitest on the 5s default, before
+// #8909 pointed it at config/vitest.config.ts.
+const WINDOWS_LAUNCHER_TIMEOUT_MS = 60_000
+
 function itWindows(name: string, test: () => void): void {
   const runner = process.platform === 'win32' ? it : it.skip
-  runner(name, { timeout: 15_000 }, test)
+  runner(name, { timeout: WINDOWS_LAUNCHER_TIMEOUT_MS }, test)
 }
 
 function decodePowerShellCommand(command: string): string {

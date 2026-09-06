@@ -1,6 +1,6 @@
 import type { OpenFile } from '@/store/slices/editor'
 import type { PaletteDocument } from './palette-match/palette-document'
-import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -49,7 +49,7 @@ export type SearchableWorkspaceTab = {
 // secondary crowds the row. Keep these matchable so typing "terminal" still finds them.
 export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
-type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]

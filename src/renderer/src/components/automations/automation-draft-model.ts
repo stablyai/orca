@@ -1,7 +1,7 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
-import { buildAutomationCronSchedule } from '../../../../shared/automation-schedules'
+import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { AutomationDraft } from './AutomationEditorDialog'
 

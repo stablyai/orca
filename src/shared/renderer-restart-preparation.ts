@@ -2,7 +2,11 @@ import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
 } from './editor-save-events'
-import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT } from './renderer-shutdown-events'
+import {
+  consumeShutdownCheckpointFailureReason,
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT
+} from './renderer-shutdown-events'
 import type { UpdateStatus } from './update-status-types'
 
 export type AppRestartPrepOptions = {
@@ -42,10 +46,10 @@ export async function prepareRendererForAppRestart(
   { startedEventName, abortedEventName, awaitCheckpoint }: AppRestartPrepOptions
 ): Promise<void> {
   eventTarget.dispatchEvent(new Event(startedEventName))
+  let checkpointFailed = false
 
   try {
     await requestEditorHotExitBackup(eventTarget)
-    let checkpointFailed = false
     const markCheckpointFailed = (): void => {
       checkpointFailed = true
     }
@@ -63,13 +67,26 @@ export async function prepareRendererForAppRestart(
       )
     }
     if (checkpointFailed) {
-      throw new Error('Renderer shutdown checkpoint was not completed.')
+      // Why: the guard publishes the swallowed persist error out-of-band; naming it
+      // here is the only way the update-error dialog can say what actually failed.
+      const reason = consumeShutdownCheckpointFailureReason()
+      throw new Error(
+        reason
+          ? `Renderer shutdown checkpoint was not completed: ${reason}`
+          : 'Renderer shutdown checkpoint was not completed.'
+      )
     }
     // Why: the checkpoint only stages synchronously. Navigating before that
     // write lands loses the session snapshot to a crash or power loss.
     await awaitCheckpoint()
   } catch (error) {
-    eventTarget.dispatchEvent(new Event(abortedEventName))
+    // A checkpoint failure ends the current restart without abandoning the
+    // retry-then-degrade budget that the next user attempt must consume.
+    eventTarget.dispatchEvent(
+      new Event(
+        checkpointFailed ? ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT : abortedEventName
+      )
+    )
     throw error
   }
 }

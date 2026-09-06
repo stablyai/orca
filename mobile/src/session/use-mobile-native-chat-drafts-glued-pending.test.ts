@@ -41,6 +41,7 @@ function renderedPendingTexts(
   state: DraftState | null
 ): (string | undefined)[] {
   const { data } = buildMobileNativeChatTransientData({
+    messages,
     folded: messages,
     streaming: null,
     pending: state?.pending ?? []

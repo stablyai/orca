@@ -4,6 +4,9 @@ import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
+import type { DispatchCreator } from '../dispatch-depth'
+import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -25,6 +28,9 @@ export function createStartingWorkerDispatch(
       method: string
       payloadHash: string
     }
+    /** Who is dispatching, for nesting depth. Required so a new caller must decide. */
+    creator: DispatchCreator
+    maxDepth: number
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -55,7 +61,7 @@ export function createStartingWorkerDispatch(
     }
     const task = this.getTask(params.taskId)
     if (!task) {
-      throw new OrchestrationError('task_not_found', `Task ${params.taskId} was not found.`)
+      throw taskNotFoundError(`Task ${params.taskId} was not found.`, { taskId: params.taskId })
     }
     if (params.retryOf) {
       const prior = this.getDispatchContextById(params.retryOf)
@@ -69,15 +75,18 @@ export function createStartingWorkerDispatch(
         !['failed', 'stopped', 'abandoned'].includes(priorWorker.state) ||
         !['failed', 'blocked'].includes(task.status)
       ) {
-        throw new OrchestrationError(
-          'task_not_startable',
-          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`
+        throw taskNotStartableError(
+          this,
+          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`,
+          task,
+          params.retryOf
         )
       }
     } else if (task.status !== 'ready') {
-      throw new OrchestrationError(
-        'task_not_startable',
-        `Task ${task.id} is ${task.status}; only a ready Task can start.`
+      throw taskNotStartableError(
+        this,
+        `Task ${task.id} is ${task.status}; only a ready Task can start.`,
+        task
       )
     }
 
@@ -95,13 +104,14 @@ export function createStartingWorkerDispatch(
           params.mutationReceipt.requestId
         )
     }
-    this.db
-      .prepare(
-        `INSERT INTO dispatch_contexts (
-           id, run_id, task_id, contract_version, launch_token_hash, status, dispatched_at
-         ) VALUES (?, ?, ?, ?, ?, 'pending', datetime('now'))`
-      )
-      .run(id, task.run_id, task.id, CURRENT_CONTRACT_VERSION, params.launchTokenHash ?? null)
+    insertStartingDispatchContextRow(this.db, {
+      id,
+      runId: task.run_id,
+      taskId: task.id,
+      contractVersion: CURRENT_CONTRACT_VERSION,
+      launchTokenHash: params.launchTokenHash ?? null,
+      depth: this.resolveChildDispatchDepth(params.creator, params.maxDepth)
+    })
     this.db
       .prepare(
         `INSERT INTO worker_dispatches (

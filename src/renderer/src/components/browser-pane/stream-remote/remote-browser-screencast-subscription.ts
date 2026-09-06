@@ -4,6 +4,7 @@ import type {
   BrowserScreencastResult
 } from '../../../../../shared/runtime-types'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/runtime-rpc-feature-interaction-source'
+import { e2eConfig } from '@/lib/e2e-config'
 import { isRemoteBrowserPageMissingCode } from './remote-browser-stream-errors'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
 
@@ -23,6 +24,23 @@ export type RemoteBrowserScreencastRequest = {
   pageId: string
   viewportSize: RemoteBrowserViewportSize | null
   deviceScaleFactor: number
+}
+
+type E2eRemoteBrowserScreencastWindow = Window & {
+  __remoteBrowserScreencastObserver?: { snapshot: () => { subscribeCount: number } }
+}
+
+let e2eScreencastSubscribeCount = 0
+
+function recordE2eScreencastSubscribe(): void {
+  if (!e2eConfig.exposeStore || typeof window === 'undefined') {
+    return
+  }
+  e2eScreencastSubscribeCount += 1
+  const target = window as E2eRemoteBrowserScreencastWindow
+  target.__remoteBrowserScreencastObserver ??= {
+    snapshot: () => ({ subscribeCount: e2eScreencastSubscribeCount })
+  }
 }
 
 // Why: isCurrent gates the two channels the runtime can deliver a stale event on; frames and close
@@ -46,6 +64,7 @@ export async function openRemoteBrowserScreencastStream(
   request: RemoteBrowserScreencastRequest,
   events: RemoteBrowserScreencastEvents
 ): Promise<{ unsubscribe: () => void }> {
+  recordE2eScreencastSubscribe()
   return subscribe(
     {
       selector: request.environmentId,

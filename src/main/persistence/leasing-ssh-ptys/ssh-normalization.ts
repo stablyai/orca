@@ -4,6 +4,7 @@ import type {
   SshTarget
 } from '../../../shared/ssh-types'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../../shared/ssh-types'
+import { normalizeSshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
@@ -60,9 +61,11 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
     return null
   }
   const now = Date.now()
+  const pendingKill = normalizeSshPendingPtyKill(raw.pendingKill)
   return {
     targetId: raw.targetId,
     ptyId: raw.ptyId,
+    ...(pendingKill ? { pendingKill } : {}),
     ...(typeof raw.worktreeId === 'string' ? { worktreeId: raw.worktreeId } : {}),
     ...(typeof raw.tabId === 'string' ? { tabId: raw.tabId } : {}),
     ...(typeof raw.leafId === 'string' && raw.leafId.length <= 256 ? { leafId: raw.leafId } : {}),
@@ -70,7 +73,13 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
-    ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
+    ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {}),
+    // Whitelisted or the loader would strip them on every launch, and a superseded predecessor
+    // would come back reattachable — the fan-out this mark exists to prevent.
+    ...(typeof raw.supersededBy === 'string' && raw.supersededBy.length > 0
+      ? { supersededBy: raw.supersededBy }
+      : {}),
+    ...(raw.relayIdRecycled === true ? { relayIdRecycled: true as const } : {})
   }
 }
 

@@ -10,6 +10,7 @@ import { OrchestrationDb } from '../orchestration/db'
 import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const Params = z.object({ subject: z.string() })
 
@@ -304,6 +305,8 @@ describe('durable orchestration mutation ledger', () => {
       .update(JSON.stringify({ method: 'orchestration.workerStart', params }))
       .digest('hex')
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: params.task,
       startOptions: {},
       mutationReceipt: {
@@ -371,7 +374,7 @@ describe('durable orchestration mutation ledger', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'ask', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
     const capability = db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: 'tab_worker:leaf_worker',

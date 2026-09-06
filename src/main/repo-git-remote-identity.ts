@@ -1,6 +1,7 @@
+import type { ExecutionHostId } from '../shared/execution-host'
 import { deriveGitRemoteIdentity, type GitRemoteIdentity } from '../shared/git-remote-identity'
 import { gitExecFileAsync } from './git/runner'
-import { getSshGitProvider } from './providers/ssh-git-dispatch'
+import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
 
 // Why: the runner only arms its kill timer when a timeout is passed, so an unbounded local probe
 // never settles on a hung NFS/SMB cwd (the path walk blocks) or a wedged `wsl.exe -d <distro>`.
@@ -26,20 +27,29 @@ export type GitRemoteIdentityProbe =
 
 export async function probeGitRemoteIdentity(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: GitRemoteIdentityProbeOptions = {}
 ): Promise<GitRemoteIdentityProbe> {
   try {
-    const result = connectionId
-      ? await getSshGitProvider(connectionId)?.exec(['remote', '-v'], repoPath, {
-          signal: options.signal,
-          timeoutMs: options.timeoutMs ?? SSH_PROBE_TIMEOUT_MS
-        })
-      : await gitExecFileAsync(['remote', '-v'], {
-          cwd: repoPath,
-          timeout: options.timeoutMs ?? LOCAL_PROBE_TIMEOUT_MS,
-          signal: options.signal
-        })
+    // Inside the try on purpose: an id naming no host must land on `unavailable` like every other
+    // probe that never reached git. It must never become the local answer for a remote path.
+    const route = resolveGitRouteForHost(executionHostId)
+    if (route.kind === 'runtime') {
+      // That environment's server runs its own git, and the SSH target on its repo row is nested in
+      // that server's namespace — dialing it here answers for a same-named box of ours.
+      return { status: 'unavailable' }
+    }
+    const result =
+      route.kind === 'ssh'
+        ? await route.provider?.exec(['remote', '-v'], repoPath, {
+            signal: options.signal,
+            timeoutMs: options.timeoutMs ?? SSH_PROBE_TIMEOUT_MS
+          })
+        : await gitExecFileAsync(['remote', '-v'], {
+            cwd: repoPath,
+            timeout: options.timeoutMs ?? LOCAL_PROBE_TIMEOUT_MS,
+            signal: options.signal
+          })
     if (!result) {
       return { status: 'unavailable' }
     }
@@ -54,9 +64,9 @@ export async function probeGitRemoteIdentity(
 
 export async function detectGitRemoteIdentity(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   options: GitRemoteIdentityProbeOptions = {}
 ): Promise<GitRemoteIdentity | null> {
-  const probe = await probeGitRemoteIdentity(repoPath, connectionId, options)
+  const probe = await probeGitRemoteIdentity(repoPath, executionHostId, options)
   return probe.status === 'resolved' ? probe.identity : null
 }

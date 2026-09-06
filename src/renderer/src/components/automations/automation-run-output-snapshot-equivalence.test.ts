@@ -89,7 +89,7 @@ describe('automation run output snapshot queue equivalence', () => {
     const reference = createShiftReferenceBuffer()
     const candidate = createAutomationRunOutputSnapshotBuffer()
     let chunkCount = 0
-    for (let offset = 0; offset < source.length; ) {
+    for (let offset = 0; offset < source.length;) {
       const chunkLength = 1 + (random() % 73)
       const chunk = source.slice(offset, offset + chunkLength)
       reference.append(chunk)

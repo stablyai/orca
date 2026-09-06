@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
 import { buildAutomationShellStartup } from '../../../shared/automation-shell-startup'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { requireTuiAgentConfig } from '../../../shared/require-tui-agent-config'
 import {
   buildAgentStartupPlan,
   resolveStartupShell,
@@ -33,7 +33,7 @@ export function buildBackgroundSessionStartup(args: {
   })
   const hasPrompt = prompt.length > 0
   const isFollowup =
-    agent !== null && TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+    agent !== null && requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
   const startupPlan = agent
     ? buildAgentStartupPlan({
         agent,

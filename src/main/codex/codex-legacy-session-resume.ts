@@ -9,6 +9,7 @@ import type {
 import { isPerAccountManagedCodexHome } from '../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
@@ -104,6 +105,7 @@ async function resolveSelectedAccountCodexHomeForResume(
     args.agent !== 'codex' ||
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
+    parseWslUncPath(args.codexHome) !== null ||
     !isPerAccountManagedCodexHome(args.codexHome)
   ) {
     return null

@@ -5,12 +5,16 @@ import {
   registerPtyMock,
   setMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtysForPaneKeyMock,
-  clearPaneKeyAliasesForPtyMock
+  clearPaneKeyAliasesForPtyMock,
+  spawnMock
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { RuntimeResolvedWorktreeCache } from '../runtime/runtime-resolved-worktree-cache'
+import type { ResolvedWorktree } from '../runtime/runtime-worktree-path-identity'
+import { getWorktreeScanMutationRevision } from '../local-worktree-scan-generation'
 import {
   registerPtyHandlers,
   clearProviderPtyState,
@@ -358,19 +362,22 @@ describe('registerPtyHandlers', () => {
     } as never)
     // Why: selector resolution shells out to git for real repos; prime the
     // resolved-worktree cache so this headless fixture resolves offline.
+    //
+    // Why through getSnapshot and not a hand-written `resolved` entry: the cache decides freshness
+    // from fields it stamps itself, so a literal that mirrors them is a second copy of that
+    // contract and goes stale the moment a field is added. Let the cache stamp its own entry.
     const worktreeResolutionInternals = runtime as unknown as {
-      buildResolvedWorktreeFromId(id: string): unknown
-      resolvedWorktreeCache: {
-        worktrees: unknown[]
-        platformByRepoId: Map<string, NodeJS.Platform>
-        expiresAt: number
-      } | null
+      buildResolvedWorktreeFromId(id: string): ResolvedWorktree
+      resolvedWorktrees: RuntimeResolvedWorktreeCache
     }
-    worktreeResolutionInternals.resolvedWorktreeCache = {
-      worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
-      platformByRepoId: new Map([[repo.id, process.platform]]),
-      expiresAt: Date.now() + 60_000
-    }
+    await worktreeResolutionInternals.resolvedWorktrees.getSnapshot(
+      async () => ({
+        worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
+        platformByRepoId: new Map([[repo.id, process.platform]])
+      }),
+      60_000,
+      getWorktreeScanMutationRevision()
+    )
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
         id: ptyId,
@@ -462,8 +469,86 @@ describe('registerPtyHandlers', () => {
 
     expect(registerPtyMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        paneKey: null
+        paneKey: stablePaneKey
       })
+    )
+  })
+  it('stamps a reminted $$ pane key as the metadata-proven canonical key', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+    const remintedPaneKey = '$$MFRGGZDFMY:L$$'
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: {
+        ORCA_PANE_KEY: remintedPaneKey,
+        ORCA_AGENT_LAUNCH_TOKEN: 'launch-remint'
+      }
+    })
+
+    expect(spawnMock.mock.calls.at(-1)?.[2]).toEqual(
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_PANE_KEY: stablePaneKey,
+          ORCA_AGENT_LAUNCH_TOKEN: 'launch-remint'
+        })
+      })
+    )
+    expect(registerPtyMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paneKey: stablePaneKey
+      })
+    )
+    expect(registerPaneKeyAliasMock).toHaveBeenCalledWith(
+      remintedPaneKey,
+      stablePaneKey,
+      expect.any(String),
+      expect.any(Number),
+      { authorityVerified: true }
+    )
+  })
+  it('aliases a reminted env token only onto this spawn metadata pane', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const claimedPaneKey = makePaneKey('tab-2', leafId)
+    const remintedPaneKey = '$$MFRGGZDFMY:L$$'
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-2',
+      leafId,
+      env: {
+        ORCA_PANE_KEY: remintedPaneKey,
+        ORCA_AGENT_LAUNCH_TOKEN: 'launch-remint'
+      }
+    })
+
+    expect(spawnMock.mock.calls.at(-1)?.[2]).toEqual(
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_PANE_KEY: claimedPaneKey,
+          ORCA_AGENT_LAUNCH_TOKEN: 'launch-remint'
+        })
+      })
+    )
+    expect(registerPaneKeyAliasMock).toHaveBeenCalledWith(
+      remintedPaneKey,
+      claimedPaneKey,
+      expect.any(String),
+      expect.any(Number),
+      { authorityVerified: true }
+    )
+    expect(registerPaneKeyAliasMock).not.toHaveBeenCalledWith(
+      remintedPaneKey,
+      expect.stringContaining('tab-1:'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
     )
   })
   it('does not let an old PTY teardown clear a newer pane-key owner', async () => {

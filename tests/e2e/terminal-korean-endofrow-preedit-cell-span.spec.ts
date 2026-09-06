@@ -42,7 +42,7 @@ async function sampleOpenComposition(page: Page): Promise<MidlinePreeditOcclusio
     .poll(
       async () => {
         const overlay = await samplePreeditOverlay(page)
-        return overlay.active && overlay.rect.width > 0 && overlay.text === '가'
+        return overlay.active && overlay.rect.width > 0 && overlay.text.startsWith('가')
       },
       { message: 'the preedit never reached the overlay at a non-zero size' }
     )
@@ -56,6 +56,73 @@ function describeSpan(sample: MidlinePreeditOcclusionSample): string {
 }
 
 test.describe('Terminal end-of-row Korean preedit cell span', () => {
+  test('keeps the preedit caret inside the final terminal cell', async ({ orcaPage }, testInfo) => {
+    const arena = await openTerminalImePaneArena(orcaPage)
+    let completed = false
+    try {
+      // CHA clamps to the last column; xterm's wrap-pending cursor is the final-cell shape the
+      // composition helper itself clamps onto.
+      await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H\x1b[999Gx')
+      await setImeComposition(arena.session, '가')
+
+      const sample = await sampleOpenComposition(orcaPage)
+      const caret = sample.caretRect
+      const preedit = sample.preeditRect
+      const textarea = sample.textareaRect
+      const screenRight = sample.screenRect.left + sample.screenRect.width
+      expect(sample.cursorColumn, 'the cursor is not in the final column').toBe(
+        sample.terminalColumns - 1
+      )
+      expect(sample.rowTailFromCursor, 'the final committed cell is not under the cursor').toBe('x')
+      expect(sample.remainderText, 'the overlay lost the final committed cell').toBe('x')
+      expect(sample.remainderDisplay, 'the impossible tail still clips the preedit caret').toBe(
+        'none'
+      )
+      expect(sample.overlayText, 'the hidden tail still appears in the overlay').toBe('가')
+      expect(caret, 'the active preedit has no caret element').not.toBeNull()
+      expect(caret!.width, 'the preedit caret has zero width').toBeGreaterThan(0)
+      expect(caret!.height, 'the preedit caret has zero height').toBeGreaterThan(0)
+      expect(
+        caret!.left,
+        'the preedit caret is clipped left of its overlay'
+      ).toBeGreaterThanOrEqual(sample.overlayRect.left - 0.5)
+      expect(
+        caret!.right,
+        'the preedit caret overflows the terminal at the right edge'
+      ).toBeLessThanOrEqual(screenRight + 0.5)
+      expect(preedit, 'the active composition has no preedit element').not.toBeNull()
+      expect(textarea.width, 'the IME candidate anchor has zero width').toBeGreaterThan(0)
+      expect(
+        textarea.left,
+        'the IME candidate anchor overflows the terminal at the left edge'
+      ).toBeGreaterThanOrEqual(sample.screenRect.left - 0.5)
+      expect(
+        textarea.right,
+        'the IME candidate anchor overflows the terminal at the right edge'
+      ).toBeLessThanOrEqual(screenRight + 0.5)
+      expect(
+        textarea.right,
+        'the IME candidate anchor is not aligned with the preedit right edge'
+      ).toBeCloseTo(preedit!.right, 0)
+      expect(
+        textarea.right,
+        'the IME candidate anchor is not aligned with the caret right edge'
+      ).toBeCloseTo(caret!.right, 0)
+      expect(
+        textarea.right,
+        'the IME candidate anchor is not aligned with the terminal right edge'
+      ).toBeCloseTo(screenRight, 0)
+      completed = true
+    } finally {
+      await closeTerminalImePaneArena(
+        arena,
+        testInfo,
+        'korean-right-edge-preedit-caret',
+        !completed
+      )
+    }
+  })
+
   test('renders a composing syllable wider than the one cell #12729 measured', async ({
     orcaPage
   }, testInfo) => {

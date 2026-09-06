@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import * as path from 'node:path'
 import { resolveSpawn, runProcess, runProcessSync } from './run-process'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
@@ -96,6 +99,27 @@ describe('runProcessSync', () => {
   })
 })
 
+describe('bounded output', () => {
+  it('reports a clipped answer instead of passing it off as the whole one', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(64))'],
+      maxOutputBytes: 8
+    })
+    expect(result.stdout).toBe('xxxxxxxx')
+    expect(result.outputTruncated).toBe(true)
+  })
+
+  it('does not call output that exactly fills the cap truncated', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(8))'],
+      maxOutputBytes: 8
+    })
+    expect(result.outputTruncated).toBe(false)
+  })
+})
+
 describe('unkillable children', () => {
   it('settles after the grace period rather than outliving its own deadline', async () => {
     // `close` only fires once the child is gone, so a child that ignores the
@@ -126,6 +150,42 @@ describe('abort', () => {
     // Not a timeout: the caller asked it to stop.
     expect(result.timedOut).toBe(false)
   }, 20_000)
+
+  it.skipIf(process.platform === 'win32')(
+    'kills the process group and waits for confirmed root exit with a termination barrier',
+    async () => {
+      const root = await mkdtemp(path.join(tmpdir(), 'run-process-barrier-'))
+      const marker = path.join(root, 'descendant-state')
+      const descendantScript =
+        `printf ready > "$1";trap 'printf signaled > "$1"' TERM;` + `while :;do sleep 1;done`
+      const controller = new AbortController()
+      const pending = runProcess({
+        program: process.execPath,
+        args: [
+          '-e',
+          `const {spawn}=require('node:child_process');` +
+            `spawn('/bin/sh',${JSON.stringify(['-c', descendantScript, 'sh', marker])},{stdio:'ignore'});` +
+            `setInterval(()=>{},1000)`
+        ],
+        timeoutMs: 60_000,
+        signal: controller.signal,
+        terminationBarrier: true
+      })
+      try {
+        await expect
+          .poll(() => readFile(marker, 'utf8').catch(() => ''), { timeout: 10_000 })
+          .toBe('ready')
+        controller.abort()
+        await pending
+        await expect.poll(() => readFile(marker, 'utf8')).toBe('signaled')
+      } finally {
+        controller.abort()
+        await pending
+        await rm(root, { recursive: true, force: true })
+      }
+    },
+    30_000
+  )
 })
 
 describe('stdin delivery failures', () => {
@@ -150,13 +210,15 @@ describe('a signal that is already aborted', () => {
     const controller = new AbortController()
     controller.abort()
     const startedAt = Date.now()
+    const onChildTerminated = vi.fn()
     const result = await runProcess({
-      program: process.execPath,
-      args: ['-e', 'setInterval(() => {}, 1000)'],
+      program: path.join(tmpdir(), 'orca-must-not-spawn'),
       timeoutMs: 30_000,
-      signal: controller.signal
+      signal: controller.signal,
+      onChildTerminated
     })
     expect(result.timedOut).toBe(false)
+    expect(onChildTerminated).toHaveBeenCalledOnce()
     expect(Date.now() - startedAt).toBeLessThan(10_000)
   }, 20_000)
 })

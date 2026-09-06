@@ -124,12 +124,14 @@ function makeBrowserPage({
   id,
   title,
   url = 'https://example.com/one',
+  faviconUrl = null,
   workspaceLabel = null,
   isCurrentPage = false
 }: {
   id: string
   title: string
   url?: string
+  faviconUrl?: string | null
   workspaceLabel?: string | null
   isCurrentPage?: boolean
 }): SearchableBrowserPage {
@@ -140,7 +142,7 @@ function makeBrowserPage({
     url,
     title,
     loading: false,
-    faviconUrl: null,
+    faviconUrl,
     canGoBack: false,
     canGoForward: false,
     loadError: null,
@@ -445,10 +447,11 @@ describe('searchOpenTabs result fields', () => {
   })
 
   it('carries the activation identifiers each source needs', () => {
+    const faviconUrl = 'https://example.com/favicon.ico'
     const results = search({
       query: 'zebra',
       workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Zebra tab' })],
-      browserPages: [makeBrowserPage({ id: 'page-1', title: 'Zebra page' })],
+      browserPages: [makeBrowserPage({ id: 'page-1', title: 'Zebra page', faviconUrl })],
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Zebra emulator' })]
     })
 
@@ -467,7 +470,8 @@ describe('searchOpenTabs result fields', () => {
         contentType: 'browser',
         pageId: 'page-1',
         workspaceId: 'page-1-ws',
-        worktreeId: 'wt-1'
+        worktreeId: 'wt-1',
+        faviconUrl
       },
       {
         source: 'simulator',

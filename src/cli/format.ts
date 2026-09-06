@@ -1,8 +1,8 @@
 import type { CliStatusResult } from '../shared/runtime-types'
-import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
 import { prepareComputerCliJsonResult } from './computer-format'
-import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
-import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
+import type { RuntimeRpcSuccess } from './runtime-client'
+
+export { formatCliError, reportCliError } from './cli-error'
 
 export {
   formatBrowserProfileList,
@@ -47,7 +47,10 @@ export {
   formatAutomationRemoved,
   formatAutomationRun,
   formatAutomationRuns,
-  formatAutomationShow,
+  formatAutomationShow
+} from './automation-format'
+export type { AutomationListPayload, AutomationShowPayload } from './automation-format'
+export {
   formatEnvironment,
   formatEnvironmentList,
   formatMemorySnapshot,
@@ -58,10 +61,6 @@ export {
   formatWorktreePs,
   formatWorktreeShow
 } from './workspace-format'
-
-type CliErrorContext = {
-  commandPath?: readonly string[]
-}
 
 export function printResult<TResult>(
   response: RuntimeRpcSuccess<TResult>,
@@ -75,111 +74,14 @@ export function printResult<TResult>(
   console.log(formatter(response.result))
 }
 
-export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
-  const message = error instanceof Error ? error.message : String(error)
-  if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
-    if (hasOrchestrationRequestId(error.data)) {
-      return message
-    }
-    return `${message}\nOrca is not running. Run 'orca open' first.`
-  }
-  // Why: error-specific recovery must win over the generic computer fallback.
-  if (error instanceof RuntimeClientError) {
-    const nextSteps = nextStepsFromData(error.data)
-    if (nextSteps.length > 0) {
-      return formatMessageWithNextSteps(message, nextSteps)
-    }
-    if (error.code === 'invalid_argument' && context.commandPath?.[0] === 'computer') {
-      return formatMessageWithNextSteps(
-        message,
-        computerUseErrorRecoveryData('invalid_argument')?.nextSteps ?? []
-      )
-    }
-  }
-  if (
-    error instanceof RuntimeRpcFailureError &&
-    error.response.error.code === 'runtime_unavailable'
-  ) {
-    return `${message}\nOrca is not running. Run 'orca open' first.`
-  }
-  if (error instanceof RuntimeRpcFailureError) {
-    return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
-  }
-  return message
-}
-
-function hasOrchestrationRequestId(data: unknown): boolean {
-  return (
-    data !== null &&
-    typeof data === 'object' &&
-    typeof (data as { orchestrationRequestId?: unknown }).orchestrationRequestId === 'string'
-  )
-}
-
-export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
-  if (json) {
-    if (error instanceof RuntimeRpcFailureError) {
-      console.log(JSON.stringify(error.response, null, 2))
-    } else {
-      const response: RuntimeRpcFailure = {
-        id: 'local',
-        ok: false,
-        error: {
-          code: error instanceof RuntimeClientError ? error.code : 'runtime_error',
-          message: error instanceof Error ? error.message : String(error),
-          data: localCliErrorData(error, context)
-        },
-        _meta: {
-          runtimeId: null
-        }
-      }
-      console.log(JSON.stringify(response, null, 2))
-    }
-  } else {
-    console.error(formatCliError(error, context))
-  }
-}
-
-function formatMessageWithNextSteps(message: string, nextSteps: readonly string[]): string {
-  if (nextSteps.length === 0) {
-    return message
-  }
-  return `${message}\n${nextSteps.map((step) => `Next step: ${step}`).join('\n')}`
-}
-
-function nextStepsFromData(data: unknown): string[] {
-  if (
-    data &&
-    typeof data === 'object' &&
-    Array.isArray((data as { nextSteps?: unknown }).nextSteps)
-  ) {
-    return (data as { nextSteps: unknown[] }).nextSteps.filter(
-      (step): step is string => typeof step === 'string'
-    )
-  }
-  return []
-}
-
-function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
-  // Why: error-specific recovery must win over the generic computer fallback.
-  if (error instanceof RuntimeClientError && error.data !== undefined) {
-    return error.data
-  }
-  if (
-    error instanceof RuntimeClientError &&
-    error.code === 'invalid_argument' &&
-    context.commandPath?.[0] === 'computer'
-  ) {
-    return computerUseErrorRecoveryData('invalid_argument')
-  }
-  return undefined
-}
-
 export type HostListEntry = {
   kind: 'local' | 'ssh' | 'environment'
   name: string
   id: string
   selector: string
+  platform?: string
+  connected?: boolean
+  connectionStatus?: string
 }
 
 // Why: the selector column is the point of this command — the name alone is what callers already
@@ -191,8 +93,23 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
     environment: 'orca server'
   }
   return result.hosts
-    .map((host) => `${kindLabel[host.kind].padEnd(11)} ${host.name}  ->  ${host.selector}`)
+    .map(
+      (host) =>
+        `${kindLabel[host.kind].padEnd(11)} ${host.name}  ${host.platform ?? 'platform unknown'}  ${formatHostConnection(host)}  ->  ${host.selector}`
+    )
     .join('\n')
+}
+
+function formatHostConnection(host: HostListEntry): string {
+  if (host.kind !== 'ssh') {
+    return ''
+  }
+  if (host.connected === undefined) {
+    return `connection unknown${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+  }
+  return host.connected
+    ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
+    : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
@@ -205,6 +122,7 @@ export function formatCliStatus(status: CliStatusResult): string {
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
     `runtimeState: ${status.runtime.state}`,
     `runtimeReachable: ${status.runtime.reachable}`,
+    `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`
   ].join('\n')

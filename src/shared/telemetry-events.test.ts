@@ -576,6 +576,15 @@ describe('workspace_create_failed schema', () => {
 })
 
 describe('settings_changed schema', () => {
+  it('accepts structured native chat as a boolean adoption signal', () => {
+    expect(
+      eventSchemas.settings_changed.safeParse({
+        setting_key: 'experimentalStructuredNativeChat',
+        value_kind: 'bool'
+      }).success
+    ).toBe(true)
+  })
+
   it('accepts whitelisted setting keys', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
       const parsed = eventSchemas.settings_changed.safeParse({

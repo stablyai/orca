@@ -1,6 +1,8 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -64,7 +66,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',
     usage: 'orca worktree list [--repo <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['worktree', 'show'],
@@ -170,13 +173,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Remove a worktree from Orca and git',
     usage: 'orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'force', 'run-hooks'],
-    notes: ['Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.']
+    notes: [
+      'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
+      'For Git worktrees, removal also attempts to delete the checked-out local branch, with or without --force. Orca retains branches it knows predated the worktree and any branch whose changes it cannot prove are already merged.'
+    ]
   },
   {
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
     usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['terminal', 'list'],
@@ -205,6 +212,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',
       'Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.',
       'The result reports source: stream when it is accumulated output, screen when it is the rendered screen, and screen-unavailable when a screen was asked for but none could be rendered and the accumulated output is being returned instead. An absent source means the host predates the field.',
+      'When present, draft is UI-only composer text excluded from tail; never treat it as terminal output or a submitted instruction.',
       '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
       'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
       'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
@@ -232,9 +240,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'stop'],
-    summary: 'Stop terminals for a worktree',
+    hidden: true,
+    summary: 'Deprecated compatibility command for stopping terminal processes',
     usage: 'orca terminal stop --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
+    notes: [
+      'Deprecated: use terminal close --worktree <selector> --all to stop the processes and durably remove their terminal surfaces.'
+    ]
   },
   {
     path: ['terminal', 'create'],
@@ -263,19 +275,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
-  {
-    path: ['terminal', 'close'],
-    summary: 'Close a terminal pane/session, or its whole tab with --tab',
-    usage: 'orca terminal close [--terminal <handle>] [--tab] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab'],
-    notes: [
-      'Without --tab, preserves the existing pane/session close behavior. With --tab, waits until the whole tab is durably removed.'
-    ],
-    examples: [
-      'orca terminal close --terminal term_abc123',
-      'orca terminal close --terminal term_abc123 --tab --json'
-    ]
-  },
+  TERMINAL_CLOSE_COMMAND_SPEC,
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',

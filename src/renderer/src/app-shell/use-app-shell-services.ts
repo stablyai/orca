@@ -15,6 +15,7 @@ import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerE
 import { useGitStatusPolling } from '../components/right-sidebar/useGitStatusPolling'
 import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/osc52-clipboard-default-on-notice'
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
+import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
 
 /**
@@ -31,6 +32,7 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
 
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
+  useLocalStructuredSessionTabsSync()
   // Subscribe to IPC push events
   useIpcEvents()
   useRemoteRuntimeRecoveryTriggers()

@@ -1,9 +1,11 @@
 import { join } from 'node:path'
 import {
+  clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
 } from './session-scanner-background'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import { listRunningWslHomeDirsAsync } from '../wsl'
+import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
@@ -56,6 +58,9 @@ export async function listAiVaultSessions(
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
+  if (args?.force === true) {
+    clearAiVaultBackgroundRestartCircuit()
+  }
   // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
   // transcripts; explicit refreshes bypass the cache and preempt stale scans.
   if (
@@ -75,15 +80,21 @@ export async function listAiVaultSessions(
     force: args?.force,
     signal: options.signal,
     start: async (scanSignal) => {
-      const additionalCodexSessionsDirs =
-        sources.getAdditionalCodexHomePaths?.().map((homePath) => join(homePath, 'sessions')) ?? []
+      const configuredCodexHomes = sources.getAdditionalCodexHomePaths?.() ?? []
+      const [additionalCodexHomes, wslHomeDirs] = await Promise.all([
+        filterPathsToRunningWslDistrosAsync(configuredCodexHomes),
+        getAiVaultWslHomeDirs()
+      ])
+      const additionalCodexSessionsDirs = additionalCodexHomes.map((homePath) =>
+        join(homePath, 'sessions')
+      )
       const result = await scanAiVaultSessionsInBackground(
         {
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths,
           additionalCodexSessionsDirs,
-          wslHomeDirs: await getAiVaultWslHomeDirs(),
+          wslHomeDirs,
           // Why: this scan is always host-local; callers addressing this host by a
           // runtime id get the result restamped at the RPC edge, never rescanned.
           executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -120,10 +131,7 @@ export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
-  const homes = await Promise.all(
-    (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
-  )
-  return homes.filter((homeDir): homeDir is string => Boolean(homeDir))
+  return listRunningWslHomeDirsAsync()
 }
 
 // Drops the scan-result cache after a session is deleted so a non-force

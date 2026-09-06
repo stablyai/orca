@@ -31,6 +31,7 @@ export type WorkerTranscriptSnapshotArchive = {
 
 export type WorkerTerminalTailArchive = {
   lines: string[]
+  draft?: string
   truncated: boolean
   terminalStatus: string
   warnings: string[]
@@ -85,8 +86,13 @@ export async function captureWorkerOutputArchive(args: {
       `Output could not be preserved for Dispatch ${args.dispatchId}; the terminal was retained. ${error instanceof Error ? error.message : String(error)}`
     )
   }
-  const redacted = redactWorkerTerminalLines(terminal.tail)
+  const redacted = redactWorkerTerminalLines([
+    ...terminal.tail,
+    ...(terminal.draft ? [terminal.draft] : [])
+  ])
   const bounded = boundArchiveLines(redacted.lines)
+  const draft = terminal.draft ? bounded.lines.at(-1) : undefined
+  const lines = terminal.draft ? bounded.lines.slice(0, -1) : bounded.lines
   // Why: an exited PTY zeroes its tail immediately, so an empty capture is a distinct receipt,
   // not silent success — worker-read must be able to say why nothing is there.
   const empty = bounded.lines.every((line) => line.trim() === '')
@@ -94,7 +100,8 @@ export async function captureWorkerOutputArchive(args: {
     kind: 'terminal_tail',
     status: empty ? 'empty' : 'captured',
     content: {
-      lines: bounded.lines,
+      lines,
+      ...(draft ? { draft } : {}),
       truncated: terminal.truncated || bounded.truncated,
       terminalStatus: terminal.status,
       warnings: empty
@@ -107,7 +114,7 @@ export async function captureWorkerOutputArchive(args: {
   }
 }
 
-function boundArchiveLines(lines: string[]): { lines: string[]; truncated: boolean } {
+export function boundArchiveLines(lines: string[]): { lines: string[]; truncated: boolean } {
   let total = 0
   for (const line of lines) {
     total += line.length + 1
@@ -115,18 +122,21 @@ function boundArchiveLines(lines: string[]): { lines: string[]; truncated: boole
   if (total <= TERMINAL_ARCHIVE_MAX_CHARS) {
     return { lines, truncated: false }
   }
-  const kept: string[] = []
+  // Collected newest-first and reversed once: unshift per line is O(n^2) and the
+  // char budget admits ~260k blank lines.
+  const keptReversed: string[] = []
   let budget = TERMINAL_ARCHIVE_MAX_CHARS
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const cost = lines[index].length + 1
     if (cost > budget) {
-      if (kept.length === 0 && budget > 1) {
-        kept.unshift(lines[index].slice(-(budget - 1)))
+      if (keptReversed.length === 0 && budget > 1) {
+        keptReversed.push(lines[index].slice(-(budget - 1)))
       }
       break
     }
-    kept.unshift(lines[index])
+    keptReversed.push(lines[index])
     budget -= cost
   }
-  return { lines: kept, truncated: true }
+  keptReversed.reverse()
+  return { lines: keptReversed, truncated: true }
 }

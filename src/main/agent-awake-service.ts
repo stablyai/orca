@@ -23,7 +23,7 @@ type PowerSaveBlocker = {
 }
 
 type PlatformAwakeAssertion = {
-  start: (reason: string) => void
+  start: (reason: string) => boolean | void
   stop: (reason: string) => void
   dispose: () => void
 }
@@ -41,6 +41,7 @@ type AgentAwakeServiceOptions = {
   logger?: Logger
   macosAssertion?: PlatformAwakeAssertion
   now?: () => number
+  platform?: NodeJS.Platform
   powerMonitor?: PowerMonitorEventSource | null
 }
 
@@ -55,6 +56,7 @@ export class AgentAwakeService {
   private readonly linuxAssertion: PlatformAwakeAssertion
   private readonly logger: Logger
   private readonly macosAssertion: PlatformAwakeAssertion
+  private readonly platform: NodeJS.Platform
   private readonly now: () => number
   private readonly unsubscribeResume: (() => void) | null
 
@@ -78,6 +80,7 @@ export class AgentAwakeService {
         now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
       })
+    this.platform = options.platform ?? process.platform
     const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
     if (resumeSource) {
       const onResume = () => this.refresh('power-resume')
@@ -102,7 +105,8 @@ export class AgentAwakeService {
   }
 
   setStatuses(statuses: AgentAwakeStatus[]): void {
-    this.statuses = statuses.map((status) => ({ ...status }))
+    // Copy the array, not every row: the hook server allocates each row fresh per event.
+    this.statuses = [...statuses]
     this.refresh('status-change')
   }
 
@@ -112,6 +116,11 @@ export class AgentAwakeService {
       mode: this.mode,
       active: this.mode === 'on' || (this.mode === 'auto' && workingAgentCount > 0)
     }
+  }
+
+  /** Agents this runtime has seen working recently, independent of the awake setting. */
+  getWorkingAgentCount(): number {
+    return this.getEligibleRunningStatusCount()
   }
 
   subscribe(listener: (status: ComputerAwakeStatus) => void): () => void {
@@ -132,8 +141,12 @@ export class AgentAwakeService {
     const runningStatusCount = this.getEligibleRunningStatusCount()
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
     if (shouldBlock) {
-      this.startBlocker(reason, runningStatusCount)
-      this.startMacosAssertion(reason)
+      const macosAssertionActive = this.startMacosAssertion(reason)
+      if (this.platform !== 'darwin' || !macosAssertionActive) {
+        this.startBlocker(reason, runningStatusCount)
+      } else {
+        this.stopBlocker('macos-assertion-active', runningStatusCount)
+      }
       this.startLinuxAssertion(reason)
     } else {
       this.stopBlocker(reason, runningStatusCount)
@@ -159,7 +172,8 @@ export class AgentAwakeService {
 
   private getEligibleRunningStatusCount(): number {
     const now = this.now()
-    return this.statuses.filter((status) => this.isWakeEligible(status, now)).length
+    // Counted in place: the filtered array was only ever measured, and this runs per hook event.
+    return this.statuses.reduce((count, s) => count + (this.isWakeEligible(s, now) ? 1 : 0), 0)
   }
 
   private isWakeEligible(status: AgentAwakeStatus, now: number): boolean {
@@ -229,15 +243,16 @@ export class AgentAwakeService {
     }
   }
 
-  private startMacosAssertion(reason: string): void {
+  private startMacosAssertion(reason: string): boolean {
     try {
-      this.macosAssertion.start(reason)
+      return this.macosAssertion.start(reason) !== false
     } catch (err) {
       this.logger.warn('[agent-awake] failed to start macOS system sleep assertion', {
         reason,
         mode: this.mode,
         error: err
       })
+      return false
     }
   }
 

@@ -17,6 +17,9 @@ export function useNativeChatLaunchDraftSignal(args: {
    *  session's real history. Same gate mobile's drafts hook uses. */
   transcriptLoading?: boolean
 }): { launchDraft: NativeChatLaunchDraft | null; launchDraftResolved: boolean } {
+  // Deliberately pane-agnostic: pane ownership gates the composer *write* in
+  // useNativeChatLaunchDraftAdoption. Nulling the seed here would also strand a
+  // copy an owning pane already mirrored, since the adoption effect early-returns.
   const launchDraft = useAppStore((s) => s.nativeChatLaunchDraftByTabId[args.terminalTabId] ?? null)
   const paneLaunchDraft = launchDraft?.agent === args.agent ? launchDraft : null
   const messages = args.messages
@@ -66,10 +69,11 @@ export function useNativeChatLaunchDraftSignal(args: {
  * transcript shows the TUI-side copy was resolved (submitted or cleared).
  *
  * State machine per seeded draft:
- * - unadopted + composer empty  → copy text into the composer, mark adopted
- * - unadopted + composer in use → mark adopted without copying (never stomp)
- * - resolved by transcript      → clear the seed; also clear the composer copy
- *                                 only when it is still the untouched seed text
+ * - unadopted + not the owning pane → ignore (the seed is keyed by tab; #16695)
+ * - unadopted + composer empty      → copy text into the composer, mark adopted
+ * - unadopted + composer in use     → mark adopted without copying (never stomp)
+ * - resolved by transcript          → clear the composer copy while it is still
+ *                                     the untouched seed text, and drop the seed
  */
 export function useNativeChatLaunchDraftAdoption(args: {
   terminalTabId: string
@@ -79,21 +83,45 @@ export function useNativeChatLaunchDraftAdoption(args: {
   draft: string
   setDraft: (next: string) => void
   setCaret: (next: number) => void
+  /** This pane is the tab-wide evidence's owner (`nativeChatLeafOwnsTabWideEvidence`).
+   *  Splitting drops it for every pane, so it gates pickup, never cleanup. */
+  ownsTabWideLaunchDraft: boolean
 }): void {
-  const { terminalTabId, agent, launchDraft, launchDraftResolved, draft, setDraft, setCaret } = args
+  const {
+    terminalTabId,
+    agent,
+    launchDraft,
+    launchDraftResolved,
+    draft,
+    setDraft,
+    setCaret,
+    ownsTabWideLaunchDraft
+  } = args
   useEffect(() => {
     if (!launchDraft || launchDraft.agent !== agent) {
       return
     }
     if (launchDraftResolved) {
-      if (launchDraft.adopted && draft === launchDraft.text) {
+      // Cleanup must survive a split: ownership is gone for both panes by then,
+      // so the pane still holding the untouched copy is the one that cleans up.
+      const holdsUntouchedCopy = launchDraft.adopted && draft === launchDraft.text
+      if (holdsUntouchedCopy) {
         setDraft('')
         setCaret(0)
       }
-      useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
+      // A pane that neither owns the seed nor holds its copy has no standing to
+      // drop it — the owning pane may not have mirrored it yet.
+      if (ownsTabWideLaunchDraft || holdsUntouchedCopy) {
+        useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
+      }
       return
     }
     if (launchDraft.adopted) {
+      return
+    }
+    // #16695: the seed describes the tab's original sole pane, so once a split
+    // exists no pane may mirror it into a composer.
+    if (!ownsTabWideLaunchDraft) {
       return
     }
     // Mark adopted before copying so a composer that already holds user text
@@ -103,5 +131,14 @@ export function useNativeChatLaunchDraftAdoption(args: {
       setDraft(launchDraft.text)
       setCaret(launchDraft.text.length)
     }
-  }, [agent, draft, launchDraft, launchDraftResolved, setCaret, setDraft, terminalTabId])
+  }, [
+    agent,
+    draft,
+    launchDraft,
+    launchDraftResolved,
+    ownsTabWideLaunchDraft,
+    setCaret,
+    setDraft,
+    terminalTabId
+  ])
 }

@@ -58,6 +58,22 @@ class ManualIdleClock {
     return this.timers.size
   }
 }
+type DaemonServerInternals = {
+  connections: {
+    clients: Map<string, { controlSocket: Socket }>
+    accept(socket: Socket): void
+  }
+  admission: { createOrAttachInFlight: number }
+  lifecycle: {
+    retirementRequested: boolean
+    state: string
+    beginIdleShutdown(): void
+  }
+  requestRouter: {
+    route(clientId: string, request: unknown): Promise<unknown>
+  }
+  host: { dispose: () => Promise<void> }
+}
 
 function createMockSubprocess(): SubprocessHandle & { exit(code: number): void } {
   let onExit: ((code: number) => void) | null = null
@@ -222,11 +238,8 @@ describe('current daemon lifecycle retirement', () => {
     await startServer()
     const client = new DaemonClient({ socketPath, tokenPath })
     await client.ensureConnected()
-    const daemon = server as unknown as {
-      clients: Map<string, { controlSocket: Socket }>
-      host: { dispose: () => Promise<void> }
-    }
-    const controlSocket = [...daemon.clients.values()][0].controlSocket
+    const daemon = server as unknown as DaemonServerInternals
+    const controlSocket = [...daemon.connections.clients.values()][0].controlSocket
     const originalWrite = controlSocket.write.bind(controlSocket)
     let replyFlushed: (() => void) | undefined
     vi.spyOn(controlSocket, 'write').mockImplementation(((
@@ -252,11 +265,8 @@ describe('current daemon lifecycle retirement', () => {
     await startServer()
     const client = new DaemonClient({ socketPath, tokenPath })
     await client.ensureConnected()
-    const daemon = server as unknown as {
-      clients: Map<string, { controlSocket: Socket }>
-      host: { dispose: () => Promise<void> }
-    }
-    const controlSocket = [...daemon.clients.values()][0].controlSocket
+    const daemon = server as unknown as DaemonServerInternals
+    const controlSocket = [...daemon.connections.clients.values()][0].controlSocket
     const originalWrite = controlSocket.write.bind(controlSocket)
     vi.spyOn(controlSocket, 'write').mockImplementation(((chunk: string | Uint8Array) =>
       originalWrite(chunk)) as unknown as Socket['write'])
@@ -301,8 +311,8 @@ describe('current daemon lifecycle retirement', () => {
     await startServer()
     const client = new DaemonClient({ socketPath, tokenPath })
     await client.ensureConnected()
-    const daemon = server as unknown as { createOrAttachInFlight: number }
-    daemon.createOrAttachInFlight = 1
+    const daemon = server as unknown as DaemonServerInternals
+    daemon.admission.createOrAttachInFlight = 1
 
     await expect(client.request('shutdownIfIdle', undefined)).resolves.toEqual({
       retiring: false
@@ -395,13 +405,13 @@ describe('current daemon lifecycle retirement', () => {
     await first.ensureConnected()
     await first.request('createOrAttach', { sessionId: 'reconnected', cols: 80, rows: 24 })
     first.disconnect()
-    const daemon = server as unknown as { retirementRequested: boolean }
-    await waitFor(() => daemon.retirementRequested)
+    const daemon = server as unknown as DaemonServerInternals
+    await waitFor(() => daemon.lifecycle.retirementRequested)
     expect(onIdleShutdown).not.toHaveBeenCalled()
 
     const second = new DaemonClient({ socketPath, tokenPath })
     await second.ensureConnected()
-    await waitFor(() => !daemon.retirementRequested)
+    await waitFor(() => !daemon.lifecycle.retirementRequested)
     subprocess.exit(0)
     expect(onIdleShutdown).not.toHaveBeenCalled()
 
@@ -444,8 +454,8 @@ describe('current daemon lifecycle retirement', () => {
         role: 'control'
       })}\n`
     )
-    const daemon = server as unknown as { clients: Map<string, unknown> }
-    await waitFor(() => daemon.clients.has('startup-health-control'))
+    const daemon = server as unknown as DaemonServerInternals
+    await waitFor(() => daemon.connections.clients.has('startup-health-control'))
     clock.advanceBy(1_000)
     healthControl.destroy()
 
@@ -465,18 +475,15 @@ describe('current daemon lifecycle retirement', () => {
         role: 'control'
       })}\n`
     )
-    const daemon = server as unknown as {
-      clients: Map<string, unknown>
-      retirementRequested: boolean
-    }
-    await waitFor(() => daemon.clients.has('startup-control-create'))
+    const daemon = server as unknown as DaemonServerInternals
+    await waitFor(() => daemon.connections.clients.has('startup-control-create'))
     const response = await requestOnRawSocket(control, {
       id: 'control-only-create',
       type: 'createOrAttach',
       payload: { sessionId: 'must-not-start', cols: 80, rows: 24 }
     })
     expect(response.error).toContain('connection is incomplete')
-    expect(daemon.retirementRequested).toBe(false)
+    expect(daemon.lifecycle.retirementRequested).toBe(false)
     expect(clock.pendingCount).toBe(0)
 
     clock.advanceBy(1_000)
@@ -501,14 +508,11 @@ describe('current daemon lifecycle retirement', () => {
         role: 'control'
       })}\n`
     )
-    const daemon = server as unknown as {
-      clients: Map<string, unknown>
-      retirementRequested: boolean
-    }
-    await waitFor(() => daemon.clients.has('control-only-overlap'))
+    const daemon = server as unknown as DaemonServerInternals
+    await waitFor(() => daemon.connections.clients.has('control-only-overlap'))
 
     paired.disconnect()
-    await waitFor(() => daemon.retirementRequested)
+    await waitFor(() => daemon.lifecycle.retirementRequested)
     expect(clock.pendingCount).toBe(0)
     const response = await requestOnRawSocket(incomplete, {
       id: 'overlap-control-create',
@@ -516,7 +520,7 @@ describe('current daemon lifecycle retirement', () => {
       payload: { sessionId: 'must-not-start', cols: 80, rows: 24 }
     })
     expect(response.error).toContain('connection is incomplete')
-    expect(daemon.retirementRequested).toBe(true)
+    expect(daemon.lifecycle.retirementRequested).toBe(true)
 
     incomplete.destroy()
     await waitFor(() => onIdleShutdown.mock.calls.length === 1)
@@ -538,10 +542,8 @@ describe('current daemon lifecycle retirement', () => {
         role: 'control'
       })}\n`
     )
-    const daemon = server as unknown as {
-      retirementRequested: boolean
-    }
-    await waitFor(() => daemon.retirementRequested)
+    const daemon = server as unknown as DaemonServerInternals
+    await waitFor(() => daemon.lifecycle.retirementRequested)
     expect(clock.pendingCount).toBe(0)
 
     replacementControl.destroy()
@@ -554,8 +556,8 @@ describe('current daemon lifecycle retirement', () => {
     await client.ensureConnected()
     await client.request('createOrAttach', { sessionId: 'live', cols: 80, rows: 24 })
     client.disconnect()
-    const daemon = server as unknown as { retirementRequested: boolean }
-    await waitFor(() => daemon.retirementRequested)
+    const daemon = server as unknown as DaemonServerInternals
+    await waitFor(() => daemon.lifecycle.retirementRequested)
 
     expect(onIdleShutdown).not.toHaveBeenCalled()
     expect(clock.pendingCount).toBe(0)
@@ -612,14 +614,11 @@ describe('current daemon lifecycle retirement', () => {
 
   it('rejects create or attach once the idle admission fence is pending', async () => {
     await startServer()
-    const daemon = server as unknown as {
-      idleShutdownState: string
-      routeRequest(clientId: string, request: unknown): Promise<unknown>
-    }
-    daemon.idleShutdownState = 'idle-shutdown-pending'
+    const daemon = server as unknown as DaemonServerInternals
+    daemon.lifecycle.state = 'idle-shutdown-pending'
 
     await expect(
-      daemon.routeRequest('late-client', {
+      daemon.requestRouter.route('late-client', {
         id: 'late-create',
         type: 'createOrAttach',
         payload: { sessionId: 'late', cols: 80, rows: 24 }
@@ -629,30 +628,23 @@ describe('current daemon lifecycle retirement', () => {
 
   it('aborts the pending shutdown when create or attach started before the fence', async () => {
     await startServer()
-    const daemon = server as unknown as {
-      createOrAttachInFlight: number
-      idleShutdownState: string
-      beginIdleShutdown(): void
-    }
-    daemon.createOrAttachInFlight = 1
+    const daemon = server as unknown as DaemonServerInternals
+    daemon.admission.createOrAttachInFlight = 1
 
-    daemon.beginIdleShutdown()
+    daemon.lifecycle.beginIdleShutdown()
 
-    expect(daemon.idleShutdownState).toBe('running')
+    expect(daemon.lifecycle.state).toBe('running')
     expect(onIdleShutdown).not.toHaveBeenCalled()
   })
 
   it('explicitly marks a post-fence accepted transport as retryable', async () => {
     await startServer()
-    const daemon = server as unknown as {
-      idleShutdownState: string
-      handleConnection(socket: Socket): void
-    }
-    daemon.idleShutdownState = 'idle-shutdown-pending'
+    const daemon = server as unknown as DaemonServerInternals
+    daemon.lifecycle.state = 'idle-shutdown-pending'
     const socket = new EventEmitter() as Socket
     socket.end = vi.fn() as unknown as Socket['end']
 
-    daemon.handleConnection(socket)
+    daemon.connections.accept(socket)
 
     const payload = vi.mocked(socket.end).mock.calls[0]?.[0]
     expect(JSON.parse(String(payload))).toMatchObject({ ok: false, retryable: true })

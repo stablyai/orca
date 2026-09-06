@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   registerHttpLinkStoreAccessor,
-  registerRuntimeHttpLinkBrowserOpener
+  registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
 import {
   closeTerminalLinkActionRequest,
@@ -48,11 +48,11 @@ beforeEach(() => {
     setActiveWorktree,
     createBrowserTab
   }))
-  registerRuntimeHttpLinkBrowserOpener(openRuntimeBrowserTab)
+  registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTab)
 })
 
 afterEach(() => {
-  registerRuntimeHttpLinkBrowserOpener(null)
+  registerWorkspaceHttpLinkBrowserOpener(null)
   vi.clearAllMocks()
   vi.unstubAllGlobals()
 })
@@ -207,6 +207,28 @@ describe('terminal link action routing', () => {
       expectedRuntimeEnvironmentId: 'env-1'
     })
     expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('routes an explicit Orca Browser action through the owning SSH workspace', () => {
+    const request = vi.fn()
+    const url = 'http://0.0.0.0:8000/'
+
+    handleTerminalHttpLink(url, plainEvent(), {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' },
+      linkActionContext: actionContext(request),
+      actionDestinations: { primary: 'system', alternate: 'orca' }
+    })
+
+    request.mock.calls[0][0].alternate.run()
+    expect(openRuntimeBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url,
+      intent: { kind: 'url' },
+      expectedSshConnectionId: 'ssh-1'
+    })
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(openUrl).not.toHaveBeenCalled()
   })
 
   it('uses Shift+modifier for the alternate local destination', () => {

@@ -26,7 +26,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { updatePRState, _resetOwnerRepoCache } from './client'
+import { markPRReadyForReview, updatePRState, _resetOwnerRepoCache } from './client'
 import { resetOriginRepositoryCache } from './client-test-harness'
 
 const {
@@ -39,7 +39,7 @@ const {
   releaseMock
 } = clientMocks
 
-describe('updatePRState', () => {
+describe('pull request state mutations', () => {
   beforeEach(() => {
     resetOriginRepositoryCache()
     ghExecFileAsyncMock.mockReset()
@@ -102,5 +102,19 @@ describe('updatePRState', () => {
       ['pr', 'reopen', '3977', '--repo', 'stablyai/orca'],
       { host: 'github.com' }
     )
+  })
+
+  it('marks pull requests ready for review through gh', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(markPRReadyForReview('/repo-root', 3977)).resolves.toEqual({ ok: true })
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['pr', 'ready', '3977', '--repo', 'stablyai/orca'],
+      { cwd: '/repo-root', host: 'github.com' }
+    )
+    expect(acquireMock).toHaveBeenCalledTimes(1)
+    expect(releaseMock).toHaveBeenCalledTimes(1)
   })
 })

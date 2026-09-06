@@ -1,4 +1,7 @@
 import { specPaths, type CommandSpec } from './command-spec'
+import { levenshtein } from '../shared/edit-distance'
+
+export { levenshtein } from '../shared/edit-distance'
 
 // Why: rank the live registry so typo recovery cannot drift from accepted paths.
 
@@ -34,7 +37,10 @@ function destructiveVerbs(specs: CommandSpec[]): Set<string> {
 // input token is itself a near-miss of a destructive verb. #6303
 function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
   for (const verb of verbs) {
-    if (levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD) {
+    if (
+      Math.abs(inputToken.length - verb.length) <= DESTRUCTIVE_INTENT_THRESHOLD &&
+      levenshtein(inputToken, verb) <= DESTRUCTIVE_INTENT_THRESHOLD
+    ) {
       return true
     }
   }
@@ -44,30 +50,6 @@ function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
 export type CommandErrorData = {
   suggestions: string[]
   nextSteps: string[]
-}
-
-export function levenshtein(a: string, b: string): number {
-  const m = a.length
-  const n = b.length
-  if (m === 0) {
-    return n
-  }
-  if (n === 0) {
-    return m
-  }
-  let prev = Array.from({ length: n + 1 }, (_, index) => index)
-  let curr = Array.from({ length: n + 1 }, () => 0)
-  for (let i = 1; i <= m; i += 1) {
-    curr[0] = i
-    for (let j = 1; j <= n; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
-    }
-    const swap = prev
-    prev = curr
-    curr = swap
-  }
-  return prev[n]
 }
 
 // Why: one bounded near-match ranking keeps command and flag recovery consistent.
@@ -88,6 +70,9 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
+    if (spec.hidden) {
+      continue
+    }
     if (spec.destructive && !allowDestructive) {
       continue
     }
@@ -103,7 +88,9 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
         continue
       }
       seen.add(joined)
-      scored.push({ label: joined, distance: levenshtein(input, joined) })
+      if (Math.abs(input.length - joined.length) <= SUGGESTION_THRESHOLD) {
+        scored.push({ label: joined, distance: levenshtein(input, joined) })
+      }
     }
   }
   return rankByDistance(scored)
@@ -124,9 +111,13 @@ export type FlagErrorData = {
 }
 
 function suggestFlags(flag: string, validFlags: string[]): string[] {
-  return rankByDistance(
-    validFlags.map((candidate) => ({ label: candidate, distance: levenshtein(flag, candidate) }))
-  )
+  const scored: { label: string; distance: number }[] = []
+  for (const candidate of validFlags) {
+    if (Math.abs(flag.length - candidate.length) <= SUGGESTION_THRESHOLD) {
+      scored.push({ label: candidate, distance: levenshtein(flag, candidate) })
+    }
+  }
+  return rankByDistance(scored)
 }
 
 // Why: include the accepted set so agents can recover without another help call.

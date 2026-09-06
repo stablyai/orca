@@ -16,6 +16,10 @@ type PairedMobileDevicesSnapshot = {
   error: boolean
 }
 
+type RefreshPairedMobileDevicesOptions = {
+  force?: boolean
+}
+
 const EMPTY_SNAPSHOT: PairedMobileDevicesSnapshot = {
   devices: [],
   loaded: false,
@@ -80,9 +84,7 @@ export function replacePairedMobileDevices(devices: readonly PairedMobileDevice[
 
 export function refreshPairedMobileDevices({
   force = false
-}: {
-  force?: boolean
-} = {}): Promise<readonly PairedMobileDevice[]> {
+}: RefreshPairedMobileDevicesOptions = {}): Promise<readonly PairedMobileDevice[]> {
   if (activeRequest && !force) {
     return activeRequest.promise
   }
@@ -173,7 +175,10 @@ export function usePairedMobileDevices({
   refresh: typeof refreshPairedMobileDevices
 } {
   const currentSnapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  const refresh = useCallback(refreshPairedMobileDevices, [])
+  const refresh = useCallback(
+    (options?: RefreshPairedMobileDevicesOptions) => refreshPairedMobileDevices(options),
+    []
+  )
 
   useEffect(() => {
     if (!enabled || !refreshOnMount || currentSnapshot.loaded || currentSnapshot.loading) {

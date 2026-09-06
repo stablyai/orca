@@ -3,7 +3,7 @@ import type React from 'react'
 import { Bot, FileJson } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession, AiVaultSubagentRunStatus } from '../../../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
@@ -120,7 +120,7 @@ function SubagentSessionLine({ session }: { session: AiVaultSession }): React.JS
       {dotState ? (
         // Why: a plain inline span would baseline-align the dot; flex keeps it
         // vertically centered with the row text.
-        <span className="flex shrink-0 items-center" title={agentStateLabel(dotState)}>
+        <span className="flex shrink-0 items-center">
           <AgentStateDot state={dotState} />
         </span>
       ) : null}

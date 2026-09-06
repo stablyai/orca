@@ -3,9 +3,11 @@ import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { glabExecFileAsync } from '../git/runner'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
 export type LocalGitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
@@ -148,9 +150,14 @@ async function probeGlabKnownHosts(
     // or reconnected SSH/relay results, and bound an otherwise global probe.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
       timeout: GLAB_KNOWN_HOSTS_TIMEOUT_MS,
+      // Why: a local probe would cache the default distro's auth under 'native'
+      // and wake an idle VM. A connection-keyed probe keeps the retry — glab never
+      // runs over SSH/relay, so the calls it gates take that same fallback.
+      ...(connectionId ? {} : { allowDefaultWslFallback: false }),
       ...(!connectionId && localGitOptions.wslDistro
         ? { wslDistro: localGitOptions.wslDistro }
-        : {})
+        : {}),
+      ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
     const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
     const remembered = knownHostsCacheByExecutionContext.get(key) ?? []

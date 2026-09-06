@@ -30,14 +30,20 @@ function assistantText(message: NativeChatMessage | undefined): string {
  * duplicate or flicker as the transcript catches up.
  *
  * `working` gates it: a stale preview from a finished turn never shows.
+ *
+ * `previewIsToolOutput` hard-gates it: several providers publish a tool's stdout or
+ * error as `lastAssistantMessage` so status cards can preview it. That text is not the
+ * reply, and it never appears in a transcript assistant block — so the catch-up rules
+ * below can never retire it and it would sit in the chat until the turn ended.
  */
 export function deriveNativeChatStreamingText(args: {
   messages: readonly NativeChatMessage[]
   previewText: string | null | undefined
   working: boolean
+  previewIsToolOutput?: boolean
 }): string | null {
-  const { messages, previewText, working } = args
-  if (!working) {
+  const { messages, previewText, working, previewIsToolOutput } = args
+  if (!working || previewIsToolOutput) {
     return null
   }
   const text = previewText?.trim()

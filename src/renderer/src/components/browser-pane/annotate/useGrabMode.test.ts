@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function createReactHookHarness() {
@@ -47,6 +49,7 @@ describe('useGrabMode', () => {
     vi.doUnmock('@/hooks/useMountedRef')
     vi.resetModules()
     vi.unstubAllGlobals()
+    document.body.innerHTML = ''
   })
 
   it('uses the latest browser page when toggled before the page-change effect runs', async () => {
@@ -271,5 +274,106 @@ describe('useGrabMode', () => {
       expect(grab.state).toBe('awaiting')
       expect(grab.payload).toBeNull()
     })
+  })
+
+  it('keeps grab mode active when Escape comes from inside an annotation-edit row', async () => {
+    const harness = createReactHookHarness()
+    const addEventListener = vi.fn()
+    const setGrabMode = vi.fn(async () => ({ ok: true }))
+    vi.doMock('react', () => harness.react)
+    vi.doMock('@/hooks/useMountedRef', () => ({
+      useMountedRef: () => ({ current: true })
+    }))
+    vi.stubGlobal('window', {
+      addEventListener,
+      removeEventListener: vi.fn(),
+      api: {
+        browser: {
+          setGrabMode,
+          awaitGrabSelection: vi.fn(() => new Promise(() => {})),
+          cancelGrab: vi.fn()
+        }
+      }
+    })
+    const { useGrabMode } = await import('./useGrabMode')
+    const render = () => {
+      harness.beginRender()
+      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
+      return useGrabMode('page-1')
+    }
+
+    const grab = render()
+    grab.toggle()
+    expect(render().state).toBe('armed')
+    harness.effects[1]?.effect()
+    const handleKeyDown = addEventListener.mock.calls[0]?.[1] as (event: KeyboardEvent) => void
+
+    // Why: a button in the edit row isn't itself editable, so only the
+    // annotation-edit closest() clause (not isEditableKeyboardTarget) exempts it.
+    const editRow = document.createElement('div')
+    editRow.setAttribute('data-slot', 'annotation-edit')
+    const cancelButton = document.createElement('button')
+    editRow.appendChild(cancelButton)
+    document.body.appendChild(editRow)
+
+    const preventDefault = vi.fn()
+    handleKeyDown({
+      key: 'Escape',
+      target: cancelButton,
+      preventDefault,
+      stopPropagation: vi.fn()
+    } as unknown as KeyboardEvent)
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(setGrabMode).toHaveBeenCalledTimes(1)
+    expect(render().state).toBe('armed')
+  })
+
+  it('cancels grab mode when Escape comes from outside any exempt container', async () => {
+    const harness = createReactHookHarness()
+    const addEventListener = vi.fn()
+    const setGrabMode = vi.fn(async () => ({ ok: true }))
+    vi.doMock('react', () => harness.react)
+    vi.doMock('@/hooks/useMountedRef', () => ({
+      useMountedRef: () => ({ current: true })
+    }))
+    vi.stubGlobal('window', {
+      addEventListener,
+      removeEventListener: vi.fn(),
+      api: {
+        browser: {
+          setGrabMode,
+          awaitGrabSelection: vi.fn(() => new Promise(() => {})),
+          cancelGrab: vi.fn()
+        }
+      }
+    })
+    const { useGrabMode } = await import('./useGrabMode')
+    const render = () => {
+      harness.beginRender()
+      // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
+      return useGrabMode('page-1')
+    }
+
+    const grab = render()
+    grab.toggle()
+    expect(render().state).toBe('armed')
+    harness.effects[1]?.effect()
+    const handleKeyDown = addEventListener.mock.calls[0]?.[1] as (event: KeyboardEvent) => void
+
+    const outside = document.createElement('div')
+    document.body.appendChild(outside)
+
+    const preventDefault = vi.fn()
+    handleKeyDown({
+      key: 'Escape',
+      target: outside,
+      preventDefault,
+      stopPropagation: vi.fn()
+    } as unknown as KeyboardEvent)
+
+    expect(preventDefault).toHaveBeenCalled()
+    expect(setGrabMode).toHaveBeenLastCalledWith({ browserPageId: 'page-1', enabled: false })
+    expect(render().state).toBe('idle')
   })
 })

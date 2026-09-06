@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../../../shared/artifacts'
+import { ARTIFACT_MAX_CONTENT_BYTES } from '../../../../shared/artifacts'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
 
 const mocks = vi.hoisted(() => ({
@@ -91,14 +91,29 @@ describe('artifact publish flow', () => {
   it('rejects an oversized request before RPC', async () => {
     const createRequest = vi.fn().mockResolvedValue({
       ...request,
-      content: '"'.repeat(Math.floor(ARTIFACT_CLI_MAX_RPC_BYTES / 2))
+      content: '"'.repeat(ARTIFACT_MAX_CONTENT_BYTES + 1)
     })
 
     await expect(publishArtifactFromSurface(createRequest)).resolves.toBeNull()
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith('Could not share artifact', {
-      description: 'Artifacts shared from Orca must be smaller than 800 KB.'
+      description: 'This artifact is too large to share.'
     })
+  })
+
+  it('publishes content at the 10 MiB boundary', async () => {
+    mocks.callRuntimeRpc.mockResolvedValue({ status: 'ok', value: published })
+    const createRequest = vi.fn().mockResolvedValue({
+      ...request,
+      content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES)
+    })
+
+    await expect(publishArtifactFromSurface(createRequest)).resolves.toBe(published)
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'artifacts.publish',
+      expect.objectContaining({ content: 'a'.repeat(ARTIFACT_MAX_CONTENT_BYTES) })
+    )
   })
 
   it('shows confirmation without putting the public link in the toast', async () => {

@@ -22,7 +22,7 @@ export function BrowserPageDownloadList({
   }
 
   return (
-    <div className="border-b border-border/60 bg-background px-3 py-1.5">
+    <div className="border-b border-border/60 bg-background">
       <div className="scrollbar-sleek flex max-h-36 flex-col gap-1 overflow-y-auto">
         {visibleDownloads.map((download) => {
           const progressLabel = formatBrowserDownloadProgress(download)
@@ -47,10 +47,14 @@ export function BrowserPageDownloadList({
           return (
             <div
               key={download.downloadId}
-              className="flex min-h-8 items-center gap-2 text-xs text-foreground"
+              className={
+                download.status === 'completed'
+                  ? 'flex min-h-8 items-center gap-2 bg-status-success-background px-3 py-1.5 text-xs text-foreground'
+                  : 'flex min-h-8 items-center gap-2 px-3 py-1.5 text-xs text-foreground'
+              }
             >
               {download.status === 'completed' ? (
-                <CircleCheck className="size-3.5 shrink-0 text-muted-foreground" />
+                <CircleCheck className="size-3.5 shrink-0 text-status-success" />
               ) : download.status === 'failed' ? (
                 <OctagonX className="size-3.5 shrink-0 text-muted-foreground" />
               ) : (
@@ -58,7 +62,13 @@ export function BrowserPageDownloadList({
               )}
               <div className="min-w-0 flex-1">
                 <div className="truncate font-medium">{download.filename}</div>
-                <div className="truncate text-muted-foreground">
+                <div
+                  className={
+                    download.status === 'completed'
+                      ? 'truncate font-medium text-status-success'
+                      : 'truncate text-muted-foreground'
+                  }
+                >
                   {download.status === 'downloading'
                     ? translate(
                         'auto.components.browser.pane.BrowserPane.4300f38145',

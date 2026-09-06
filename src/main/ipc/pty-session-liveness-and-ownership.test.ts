@@ -91,6 +91,22 @@ describe('registerPtyHandlers', () => {
     ).resolves.toBe(null)
     expect(hasPty).not.toHaveBeenCalled()
   })
+  it.each(['remote:env-1@@terminal-1', 'ssh:missing-host@@pty-1'])(
+    'never routes process inspection for %s to the local provider',
+    async (id) => {
+      const inspectProcess = vi.fn()
+      registerPtyHandlers(mainWindow as never)
+      setLocalPtyProvider({ inspectProcess } as never)
+
+      await expect(handlers.get('pty:inspectProcess')!(null, { id })).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        verdict: 'unverifiable',
+        reason: 'terminal_gone'
+      })
+      expect(inspectProcess).not.toHaveBeenCalled()
+    }
+  )
   it('lists duplicate SSH relay session ids as distinct app sessions', async () => {
     registerPtyHandlers(mainWindow as never)
     const shutdownA = vi.fn(async () => undefined)
@@ -287,7 +303,7 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     const sshShutdown = vi.fn(async () => undefined)
-    const store = { markSshRemotePtyLease: vi.fn() }
+    const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
     registerSshPtyProvider('ssh-1', {
       spawn: vi.fn(),
       write: vi.fn(),
@@ -352,7 +368,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
-    const store = { markSshRemotePtyLease: vi.fn() }
+    const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -370,8 +386,10 @@ describe('registerPtyHandlers', () => {
   it('ignores fire-and-forget IPC for detached SSH PTYs without a provider', async () => {
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     const provider = {
       spawn: vi.fn(async () => ({ id: 'remote-pty' })),
@@ -498,7 +516,8 @@ describe('registerPtyHandlers', () => {
     await expect(handlers.get('pty:inspectProcess')!(null, { id: 'gone-pty' })).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: false,
-      unavailable: true
+      verdict: 'unverifiable',
+      reason: 'terminal_gone'
     })
   })
 })

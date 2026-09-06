@@ -176,7 +176,10 @@ export function RepoIconGlyph({
   const Icon = getRepoLucideIcon(repoIcon?.type === 'lucide' ? repoIcon.name : 'Folder')
   return (
     <span className={cn('inline-flex items-center justify-center', className)}>
-      <Icon className={iconClassName} style={color ? { color } : undefined} />
+      {React.createElement(Icon, {
+        className: iconClassName,
+        style: color ? { color } : undefined
+      })}
     </span>
   )
 }

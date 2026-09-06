@@ -87,7 +87,7 @@ const parent = `${head}~1`
 const CANDIDATES = [
   'src/main/git/status.ts',
   'src/shared/agent-hook-listener.ts',
-  'src/renderer/src/components/TaskPage.tsx'
+  'src/renderer/src/components/task-page/TaskPage.tsx'
 ]
 
 const files = []

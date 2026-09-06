@@ -1,15 +1,9 @@
-import type {
-  ClipboardEventHandler,
-  CompositionEventHandler,
-  KeyboardEventHandler,
-  RefObject
-} from 'react'
-import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
+import { useLayoutEffect, useRef } from 'react'
+import { ImageOff } from 'lucide-react'
+import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
-import { basename } from '@/lib/path'
-import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
 import { NativeChatMentionHint, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -18,6 +12,8 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
+import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -35,11 +31,11 @@ export type NativeChatComposerFieldProps = {
   dictationDisabled: boolean
   isDictating: boolean
   isDictationHoldMode: boolean
+  imeEnterGesture: ReturnType<typeof useImeEnterGestureOwnership>
   onDraftChange: (value: string, element: HTMLTextAreaElement) => void
   onTextareaSelect: (element: HTMLTextAreaElement) => void
   onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
-  onCompositionStart: CompositionEventHandler<HTMLTextAreaElement>
-  onCompositionEnd: CompositionEventHandler<HTMLTextAreaElement>
+  onImeSettled: (element: HTMLTextAreaElement) => void
   onPaste: ClipboardEventHandler<HTMLTextAreaElement>
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
@@ -54,11 +50,40 @@ export type NativeChatComposerFieldProps = {
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
+  sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
 }
 
 export type NativeChatComposerImageAttachment = {
   id: string
+  /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
   path: string
+  connectionId?: string
+  /** Clipboard thumbnail (blob/data URL) rendered before — and after — the file
+   *  lands, so the chip never waits on a disk round-trip to show something. */
+  previewUrl?: string
+  /** True while the pasted image is still being written to disk or uploaded. */
+  pending?: boolean
+}
+
+/**
+ * Applies a draft clear that was dropped mid-composition: everything the field held when the
+ * IME started is what the clear was meant to erase, so only the composed segment survives.
+ * Diffed from both ends because an IME edits at the caret, which need not be the end.
+ */
+function imeComposedSegment(base: string, settled: string): string {
+  const limit = Math.min(base.length, settled.length)
+  let prefix = 0
+  while (prefix < limit && base[prefix] === settled[prefix]) {
+    prefix += 1
+  }
+  let suffix = 0
+  while (
+    suffix < limit - prefix &&
+    base[base.length - 1 - suffix] === settled[settled.length - 1 - suffix]
+  ) {
+    suffix += 1
+  }
+  return settled.slice(prefix, settled.length - suffix)
 }
 
 export function NativeChatComposerField({
@@ -77,11 +102,11 @@ export function NativeChatComposerField({
   dictationDisabled,
   isDictating,
   isDictationHoldMode,
+  imeEnterGesture,
   onDraftChange,
   onTextareaSelect,
   onKeyDown,
-  onCompositionStart,
-  onCompositionEnd,
+  onImeSettled,
   onPaste,
   pickerListboxId,
   onChoosePickerItem,
@@ -95,8 +120,41 @@ export function NativeChatComposerField({
   onSend,
   onStop,
   sessionOptionsSurface,
-  sessionOptionsSnapshot
+  sessionOptionsSnapshot,
+  sessionOptionsPickerRequest
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  // Value the IME started from, and whether a programmatic clear was dropped on top of it.
+  const compositionBaseRef = useRef('')
+  const droppedDraftClearRef = useRef(false)
+
+  // Browser owns the provisional value; React synchronizes drafts only between IME sessions.
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) {
+      return
+    }
+    if (imeEnterGesture.isComposing()) {
+      // Why: a clear (an async structured send confirming) would otherwise be lost outright and
+      // the sent text would ride along into the next message. Only clears are carved out of
+      // browser ownership; every other programmatic draft still loses to the live composition.
+      droppedDraftClearRef.current ||= draft === '' && textarea.value !== ''
+      return
+    }
+    droppedDraftClearRef.current = false
+    if (textarea.value === draft) {
+      return
+    }
+    textarea.value = draft
+  }, [draft, imeEnterGesture, textareaRef])
+
+  const settleImeValue = (element: HTMLTextAreaElement): void => {
+    if (droppedDraftClearRef.current) {
+      droppedDraftClearRef.current = false
+      element.value = imeComposedSegment(compositionBaseRef.current, element.value)
+    }
+    onImeSettled(element)
+  }
+
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
@@ -131,46 +189,46 @@ export function NativeChatComposerField({
             )}
           >
             {imageAttachments.length > 0 ? (
-              <div className="mb-2 flex flex-wrap gap-1.5 px-1">
+              <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment) => (
-                  <div
+                  <NativeChatImageAttachmentPreview
                     key={attachment.id}
-                    className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
-                    title={attachment.path}
-                  >
-                    <ImageIcon className="size-3.5 shrink-0" />
-                    <span className="max-w-56 truncate">
-                      {isNativeChatPastedImagePath(attachment.path)
-                        ? translate(
-                            'components.native-chat.composer.pastedImageLabel',
-                            'Pasted image'
-                          )
-                        : basename(attachment.path)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onRemoveImageAttachment(attachment.id)}
-                      aria-label={translate(
-                        'components.native-chat.composer.removeAttachment',
-                        'Remove attachment'
-                      )}
-                      className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </div>
+                    attachment={attachment}
+                    onRemove={onRemoveImageAttachment}
+                  />
                 ))}
               </div>
             ) : null}
             <textarea
               ref={textareaRef}
-              value={draft}
+              defaultValue={draft}
               disabled={disabled}
               rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
-              onKeyDown={onKeyDown}
-              onCompositionStart={onCompositionStart}
-              onCompositionEnd={onCompositionEnd}
+              onKeyDown={(event) => {
+                if (!imeEnterGesture.ownsKeyDown(event)) {
+                  onKeyDown(event)
+                }
+              }}
+              onKeyUp={imeEnterGesture.onKeyUp}
+              onBlur={(event) => {
+                const compositionWasActive = imeEnterGesture.isComposing()
+                imeEnterGesture.reset()
+                if (compositionWasActive) {
+                  settleImeValue(event.currentTarget)
+                }
+              }}
+              onCompositionStart={(event) => {
+                compositionBaseRef.current = event.currentTarget.value
+                imeEnterGesture.setComposing(true)
+              }}
+              onCompositionEnd={(event) => {
+                const compositionWasActive = imeEnterGesture.isComposing()
+                imeEnterGesture.setComposing(false)
+                if (compositionWasActive) {
+                  settleImeValue(event.currentTarget)
+                }
+              }}
               onPaste={onPaste}
               onSelect={(e) => onTextareaSelect(e.currentTarget)}
               aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
@@ -213,6 +271,7 @@ export function NativeChatComposerField({
                 onStop={onStop}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
+                sessionOptionsPickerRequest={sessionOptionsPickerRequest}
               />
             </div>
           </div>

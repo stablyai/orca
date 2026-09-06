@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
+import {
+  activateAndRevealFolderWorkspace,
+  activateAndRevealWorkspace,
+  activateAndRevealWorktree
+} from './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
@@ -8,6 +12,7 @@ import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
 } from '@/lib/worktree-activation-created-agent-test-state'
+import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -201,6 +206,25 @@ function seedEmptiedFolderWorkspaceOnTwoHosts(): void {
 }
 
 describe('activating a folder workspace whose last terminal was closed', () => {
+  it.each(['local', SSH_HOST_ID] as const)(
+    'opens a notification on %s without revealing the folder',
+    (executionHostId) => {
+      seedEmptiedFolderWorkspaceOnTwoHosts()
+      useAppStore.setState({ sidebarBody: 'agents' })
+
+      const result = activateAndRevealWorkspace(FOLDER_KEY, {
+        executionHostId,
+        revealInSidebar: false,
+        clearSidebarFilters: false
+      })
+
+      expect(result).not.toBe(false)
+      expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
+      expect(useAppStore.getState().sidebarBody).toBe('agents')
+      expect(useAppStore.getState().revealWorktreeInSidebar).not.toHaveBeenCalled()
+    }
+  )
+
   it('re-seeds a terminal when the workspace is opened', () => {
     seedEmptiedFolderWorkspaceOnTwoHosts()
 
@@ -224,13 +248,26 @@ describe('activating a folder workspace whose last terminal was closed', () => {
 
   // Why: the opt-out must mean the same thing on both workspace shapes, or routing a
   // file link through a folder workspace would silently regress to seeding a shell.
-  it('leaves the row empty when the caller opens its own surface', () => {
+  it('leaves the row empty when the caller opens its own surface', async () => {
     seedEmptiedFolderWorkspaceOnTwoHosts()
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      terminalStartupRestorationReady: true
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtime: {
+          call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } }))
+        },
+        pty: { listSessions: vi.fn(async () => []) }
+      }
+    })
 
     const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
       executionHostId: 'local',
       providesInitialSurface: true
     })
+    await waitForWorktreeAgentActivationGateForTests(FOLDER_KEY)
 
     expect(result).not.toBe(false)
     expect(result === false ? null : result.primaryTabId).toBeNull()

@@ -15,8 +15,11 @@ import {
   summarizeAutomationRunUsage
 } from './automation-usage-model'
 import type { AutomationTargetAvailability } from './automation-target-availability'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import { getAutomationHostDetailDisplay } from './automation-host-detail-display'
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
+import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -24,6 +27,8 @@ type AutomationDetailProps = {
   projectName: string
   workspaceName: string
   projectDefaultBaseRef: string | null
+  /** The catalog entry the selected row was listed from; absent for legacy unscoped rows. */
+  hostEntry?: AutomationHostCatalogEntry | null
   hostLabelById?: ReadonlyMap<string, string>
   runNowAvailability: AutomationTargetAvailability | null
   now: number
@@ -101,6 +106,7 @@ export function AutomationDetail({
   projectName,
   workspaceName,
   projectDefaultBaseRef,
+  hostEntry,
   hostLabelById,
   runNowAvailability,
   now,
@@ -139,6 +145,11 @@ export function AutomationDetail({
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
       : workspaceName
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
+  const hostDisplay = getAutomationHostDetailDisplay({
+    automation,
+    entry: hostEntry,
+    hostLabelById
+  })
   const runNowDisabled = runNowAvailability?.canRunNow === false
 
   return (
@@ -150,7 +161,7 @@ export function AutomationDetail({
             <Badge variant={automation.enabled ? 'secondary' : 'outline'}>
               {automation.enabled
                 ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
-                : translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+                : translate('auto.components.automations.enablement.paused', 'Paused')}
             </Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -245,6 +256,11 @@ export function AutomationDetail({
           }
         />
         <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.host', 'Host')}
+          value={hostDisplay.label}
+          title={hostDisplay.title}
+        />
+        <DetailMetric
           label={
             automation.workspaceMode === 'new_per_run'
               ? translate('auto.components.automations.AutomationDetail.2f8baf5360', 'Create from')
@@ -312,19 +328,11 @@ export function AutomationDetail({
         />
       </div>
 
-      <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">{promptLabel}</div>
-        <div className="px-3 py-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">
-              {promptLabel}
-            </div>
-            <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
-              {automation.prompt}
-            </p>
-          </div>
-        </div>
-      </div>
+      <AutomationPromptDisclosure
+        key={`${automation.id}:${automation.prompt}`}
+        prompt={automation.prompt}
+        label={promptLabel}
+      />
     </div>
   )
 }

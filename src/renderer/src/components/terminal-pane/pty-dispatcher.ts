@@ -203,6 +203,9 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
       deliverPtyExitToHandlers({
         ptyId: payload.id,
         code: payload.code,
+        // Why forwarded: pty ids are reused, so a buffered exit needs the lifetime it describes to
+        // tell "this pane's shell died" from "the id's previous owner died" (#16970).
+        ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {}),
         ...(primary ? { primary } : {}),
         sidecars: sidecars ? Array.from(sidecars) : []
       })
@@ -258,9 +261,13 @@ export function getEagerPtyBufferHandle(ptyId: string): EagerPtyHandle | undefin
 // Why: cap matches TerminalPane's scrollback serialization limit so a restored shell (e.g. tail -f) can't grow unbounded.
 const EAGER_BUFFER_MAX_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
+/** `incarnationId` names the lifetime the caller just spawned. Without it a background launch that
+ *  is handed a relay-recycled id drains whatever the id's PREVIOUS owner left here and tears its own
+ *  freshly started agent session down seconds after launch. */
 export function registerEagerPtyBuffer(
   ptyId: string,
-  onExit: (ptyId: string, code: number) => void
+  onExit: (ptyId: string, code: number) => void,
+  incarnationId?: string
 ): EagerPtyHandle {
   ensurePtyDispatcher()
   // Why: head index instead of Array.shift() (O(n)) so pre-attach buffering isn't quadratic under many small chunks.
@@ -328,7 +335,7 @@ export function registerEagerPtyBuffer(
   // Why: defer the pre-handler exit one microtask so the caller receives the returned handle before onExit fires.
   queueMicrotask(() => {
     if (ptyExitHandlers.get(ptyId) === exitHandler) {
-      drainPreHandlerPtyExit(ptyId, exitHandler)
+      drainPreHandlerPtyExit(ptyId, exitHandler, incarnationId)
     } else {
       clearPreHandlerPtyState(ptyId)
     }

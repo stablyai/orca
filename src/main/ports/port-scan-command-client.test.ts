@@ -298,3 +298,29 @@ describe('PortScanCommandClient on a real worker thread', () => {
     }
   }, 30_000)
 })
+
+describe('resolveWorkerEntryPath on a non-Electron host', () => {
+  // Why: orcad reports isPackaged true (it is a production build), but
+  // process.resourcesPath is Electron-only and undefined there. Joining undefined threw
+  // a TypeError instead of failing as a missing worker — a crash where a clean
+  // "worker unavailable" was the honest outcome.
+  it('does not join an undefined resourcesPath', () => {
+    expect(() =>
+      resolveWorkerEntryPath({
+        isPackaged: true,
+        resourcesPath: undefined,
+        moduleDir: '/opt/orcad'
+      })
+    ).not.toThrow()
+  })
+
+  it('falls back to the module directory when there is no resources tree', () => {
+    expect(
+      resolveWorkerEntryPath({
+        isPackaged: true,
+        resourcesPath: undefined,
+        moduleDir: '/opt/orcad'
+      })
+    ).toBe(join('/opt/orcad', 'port-scan-command-worker-entry.js'))
+  })
+})

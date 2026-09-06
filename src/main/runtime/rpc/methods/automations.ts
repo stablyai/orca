@@ -1,150 +1,32 @@
-import { z } from 'zod'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedules'
 import {
-  MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
-  normalizeAutomationPrecheckTimeoutSeconds
-} from '../../../../shared/automation-precheck'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { AUTOMATION_SHELL_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+  AUTOMATION_SHELL_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
+import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
 import { defineMethod, InvalidArgumentError, type RpcContext, type RpcMethod } from '../core'
 import {
-  OptionalBoolean,
-  OptionalPlainString,
-  OptionalPositiveInt,
-  OptionalString,
-  requiredNumber,
-  requiredString
-} from '../schemas'
+  AutomationCreate,
+  AutomationId,
+  AutomationList,
+  AutomationRuns,
+  AutomationUpdate
+} from './automation-schemas'
 
-const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
-  message: 'Unknown provider'
-})
-
-const AutomationWorkspaceMode = z.enum(['existing', 'new_per_run']).optional()
-const SetupDecision = z.enum(['inherit', 'run', 'skip']).optional()
-const ExecutionHostId = requiredString('Missing host id').transform((value, ctx) => {
-  const hostId = normalizeExecutionHostId(value)
-  if (!hostId) {
-    ctx.addIssue({ code: 'custom', message: 'Invalid host id' })
-    return z.NEVER
+function mutationOwner(
+  id: string,
+  expectedOwner: AutomationOwnerPrecondition | undefined,
+  context: RpcContext
+): AutomationOwnerPrecondition | undefined {
+  if (
+    expectedOwner ||
+    context.clientCapabilities === undefined ||
+    context.clientCapabilities.includes(AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY)
+  ) {
+    return expectedOwner
   }
-  return hostId
-})
-
-const AutomationSchedule = requiredString('Missing trigger').refine(isValidAutomationSchedule, {
-  message: 'Invalid automation trigger'
-})
-
-const AutomationPrecheck = z
-  .object({
-    command: requiredString('Missing precheck command'),
-    timeoutSeconds: OptionalPositiveInt.transform((value) =>
-      normalizeAutomationPrecheckTimeoutSeconds(value)
-    ).refine((value) => value <= MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS, {
-      message: 'Precheck timeout is too large'
-    })
-  })
-  .nullable()
-  .optional()
-
-const OptionalNullablePlainString = z
-  .unknown()
-  .transform((value) => (value === null || typeof value === 'string' ? value : undefined))
-  .pipe(z.union([z.string(), z.null(), z.undefined()]))
-  .optional()
-
-const TaskProviderIdentity = z
-  .custom<SharedTaskProviderIdentity>(
-    (value) =>
-      value !== null &&
-      typeof value === 'object' &&
-      'provider' in value &&
-      ['github', 'gitlab', 'linear', 'jira'].includes(String(value.provider))
-  )
-  .optional()
-  .nullable()
-
-const TaskSourceContext = z
-  .object({
-    kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
-    projectId: requiredString('Missing source project id'),
-    hostId: ExecutionHostId,
-    projectHostSetupId: OptionalNullablePlainString,
-    repoId: OptionalNullablePlainString,
-    providerIdentity: TaskProviderIdentity,
-    accountLabel: OptionalNullablePlainString
-  })
-  .optional()
-  .nullable()
-
-const WorkspaceRunContext = z
-  .object({
-    kind: z.literal('workspace-run'),
-    projectId: requiredString('Missing run project id'),
-    hostId: ExecutionHostId,
-    projectHostSetupId: requiredString('Missing project host setup id'),
-    repoId: requiredString('Missing repo id'),
-    path: requiredString('Missing run path')
-  })
-  .optional()
-  .nullable()
-
-const AutomationId = z.object({
-  id: requiredString('Missing automation id')
-})
-
-const AutomationRuns = z.object({
-  automationId: OptionalString
-})
-
-const AutomationCreate = z.object({
-  name: requiredString('Missing automation name'),
-  prompt: requiredString('Missing automation prompt'),
-  precheck: AutomationPrecheck,
-  agentId: TuiAgent.nullable(),
-  runContext: WorkspaceRunContext,
-  sourceContext: TaskSourceContext,
-  repo: OptionalString,
-  workspace: OptionalString,
-  workspaceMode: AutomationWorkspaceMode,
-  baseBranch: OptionalPlainString,
-  setupDecision: SetupDecision,
-  reuseSession: OptionalBoolean,
-  timezone: OptionalString,
-  rrule: AutomationSchedule,
-  dtstart: requiredNumber('Missing trigger start time'),
-  enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
-})
-
-const AutomationUpdateFields = z.object({
-  name: OptionalString,
-  prompt: OptionalString,
-  precheck: AutomationPrecheck,
-  agentId: TuiAgent.nullable().optional(),
-  runContext: WorkspaceRunContext,
-  sourceContext: TaskSourceContext,
-  repo: OptionalString,
-  workspace: OptionalString,
-  workspaceMode: AutomationWorkspaceMode,
-  // Why: update patches distinguish omitted from null so callers can clear a saved base branch.
-  baseBranch: OptionalNullablePlainString,
-  setupDecision: SetupDecision,
-  reuseSession: OptionalBoolean,
-  timezone: OptionalString,
-  rrule: AutomationSchedule.optional(),
-  dtstart: requiredNumber('Missing trigger start time').optional(),
-  enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
-})
-
-const AutomationUpdate = z.object({
-  id: requiredString('Missing automation id'),
-  updates: AutomationUpdateFields
-})
+  // Legacy clients cannot echo owner metadata, so snapshot it at the RPC boundary.
+  return context.runtime.automationOwnerPrecondition(id) ?? undefined
+}
 
 function supportsShellAutomations(context: RpcContext): boolean {
   return (
@@ -162,22 +44,32 @@ function assertShellAutomationSupport(context: RpcContext): void {
 export const AUTOMATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'automation.list',
-    params: null,
-    handler: (_params, context) => ({
-      automations: context.runtime
-        .listAutomations()
-        .filter((automation) => automation.agentId !== null || supportsShellAutomations(context))
-    })
+    params: AutomationList,
+    handler: (params, context) => {
+      const result = context.runtime.listAutomationsForScope(params)
+      if (supportsShellAutomations(context)) {
+        return result
+      }
+      const automations = result.automations.filter((automation) => automation.agentId !== null)
+      const visibleIds = new Set(automations.map((automation) => automation.id))
+      return {
+        ...result,
+        automations,
+        items: result.items.filter((item) => visibleIds.has(item.automationId))
+      }
+    }
   }),
   defineMethod({
     name: 'automation.show',
     params: AutomationId,
+    // The CLI echoes the authority's owner metadata on subsequent mutations.
     handler: (params, context) => {
-      const automation = context.runtime.showAutomation(params.id)
+      const automation = context.runtime.showAutomation(params.id, params.expectedOwner)
       if (automation.agentId === null) {
         assertShellAutomationSupport(context)
       }
-      return { automation }
+      const owner = context.runtime.automationOwnerPrecondition(params.id)
+      return owner ? { automation, owner } : { automation }
     }
   }),
   defineMethod({
@@ -194,31 +86,54 @@ export const AUTOMATION_METHODS: RpcMethod[] = [
     name: 'automation.update',
     params: AutomationUpdate,
     handler: async (params, context) => {
+      const expectedOwner = mutationOwner(params.id, params.expectedOwner, context)
       if (
         !supportsShellAutomations(context) &&
         (params.updates.agentId === null ||
-          context.runtime.showAutomation(params.id).agentId === null)
+          context.runtime.showAutomation(params.id, expectedOwner).agentId === null)
       ) {
         assertShellAutomationSupport(context)
       }
-      return { automation: await context.runtime.updateAutomation(params.id, params.updates) }
+      return {
+        automation: await context.runtime.updateAutomation(params.id, params.updates, {
+          expectedOwner,
+          destination: params.destination
+        })
+      }
     }
   }),
   defineMethod({
     name: 'automation.delete',
     params: AutomationId,
-    handler: (params, { runtime }) => runtime.deleteAutomation(params.id)
+    handler: (params, context) =>
+      context.runtime.deleteAutomation(
+        params.id,
+        mutationOwner(params.id, params.expectedOwner, context)
+      )
   }),
   defineMethod({
     name: 'automation.runNow',
     params: AutomationId,
-    handler: async (params, { runtime }) => ({ run: await runtime.runAutomationNow(params.id) })
+    handler: async (params, context) => ({
+      run: await context.runtime.runAutomationNow(
+        params.id,
+        mutationOwner(params.id, params.expectedOwner, context)
+      )
+    })
   }),
   defineMethod({
     name: 'automation.runs',
     params: AutomationRuns,
-    handler: (params, { runtime }) => ({
-      runs: runtime.listAutomationRuns(params.automationId)
-    })
+    handler: (params, { runtime }) => {
+      if (params.limit !== undefined || params.cursor !== undefined) {
+        return runtime.listAutomationRunsPage(
+          params.automationId,
+          params.expectedOwner,
+          params.limit,
+          params.cursor
+        )
+      }
+      return { runs: runtime.listAutomationRuns(params.automationId, params.expectedOwner) }
+    }
   })
 ]

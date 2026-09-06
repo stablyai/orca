@@ -123,4 +123,58 @@ describe('useUnreadDockBadge', () => {
     expect(getUnreadBadgeCount).toHaveBeenCalledTimes(5)
     expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
   })
+
+  // Why render-counted: this hook is mounted on the App root, so anything that wakes its
+  // subscription re-renders the whole shell — the chrome layout, both providers and every
+  // non-memoised overlay — for a badge integer that did not move.
+  it('leaves the App root asleep through title frames and wakes it only on a badge change', () => {
+    const worktrees = Array.from({ length: 20 }, (_, index) =>
+      makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo' })
+    )
+    const tabsByWorktree = Object.fromEntries(
+      worktrees.map((worktree, index) => [
+        worktree.id,
+        [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
+      ])
+    )
+    useAppStore.setState({
+      worktreesByRepo: { repo: worktrees },
+      tabsByWorktree,
+      unreadTerminalTabs: { 'tab-19': true }
+    })
+    let renders = 0
+    renderHook(() => {
+      renders += 1
+      return useUnreadDockBadge()
+    })
+    const rendersAfterMount = renders
+
+    // Separate acts: title frames arrive as individual store writes, not one batch.
+    for (let index = 0; index < 20; index += 1) {
+      act(() => useAppStore.getState().updateTabTitle(`tab-${index}`, `agent frame ${index}`))
+    }
+
+    expect(useAppStore.getState().tabsByWorktree).not.toBe(tabsByWorktree)
+    expect(renders).toBe(rendersAfterMount)
+
+    // A tab becomes unread.
+    act(() => useAppStore.setState({ unreadTerminalTabs: { 'tab-19': true, 'tab-0': true } }))
+    expect(renders).toBe(rendersAfterMount + 1)
+    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(2)
+
+    // A tab is read.
+    act(() => useAppStore.setState({ unreadTerminalTabs: { 'tab-19': true } }))
+    expect(renders).toBe(rendersAfterMount + 2)
+    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(1)
+
+    // A tab holding unread state closes.
+    act(() =>
+      useAppStore.setState({
+        tabsByWorktree: { ...useAppStore.getState().tabsByWorktree, 'repo::worktree-19': [] },
+        unreadTerminalTabs: {}
+      })
+    )
+    expect(renders).toBe(rendersAfterMount + 3)
+    expect(setUnreadDockBadgeCount).toHaveBeenLastCalledWith(0)
+  })
 })

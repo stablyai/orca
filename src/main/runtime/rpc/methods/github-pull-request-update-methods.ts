@@ -39,6 +39,11 @@ const UpdatePrState = RepoSelector.extend({
   })
 })
 
+const MarkPrReadyForReview = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 const RequestPrReviewers = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   prRepo: SlugRepo.nullable().optional(),
@@ -112,6 +117,12 @@ export const GITHUB_PULL_REQUEST_UPDATE_METHODS: RpcMethod[] = [
     params: UpdatePrState,
     handler: async (params, { runtime }) =>
       runtime.updateRepoPRState(params.repo, params.prNumber, params.updates, params.prRepo ?? null)
+  }),
+  defineMethod({
+    name: 'github.markPRReadyForReview',
+    params: MarkPrReadyForReview,
+    handler: async (params, { runtime }) =>
+      runtime.markRepoPRReadyForReview(params.repo, params.prNumber, params.prRepo ?? null)
   }),
   defineMethod({
     name: 'github.requestPRReviewers',
