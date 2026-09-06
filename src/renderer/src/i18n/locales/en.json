@@ -17119,7 +17119,27 @@
       },
       "structuredSessionFellBackToTerminal": "Structured chat isn't available",
       "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
-      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
+      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details.",
+      "subagents": {
+        "state": {
+          "completed": "completed",
+          "working": "working",
+          "idle": "idle",
+          "failed": "failed",
+          "stopped": "stopped",
+          "unverifiable": "unverifiable",
+          "workingCount": "{{value0}} working",
+          "idleCount": "{{value0}} idle",
+          "failedCount": "{{value0}} failed",
+          "stoppedCount": "{{value0}} stopped",
+          "unverifiableCount": "{{value0}} unverifiable"
+        },
+        "startedOne": "Kicked off 1 subagent",
+        "startedN": "Kicked off {{value0}} subagents",
+        "ranOne": "Ran 1 subagent",
+        "ranN": "Ran {{value0}} subagents",
+        "tokens": "{{value0}} tokens"
+      }
     },
     "tab": {
       "bar": {

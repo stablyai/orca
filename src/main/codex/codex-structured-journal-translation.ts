@@ -1,3 +1,6 @@
+import { CODEX_TOKEN_USAGE_METHOD } from './codex-subagent-activity'
+import { CodexSubagentRoster } from './codex-subagent-roster'
+import { readCodexThreadItem } from './codex-structured-item-translation'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import { CodexJournalPrompts } from './codex-structured-journal-prompts'
@@ -53,6 +56,11 @@ export function createCodexJournalTranslator(
   const prompts = new CodexJournalPrompts(deps, (threadId, itemId) =>
     items.detailFor(threadId, itemId)
   )
+  const subagents = new CodexSubagentRoster({
+    sink: deps.sink,
+    primaryThreadId: () => deps.primaryThreadId?.() ?? null,
+    activeTurn: (threadId) => activeTurns.current(threadId)
+  })
   const flushStreams = (): CodexJournalTranslationAdmission =>
     items.streams.flush() ? CODEX_JOURNAL_ADMITTED : { accepted: false, reason: 'backpressure' }
 
@@ -94,6 +102,11 @@ export function createCodexJournalTranslator(
         if (!admission.accepted) {
           return admission
         }
+        // No event will ever settle a child once the provider is gone.
+        const sweep = subagents.settleSession()
+        if (!sweep.accepted) {
+          return sweep
+        }
         items.activeItems.clear()
         prompts.pending.clear()
         activeTurns.clear()
@@ -133,7 +146,19 @@ export function createCodexJournalTranslator(
       if (event.method === 'turn/completed') {
         return completeTurn(event)
       }
+      if (event.method === CODEX_TOKEN_USAGE_METHOD) {
+        // Classified `status-chrome`, so the generic-frame path swallows it
+        // before the journal. The roster consumes it as a typed notification.
+        const admission = subagents.handleTokenUsage(event.params)
+        if (admission) {
+          return admission
+        }
+      }
       if (event.method === 'item/started' || event.method === 'item/completed') {
+        const subagentAdmission = handleSubagentItem(event)
+        if (subagentAdmission) {
+          return subagentAdmission
+        }
         const translated = items.handle(event)
         return translated.handled
           ? translated.admission
@@ -158,8 +183,29 @@ export function createCodexJournalTranslator(
       items.dispose()
       prompts.dispose()
       genericFrames.dispose()
+      subagents.dispose()
       activeTurns.clear()
     }
+  }
+
+  /** Routes a `subAgentActivity` item to the roster; null when it is not one. */
+  function handleSubagentItem(event: {
+    threadId: string
+    params: unknown
+  }): CodexJournalTranslationAdmission | null {
+    const params =
+      typeof event.params === 'object' && event.params !== null
+        ? (event.params as Record<string, unknown>)
+        : {}
+    const item = readCodexThreadItem(params.item)
+    if (!item) {
+      return null
+    }
+    return subagents.handleItem({
+      threadId: event.threadId,
+      turnId: readCodexTurnId(event.params) ?? activeTurns.current(event.threadId),
+      item
+    })
   }
 
   function settleOversizedNotification(event: {
@@ -222,6 +268,12 @@ export function createCodexJournalTranslator(
     const turnId = readCodexTurnId(event.params) ?? activeTurns.current(event.threadId)
     if (!turnId) {
       return CODEX_JOURNAL_ADMITTED
+    }
+    // The turn is over however it ended (completion, failure, or abort), so a
+    // child still reported as working will never be settled by an event.
+    const sweep = subagents.settleTurn(event.threadId, turnId)
+    if (!sweep.accepted) {
+      return sweep
     }
     const admission = settleCodexJournalTurn({
       sink: deps.sink,

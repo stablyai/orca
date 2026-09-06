@@ -1,4 +1,5 @@
 import {
+  isSubagentGroupBlock,
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
@@ -33,6 +34,13 @@ function isHarnessSidecarToolMessage(message: NativeChatMessage): boolean {
         (block.type === 'text' && isKnownHarnessInjectedUserTurnText(block.text))
     )
   )
+}
+
+/** The spawn-group roster row lands mid-turn, between the assistant's tool
+ *  calls. It is activity chrome, not a new turn, so it must not end the run the
+ *  following tool messages fold into. */
+function isSubagentRosterMessage(message: NativeChatMessage): boolean {
+  return message.blocks.some(isSubagentGroupBlock)
 }
 
 function isInterruptionBoundary(message: NativeChatMessage): boolean {
@@ -104,7 +112,10 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
     if (message.role === 'assistant') {
       mutableAssistantIndex = output.length - 1
       clonedAssistantIndex = -1
-    } else if (!isNoiseMessage(message) || isInterruptionBoundary(message)) {
+    } else if (
+      !isSubagentRosterMessage(message) &&
+      (!isNoiseMessage(message) || isInterruptionBoundary(message))
+    ) {
       mutableAssistantIndex = -1
       clonedAssistantIndex = -1
     }

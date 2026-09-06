@@ -784,7 +784,7 @@ describe('codex item bodies', () => {
     }
   })
 
-  it('leaves subagent items on the generic row until a real renderer exists', () => {
+  it('drops the raw subagent item now the roster row renders it', () => {
     expect(
       codexJournalItem({
         type: 'subAgentActivity',
@@ -793,10 +793,7 @@ describe('codex item bodies', () => {
         agentThreadId: 'thread-child',
         agentPath: '/root/list_directory'
       })
-    ).toMatchObject({
-      handled: false,
-      body: { kind: 'status', providerFrame: { kind: 'item:subAgentActivity' } }
-    })
+    ).toMatchObject({ handled: true, body: null })
   })
 
   it('drops the sleep item, which codex itself renders as nothing', () => {

@@ -5,8 +5,10 @@ import { translate } from '@/i18n/i18n'
 import {
   isToolCallBlock,
   isToolResultBlock,
-  type NativeChatBlock
+  type NativeChatBlock,
+  type NativeChatSubagentGroupBlock
 } from '../../../../shared/native-chat-types'
+import { isRenderableSubagentGroup } from '../../../../shared/native-chat-subagent-summary'
 import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 import { pairToolBlocks } from './native-chat-tool-fold'
@@ -27,8 +29,12 @@ import {
 } from '../../../../shared/native-chat-tool-activity'
 import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
 import { NativeChatDiffView } from './NativeChatDiffView'
+import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolIcon, NativeChatToolRunIcon } from './NativeChatToolIcon'
 import { nativeChatToolActivityLabel } from './native-chat-tool-activity-label'
+
+/** Stable empty default: a fresh array literal per render breaks memoization. */
+const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
 
 /** A single inline tool line — `▸ ToolName  preview` — that expands in place to
  *  show the call's diff/input or the result's body. Tool calls read as flat
@@ -182,12 +188,15 @@ function buildEditCards(blocks: NativeChatBlock[]): EditCardModel {
  *  toolbar toggle drive every run at once while still allowing per-run override. */
 export function NativeChatToolRun({
   blocks,
+  subagentGroups = NO_SUBAGENT_GROUPS,
   expandSignal,
   activeTurnIsWorking,
   expandOverride,
   structuredActivityUi = true
 }: {
   blocks: NativeChatBlock[]
+  /** Spawn-group rosters that belong with this run's activity, one row each. */
+  subagentGroups?: NativeChatSubagentGroupBlock[]
   /** Toolbar-driven desired open state. Each change re-syncs this run's state. */
   expandSignal: boolean
   /** Per-turn disclosure state controlled by the completed turn status row. */
@@ -200,6 +209,20 @@ export function NativeChatToolRun({
   // Re-sync when the global toolbar toggle flips.
   useEffect(() => setOpen(expandOverride ?? expandSignal), [expandOverride, expandSignal])
 
+  // Childless groups are dropped so `subagentRows.length` stays an honest test of
+  // "something will draw": the roster-only branch below returns a margin-bearing
+  // wrapper on the strength of it, and a group with no children renders null.
+  // Same predicate `subagentGroupBlocks` applies, so this row and the caller
+  // deciding the row is worth mounting cannot disagree about what draws.
+  const subagentRows = subagentGroups
+    .filter(isRenderableSubagentGroup)
+    .map((group) => (
+      <NativeChatSubagentRun
+        key={group.groupId}
+        block={group}
+        activeTurnIsWorking={activeTurnIsWorking}
+      />
+    ))
   const callCount = countToolCalls(blocks) || blocks.length
   const summary = summarizeToolRun(blocks)
   const latestActiveCall = structuredActivityUi
@@ -229,6 +252,19 @@ export function NativeChatToolRun({
           value0: callCount
         })
 
+  // A roster with no tool calls beside it is the whole run: rendering the tool
+  // header too would announce "1 tool call" for activity that has none.
+  //
+  // Ordered BEFORE the completed-turn guard below on purpose. That guard hides
+  // TOOL activity behind the turn-status disclosure, and a roster row has none
+  // to hide: it is the compact summary this row exists to leave behind. Bailing
+  // there instead dropped it from every settled turn — the default state of the
+  // whole transcript — and left the caller, which counts a spawn group as
+  // renderable, drawing the empty bubble it explicitly guards against.
+  if (blocks.length === 0) {
+    return subagentRows.length > 0 ? <div className="mt-3">{subagentRows}</div> : null
+  }
+
   // Completed turn activity belongs behind the turn-status disclosure. Keeping
   // the grouped row visible here made a failed child command look like the
   // whole response was still running (or had failed) even while collapsed.
@@ -245,6 +281,7 @@ export function NativeChatToolRun({
     // Extra top margin sets the tool run apart from the assistant prose above it
     // so the turn's activity doesn't crowd the message text.
     <div className="mt-3">
+      {subagentRows}
       {latestActiveCall ? (
         <button
           type="button"

@@ -4,7 +4,11 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatMessage } from '../../../../shared/native-chat-types'
+import {
+  isSubagentGroupFallbackText,
+  subagentGroupBlocks
+} from '../../../../shared/native-chat-subagent-summary'
+import { isSubagentGroupBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
 import { splitNativeChatBlocks } from './native-chat-tool-fold'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { nativeChatProseToMarkdown } from './native-chat-prose'
@@ -47,12 +51,28 @@ export const MessageRow = memo(function MessageRow({
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set: a streaming turn re-renders this row on every frame, and these
   // derivations used to re-run each time even though `message.blocks` had not changed.
-  const { hasImages, markdown, prose, tools } = useMemo(() => {
+  const { hasImages, markdown, prose, subagentGroups, tools } = useMemo(() => {
     const split = splitNativeChatBlocks(message.blocks)
+    const groups = subagentGroupBlocks(split.prose)
+    // A spawn-group row carries a plain-text twin so a client without the block
+    // type still reads the roster. This one draws the block, so the twin is
+    // dropped rather than printed beside it — only the twin, never the prose
+    // beside it: the block is provider-agnostic, so a lane that folds a roster
+    // into a message with real text must not lose that text here.
+    const prose =
+      groups.length === 0
+        ? split.prose
+        : split.prose.filter(
+            (block) =>
+              !isSubagentGroupBlock(block) &&
+              !(block.type === 'text' && isSubagentGroupFallbackText(block.text))
+          )
     return {
-      ...split,
-      markdown: nativeChatProseToMarkdown(split.prose),
-      hasImages: split.prose.some((block) => block.type === 'image-ref')
+      tools: split.tools,
+      prose,
+      subagentGroups: groups,
+      markdown: nativeChatProseToMarkdown(prose),
+      hasImages: prose.some((block) => block.type === 'image-ref')
     }
   }, [message.blocks])
   const isUser = message.role === 'user'
@@ -69,7 +89,7 @@ export const MessageRow = memo(function MessageRow({
   // Skip rows with nothing renderable so the transcript shows no empty/ghost
   // bubble.
   // After all hooks, so hook order stays unconditional.
-  if (markdown.length === 0 && !hasImages && tools.length === 0) {
+  if (markdown.length === 0 && !hasImages && tools.length === 0 && subagentGroups.length === 0) {
     return null
   }
 
@@ -151,9 +171,10 @@ export const MessageRow = memo(function MessageRow({
           linkifyFilePaths={onLinkClick !== undefined}
         />
       ) : null}
-      {tools.length > 0 ? (
+      {tools.length > 0 || subagentGroups.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}
+          subagentGroups={subagentGroups}
           expandSignal={expandSignal}
           expandOverride={activityExpandOverride}
           activeTurnIsWorking={activeTurnIsWorking}
