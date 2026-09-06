@@ -192,9 +192,9 @@ if [[ -n "$CURRENT_VERSION" ]]; then
   if [[ "$TARGET_VERSION" == "$CURRENT_VERSION" ]]; then
     reject "already at version $TARGET_VERSION"
   fi
-  # SemVer-aware gate: sort -V ranks a stable release above its own prereleases
-  # (1.2.3 > 1.2.3-beta.1), so accepting only when the target sorts strictly
-  # highest blocks both plain downgrades and stable->its-own-prerelease moves.
+  # SemVer-aware gate: sort -V ranks a stable release BELOW its own prereleases
+  # (1.2.3 < 1.2.3-beta.1), so a plain sort -V gate would wave through both plain
+  # downgrades and stable->its-own-prerelease moves. semver_higher decides.
   HIGHEST=$(semver_higher "$CURRENT_VERSION" "$TARGET_VERSION")
   if [[ "$HIGHEST" != "$TARGET_VERSION" ]]; then
     reject "refusing downgrade from $CURRENT_VERSION to $TARGET_VERSION"
@@ -206,7 +206,10 @@ fi
 # cache original and copying it later would leave a window where a service-user
 # process could swap the file between hash and install. Runs after every cheap
 # pre-acceptance check so a refused request never pays the copy + sha512 pass.
-if ! cp -- "$ARTIFACT_PATH" "$STAGING"; then
+# umask 077: the staged copy must never inherit a permissive mode the service
+# user could keep writing through between the hash and the promotion.
+rm -f "$STAGING"
+if ! ( umask 077 && cp -- "$ARTIFACT_PATH" "$STAGING" ); then
   reject "could not stage artifact"
 fi
 ACTUAL_SHA=$(sha512sum -- "$STAGING" | awk '{print $1}')

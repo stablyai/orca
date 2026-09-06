@@ -163,6 +163,7 @@ describe('serve update helper script', () => {
     const downgradeAt = script.indexOf('refusing downgrade')
     const noOpAt = script.indexOf('already at version')
     expect(downgradeAt).toBeGreaterThan(-1)
+    expect(noOpAt).toBeGreaterThan(-1)
     expect(downgradeAt).toBeLessThan(cpAt)
     expect(noOpAt).toBeLessThan(cpAt)
   })
