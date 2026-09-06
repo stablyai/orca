@@ -8,10 +8,53 @@
 
 import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
 
 export type StructuredAgentSessionTeardownPhase = {
   name: string
   run: () => Promise<void> | void
+}
+
+/** Quit must not wait indefinitely on an in-flight flow; see the bounded drains below. */
+const DRAIN_TIMEOUT_MS = 5_000
+
+/** The order teardown has to happen in, kept together because the order IS the contract. */
+export function structuredAgentSessionTeardownPhases({
+  holds,
+  runtimeState,
+  handoffs,
+  tasks,
+  eventRecovery
+}: {
+  holds: { dispose: () => void }
+  runtimeState: { stopLeaseRenewal: () => void; flushAllEventSinks: () => Promise<void> }
+  handoffs: { stopTuiHistoryCatchup: () => void; drain: () => Promise<void> }
+  tasks: { drainAttaches: () => Promise<void> }
+  eventRecovery: { drainSinkRecoveries: () => Promise<void> }
+}): readonly StructuredAgentSessionTeardownPhase[] {
+  return [
+    { name: 'dispose-holds', run: () => holds.dispose() },
+    { name: 'stop-lease-renewal', run: () => runtimeState.stopLeaseRenewal() },
+    { name: 'stop-tui-catchup', run: () => handoffs.stopTuiHistoryCatchup() },
+    // Before the session map is dropped: a handoff flow left running writes rows into a journal
+    // this teardown is about to close, and publishes against a session it removed.
+    // Why bounded: this phase is on the app-quit path, and a flow wedged in `launchTui` would
+    // otherwise hold the quit open forever. Giving up merely restores the old orphaning, which
+    // the publish guard above already makes survivable.
+    {
+      name: 'drain-handoffs',
+      run: () => withTimeout(handoffs.drain(), DRAIN_TIMEOUT_MS, undefined)
+    },
+    { name: 'drain-attaches', run: () => tasks.drainAttaches() },
+    { name: 'flush-event-sinks', run: () => runtimeState.flushAllEventSinks() },
+    // Ordered after the flush, because the flush is what surfaces the sink failure that starts
+    // recovery. Bounded for the same reason as the handoff drain: recovery stops a provider child
+    // and can re-attach one, and neither step carries a deadline of its own.
+    {
+      name: 'drain-sink-recoveries',
+      run: () => withTimeout(eventRecovery.drainSinkRecoveries(), DRAIN_TIMEOUT_MS, undefined)
+    }
+  ]
 }
 
 export async function tearDownStructuredAgentSessionHost(input: {

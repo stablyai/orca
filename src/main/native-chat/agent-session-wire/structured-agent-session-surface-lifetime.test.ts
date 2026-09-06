@@ -117,6 +117,33 @@ function waitOutSeveralGraceWindows(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, GRACE_MS * 20))
 }
 
+/** The live session, reached past the host's private index so its journal can be made to fail. */
+function hostSession(): { journal: { appendItem: (...args: never[]) => Promise<unknown> } } {
+  const session = (
+    host as unknown as {
+      sessions: Map<string, { journal: { appendItem: (...args: never[]) => Promise<unknown> } }>
+    }
+  ).sessions.get(SESSION)
+  expect(session).toBeDefined()
+  return session!
+}
+
+/** Replace the failed cached sink so suite cleanup can drain the host. */
+function replaceFailedEventSink(): void {
+  ;(
+    host as unknown as { runtimeState: { eventSinkFor: (sessionId: string) => unknown } }
+  ).runtimeState.eventSinkFor(SESSION)
+}
+
+/** The write that fails, which is what starts sink-failure recovery. */
+function failNextJournalWrite(): void {
+  vi.spyOn(hostSession().journal, 'appendItem').mockRejectedValueOnce(new Error('disk unavailable'))
+  sink?.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'lost write' }] }
+  )
+}
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-surface-lifetime-'))
   resetHostTestOperationIds()
@@ -273,20 +300,67 @@ describe('a session evicted and opened again', () => {
 })
 
 describe('an unexpected provider exit', () => {
+  it('drains sink-failure lease persistence before closing the host', async () => {
+    await attach()
+    const settlementStarted = Promise.withResolvers<void>()
+    const settlementGate = Promise.withResolvers<void>()
+    const originalTransition = store.transitionHandoff.bind(store)
+    vi.spyOn(store, 'transitionHandoff').mockImplementationOnce(async (...args) => {
+      settlementStarted.resolve()
+      await settlementGate.promise
+      return originalTransition(...args)
+    })
+    failNextJournalWrite()
+    await settlementStarted.promise
+    replaceFailedEventSink()
+
+    let drained = false
+    const teardown = host.flushAllStreamedEvents().then(() => {
+      drained = true
+    })
+    try {
+      // Quiescence probe, not a wait for the flow: teardown must still be blocked on it.
+      for (let tick = 0; tick < 20; tick += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      }
+      expect(drained).toBe(false)
+    } finally {
+      settlementGate.resolve()
+      await teardown
+    }
+
+    expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
+    expect(host.hasSession(SESSION)).toBe(false)
+  })
+
+  it('gives up on a wedged sink recovery instead of holding the quit open', async () => {
+    await attach()
+    const stopEntered = Promise.withResolvers<void>()
+    const stopGate = Promise.withResolvers<boolean>()
+    // The provider stop that never answers, and so never lets recovery finish.
+    closeSession.mockImplementationOnce(async () => {
+      stopEntered.resolve()
+      return stopGate.promise
+    })
+    failNextJournalWrite()
+    await stopEntered.promise
+    replaceFailedEventSink()
+
+    vi.useFakeTimers()
+    try {
+      const teardown = host.flushAllStreamedEvents()
+      await vi.advanceTimersByTimeAsync(10_000)
+      await expect(teardown).resolves.toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+      // Report "not stopped", so the abandoned recovery settles without writing a closed journal.
+      stopGate.resolve(false)
+    }
+  })
+
   it('turns a journal sink failure into observed-exit settlement and lease release', async () => {
     await attach()
-    const session = (
-      host as unknown as {
-        sessions: Map<string, { journal: { appendItem: (...args: never[]) => Promise<unknown> } }>
-      }
-    ).sessions.get(SESSION)
-    expect(session).toBeDefined()
-    vi.spyOn(session!.journal, 'appendItem').mockRejectedValueOnce(new Error('disk unavailable'))
-
-    sink?.appendItem(
-      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 },
-      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'lost write' }] }
-    )
+    failNextJournalWrite()
 
     await vi.waitFor(() => {
       expect(closeSession).toHaveBeenCalledWith(SESSION)
@@ -304,12 +378,7 @@ describe('an unexpected provider exit', () => {
         )
     ).toBe(true)
 
-    // Replace the failed cached sink so suite cleanup can drain the host.
-    ;(
-      host as unknown as {
-        runtimeState: { eventSinkFor: (sessionId: string) => unknown }
-      }
-    ).runtimeState.eventSinkFor(SESSION)
+    replaceFailedEventSink()
   })
 
   it('releases the exact generation, reacquires outside the queue, and dispatches a new message', async () => {
