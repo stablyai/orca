@@ -5,6 +5,7 @@ import { StatCard } from './StatCard'
 import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
+import { KimiUsagePane } from './KimiUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import { Button } from '../ui/button'
@@ -52,7 +53,7 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok' | 'kimi'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -83,6 +84,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     id: 'grok',
     get label() {
       return translate('auto.components.stats.StatsPane.grokUsageTab', 'Grok')
+    }
+  },
+  {
+    id: 'kimi',
+    get label() {
+      return translate('auto.components.stats.StatsPane.kimiUsageTab', 'Kimi')
     }
   }
 ] as const satisfies readonly { id: UsageTab; label: string }[]
@@ -208,6 +215,8 @@ export function StatsPane(): React.JSX.Element {
             <CodexUsagePane />
           ) : activeUsageTab === 'opencode' ? (
             <OpenCodeUsagePane />
+          ) : activeUsageTab === 'kimi' ? (
+            <KimiUsagePane />
           ) : (
             <GrokUsagePane />
           )}

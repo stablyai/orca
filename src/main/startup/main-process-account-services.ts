@@ -27,7 +27,13 @@ import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
-  if (!store || !state.claudeUsage || !state.codexUsage || !state.openCodeUsage) {
+  if (
+    !store ||
+    !state.claudeUsage ||
+    !state.codexUsage ||
+    !state.openCodeUsage ||
+    !state.kimiUsage
+  ) {
     throw new Error('Usage stores must be initialized before account services')
   }
   state.rateLimits = new RateLimitService()

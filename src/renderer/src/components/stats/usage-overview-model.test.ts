@@ -14,6 +14,11 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
+import type {
+  KimiUsageDailyPoint,
+  KimiUsageScanState,
+  KimiUsageSummary
+} from '../../../../shared/kimi-usage-types'
 import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 
@@ -47,6 +52,17 @@ function enabledOpenCodeScanState(): OpenCodeUsageScanState {
     lastScanCompletedAt: 600,
     lastScanError: null,
     hasAnyOpenCodeData: true
+  }
+}
+
+function enabledKimiScanState(): KimiUsageScanState {
+  return {
+    enabled: true,
+    isScanning: false,
+    lastScanStartedAt: 700,
+    lastScanCompletedAt: 800,
+    lastScanError: null,
+    hasAnyKimiData: true
   }
 }
 
@@ -98,6 +114,20 @@ describe('usage overview model', () => {
       topProject: 'orca-third',
       hasAnyOpenCodeData: true
     }
+    const kimiSummary: KimiUsageSummary = {
+      scope: 'orca',
+      range: '30d',
+      sessions: 1,
+      events: 2,
+      inputTokens: 700,
+      cachedInputTokens: 300,
+      cacheCreationTokens: 200,
+      outputTokens: 400,
+      totalTokens: 1_600,
+      topModel: 'kimi-k2',
+      topProject: 'orca-kimi',
+      hasAnyKimiData: true
+    }
     const claudeDaily: ClaudeUsageDailyPoint[] = [
       {
         day: '2026-05-13',
@@ -142,6 +172,16 @@ describe('usage overview model', () => {
         totalTokens: 1_600
       }
     ]
+    const kimiDaily: KimiUsageDailyPoint[] = [
+      {
+        day: '2026-05-15',
+        inputTokens: 700,
+        cachedInputTokens: 300,
+        cacheCreationTokens: 200,
+        outputTokens: 400,
+        totalTokens: 1_600
+      }
+    ]
 
     const overview = buildUsageOverview({
       claude: {
@@ -158,25 +198,31 @@ describe('usage overview model', () => {
         scanState: enabledOpenCodeScanState(),
         summary: openCodeSummary,
         daily: openCodeDaily
+      },
+      kimi: {
+        scanState: enabledKimiScanState(),
+        summary: kimiSummary,
+        daily: kimiDaily
       }
     })
 
-    expect(overview.totalTokens).toBe(10_800)
-    expect(overview.newInputTokens).toBe(2_950)
-    expect(overview.cacheTokens).toBe(5_550)
-    expect(overview.outputTokens).toBe(2_200)
+    expect(overview.totalTokens).toBe(12_400)
+    expect(overview.newInputTokens).toBe(3_650)
+    expect(overview.cacheTokens).toBe(6_050)
+    expect(overview.outputTokens).toBe(2_600)
     expect(overview.reasoningTokens).toBe(400)
-    expect(overview.sessions).toBe(4)
-    expect(overview.activityCount).toBe(9)
+    expect(overview.sessions).toBe(5)
+    expect(overview.activityCount).toBe(11)
     expect(overview.activeDays).toBe(3)
     expect(overview.estimatedCostUsd).toBeCloseTo(0.09)
-    expect(overview.cacheShare).toBeCloseTo(5_550 / 8_500)
+    expect(overview.cacheShare).toBeCloseTo(6_050 / 9_700)
     expect(overview.bestDay).toMatchObject({
       day: '2026-05-14',
       totalTokens: 4_500,
       claudeTokens: 2_500,
       codexTokens: 2_000,
       openCodeTokens: 0,
+      kimiTokens: 0,
       intensity: 4
     })
     expect(overview.providers.find((provider) => provider.id === 'codex')).toMatchObject({
@@ -189,6 +235,15 @@ describe('usage overview model', () => {
       cacheTokens: 250,
       totalTokens: 1_600
     })
+    expect(overview.providers.find((provider) => provider.id === 'kimi')).toMatchObject({
+      newInputTokens: 700,
+      cacheTokens: 500,
+      totalTokens: 1_600
+    })
+    expect(overview.daily.find((entry) => entry.day === '2026-05-15')).toMatchObject({
+      totalTokens: 4_400,
+      kimiTokens: 1_600
+    })
   })
 
   it('pads recent usage days with zero-token cells', () => {
@@ -200,6 +255,7 @@ describe('usage overview model', () => {
           claudeTokens: 2_500,
           codexTokens: 2_000,
           openCodeTokens: 0,
+          kimiTokens: 0,
           intensity: 4
         }
       ],
@@ -214,6 +270,7 @@ describe('usage overview model', () => {
         claudeTokens: 0,
         codexTokens: 0,
         openCodeTokens: 0,
+        kimiTokens: 0,
         intensity: 0
       },
       {
@@ -222,6 +279,7 @@ describe('usage overview model', () => {
         claudeTokens: 2_500,
         codexTokens: 2_000,
         openCodeTokens: 0,
+        kimiTokens: 0,
         intensity: 4
       },
       {
@@ -230,6 +288,7 @@ describe('usage overview model', () => {
         claudeTokens: 0,
         codexTokens: 0,
         openCodeTokens: 0,
+        kimiTokens: 0,
         intensity: 0
       }
     ])
@@ -239,7 +298,8 @@ describe('usage overview model', () => {
     const overview = buildUsageOverview({
       claude: { scanState: null, summary: null, daily: [] },
       codex: { scanState: null, summary: null, daily: [] },
-      opencode: { scanState: null, summary: null, daily: [] }
+      opencode: { scanState: null, summary: null, daily: [] },
+      kimi: { scanState: null, summary: null, daily: [] }
     })
 
     expect(overview.hasAnyEnabledProvider).toBe(false)
@@ -269,7 +329,8 @@ describe('usage overview model', () => {
         summary: null,
         daily: codexDaily
       },
-      opencode: { scanState: null, summary: null, daily: [] }
+      opencode: { scanState: null, summary: null, daily: [] },
+      kimi: { scanState: null, summary: null, daily: [] }
     })
 
     expect(overview.daily).toHaveLength(130_000)

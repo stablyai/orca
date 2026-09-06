@@ -13,8 +13,13 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
+import type {
+  KimiUsageDailyPoint,
+  KimiUsageScanState,
+  KimiUsageSummary
+} from '../../../../shared/kimi-usage-types'
 
-export type UsageProviderId = 'claude' | 'codex' | 'opencode'
+export type UsageProviderId = 'claude' | 'codex' | 'opencode' | 'kimi'
 
 export type UsageProviderOverview = {
   id: UsageProviderId
@@ -44,6 +49,7 @@ export type UsageOverviewDailyPoint = {
   claudeTokens: number
   codexTokens: number
   openCodeTokens: number
+  kimiTokens: number
   intensity: 0 | 1 | 2 | 3 | 4
 }
 
@@ -84,5 +90,10 @@ export type UsageOverviewInput = {
     scanState: OpenCodeUsageScanState | null
     summary: OpenCodeUsageSummary | null
     daily: OpenCodeUsageDailyPoint[]
+  }
+  kimi: {
+    scanState: KimiUsageScanState | null
+    summary: KimiUsageSummary | null
+    daily: KimiUsageDailyPoint[]
   }
 }

@@ -1,5 +1,6 @@
 import type { CodexUsageSummary } from '../../../../shared/codex-usage-types'
 import type { OpenCodeUsageSummary } from '../../../../shared/opencode-usage-types'
+import type { KimiUsageSummary } from '../../../../shared/kimi-usage-types'
 import { countActiveDays, getClaudeDailyTotal } from './usage-overview-daily-series'
 import type { UsageOverviewInput, UsageProviderOverview } from './usage-overview-types'
 import { translate } from '@/i18n/i18n'
@@ -16,6 +17,10 @@ function getOpenCodeNewInputTokens(summary: OpenCodeUsageSummary | null): number
     return 0
   }
   return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
+}
+
+function getKimiCacheTokens(summary: KimiUsageSummary | null): number {
+  return summary ? summary.cachedInputTokens + summary.cacheCreationTokens : 0
 }
 
 export function createClaudeProvider(input: UsageOverviewInput['claude']): UsageProviderOverview {
@@ -103,6 +108,34 @@ export function createOpenCodeProvider(
     cacheTokens: summary?.cachedInputTokens ?? 0,
     reasoningTokens: summary?.reasoningOutputTokens ?? 0,
     estimatedCostUsd: summary?.estimatedCostUsd ?? null,
+    topModel: summary?.topModel ?? null,
+    topProject: summary?.topProject ?? null,
+    activeDays: countActiveDays(dailyActiveDays)
+  }
+}
+
+export function createKimiProvider(input: UsageOverviewInput['kimi']): UsageProviderOverview {
+  const summary = input.summary
+  const dailyActiveDays = input.daily
+    .filter((entry) => entry.totalTokens > 0)
+    .map((entry) => entry.day)
+  return {
+    id: 'kimi',
+    label: translate('auto.components.stats.usage.overview.model.kimiProvider', 'Kimi'),
+    enabled: input.scanState?.enabled ?? false,
+    isScanning: input.scanState?.isScanning ?? false,
+    hasData: summary?.hasAnyKimiData ?? input.scanState?.hasAnyKimiData ?? false,
+    lastScanCompletedAt: input.scanState?.lastScanCompletedAt ?? null,
+    lastScanError: input.scanState?.lastScanError ?? null,
+    sessions: summary?.sessions ?? 0,
+    activityLabel: 'events',
+    activityCount: summary?.events ?? 0,
+    totalTokens: summary?.totalTokens ?? 0,
+    newInputTokens: summary?.inputTokens ?? 0,
+    outputTokens: summary?.outputTokens ?? 0,
+    cacheTokens: getKimiCacheTokens(summary),
+    reasoningTokens: 0,
+    estimatedCostUsd: null,
     topModel: summary?.topModel ?? null,
     topProject: summary?.topProject ?? null,
     activeDays: countActiveDays(dailyActiveDays)

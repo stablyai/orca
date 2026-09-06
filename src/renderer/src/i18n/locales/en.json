@@ -4174,7 +4174,8 @@
           "eb6a066185": "claude",
           "eee19cfade": "overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "kimiUsageTab": "Kimi"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sessions",
@@ -4194,7 +4195,8 @@
           "ca6bc5fded": "Refresh",
           "e06d1baf5c": "Refresh usage overview",
           "c760c481c5": "Usage Overview",
-          "55c910f4f1": "- some model prices are unavailable"
+          "55c910f4f1": "- some model prices are unavailable",
+          "enableKimi": "Enable Kimi"
         },
         "share": {
           "card": {
@@ -4239,7 +4241,8 @@
             "model": {
               "bc474051e5": "OpenCode",
               "eb220d193b": "Codex",
-              "544d6d4c16": "Claude"
+              "544d6d4c16": "Claude",
+              "kimiProvider": "Kimi"
             },
             "sections": {
               "9564a3b21b": "sessions -",
@@ -4298,6 +4301,46 @@
           "e5a6b7c8d9": "Weekly credits used",
           "f6b7c8d9e0": "Billing period reset",
           "a7b8c9d0e1": "Grok account settings"
+        },
+        "KimiUsageDetails": {
+          "byModel": "By model",
+          "topModel": "Top model:",
+          "byProject": "By project",
+          "topProject": "Top project:",
+          "recentSessions": "Recent sessions",
+          "recentSessionsDesc": "Most recent local Kimi Code sessions in this scope.",
+          "lastActive": "Last active",
+          "project": "Project",
+          "model": "Model",
+          "events": "Events",
+          "input": "Input",
+          "output": "Output",
+          "total": "Total",
+          "unknown": "Unknown"
+        },
+        "KimiUsagePane": {
+          "scopeOrca": "Orca worktrees only",
+          "scopeAll": "All local Kimi Code usage",
+          "range7d": "Last 7 days",
+          "range30d": "Last 30 days",
+          "range90d": "Last 90 days",
+          "rangeAll": "All time",
+          "title": "Kimi Code Usage Tracking",
+          "description": "Reads local Kimi Code usage logs to show token, model, and session stats.",
+          "enable": "Enable Kimi Code usage analytics",
+          "scanError": " — Last scan error: {{value0}}",
+          "options": "Kimi Code usage options",
+          "filters": "Filters",
+          "scope": "Scope",
+          "range": "Range",
+          "refresh": "Refresh Kimi Code usage",
+          "refreshLabel": "Refresh",
+          "noData": "No local Kimi Code usage found yet for this scope.",
+          "inputTokens": "Input tokens",
+          "outputTokens": "Output tokens",
+          "cacheRead": "Cache read",
+          "cacheCreation": "Cache creation",
+          "sessions": "Sessions / Events"
         }
       },
       "sparse": {
