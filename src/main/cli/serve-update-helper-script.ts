@@ -148,22 +148,6 @@ if ! systemctl list-unit-files "$UNIT_NAME" >/dev/null 2>&1; then
   reject "unit not found: $UNIT_NAME"
 fi
 
-# Trust anchor: the helper verifies the bytes it will actually install. Stage the
-# artifact into a root-owned copy FIRST, then hash the staged file: hashing the
-# cache original and copying it later would leave a window where a service-user
-# process could swap the file between hash and install.
-if ! cp -- "$ARTIFACT_PATH" "$STAGING"; then
-  reject "could not stage artifact"
-fi
-ACTUAL_SHA=$(sha512sum -- "$STAGING" | awk '{print $1}')
-# Why the || true: an undecodable digest must reach the length check and produce a
-# rejected verdict, not kill the helper under set -e before any verdict is written.
-EXPECTED_SHA=$(printf '%s' "$SHA512" | { base64 -d 2>/dev/null || true; } | od -An -v -tx1 | tr -d ' \\n')
-if [[ \${#EXPECTED_SHA} -ne 128 || "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
-  rm -f "$STAGING"
-  reject "artifact hash mismatch"
-fi
-
 if [[ ! -f "$APPIMAGE_TARGET" ]]; then
   reject "current binary missing: $APPIMAGE_TARGET"
 fi
@@ -183,6 +167,23 @@ if [[ -n "$CURRENT_VERSION" ]]; then
   if [[ "$OLDEST" == "$TARGET_VERSION" ]]; then
     reject "refusing downgrade from $CURRENT_VERSION to $TARGET_VERSION"
   fi
+fi
+
+# Trust anchor: the helper verifies the bytes it will actually install. Stage the
+# artifact into a root-owned copy FIRST, then hash the staged file: hashing the
+# cache original and copying it later would leave a window where a service-user
+# process could swap the file between hash and install. Runs after every cheap
+# pre-acceptance check so a refused request never pays the copy + sha512 pass.
+if ! cp -- "$ARTIFACT_PATH" "$STAGING"; then
+  reject "could not stage artifact"
+fi
+ACTUAL_SHA=$(sha512sum -- "$STAGING" | awk '{print $1}')
+# Why the || true: an undecodable digest must reach the length check and produce a
+# rejected verdict, not kill the helper under set -e before any verdict is written.
+EXPECTED_SHA=$(printf '%s' "$SHA512" | { base64 -d 2>/dev/null || true; } | od -An -v -tx1 | tr -d ' \\n')
+if [[ \${#EXPECTED_SHA} -ne 128 || "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+  rm -f "$STAGING"
+  reject "artifact hash mismatch"
 fi
 
 # From here the app may quit; the helper owns the unit.
