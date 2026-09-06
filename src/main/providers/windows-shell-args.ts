@@ -27,7 +27,7 @@ const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call 
 // (`❯` -> `Γ¥»`). Switch the console to UTF-8, then exec the normal interactive
 // login shell; cmd.exe and PowerShell already do the equivalent. The `;` (not
 // `&&`) keeps startup working even if chcp.com is missing.
-const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
+const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; "$BASH" --login -i; exit $?'
 
 function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
   if (!codexLaunchPreflightCommand) {
@@ -42,7 +42,7 @@ function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
   const bashArgs = [...wrapperArgs, '-i']
     .map((arg) => (arg.startsWith('-') ? arg : quotePosixShell(arg.replace(/\\/g, '/'))))
     .join(' ')
-  return `chcp.com 65001 >/dev/null 2>&1; exec "$BASH" ${bashArgs}`
+  return `chcp.com 65001 >/dev/null 2>&1; "$BASH" ${bashArgs}; exit $?`
 }
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
