@@ -55,8 +55,10 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           window.api.ui.replyTerminalCreate({
             requestId: data.requestId,
             errorCode: 'worktree_not_renderable',
-            error:
+            error: translate(
+              'auto.hooks.useIpcEvents.worktreeNotRenderable',
               'This window has no terminal surface for the worktree. Show it in Non-Orca worktrees or select a visible workspace, then retry.'
+            )
           })
           return
         }
