@@ -86,9 +86,7 @@ for (const theme of ['light', 'dark'] as const) {
                   window
                     .__store!.getState()
                     .allWorktrees()
-                    .find(
-                      (item) => !ids.includes(item.id) && item.linkedWorkItem?.provider === 'kaneo'
-                    )?.id ?? null,
+                    .find((item) => !ids.includes(item.id))?.id ?? null,
                 originalIds
               )
               return createdId
@@ -144,7 +142,7 @@ for (const theme of ['light', 'dark'] as const) {
         await orcaPage.evaluate(async (ids) => {
           const state = window.__store!.getState()
           for (const item of state.allWorktrees()) {
-            if (!ids.includes(item.id) && item.linkedWorkItem?.provider === 'kaneo') {
+            if (!ids.includes(item.id)) {
               await state.removeWorktree(
                 { id: item.id, executionHostId: item.hostId ?? null },
                 true
