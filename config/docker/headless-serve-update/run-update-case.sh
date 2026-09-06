@@ -92,7 +92,13 @@ EOF
 old_main_pid=$(systemctl show -p MainPID --value "$UNIT_NAME")
 [[ -n "$old_main_pid" && "$old_main_pid" != 0 ]] || fail "unit not running before helper run"
 spool_request "e2e-runtime-1" "e2e-attempt-1" "0.0.0-test-old" "1.2.3-test"
+# The helper waits for the app's quit-fence census continuation before stopping the unit;
+# a background writer simulates the app answering after it reads the accepted verdict.
+( for _ in $(seq 1 30); do [[ -f "$SPOOL_DIR/result.json" ]] && break; sleep 0.2; done; touch "$SPOOL_DIR/census.ok" ) &
+census_writer_pid=$!
 runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH" || fail "helper run failed (positive case)"
+kill "$census_writer_pid" 2>/dev/null || true
+wait "$census_writer_pid" 2>/dev/null || true
 
 verdict=$(cat "$SPOOL_DIR/result.json") || fail "helper wrote no result.json (positive case)"
 log "verdict: $verdict"

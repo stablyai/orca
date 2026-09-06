@@ -39,9 +39,11 @@ APPIMAGE_TARGET=${q(input.appImageTargetPath)}
 VERSION_TARGET=${q(input.versionRecordPath)}
 REQUEST="$SPOOL_DIR/request.json"
 RESULT="$SPOOL_DIR/result.json"
+CENSUS_OK="$SPOOL_DIR/census.ok"
 STAGING="$APPIMAGE_TARGET.new"
 BACKUP="$APPIMAGE_TARGET.update-backup"
 READY_TIMEOUT_SECONDS=60
+CENSUS_WAIT_SECONDS=15
 LOG_TAG="orca-serve-update-helper"
 
 log() { echo "[$LOG_TAG] $*" >&2; }
@@ -58,9 +60,15 @@ write_result() {
 # (empty ATTEMPT_ID/TARGET_VERSION before that), so readServeUpdateResultFor can
 # match rejections to this attempt instead of discarding them as stale. Verdict
 # JSON is built with jq so odd characters in the request cannot break parsing.
+# Declared up front: pre-parse rejections run before the request is read and
+# set -u would abort on the unset variables.
+ATTEMPT_ID=""
+TARGET_VERSION=""
+
 reject() {
   log "rejected: $1"
   rm -f "$REQUEST"
+  rm -f "$CENSUS_OK"
   write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGET_VERSION" --arg reason "$1" '{phase: "rejected", attemptId: $attemptId, targetVersion: $targetVersion, reason: $reason}')"
   exit 0
 }
@@ -68,6 +76,7 @@ reject() {
 fail() {
   log "failed: $1"
   rm -f "$REQUEST"
+  rm -f "$CENSUS_OK"
   write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGET_VERSION" --arg reason "$1" '{phase: "failed", attemptId: $attemptId, targetVersion: $targetVersion, reason: $reason}')"
   exit 0
 }
@@ -77,12 +86,14 @@ fail() {
 if ! command -v jq >/dev/null 2>&1; then
   log "jq is required but not installed"
   rm -f "$REQUEST"
+  rm -f "$CENSUS_OK"
   write_result '{"phase":"failed","reason":"jq-missing"}'
   exit 0
 fi
 if ! command -v flock >/dev/null 2>&1; then
   log "flock is required but not installed"
   rm -f "$REQUEST"
+  rm -f "$CENSUS_OK"
   write_result '{"phase":"failed","reason":"flock-missing"}'
   exit 0
 fi
@@ -90,7 +101,6 @@ fi
 if [[ $(id -u) -ne 0 ]]; then
   reject "helper must run as root"
 fi
-
 # Serialize concurrent invocations; the lock dies with this process.
 exec 9>"$SPOOL_DIR/helper.lock"
 if ! flock -w 30 9; then
@@ -100,6 +110,7 @@ fi
 # A result left by a previous attempt must never be read as this one's verdict.
 # Cleared under the lock so a concurrent helper cannot delete a live verdict.
 rm -f "$RESULT"
+rm -f "$CENSUS_OK"
 
 if [[ ! -f "$REQUEST" ]]; then
   reject "no request spooled"
@@ -179,6 +190,32 @@ write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGE
 log "accepted request from pid $SERVING_PID for $TARGET_VERSION"
 
 OLD_VERSION_RECORD="$CURRENT_VERSION"
+
+# Quit-fence handshake: the app re-runs its census AFTER reading the accepted
+# verdict and writes census.ok when it is safe to stop the unit. Wait for it so
+# live terminals/agents are never stopped behind a census the app blocked. If
+# the request disappears the app cancelled; if the app crashes before answering,
+# proceed fail-safe after the deadline so a half-started update never wedges.
+wait_for_census_continuation() {
+  local deadline=$(( $(date +%s) + CENSUS_WAIT_SECONDS ))
+  while (( $(date +%s) < deadline )); do
+    if [[ -f "$CENSUS_OK" ]]; then
+      return 0
+    fi
+    if [[ ! -f "$REQUEST" ]]; then
+      return 1
+    fi
+    sleep 1
+  done
+  log "census continuation not observed within $CENSUS_WAIT_SECONDS seconds; proceeding"
+  return 0
+}
+
+if ! wait_for_census_continuation; then
+  rm -f "$STAGING"
+  reject "update cancelled before unit stop"
+fi
+log "census continuation observed; stopping unit"
 
 # Roll back to the snapshot and bring the OLD binary back up; used for every
 # post-acceptance failure so the unit is never left down.

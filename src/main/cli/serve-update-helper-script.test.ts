@@ -130,6 +130,28 @@ describe('serve update helper script', () => {
     expect(script.slice(failedAt, failedAt + 220)).toContain('targetVersion')
   })
 
+  it('initializes the attempt binding before any reject call so set -u cannot abort pre-parse rejections', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const initAt = script.indexOf('ATTEMPT_ID=""')
+    const rootCheckAt = script.indexOf('reject "helper must run as root"')
+    expect(initAt).toBeGreaterThan(-1)
+    expect(rootCheckAt).toBeGreaterThan(initAt)
+  })
+
+  it('waits for the census continuation before stopping the unit and cancels when the request vanishes', () => {
+    const script = buildServeUpdateHelperScript(INPUT)
+    const acceptedAt = script.indexOf('{phase: "accepted"')
+    const waitAt = script.indexOf('wait_for_census_continuation')
+    const stopAt = script.indexOf('systemctl stop "$UNIT_NAME"')
+    expect(acceptedAt).toBeGreaterThan(-1)
+    expect(waitAt).toBeGreaterThan(acceptedAt)
+    expect(stopAt).toBeGreaterThan(waitAt)
+    // A vanished request means the app cancelled: abort instead of stopping the unit.
+    expect(script).toContain('reject "update cancelled before unit stop"')
+    // Stale continuations never authorize a later attempt.
+    expect(script).toContain('rm -f "$CENSUS_OK"')
+  })
+
   it('writes verdicts through a mktemp path and clears the result under the lock', () => {
     const script = buildServeUpdateHelperScript(INPUT)
     expect(script).toContain('mktemp "$SPOOL_DIR/result.XXXXXXXX"')
