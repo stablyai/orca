@@ -74,6 +74,20 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
   })
 
+  it('re-retiring an already-retired pane keeps the retired-key map identity and epochs', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
+    store.getState().retireAgentPaneAuthority(TARGET)
+    const before = store.getState()
+
+    store.getState().retireAgentPaneAuthority(TARGET)
+
+    const after = store.getState()
+    expect(after.recentlyRetiredAgentStatusPaneKeys).toBe(before.recentlyRetiredAgentStatusPaneKeys)
+    expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
+    expect(after.sortEpoch).toBe(before.sortEpoch)
+  })
+
   it('retires the pane activity cutoff with the rest of its pane-owned state', () => {
     const store = createTestStore()
     store.setState({
