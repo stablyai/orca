@@ -4598,9 +4598,10 @@
       "providers": ["remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": [],
-      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, immediate SOCKS5 setup with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, arbitrary initial-navigation denial, and fail-closed per-guest WebRTC policy through delayed or failed cleanup. The production client-page executor prepares, registers, and grants the exact route page. A real Electron A/B capture proves HTTP, HTTPS, WebSocket, redirects, subresources, downloads, and a `.test` hostname traverse SOCKS with no direct target connection. A two-launch control proves immediate setProxy routes a forced persisted-worker wake and later worker fetch. A separate capture proves the protected guest sends zero direct STUN packets. A further capture proves non-WebRTC UDP is also contained: a WebTransport session and a fetch forced onto QUIC both reach the desktop directly in the control arm and emit zero datagrams through the route partition, and the shipped disable-features list hides the Direct Sockets constructors whose mere construction kills a control-arm renderer. DNS prefetch is a tripwire over an accepted residual rather than a guard: Electron 43 inherits Chromium's PrefetchDNS, so a `<link rel=\"dns-prefetch\">` host resolves on the desktop resolver outside the tunnel, and a source census keeps any DoH host-resolver mode from widening that leak. Network-service restart and provider journeys remain uncovered.",
+      "coverageNotes": "Deterministic main-process tests cover versioned delimiter-safe aggregate partition derivation, path-safe opaque names, durable collision metadata, oversized or corrupt metadata refusal, missing-sidecar Chromium-data refusal, bounded binding/live-page admission, immediate SOCKS5 setup with Chromium loopback bypass disabled, inherited-connection closure, exact proxy verification before allowlisting, concurrent setup coalescing, live proxy-retarget refusal, token-safe page replacement, existing browser-profile policy installation, active Orca-profile storage scoping, blank-only initial attachment, arbitrary initial-navigation denial, and fail-closed per-guest WebRTC policy through delayed or failed cleanup. The production client-page executor prepares, registers, and grants the exact route page. A real Electron A/B capture proves HTTP, HTTPS, WebSocket, redirects, subresources, downloads, and a `.test` hostname traverse SOCKS with no direct target connection. A two-launch control proves immediate setProxy routes a forced persisted-worker wake and later worker fetch. A separate capture proves the protected guest sends zero direct STUN packets. A further capture proves non-WebRTC UDP is also contained: a WebTransport session and a fetch forced onto QUIC both reach the desktop directly in the control arm and emit zero datagrams through the route partition, and the shipped disable-features list hides the Direct Sockets constructors whose mere construction kills a control-arm renderer. DNS prefetch is a tripwire over an accepted residual rather than a guard: Electron 43 inherits Chromium's PrefetchDNS, so a `<link rel=\"dns-prefetch\">` host resolves on the desktop resolver outside the tunnel, and a source census keeps any DoH host-resolver mode from widening that leak. Network-service restart and WSL provider journeys remain uncovered. Four Linux Docker SSH browser baseline scenarios passed: direct-host routing, unavailable-host local escape, forwarding refusal, and paired client-hosted reconnect. Three repetitions of each are pending before CI registration lands.",
       "motivatingLinks": [
-        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews"
+        "https://linear.app/stably/issue/STA-4150/refactor-remote-browser-to-client-hosted-electron-webviews",
+        "https://github.com/stablyai/orca/actions/runs/34039986047"
       ],
       "invariant": "A client-hosted partition is derived only in main from stable Orca-profile, browser-profile, authority-connection, and execution-host identities. Raw identities and individually linkable component hashes never enter its path-safe partition name. Durable binding metadata must match and precede Chromium partition data before reuse. One live partition never changes execution host or proxy endpoint. Fixed SOCKS5 setup starts immediately after Session creation, before policy installation can yield or a persisted worker is awakened; no partition enters the webview allowlist until browser policy is installed, inherited connections are closed, and resolveProxy returns exactly that one listener. Initial route-partition attachment is blank-only. Its exact WebContents is quarantined before applying non-proxied WebRTC denial and remains navigation- and popup-denied if policy application or cleanup fails. Distinct live partitions, retained logical page generations, durable bindings, and binding-file reads remain bounded. No UDP transport a route-partition page can reach — WebRTC, WebTransport, or forced QUIC — emits a datagram to the desktop, the Direct Sockets constructors stay absent from every guest so no page can kill its renderer, and the process never enables a DoH host-resolver mode.",
       "oracle": "Derive two delimiter-adversarial identities and require distinct full-digest path-safe partitions with no raw IDs or component hashes. Persist one binding, reload it, and reject replacement, malformed or oversized state, Chromium data without matching metadata, and the 513th binding. Prepare one partition and require setProxy with <-loopback> to be invoked immediately after getSession and before policy setup, then closeAllConnections and exact SOCKS5 resolveProxy while isAllowedPartition remains false; only then may it become live. Under real Electron, require direct controls for HTTP, HTTPS, WebSocket, redirects, subresources, and downloads, then require the fixed SOCKS session to route every equivalent request plus an otherwise-unresolvable `.test` hostname with zero direct target connections. Across two Electron launches, require immediate setProxy to route a forced worker wake and post-verification fetch. Reject DIRECT, endpoint retargeting, and capacity overflow. Require quarantine before disable_non_proxied_udp and admission; under real Electron require the unprotected control to emit STUN and the protected guest to emit zero direct UDP packets. Under real Electron require a direct control to emit WebTransport and forced-QUIC datagrams and the SOCKS partition to emit none, require an explicitly enabled Direct Sockets control to expose the constructors and die on construction, and require the shipped disable-features list to leave them undefined with the renderer alive. Capture a route partition's netLog across a dns-prefetch load and require the prefetched host to appear on a local resolver task while an unreferenced control host appears nowhere; require no source file to set a non-'off' secureDnsMode.",
@@ -4609,7 +4610,9 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-webcontents-registry.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-session-registry.test.ts src/main/browser/browser-route-persisted-worker-egress.electron.test.ts src/main/browser/browser-route-webrtc-egress.electron.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-tcp-egress.electron.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-route-h3-egress.electron.test.ts src/main/browser/browser-route-dns-prefetch.electron.test.ts src/main/startup/secure-dns-census.test.ts",
+        "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/local-ssh-browser-routing.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3",
+        "ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_LOCAL_SSH_BROWSER=1 ORCA_E2E_SSH_CLIENT_HOSTED_BROWSER=1 ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1 --repeat-each=3"
       ],
       "testFiles": [
         "src/main/browser/browser-route-identity.test.ts",
@@ -4624,7 +4627,9 @@
         "src/main/browser/browser-route-webcontents-registry.test.ts",
         "src/main/browser/browser-session-registry.test.ts",
         "src/main/browser/browser-session-startup.test.ts",
-        "src/main/window/createMainWindow.test.ts"
+        "src/main/window/createMainWindow.test.ts",
+        "tests/e2e/local-ssh-browser-routing.spec.ts",
+        "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -4719,6 +4724,20 @@
             "a live route partition may attach only the normalized blank document",
             "an arbitrary URL cannot be the initial route-partition document"
           ]
+        },
+        {
+          "file": "tests/e2e/local-ssh-browser-routing.spec.ts",
+          "assertions": [
+            "a remote-only origin renders through direct SSH routing; cookies survive transport recovery",
+            "unavailable SSH hosts prevent premature webview attachment and offer a working explicit local escape hatch",
+            "real AllowTcpForwarding refusal is classified and Try anyway preserves the SSH route"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts",
+          "assertions": [
+            "paired client-hosted browser pages render an SSH-only origin, preserve cookies and retire superseded route pages across a real transport drop"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -4801,7 +4820,8 @@
         "Partition deletion, download/transfer draining, idle route release, disk quotas, and browser-profile cloning are later lifecycle stages.",
         "Binding writes serialize in Electron main, and packaged hosts rely on Orca's per-userData single-instance lock. Activation still needs an explicit guard for dev instances that share userData or a cross-process CAS/lock.",
         "Sequential proxy or policy setup failures retain durable bindings and can exhaust the 512-binding ledger. Activation requires bounded tombstone recovery and partition garbage collection.",
-        "Each preparePage synchronously reads and parses bounded binding metadata on Electron main; activation requires latency evidence or a safely invalidated cache before this becomes frequent."
+        "Each preparePage synchronously reads and parses bounded binding metadata on Electron main; activation requires latency evidence or a safely invalidated cache before this becomes frequent.",
+        "New SSH browser journey evidence is limited to Linux CI with Docker; native macOS/Windows clients and WSL providers remain unverified by these scenarios."
       ],
       "demotionRule": "Keep experimental or demote if raw identities enter a partition path, a durable binding mismatch is reused, a partition retargets to another execution host or live listener, a route partition becomes attachable before exact proxy verification, initial attachment can navigate beyond blank, stale cleanup retires a replacement, admission exceeds a declared cap, or any browser request reaches desktop DNS, TCP, UDP, localhost, or system proxy outside the selected route."
     },

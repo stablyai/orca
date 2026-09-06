@@ -227,6 +227,8 @@ jobs:
           mapfile -t TEST_FILES < <(jq -r '.[] | select(
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
             . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
+            . != "tests/e2e/local-ssh-browser-routing.spec.ts" and
+            . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
             . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
             . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
           )' <<<"$TEST_FILES_JSON")
@@ -268,6 +270,8 @@ jobs:
     if: >-
       inputs.test_files == '' ||
       inputs.ssh_source_changed == 'true' ||
+      contains(inputs.test_files, 'tests/e2e/local-ssh-browser-routing.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
