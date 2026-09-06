@@ -12,6 +12,20 @@ export function surfaceKey(tabId: string, leafId: string): string {
   return `${tabId}\0${leafId}`
 }
 
+export function hasTerminalHandleRetirementProof(
+  snapshot: Pick<RuntimeMobileSessionTabsResult, 'retiredTerminalSurfaces'>,
+  surface: { tabId: string; leafId: string; handle: string }
+): boolean {
+  return (
+    snapshot.retiredTerminalSurfaces?.some(
+      (retired) =>
+        retired.parentTabId === surface.tabId &&
+        retired.leafId === surface.leafId &&
+        retired.terminal === surface.handle
+    ) === true
+  )
+}
+
 export function isRemovedSnapshot(snapshot: RuntimeMobileSessionTabsResult): boolean {
   return 'removed' in snapshot && snapshot.removed === true
 }

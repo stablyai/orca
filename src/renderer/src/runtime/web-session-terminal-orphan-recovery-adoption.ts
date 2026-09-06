@@ -10,6 +10,11 @@ import {
 } from '../../../shared/remote-runtime-client-error-classification'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { cacheStableSurfaceRecoveryFailure } from './web-session-terminal-orphan-recovery-cache'
+import { runInTerminalRecoveryRpcLane } from './web-session-terminal-orphan-recovery-rpc-lane'
+import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
+import { hasTerminalHandleRetirementProof } from './web-session-terminal-orphan-recovery-surface-index'
+import { isTerminalRecoverySnapshot } from './web-session-terminal-recovery-snapshot-validation'
 import {
   mergeRetainedTerminalSurfaces,
   isValidReadySurface,
@@ -25,24 +30,24 @@ const STABLE_ADOPTION_FAILURE_CODES = new Set([
   'invalid_runtime_response'
 ])
 
+export type TerminalOrphanRecoveryCall = (args: {
+  selector: string
+  method: string
+  params: unknown
+  timeoutMs: number
+  expectedEnvironmentPairingRevision?: number
+}) => Promise<RuntimeRpcResponse<unknown>>
+
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function isAdoptionResult(value: unknown): value is RuntimeTerminalOrphanAdoptionResult {
-  if (!isRecord(value) || !isRecord(value.snapshot)) {
-    return false
-  }
-  const snapshot = value.snapshot
   return (
+    isRecord(value) &&
     typeof value.adopted === 'boolean' &&
     Number.isSafeInteger(value.topologyRevision) &&
-    typeof snapshot.worktree === 'string' &&
-    snapshot.worktree.length > 0 &&
-    typeof snapshot.publicationEpoch === 'string' &&
-    Number.isSafeInteger(snapshot.snapshotVersion) &&
-    Array.isArray(snapshot.tabs) &&
-    snapshot.tabs.every(isRecord)
+    isTerminalRecoverySnapshot(value.snapshot)
   )
 }
 
@@ -64,6 +69,38 @@ export function isRpcResponse(value: unknown): value is RuntimeRpcResponse<unkno
   }
   const error = value.error
   return isRecord(error) && typeof error.code === 'string' && typeof error.message === 'string'
+}
+
+export async function readClientSessionSnapshotAfterAdoption(args: {
+  environmentId: string
+  worktreeId: string
+  expectedEnvironmentPairingRevision?: number
+  expectedRuntimeId?: string
+  call: TerminalOrphanRecoveryCall
+  isCurrent: () => boolean
+}): Promise<RuntimeMobileSessionTabsResult | null> {
+  try {
+    // Adoption returns host-private epochs; only the caller's session-tab projection may enter its mirror.
+    const response = await runInTerminalRecoveryRpcLane(args.isCurrent, () =>
+      args.call({
+        selector: args.environmentId,
+        method: 'session.tabs.list',
+        params: { worktree: toRuntimeWorktreeSelector(args.worktreeId) },
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+      })
+    )
+    return isRpcResponse(response) &&
+      response.ok &&
+      (args.expectedRuntimeId === undefined ||
+        getSessionTabsRuntimeIdFromResponse(response) === args.expectedRuntimeId) &&
+      isTerminalRecoverySnapshot(response.result) &&
+      response.result.worktree === args.worktreeId
+      ? response.result
+      : null
+  } catch {
+    return null
+  }
 }
 
 export function claimSurfaces(
@@ -119,11 +156,32 @@ export function mergeAdoptionResponse(
   missingClaims: readonly RecoverySurface[],
   removed: ReadonlySet<string>
 ): RuntimeMobileSessionTabsResult {
+  const rowsBySurface = terminalRowsBySurface(snapshot)
   const readyKeys = new Set(
-    [...terminalRowsBySurface(snapshot).entries()]
+    [...rowsBySurface.entries()]
       .filter(([, rows]) => rows.some(isValidReadySurface))
       .map(([key]) => key)
   )
-  const effectiveRemoved = new Set([...removed].filter((key) => !readyKeys.has(key)))
-  return mergeRetainedTerminalSurfaces(snapshot, [...retained, ...missingClaims], effectiveRemoved)
+  const effectiveRemoved = new Set([...removed].filter((key) => !rowsBySurface.has(key)))
+  // A later host rebind or exact retirement outranks the pre-adoption inventory.
+  const retainedSurfaces = [...retained, ...missingClaims].filter((surface) => {
+    if (readyKeys.has(surface.surfaceKey)) {
+      return false
+    }
+    if (
+      surface.handle &&
+      hasTerminalHandleRetirementProof(snapshot, {
+        tabId: surface.tabId,
+        leafId: surface.leafId,
+        handle: surface.handle
+      })
+    ) {
+      if (!rowsBySurface.has(surface.surfaceKey)) {
+        effectiveRemoved.add(surface.surfaceKey)
+      }
+      return false
+    }
+    return !effectiveRemoved.has(surface.surfaceKey)
+  })
+  return mergeRetainedTerminalSurfaces(snapshot, retainedSurfaces, effectiveRemoved)
 }
