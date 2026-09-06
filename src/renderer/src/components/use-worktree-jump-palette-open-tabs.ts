@@ -80,6 +80,7 @@ export function useWorktreeJumpPaletteOpenTabs({
       worktreeOrder,
       browserTabsByWorktree,
       browserPagesByWorkspace,
+      unifiedTabsByWorktree,
       activeBrowserTabId,
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
@@ -95,6 +96,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     browserPagesByWorkspace,
     browserTabsByWorktree,
     browserSortedWorktrees,
+    unifiedTabsByWorktree,
     repoByHostIdentity,
     repoMap,
     worktreeOrder
