@@ -27,7 +27,6 @@ import path from 'node:path'
 import { TEST_REPO_PATH_FILE } from '../global-setup'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
-import { enableHiddenElectronCompositor } from './hidden-electron-compositor'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import {
@@ -294,7 +293,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // especially on cold start with no prior dev userData. Isolated per-test
     // profiles make late-suite launches slower, so use the full test budget.
     const page = await electronApp.firstWindow({ timeout: 120_000 })
-    await enableHiddenElectronCompositor(electronApp)
     await page.waitForLoadState('domcontentloaded')
 
     // Wait for the store to be available

@@ -98,6 +98,8 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
     }
     const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true })
     await ((await cancel.isVisible()) ? cancel.click() : page.keyboard.press('Escape'))
+    // Hidden Electron windows can park CSS exits before their first compositor frame.
+    await page.screenshot({ animations: 'disabled' })
     await expect(dialog).toBeHidden({ timeout: 3_000 })
   }
   await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
