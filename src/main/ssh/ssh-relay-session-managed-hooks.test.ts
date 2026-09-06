@@ -128,4 +128,45 @@ describe('SshRelaySession managed hooks', () => {
       muxRequestMock.mock.invocationCallOrder[managedIndex]
     )
   })
+
+  it('retries without ZCode when an older relay rejects the expanded allowlist', async () => {
+    let installAttempts = 0
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['codex', 'zcode'] }
+      }
+      if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
+        installAttempts += 1
+        if (installAttempts === 1) {
+          throw new Error('remote request failed: invalid_managed_hook_agents')
+        }
+        return { installers: 1, errors: 0 }
+      }
+      return { ok: true }
+    })
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const connection = {
+      sftp: vi.fn(),
+      getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(connection)
+    await vi.waitFor(() => expect(installAttempts).toBe(2))
+
+    const installCalls = muxRequestMock.mock.calls.filter(
+      ([method]) => method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
+    )
+    expect(installCalls.map(([, params]) => params)).toEqual([
+      {
+        hostKeyFingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        agents: ['codex', 'zcode']
+      },
+      {
+        hostKeyFingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        agents: ['codex']
+      }
+    ])
+    expect(registerSshPtyProvider).toHaveBeenCalled()
+  })
 })
