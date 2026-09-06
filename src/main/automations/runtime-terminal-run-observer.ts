@@ -1,6 +1,10 @@
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type { AutomationRunTerminalObserver } from './run-completion-watcher'
-import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
+import {
+  describeTerminalExitCause,
+  isProvenProcessExit,
+  type TerminalExitCause
+} from '../../shared/terminal-exit-cause'
 
 const TERMINAL_SNAPSHOT_LIMIT = 2_000
 
@@ -13,7 +17,12 @@ export type AutomationRunTerminalHost = {
   waitForTerminal(
     handle: string,
     options?: { condition?: 'exit' | 'tui-idle'; timeoutMs?: number; signal?: AbortSignal }
-  ): Promise<{ satisfied: boolean; exitCode?: number | null; blockedReason?: string }>
+  ): Promise<{
+    satisfied: boolean
+    exitCode?: number | null
+    exitCause?: TerminalExitCause
+    blockedReason?: string
+  }>
   subscribeToPtyExit(ptyId: string, listener: () => void): () => void
   readTerminal(
     handle: string,
@@ -52,10 +61,20 @@ export function createRuntimeAutomationRunTerminalObserver(
       try {
         // Agent idle is a turn signal, never proof that this run's process exited.
         const wait = await runtime.waitForTerminal(handle, { condition: 'exit', signal })
-        if (!wait.satisfied || wait.exitCode == null || !isProvenProcessExit(wait.exitCode)) {
+        const cause = wait.exitCause
+        const stopUnverified = cause?.kind === 'unknown' && cause.reason === 'stop_unverified'
+        if (
+          !wait.satisfied ||
+          wait.exitCode == null ||
+          !isProvenProcessExit(wait.exitCode) ||
+          stopUnverified
+        ) {
           return {
             status: 'dispatch_failed',
-            error: 'Orca lost contact with this run before its process exit could be verified.'
+            error:
+              cause && (stopUnverified || cause.kind === 'operator_close')
+                ? describeTerminalExitCause(cause)
+                : 'Orca lost contact with this run before its process exit could be verified.'
           }
         }
         // Capture must finish before the watcher can publish a terminal run status.
@@ -66,11 +85,17 @@ export function createRuntimeAutomationRunTerminalObserver(
         if (outputSnapshot && (read.truncated || read.limited)) {
           outputSnapshot.truncated = true
         }
+        // Legacy hosts omit the cause; explicit teardown evidence still overrides a zero.
+        const interrupted = cause?.kind === 'operator_close' || cause?.kind === 'signaled'
+        const completed = wait.exitCode === 0 && !interrupted
         return {
-          status: wait.exitCode === 0 ? 'completed' : 'dispatch_failed',
+          status: completed ? 'completed' : 'dispatch_failed',
           outputSnapshot,
-          error:
-            wait.exitCode === 0 ? null : `Automation process exited with code ${wait.exitCode}.`
+          error: interrupted
+            ? describeTerminalExitCause(cause)
+            : completed
+              ? null
+              : `Automation process exited with code ${wait.exitCode}.`
         }
       } finally {
         unsubscribe()

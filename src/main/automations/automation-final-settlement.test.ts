@@ -64,6 +64,52 @@ function fixture() {
 }
 
 describe('automation final settlement (ROB-1925)', () => {
+  it.each([false, true])(
+    'reconciles a fresh missing terminal after dispatch (pane returns: %s)',
+    async (paneReturns) => {
+      vi.useFakeTimers()
+      const f = fixture()
+      const resolvePane = vi.spyOn(f.runtime, 'resolveTerminalPane').mockImplementation(() => {
+        throw new Error('terminal_not_found')
+      })
+      try {
+        f.service.setRendererReady()
+        await vi.advanceTimersByTimeAsync(10 * 60_000)
+        await f.service.markDispatchResult({ runId: f.run().id, status: 'dispatched' })
+        await f.service.markDispatchResult({ runId: f.run().id, status: 'completed' })
+        await vi.advanceTimersByTimeAsync(5_000)
+        expect(f.run().status).toBe('dispatched')
+        expect(f.runtime.waitForTerminal).not.toHaveBeenCalled()
+
+        if (paneReturns) {
+          resolvePane.mockRestore()
+          await vi.advanceTimersByTimeAsync(2_000)
+          expect(f.runtime.waitForTerminal).toHaveBeenCalledOnce()
+          f.exit.resolve({ satisfied: true, exitCode: 0 })
+          f.capture.resolve({ tail: [FINAL] })
+        }
+        await vi.advanceTimersByTimeAsync(2 * 60_000)
+        expect(f.run().status).toBe(paneReturns ? 'completed' : 'dispatch_failed')
+        if (paneReturns) {
+          expect(f.run()).toMatchObject({
+            terminalPtyId: null,
+            outputSnapshot: { content: FINAL }
+          })
+        } else {
+          expect(f.run().error).toBe(
+            'Orca lost the terminal for this run before it reported completion.'
+          )
+          expect(f.run().terminalPtyId).not.toBeNull()
+          expect(f.published.some((run) => run.status === 'completed')).toBe(false)
+        }
+      } finally {
+        f.service.stop()
+        resolvePane.mockRestore()
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('rejects startup completion while live and publishes final capture with cleared identity', async () => {
     const f = fixture()
     try {

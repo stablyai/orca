@@ -72,16 +72,12 @@ export class AutomationRunCompletionWatcher {
     })
   }
 
-  /** Observes a just-dispatched run. A run whose terminal is not resolvable yet
-   *  is left alone; startup reconciliation is what resolves stranded runs. */
+  /** Fresh runs use the same remount grace and recovery path as retained runs. */
   watch(run: AutomationRun): void {
-    if (this.disposed || this.watching.has(run.id)) {
+    if (this.disposed || this.watching.has(run.id) || isFinalAutomationRunStatus(run.status)) {
       return
     }
-    const handle = this.observer.resolveRunTerminal(run)
-    if (handle) {
-      this.startWatch(run, handle)
-    }
+    this.reconciler.reconcile([run])
   }
 
   deferReportedCompletion(runId: string, store: Store): AutomationRun | null {

@@ -35,7 +35,6 @@ export function createAutomationDispatchCompletion(args: {
   let pendingExitCode: number | null = null
   let pendingDone = false
   let completionMarked = false
-  let retirementRequested = false
   let contactLost = false
   let unsubscribeAgentStatus = (): void => {}
   let unsubscribeSessionObserver = (): void => {}
@@ -53,10 +52,7 @@ export function createAutomationDispatchCompletion(args: {
       return
     }
     if (args.requireProcessExit !== false) {
-      if (!retirementRequested && !contactLost) {
-        retirementRequested = true
-        args.finalizeTerminalOwnership()
-      }
+      // A turn can finish before the process; closing here would kill its final capture.
       return
     }
     completionMarked = true
@@ -108,8 +104,7 @@ export function createAutomationDispatchCompletion(args: {
     }
     completionMarked = true
     cleanupRunObservers()
-    if (code === 0 && !retirementRequested) {
-      retirementRequested = true
+    if (code === 0) {
       args.finalizeTerminalOwnership()
     }
     try {

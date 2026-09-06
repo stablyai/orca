@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRuntimeAutomationRunTerminalObserver } from './runtime-terminal-run-observer'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 const PTY_ID = 'pty-automation'
 const PANE_KEY = 'tab-automation:11111111-2222-4333-8444-555555555555'
@@ -92,9 +93,36 @@ describe('authority automation terminal exit observation', () => {
     run.runtime.onPtyExit(PTY_ID, -1, 'incarnation-automation')
     await expect(run.promise).resolves.toMatchObject({
       status: 'dispatch_failed',
-      error: expect.stringContaining('could be verified')
+      error: 'Agent process stop was requested but never confirmed'
     })
   })
+
+  it('reports an operator close instead of completing from its zero exit code', async () => {
+    const run = observe()
+    run.runtime.onPtyData(PTY_ID, 'partial work\r\n', Date.now())
+    run.runtime.markPtyStopRequested(PTY_ID)
+    run.runtime.onPtyExit(PTY_ID, 0, 'incarnation-automation')
+    await expect(run.promise).resolves.toMatchObject({
+      status: 'dispatch_failed',
+      error: 'Terminal closed by operator request',
+      outputSnapshot: { content: 'partial work' }
+    })
+  })
+
+  it.each([
+    [{ kind: 'signaled', signal: 15 }, 'Agent process killed by signal 15'],
+    [
+      { kind: 'unknown', reason: 'stop_unverified' },
+      'Agent process stop was requested but never confirmed'
+    ]
+  ] satisfies [TerminalExitCause, string][])(
+    'does not let a zero code override explicit cause %j',
+    async (cause, error) => {
+      const run = observe('ssh-automation')
+      run.runtime.onPtyExit(PTY_ID, 0, 'incarnation-automation', { cause })
+      await expect(run.promise).resolves.toMatchObject({ status: 'dispatch_failed', error })
+    }
+  )
 
   it('releases both exit subscriptions when watching is aborted', async () => {
     const run = observe()

@@ -541,7 +541,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  it('retires a fresh terminal before publishing one final result after exit', async () => {
+  it('waits for natural exit before retiring a fresh terminal and publishing its final result', async () => {
     const order: string[] = []
     mockMarkDispatchResult.mockImplementation(async (result) => {
       order.push(`persist:${result.status}`)
@@ -559,7 +559,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     launch.onAgentStatus({ state: 'working' })
     launch.onAgentStatus({ state: 'done', lastAssistantMessage: 'mid-work sentence' })
     await Promise.resolve()
-    expect(order).toEqual(['persist:dispatched', 'retire'])
+    expect(order).toEqual(['persist:dispatched'])
     launch.onAgentStatus({
       state: 'done',
       lastAssistantMessage: 'CONFIG_STAMP: ORCA-HEALTH-2026-09-04-R14\nSTATUS: DONE'
@@ -583,24 +583,8 @@ describe('useAutomationDispatchEvents setup launch', () => {
   })
 
   it('ignores a session-boundary done so a connecting agent cannot complete the run (STA-3386)', async () => {
-    let launchArgs: {
-      onAgentStatus?: (payload: { state: string; sessionBoundary?: boolean }) => void
-    } = {}
-    mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
-      launchArgs = args
-      return {
-        tabId: 'agent-tab',
-        paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
-        ptyId: 'agent-pty',
-        startupPlan: {},
-        terminalOwnership: {
-          finalize: mockFinalizeTerminalOwnership,
-          release: mockReleaseTerminalOwnership
-        }
-      }
-    })
-
     await registerAndDispatch()
+    const launchArgs = mockLaunchAgentBackgroundSession.mock.calls[0][0]
     // Why: Claude fires SessionStart (a sessionBoundary done) at launch, before the argv
     // prompt submits — treating it as run completion would close the tab on an empty run.
     launchArgs.onAgentStatus?.({ state: 'done', sessionBoundary: true })
@@ -612,6 +596,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
     launchArgs.onAgentStatus?.({ state: 'working' })
     launchArgs.onAgentStatus?.({ state: 'done' })
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    launchArgs.onExit?.('agent-pty', 0)
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 
@@ -655,6 +642,9 @@ describe('useAutomationDispatchEvents setup launch', () => {
     }
     latestStoreSubscriber()
 
+    await Promise.resolve()
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    mockLaunchAgentBackgroundSession.mock.calls[0][0].onExit?.('agent-pty', 0)
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 
