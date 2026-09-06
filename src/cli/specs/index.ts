@@ -13,6 +13,7 @@ import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
 import { DIAGNOSTICS_COMMAND_SPECS } from './diagnostics'
 import { EMULATOR_COMMAND_SPECS } from './emulator'
 import { INTROSPECTION_COMMAND_SPECS } from './introspection'
+import { JIRA_COMMAND_SPECS } from './jira'
 import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
 import { SKILL_COMMAND_SPECS } from './skills'
@@ -34,6 +35,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...INTROSPECTION_COMMAND_SPECS,
   ...ENVIRONMENT_COMMAND_SPECS,
   ...LINEAR_COMMAND_SPECS,
+  ...JIRA_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,
   ...SKILL_COMMAND_SPECS

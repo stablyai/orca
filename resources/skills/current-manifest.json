@@ -92,6 +92,24 @@
       ]
     },
     {
+      "name": "orca-jira",
+      "sourcePath": "skills/orca-jira",
+      "releaseRevision": 1,
+      "packageDigest": "f044d41f9bfb5d469b776dc9464dabbc3774e71e13ae6c023e247f4bf3942b88",
+      "gitTreeSha": "b86ab00d30a08f5736a726cf380b7a856c4e20e2",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 3680,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "0b7025a5b90d14290075fe3f7f2471aec3c9310c967df0f179f4e36872a6caee",
+          "textNormalizedSha256": "0b7025a5b90d14290075fe3f7f2471aec3c9310c967df0f179f4e36872a6caee",
+          "identitySha256": "0b7025a5b90d14290075fe3f7f2471aec3c9310c967df0f179f4e36872a6caee"
+        }
+      ]
+    },
+    {
       "name": "orca-linear",
       "sourcePath": "skills/orca-linear",
       "releaseRevision": 8,
