@@ -9,6 +9,7 @@ import { createCodexSessionMigrationScheduler } from '../codex/codex-session-mig
 import { startCodexSessionBackfillInBackground } from '../codex/codex-session-backfill'
 import { startCodexSessionIndexHealInBackground } from '../codex/codex-session-index-heal'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../codex/codex-state-db-backfill-recovery'
+import { startCodexSessionLogRetentionSweepInBackground } from '../codex/codex-session-log-retention'
 import { getOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import { getInitialCodexRateLimitTarget } from '../rate-limits/codex-rate-limit-target'
 import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limit-target'
@@ -33,6 +34,8 @@ export function initializeMainProcessAccountServices(): void {
   state.rateLimits = new RateLimitService()
   state.codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
+  // Why: rollout logs in the runtime home were never pruned and grew unbounded (#16776).
+  void startCodexSessionLogRetentionSweepInBackground(getOrcaManagedCodexHomePath())
   // Why: an incapable trust-grant host must fall back to the managed home for
   // every consumer (PTY env, rate limits, commit messages) in one place.
   state.codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
