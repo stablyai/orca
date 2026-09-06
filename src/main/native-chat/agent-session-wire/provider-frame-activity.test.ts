@@ -72,7 +72,7 @@ describe('provider frame activity', () => {
     expect(bounded?.endsWith('…')).toBe(true)
   })
 
-  it('keeps only the reasoning headline and tolerates an unterminated bold header', () => {
+  it('keeps only the reasoning headline and waits for an unterminated bold header', () => {
     expect(
       codexProviderFrameActivity(
         'item/reasoning/summaryTextDelta',
@@ -82,7 +82,7 @@ describe('provider frame activity', () => {
     ).toBe('Inspecting the workspace')
     expect(
       codexProviderFrameActivity('item/reasoning/summaryTextDelta', {}, '**Inspecting the wor')
-    ).toBe('Inspecting the wor')
+    ).toBeUndefined()
   })
 
   it.each([
