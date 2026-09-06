@@ -1,16 +1,18 @@
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
+import { isAtomCodeHeadlessOneShotCommand } from './atomcode-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TuiAgent } from './tui-agent'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
-// the same `--print` one-shot contract, Ante's `--prompt` form and Prime Agent's
-// `--mode` forms need their own matchers.
+// the same `--print` one-shot contract, while Ante, AtomCode and Prime Agent have
+// agent-specific headless forms.
 const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   Record<TuiAgent, (tokens: readonly string[]) => boolean>
 > = {
   claude: isPrintModeHeadlessOneShotCommand,
   trae: isPrintModeHeadlessOneShotCommand,
+  atomcode: isAtomCodeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,
   ante: isAnteHeadlessOneShotCommand
 }

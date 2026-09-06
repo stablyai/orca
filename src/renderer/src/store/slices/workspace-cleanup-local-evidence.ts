@@ -23,6 +23,7 @@ const AGENT_PROCESS_NAMES = new Set([
   'aider',
   'amp',
   'agy',
+  'atomcode',
   'claude',
   'claude-code',
   'codex',

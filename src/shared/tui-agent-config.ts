@@ -134,6 +134,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: mirrors opencode's cursor-gated signal by parity; mimo's startup stream isn't separately validated.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  atomcode: {
+    detectCmd: 'atomcode',
+    // Why: `atomcode -p/--prompt/--prompt-file` is one-shot; Orca owns a persistent TUI and injects after startup.
+    promptInjectionMode: 'stdin-after-start'
+  },
   pi: {
     detectCmd: 'pi',
     promptInjectionMode: 'argv',

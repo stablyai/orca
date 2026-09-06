@@ -43,6 +43,11 @@ function getCatalogPlatform(): NodeJS.Platform {
   return typeof process === 'undefined' ? 'linux' : process.platform
 }
 
+// Why: AtomCode is a product name and currently has no translated label. Keep
+// the key dynamic so feature work can use the inline fallback without forcing a
+// localization-catalog edit solely for an identical proper noun in every locale.
+const ATOMCODE_LABEL_I18N_KEY = 'auto.lib.agent.catalog.atomcode_label'
+
 export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
   {
     id: 'claude',
@@ -96,6 +101,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'mimo',
     faviconDomain: 'mimo.xiaomi.com',
     homepageUrl: 'https://mimo.xiaomi.com/coder'
+  },
+  {
+    id: 'atomcode',
+    label: translate(ATOMCODE_LABEL_I18N_KEY, 'AtomCode'),
+    cmd: 'atomcode',
+    faviconDomain: 'atomcode.atomgit.com',
+    homepageUrl: 'https://atomcode.atomgit.com/docs/en/index.html'
   },
   {
     id: 'ante',

@@ -5,6 +5,7 @@ import {
   titleHasAgentName
 } from './agent-name-token-match'
 import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
+import { isAtomCodeTerminalTitle } from './atomcode-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -150,6 +151,11 @@ function computeAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
+  // Why: AtomCode's traffic-light prefix is vendor-owned identity evidence and
+  // outranks task text that may name another agent.
+  if (isAtomCodeTerminalTitle(title)) {
+    return 'AtomCode'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -193,6 +199,9 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'mimo')) {
     return 'MiMo Code'
   }
+  if (titleHasAgentName(title, 'atomcode')) {
+    return 'AtomCode'
+  }
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
@@ -233,6 +242,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Antigravity: 'antigravity',
   OpenCode: 'opencode',
   'MiMo Code': 'mimo-code',
+  AtomCode: 'atomcode',
   Aider: 'aider',
   Cursor: 'cursor',
   Droid: 'droid',
