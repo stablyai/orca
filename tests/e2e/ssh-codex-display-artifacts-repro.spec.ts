@@ -62,7 +62,7 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
   test.skip(process.platform === 'win32', 'Docker SSH repro uses POSIX ssh tooling.')
 
   test('does not leave duplicated Codex status output after SSH replay', async ({
-    orcaPage
+    orcaPage, electronApp
   }, testInfo: TestInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
@@ -85,6 +85,23 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
       await installPtyReplayProbe(orcaPage)
 
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+
+      await electronApp.evaluate(({ ipcMain }) => {
+        type Handler = (event: unknown, args: Record<string, unknown>) => Promise<Record<string, unknown> | null>
+        const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })._invokeHandlers
+        for (const channel of ['pty:spawn', 'pty:getMainBufferSnapshot']) {
+          const original = handlers.get(channel)
+          if (!original) throw new Error(`Missing ${channel}`)
+          handlers.set(channel, async (event, args) => {
+            const result = await original(event, args)
+            console.info('[ssh-replay-invoke] '+JSON.stringify({ channel, at: Date.now(), requestId: args.id, sessionId: args.sessionId,
+              id: result?.id, isReattach: result?.isReattach,
+              lengths: Object.fromEntries(['snapshot','snapshotPrefixAnsi','snapshotFrameAnsi','snapshotFrameRestoreAnsi','replay','data'].map(key => [key, typeof result?.[key] === 'string' ? (result[key] as string).length : null])) }))
+            return result
+          })
+        }
+      })
+
       const doneMarker = RUN_REAL_REMOTE_CODEX
         ? `ORCA_REAL_REMOTE_CODEX_DONE_${Date.now()}`
         : REMOTE_TUI_DONE
@@ -102,6 +119,7 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
       )
       await orcaPage.waitForTimeout(1_200)
       if (FORCE_SSH_RECONNECT_DURING_TUI) {
+        console.info('[ssh-replay-fault] '+Date.now())
         dropDockerSshClientSessions(target)
         await waitForDockerRemoteReconnected(orcaPage, remote.targetId)
         await orcaPage.waitForTimeout(2_000)
