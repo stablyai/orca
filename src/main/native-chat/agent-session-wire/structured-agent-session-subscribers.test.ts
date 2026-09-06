@@ -254,6 +254,47 @@ describe('AgentSessionSubscribers', () => {
     expect(events.at(-1)).toMatchObject({ type: 'batch', fence: 2 })
   })
 
+  it('publishes latest turn activity without advancing or adding journal rows', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'activity-journal')
+    })
+    const subscribers = new AgentSessionSubscribers()
+    const events: AgentSessionSubscribeEvent[] = []
+    subscribers.open({
+      id: 'subscriber-1',
+      sessionId: SESSION,
+      journal,
+      fence: 1,
+      emit: (event) => events.push(event)
+    })
+    const cursor = journal.cursor()
+
+    subscribers.publish(SESSION, journal, {
+      turnId: 'turn-1',
+      text: 'Inspecting the session wire'
+    })
+
+    expect(journal.cursor()).toEqual(cursor)
+    expect(events.at(-1)).toEqual({
+      type: 'batch',
+      sessionId: SESSION,
+      batch: { cursor, items: [], removedItemIds: [], submissions: [] },
+      fence: 1,
+      activity: { turnId: 'turn-1', text: 'Inspecting the session wire' }
+    })
+
+    subscribers.publish(SESSION, journal, null)
+    expect(journal.cursor()).toEqual(cursor)
+    expect(events.at(-1)).toMatchObject({ activity: null })
+  })
+
   it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {
     const journalDir = join(root, 'oversized-removal-journal')
     const seeded = await journals.open({

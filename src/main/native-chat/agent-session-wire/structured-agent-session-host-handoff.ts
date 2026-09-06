@@ -230,7 +230,7 @@ export async function acquireNativeHandoffOwner(
   eventSink.bind({
     journal: session.journal,
     fence: proved.lease.runtimeFence,
-    publish: () => host.subscribers.publish(input.sessionId, session.journal)
+    publish: (activity) => host.subscribers.publish(input.sessionId, session.journal, activity)
   })
   const acquiredBarrier = await eventSink.drained()
   if (!acquiredBarrier.ok) {

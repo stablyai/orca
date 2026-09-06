@@ -34,6 +34,68 @@ describe('selectStructuredAgentTurnActivity', () => {
     expect(activity).toEqual({ kind: 'description', text: 'Preparing the answer' })
   })
 
+  it('prefers matching ephemeral provider activity over journal-derived status', () => {
+    const activity = selectStructuredAgentTurnActivity(
+      [turnStart, item(2, { kind: 'status', text: 'Older journal status' })],
+      'turn-1',
+      { turnId: 'turn-1', text: 'Inspecting the session wire' }
+    )
+
+    expect(activity).toEqual({ kind: 'description', text: 'Inspecting the session wire' })
+  })
+
+  it('ignores ephemeral activity from another or settled turn', () => {
+    const providerActivity = { turnId: 'turn-1', text: 'Inspecting the session wire' }
+
+    expect(selectStructuredAgentTurnActivity([turnStart], 'turn-2', providerActivity)).toBeNull()
+    expect(selectStructuredAgentTurnActivity([turnStart], null, providerActivity)).toBeNull()
+  })
+
+  it.each([
+    ['active', 'Still running pnpm test'],
+    ['most recently settled', 'Running shell pnpm lint now']
+  ])('never repeats the %s tool label as provider activity', (_kind, text) => {
+    const activity = selectStructuredAgentTurnActivity(
+      [
+        turnStart,
+        item(2, {
+          kind: 'tool-call',
+          name: 'shell',
+          input: { command: 'pnpm test' },
+          state: 'running'
+        }),
+        item(3, {
+          kind: 'tool-call',
+          name: 'shell',
+          input: { command: 'pnpm lint' },
+          state: 'completed'
+        })
+      ],
+      'turn-1',
+      { turnId: 'turn-1', text }
+    )
+
+    expect(activity).toBeNull()
+  })
+
+  it('does not fall through to a journal status that repeats a recent tool label', () => {
+    const activity = selectStructuredAgentTurnActivity(
+      [
+        turnStart,
+        item(2, {
+          kind: 'tool-call',
+          name: 'shell',
+          input: { command: 'pnpm lint' },
+          state: 'completed'
+        }),
+        item(3, { kind: 'status', text: 'Running pnpm lint' })
+      ],
+      'turn-1'
+    )
+
+    expect(activity).toBeNull()
+  })
+
   it('ignores active and settled tools so the tail can use a broad fallback', () => {
     const activity = selectStructuredAgentTurnActivity(
       [

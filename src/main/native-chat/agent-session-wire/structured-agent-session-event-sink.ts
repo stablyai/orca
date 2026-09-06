@@ -3,6 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
@@ -43,6 +44,7 @@ export type StructuredAgentSessionEventSink = {
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   publish(options?: StructuredAgentSessionAppendOptions): void
+  setActivity?(activity: AgentSessionTurnActivity | null): void
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -66,7 +68,7 @@ export type StructuredAgentSessionEventSink = {
 export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
-  publish: () => void
+  publish: (activity?: AgentSessionTurnActivity | null) => void
 }
 
 export type DeferredStructuredAgentSessionEventSink = {
@@ -208,6 +210,13 @@ export function createDeferredStructuredAgentSessionEventSink(
         ),
       publish: (options = {}) => {
         publish(options)
+      },
+      setActivity: (activity) => {
+        queue.submit({
+          bytes: Buffer.byteLength(JSON.stringify(activity), 'utf8') + 64,
+          coalescingKey: 'turn-activity',
+          run: (bound) => bound.publish(activity)
+        })
       },
       tryPublish: publish
     },
