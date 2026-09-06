@@ -21,6 +21,9 @@ jobs:
         shell: pwsh
         run: ./config/windows-signing/signing-control.test.ps1
   coordinator:
+    defaults:
+      run:
+        working-directory: cloud
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,12 +35,11 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: pnpm
-          cache-dependency-path: cloud/pnpm-lock.yaml
-      - run: pnpm --dir cloud install --frozen-lockfile
-      - run: pnpm --dir cloud --filter @orca-cloud/release-signing typecheck
-      - run: pnpm --dir cloud --filter @orca-cloud/release-signing test
-      - run: node --test config/windows-signing/configure-environments.test.mjs
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @orca-cloud/release-signing typecheck
+      - run: pnpm --filter @orca-cloud/release-signing test
+      - run: node --test ../config/windows-signing/configure-environments.test.mjs
   infrastructure:
     runs-on: ubuntu-latest
     timeout-minutes: 10
