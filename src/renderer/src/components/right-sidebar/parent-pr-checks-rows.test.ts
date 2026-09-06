@@ -225,6 +225,103 @@ describe('buildParentPrChecksProjection', () => {
     })
   })
 
+  it('rejects matching suppressed GitHub cache entries', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: null,
+      suppressedGitHubPR: 99
+    })
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
+    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        hostedReviewCache: {
+          [hostedKey]: {
+            data: makeReview({ number: 99 }),
+            fetchedAt: 2,
+            linkedReviewHintKey: ''
+          }
+        },
+        prCache: {
+          [cacheKey]: { data: makePRInfo({ number: 99 }), fetchedAt: 2 }
+        }
+      }).rows[0]
+    ).toMatchObject({ reviewNumber: null, reviewLabel: null })
+  })
+
+  it('lets explicit GitHub metadata override stale suppression', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: 99,
+      suppressedGitHubPR: 99
+    })
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        prCache: {
+          [cacheKey]: { data: makePRInfo({ number: 99 }), fetchedAt: 2 }
+        }
+      }).rows[0]
+    ).toMatchObject({ reviewNumber: 99, reviewLabel: '#99' })
+  })
+
+  it('falls through a suppressed live outcome to a different cached PR', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: null,
+      suppressedGitHubPR: 99
+    })
+    const identity = getParentPrChecksRefreshIdentity(worktree, repo, 'feature')
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        prCache: {
+          [cacheKey]: { data: makePRInfo({ number: 100 }), fetchedAt: 2 }
+        },
+        refreshOutcomes: new Map([
+          [identity, { kind: 'found', review: makeReview({ number: 99 }) }]
+        ])
+      }).rows[0]
+    ).toMatchObject({ reviewNumber: 100, reviewLabel: '#100' })
+  })
+
+  it('preserves a non-GitHub hosted review with the suppressed number', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: null,
+      suppressedGitHubPR: 99,
+      linkedGitLabMR: 99
+    })
+    const cacheKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        hostedReviewCache: {
+          [cacheKey]: {
+            data: makeReview({ provider: 'gitlab', number: 99 }),
+            fetchedAt: 2,
+            linkedReviewHintKey: 'gitlab:99'
+          }
+        }
+      }).rows[0]
+    ).toMatchObject({ provider: 'gitlab', reviewNumber: 99 })
+  })
+
   it('uses legacy path-scoped PR cache for local persisted entries', () => {
     const repo = makeRepo()
     const worktree = makeWorktree({ id: 'repo-1::/feature', linkedPR: 99 })

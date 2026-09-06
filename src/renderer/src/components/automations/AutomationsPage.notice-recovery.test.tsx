@@ -15,16 +15,17 @@ import {
   addRuntimeProject,
   api,
   installAutomationsPageHarness,
-  listedRow,
   mocks,
   renderPage,
   runtimeHost,
+  RUNTIME_ID,
   RUNTIME_REPO_ID,
   RUNTIME_SELF_FILTER,
   RUNTIME_WORKSPACE_ID,
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { listedRow } from './automations-page-listed-items'
 import { makeAutomation } from './automations-page-fixtures'
 
 installAutomationsPageHarness()
@@ -88,7 +89,11 @@ describe('AutomationsPage notice recovery', () => {
     })
 
     expect(settings.open).toHaveBeenCalled()
-    expect(settings.target).toHaveBeenCalledWith({ pane: 'servers', repoId: null })
+    expect(settings.target).toHaveBeenCalledWith({
+      pane: 'servers',
+      repoId: null,
+      sectionId: RUNTIME_ID
+    })
   })
 
   it('sends a row Update server to the row own host, not to the unfiltered list', async () => {
@@ -116,6 +121,10 @@ describe('AutomationsPage notice recovery', () => {
 
     // All hosts selects no host, so only the row's captured owner names one.
     expect(settings.open).toHaveBeenCalled()
-    expect(settings.target).toHaveBeenCalledWith({ pane: 'servers', repoId: null })
+    expect(settings.target).toHaveBeenCalledWith({
+      pane: 'servers',
+      repoId: null,
+      sectionId: RUNTIME_ID
+    })
   })
 })

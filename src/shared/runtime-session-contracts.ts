@@ -1,6 +1,7 @@
 import type { AgentStatusOrchestrationContext } from './agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from './remote-runtime-shared-control-types'
+import type { RuntimeHostConnectionState } from './runtime-host-connection-state'
 import type { RuntimeCapability } from './protocol-version'
 import type {
   RuntimeBrowserUnavailableReason,
@@ -14,7 +15,7 @@ import type {
   RuntimeMobileSessionTerminalClientTab
 } from './runtime-mobile-session-tab-contracts'
 
-export * from './runtime-mobile-session-tab-contracts'
+export type * from './runtime-mobile-session-tab-contracts'
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
@@ -111,6 +112,8 @@ export type CliStatusResult = {
   runtime: {
     state: CliRuntimeState
     reachable: boolean
+    /** Canonical runtime transport verdict, when the caller has runtime evidence. */
+    connectionState?: RuntimeHostConnectionState
     runtimeId: string | null
     appVersion?: string
     remoteUpdateSupport?: RemoteServerUpdateSupport
@@ -212,6 +215,8 @@ export const UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH = 'none'
 
 export type RuntimeMobileSessionTabsSnapshot = {
   worktree: string
+  /** Immutable catalog identity used to fence snapshots across path reuse. */
+  worktreeInstanceId?: string
   publicationEpoch: string
   snapshotVersion: number
   activeGroupId: string | null
@@ -219,7 +224,16 @@ export type RuntimeMobileSessionTabsSnapshot = {
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
+  retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
   tabs: RuntimeMobileSessionSnapshotTab[]
+}
+
+export type RuntimeMobileSessionRetiredTerminalSurface = {
+  parentTabId: string
+  leafId: string
+  ptyId: string
+  terminal: string
+  incarnationId?: string
 }
 
 export type RuntimeMobileSessionTabsResult = {
@@ -232,6 +246,7 @@ export type RuntimeMobileSessionTabsResult = {
   activeTabType: 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session' | null
   tabGroups?: RuntimeMobileSessionTabGroup[]
   tabGroupLayout?: TabGroupLayoutNode | null
+  retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
   tabs: RuntimeMobileSessionClientTab[]
   /**
    * Set while a freshly started runtime has not yet taken back the client-hosted pages its paired

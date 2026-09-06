@@ -121,11 +121,21 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'rev-parse') {
           throw new Error('missing local branch')
         }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing exact ref'), { code: 1 })
+        }
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/old-improve-dashboard',
+          head: 'old123',
+          branch: 'refs/heads/archive/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        },
         {
           path: '/remote/repo-improve-dashboard',
           head: 'abc123',
@@ -219,6 +229,9 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'rev-parse') {
           throw new Error('missing local branch')
         }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing exact ref'), { code: 1 })
+        }
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
@@ -305,6 +318,9 @@ describe('registerWorktreeHandlers', () => {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw Object.assign(new Error('missing exact ref'), { code: 1 })
         }
         return { stdout: '', stderr: '' }
       }),

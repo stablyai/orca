@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import {
   RelayConnectionOpenMessageSchema,
@@ -8,6 +9,7 @@ import {
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
   RelayPingMessageSchema,
+  encodeRelayHostHello,
   parseRelayControlMessage,
   type RelayConnectionOpenMessage,
   type RelayDrainMessage,
@@ -21,6 +23,7 @@ import {
   RELAY_CONTROL_SILENCE_LIMIT_MS,
   RelayControlSilenceWatchdog
 } from './relay-control-silence-watchdog'
+import { closeRelayControlSocket } from './relay-control-socket-close'
 import { controlWebSocketUrl } from './relay-control-url'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
@@ -166,7 +169,7 @@ export class RelayControlClient {
     return this.requests.confirmResume(reqId, basisConnId, (payload) => this.sendActive(payload))
   }
 
-  closeNow(): void {
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
     this.silenceWatchdog.stop()
@@ -175,8 +178,9 @@ export class RelayControlClient {
       this.clearConnectPromise()
     }
     this.requests.rejectAll(new Error('relay_control_closed'))
-    this.socket?.terminate()
+    const socket = this.socket
     this.socket = null
+    closeRelayControlSocket(socket, hostCloseReason)
   }
 
   private sendHostHello(): void {
@@ -185,19 +189,9 @@ export class RelayControlClient {
     }
     this.state = 'proving'
     this.socket.send(
-      JSON.stringify({
-        type: 'host-hello',
-        v: 1,
-        relayHostId: this.options.relayHostId,
-        assignmentEpoch: this.options.assignmentEpoch,
-        hostPublicKeyB64: this.options.keypair.publicKeyB64,
-        appVersion: this.options.appVersion,
-        ...(this.options.previousGeneration === undefined
-          ? {}
-          : { previousGeneration: this.options.previousGeneration }),
-        ...(this.options.controlResumeSecret
-          ? { controlResumeSecret: this.options.controlResumeSecret }
-          : {})
+      encodeRelayHostHello({
+        ...this.options,
+        hostPublicKeyB64: this.options.keypair.publicKeyB64
       })
     )
   }
@@ -234,7 +228,18 @@ export class RelayControlClient {
     if (this.requests.resolveMessage(message)) {
       return
     }
-    this.failProtocol('unknown control message')
+    // Drop a well-formed control message we do not recognize, matching how every
+    // other Orca decoder treats an unknown frame (see the silent-drop convention
+    // in docs/reference/remote-wire-compatibility.md). The control channel has no
+    // opcode negotiation step, so this reaches either a newer relay's message
+    // this build predates, or a reply whose request already timed out and has no
+    // waiter (relay control ops run DB transactions that can exceed the request
+    // deadline under load). Self-closing here was strictly worse than ignoring:
+    // it orphaned the relay session, which answered the phone with HOST_OFFLINE
+    // for the orphan-grace window plus the director's reconnect throttle — minutes
+    // of outage from a single stray frame.
+    const messageType = typeof message.type === 'string' ? message.type : 'unknown'
+    console.warn(`[relay] ignoring unrecognized control message type=${messageType}`)
   }
 
   private handleProofMessage(message: Record<string, unknown>): void {

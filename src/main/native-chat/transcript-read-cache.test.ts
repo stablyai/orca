@@ -161,7 +161,9 @@ describe('readNativeChatTranscriptCached', () => {
     await utimes(fileA, when, when)
     await utimes(fileC, when, when)
 
-    const readText = (result: Awaited<ReturnType<typeof readNativeChatTranscriptCached>>): string =>
+    const readText = (
+      result: Awaited<ReturnType<typeof readNativeChatTranscriptCached>>
+    ): string =>
       'messages' in result
         ? result.messages
             .flatMap((message) => message.blocks)

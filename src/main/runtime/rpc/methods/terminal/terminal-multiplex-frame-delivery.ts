@@ -108,7 +108,7 @@ export function installMultiplexFrameDelivery(
       : undefined
     if (stream.ackOutputSourceRanges && prepared?.status !== 'ready') {
       if (prepared?.status !== 'capacity') {
-        state.detachStream(stream.streamId, true)
+        state.detachStream(stream.streamId, 'unverifiable')
       }
       return false
     }
@@ -124,7 +124,7 @@ export function installMultiplexFrameDelivery(
       return false
     }
     if (admission && !admission.commit()) {
-      state.detachStream(stream.streamId, true)
+      state.detachStream(stream.streamId, 'unverifiable')
       return false
     }
     if (stream.ackOutput) {

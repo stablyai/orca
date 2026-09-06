@@ -87,7 +87,6 @@ export function ChecksPanelActiveContent({
     isRefreshing,
     isResolvingConflictsWithAI,
     linkedGitLabMR,
-    linkedPR,
     pendingCommentResolutionRef,
     pr,
     prRefreshState,
@@ -132,9 +131,7 @@ export function ChecksPanelActiveContent({
         <ReviewHeaderComponent
           review={activeReview}
           isRefreshing={isRefreshing}
-          canUnlinkReview={
-            activeReview.provider === 'gitlab' ? linkedGitLabMR !== null : linkedPR !== null
-          }
+          canUnlinkReview={activeReview.provider === 'github' ? true : linkedGitLabMR !== null}
           modifierHintDestination={hostedReviewModifierHintDestination}
           onRefresh={() => void handleRefresh()}
           onOpenReview={handleOpenPR}

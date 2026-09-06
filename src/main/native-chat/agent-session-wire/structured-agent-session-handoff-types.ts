@@ -49,7 +49,7 @@ export type StructuredAgentSessionHandoffTransport = {
     sessionId: string
     agent?: 'claude' | 'codex'
     adoptedTerminal?: true
-  }): void
+  }): Promise<void> | void
   waitForTuiExit(owner: StructuredTuiOwner): Promise<{ transcriptPath?: string }>
   waitForTuiIdleOrExit(
     owner: StructuredTuiOwner,

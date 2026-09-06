@@ -40,10 +40,13 @@ const CRASHED_CLUSTER_SESSIONS: FieldSession[] = [
   { report: '96d8c63b', gpuCrashesMsSinceLaunch: [2_108] }
 ]
 
-/** index.ts's `child-process-gone` listener body — the wiring these claims rest on. */
+/** Ready-phase `child-process-gone` listener body — the wiring these claims rest on. */
 function readChildProcessGoneListener(): string {
-  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
-  const start = source.indexOf("app.on('child-process-gone'")
+  const source = readFileSync(
+    join(__dirname, '..', 'startup', 'main-process-ready-runtime.ts'),
+    'utf8'
+  )
+  const start = source.indexOf("  app.on('child-process-gone'")
   expect(start).toBeGreaterThan(0)
   return source.slice(start, source.indexOf('\n  })', start))
 }
@@ -66,7 +69,13 @@ const FIELD_GPU_EVENT = {
 describe('1.4.190 win32 GPU-child crash cluster', () => {
   it('does not let process_gone_suppressed gate the fallback candidate check', () => {
     // The GPU death is suppressed as recoverable churn (no user-facing report)...
-    expect(shouldRecordProcessGoneCrash({ ...FIELD_GPU_EVENT, exitCode: -2147483645 })).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        ...FIELD_GPU_EVENT,
+        platform: 'win32',
+        exitCode: -2147483645
+      })
+    ).toBe(false)
     // ...but the fallback path reads the raw child-process-gone event, so the
     // suppression cannot hide a broken driver from recovery.
     expect(
@@ -83,7 +92,7 @@ describe('1.4.190 win32 GPU-child crash cluster', () => {
     expect(guardStart).toBeGreaterThan(0)
     expect(listener.slice(0, guardStart).match(/\bif\s*\(/g) ?? []).toHaveLength(1)
     expect(listener).toMatch(
-      /isGpuFallbackCrashCandidate\([\s\S]*?gpuCrashDiagnostics\?\.record\(\)[\s\S]*?handleGpuChildCrash\(/
+      /isGpuFallbackCrashCandidate\([\s\S]*?state\.gpuCrashDiagnostics\?\.record\(\)[\s\S]*?handleGpuChildCrash\(/
     )
     // The `if (` count alone still allows `recorded && isGpuFallbackCrashCandidate(...)`, which
     // re-couples recovery to the suppression decision, so pin the guard to that check alone.

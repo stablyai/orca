@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { parseJournalRow } from './journal-row-schema'
+import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS, parseJournalRow } from './journal-row-schema'
 
 const BASE = { v: 1, epoch: 'epoch-1', seq: 1, fence: 1, ts: 1 }
 
@@ -8,6 +9,41 @@ function parse(row: Record<string, unknown>): boolean {
 }
 
 describe('journal row validation', () => {
+  it('upcasts v1 rows to the current schema without changing their body', () => {
+    const parsed = parseJournalRow(
+      JSON.stringify({
+        ...BASE,
+        kind: 'item',
+        itemId: 'i-1',
+        revision: 1,
+        body: { kind: 'status', text: 'from schema v1' }
+      })
+    )
+
+    expect(parsed).toEqual({
+      ok: true,
+      row: expect.objectContaining({
+        v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+        body: { kind: 'status', text: 'from schema v1' }
+      })
+    })
+  })
+
+  it('treats future-version rows as unreadable before validating future body shapes', () => {
+    expect(
+      parseJournalRow(
+        JSON.stringify({
+          ...BASE,
+          v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION + 1,
+          kind: 'item',
+          itemId: 'future',
+          revision: 1,
+          body: { kind: 'future-render-kind', payload: { anything: true } }
+        })
+      )
+    ).toEqual({ ok: false, unreadable: true })
+  })
+
   it('accepts every fully-formed row shape this build writes', () => {
     expect(
       parse({
@@ -188,5 +224,17 @@ describe('journal row validation', () => {
         reason: null
       })
     ).toBe(true)
+  })
+
+  it('rejects lifecycle batches beyond the persisted mutation bound', () => {
+    const mutation = { kind: 'tombstone', itemId: 'i-1', revision: 1 }
+    expect(
+      parse({
+        ...BASE,
+        kind: 'lifecycle-batch',
+        settlementId: 'settlement-1',
+        mutations: Array.from({ length: MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS + 1 }, () => mutation)
+      })
+    ).toBe(false)
   })
 })

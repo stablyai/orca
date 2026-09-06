@@ -151,6 +151,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     ...overrides,
     diffWordWrap: overrides.diffWordWrap ?? false,
+    diffShowWhitespace: overrides.diffShowWhitespace ?? false,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,
@@ -205,9 +206,10 @@ export function createRuntimeHome(): RuntimeHomeStub {
   return {
     syncForCurrentSelection: vi.fn(),
     clearLastWrittenAuthJson: vi.fn(),
-    prepareForRateLimitFetch: vi.fn(
-      (): CodexRateLimitHomeResolution => ({ kind: 'ready', codexHomePath: null })
-    )
+    prepareForRateLimitFetch: vi.fn((): CodexRateLimitHomeResolution => ({
+      kind: 'ready',
+      codexHomePath: null
+    }))
   }
 }
 

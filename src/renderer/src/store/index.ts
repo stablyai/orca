@@ -49,7 +49,7 @@ import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import {
   registerHttpLinkStoreAccessor,
-  registerRuntimeHttpLinkBrowserOpener
+  registerWorkspaceHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
 import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
@@ -112,7 +112,7 @@ export const useAppStore = create<AppState>()(
 )
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())
-registerRuntimeHttpLinkBrowserOpener(async (request) => {
+registerWorkspaceHttpLinkBrowserOpener(async (request) => {
   const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
   await openWorkspaceBrowserTab(request)
 })

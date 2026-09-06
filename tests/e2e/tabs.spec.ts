@@ -18,8 +18,9 @@
  * (dnd-kit reorder); in those cases a DOM assertion still follows.
  */
 
-import { test, expect } from './helpers/orca-app'
+import { rm } from 'node:fs/promises'
 import type { Page } from '@stablyai/playwright-test'
+import { test, expect } from './helpers/orca-app'
 import {
   waitForSessionReady,
   waitForActiveWorktree,
@@ -28,7 +29,8 @@ import {
   getActiveTabType,
   getWorktreeTabs,
   getTabBarOrder,
-  ensureTerminalVisible
+  ensureTerminalVisible,
+  waitForStartupWorktreeRefresh
 } from './helpers/store'
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
@@ -68,6 +70,7 @@ async function getFocusedTerminalTabId(page: Page): Promise<string | null> {
 test.describe('Tabs', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
+    await waitForStartupWorktreeRefresh(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
   })
@@ -116,6 +119,65 @@ test.describe('Tabs', () => {
         message: 'Menu-created terminal tab did not receive keyboard focus'
       })
       .toBe(storeActiveId)
+  })
+
+  test('clicking "+" then "New Markdown" focuses the editor', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    let createdFilePath: string | null = null
+    registerPostElectronShutdownCleanup(async () => {
+      if (createdFilePath) {
+        await rm(createdFilePath, { force: true })
+      }
+    })
+
+    const preExistingFileIds = await orcaPage.evaluate(
+      () => window.__store?.getState().openFiles.map((file) => file.id) ?? []
+    )
+
+    await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+    const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
+    await newMarkdownMenuItem.click({ force: true })
+    await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
+
+    // Why: require an id that did not exist before the click, so an already-open
+    // Markdown file can't satisfy the assertions (or be deleted by cleanup), and
+    // record the path here so cleanup still has it if a later assertion fails.
+    const createdFileHandle = await orcaPage.waitForFunction(
+      (knownFileIds) => {
+        const state = window.__store?.getState()
+        const file = state?.openFiles.find((candidate) => candidate.id === state.activeFileId)
+        if (!file || knownFileIds.includes(file.id)) {
+          return null
+        }
+        return { id: file.id, filePath: file.filePath }
+      },
+      preExistingFileIds,
+      { timeout: 25_000 }
+    )
+    const createdFile = (await createdFileHandle.jsonValue())!
+    createdFilePath = createdFile.filePath
+
+    const editor = orcaPage.locator('.rich-markdown-editor')
+    await expect(editor).toBeVisible({ timeout: 25_000 })
+
+    await expect
+      .poll(() => editor.evaluate((element) => document.activeElement === element), {
+        timeout: 5_000,
+        message: 'Menu-created Markdown editor did not receive keyboard focus'
+      })
+      .toBe(true)
+
+    const sentinel = `autofocus-${Date.now()}`
+    // Why: typing through the page keyboard proves focus landed without an editor click.
+    await orcaPage.keyboard.type(sentinel)
+    await expect(editor).toContainText(sentinel)
+
+    await orcaPage.evaluate((fileId) => {
+      window.__store?.getState().closeFile(fileId)
+    }, createdFile.id)
+    await expect(editor).toBeHidden()
   })
 
   /**
@@ -376,7 +438,9 @@ test.describe('Tabs', () => {
       }
     }, worktreeId)
     await expect
-      .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, { timeout: 5_000 })
+      .poll(async () => (await getWorktreeTabs(orcaPage, worktreeId)).length, {
+        timeout: 5_000
+      })
       .toBeGreaterThanOrEqual(3)
 
     const initialOrder = await getTabBarOrder(orcaPage, worktreeId)
@@ -403,7 +467,9 @@ test.describe('Tabs', () => {
       state.reorderUnifiedTabs(activeGroup.id, [...rest, first])
     }, worktreeId)
     await expect
-      .poll(async () => getTabBarOrder(orcaPage, worktreeId), { timeout: 3_000 })
+      .poll(async () => getTabBarOrder(orcaPage, worktreeId), {
+        timeout: 3_000
+      })
       .toEqual([b, c, a])
 
     // Activate the last tab in the new visible order, then walk left twice.

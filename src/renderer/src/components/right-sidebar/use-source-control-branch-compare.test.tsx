@@ -231,13 +231,18 @@ describe('useSourceControlBranchCompare scheduler', () => {
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(2)
   })
 
-  it('collapses a poll tick that fires while a refresh is in flight', async () => {
+  it('coalesces M interval ticks into one trailing run after the slowTaskBackoff gap', async () => {
     vi.useFakeTimers()
     const first = deferred<typeof OK>()
     mocks.getRuntimeGitBranchCompare.mockReturnValueOnce(first.promise)
     // Visible mounts run once immediately through the visibility interval.
     await mount({ isBranchVisible: true })
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
+    expect(mocks.getRuntimeGitBranchCompare).toHaveBeenLastCalledWith(
+      expect.objectContaining({ worktreeId: 'A' }),
+      'origin/main',
+      'background'
+    )
 
     await act(async () => {
       vi.advanceTimersByTime(BRANCH_REFRESH_INTERVAL_MS * 3)
@@ -250,8 +255,22 @@ describe('useSourceControlBranchCompare scheduler', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
-    // Three skipped ticks collapse into exactly one trailing run.
+    // Three skipped ticks collapse into one pending run, but a 90s task must
+    // idle for its own duration before the trailing run.
+    expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(89_999)
+    })
+    expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(2)
+    expect(mocks.getRuntimeGitBranchCompare).toHaveBeenLastCalledWith(
+      expect.objectContaining({ worktreeId: 'A' }),
+      'origin/main',
+      'background'
+    )
   })
 
   it('preserves the existing summary on a poll refresh but resets to loading on a base-ref change', async () => {
@@ -306,7 +325,8 @@ describe('useSourceControlBranchCompare scheduler', () => {
     })
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledWith(
       expect.objectContaining({ worktreeId: 'A' }),
-      'origin/dev'
+      'origin/dev',
+      'interactive'
     )
   })
 

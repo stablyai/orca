@@ -1,51 +1,81 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
-import {
-  hasPersistedStructuredAgentSessionTurn,
-  projectStructuredAgentSessionStatus,
-  structuredAgentSessionPaneKey
-} from '../../../../shared/structured-agent-session-projection'
-import type { StructuredAgentSessionState } from '../../../../shared/structured-agent-session-reducer'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { useStructuredAgentSessionReadObservation } from './use-structured-agent-session-read'
+import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 
 type StructuredTab = Tab & { contentType: 'agent-session' }
 
-function latestPrompt(state: StructuredAgentSessionState): string {
-  for (let index = state.items.length - 1; index >= 0; index -= 1) {
-    const body = state.items[index]?.body
-    if (body?.kind === 'message' && body.role === 'user') {
-      return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
-    }
-  }
-  return ''
+function isStructuredTab(tab: Tab): tab is StructuredTab {
+  return tab.contentType === 'agent-session' && isAgentSessionHandleProvider(tab.agentSessionAgent)
 }
 
-function projectStatus(
-  tab: StructuredTab,
-  state: StructuredAgentSessionState,
-  providerSession: AgentProviderSessionMetadata | undefined
-): void {
+const structuredTabsByUnifiedTabsSnapshot = new WeakMap<
+  Record<string, Tab[]>,
+  readonly StructuredTab[]
+>()
+
+/** Project structured-session tabs once per immutable tab-map snapshot. */
+export function getStructuredAgentSessionTabs(
+  unifiedTabsByWorktree: Record<string, Tab[]>
+): readonly StructuredTab[] {
+  const cached = structuredTabsByUnifiedTabsSnapshot.get(unifiedTabsByWorktree)
+  if (cached) {
+    return cached
+  }
+
+  const tabs: StructuredTab[] = []
+  for (const worktreeTabs of Object.values(unifiedTabsByWorktree)) {
+    for (const tab of worktreeTabs) {
+      if (isStructuredTab(tab)) {
+        tabs.push(tab)
+      }
+    }
+  }
+  structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
+  return tabs
+}
+
+/** The host's projected status for one session, live while the caller is mounted. */
+function useStructuredAgentSessionStatusSummary(
+  sessionId: string,
+  target: RuntimeClientTarget
+): AgentSessionStatusSummary | null {
+  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
+  useEffect(() => feed.activate(), [feed])
+  return useSyncExternalStore(
+    feed.subscribe,
+    () => feed.getSnapshot().get(sessionId) ?? null,
+    () => null
+  )
+}
+
+function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | null): void {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const store = useAppStore.getState()
-  if (!hasPersistedStructuredAgentSessionTurn(state.items)) {
+  // No persisted turn yet (or nothing known): the row shows no agent status at all.
+  if (!summary?.status) {
     if (store.agentStatusByPaneKey?.[paneKey]) {
       store.removeAgentStatus(paneKey)
     }
     return
   }
-  const projection = projectStructuredAgentSessionStatus(state.items)
   const desired = {
-    state: projection === 'working' ? 'working' : projection === 'attention' ? 'blocked' : 'done',
-    prompt: latestPrompt(state),
+    state:
+      summary.status === 'working'
+        ? 'working'
+        : summary.status === 'attention'
+          ? 'blocked'
+          : 'done',
+    prompt: summary.latestPrompt,
     agentType: tab.agentSessionAgent,
-    sessionBoundary: projection === 'idle'
+    sessionBoundary: summary.status === 'idle'
   } as const
   const current = store.agentStatusByPaneKey?.[paneKey]
   if (
@@ -57,7 +87,11 @@ function projectStatus(
     current.tabId === tab.id &&
     current.worktreeId === tab.worktreeId &&
     current.terminalResumeEligible === false &&
-    agentProviderSessionsEqual(tab.agentSessionAgent, current.providerSession, providerSession)
+    agentProviderSessionsEqual(
+      tab.agentSessionAgent,
+      current.providerSession,
+      summary.providerSession
+    )
   ) {
     return
   }
@@ -68,7 +102,7 @@ function projectStatus(
     undefined,
     { tabId: tab.id, worktreeId: tab.worktreeId },
     {
-      ...(providerSession ? { providerSession } : {}),
+      ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
       terminalResumeEligible: false
     }
   )
@@ -82,13 +116,10 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
     [environmentId]
   )
-  const { providerSession, state } = useStructuredAgentSessionReadObservation({
-    sessionId: tab.entityId,
-    target
-  })
+  const summary = useStructuredAgentSessionStatusSummary(tab.entityId, target)
   useEffect(() => {
-    projectStatus(tab, state, providerSession)
-  }, [providerSession, state, tab])
+    projectStatus(tab, summary)
+  }, [summary, tab])
   useEffect(
     () => () =>
       useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),
@@ -99,15 +130,7 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
 
 export function StructuredAgentSessionStatusBridge(): React.JSX.Element {
   const tabs = useAppStore(
-    useShallow((state) =>
-      Object.values(state.unifiedTabsByWorktree)
-        .flat()
-        .filter(
-          (tab): tab is StructuredTab =>
-            tab.contentType === 'agent-session' &&
-            isAgentSessionHandleProvider(tab.agentSessionAgent)
-        )
-    )
+    useShallow((state) => getStructuredAgentSessionTabs(state.unifiedTabsByWorktree))
   )
   return (
     <>

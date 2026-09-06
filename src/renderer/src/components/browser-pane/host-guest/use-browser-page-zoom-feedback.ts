@@ -28,9 +28,9 @@ export function useBrowserPageZoomFeedback(browserTabId: string): {
   // tab's zoom through the shared setting. Why the module-level lookup: the guest webview outlives
   // this component (worktree switch, Settings visit), so re-seeding on remount would let a later
   // Settings change retroactively hijack a tab the user already zoomed.
-  const paneZoomLevelRef = useRef(
+  const paneZoomLevelRef = useRef<number>(undefined!)
+  paneZoomLevelRef.current ??=
     getExplicitBrowserPageZoomLevel(browserTabId) ?? normalizedBrowserDefaultZoomLevel
-  )
   const [browserZoomPercent, setBrowserZoomPercent] = useState(browserDefaultZoomPercent)
   const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
   const browserZoomFeedbackTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)

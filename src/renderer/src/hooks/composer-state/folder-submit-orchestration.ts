@@ -146,6 +146,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
           runtimeEnvironmentId: folderTargetRuntimeEnvironmentId,
+          settings,
           createFolderWorkspace: (input) =>
             createFolderWorkspace(input, {
               runtimeEnvironmentId: folderTargetRuntimeEnvironmentId
@@ -200,14 +201,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
       persistDraft,
       resolvePendingSmartGitHubSubmit,
       selectedProjectGroup,
-      settings?.agentCmdOverrides,
-      settings?.agentDefaultArgs,
-      settings?.agentDefaultEnv,
-      settings?.autoRenameBranchFromWork,
-      settings?.experimentalNativeChat,
-      settings?.nativeChatSessionOptions,
-      settings?.openAgentTabsInChatByDefault,
-      settings?.terminalWindowsShell,
+      settings,
       taskSourceContext,
       telemetrySource,
       lastAutoNameRef,

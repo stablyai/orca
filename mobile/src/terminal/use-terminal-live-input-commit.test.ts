@@ -19,6 +19,7 @@ function changeLiveInput(
 
 type TerminalLiveInputCommitHarness = {
   readonly captures: readonly string[]
+  readonly getHandlers: () => TerminalLiveInputCommitHandlers
   readonly handlers: TerminalLiveInputCommitHandlers
   readonly sent: readonly string[]
   readonly setActiveSessionTabType: (next: string | undefined) => void
@@ -85,6 +86,12 @@ function createTerminalLiveInputCommitHarness({
 
   return {
     captures,
+    getHandlers: () => {
+      if (!handlers) {
+        throw new Error('terminal live input hook is not mounted')
+      }
+      return handlers
+    },
     handlers,
     sent,
     setActiveSessionTabType: (next: string | undefined): void => {
@@ -239,9 +246,10 @@ describe('terminal live input commit hook', () => {
     changeLiveInput(handlers, '한')
 
     // When
-    handlers.handleLiveInputSubmit()
+    const accepted = await handlers.handleLiveInputSubmit()
 
     // Then
+    expect(accepted).toBe(true)
     await vi.waitFor(() => expect(sent).toEqual(['한', '\r']))
   })
 
@@ -250,10 +258,30 @@ describe('terminal live input commit hook', () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When
-    handlers.handleLiveInputSubmit()
+    const accepted = await handlers.handleLiveInputSubmit()
 
     // Then
+    expect(accepted).toBe(true)
     await vi.waitFor(() => expect(sent).toEqual(['\r']))
+  })
+
+  it('increments a stable interaction generation for typing, submit, and accessory Enter', async () => {
+    const { getHandlers, handlers, setActiveSessionTabType } =
+      createTerminalLiveInputCommitHarness()
+    const getter = handlers.getLiveInputInteractionGeneration
+    const initialGeneration = getter()
+
+    changeLiveInput(handlers, 'newer text')
+    const typedGeneration = getter()
+    await handlers.handleLiveInputSubmit()
+    const submitGeneration = getter()
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\r' })
+    setActiveSessionTabType(undefined)
+
+    expect(getHandlers().getLiveInputInteractionGeneration).toBe(getter)
+    expect(typedGeneration).toBe(initialGeneration + 1)
+    expect(submitGeneration).toBeGreaterThan(typedGeneration)
+    expect(getter()).toBeGreaterThan(submitGeneration)
   })
 
   it('Given a rejected held-text send When submit is requested Then suppresses the carriage return', async () => {
@@ -262,12 +290,20 @@ describe('terminal live input commit hook', () => {
     changeLiveInput(handlers, '한')
 
     // When
-    handlers.handleLiveInputSubmit()
-    await Promise.resolve()
-    await Promise.resolve()
+    const accepted = await handlers.handleLiveInputSubmit()
 
     // Then: the held commit went out but was not accepted, so no \r follows
+    expect(accepted).toBe(false)
     await vi.waitFor(() => expect(sent).toEqual(['한']))
+  })
+
+  it('Given a rejected carriage return When submit is requested Then reports rejection', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
+
+    const accepted = await handlers.handleLiveInputSubmit()
+
+    expect(accepted).toBe(false)
+    expect(sent).toEqual(['\r'])
   })
 
   it('Given ASCII typing When changes arrive Then mirrors immediately', async () => {

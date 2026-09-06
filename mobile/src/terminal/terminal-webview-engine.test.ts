@@ -8,12 +8,12 @@ import {
   XTERM_ENGINE_JS
 } from './terminal-webview-engine.generated'
 import { XTERM_HTML } from './terminal-webview-html'
+import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 
-const terminalHtmlSource = readFileSync(
-  new URL('./terminal-webview-html.ts', import.meta.url),
-  'utf8'
-)
+// Assert against the assembled document so extracted fragments cannot silently
+// disappear from the WebView while source-level checks still pass.
+const terminalHtmlSource = readTerminalWebViewHtmlSource()
 
 function createWebglRecoveryHarness(failSecondAttach = false) {
   const variablesStart = terminalHtmlSource.indexOf('  var webglAddon = null;')
@@ -108,6 +108,7 @@ describe('terminal WebView bundled engine', () => {
     expect(TERMINAL_NERD_FONT_CSS).toContain(
       'unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD'
     )
+    expect(XTERM_HTML).toContain(`<style>${TERMINAL_NERD_FONT_CSS}</style>`)
     expect(XTERM_HTML).toContain(
       '"Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono"'
     )

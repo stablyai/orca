@@ -47,12 +47,20 @@ export type NativeChatComposerProps = {
   onSwitchToTerminal?: () => void
   /** Reads the hosted TUI's current rendered screen when chat is entered. */
   readTerminalScreen?: () => string | null
-  /** Launch context prefilled into the TUI input as an unsent draft; adopted as the composer draft. */
-  launchDraft?: NativeChatLaunchDraft | null
-  /** True once the transcript shows the TUI-side draft was submitted or cleared. */
-  launchDraftResolved?: boolean
+  /** The tab's launch seed as this pane sees it. */
+  launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
+}
+
+/** Launch context prefilled into the TUI input as an unsent draft, plus the two
+ *  facts that decide its fate in this pane's composer. */
+export type NativeChatLaunchSeed = {
+  launchDraft: NativeChatLaunchDraft | null
+  /** True once the transcript shows the TUI-side draft was submitted or cleared. */
+  launchDraftResolved: boolean
+  /** False for every pane of a split tab; gates adopting the seed, not cleanup. */
+  ownsTabWideLaunchDraft: boolean
 }
 
 export type NativeChatComposerHandle = {

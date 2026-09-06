@@ -31,20 +31,22 @@ export async function getRuntimeGitDiff(
 
 export async function getRuntimeGitBranchCompare(
   context: RuntimeGitContext,
-  baseRef: string
+  baseRef: string,
+  admissionTier: 'interactive' | 'background' = 'interactive'
 ): Promise<GitBranchCompareResult> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.branchCompare({
       worktreePath: resolveLocalWorktreePath(context),
       baseRef,
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      admissionTier
     })
   }
   return callRuntimeRpc<GitBranchCompareResult>(
     target,
     'git.branchCompare',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), baseRef, admissionTier },
     { timeoutMs: 15_000 }
   )
 }

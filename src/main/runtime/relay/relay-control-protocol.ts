@@ -143,3 +143,29 @@ export function parseRelayControlMessage(raw: RawData): Record<string, unknown> 
     return null
   }
 }
+
+export type RelayHostHello = {
+  relayHostId: string
+  assignmentEpoch: number
+  hostPublicKeyB64: string
+  appVersion: string
+  previousGeneration?: number
+  controlResumeSecret?: string
+}
+
+// Optional members are omitted rather than sent as undefined: the cell parses
+// host-hello strictly and an explicit null is not the same as absent.
+export function encodeRelayHostHello(hello: RelayHostHello): string {
+  return JSON.stringify({
+    type: 'host-hello',
+    v: 1,
+    relayHostId: hello.relayHostId,
+    assignmentEpoch: hello.assignmentEpoch,
+    hostPublicKeyB64: hello.hostPublicKeyB64,
+    appVersion: hello.appVersion,
+    ...(hello.previousGeneration === undefined
+      ? {}
+      : { previousGeneration: hello.previousGeneration }),
+    ...(hello.controlResumeSecret ? { controlResumeSecret: hello.controlResumeSecret } : {})
+  })
+}

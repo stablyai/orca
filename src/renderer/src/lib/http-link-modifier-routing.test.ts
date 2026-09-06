@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   openHttpLink,
   registerHttpLinkStoreAccessor,
-  registerRuntimeHttpLinkBrowserOpener,
+  registerWorkspaceHttpLinkBrowserOpener,
   resolveModifierRouting
 } from './http-link-routing'
 
@@ -73,12 +73,12 @@ describe('modifier routing across link source owners', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     registerHttpLinkStoreAccessor(() => storeState)
-    registerRuntimeHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
+    registerWorkspaceHttpLinkBrowserOpener(openRuntimeBrowserTabMock)
     vi.stubGlobal('window', { api: { shell: { openUrl: openUrlMock } } })
   })
 
   afterEach(() => {
-    registerRuntimeHttpLinkBrowserOpener(null)
+    registerWorkspaceHttpLinkBrowserOpener(null)
     vi.unstubAllGlobals()
   })
 
@@ -104,7 +104,7 @@ describe('modifier routing across link source owners', () => {
     }
 
     openHttpLink('https://example.com/', {
-      allowRuntimeInApp: true,
+      allowRemoteInApp: true,
       worktreeId: 'wt-1',
       modifierHeld: true,
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }

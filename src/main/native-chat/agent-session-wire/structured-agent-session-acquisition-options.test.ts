@@ -28,7 +28,8 @@ afterEach(async () => {
 
 function attachParams(
   operationId: string,
-  expectedRuntimeFence: number | null
+  expectedRuntimeFence: number | null,
+  options?: Readonly<Record<string, string>>
 ): AgentSessionAttachParams {
   const params: AgentSessionAttachParams = {
     envelope: {
@@ -47,6 +48,7 @@ function attachParams(
     agent: 'codex',
     accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
     runtimeKind: 'native',
+    ...(options ? { options } : {}),
     providerHandle: { kind: 'codex', threadId: 'legacy-thread' }
   }
   return {
@@ -101,6 +103,70 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
 }
 
 describe('structured session acquisition options', () => {
+  it('persists create defaults before the first provider acquisition', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-create-options-'))
+    const store = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    const sessionAdapter = adapter({ origin: 'created' })
+    const options = { model: 'gpt-5.6-sol', effort: 'medium' }
+
+    const created = await performAttach({
+      store,
+      adapter: sessionAdapter,
+      journalRoot: root,
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(CREATE_OPERATION, null, options),
+      now: () => NOW,
+      onAttached: () => {}
+    })
+
+    expect(created).toMatchObject({ ok: true })
+    expect(sessionAdapter.acquire).toHaveBeenCalledWith(expect.objectContaining({ options }))
+    expect(store.getRecord(SESSION)?.options).toEqual(options)
+  })
+
+  it('replays a create retried after the host re-resolved different options', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-create-retry-'))
+    const store = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    const sessionAdapter = adapter({ origin: 'created' })
+    const attempt = async (options: Readonly<Record<string, string>>, spawnToken: string) =>
+      performAttach({
+        store,
+        adapter: sessionAdapter,
+        journalRoot: root!,
+        authority: {
+          spawnToken,
+          claimKeyId: 'key-1',
+          handoffOperationId: CREATE_OPERATION,
+          probe: { outcome: 'reservation-unused' }
+        },
+        callerKey: 'client-1',
+        params: attachParams(CREATE_OPERATION, null, options),
+        now: () => NOW,
+        onAttached: () => {}
+      })
+
+    const created = await attempt({ model: 'gpt-5.6-sol', effort: 'medium' }, 'spawn-a')
+    // Why: the user may reselect a model between an unknown-outcome create and the
+    // retry that reuses its operation id; the retry must replay, not conflict.
+    const retried = await attempt({ model: 'gpt-5.5', effort: 'high' }, 'spawn-b')
+
+    expect(created).toMatchObject({ ok: true })
+    expect(retried).toMatchObject({ ok: true })
+    expect(store.getRecord(SESSION)?.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium' })
+  })
+
   it('persists provider options before proving a resumed legacy record', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-acquisition-options-'))
     const storeDir = join(root, 'store')

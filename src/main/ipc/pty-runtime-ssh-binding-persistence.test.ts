@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnMock, openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { SSH_SESSION_EXPIRED_ERROR } from '../providers/ssh-pty-errors'
+import { SSH_SESSION_EXPIRED_ERROR, SshPtyAbsentFromRelayError } from '../providers/ssh-pty-errors'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -154,6 +154,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
       markSshRemotePtyLease: vi.fn(),
@@ -260,6 +261,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
@@ -370,6 +372,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(() => {
         throw new Error('disk full')
       }),
@@ -446,7 +449,9 @@ describe('registerPtyHandlers', () => {
     const remoteWrite = vi.fn()
     registerSshPtyProvider('ssh-expired-runtime', {
       spawn: vi.fn(async () => {
-        throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: relay-pty`)
+        // The class, not the message: `SSH_SESSION_EXPIRED` is also what a live PTY whose source
+        // stream needs restoring refuses with, and only this one is host-reported absence.
+        throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: relay-pty`)
       }),
       write: remoteWrite,
       resize: vi.fn(),
@@ -469,6 +474,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
       markSshRemotePtyLease: vi.fn(),
@@ -529,6 +535,108 @@ describe('registerPtyHandlers', () => {
     } finally {
       deletePtyOwnership(appPtyId)
       unregisterSshPtyProvider('ssh-expired-runtime')
+    }
+  })
+  it('leaves a runtime-owned lease alone when the refusal did not observe the process', async () => {
+    // The `restoreRequired` twin of the case above: same `SSH_SESSION_EXPIRED` text, opposite
+    // meaning — the PTY is live and only its source stream needs rebuilding. Expiring the lease
+    // and dropping ownership erases this client's only record of a running remote process, and
+    // #9819's sweep reads a PTY it has no record of as one it may SIGKILL on the next connect.
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        sessionId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const appPtyId = 'ssh:ssh-live-runtime@@relay-pty'
+    const remoteWrite = vi.fn()
+    registerSshPtyProvider('ssh-live-runtime', {
+      spawn: vi.fn(async () => {
+        throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: relay-pty`)
+      }),
+      write: remoteWrite,
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      setPtyOwnership(appPtyId, 'ssh-live-runtime')
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const spawnController = controller as unknown as RuntimeSpawnController
+      const leafId = '11111111-1111-4111-8111-111111111111'
+
+      await expect(
+        spawnController.spawn({
+          cols: 80,
+          rows: 24,
+          connectionId: 'ssh-live-runtime',
+          worktreeId: 'wt-remote',
+          tabId: 'tab-remote',
+          leafId,
+          sessionId: appPtyId,
+          persistHostSessionBinding: true
+        })
+      ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
+
+      expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
+      expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      // Still routable: the client kept its handle on a process that is still running.
+      getPtyWriteListener()(mainWindowIpcEvent, { id: appPtyId, data: 'echo still-here' })
+      expect(remoteWrite).toHaveBeenCalledWith(appPtyId, 'echo still-here')
+    } finally {
+      deletePtyOwnership(appPtyId)
+      unregisterSshPtyProvider('ssh-live-runtime')
     }
   })
 })

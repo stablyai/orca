@@ -1,6 +1,7 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
+import { countUnchangedObserverHistoryReads } from './automation-dispatch-observer-test-probe'
 
 const mockDispatchEvent = vi.fn()
 
@@ -620,10 +621,11 @@ describe('useAutomationDispatchEvents setup launch', () => {
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
   })
 
-  it('persists assistant output from a batched working→done→working transition', async () => {
+  it('skips unchanged status and persists batched working→done→working output', async () => {
     const paneKey = 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d'
 
     await registerAndDispatch()
+    expect(countUnchangedObserverHistoryReads(state, latestStoreSubscriber)).toBe(0)
     const transitionStartedAt = Date.now() + 1
     state.agentStatusByPaneKey = {
       [paneKey]: {

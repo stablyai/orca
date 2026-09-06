@@ -1,6 +1,7 @@
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type { Repo } from '../../../shared/repo-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
@@ -12,6 +13,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import { scheduleSave } from './write-scheduling'
 import {
   hasPersistedWorkspaceSession,
@@ -28,6 +30,13 @@ import {
   setWorktreeMetaForHost as setWorktreeMetaForHostOperation
 } from './worktree-identity-metadata'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
+import {
+  captureNativeLocalWorktreeMetadataScanExpectation as captureNativeLocalWorktreeMetadataScanExpectationOperation,
+  pruneSessionlessMissingLocalWorktreeMetadataForRepo as pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation,
+  selectProbeableLocalWorktreeMetadataCandidates as selectProbeableLocalWorktreeMetadataCandidatesOperation,
+  type LocalWorktreeMetadataPruneExpectation,
+  type NativeLocalWorktreeMetadataScanExpectation
+} from '../tracking-repos/missing-local-worktree-metadata-pruning'
 
 type MetadataLineageOperationsRuntime = Pick<StoreRuntimeState, 'state'>
 
@@ -86,6 +95,15 @@ export class MetadataLineageOperations {
     return getAllWorktreeMetaForHostOperation(
       this[metadataLineageOperationsContext].runtime,
       executionHostId
+    )
+  }
+
+  captureNativeLocalWorktreeMetadataScanExpectation(
+    repo: Repo
+  ): NativeLocalWorktreeMetadataScanExpectation {
+    return captureNativeLocalWorktreeMetadataScanExpectationOperation(
+      this[metadataLineageOperationsContext].runtime.state,
+      repo
     )
   }
 
@@ -181,7 +199,34 @@ export class MetadataLineageOperations {
         }
       )
     }
+    // Why: dropping a row can free the identity key that was vetoing an unrelated row's removal, so
+    // the metadata prune needs to look again — it is otherwise waiting on evidence (#17775).
+    invalidateLocalWorktreeMetadataPruneInputs()
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
+  }
+
+  selectProbeableLocalWorktreeMetadataCandidates(
+    scan: NativeLocalWorktreeMetadataScanExpectation
+  ): readonly LocalWorktreeMetadataPruneExpectation[] {
+    return selectProbeableLocalWorktreeMetadataCandidatesOperation(
+      this[metadataLineageOperationsContext].runtime.state,
+      scan
+    )
+  }
+
+  pruneSessionlessMissingLocalWorktreeMetadataForRepo(
+    scan: NativeLocalWorktreeMetadataScanExpectation,
+    missingMetadata: readonly LocalWorktreeMetadataPruneExpectation[]
+  ): string[] {
+    const removed = pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation(
+      this[metadataLineageOperationsContext].runtime.state,
+      scan,
+      missingMetadata
+    )
+    if (removed.length > 0) {
+      scheduleSave(this[metadataLineageOperationsContext].scheduling)
+    }
+    return removed
   }
 
   getWorktreeLineage(worktreeId: string): WorktreeLineage | undefined {

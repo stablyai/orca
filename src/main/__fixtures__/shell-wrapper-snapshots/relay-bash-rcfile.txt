@@ -37,11 +37,14 @@ __orca_omp_should_skip_extension() {
   return 1
 }
 __orca_omp_cwd_is_usable() {
+  local __orca_physical_cwd
   [[ -x . ]] || return 1
-  if [[ -n "${PWD:-}" ]]; then
-    [[ -d "${PWD}" && "${PWD}" -ef . ]]
+  if [[ -n "${PWD:-}" && -d "${PWD:-}" ]]; then
+    [[ "${PWD}" -ef . ]]
   else
-    builtin pwd -P >/dev/null 2>&1
+    # Why compare the path: shell builtins can print a cached path for a deleted cwd.
+    __orca_physical_cwd="$(builtin pwd -P 2>/dev/null)" || return 1
+    [[ -d "$__orca_physical_cwd" && "$__orca_physical_cwd" -ef . ]]
   fi
 }
 __orca_omp_invoke() {
@@ -61,7 +64,7 @@ __orca_omp_invoke() {
 __orca_omp() {
   local __orca_use_extension=1
   __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
-  if [[ $__orca_use_extension -eq 1 ]] && ! __orca_omp_cwd_is_usable; then
+  if ! __orca_omp_cwd_is_usable; then
     local __orca_logical_cwd="${PWD:-${ORCA_WORKTREE_PATH:-${ORCA_ROOT_PATH:-}}}"
     # Why: a restored shell can retain the deleted directory inode after its path is recreated.
     (

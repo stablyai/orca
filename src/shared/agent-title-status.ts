@@ -29,13 +29,22 @@ import {
   getPiCompatibleTitleSeparatorStatus,
   getPiCompatibleSyntheticAgentStatus
 } from './pi-compatible-synthetic-title'
+import { clearPiStateWorkingMarker, getPiStateTitleStatus } from './pi-state-title-marker'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /**
  * Strip working-status indicators so stale exit titles stop reporting working.
  */
 export function clearWorkingIndicators(title: string): string {
+  // Why: Pi/OMP's static working marker survives every strip below, so a stale native
+  // title would keep re-arming the 3s clear timer without ever leaving working (#13890).
+  const clearedPiStateMarker = clearPiStateWorkingMarker(title)
+  if (clearedPiStateMarker) {
+    return clearedPiStateMarker
+  }
+
   let cleaned = title
 
   cleaned = cleaned.replace(GEMINI_WORKING, '')
@@ -123,7 +132,9 @@ export function normalizeTerminalTitle(title: string): string {
     return title
   }
 
-  if (isGeminiTerminalTitle(title)) {
+  // Why: a Pi/OMP label is cwd/session text that may contain Gemini's glyphs; its own
+  // state marker is explicit, so it outranks glyph sniffing here as it does in detection.
+  if (!getPiStateTitleStatus(title) && isGeminiTerminalTitle(title)) {
     const status = detectAgentStatusFromTitle(title)
     if (status === 'permission') {
       return `${GEMINI_PERMISSION} Gemini CLI`
@@ -168,7 +179,7 @@ function canonicalizeBrailleSpinnerFrame(title: string): string {
   return canonical
 }
 
-export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
+function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (!title || isClaudeManagementTitle(title)) {
     return null
   }
@@ -178,6 +189,13 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   if (isOpenCodeNativeTitle(title)) {
     return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
+  }
+
+  // Why: Pi/OMP's marker is an explicit state protocol, so it wins over the glyph and
+  // keyword gates below — its label is free-form cwd/session text that can carry either.
+  const piStateStatus = getPiStateTitleStatus(title)
+  if (piStateStatus) {
+    return piStateStatus
   }
 
   if (title.includes(GEMINI_PERMISSION)) {
@@ -244,6 +262,13 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   return 'idle'
 }
+
+/**
+ * Pure in `title`, so it is memoized on the title string: sidebar/tab selectors
+ * re-ask for the same unchanged titles on every store write.
+ */
+export const detectAgentStatusFromTitle: (title: string) => AgentStatus | null =
+  memoizeTitleClassification(computeAgentStatusFromTitle)
 
 /**
  * True when a quarter-circle spinner frame is the only agent evidence a title carries.

@@ -94,7 +94,34 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     vi.stubGlobal('window', {
       api: {
         runtime: {
-          call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } }))
+          call: vi.fn(async ({ method }: { method: string }) =>
+            method === 'terminal.list'
+              ? {
+                  ok: true,
+                  result: {
+                    // The host still binds the restored PTY to its original pane.
+                    terminals: [
+                      {
+                        handle: 'restored-1',
+                        ptyId: livePtyId,
+                        worktreeId: worktree.id,
+                        worktreePath: worktree.path,
+                        branch: 'main',
+                        tabId: 'packaged-restart-pane',
+                        leafId,
+                        title: 'Codex',
+                        connected: true,
+                        writable: true,
+                        lastOutputAt: null,
+                        preview: ''
+                      }
+                    ],
+                    truncated: false,
+                    hostScope: { hostIds: ['local'], omittedHostIds: [] }
+                  }
+                }
+              : { ok: true, result: { snapshots: [] } }
+          )
         },
         pty: {
           listSessions: vi.fn(async () => [
@@ -122,6 +149,8 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     const restored = useAppStore.getState()
     expect(restored.tabsByWorktree[worktree.id]).toHaveLength(1)
     expect(restored.tabsByWorktree[worktree.id]?.[0]?.ptyId).toBe(livePtyId)
+    // The host's pane, not a freshly minted duplicate surface.
+    expect(restored.tabsByWorktree[worktree.id]?.[0]?.id).toBe('packaged-restart-pane')
     expect(restored.automaticAgentResumeClaimsByTabId).toEqual({})
     expect(restored.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
   })

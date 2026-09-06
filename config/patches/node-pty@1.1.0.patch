@@ -138,8 +138,34 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  process.exit(0);
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
+diff --git a/lib/terminal.js b/lib/terminal.js
+index e2f9bc9131077b53ebc32d207207ad82804ff185..6c63bfaaf75128d88f9a2efece13476348780cfd 100644
+--- a/lib/terminal.js
++++ b/lib/terminal.js
+@@ -172,6 +172,21 @@ var Terminal = /** @class */ (function () {
+         this.end = function () { };
+         this._writable = false;
+         this._readable = false;
++        // Orca: libuv closes the master fd on EIO/EOF, and the kernel may hand
++        // that number straight to the next open(2). Retire it in the same block
++        // that gives up the handle so no later ioctl can address a reused fd.
++        // Inert on Windows, where `_fd` is written once and never read back.
++        // Upstream named this mechanism in microsoft/node-pty#220 ("fd number got
++        // reattached to something else"), closed 2025-12-19 as completed after
++        // only improving the error message; #827 is still open. Windows guards in
++        // windowsPtyAgent.ts, Unix does not. Orca tracking: #18109.
++        this._fd = -1;
++        // Orca: the write stream holds its own copy of that number, so retiring
++        // `_fd` alone leaves the queued and in-flight writes addressing it.
++        // Undefined on Windows and on `UnixTerminal.open()` handles.
++        if (this._writeStream) {
++            this._writeStream.dispose();
++        }
+     };
+     Terminal.prototype._parseEnv = function (env) {
+         var keys = Object.keys(env || {});
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..d838d795ecb9ea72e3bcc31113344947c006af7e 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -157,6 +183,56 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+@@ -234,6 +238,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+          * Gets the name of the process.
+          */
+         get: function () {
++            // Orca: tcgetpgrp on a retired fd would name whatever process now
++            // owns that descriptor, so a closed master reports the spawn file.
++            if (this._fd < 0) {
++                return this._file;
++            }
+             if (process.platform === 'darwin') {
+                 var title = pty.process(this._fd);
+                 return (title !== 'kernel_task') ? title : this._file;
+@@ -250,6 +259,11 @@ var UnixTerminal = /** @class */ (function (_super) {
+         if (cols <= 0 || rows <= 0 || isNaN(cols) || isNaN(rows) || cols === Infinity || rows === Infinity) {
+             throw new Error('resizing must be done using positive cols and rows');
+         }
++        // Orca: a retired master is unreachable rather than EBADF-or-worse; cols
++        // and rows stay at the last size actually applied instead of a claim.
++        if (this._fd < 0) {
++            return;
++        }
+         pty.resize(this._fd, cols, rows);
+         this._cols = cols;
+         this._rows = rows;
+@@ -287,8 +301,15 @@ var CustomWriteStream = /** @class */ (function () {
+     CustomWriteStream.prototype.dispose = function () {
+         clearImmediate(this._writeImmediate);
+         this._writeImmediate = undefined;
++        // Orca: retire this stream's own copy of the master fd and drop what has
++        // not shipped, so nothing queued here reaches a reused descriptor.
++        this._fd = -1;
++        this._writeQueue.length = 0;
+     };
+     CustomWriteStream.prototype.write = function (data) {
++        if (this._fd < 0) {
++            return;
++        }
+         // Writes are put in a queue and processed asynchronously in order to handle
+         // backpressure from the kernel buffer.
+         var buffer = typeof data === 'string'
+@@ -304,7 +325,8 @@ var CustomWriteStream = /** @class */ (function () {
+     CustomWriteStream.prototype._processWriteQueue = function () {
+         var _this = this;
+         this._writeImmediate = undefined;
+-        if (this._writeQueue.length === 0) {
++        // Orca: an in-flight fs.write can re-enter here after dispose().
++        if (this._fd < 0 || this._writeQueue.length === 0) {
+             return;
+         }
+         var task = this._writeQueue[0];
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
 index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts
@@ -176,7 +252,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d15c4dd44 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a52c690e0a 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -215,7 +291,17 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -237,13 +258,23 @@ pty_getproc(int, char *);
+@@ -228,6 +249,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+ static int
+ pty_nonblock(int);
+ 
++static int
++pty_cloexec(int);
++
+ #if defined(__APPLE__)
+ static char *
+ pty_getproc(int);
+@@ -237,13 +261,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -240,7 +326,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  #endif
  
  struct DelBuf {
-@@ -367,10 +398,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,14 +401,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -256,7 +342,48 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +716,73 @@ pty_getproc(int fd, char *tty) {
+   }
++  if (pty_cloexec(master) == -1) {
++    throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
++  }
+ #else
+   int argc = argv_.Length();
+   int argl = argc + 2;
+@@ -445,6 +483,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+       if (pty_nonblock(master) == -1) {
+         throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+       }
++      if (pty_cloexec(master) == -1) {
++        throw Napi::Error::New(napiEnv, "Could not set master fd to close-on-exec.");
++      }
+   }
+ #endif
+ 
+@@ -586,6 +627,23 @@ pty_nonblock(int fd) {
+   return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+ }
+ 
++/**
++ * Orca: close-on-exec FD
++ *
++ * forkpty()/posix_openpt() have no atomic O_CLOEXEC, so a master left without
++ * FD_CLOEXEC is inherited by every later child of this process -- including
++ * later pty children -- which keeps its /dev/pts device and buffers alive long
++ * after its own session ends (#8362).
++ */
++
++static int
++pty_cloexec(int fd) {
++  int flags = fcntl(fd, F_GETFD);
++  if (flags == -1) return -1;
++  if (flags & FD_CLOEXEC) return 0;
++  return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
++}
++
+ /**
+  * pty_getproc
+  * Taken from tmux.
+@@ -684,15 +742,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -332,7 +459,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +796,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +822,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -476,7 +603,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  }
  #endif
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a6a4082ce 100644
+index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c97209248e 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,6 +18,7 @@
@@ -487,7 +614,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
  #include <vector>
  #include <Windows.h>
  #include <strsafe.h>
-@@ -44,12 +45,29 @@ struct pty_baton {
+@@ -44,12 +45,39 @@ struct pty_baton {
    HANDLE hOut;
    HPCON hpc;
  
@@ -503,22 +630,32 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
 +  // refused to create or assign one (an outer job without breakaway rights),
 +  // in which case callers fall back to their pre-job behaviour.
 +  HANDLE hJob = nullptr;
++
++  // Orca: teardown needs BOTH the shell's death and an explicit kill() before
++  // the baton can be freed, so each side records that it has run. Whichever
++  // arrives second frees it. Freeing on the shell's death alone -- what this
++  // file did before -- destroyed the only record of `hpc` while
++  // ClosePseudoConsole was still owed, which is why a self-exiting shell
++  // leaked its pseudoconsole and the console host it reaps (#18601 / F24).
++  bool shellExited = false;
++  bool consoleClosed = false;
  
    pty_baton(int _id, HANDLE _hIn, HANDLE _hOut, HPCON _hpc) : id(_id), hIn(_hIn), hOut(_hOut), hpc(_hpc) {};
  };
  
  static std::vector<std::unique_ptr<pty_baton>> ptyHandles;
-+// Orca: guards the job accessors below against the exit watcher thread. It does
-+// NOT make the whole table safe -- PtyResize/PtyClear/PtyKill read it unlocked,
-+// as they always have -- but it closes the window this patch opened, where the
-+// watcher can close hShell/hJob and free the baton between a lookup and its use.
++// Orca: guards the job accessors below, and PtyKill, against the exit watcher
++// thread. It does NOT make the whole table safe -- PtyResize and PtyClear still
++// read it unlocked, as they always have -- but it closes the window this patch
++// opened, where the watcher can close hShell/hJob and free the baton between a
++// lookup and its use.
 +// Handle VALUES are recycled aggressively, so an unguarded read could pass the
 +// shell-pid check against an unrelated process and terminate the wrong job.
 +static std::mutex ptyJobMutex;
  static volatile LONG ptyCounter;
  
  static pty_baton* get_pty_baton(int id) {
-@@ -102,8 +120,27 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+@@ -102,8 +130,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
      // Get process exit code.
      GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
      // Clean up handles
@@ -538,9 +675,13 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
 +      // Why inside the lock: erasing frees the baton the job accessors hold a
 +      // pointer to. Note remove_pty_baton must not be an assert() argument --
 +      // NDEBUG would compile the call away and leak every baton.
-+      const bool removed = remove_pty_baton(baton->id);
-+      assert(removed);
-+      (void)removed;
++      baton->shellExited = true;
++      if (baton->consoleClosed) {
++        const bool removed = remove_pty_baton(baton->id);
++        assert(removed);
++        (void)removed;
++      }
++      // Else PtyKill has not run yet and still owns hpc. It frees the baton.
 +    }
 +    // Why the lock ends here: BlockingCall below waits on the JS thread, and the
 +    // JS thread can be waiting on ptyJobMutex inside PtyTerminateJob. Holding
@@ -548,7 +689,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
  
      auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
      switch (status) {
-@@ -409,6 +446,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -409,6 +460,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -564,7 +705,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +462,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -416,7 +476,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -576,7 +717,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +475,47 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -426,8 +489,47 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -626,7 +767,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -440,6 +528,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -440,6 +542,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
  
    // Update handle
    handle->hShell = piClient.hProcess;
@@ -635,7 +776,91 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -567,6 +657,143 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,29 +648,215 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+   int id = info[0].As<Napi::Number>().Int32Value();
+   const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
+ 
+-  const pty_baton* handle = get_pty_baton(id);
++  // Orca: resolve the DLL BEFORE touching any baton state, for the same reason
++  // PtyConnect does it before creating anything. LoadConptyDll throws when
++  // conpty.dll is missing, and a throw after consoleClosed was set would strand
++  // the pseudoconsole permanently: the retry would find the work already
++  // claimed and do nothing. Only the useConptyDll path can throw here; the
++  // other returns kernel32.
++  HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
++  PFNCLOSEPSEUDOCONSOLE pfnClosePseudoConsole = nullptr;
++  if (hLibrary != nullptr) {
++    pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
++      (HMODULE)hLibrary,
++      useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
++  }
+ 
+-  if (handle != nullptr) {
+-    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+-    bool fLoadedDll = hLibrary != nullptr;
+-    if (fLoadedDll)
+-    {
+-      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
+-        (HMODULE)hLibrary,
+-        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
+-      if (pfnClosePseudoConsole)
+-      {
+-        pfnClosePseudoConsole(handle->hpc);
++  // Orca: the baton now outlives the shell, so this runs on a self-exited pty
++  // too -- that is the whole point. Take what we need under the lock: the
++  // watcher thread nulls hShell the moment the shell dies, and TerminateProcess
++  // on a handle it just closed is an invalid-handle operation. Duplicating
++  // rather than reordering keeps upstream's close-then-terminate sequence.
++  HPCON hpc = nullptr;
++  HANDLE hShellDup = nullptr;
++  bool owed = false;
++  {
++    std::lock_guard<std::mutex> guard(ptyJobMutex);
++    pty_baton* handle = get_pty_baton(id);
++    // Why the consoleClosed check: a second kill() would otherwise close the
++    // same pseudoconsole twice. Upstream relied on the baton being gone.
++    if (handle != nullptr && !handle->consoleClosed) {
++      hpc = handle->hpc;
++      owed = true;
++      handle->consoleClosed = true;
++      // Null hShell means a self-exited pty, where there is nothing to kill.
++      if (useConptyDll && handle->hShell != nullptr) {
++        if (!DuplicateHandle(GetCurrentProcess(), handle->hShell, GetCurrentProcess(),
++                             &hShellDup, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
++          // Why terminate here instead of skipping: a failed duplication leaves
++          // hShellDup null, which is indistinguishable from the self-exit case,
++          // and skipping would leave the shell RUNNING after its pane closed --
++          // a worse outcome than the leak this all exists to fix. hShell is
++          // valid under this lock and TerminateProcess does not block, so the
++          // only cost is that this rare path kills before the console closes.
++          hShellDup = nullptr;
++          TerminateProcess(handle->hShell, 1);
++        }
++      }
++      if (handle->shellExited) {
++        const bool removed = remove_pty_baton(id);
++        assert(removed);
++        (void)removed;
+       }
++      // Else the shell is still running and the watcher frees the baton.
+     }
+-    if (useConptyDll) {
+-      TerminateProcess(handle->hShell, 1);
++  }
++
++  // Why outside the lock: ClosePseudoConsole blocks until the conout side has
++  // drained, and the watcher must be able to take the lock while it does.
++  if (owed) {
++    if (pfnClosePseudoConsole)
++    {
++      pfnClosePseudoConsole(hpc);
++    }
++    if (hShellDup != nullptr) {
++      TerminateProcess(hShellDup, 1);
++      CloseHandle(hShellDup);
+     }
+   }
+ 
    return env.Undefined();
  }
  
@@ -681,9 +906,11 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
 + * Orca: the pids still alive in this pty's tree, straight from the kernel.
 + *
 + * Descendant liveness for a tree that is still tracked, including children that
-+ * detached from the console. Once the shell exits the baton is gone, so this
-+ * returns null rather than an empty list -- null means "no answer", never
-+ * "they died". Also returns null when no job was assigned.
++ * detached from the console. Once the shell exits the watcher nulls hJob, which
++ * ownsShell rejects, so this returns null rather than an empty list -- null
++ * means "no answer", never "they died". (The baton itself now outlives the
++ * shell, until kill() runs; hJob is what makes the answer null.) Also returns
++ * null when no job was assigned.
 + *
 + * Does not include the ConPTY console host: CreatePseudoConsole spawns it
 + * before this job exists, so it is not a member and ClosePseudoConsole is what
@@ -779,7 +1006,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
  /**
  * Init
  */
-@@ -577,6 +804,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +867,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
@@ -789,3 +1016,228 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a
    return exports;
  };
  
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+index a358ffb177357e177661033c1b092f9c9d0e5f5a..26c2a4c58799ce649f5113131e4c52f7ed2d87ad 100644
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -136,6 +136,9 @@ var WindowsPtyAgent = /** @class */ (function () {
+         if (this._useConpty) {
+             if (!this._useConptyDll) {
+                 this._inSocket.readable = false;
++                // The non-DLL path previously only flipped `readable`, leaving the
++                // conin PipeWrap alive until the host exited (#947).
++                this._inSocket.destroy();
+                 this._outSocket.readable = false;
+                 this._getConsoleProcessList().then(function (consoleProcessList) {
+                     consoleProcessList.forEach(function (pid) {
+@@ -154,9 +157,10 @@ var WindowsPtyAgent = /** @class */ (function () {
+                 // Close the input write handle to signal the end of session.
+                 this._inSocket.destroy();
+                 this._ptyNative.kill(this._pty, this._useConptyDll);
+-                this._outSocket.on('data', function () {
+-                    _this._conoutSocketWorker.dispose();
+-                });
++                // Orca: dispose unconditionally, as the non-DLL branch above does.
++                // Waiting for another 'data' event leaks the conout worker on every
++                // self-exiting shell, because no more data ever arrives (F24).
++                this._conoutSocketWorker.dispose();
+             }
+         }
+         else {
+diff --git a/lib/windowsTerminal.js b/lib/windowsTerminal.js
+index 3c38f89..e20b3e6 100644
+--- a/lib/windowsTerminal.js
++++ b/lib/windowsTerminal.js
+@@ -50,6 +50,27 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         // Create new termal.
+         _this._agent = new windowsPtyAgent_1.WindowsPtyAgent(file, args, parsedEnv, cwd, _this._cols, _this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
+         _this._socket = _this._agent.outSocket;
++        // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
++        _this._socket.on('error', function (err) {
++            var code = err && err.code;
++            // PTY output can report EPIPE before `_close()` wins the race.
++            _this._close();
++            if (code === 'EPIPE' || code === 'ERR_STREAM_PUSH_AFTER_EOF' || code === 'ERR_STREAM_DESTROYED') {
++                return;
++            }
++            // EIO, happens when someone closes our child process: the only process
++            // in the terminal.
++            // node < 0.6.14: errno 5
++            // node >= 0.6.14: read EIO
++            if (typeof code === 'string') {
++                if (~code.indexOf('errno 5') || ~code.indexOf('EIO'))
++                    return;
++            }
++            // Throw anything else.
++            if (_this.listeners('error').length < 2) {
++                throw err;
++            }
++        });
+         // Not available until `ready` event emitted.
+         _this._pid = _this._agent.innerPid;
+         _this._fd = _this._agent.fd;
+@@ -76,23 +99,6 @@ var WindowsTerminal = /** @class */ (function (_super) {
+                     _this._deferreds = [];
+                 }
+             });
+-            // Shutdown if `error` event is emitted.
+-            _this._socket.on('error', function (err) {
+-                // Close terminal session.
+-                _this._close();
+-                // EIO, happens when someone closes our child process: the only process
+-                // in the terminal.
+-                // node < 0.6.14: errno 5
+-                // node >= 0.6.14: read EIO
+-                if (err.code) {
+-                    if (~err.code.indexOf('errno 5') || ~err.code.indexOf('EIO'))
+-                        return;
+-                }
+-                // Throw anything else.
+-                if (_this.listeners('error').length < 2) {
+-                    throw err;
+-                }
+-            });
+             // Cleanup after the socket is closed.
+             _this._socket.on('close', function () {
+                 _this.emit('exit', _this._agent.exitCode);
+@@ -103,6 +109,20 @@ var WindowsTerminal = /** @class */ (function (_super) {
+         _this._name = name;
+         _this._readable = true;
+         _this._writable = true;
++        // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
++        // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
++        _this._agent.inSocket.on('error', function () {
++            if (!_this._writable) {
++                return;
++            }
++            _this._close();
++            try {
++                _this._agent.kill();
++            }
++            catch (_a) {
++                // The failing pipe may have raced process exit; the terminal is already unwritable.
++            }
++        });
+         _this._forwardEvents();
+         return _this;
+     }
+@@ -196,4 +216,4 @@ var WindowsTerminal = /** @class */ (function (_super) {
+     return WindowsTerminal;
+ }(terminal_1.Terminal));
+ exports.WindowsTerminal = WindowsTerminal;
+-//# sourceMappingURL=windowsTerminal.js.map
+\ No newline at end of file
++//# sourceMappingURL=windowsTerminal.js.map
+diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+index d7054449516f0c9a62af351c2caa17331206d530..0c28a32e2e1db2b3f208ddde8443cd4e67bb1ad6 100644
+--- a/src/windowsPtyAgent.ts
++++ b/src/windowsPtyAgent.ts
+@@ -143,6 +143,9 @@ export class WindowsPtyAgent {
+     if (this._useConpty) {
+       if (!this._useConptyDll) {
+         this._inSocket.readable = false;
++        // The non-DLL path previously only flipped `readable`, leaving the
++        // conin PipeWrap alive until the host exited (#947).
++        this._inSocket.destroy();
+         this._outSocket.readable = false;
+         this._getConsoleProcessList().then(consoleProcessList => {
+           consoleProcessList.forEach((pid: number) => {
+@@ -159,9 +162,10 @@ export class WindowsPtyAgent {
+         // Close the input write handle to signal the end of session.
+         this._inSocket.destroy();
+         (this._ptyNative as IConptyNative).kill(this._pty, this._useConptyDll);
+-        this._outSocket.on('data', () => {
+-          this._conoutSocketWorker.dispose();
+-        });
++        // Orca: dispose unconditionally, as the non-DLL branch above does.
++        // Waiting for another 'data' event leaks the conout worker on every
++        // self-exiting shell, because no more data ever arrives (F24).
++        this._conoutSocketWorker.dispose();
+       }
+     } else {
+       // Because pty.kill closes the handle, it will kill most processes by itself.
+diff --git a/src/windowsTerminal.ts b/src/windowsTerminal.ts
+index 13f6c6d..eda63c8 100644
+--- a/src/windowsTerminal.ts
++++ b/src/windowsTerminal.ts
+@@ -51,6 +51,30 @@ export class WindowsTerminal extends Terminal {
+     this._agent = new WindowsPtyAgent(file, args, parsedEnv, cwd, this._cols, this._rows, false, opt.useConpty, opt.useConptyDll, opt.conptyInheritCursor);
+     this._socket = this._agent.outSocket;
+-
++
++    // Attach before readiness so a broken ConPTY output pipe cannot be unhandled.
++    this._socket.on('error', err => {
++      const code = (<any>err).code;
++
++      // PTY output can report EPIPE before `_close()` wins the race.
++      this._close();
++      if (code === 'EPIPE' || code === 'ERR_STREAM_PUSH_AFTER_EOF' || code === 'ERR_STREAM_DESTROYED') {
++        return;
++      }
++
++      // EIO, happens when someone closes our child process: the only process
++      // in the terminal.
++      // node < 0.6.14: errno 5
++      // node >= 0.6.14: read EIO
++      if (typeof code === 'string') {
++        if (~code.indexOf('errno 5') || ~code.indexOf('EIO')) return;
++      }
++
++      // Throw anything else.
++      if (this.listeners('error').length < 2) {
++        throw err;
++      }
++    });
++
+     // Not available until `ready` event emitted.
+     this._pid = this._agent.innerPid;
+     this._fd = this._agent.fd;
+@@ -82,25 +108,6 @@ export class WindowsTerminal extends Terminal {
+         }
+       });
+-
++
+-      // Shutdown if `error` event is emitted.
+-      this._socket.on('error', err => {
+-        // Close terminal session.
+-        this._close();
+-
+-        // EIO, happens when someone closes our child process: the only process
+-        // in the terminal.
+-        // node < 0.6.14: errno 5
+-        // node >= 0.6.14: read EIO
+-        if ((<any>err).code) {
+-          if (~(<any>err).code.indexOf('errno 5') || ~(<any>err).code.indexOf('EIO')) return;
+-        }
+-
+-        // Throw anything else.
+-        if (this.listeners('error').length < 2) {
+-          throw err;
+-        }
+-      });
+-
+       // Cleanup after the socket is closed.
+       this._socket.on('close', () => {
+         this.emit('exit', this._agent.exitCode);
+@@ -114,6 +121,19 @@ export class WindowsTerminal extends Terminal {
+-
++
+     this._readable = true;
+     this._writable = true;
++    // A ConPTY input-pipe error must retire only this terminal. Without a listener, Node promotes
++    // errors such as write EAGAIN to uncaughtException and kills every PTY in the daemon.
++    this._agent.inSocket.on('error', () => {
++      if (!this._writable) {
++        return;
++      }
++      this._close();
++      try {
++        this._agent.kill();
++      } catch {
++        // The failing pipe may have raced process exit; the terminal is already unwritable.
++      }
++    });
+-
++
+     this._forwardEvents();
+   }

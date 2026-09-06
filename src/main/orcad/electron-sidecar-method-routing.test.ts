@@ -52,6 +52,10 @@ async function runtimeCommandFor(
 }
 
 describe('electronSidecarRuntimeMethodName', () => {
+  it('maps client URL opens to the browser.openUrl RPC', () => {
+    expect(electronSidecarRuntimeMethodName('browserOpenUrlOnClient')).toBe('browser.openUrl')
+  })
+
   it('round-trips every registered browser RPC method', async () => {
     const mismatches: string[] = []
     const unmapped: string[] = []

@@ -2,6 +2,7 @@ import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
 import { isTransientGitProbeError, readRemoteUrl } from './remote-url-probe'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
+import type { GitAdmissionTier } from './command-runner/git-exec-options'
 
 /**
  * The "is this repo mine?" probe every forge integration runs: read the remote's
@@ -25,6 +26,7 @@ type CachedRepoRef<Ref> = { value: Ref | null; expiresAt: number }
 
 export type RemoteRefLocalGitOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 export type RemoteRefProbeCache<Ref> = {
@@ -79,7 +81,8 @@ export function createRemoteRefProbeCache<Ref>(
         {
           repoPath,
           connectionId,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+          ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
         },
         remoteName
       )

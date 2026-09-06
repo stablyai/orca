@@ -1,11 +1,13 @@
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -334,18 +336,82 @@ exit 0
     const homeDir = join(tempDir, 'home')
     const binDir = join(tempDir, 'bin')
     const extensionDir = join(tempDir, 'extensions')
+    const logicalProjectLink = join(tempDir, 'logical-project')
     mkdirSync(projectDir, { recursive: true })
     mkdirSync(homeDir)
     mkdirSync(binDir)
     mkdirSync(extensionDir)
+    symlinkSync(projectDir, logicalProjectLink)
     const expectedProjectDir = realpathSync(projectDir)
+    const expectedWorkspaceDir = realpathSync(workspaceDir)
     const statusExtension = join(extensionDir, 'orca-agent-status.ts')
     writeFileSync(statusExtension, 'export default {}')
     writeFakeOmp(binDir)
 
     const unsetPwdCaptureFile = join(tempDir, 'unset-pwd-capture')
+    const deletedLinkCaptureFile = join(tempDir, 'deleted-link-capture')
     const staleCaptureFile = join(tempDir, 'stale-cwd-capture')
+    const skipCaptureFile = join(tempDir, 'skip-capture')
+    const staleUnsetCaptureFile = join(tempDir, 'stale-unset-capture')
+    const noLogicalCaptureFile = join(tempDir, 'no-logical-capture')
     const resultFile = join(tempDir, 'stale-cwd-result')
+    const scenarioFile = join(tempDir, 'stale-cwd-scenario')
+    writeFileSync(
+      scenarioFile,
+      `ORCA_CAPTURE_FILE="$ORCA_UNSET_PWD_CAPTURE_FILE"
+unset PWD
+omp
+__orca_test_unset_status=$?
+if [[ -z "\${PWD+x}" ]]; then
+  __orca_test_pwd_state=unset
+else
+  __orca_test_pwd_state=set
+fi
+builtin cd -- "$ORCA_LOGICAL_PROJECT_LINK"
+/bin/rm -- "$ORCA_LOGICAL_PROJECT_LINK"
+ORCA_CAPTURE_FILE="$ORCA_DELETED_LINK_CAPTURE_FILE"
+omp
+__orca_test_deleted_link_status=$?
+builtin cd -P -- "$ORCA_STALE_PROJECT_DIR"
+ORCA_CAPTURE_FILE="$ORCA_STALE_CAPTURE_FILE"
+/bin/rm -rf -- "$ORCA_STALE_PROJECT_DIR"
+/bin/mkdir -p -- "$ORCA_STALE_PROJECT_DIR"
+omp
+__orca_test_first_status=$?
+ORCA_CAPTURE_FILE="$ORCA_SKIP_CAPTURE_FILE"
+omp --version
+__orca_test_skip_status=$?
+if [[ "$PWD" -ef . ]]; then
+  __orca_test_parent_state=live
+else
+  __orca_test_parent_state=stale
+fi
+unset PWD
+ORCA_CAPTURE_FILE="$ORCA_STALE_UNSET_CAPTURE_FILE"
+omp
+__orca_test_stale_unset_status=$?
+unset ORCA_WORKTREE_PATH ORCA_ROOT_PATH
+ORCA_CAPTURE_FILE="$ORCA_NO_LOGICAL_CAPTURE_FILE"
+omp
+__orca_test_no_logical_status=$?
+PWD="$ORCA_STALE_PROJECT_DIR"
+/bin/rm -rf -- "$ORCA_STALE_PROJECT_DIR"
+omp
+__orca_test_missing_status=$?
+{
+  echo "UNSET=$__orca_test_unset_status"
+  echo "PWD=$__orca_test_pwd_state"
+  echo "LINK=$__orca_test_deleted_link_status"
+  echo "FIRST=$__orca_test_first_status"
+  echo "SKIP=$__orca_test_skip_status"
+  echo "PARENT=$__orca_test_parent_state"
+  echo "STALE_UNSET=$__orca_test_stale_unset_status"
+  echo "NO_LOGICAL=$__orca_test_no_logical_status"
+  echo "MISSING=$__orca_test_missing_status"
+} > "$ORCA_RESULT_FILE"
+exit 0
+`
+    )
     const output = await runInteractivePosixPty({
       shell,
       cwd: projectDir,
@@ -355,47 +421,30 @@ ${getPosixOmpShellWrapper()}`,
         INPUTRC: '/dev/null',
         PROMPT_COMMAND: '',
         ORCA_STALE_PROJECT_DIR: projectDir,
+        ORCA_LOGICAL_PROJECT_LINK: logicalProjectLink,
         ORCA_UNSET_PWD_CAPTURE_FILE: unsetPwdCaptureFile,
+        ORCA_DELETED_LINK_CAPTURE_FILE: deletedLinkCaptureFile,
         ORCA_STALE_CAPTURE_FILE: staleCaptureFile,
+        ORCA_SKIP_CAPTURE_FILE: skipCaptureFile,
+        ORCA_STALE_UNSET_CAPTURE_FILE: staleUnsetCaptureFile,
+        ORCA_NO_LOGICAL_CAPTURE_FILE: noLogicalCaptureFile,
         ORCA_WORKTREE_PATH: workspaceDir,
         HOME: homeDir,
         PATH: `${binDir}:/usr/bin:/bin:/usr/sbin:/sbin`,
         ORCA_OMP_STATUS_EXTENSION: statusExtension,
         ORCA_CAPTURE_FILE: staleCaptureFile,
         ORCA_RESULT_FILE: resultFile,
+        ORCA_SCENARIO_FILE: scenarioFile,
         ORCA_TEST_FAKE_OMP_EXIT_CODE: '23',
         TERM: 'xterm-256color'
       },
-      input: `ORCA_CAPTURE_FILE="$ORCA_UNSET_PWD_CAPTURE_FILE"
-unset PWD
-omp
-__orca_test_unset_status=$?
-if [[ -z "\${PWD+x}" ]]; then
-  __orca_test_pwd_state=unset
-else
-  __orca_test_pwd_state=set
-fi
-builtin cd -P -- "$ORCA_STALE_PROJECT_DIR"
-ORCA_CAPTURE_FILE="$ORCA_STALE_CAPTURE_FILE"
-/bin/rm -rf -- "$ORCA_STALE_PROJECT_DIR"
-/bin/mkdir -p -- "$ORCA_STALE_PROJECT_DIR"
-omp
-__orca_test_first_status=$?
-if [[ "$PWD" -ef . ]]; then
-  __orca_test_parent_state=live
-else
-  __orca_test_parent_state=stale
-fi
-/bin/rm -rf -- "$ORCA_STALE_PROJECT_DIR"
-omp
-__orca_test_missing_status=$?
-printf 'UNSET=%s\nPWD=%s\nFIRST=%s\nPARENT=%s\nMISSING=%s\n' "$__orca_test_unset_status" "$__orca_test_pwd_state" "$__orca_test_first_status" "$__orca_test_parent_state" "$__orca_test_missing_status" > "$ORCA_RESULT_FILE"
-exit 0
-`
+      input: 'source "$ORCA_SCENARIO_FILE"\n'
     })
 
     const unsetPwdCapture = readFileSync(unsetPwdCaptureFile, 'utf8')
     expect(unsetPwdCapture).toContain(`CWD=${expectedProjectDir}`)
+    const deletedLinkCapture = readFileSync(deletedLinkCaptureFile, 'utf8')
+    expect(deletedLinkCapture).toContain(`CWD=${expectedProjectDir}`)
     const staleCapture = readFileSync(staleCaptureFile, 'utf8')
     expect(staleCapture).toContain(`CWD=${expectedProjectDir}`)
     expect(staleCapture.split('\n').filter((line) => line.startsWith('ARG'))).toEqual([
@@ -403,9 +452,17 @@ exit 0
       `ARG2=${statusExtension}`
     ])
     expect(staleCapture).not.toContain('--cwd')
+    const skipCapture = readFileSync(skipCaptureFile, 'utf8')
+    expect(skipCapture).toContain(`CWD=${expectedProjectDir}`)
+    expect(skipCapture).toContain('ARG1=--version')
+    expect(skipCapture).not.toContain('--extension')
+    const staleUnsetCapture = readFileSync(staleUnsetCaptureFile, 'utf8')
+    expect(staleUnsetCapture).toContain(`CWD=${expectedWorkspaceDir}`)
+    expect(existsSync(noLogicalCaptureFile)).toBe(false)
     expect(readFileSync(resultFile, 'utf8')).toBe(
-      'UNSET=23\nPWD=unset\nFIRST=23\nPARENT=stale\nMISSING=1\n'
+      'UNSET=23\nPWD=unset\nLINK=23\nFIRST=23\nSKIP=23\nPARENT=stale\nSTALE_UNSET=23\nNO_LOGICAL=1\nMISSING=1\n'
     )
+    expect(output).toContain('no terminal working directory is available')
     expect(output).toContain('Orca: OMP cannot access the terminal working directory')
   }
 

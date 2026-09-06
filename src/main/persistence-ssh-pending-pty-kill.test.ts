@@ -171,6 +171,9 @@ describe('Store SSH pending PTY kills', () => {
       .getSshRemotePtyLeases('ssh-1')
       .filter((lease) => lease.pendingKill !== undefined)
     expect(persisted).toHaveLength(MAX_SSH_PENDING_PTY_KILLS_PER_TARGET)
+    expect(reloaded.getSshRemotePtyLeases('ssh-1')).toHaveLength(
+      MAX_SSH_PENDING_PTY_KILLS_PER_TARGET
+    )
     // Newest kept: the oldest orders are the ones least likely to still name a live process.
     expect(persisted.some((lease) => lease.ptyId === `pty-${total - 1}`)).toBe(true)
     expect(persisted.some((lease) => lease.ptyId === 'pty-0')).toBe(false)
@@ -195,6 +198,95 @@ describe('Store SSH pending PTY kills', () => {
       incarnationId: 'inc-a',
       attempts: 1
     })
+  })
+
+  it('starts a fresh TTL and attempt count when a relay id names a new incarnation', async () => {
+    const store = await createStore()
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW,
+      incarnationId: 'inc-a',
+      attempts: 0
+    })
+    store.noteSshRemotePtyKillReplayAttempt('ssh-1', 'pty-1')
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW + 5000,
+      incarnationId: 'inc-b',
+      attempts: 0
+    })
+
+    expect(store.getSshRemotePtyKillIntents('ssh-1', NOW)[0]?.intent).toEqual({
+      requestedAt: NOW + 5000,
+      incarnationId: 'inc-b',
+      attempts: 0
+    })
+  })
+
+  it('removes a synthetic lease when its only pending intent expires', async () => {
+    const store = await createStore()
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW,
+      incarnationId: 'inc-a',
+      attempts: 0
+    })
+
+    store.pruneExpiredSshRemotePtyKillIntents('ssh-1', NOW + SSH_PENDING_PTY_KILL_TTL_MS + 1)
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
+  })
+
+  // An `expired` lease says this CLIENT lost its handle, never that the shell died. The row is the
+  // last route back to it, so collecting it with the retired order would take the id out of the
+  // bulk reattach set and out of the orphan sweep's leave-alone list at once.
+  it('keeps an unmarked expired lease when its intent ages out', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'attached' })
+    store.markSshRemotePtyLease('ssh-1', 'pty-1', 'expired')
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW,
+      incarnationId: 'inc-a',
+      attempts: 0
+    })
+
+    store.pruneExpiredSshRemotePtyKillIntents('ssh-1', NOW + SSH_PENDING_PTY_KILL_TTL_MS + 1)
+
+    const kept = store.getSshRemotePtyLeases('ssh-1')
+    expect(kept).toMatchObject([{ ptyId: 'pty-1', state: 'expired' }])
+    expect(kept[0]).not.toHaveProperty('pendingKill')
+  })
+
+  it('collects an expired lease whose relay id the host recycled', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'attached' })
+    // The mark the replay writes when the host lists this id under another incarnation: the route
+    // is dead for good, so nothing can reattach it and the row is pure bookkeeping.
+    store.markSshRemotePtyLease('ssh-1', 'pty-1', 'expired', { relayIdRecycled: true })
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW,
+      incarnationId: 'inc-a',
+      attempts: 0
+    })
+
+    store.pruneExpiredSshRemotePtyKillIntents('ssh-1', NOW + SSH_PENDING_PTY_KILL_TTL_MS + 1)
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
+  })
+
+  it('collects a superseded expired lease that carries no pane identity', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({ targetId: 'ssh-1', ptyId: 'pty-1', state: 'expired' })
+    const leases = store.getSshRemotePtyLeases('ssh-1')
+    // Supersession normally writes this alongside pane identity; forcing the mark alone isolates
+    // what the predicate contributes from what the pane-identity guard already covered.
+    leases[0].supersededBy = 'pty-2'
+    store.recordSshRemotePtyKillIntent('ssh-1', 'pty-1', {
+      requestedAt: NOW,
+      incarnationId: 'inc-a',
+      attempts: 0
+    })
+
+    store.pruneExpiredSshRemotePtyKillIntents('ssh-1', NOW + SSH_PENDING_PTY_KILL_TTL_MS + 1)
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([])
   })
 
   it('scopes intents to their own target', async () => {

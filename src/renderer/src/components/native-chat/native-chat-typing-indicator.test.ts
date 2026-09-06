@@ -68,6 +68,24 @@ describe('shouldShowNativeChatTypingIndicator', () => {
     ).toBe(true)
   })
 
+  it('does not let an unresolved tool from an earlier turn hide the next send indicator', () => {
+    const earlierRunningTool: NativeChatMessage = {
+      id: 'tool-old',
+      role: 'assistant',
+      blocks: [
+        { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'running' }
+      ],
+      timestamp: null,
+      source: 'transcript'
+    }
+    expect(
+      shouldShowNativeChatTypingIndicator({
+        messages: [earlierRunningTool, message('a1', 'assistant'), message('u2', 'user')],
+        isWorking: true
+      })
+    ).toBe(true)
+  })
+
   it('shows after a slash-command marker even though an earlier turn replied', () => {
     expect(
       shouldShowNativeChatTypingIndicator({
@@ -118,15 +136,13 @@ describe('with rows projected from the structured journal', () => {
     } as AgentJournalRenderItem
   }
 
-  it('keeps showing while a running command is the newest row', () => {
-    // The screenshot case: prose landed, then codex started running shell commands
-    // and the chat body went still for the length of the command.
+  it('stays visible beside the structured live tool row while a command runs', () => {
     const messages = projectStructuredItemsToNativeChat([assistantTextItem(1), toolCallItem(2)])
     expect(messages.at(-1)?.role).toBe('assistant')
     expect(shouldShowNativeChatTypingIndicator({ messages, isWorking: true })).toBe(true)
   })
 
-  it('still hides once prose is the newest row', () => {
+  it('hides once prose is the newest row', () => {
     const messages = projectStructuredItemsToNativeChat([toolCallItem(1), assistantTextItem(2)])
     expect(shouldShowNativeChatTypingIndicator({ messages, isWorking: true })).toBe(false)
   })

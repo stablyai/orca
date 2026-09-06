@@ -36,6 +36,7 @@ export function extractClaudeToolFields(
     const responseText = extractToolResponseText(hookPayload.tool_response)
     if (responseText) {
       update.lastAssistantMessage = responseText
+      update.lastAssistantMessageIsToolOutput = true
     }
   }
   if (eventName === 'PostToolUseFailure') {
@@ -45,6 +46,7 @@ export function extractClaudeToolFields(
       readString(hookPayload, 'message')
     if (errorText) {
       update.lastAssistantMessage = errorText
+      update.lastAssistantMessageIsToolOutput = true
     }
   }
   if (eventName === 'Stop') {

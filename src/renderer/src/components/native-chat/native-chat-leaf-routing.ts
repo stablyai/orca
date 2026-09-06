@@ -44,6 +44,22 @@ export function isNativeChatTabWideFallbackSafe(
   return !layout.activeLeafId || layout.activeLeafId === layout.root.leafId
 }
 
+/** Whether tab-wide launch evidence (agent hint, launch draft) describes this
+ *  leaf: it must still be the tab's sole pane and the one the evidence bound to. */
+export function nativeChatLeafOwnsTabWideEvidence(args: {
+  ownerLeafId: string | null
+  leafId: string | null
+  leafIds: readonly string[]
+}): boolean {
+  const { ownerLeafId, leafId, leafIds } = args
+  if (!ownerLeafId || !leafId) {
+    return false
+  }
+  // Why: the evidence belongs to the tab's original pane. Once a split exists,
+  // it says nothing about any particular sibling.
+  return leafIds.length === 1 && leafIds[0] === leafId && ownerLeafId === leafId
+}
+
 export function nativeChatLaunchAgentForLeaf(args: {
   launchAgent?: TuiAgent | null
   launchAgentLeafId: string | null
@@ -51,12 +67,14 @@ export function nativeChatLaunchAgentForLeaf(args: {
   leafIds: readonly string[]
 }): TuiAgent | null {
   const { launchAgent, launchAgentLeafId, leafId, leafIds } = args
-  if (!launchAgent || !launchAgentLeafId || !leafId) {
+  if (!launchAgent) {
     return null
   }
-  // Why: launchAgent belongs to the tab's original pane. Once a split exists,
-  // it is not evidence that an agent is running in any particular sibling.
-  return leafIds.length === 1 && leafIds[0] === leafId && launchAgentLeafId === leafId
+  return nativeChatLeafOwnsTabWideEvidence({
+    ownerLeafId: launchAgentLeafId,
+    leafId,
+    leafIds
+  })
     ? launchAgent
     : null
 }

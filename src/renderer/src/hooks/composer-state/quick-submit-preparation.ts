@@ -230,11 +230,10 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
 
       const submitBaseBranch = baseBranchSettlement.value
 
-      const createDisplayName =
-        smartGitHubResolution.kind === 'none'
-          ? nameIsAutoManaged
-            ? submitTitleName?.displayName
-            : undefined
+      const createDisplayName = !nameIsAutoManaged
+        ? workspaceName
+        : smartGitHubResolution.kind === 'none'
+          ? submitTitleName?.displayName
           : smartGitHubCreateNames.displayName
 
       // Why: quick create shares the blank-name flow; the card needs an explicit marker, not a guess from the title.

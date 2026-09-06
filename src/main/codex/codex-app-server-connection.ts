@@ -4,16 +4,16 @@ import { createProviderSpawnSpec } from './codex-app-server-posix-supervisor'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
 import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
 import { CodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
-import { isAppServerRecord, parseCodexAppServerJsonLine } from './codex-app-server-jsonl'
 import { terminateCodexAppServerProcessTree } from './codex-app-server-process-teardown'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
+import { NDJSON_MAX_LINE_BYTES } from '../../shared/main-process-ndjson-framer'
 import {
   CodexAppServerTimeoutError,
-  CodexAppServerUnsupportedError,
-  isCodexMethodNotFoundError
+  CodexAppServerUnsupportedError
 } from './codex-app-server-session'
+import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
+import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -28,6 +28,7 @@ export {
   CodexAppServerRequestError,
   isCodexAppServerRequestError
 } from './codex-app-server-request-error'
+export { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
 
 // Structured chat needs a persistent bidirectional child and per-request deadlines;
 // the request-scoped app-server runner cannot carry approvals or streamed turns.
@@ -47,14 +48,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const GRACEFUL_EXIT_MS = 1_500
 const FORCED_EXIT_MS = 1_000
 const STDERR_TAIL_MAX_BYTES = 8192
-const STDOUT_LINE_MAX_BYTES = 1024 * 1024
-
-type PendingRequest = {
-  method: string
-  resolve: (result: unknown) => void
-  reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
-}
+export const CODEX_APP_SERVER_MAX_RECORD_BYTES = NDJSON_MAX_LINE_BYTES
 
 /**
  * Spawns `codex app-server`, completes the initialize handshake, and returns a
@@ -80,12 +74,12 @@ export async function openCodexAppServerConnection(
     return terminateCodexAppServerProcessTree(child, spawnToken)
   }
 
-  const pending = new Map<number, PendingRequest>()
   let stderrTail = ''
   let nextRequestId = 1
   let exited = false
   let exitObserved = false
   let closing = false
+  let exitReported = false
   const exitProof = new RetryableProcessExitProof()
   /** First terminal cause, or null while the transport is still usable. Set once:
    *  a child that dies reaches us through several listeners, and the specific
@@ -103,31 +97,38 @@ export async function openCodexAppServerConnection(
     resolveExit()
   }
 
-  child.on('exit', observeExit)
+  child.on('exit', () => {
+    observeExit()
+    handleUnexpectedEnd()
+  })
 
   function buildExitError(cause?: Error): Error {
     return buildCodexAppServerExitError(stderrTail, cause)
   }
 
-  function failPending(error: Error): void {
-    for (const waiter of pending.values()) {
-      clearTimeout(waiter.timer)
-      waiter.reject(error)
+  const dispatcher = createCodexAppServerRecordDispatcher({
+    handlers,
+    writeResponse,
+    onProtocolFailure: (error) => {
+      handleUnexpectedEnd(error)
+      void terminateProcessTree()
     }
-    pending.clear()
-  }
+  })
 
   /** A death nobody asked for kills every in-flight call AND tells the owner,
    *  which is the only signal the session has that its lease is now worthless.
    *  Once only: an oversized line kills the child and its `close` arrives after,
    *  and a spawn failure arrives as both `error` and `close`. */
   function handleUnexpectedEnd(cause?: Error): void {
-    if (terminalError) {
-      return
+    if (!terminalError) {
+      terminalError = buildExitError(cause)
+      dispatcher.failPending(terminalError)
     }
-    terminalError = buildExitError(cause)
-    failPending(terminalError)
-    if (!closing) {
+    // Transport/protocol failures make the connection unusable immediately so
+    // callers do not hang, but recovery must not treat that as a child exit
+    // until the execution host has observed `exit`/`close`.
+    if (exitObserved && !closing && !exitReported) {
+      exitReported = true
       handlers.onExit?.(terminalError)
     }
   }
@@ -149,87 +150,33 @@ export async function openCodexAppServerConnection(
     // close the reap is already under way and `exited` must stay honest, or
     // `close` would skip the kill it still owes.
     if (closing) {
-      failPending(error)
+      dispatcher.failPending(error)
       return
     }
-    void terminateProcessTree()
     handleUnexpectedEnd(error)
+    void terminateProcessTree()
   })
 
-  function dispatchMessage(message: Record<string, unknown>): void {
-    const hasMethod = typeof message.method === 'string'
-    const hasId = typeof message.id === 'number' || typeof message.id === 'string'
-    if (hasMethod && hasId) {
-      handlers.onServerRequest?.({
-        id: message.id as number | string,
-        method: message.method as string,
-        params: message.params
-      })
-      return
-    }
-    if (hasMethod) {
-      handlers.onNotification?.(message.method as string, message.params)
-      return
-    }
-    if (typeof message.id !== 'number') {
-      handlers.onUnhandledFrame?.('frame:unclassified', message)
-      return
-    }
-    const waiter = pending.get(message.id)
-    if (!waiter) {
-      handlers.onUnhandledFrame?.('response:unmatched', message)
-      return
-    }
-    pending.delete(message.id)
-    clearTimeout(waiter.timer)
-    const error = message.error
-    if (isAppServerRecord(error)) {
-      const detail = typeof error.message === 'string' ? error.message : 'unknown error'
-      waiter.reject(
-        isCodexMethodNotFoundError(error)
-          ? new CodexAppServerUnsupportedError(
-              `codex app-server does not support ${waiter.method}: ${detail}`
-            )
-          : new CodexAppServerRequestError(
-              waiter.method,
-              typeof error.code === 'number' ? error.code : null,
-              `codex app-server ${waiter.method} failed: ${detail}`
-            )
-      )
-      return
-    }
-    waiter.resolve(message.result)
-  }
-
-  let stdoutBuffer = ''
-  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
-    stdoutBuffer += chunk
-    if (Buffer.byteLength(stdoutBuffer) > STDOUT_LINE_MAX_BYTES) {
-      child.stdout.destroy()
-      void terminateProcessTree()
-      handleUnexpectedEnd(new Error('codex app-server emitted an oversized JSONL line'))
-      return
-    }
-    let newlineIndex: number
-    while ((newlineIndex = stdoutBuffer.indexOf('\n')) !== -1) {
-      const line = stdoutBuffer.slice(0, newlineIndex).trim()
-      stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1)
-      if (!line) {
-        continue
-      }
-      const parsed = parseCodexAppServerJsonLine(line)
-      if (!parsed) {
+  const recordReader = createCodexAppServerRecordReader({
+    stdout: child.stdout,
+    maxRecordBytes: CODEX_APP_SERVER_MAX_RECORD_BYTES,
+    onRecord: (parsed, line) => {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         handlers.onUnhandledFrame?.('frame:invalid-json', line)
-        continue
-      }
-      try {
-        dispatchMessage(parsed)
-      } catch (error) {
-        child.stdout.destroy()
-        void terminateProcessTree()
-        handleUnexpectedEnd(error instanceof Error ? error : new Error(String(error)))
         return
       }
+      dispatcher.dispatch(parsed as Record<string, unknown>)
+    },
+    onRejected: (rejected) => {
+      if (rejected.kind === 'invalid-json') {
+        handlers.onUnhandledFrame?.('frame:invalid-json', rejected.line)
+      } else {
+        dispatcher.rejectOversized(rejected)
+      }
+    },
+    onFatal: (error) => {
+      handleUnexpectedEnd(error)
+      void terminateProcessTree()
     }
   })
 
@@ -268,14 +215,14 @@ export async function openCodexAppServerConnection(
       // Why: per request, not per session — a chat session outlives every call,
       // so only the individual call can carry a deadline.
       const timer = setTimeout(() => {
-        pending.delete(id)
+        dispatcher.deletePending(id)
         reject(new CodexAppServerTimeoutError(`codex app-server ${method} exceeded ${timeoutMs}ms`))
       }, timeoutMs)
-      pending.set(id, { method, resolve, reject, timer })
+      dispatcher.addPending(id, { method, resolve, reject, timer })
       try {
         sendLine(params === undefined ? { method, id } : { method, id, params })
       } catch (error) {
-        pending.delete(id)
+        dispatcher.deletePending(id)
         clearTimeout(timer)
         reject(error instanceof Error ? error : new Error(String(error)))
       }
@@ -309,13 +256,13 @@ export async function openCodexAppServerConnection(
         if (!exited) {
           const treeExited = await terminateProcessTree()
           if (!treeExited) {
-            failPending(new Error('codex app-server process-tree exit was not proven'))
+            dispatcher.failPending(new Error('codex app-server process-tree exit was not proven'))
             return false
           }
           await waitForProcessExitUntil(exitPromise, FORCED_EXIT_MS)
         }
       }
-      failPending(new Error('codex app-server connection closed'))
+      dispatcher.failPending(new Error('codex app-server connection closed'))
       return exitObserved
     })
   }
@@ -331,6 +278,8 @@ export async function openCodexAppServerConnection(
     notify,
     respond: (id, result) => writeResponse({ id, result }),
     respondWithError: (id, code, message) => writeResponse({ id, error: { code, message } }),
+    pauseReading: recordReader.pause,
+    resumeReading: recordReader.resume,
     close
   }
 

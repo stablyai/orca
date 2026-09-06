@@ -285,8 +285,9 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     expect(afterPreview.hostSessionBrowserTabs).toEqual(baseline.hostSessionBrowserTabs)
 
     // The chip stands in for the address bar the document page has none of, and keeps naming the
-    // file whatever the document calls itself.
-    const pathChip = page.getByRole('button', { name: 'Copy file path', exact: true })
+    // file whatever the document calls itself. Since STA-5681 the chip is the way into the
+    // editable address bar, so it answers to that name now.
+    const pathChip = page.getByRole('button', { name: 'Edit address', exact: true })
     await expect(pathChip).toBeVisible({ timeout: 30_000 })
     await expect(pathChip).toContainText(FIXTURE_NAME)
     // Below 24rem of chip width the identity row hides whole instead of clipping into slivers;

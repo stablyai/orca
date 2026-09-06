@@ -20,7 +20,13 @@ import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
  *  hint is scoped to pane creation and does not live on the pane afterwards. */
 export type PaneSpawnHints = {
   cwd?: string
+  cwdPromise?: Promise<string>
   ptyId?: string
+}
+
+export type PaneSplitOptions = PaneSpawnHints & {
+  ratio?: number
+  leafId?: string
 }
 
 export type ClosedPaneInfo = {
@@ -57,6 +63,7 @@ export type PaneManagerOptions = {
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
+  terminalLigaturesEnabled?: () => boolean
   terminalTuiScrollSensitivity?: () => number | undefined
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */

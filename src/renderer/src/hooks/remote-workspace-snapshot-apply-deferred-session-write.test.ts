@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { RemoteWorkspaceSnapshot } from '../../../shared/remote-workspace-types'
+import type { RemoteWorkspaceObservedSnapshot } from '../../../shared/remote-workspace-types'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../shared/ssh-types'
 import { createTestStore, makeWorktree } from '../store/slices/store-test-helpers'
 import {
@@ -57,12 +57,13 @@ function token(snapshotRevision: number): DirectSshSnapshotApplyToken {
   }
 }
 
-function snapshot(revision: number): RemoteWorkspaceSnapshot {
+function snapshot(revision: number): RemoteWorkspaceObservedSnapshot {
   return {
     namespace: 'workspace',
     revision,
     updatedAt: revision,
     schemaVersion: 1,
+    hostObservationToken: `observation-${revision}`,
     session: {
       activeWorktreePath: PATH_A,
       activeTabId: 'tab-a',
@@ -87,7 +88,7 @@ function snapshot(revision: number): RemoteWorkspaceSnapshot {
       lastVisitedAtByWorktreePath: { [PATH_A]: revision },
       defaultTerminalTabsAppliedByWorktreePath: { [PATH_A]: true }
     }
-  } satisfies RemoteWorkspaceSnapshot
+  } satisfies RemoteWorkspaceObservedSnapshot
 }
 
 function seedCatalog(store: TestStore): void {

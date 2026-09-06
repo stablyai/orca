@@ -1,11 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { getRuntimeGitStatus, getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-client'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   shouldClearChecksPanelGitStatusSnapshot,
-  shouldCoalesceChecksPanelGitStatusSnapshotRefresh,
   shouldCommitChecksPanelGitStatusSnapshot
 } from '../checks-panel-git-status-snapshot'
+import { createCoalescedPollRunner, type CoalescedPollRunner } from '../coalesced-poll-runner'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
@@ -21,8 +21,6 @@ type ChecksPanelGitStatusEffectsInput = Pick<
   | 'getHostedReviewCreationEligibility'
   | 'gitStatusInvalidation'
   | 'gitStatusRefreshNonce'
-  | 'gitStatusSnapshotInFlightContextRef'
-  | 'gitStatusSnapshotRerunContextRef'
   | 'gitStatusSnapshotRetryTimerRef'
   | 'isPanelVisible'
   | 'localExecutionScope'
@@ -60,6 +58,12 @@ type ChecksPanelGitStatusEffectsInput = Pick<
   >
 
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
+const CHECKS_PANEL_GIT_STATUS_MIN_INTERVAL_MS = 3000
+const CHECKS_PANEL_GIT_STATUS_SLOW_BACKOFF = {
+  idleMultiplier: 1,
+  changeSignalMultiplier: 1,
+  maxIntervalMs: 5 * 60_000
+}
 
 export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffectsInput) {
   const {
@@ -74,8 +78,6 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     gitStatusInvalidation,
     gitStatusReadyForPanelContext,
     gitStatusRefreshNonce,
-    gitStatusSnapshotInFlightContextRef,
-    gitStatusSnapshotRerunContextRef,
     gitStatusSnapshotRetryTimerRef,
     hasUncommittedChanges,
     hostedReviewCreationRequestKey,
@@ -103,6 +105,36 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     sshConnectionStatus,
     updateWorktreeGitIdentity
   } = model
+  const gitStatusRequestRef = useRef<(() => Promise<void>) | null>(null)
+  const gitStatusPollRunnerRef = useRef<CoalescedPollRunner | null>(null)
+  const gitStatusPollingReady = Boolean(
+    repo &&
+    !isFolder &&
+    branch &&
+    isPanelVisible &&
+    activeWorktreeId &&
+    activeWorktreePath &&
+    (runtimeEnvironmentId || !repoConnectionId || sshConnectionStatus === 'connected')
+  )
+
+  useEffect(() => {
+    const runner = createCoalescedPollRunner(
+      () => gitStatusRequestRef.current?.() ?? Promise.resolve(),
+      {
+        minIntervalMs: CHECKS_PANEL_GIT_STATUS_MIN_INTERVAL_MS,
+        slowTaskBackoff: CHECKS_PANEL_GIT_STATUS_SLOW_BACKOFF
+      }
+    )
+    gitStatusPollRunnerRef.current = runner
+    return () => {
+      gitStatusRequestRef.current = null
+      runner.dispose()
+      if (gitStatusPollRunnerRef.current === runner) {
+        gitStatusPollRunnerRef.current = null
+      }
+    }
+  }, [gitStatusPollingReady, panelContextKey])
+
   useEffect(() => {
     if (
       !repo ||
@@ -117,24 +149,13 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         clearTimeout(gitStatusSnapshotRetryTimerRef.current)
         gitStatusSnapshotRetryTimerRef.current = null
       }
+      gitStatusRequestRef.current = null
       // Why: hiding the panel or losing SSH should stop new work, not erase same-context Create PR eligibility that can still be retried.
       return
     }
     let stale = false
     const requestContextKey = panelContextKey
     const connectionId = activeConnectionId ?? undefined
-    if (
-      shouldCoalesceChecksPanelGitStatusSnapshotRefresh(
-        gitStatusSnapshotInFlightContextRef.current,
-        requestContextKey
-      )
-    ) {
-      gitStatusSnapshotRerunContextRef.current = requestContextKey
-      return () => {
-        stale = true
-      }
-    }
-    gitStatusSnapshotInFlightContextRef.current = requestContextKey
     // Why: global status maps are keyed only by worktree; use their changes as invalidation signals, then fetch a local snapshot.
     if (gitStatusSnapshotRetryTimerRef.current) {
       clearTimeout(gitStatusSnapshotRetryTimerRef.current)
@@ -149,32 +170,30 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
       worktreePath: activeWorktreePath,
       connectionId
     }
-    void (async () => {
-      const status = await getRuntimeGitStatus(context)
-      if (
-        !stale &&
-        shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
-      ) {
-        // Why: the Checks tab can be the only visible git surface; commit branch identity before branch-scoped upstream refresh can fail.
-        updateWorktreeGitIdentity(activeWorktreeId, {
-          head: status.head,
-          branch: status.branch ?? (status.head ? null : undefined)
-        })
-      }
-      let freshRemoteStatus = status.upstreamStatus
-      if (activeWorktreePushTarget) {
-        freshRemoteStatus = await getRuntimeGitUpstreamStatus(context, activeWorktreePushTarget)
-      } else if (
-        !freshRemoteStatus ||
-        (freshRemoteStatus.ahead > 0 &&
-          freshRemoteStatus.behind > 0 &&
-          freshRemoteStatus.behindCommitsArePatchEquivalent === undefined)
-      ) {
-        freshRemoteStatus = await getRuntimeGitUpstreamStatus(context)
-      }
-      return { status, remoteStatus: freshRemoteStatus }
-    })()
-      .then(({ status, remoteStatus }) => {
+    const runRequest = async (): Promise<void> => {
+      try {
+        const status = await getRuntimeGitStatus(context, { admissionTier: 'status' })
+        if (
+          !stale &&
+          shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
+        ) {
+          // Why: the Checks tab can be the only visible git surface; commit branch identity before branch-scoped upstream refresh can fail.
+          updateWorktreeGitIdentity(activeWorktreeId, {
+            head: status.head,
+            branch: status.branch ?? (status.head ? null : undefined)
+          })
+        }
+        let freshRemoteStatus = status.upstreamStatus
+        if (activeWorktreePushTarget) {
+          freshRemoteStatus = await getRuntimeGitUpstreamStatus(context, activeWorktreePushTarget)
+        } else if (
+          !freshRemoteStatus ||
+          (freshRemoteStatus.ahead > 0 &&
+            freshRemoteStatus.behind > 0 &&
+            freshRemoteStatus.behindCommitsArePatchEquivalent === undefined)
+        ) {
+          freshRemoteStatus = await getRuntimeGitUpstreamStatus(context)
+        }
         if (
           !stale &&
           shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
@@ -182,7 +201,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
           setGitStatusSnapshot({
             contextKey: requestContextKey,
             hasUncommittedChanges: status.entries.length > 0,
-            remoteStatus,
+            remoteStatus: freshRemoteStatus,
             gitIdentity: {
               head: status.head,
               branch: status.branch ?? (status.head ? null : undefined)
@@ -191,8 +210,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
           // A fresh probe succeeded, so this context is no longer in the "could not check branch status" state.
           setGitStatusProbeErrorContextKey((key) => (key === requestContextKey ? null : key))
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         console.warn('[ChecksPanel] git status refresh before eligibility failed', error)
         if (!stale) {
           // Why: transient SSH/runtime flakes shouldn't hide an already-valid Create PR state for this branch; retry while visible.
@@ -217,22 +235,15 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
             }
           }, GIT_STATUS_FAILURE_RETRY_MS)
         }
-      })
-      .finally(() => {
-        if (gitStatusSnapshotInFlightContextRef.current === requestContextKey) {
-          gitStatusSnapshotInFlightContextRef.current = null
-        }
-        if (gitStatusSnapshotRerunContextRef.current === requestContextKey) {
-          gitStatusSnapshotRerunContextRef.current = null
-          if (
-            shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
-          ) {
-            setGitStatusRefreshNonce((value) => value + 1)
-          }
-        }
-      })
+      }
+    }
+    gitStatusRequestRef.current = runRequest
+    gitStatusPollRunnerRef.current?.run()
     return () => {
       stale = true
+      if (gitStatusRequestRef.current === runRequest) {
+        gitStatusRequestRef.current = null
+      }
       if (gitStatusSnapshotRetryTimerRef.current) {
         clearTimeout(gitStatusSnapshotRetryTimerRef.current)
         gitStatusSnapshotRetryTimerRef.current = null
@@ -259,9 +270,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     setGitStatusProbeErrorContextKey,
     setGitStatusSnapshot,
     gitStatusSnapshotRetryTimerRef,
-    gitStatusSnapshotRerunContextRef,
     setGitStatusRefreshNonce,
-    gitStatusSnapshotInFlightContextRef,
     panelContextKeyRef
   ])
 

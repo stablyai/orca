@@ -345,17 +345,16 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     [activeWorktreeId]
   )
 
-  const { handleUnlinkReview, handleLinkAnotherReview } = useChecksPanelReviewLinkActions(
-    model,
-    refreshLinkedGitHubPullRequest
-  )
+  const { handleUnlinkReview, handleLinkAnotherReview, handleLinkSuppressedPullRequest } =
+    useChecksPanelReviewLinkActions(model, refreshLinkedGitHubPullRequest)
   return {
     handleFixChecksWithAI,
     refreshLinkedGitHubPullRequest,
     handleOpenPR,
     handleOpenStackPR,
     handleUnlinkReview,
-    handleLinkAnotherReview
+    handleLinkAnotherReview,
+    handleLinkSuppressedPullRequest
   }
 }
 

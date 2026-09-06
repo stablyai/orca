@@ -2,78 +2,25 @@ import {
   spawn as nodeSpawn,
   spawnSync as nodeSpawnSync,
   type ChildProcess,
-  type ChildProcessWithoutNullStreams,
-  type SpawnOptions as NodeSpawnOptions
+  type ChildProcessWithoutNullStreams
 } from 'node:child_process'
-import { buildWindowsCmdShimCommandLine, isCmdInterpretedProgram } from './windows-command-line'
+import { resolveSpawn } from './spawn-resolution'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 
 import { createOutputSink } from './bounded-output-sink'
+import { createChildTerminationReporter } from './child-termination-reporter'
 
-export type ChildProcessHandle = ChildProcess
-
-export type SpawnedProcess = ChildProcess
-
-/**
- * The single place Orca starts a child process.
- *
- * Why one place: six decisions have to be made every time a child is spawned,
- * POSIX forgives all six, and Windows punishes each of them differently —
- * console visibility, argument quoting, `.cmd` interpretation, binary
- * resolution, timeout policy, and how the tree is later terminated. Made
- * per-call-site, they were right in some files and wrong in others, and the
- * wrong ones reached users as stolen keyboard focus, mangled agent prompts and
- * orphaned process trees.
- *
- * Callers outside this directory must not import `node:child_process`; a guard
- * test enforces that against a shrinking allowlist.
- */
-
-export type ProcessSpec = {
-  /**
-   * Program to run. On Windows this should already be an absolute path —
-   * spawning by bare name depends on the child's PATH, which under Group Policy
-   * or a stripped Electron environment can resolve to nothing.
-   */
-  program: string
-  args?: readonly string[]
-  cwd?: string
-  env?: NodeJS.ProcessEnv
-  /** Kill the process (and, on Windows, its console) after this long. */
-  timeoutMs?: number | null
-  /** Written to stdin then closed. Omit to leave stdin empty and closed. */
-  input?: string
-  /** Cap on captured stdout/stderr; output past it is discarded. */
-  maxOutputBytes?: number
-  /** Kills the process when aborted; the result still reports the exit. */
-  signal?: AbortSignal
-  /** Keep the child in its own POSIX process group for tree termination. */
-  detached?: boolean
-  /** Preserve a caller-owned Windows command line such as a cmd.exe invocation. */
-  windowsVerbatimArguments?: boolean
-  /** Streaming callers may suppress child output for auxiliary processes. */
-  stdio?: NodeSpawnOptions['stdio']
-  /** Kill the whole process tree and do not settle until termination is verified. */
-  terminationBarrier?: boolean | ProcessTerminationBarrier
-}
-
-export type ProcessTerminationBarrier = {
-  observeStderr?: (chunk: Buffer | string) => void
-  signal: (child: ChildProcess, signal?: NodeJS.Signals) => Promise<boolean>
-  force: (child: ChildProcess) => Promise<boolean>
-}
-
-export type ProcessResult = {
-  code: number | null
-  signal: NodeJS.Signals | null
-  stdout: string
-  stderr: string
-  /** True when the process was killed by `timeoutMs` rather than exiting. */
-  timedOut: boolean
-}
-
-export const DEFAULT_PROCESS_TIMEOUT_MS = 30_000
-export const DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
+export type {
+  ChildProcessHandle,
+  SpawnedProcess,
+  ProcessSpec,
+  ProcessTerminationBarrier,
+  ProcessResult
+} from './process-spec'
+export { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
+export { resolveSpawn, type ResolvedSpawn } from './spawn-resolution'
+import type { ProcessSpec, ProcessResult } from './process-spec'
+import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 /**
  * Grace between the timeout kill and giving up on the child's exit.
  *
@@ -92,54 +39,6 @@ const PROCESS_EXIT_GRACE_MS = 2_000
  * reports would otherwise leave the promise pending for the app's lifetime.
  */
 const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
-
-export type ResolvedSpawn = {
-  file: string
-  args: readonly string[]
-  options: NodeSpawnOptions
-}
-
-/**
- * Translate a spec into the exact `child_process.spawn` call to make.
- *
- * Kept pure and exported so the Windows branch is testable from macOS/Linux:
- * the decisions below are the whole point of this module, and they must not be
- * observable only on the platform that breaks.
- */
-export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): ResolvedSpawn {
-  const args = spec.args ?? []
-  const base: NodeSpawnOptions = {
-    cwd: spec.cwd,
-    env: spec.env,
-    stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
-    // Why unconditional: Orca's main process is GUI-subsystem and owns no
-    // console, so every console-subsystem child it starts gets a fresh visible
-    // conhost that takes foreground — keystrokes typed into an Orca terminal at
-    // that moment land in the black box instead.
-    windowsHide: true,
-    detached: spec.detached,
-    windowsVerbatimArguments: spec.windowsVerbatimArguments,
-    // Why never `shell: true`: it concatenates arguments without escaping (Node
-    // itself warns DEP0190) and it silently makes windowsHide a no-op.
-    shell: false,
-    ...(spec.terminationBarrier && platform !== 'win32' ? { detached: true } : {})
-  }
-
-  if (platform !== 'win32' || !isCmdInterpretedProgram(spec.program)) {
-    return { file: spec.program, args, options: base }
-  }
-
-  // Node refuses to spawn `.cmd`/`.bat` without a shell (EINVAL, the
-  // CVE-2024-27980 mitigation), so cmd.exe has to be the program. Building the
-  // line ourselves — rather than handing Node `shell: true` — is what keeps the
-  // arguments intact and the console hidden.
-  const comSpec = spec.env?.ComSpec ?? process.env.ComSpec ?? 'cmd.exe'
-  return {
-    file: comSpec,
-    args: [buildWindowsCmdShimCommandLine(spec.program, args)],
-    options: { ...base, windowsVerbatimArguments: true }
-  }
-}
 
 /**
  * Start a child process. Use for long-lived or streaming children.
@@ -166,15 +65,18 @@ export function spawnProcess(spec: ProcessSpec): ChildProcessWithoutNullStreams 
  */
 export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
   if (spec.signal?.aborted) {
+    spec.onChildTerminated?.()
     return Promise.resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
   }
   const maxOutputBytes = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
   return new Promise<ProcessResult>((resolve, reject) => {
+    const terminationReporter = createChildTerminationReporter(spec.onChildTerminated)
     let child: ChildProcess
     try {
       child = spawnProcess(spec)
     } catch (error) {
+      terminationReporter.report()
       reject(error)
       return
     }
@@ -236,7 +138,14 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
 
     const resolveFromClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       settle(() =>
-        resolve({ code, signal, stdout: stdout.text(), stderr: stderr.text(), timedOut })
+        resolve({
+          code,
+          signal,
+          stdout: stdout.text(),
+          stderr: stderr.text(),
+          timedOut,
+          outputTruncated: stdout.truncated() || stderr.truncated()
+        })
       )
 
     const settleBarrierOutcome = (): void => {
@@ -282,6 +191,7 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
             }
             barrierAttemptComplete = true
             barrierTerminationVerified = true
+            terminationReporter.report()
             resolveBarrierIfSafe()
           })
         }
@@ -297,6 +207,7 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
                 ([initialTerminated, forceTerminated]) => {
                   barrierAttemptComplete = true
                   barrierTerminationVerified = initialTerminated || forceTerminated
+                  terminationReporter.reportIf(barrierTerminationVerified)
                   if (!barrierTerminationVerified) {
                     // The barrier never confirmed the tree died, so the root
                     // would otherwise outlive the abort or timeout.
@@ -313,6 +224,7 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
               }
               barrierAttemptComplete = true
               barrierTerminationVerified = terminated
+              terminationReporter.reportIf(barrierTerminationVerified)
               resolveBarrierIfSafe()
             })
             return
@@ -321,6 +233,7 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
             ([_initialTerminated, forceTerminated]) => {
               barrierAttemptComplete = true
               barrierTerminationVerified = forceTerminated
+              terminationReporter.reportIf(barrierTerminationVerified)
               if (!barrierTerminationVerified) {
                 terminate(child, 'SIGKILL')
               }
@@ -356,6 +269,7 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
     }
 
     child.once('error', (error) => {
+      terminationReporter.reportIf(!child.pid)
       if (barrierStopping) {
         deferredError = error
         resolveBarrierIfSafe()
@@ -373,6 +287,7 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
       }
     })
     child.once('close', (code, signal) => {
+      terminationReporter.report()
       if (!barrierStopping) {
         rootExitedBeforeBarrier = true
       }
@@ -425,6 +340,9 @@ export function runProcessSync(spec: ProcessSpec): ProcessResult {
     signal: result.signal,
     stdout: result.stdout?.toString('utf8') ?? '',
     stderr: result.stderr?.toString('utf8') ?? '',
+    // Why always false: spawnSync reports an overrun as an ENOBUFS error, and
+    // the guard above rethrows it, so no truncated result reaches this point.
+    outputTruncated: false,
     // Why ETIMEDOUT and not the signal: a timeout kills with SIGTERM, but so
     // does anything else that terminates the child, and only a timeout also
     // sets this error. Reading the signal alone reports a deliberately

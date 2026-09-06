@@ -136,6 +136,12 @@ export function registerTerminalPaneRecoveryInstance(tabId: string): {
       if (pendingRetry?.requestsByInstanceId.size === 0) {
         cancelPendingRecoveryRetry(tabId)
       }
+      const getTab = useAppStore.getState().getTab
+      if (getTab && !getTab(tabId)) {
+        recoveryTimestampsByTabId.delete(tabId)
+        recoveryGenerationByTabId.delete(tabId)
+        cancelPendingRecoveryRetry(tabId)
+      }
     }
   }
 }

@@ -238,16 +238,14 @@ export async function getIssueBodyAndComments(
       }[]
       assignees?: { login: string }[]
     }
-    const comments = (data.comments ?? []).map(
-      (comment, index): PRComment => ({
-        id: index,
-        author: comment.author?.login ?? 'ghost',
-        authorAvatarUrl: '',
-        body: comment.body ?? '',
-        createdAt: comment.createdAt,
-        url: comment.url ?? ''
-      })
-    )
+    const comments = (data.comments ?? []).map((comment, index): PRComment => ({
+      id: index,
+      author: comment.author?.login ?? 'ghost',
+      authorAvatarUrl: '',
+      body: comment.body ?? '',
+      createdAt: comment.createdAt,
+      url: comment.url ?? ''
+    }))
     return {
       body: data.body ?? '',
       comments,

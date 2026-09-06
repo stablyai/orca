@@ -25,6 +25,8 @@ export type NativeChatBridgeViewProps = NativeChatOrchestrationProps & {
   launchAgent?: TuiAgent | null
   /** Trusted title/foreground fallback for manually-started agents. */
   resolvedAgent?: TuiAgent | null
+  /** Whether this pane owns the tab's launch draft; false for split siblings. */
+  ownsTabWideLaunchDraft: boolean
   /** Return this pane to the hosted terminal surface. */
   onSwitchToTerminal?: () => void
   /** Current xterm screen reader used to recover agent-reported session state. */
@@ -35,11 +37,12 @@ export type NativeChatBridgeViewProps = NativeChatOrchestrationProps & {
 export type NativeChatStructuredViewProps = NativeChatOrchestrationProps & {
   mode: 'structured'
   tabId: string
+  groupId?: string
   sessionId: string
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
-  allowFileUriLinks: boolean
+  contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
 export type NativeChatResolvedViewProps = NativeChatOrchestrationProps & {
@@ -50,6 +53,7 @@ export type NativeChatResolvedViewProps = NativeChatOrchestrationProps & {
   isVisible: boolean
   targetPtyId: string | null
   terminalTabId: string
+  ownsTabWideLaunchDraft: boolean
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>

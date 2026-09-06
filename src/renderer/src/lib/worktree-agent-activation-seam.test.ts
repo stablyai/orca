@@ -2,7 +2,10 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeTerminalSummary
+} from '../../../shared/runtime-types'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent-test-state'
@@ -76,7 +79,33 @@ function structuredSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult 
   }
 }
 
-function stubInventory(args?: { structured?: boolean; livePtyId?: string }): {
+function orphanTerminalRow(
+  worktree: ReturnType<typeof makeWorktree>,
+  ptyId: string
+): RuntimeTerminalSummary {
+  return {
+    handle: 'orphan-1',
+    ptyId,
+    orphaned: true,
+    worktreeId: worktree.id,
+    worktreePath: worktree.path,
+    branch: worktree.branch ?? 'main',
+    tabId: `pty:${ptyId}`,
+    leafId: `pty:${ptyId}`,
+    title: 'Codex',
+    connected: true,
+    writable: true,
+    lastOutputAt: null,
+    preview: ''
+  }
+}
+
+function stubInventory(args?: {
+  structured?: boolean
+  livePtyId?: string
+  /** Host that could not produce a complete census for the workspace it was asked about. */
+  unverifiableCensus?: boolean
+}): {
   runtimeCall: ReturnType<typeof vi.fn>
   listSessions: ReturnType<typeof vi.fn>
 } {
@@ -90,6 +119,23 @@ function stubInventory(args?: { structured?: boolean; livePtyId?: string }): {
     }
     if (method === 'agentSession.handoffStatus') {
       return { ok: true, result: { owner: 'native' } }
+    }
+    if (method === 'terminal.list') {
+      // The host knows this PTY but binds it to no surface, so adoption may mint one.
+      return {
+        ok: true,
+        result: {
+          terminals: args?.unverifiableCensus
+            ? []
+            : args?.livePtyId
+              ? [orphanTerminalRow(worktree, args.livePtyId)]
+              : [],
+          truncated: false,
+          hostScope: args?.unverifiableCensus
+            ? { hostIds: [], omittedHostIds: ['local', 'runtime:env-9'] }
+            : { hostIds: ['local'], omittedHostIds: [] }
+        }
+      }
     }
     throw new Error(`Unexpected runtime method: ${method}`)
   })
@@ -182,6 +228,37 @@ describe('worktree agent activation seam', () => {
 
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
+    expect(tabs[0]?.ptyId).toBeNull()
+  })
+
+  it('does not race an explicitly promised surface with a fallback terminal', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState(baseState())
+    stubInventory()
+
+    expect(activateAndRevealWorktree(worktree.id, { providesInitialSurface: true })).toEqual({
+      primaryTabId: null
+    })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+  })
+
+  // A paired-runtime owner is always omitted from its own scoped census, and an SSH relay that
+  // never answered omits everything. Declining to mint is right; leaving the workspace with no
+  // surface at all is not — the user asked for a pane and must get one.
+  it('still seeds a usable pane when the census cannot prove who owns a live PTY', async () => {
+    const worktree = makeWorktree()
+    const livePtyId = `${worktree.id}@@live-codex`
+    useAppStore.setState(baseState())
+    stubInventory({ livePtyId, unverifiableCensus: true })
+
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
+    expect(tabs).toHaveLength(1)
+    // A fresh shell, never a second surface forked onto the live agent's PTY.
     expect(tabs[0]?.ptyId).toBeNull()
   })
 

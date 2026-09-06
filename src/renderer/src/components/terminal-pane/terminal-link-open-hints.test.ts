@@ -155,25 +155,47 @@ describe('terminalUrlOpenHintOptionsFor', () => {
 
     expect(options.modifierInverts).toBe(true)
   })
+
+  it('keeps inversion for an eligible SSH pane', () => {
+    const options = terminalUrlOpenHintOptionsFor(
+      {
+        openLinksInApp: false,
+        openLinksInAppModifierInverts: true
+      },
+      { kind: 'ssh', connectionId: 'ssh-1' },
+      true
+    )
+
+    expect(options.modifierInverts).toBe(true)
+  })
 })
 
 describe('terminalHttpLinkActionDestinationsFor', () => {
-  it('offers both destinations for a capable runtime and follows the preference', () => {
-    const owner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
-
-    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, true)).toEqual({
-      primary: 'orca',
-      alternate: 'system'
-    })
-    expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: false }, owner, true)).toEqual({
-      primary: 'system',
-      alternate: 'orca'
-    })
-  })
+  it.each([
+    ['local', { kind: 'local' } as const, false],
+    ['capable runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const, true],
+    ['eligible SSH', { kind: 'ssh', connectionId: 'ssh-1' } as const, true]
+  ])(
+    'offers both destinations for a %s owner and follows the preference',
+    (_label, owner, canOpen) => {
+      expect(
+        terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, canOpen)
+      ).toEqual({
+        primary: 'orca',
+        alternate: 'system'
+      })
+      expect(
+        terminalHttpLinkActionDestinationsFor({ openLinksInApp: false }, owner, canOpen)
+      ).toEqual({
+        primary: 'system',
+        alternate: 'orca'
+      })
+    }
+  )
 
   it.each([
     ['incapable runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const],
-    ['SSH', { kind: 'ssh', connectionId: 'ssh-1' } as const],
+    ['ineligible SSH', { kind: 'ssh', connectionId: 'ssh-1' } as const],
     ['unknown owner', { kind: 'unknown' } as const]
   ])('offers only the system browser for an %s', (_label, owner) => {
     expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, false)).toEqual({

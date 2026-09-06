@@ -207,4 +207,17 @@ describe('activity thread grouping', () => {
   it('returns no groups for empty thread input', () => {
     expect(buildActivityThreadGroups([], 'status')).toEqual([])
   })
+
+  it('keeps all threads in one ungrouped list', () => {
+    const threads = makeThreads(
+      makeActivityResult({
+        entries: {
+          [PANE_KEY]: makeWorkingEntryWithoutHistory(),
+          [PANE_KEY_2]: makeWorkingEntryWithoutHistory()
+        }
+      })
+    )
+
+    expect(buildActivityThreadGroups(threads, 'none')).toEqual([{ key: 'all', label: '', threads }])
+  })
 })

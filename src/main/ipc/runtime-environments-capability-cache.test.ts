@@ -58,6 +58,9 @@ vi.mock('./runtime-environment-request-connections', () => ({
   getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
   retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
+  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+  ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+  pauseRemoteRuntimeSharedControlRetry: vi.fn(),
   closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
 }))
 
@@ -234,7 +237,6 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     await call(null, { selector: 'desk', method: 'repo.list' })
 
     expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
-      'status.get',
       'status.get',
       'status.get'
     ])

@@ -2,10 +2,11 @@ import { useMemo } from 'react'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
+import { compareFileNames } from '../../../../../../shared/file-name-sort'
 import { compareGitStatusEntries } from '../../source-control-status-sort'
 import {
-  filterAndSortSourceControlPathEntries,
   filterSourceControlGroupedPathEntries,
+  filterSourceControlPathEntries,
   getSourceControlFileFilterState,
   type SourceControlFileFilterState
 } from './file-filter'
@@ -56,9 +57,27 @@ export type SourceControlFileProjection = {
   visibleListRowsBySection: Partial<
     Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>
   >
-  visibleBranchTreeRows: SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[]
+  visibleBranchTreeRows: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[]
   visibleSelectionEntries: FlatEntry[]
 }
+
+// Why: only one view mode is ever rendered, so building the other mode's projection is pure dead
+// work (precedent: the combined-diff file tree short-circuits the same way while collapsed).
+// The gates below and both branching consumers (section-file-list.tsx, branch-section.tsx) read the
+// same sourceControlViewMode prop within one synchronous render, so a mode switch can never show
+// these. Keep that single source: deriving the mode from a separate store read would let a consumer
+// switch a render before the memos do, and only then could one of these reach the screen.
+const EMPTY_TREE_ROOTS_BY_SECTION: Readonly<
+  Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>>
+> = Object.freeze({})
+const EMPTY_TREE_ROWS_BY_SECTION: Readonly<
+  Partial<Record<SourceControlDisplaySectionId, RenderableSourceControlNode[]>>
+> = Object.freeze({})
+const EMPTY_LIST_ROWS_BY_SECTION: Readonly<
+  Partial<Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>>
+> = Object.freeze({})
+const EMPTY_BRANCH_TREE_NODES: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[] =
+  Object.freeze([])
 
 export function useSourceControlFileProjection({
   entries,
@@ -127,12 +146,24 @@ export function useSourceControlFileProjection({
     [unfilteredDisplaySections]
   )
 
+  // Why: sorting before filtering keeps the collator off the keystroke path, and is order-identical
+  // to the old filter-then-sort for any self-consistent comparator (a total order is not required):
+  // a stable sort fixes each element's position by (comparator result, original index), and
+  // Array#filter drops elements without disturbing either, so re-sorting the survivors would
+  // reproduce the same relative order. filter(sort(x)) === sort(filter(x)).
+  const sortedBranchEntries = useMemo(
+    () => [...branchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
+    [branchEntries]
+  )
   const filteredBranchEntries = useMemo(
-    () => filterAndSortSourceControlPathEntries(branchEntries, fileFilterState),
-    [branchEntries, fileFilterState]
+    () => filterSourceControlPathEntries(sortedBranchEntries, fileFilterState),
+    [fileFilterState, sortedBranchEntries]
   )
 
   const treeRootsBySection = useMemo(() => {
+    if (sourceControlViewMode !== 'tree') {
+      return EMPTY_TREE_ROOTS_BY_SECTION
+    }
     const roots: Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>> =
       {}
     for (const section of displaySections) {
@@ -148,9 +179,12 @@ export function useSourceControlFileProjection({
           : sectionRoots
     }
     return roots
-  }, [displaySections])
+  }, [displaySections, sourceControlViewMode])
 
   const visibleTreeRowsBySection = useMemo(() => {
+    if (sourceControlViewMode !== 'tree') {
+      return EMPTY_TREE_ROWS_BY_SECTION
+    }
     const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSourceControlNode[]>> = {}
     for (const section of displaySections) {
       rows[section.id] = injectExpandedSubmoduleRows(
@@ -167,11 +201,15 @@ export function useSourceControlFileProjection({
     displaySections,
     treeRootsBySection,
     expandedSubmoduleKeys,
+    sourceControlViewMode,
     submoduleStatusByKey
   ])
 
   // List view needs the same lazy submodule expansion as tree view, spliced into the flat entry list.
   const visibleListRowsBySection = useMemo(() => {
+    if (sourceControlViewMode !== 'list') {
+      return EMPTY_LIST_ROWS_BY_SECTION
+    }
     const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSubmoduleListItem[]>> = {}
     for (const section of displaySections) {
       rows[section.id] = injectExpandedSubmoduleEntries(
@@ -183,15 +221,21 @@ export function useSourceControlFileProjection({
       )
     }
     return rows
-  }, [displaySections, expandedSubmoduleKeys, submoduleStatusByKey])
+  }, [displaySections, expandedSubmoduleKeys, sourceControlViewMode, submoduleStatusByKey])
 
   const branchTreeRoots = useMemo(
-    () => compactSourceControlTree(buildSourceControlTree('branch', filteredBranchEntries)),
-    [filteredBranchEntries]
+    () =>
+      sourceControlViewMode === 'tree'
+        ? compactSourceControlTree(buildSourceControlTree('branch', filteredBranchEntries))
+        : EMPTY_BRANCH_TREE_NODES,
+    [filteredBranchEntries, sourceControlViewMode]
   )
   const visibleBranchTreeRows = useMemo(
-    () => flattenSourceControlTree(branchTreeRoots, collapsedTreeDirs),
-    [branchTreeRoots, collapsedTreeDirs]
+    () =>
+      sourceControlViewMode === 'tree'
+        ? flattenSourceControlTree(branchTreeRoots, collapsedTreeDirs)
+        : EMPTY_BRANCH_TREE_NODES,
+    [branchTreeRoots, collapsedTreeDirs, sourceControlViewMode]
   )
 
   const visibleSelectionEntries = useMemo(() => {

@@ -3,7 +3,7 @@ import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
+import { buildInjectRejectionMessage } from '../../../../shared/orchestration-dispatch-refusal-contract'
 import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration RPC methods', () => {
@@ -50,6 +50,19 @@ describe('orchestration RPC methods', () => {
       })) as { task: { status: string } }
 
       expect(result.task.status).toBe('pending')
+    })
+
+    it('persists a dependency from a PowerShell-stripped CLI deps payload', async () => {
+      setup()
+      const t1 = db.createTask({ spec: 'first' })
+
+      const result = (await call('orchestration.taskCreate', {
+        spec: 'second',
+        deps: `[${t1.id}]`
+      })) as { task: { id: string; status: string } }
+
+      expect(result.task.status).toBe('pending')
+      expect(db.getTask(result.task.id)?.deps).toBe(JSON.stringify([t1.id]))
     })
 
     it('records the caller pane, process, and Run generation when creating a task', async () => {

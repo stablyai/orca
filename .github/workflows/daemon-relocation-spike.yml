@@ -43,10 +43,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          version: 10.24.0
-          run_install: false
+          install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

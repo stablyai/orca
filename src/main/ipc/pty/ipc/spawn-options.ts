@@ -17,6 +17,7 @@ import {
   pendingRuntimePaneCreatesByOwnerKey
 } from '../pane/spawn-reservation'
 import { ptySizes } from '../delivery/visibility-state'
+import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
 import type { PtyIpcSpawnState } from './spawn-state'
 
@@ -97,7 +98,14 @@ export async function buildPtyIpcSpawnOptions(
     ctx.effectiveSessionAppId !== undefined ? ptySizes.has(ctx.effectiveSessionAppId) : false
   ctx.sessionSizeBeforeAttach =
     ctx.effectiveSessionAppId !== undefined ? ptySizes.get(ctx.effectiveSessionAppId) : undefined
-  if (ctx.effectiveSessionId !== undefined) {
+  if (
+    ctx.effectiveSessionId !== undefined &&
+    shouldSeedPreAttachPtySize({
+      isFreshSessionId: ctx.isMintedSessionId,
+      hasCachedSize: ctx.hadSessionSizeBeforeAttach,
+      requestIsUnmeasured: args.initiallyHidden === true
+    })
+  ) {
     // Why: daemon PTYs can emit before spawn() resolves; set real geometry now or early bytes default to 80x24 and wrap TUIs.
     ptySizes.set(ctx.effectiveSessionAppId ?? ctx.effectiveSessionId, {
       cols: args.cols,

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Ellipsis, GitMerge, Link, RefreshCw, Unlink } from 'lucide-react'
+import { Ellipsis, GitMerge, Link, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -37,6 +37,7 @@ import { useChecksPanelBranchActions } from './checks-panel/use-checks-panel-bra
 import { useChecksPanelCreateReview } from './checks-panel/use-checks-panel-create-review'
 import { ChecksPanelEmptyContent } from './checks-panel/empty-content'
 import { ChecksPanelActiveContent } from './checks-panel/active-content'
+import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
@@ -120,13 +121,14 @@ export function ChecksPanelReviewHeader({
             <Ellipsis className="size-3.5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem disabled={!canUnlinkReview} onSelect={onUnlinkReview}>
-            <Unlink className="size-3.5" />
-            {review.provider === 'gitlab'
-              ? translate('auto.components.right.sidebar.ChecksPanel.gitlabUnlink', 'Unlink MR')
-              : translate('auto.components.right.sidebar.ChecksPanel.7202f4a40a', 'unlink PR')}
-          </DropdownMenuItem>
+        <DropdownMenuContent align="end" className="w-52">
+          <HostedReviewUnlinkMenuItem
+            reviewLabel={review.provider === 'gitlab' ? 'MR' : 'PR'}
+            reviewIdentifier={reviewNumberLabel}
+            providerLabel={reviewHostLabel}
+            disabled={!canUnlinkReview}
+            onSelect={onUnlinkReview}
+          />
           <DropdownMenuItem onSelect={onLinkAnotherReview}>
             <Link className="size-3.5" />
             {review.provider === 'gitlab'

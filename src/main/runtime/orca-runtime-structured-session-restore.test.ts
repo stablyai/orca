@@ -107,9 +107,109 @@ describe('structured session cold restoration', () => {
     )
   })
 
+  it('prefers the durable visible-session index after a legacy profile drops agent tabs', async () => {
+    const runtime = new OrcaRuntimeService()
+    const restoreReadableSessions = vi.fn(async () => undefined)
+    const internal = runtime as unknown as {
+      store: { getWorkspaceSession: () => unknown }
+      hasPersistedStructuredAgentSessionStore(): boolean
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.store = {
+      getWorkspaceSession: () => ({
+        activeRepoId: null,
+        activeWorktreeId: 'workspace-1',
+        activeTabId: null,
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        unifiedTabs: { 'workspace-1': [] }
+      })
+    }
+    internal.hasPersistedStructuredAgentSessionStore = () => true
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    setStructuredAgentSessionHost({
+      reconcileRestartLeases: async () => undefined,
+      getPersistedVisibleSessionTabIndex: () => ({
+        present: true,
+        sessionIds: ['session-survives-rollback']
+      }),
+      restoreReadableSessions,
+      listSessionTabs: () => []
+    } as never)
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    expect(restoreReadableSessions).toHaveBeenCalledWith(['session-survives-rollback'])
+  })
+
+  it('treats an empty durable visible-session index as authoritative', async () => {
+    const runtime = new OrcaRuntimeService()
+    const restoreReadableSessions = vi.fn(async () => undefined)
+    const internal = runtime as unknown as {
+      store: { getWorkspaceSession: () => unknown }
+      hasPersistedStructuredAgentSessionStore(): boolean
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.store = {
+      getWorkspaceSession: () => ({
+        activeRepoId: null,
+        activeWorktreeId: 'workspace-1',
+        activeTabId: 'agent-session:closed-session',
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        activeTabIdByWorktree: { 'workspace-1': 'agent-session:closed-session' },
+        unifiedTabs: {
+          'workspace-1': [
+            {
+              id: 'agent-session:closed-session',
+              entityId: 'closed-session',
+              groupId: 'group-1',
+              worktreeId: 'workspace-1',
+              contentType: 'agent-session',
+              label: 'Codex Chat',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        }
+      })
+    }
+    internal.hasPersistedStructuredAgentSessionStore = () => true
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    setStructuredAgentSessionHost({
+      reconcileRestartLeases: async () => undefined,
+      getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [] }),
+      restoreReadableSessions,
+      listSessionTabs: () => []
+    } as never)
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    expect(restoreReadableSessions).toHaveBeenCalledWith([])
+  })
+
   it('normalizes a restored tab id and removes it when closed', async () => {
     const runtime = new OrcaRuntimeService()
     const closeSessionTab = vi.fn(async () => undefined)
+    const closeStructuredSession = vi.fn(async () => {
+      const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
+      expect(snapshot.tabs.some((tab) => tab.type === 'agent-session')).toBe(false)
+    })
+    const setSessionTabVisibility = vi.fn(async () => undefined)
     runtime.setNotifier({ closeSessionTab } as never)
     const internal = runtime as unknown as {
       hasPersistedStructuredAgentSessionStore(): boolean
@@ -126,6 +226,8 @@ describe('structured session cold restoration', () => {
     setStructuredAgentSessionHost({
       reconcileRestartLeases: async () => undefined,
       restoreReadableSessions: async () => undefined,
+      close: closeStructuredSession,
+      setSessionTabVisibility,
       listSessionTabs: () => [
         {
           sessionId: 'agent-session:agent-session:restored-session',
@@ -209,6 +311,11 @@ describe('structured session cold restoration', () => {
       'structured-agent-session-restored-session',
       'workspace-1'
     )
+    expect(closeStructuredSession).toHaveBeenCalledWith('restored-session')
+    expect(setSessionTabVisibility).toHaveBeenCalledWith('restored-session', false)
+    expect(setSessionTabVisibility.mock.invocationCallOrder[0]).toBeLessThan(
+      closeStructuredSession.mock.invocationCallOrder[0]!
+    )
 
     const closed = await runtime.listMobileSessionTabs('id:workspace-1')
     expect(closed.tabs.map((tab) => tab.id)).toEqual([
@@ -218,6 +325,56 @@ describe('structured session cold restoration', () => {
     expect(closed.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab'])
   })
 
+  it('publishes restored Claude tabs with the Claude title', async () => {
+    const runtime = new OrcaRuntimeService()
+    const publish = vi.spyOn(runtime, 'publishStructuredAgentSessionTab')
+    const internal = runtime as unknown as {
+      hasPersistedStructuredAgentSessionStore(): boolean
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.hasPersistedStructuredAgentSessionStore = () => true
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    setStructuredAgentSessionHost({
+      reconcileRestartLeases: async () => undefined,
+      restoreReadableSessions: async () => undefined,
+      listSessionTabs: () => [
+        {
+          sessionId: 'agent-session:agent-session:restored-claude',
+          workspaceId: 'workspace-1',
+          agent: 'claude'
+        }
+      ]
+    } as never)
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    expect(publish).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1',
+      sessionId: 'restored-claude',
+      agent: 'claude',
+      activate: false,
+      notify: false
+    })
+
+    const restored = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(restored.tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'agent-session',
+          id: 'agent-session:restored-claude',
+          title: 'Claude Chat',
+          agent: 'claude'
+        })
+      ])
+    )
+  })
+
   it('commits the host close when the renderer already removed the structured tab', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.setNotifier({
@@ -225,7 +382,7 @@ describe('structured session cold restoration', () => {
         throw new Error('session_tab_not_found')
       })
     } as never)
-    runtime.publishStructuredAgentSessionTab({
+    await runtime.publishStructuredAgentSessionTab({
       workspaceId: 'workspace-1',
       sessionId: 'session-1',
       agent: 'codex',

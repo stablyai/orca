@@ -10,7 +10,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import {
   applyJournalRow,
   createJournalReducerState,
-  referencedBlobDigests,
+  MAX_JOURNAL_APPLIED_SETTLEMENT_IDS,
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
@@ -361,55 +361,20 @@ describe('submission and dispatch state machine', () => {
   })
 })
 
-describe('blob retention', () => {
-  it('reports the digests live rows still reference', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      {
-        kind: 'item',
-        itemId: 'inline',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'y', byteLength: 1, digest: 'digest-b', truncated: false }
-        },
-        ...base(2)
-      }
-    ])
-    expect([...referencedBlobDigests(state)]).toEqual(['digest-a'])
-  })
-
-  it('stops referencing a digest once its item is tombstoned', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'diff',
-          path: 'a.ts',
-          patch: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      { kind: 'tombstone', itemId: 'tool', revision: 2, ...base(2) }
-    ])
-    expect(referencedBlobDigests(state).size).toBe(0)
+describe('lifecycle settlement deduplication', () => {
+  it('retains only the newest bounded settlement ids', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    for (let index = 0; index <= MAX_JOURNAL_APPLIED_SETTLEMENT_IDS; index += 1) {
+      applyJournalRow(state, {
+        kind: 'lifecycle-batch',
+        settlementId: `settlement-${index}`,
+        mutations: [{ kind: 'tombstone', itemId: 'item', revision: index + 1 }],
+        ...base(index + 1)
+      })
+    }
+    expect(state.appliedSettlementIds.size).toBe(MAX_JOURNAL_APPLIED_SETTLEMENT_IDS)
+    expect(state.appliedSettlementIds.has('settlement-0')).toBe(false)
+    expect(state.appliedSettlementIds.has('settlement-1')).toBe(true)
   })
 })
 

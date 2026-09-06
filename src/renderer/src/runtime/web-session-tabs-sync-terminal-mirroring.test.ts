@@ -540,6 +540,210 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabId).toBe(mirroredId)
   })
 
+  it('retains a known title while a pending surface reports its placeholder', () => {
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const priorPtyId = 'remote:web-env-1@@terminal-1'
+    const existingTab: TerminalTab = {
+      id: mirroredId,
+      ptyId: priorPtyId,
+      worktreeId: WT,
+      title: 'pnpm dev',
+      defaultTitle: 'pnpm dev',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [mirroredId]: [priorPtyId] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Terminal',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'pending-handle',
+          terminal: null
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.title).toBe('pnpm dev')
+  })
+
+  it('adopts a real title after a pending surface becomes ready', () => {
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const priorPtyId = 'remote:web-env-1@@terminal-1'
+    const existingTab: TerminalTab = {
+      id: mirroredId,
+      ptyId: priorPtyId,
+      worktreeId: WT,
+      title: 'pnpm dev',
+      defaultTitle: 'pnpm dev',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [mirroredId]: [priorPtyId] }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'gal@host: ~/dev',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.tabsByWorktree?.[WT]?.[0]?.title).toBe('gal@host: ~/dev')
+  })
+
+  it('retains the exact prior pane binding while a mirrored surface is pending', () => {
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const priorPtyId = 'remote:web-env-1@@terminal-1'
+    const existingTab: TerminalTab = {
+      id: mirroredId,
+      ptyId: priorPtyId,
+      worktreeId: WT,
+      title: 'host shell',
+      defaultTitle: 'host shell',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+
+    const state = makeState({
+      tabsByWorktree: { [WT]: [existingTab] },
+      ptyIdsByTabId: { [mirroredId]: [priorPtyId] },
+      terminalLayoutsByTabId: {
+        [mirroredId]: {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: priorPtyId }
+        }
+      }
+    })
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'reconnecting shell',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'pending-handle',
+          terminal: null
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    const nextState = { ...state, ...patch } as WebSessionTabsSyncState
+
+    expect(nextState.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: mirroredId,
+      ptyId: priorPtyId,
+      title: 'reconnecting shell'
+    })
+    expect(nextState.terminalLayoutsByTabId?.[mirroredId]?.ptyIdsByLeafId).toEqual({
+      [LEAF_ID]: priorPtyId
+    })
+  })
+
+  it('retains only matching-environment pending bindings and never invents a sibling binding', () => {
+    const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+    const matchingPtyId = 'remote:web-env-1@@terminal-1'
+    const foreignPtyId = 'remote:web-env-2@@terminal-2'
+    const existingTab: TerminalTab = {
+      id: mirroredId,
+      ptyId: matchingPtyId,
+      worktreeId: WT,
+      title: 'host shell',
+      defaultTitle: 'host shell',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        tabsByWorktree: { [WT]: [existingTab] },
+        ptyIdsByTabId: { [mirroredId]: [matchingPtyId, foreignPtyId] },
+        terminalLayoutsByTabId: {
+          [mirroredId]: {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF_ID },
+              second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+            },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: {
+              [LEAF_ID]: matchingPtyId,
+              [SECOND_LEAF_ID]: foreignPtyId
+            }
+          }
+        }
+      }),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: `host-tab-1::${LEAF_ID}`,
+          title: 'pending matching pane',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'pending-handle',
+          terminal: null
+        },
+        {
+          type: 'terminal',
+          id: `host-tab-1::${SECOND_LEAF_ID}`,
+          title: 'pending foreign pane',
+          parentTabId: 'host-tab-1',
+          leafId: SECOND_LEAF_ID,
+          isActive: false,
+          status: 'pending-handle',
+          terminal: null
+        }
+      ]),
+      ENV,
+      NOW + 1
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.terminalLayoutsByTabId?.[mirroredId]?.ptyIdsByLeafId).toEqual({
+      [LEAF_ID]: matchingPtyId
+    })
+    expect(patch.ptyIdsByTabId?.[mirroredId]).toEqual([matchingPtyId])
+  })
+
   it('does not attach a ready sibling PTY to an active pending split leaf', () => {
     const patch = applyWebSessionTabsSnapshot(
       makeState(),

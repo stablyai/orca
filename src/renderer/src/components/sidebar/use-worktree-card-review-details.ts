@@ -168,7 +168,8 @@ export function useWorktreeCardReviewDetails({
         (useCachedBranchReview || cachedMergedBranchPRMatchesCurrentHead) && !hasLinkedReview
           ? ''
           : hostedReviewEntry?.linkedReviewHintKey,
-      branchLookupGitHubPRNumber
+      branchLookupGitHubPRNumber,
+      suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
     }
   )
 

@@ -89,6 +89,15 @@ describe('planMobileTerminalTabMount', () => {
       )
     ).toBeNull()
     expect(isTabMounted).toHaveBeenCalledTimes(1)
-    expect(isTabMounted).toHaveBeenCalledWith('tab-173')
+    expect(isTabMounted).toHaveBeenCalledWith('tab-173', 'wt')
+  })
+
+  it('passes the requested worktree to the mounted-tab predicate', () => {
+    const isTabMounted = vi.fn(() => false)
+
+    expect(
+      planMobileTerminalTabMount(state(), { worktreeId: 'wt', tabId: 'tab-0' }, { isTabMounted })
+    ).toEqual({ worktreeId: 'wt', tabIds: ['tab-0'] })
+    expect(isTabMounted).toHaveBeenCalledWith('tab-0', 'wt')
   })
 })

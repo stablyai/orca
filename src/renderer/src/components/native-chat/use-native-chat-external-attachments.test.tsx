@@ -24,6 +24,14 @@ import { useNativeChatExternalAttachments } from './use-native-chat-external-att
 
 type HookApi = ReturnType<typeof useNativeChatExternalAttachments>
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve: (value: T) => void = () => undefined
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 function Probe({
   disabled,
   attachResolvedPaths,
@@ -124,7 +132,41 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'])
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1')
+  })
+
+  it('delivers concurrent SSH resolutions in order without deduplicating paths', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({
+      kind: 'ssh',
+      connectionId: 'conn-1',
+      worktreePath: '/remote/wt',
+      expectedExecutionHostId: 'ssh:conn-1',
+      expectedSshTargetId: 'conn-1',
+      expectedSshConnectionGeneration: 4
+    })
+    const firstUpload = deferred<string[]>()
+    const secondUpload = deferred<string[]>()
+    mocks.uploadNativeChatAttachmentPaths
+      .mockReturnValueOnce(firstUpload.promise)
+      .mockReturnValueOnce(secondUpload.promise)
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+
+    act(() => {
+      probe.latest().attachExternalPaths(['/local/a.txt'])
+      probe.latest().attachExternalPaths(['/local/b.txt'])
+    })
+    await act(async () => {
+      secondUpload.resolve(['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'])
+    })
+    await act(async () => {
+      firstUpload.resolve(['/remote/wt/.orca/drops/a.txt'])
+    })
+
+    expect(attachResolvedPaths.mock.calls).toEqual([
+      [['/remote/wt/.orca/drops/b.txt', '/remote/wt/.orca/drops/b.txt'], 'conn-1'],
+      [['/remote/wt/.orca/drops/a.txt'], 'conn-1']
+    ])
   })
 
   it('shows the not-ready notice instead of attaching unresolved paths', async () => {
@@ -150,6 +192,17 @@ describe('useNativeChatExternalAttachments', () => {
     expect(setNotice).toHaveBeenCalledWith(
       'Local attachments are not available for remote sessions.'
     )
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+  })
+
+  it('ignores local attachment insertion while already disabled', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ disabled: true, attachResolvedPaths })
+
+    act(() => probe.latest().attachExternalPaths(['/local/a.txt']))
+
+    expect(mocks.resolveNativeChatAttachmentOwner).not.toHaveBeenCalled()
     expect(attachResolvedPaths).not.toHaveBeenCalled()
   })
 

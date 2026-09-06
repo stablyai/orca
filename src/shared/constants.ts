@@ -11,6 +11,7 @@ import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
+import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
 import { buildDefaultSettings } from './default-global-settings'
@@ -83,16 +84,13 @@ export const getDefaultTerminalRightClickToPaste = (
   platform = typeof process !== 'undefined' ? process.platform : ''
 ): boolean => platform === 'win32'
 
-/** Why: ProseMirror renders the whole document — no virtualization — so opening
- *  one blocks the main thread for as long as it takes to build the DOM. Measured
- *  in a packaged build (M-series) on a doc with a code block every ~570 bytes,
- *  blocking mount / median keystroke: 300 KB 1.7 s / 59 ms · 600 KB 4.2 s / 201 ms
- *  · 900 KB 8.8 s / 431 ms. The same 300 KB as pure prose is 0.8 s / 16 ms, so
- *  node-view count drives the cost far more than byte size — but bytes are the
- *  only thing cheap enough to test before parsing. The blocking mount is what
- *  pins this ceiling; past it, fall back to source mode (Monaco) with a per-file
- *  "Open anyway" escape hatch. Real headroom needs #7056. */
-export const RICH_MARKDOWN_MAX_SIZE_BYTES = 300 * 1024
+/** Why: ProseMirror renders the whole document without virtualization. After the
+ *  parser/highlighter work in #17134/#17147/#17158, M-series Electron measurements
+ *  on distinct code blocks every ~600 bytes put visible mount / longest task at
+ *  300 KB 0.70 / 0.66 s · 450 KB 1.09 / 1.02 s · 600 KB 1.49 / 1.41 s, with
+ *  600 KB typing at 38 ms median / 39 ms p95. Bytes remain the only cheap
+ *  pre-parse guard; larger files use source mode with an "Open anyway" escape hatch. */
+export const RICH_MARKDOWN_MAX_SIZE_BYTES = 600 * 1024
 
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
@@ -272,6 +270,12 @@ export function getDefaultUIState(): PersistedUIState {
     alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
+    agentsVisibleHostIds: null,
+    agentsFilterRepoIds: [],
+    agentsShowChildAgents: false,
+    agentsCompactMode: true,
+    agentsReadFilter: DEFAULT_AGENTS_READ_FILTER,
+    agentsGroupBy: DEFAULT_AGENTS_GROUP_BY,
     collapsedGroups: [],
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
@@ -295,6 +299,8 @@ export function getDefaultUIState(): PersistedUIState {
     trustedOrcaHooks: {},
     setupScriptPromptDismissedRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: {},
     setupGuideSidebarDismissed: false,
     setupGuideBrowserMilestoneMigrated: true,
     setupGuideBrowserMilestoneLegacyComplete: false,

@@ -1,5 +1,8 @@
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import { removeBrowserPageViewport } from './browser-page-viewport'
+import {
+  clearBrowserPageViewportPresetSize,
+  removeBrowserPageViewport
+} from './browser-page-viewport'
 import { forgetExplicitBrowserPageZoomLevel } from './browser-page-zoom'
 import {
   acquireWebviewsDragPassthrough,
@@ -250,6 +253,7 @@ function removePersistentWebview(
     // Why: the viewport can outlive a missing webview entry; tear it down on
     // explicit close paths so overlay slots do not leak parked shells.
     if (!preserveViewport) {
+      clearBrowserPageViewportPresetSize(browserTabId)
       removeBrowserPageViewport(browserTabId)
     }
     registeredWebContentsIds.delete(browserTabId)
@@ -263,6 +267,7 @@ function removePersistentWebview(
   webview.remove()
   unregisterPersistentWebview(browserTabId)
   if (!preserveViewport) {
+    clearBrowserPageViewportPresetSize(browserTabId)
     removeBrowserPageViewport(browserTabId)
   }
   registeredWebContentsIds.delete(browserTabId)

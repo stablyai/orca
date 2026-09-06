@@ -11,6 +11,10 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
+import {
+  buildFakeAgentCommandOverride,
+  FAKE_AGENT_WINDOWS_SHELL
+} from './helpers/fake-agent-command-override'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 
@@ -111,6 +115,22 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
   electronApp
 }) => {
   await waitForSessionReady(orcaPage)
+  await orcaPage.evaluate(
+    async ({ command, windowsShell }) => {
+      const state = window.__store!.getState()
+      await state.updateSettings({
+        agentCmdOverrides: { ...state.settings?.agentCmdOverrides, codex: command },
+        terminalWindowsShell: windowsShell
+      })
+    },
+    {
+      command: buildFakeAgentCommandOverride(
+        path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+      ),
+      windowsShell: FAKE_AGENT_WINDOWS_SHELL
+    }
+  )
+
   const worktreeId = await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   const coordinatorTabId = await getActiveTabId(orcaPage)
@@ -160,7 +180,7 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
 
   const terminals = await client.call<RuntimeTerminalListResult>('terminal.list')
   const workerTerminal = terminals.result.terminals.find(
-    (terminal) => terminal.title === 'Codex Ready'
+    (terminal) => terminal.handle === workerHandle
   )
   expect(workerTerminal?.tabId).toBeTruthy()
   expect(workerTerminal?.leafId).toBeTruthy()

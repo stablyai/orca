@@ -13,15 +13,13 @@ function makeBackend(): {
   const resolveDeviceId = vi.fn(async () => {
     throw new Error('shutdown AVD cannot resolve before boot')
   })
-  const startSession = vi.fn(
-    async (): Promise<EmulatorSessionInfo> => ({
-      deviceUdid: 'emulator-5554',
-      streamUrl: 'scrcpy://emulator-5554',
-      wsUrl: '',
-      streamCodec: 'h264',
-      backend: 'android'
-    })
-  )
+  const startSession = vi.fn(async (): Promise<EmulatorSessionInfo> => ({
+    deviceUdid: 'emulator-5554',
+    streamUrl: 'scrcpy://emulator-5554',
+    wsUrl: '',
+    streamCodec: 'h264',
+    backend: 'android'
+  }))
   const stopHelperForDevice = vi.fn(async () => {})
   const shutdownDevice = vi.fn(async () => {})
   const backend: EmulatorBackend = {

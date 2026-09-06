@@ -1,10 +1,13 @@
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 
-type CodexAuthIdentity = {
+export type CodexAuthIdentity = {
   email: string | null
   providerAccountId: string | null
+  workspaceLabel: string | null
   workspaceAccountId: string | null
 }
+
+type CodexAuthOwnershipIdentity = Omit<CodexAuthIdentity, 'workspaceLabel'>
 
 // Why: stale shared-home PTYs can write after an account switch, so read-back
 // needs a positive claim match instead of trusting the selected path alone.
@@ -13,13 +16,11 @@ export function codexAuthMatchesManagedAccount(
   account: CodexManagedAccount,
   managedAuthContents: string | null
 ): boolean {
-  const identity = readIdentityFromAuthContents(runtimeAuthContents)
+  const identity = readCodexAuthIdentity(runtimeAuthContents)
   if (!identity) {
     return false
   }
-  const managedIdentity = managedAuthContents
-    ? readIdentityFromAuthContents(managedAuthContents)
-    : null
+  const managedIdentity = managedAuthContents ? readCodexAuthIdentity(managedAuthContents) : null
   const selectedEmail = firstNonNull(normalizeField(account.email), managedIdentity?.email)
   const selectedProviderId = firstNonNull(
     normalizeField(account.providerAccountId),
@@ -65,7 +66,7 @@ export function codexAuthCouldBelongToManagedAccount(
   runtimeAuthContents: string,
   account: CodexManagedAccount
 ): boolean {
-  const identity = readIdentityFromAuthContents(runtimeAuthContents)
+  const identity = readCodexAuthIdentity(runtimeAuthContents)
   return (
     !identity ||
     !identityContradictsSelection(
@@ -85,8 +86,8 @@ export function codexAuthMatchesSystemDefaultIdentity(
   runtimeAuthContents: string,
   systemDefaultAuthContents: string
 ): boolean {
-  const runtimeIdentity = readIdentityFromAuthContents(runtimeAuthContents)
-  const systemDefaultIdentity = readIdentityFromAuthContents(systemDefaultAuthContents)
+  const runtimeIdentity = readCodexAuthIdentity(runtimeAuthContents)
+  const systemDefaultIdentity = readCodexAuthIdentity(systemDefaultAuthContents)
   if (!runtimeIdentity || !systemDefaultIdentity) {
     return false
   }
@@ -154,7 +155,7 @@ export function codexAuthIsFresher(
   return compareCodexAuthFreshness(candidateAuthContents, baselineAuthContents) === 1
 }
 
-function readIdentityFromAuthContents(contents: string): CodexAuthIdentity | null {
+export function readCodexAuthIdentity(contents: string): CodexAuthIdentity | null {
   const raw = parseJsonRecord(contents)
   if (!raw) {
     return null
@@ -166,21 +167,28 @@ function readIdentityFromAuthContents(contents: string): CodexAuthIdentity | nul
   const payload = idToken ? parseJwtPayload(idToken) : null
   const authClaims = readRecordClaim(payload, 'https://api.openai.com/auth')
   const profileClaims = readRecordClaim(payload, 'https://api.openai.com/profile')
+  // Why: normalize before the fallback chains, not after — a blank tokens.account_id
+  // must fall through to the JWT claims rather than ending the chain on an empty string.
+  const tokenAccountId = normalizeField(
+    readStringClaim(tokens, 'account_id') ?? readStringClaim(tokens, 'accountId')
+  )
 
   return {
     email: normalizeField(
       readStringClaim(payload, 'email') ?? readStringClaim(profileClaims, 'email')
     ),
     providerAccountId: normalizeField(
-      readStringClaim(tokens, 'account_id') ??
-        readStringClaim(tokens, 'accountId') ??
+      tokenAccountId ??
         readStringClaim(authClaims, 'chatgpt_account_id') ??
         readStringClaim(payload, 'chatgpt_account_id')
     ),
+    workspaceLabel: normalizeField(
+      readStringClaim(authClaims, 'workspace_name') ??
+        readStringClaim(profileClaims, 'workspace_name')
+    ),
     workspaceAccountId: normalizeField(
       readStringClaim(authClaims, 'workspace_account_id') ??
-        readStringClaim(tokens, 'account_id') ??
-        readStringClaim(tokens, 'accountId') ??
+        tokenAccountId ??
         readStringClaim(payload, 'chatgpt_account_id')
     )
   }
@@ -274,8 +282,8 @@ function identityFieldMatches(selectedField: string | null, runtimeField: string
 // no identity claims (api key, PAT, bedrock) contradicts nothing. A ChatGPT
 // rename leaves the record email stale, so a matching account id outranks it.
 function identityContradictsSelection(
-  selected: CodexAuthIdentity,
-  identity: CodexAuthIdentity
+  selected: CodexAuthOwnershipIdentity,
+  identity: CodexAuthOwnershipIdentity
 ): boolean {
   if (
     identityFieldsConflict(selected.providerAccountId, identity.providerAccountId) ||

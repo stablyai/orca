@@ -67,6 +67,20 @@ export function computeViewedAgentCompletionPaneKey(
   return state.unreadAgentCompletionPanes[targetKey] ? targetKey : null
 }
 
+function getAgentTurnTimestamp(
+  state: {
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
+    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+  },
+  paneKey: string
+): number | null {
+  return (
+    state.agentStatusByPaneKey[paneKey]?.stateStartedAt ??
+    state.retainedAgentsByPaneKey[paneKey]?.entry.stateStartedAt ??
+    null
+  )
+}
+
 export function shouldClearViewedAgentWorktreeUnread(
   state: {
     tabsByWorktree: Record<string, { id: string }[]>
@@ -106,6 +120,35 @@ export function shouldClearViewedAgentWorktreeUnread(
   }
 
   return true
+}
+
+/**
+ * Manual mark-unread protections that no longer apply: the user moved to another pane, or the
+ * agent took a new turn. Exported for the startup-race test.
+ */
+export function computeLapsedManualUnreadProtections(
+  state: {
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
+    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+    manuallyUnreadTurnsByPaneKey: Record<string, number>
+  },
+  activePaneKeys: ReadonlySet<string>
+): string[] {
+  const lapsed: string[] = []
+  for (const [paneKey, turnTimestamp] of Object.entries(state.manuallyUnreadTurnsByPaneKey)) {
+    if (!activePaneKeys.has(paneKey)) {
+      lapsed.push(paneKey)
+      continue
+    }
+    const currentTurn = getAgentTurnTimestamp(state, paneKey)
+    // Why keep on null: persisted UI hydrates before the status snapshot lands, so an active
+    // pane with no row yet is "not known", not "moved on"; wiping it would lose the mark-unread
+    // the user made before relaunch.
+    if (currentTurn !== null && currentTurn !== turnTimestamp) {
+      lapsed.push(paneKey)
+    }
+  }
+  return lapsed
 }
 
 type ViewedAgentAttentionActions = {
@@ -230,6 +273,9 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       const targets = resolveAutoAckTabTargets(s, {
         floatingPanelVisible: floatingPanelVisibleRef.current
       })
+      // Why no protection reset here: zero targets just means nothing is on screen
+      // (Settings, browser, an overlay) — a transient view switch must not lapse an
+      // explicit mark-unread the user just made.
       if (targets.length === 0) {
         return
       }
@@ -243,13 +289,31 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       lastLayouts = s.terminalLayoutsByTabId
       lastUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
 
+      const activePaneKeys = new Set<string>()
+      for (const target of targets) {
+        const activeLeafId = resolveActiveLeafId(s, target.tabId)
+        if (activeLeafId) {
+          activePaneKeys.add(makePaneKey(target.tabId, activeLeafId))
+        }
+      }
+      // Protection lapses when the user moves on to another pane or the agent takes a new
+      // turn; a still-active pane with an unchanged turn keeps its explicit mark-unread.
+      const lapsedProtections = computeLapsedManualUnreadProtections(s, activePaneKeys)
+      if (lapsedProtections.length > 0) {
+        s.clearManuallyUnreadTurns(lapsedProtections)
+      }
+
       for (const target of targets) {
         // Why re-read: acking target[0] writes to the store, which re-enters this scan synchronously
         // and may already have handled target[1]; `s` is a pre-write snapshot that would re-ack it.
         const current = useAppStore.getState()
         const tabId = target.tabId
         const activeLeafId = resolveActiveLeafId(current, tabId)
-        const toAck = computeAutoAckTargets(current, tabId, activeLeafId)
+        const toAck = computeAutoAckTargets(current, tabId, activeLeafId).filter(
+          (paneKey) =>
+            current.manuallyUnreadTurnsByPaneKey[paneKey] !==
+            getAgentTurnTimestamp(current, paneKey)
+        )
         const activePaneKey = computeViewedAgentCompletionPaneKey(current, tabId, activeLeafId)
         if (toAck.length > 0 || activePaneKey) {
           const paneKeysToClear = new Set(toAck)

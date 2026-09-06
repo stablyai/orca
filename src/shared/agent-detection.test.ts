@@ -167,6 +167,20 @@ describe('Pi-compatible title detection', () => {
     expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
   })
 
+  // Why: OMP 17.2.12+ writes static state markers on WSL/ConPTY (#13890). The label after
+  // the marker is cwd/session text, so glyphs another agent uses for status must not win.
+  it.each([
+    ['π : my-project', 'working', 'π : my-project'],
+    ['π > my-project', 'idle', 'π > my-project'],
+    ['π ! my-project', 'permission', 'π ! my-project'],
+    ['π > gemini ✦ ⏲ ◇ ✋', 'idle', 'π > gemini ✦ ⏲ ◇ ✋'],
+    ['zsh | π : my-project', 'working', 'zsh | π : my-project'],
+    ['zsh | π > gemini ✦ ⏲ ◇ ✋', 'idle', 'zsh | π > gemini ✦ ⏲ ◇ ✋']
+  ] as const)('classifies native OMP title %j as %s', (title, expectedStatus, expectedDisplay) => {
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+    expect(normalizeTerminalTitle(title)).toBe(expectedDisplay)
+  })
+
   it('re-detects status after display-title normalization for Pi idle frames', () => {
     // Normalization now preserves the session name and cwd (#16093).
     expect(normalizeTerminalTitle('π - my-project')).toBe('π - my-project')

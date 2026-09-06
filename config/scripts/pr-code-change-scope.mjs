@@ -20,6 +20,7 @@ export const PR_CHECK_JOBS = [
   'static_analysis',
   'typecheck',
   'git_compatibility',
+  'codex_index_heal_contract',
   'xterm_patch_sync',
   'shell_contracts',
   'test',
@@ -46,6 +47,24 @@ const GIT_COMPAT_PREFIXES = [
   'src/main/git/',
   'src/relay/git-',
   'config/scripts/git-binary-compatibility'
+]
+
+// Why narrow: the contract pins Codex's read-repair, so it runs when the heal that
+// depends on it, its app-server transport, or the contract itself changes.
+const CODEX_INDEX_HEAL_CONTRACT_PREFIXES = [
+  'src/main/codex/codex-index-heal-binary-contract',
+  'src/main/codex/codex-session-index-heal',
+  'src/main/codex/codex-app-server-session',
+  'src/main/codex/codex-state-db',
+  'src/main/sqlite/sync-database',
+  'src/main/codex/codex-app-server-capability-signal',
+  'src/main/codex/codex-process-exit-deadline',
+  'src/main/codex/codex-session-backfill',
+  'src/main/codex/codex-session-index-heal-state',
+  'src/main/codex-cli/command',
+  'src/main/win32-utils',
+  'src/shared/node-cli-command-resolution',
+  'src/shared/windows-batch-spawn'
 ]
 
 const XTERM_PREFIXES = [
@@ -148,6 +167,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'config/scripts/smoke-packaged',
   'config/scripts/install-electron-package-binary',
   'config/scripts/verify-packaged',
+  'config/scripts/verify-skills-cli-runtime',
   'config/scripts/verify-linux-glibc',
   'config/scripts/run-electron-vite',
   'skills/',
@@ -161,6 +181,12 @@ const SHARED_PACKAGE_PREFIXES = [
 
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  'config/docker/cli-launch-contract/',
+  'config/docker/headless-pairing/',
+  'config/docker/headless-serve-shutdown/',
+  'config/scripts/run-linux-cli-launch-contract',
+  'config/scripts/run-headless-linux-pairing-docker',
+  'config/scripts/static-appimage-package-contract',
   'native/computer-use-linux/',
   'resources/linux/',
   'config/scripts/run-headless-serve'
@@ -187,12 +213,18 @@ const LINUX_PACKAGE_TESTS = [
 const WINDOWS_PACKAGE_TESTS = [
   ...LINUX_PACKAGE_TESTS,
   'config/scripts/rebuild-native-deps.test.mjs',
+  'config/scripts/rebuild-native-deps-windows-process-tree.test.mjs',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
   'src/shared/child-process/windows-command-line.win32.test.ts',
+  'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
+  'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
+  'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',
+  'src/main/windows/windows-process-tree-command-line-patch.test.ts',
+  'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
   'src/main/wsl/wsl-invocation-boundary.test.ts',
@@ -200,17 +232,24 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/wsl/wsl-w1-w3-contract.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
   'src/main/cli/wsl-cli-powershell-boundary.test.ts',
+  'src/main/computer/desktop-script-runtime-host.win32.test.ts',
   'src/main/cursor/hook-service.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
+  'src/main/startup/windows-install-dir-acl-repair.win32.test.ts',
   'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
+  'src/shared/secure-path-windows-acl.win32.test.ts',
+  'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/pty-codex-account-attribution.test.ts',
-  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts'
+  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
+  'src/relay/windows-port-scan.win32.test.ts'
 ]
 
 const DESKTOP_IRRELEVANT_PREFIXES = [
   'mobile/',
+  'cloud/',
+  '.github/workflows/cloud-',
   '.github/workflows/mobile.yml',
   '.github/workflows/mobile-ios-release.yml',
   '.github/workflows/mobile-android-release.yml'
@@ -235,6 +274,14 @@ export function shouldRunPrChecks(changedFiles) {
   return changedFiles.some((file) => !isDocsOnlyPath(file) && !isDesktopIrrelevantPath(file))
 }
 
+export function needsMobileDependencies(changedFiles) {
+  // Why: static analysis lints CHANGED files, mobile ones included, and its
+  // type-aware pass resolves types from mobile/node_modules. Mobile is a
+  // separate pnpm project, so without this the root-only install leaves every
+  // mobile type an `error` type and the gate reports phantom findings.
+  return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
+}
+
 export function classifyPrJobs(changedFiles) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
@@ -248,6 +295,7 @@ export function classifyPrJobs(changedFiles) {
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
+    mobile_dependencies: shouldRun && needsMobileDependencies(changedFiles),
     ...jobs
   }
 }
@@ -256,6 +304,9 @@ function jobDetector(job) {
   switch (job) {
     case 'git_compatibility':
       return (files) => files.some((file) => matchesPrefix(file, GIT_COMPAT_PREFIXES))
+    case 'codex_index_heal_contract':
+      return (files) =>
+        files.some((file) => matchesPrefix(file, CODEX_INDEX_HEAL_CONTRACT_PREFIXES))
     case 'xterm_patch_sync':
       return (files) => files.some((file) => matchesPrefix(file, XTERM_PREFIXES))
     case 'shell_contracts':

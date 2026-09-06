@@ -9,6 +9,7 @@ import type {
 import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
+import { readFreshTerminalInventory } from './terminal-inventory-observation'
 
 const RECOVERY_DEADLINE_MS = 8_000
 
@@ -76,10 +77,6 @@ function count(text: string, marker: string): number {
   return text.split(marker).length - 1
 }
 
-function isTransientPtyLivenessError(error: unknown): boolean {
-  return error instanceof Error && error.message.includes('terminal_liveness_unavailable')
-}
-
 async function expectSingleOwningPty(
   page: Page,
   worktreeId: string,
@@ -90,24 +87,15 @@ async function expectSingleOwningPty(
   await expect
     .poll(
       async () => {
-        try {
-          const listed = await callStartupExecRuntime<RuntimeTerminalListResult>(
-            page,
-            'terminal.list',
-            {
-              worktree: `id:${worktreeId}`,
-              requireFreshPtyLiveness: true
-            }
-          )
-          return listed.terminals
-            .filter((candidate) => candidate.tabId === tabId)
-            .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
-        } catch (error) {
-          if (isTransientPtyLivenessError(error)) {
-            return []
-          }
-          throw error
-        }
+        const listed = await readFreshTerminalInventory(() =>
+          callStartupExecRuntime<RuntimeTerminalListResult>(page, 'terminal.list', {
+            worktree: `id:${worktreeId}`,
+            requireFreshPtyLiveness: true
+          })
+        )
+        return (listed?.terminals ?? [])
+          .filter((candidate) => candidate.tabId === tabId)
+          .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
       },
       { timeout: 30_000 }
     )

@@ -28,7 +28,7 @@ describe('PTY provider process inspection', () => {
     expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
   })
 
-  it('returns unavailable to the renderer when a stale PTY is gone', async () => {
+  it('returns client-only unverifiable to the renderer when a stale PTY is gone', async () => {
     const provider = {
       hasPty: vi.fn(() => false)
     } as unknown as IPtyProvider
@@ -36,7 +36,8 @@ describe('PTY provider process inspection', () => {
     await expect(inspectPtyProviderProcessForRenderer(provider, 'pty-missing')).resolves.toEqual({
       foregroundProcess: null,
       hasChildProcesses: false,
-      unavailable: true
+      verdict: 'unverifiable',
+      reason: 'terminal_gone'
     })
   })
 
@@ -49,11 +50,25 @@ describe('PTY provider process inspection', () => {
     await expect(inspectPtyProviderProcessForRenderer(provider, 'pty-1')).rejects.toBe(failure)
   })
 
-  it('preserves an unavailable inspection result', async () => {
+  it('returns client-only unverifiable when the provider loses transport', async () => {
+    const provider = {
+      inspectProcess: vi.fn().mockRejectedValue(new Error('SSH connection lost, reconnecting...'))
+    } as unknown as IPtyProvider
+
+    await expect(inspectPtyProviderProcessForRenderer(provider, 'pty-1')).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'transport_loss'
+    })
+  })
+
+  it('preserves a client-only unverifiable inspection result', async () => {
     const inspection = {
       foregroundProcess: null,
-      hasChildProcesses: true,
-      unavailable: true as const
+      hasChildProcesses: false,
+      verdict: 'unverifiable' as const,
+      reason: 'transport_loss' as const
     }
     const inspectProcess = vi.fn().mockResolvedValue(inspection)
     const provider = { inspectProcess } as unknown as IPtyProvider

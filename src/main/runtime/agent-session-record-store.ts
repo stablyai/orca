@@ -115,6 +115,29 @@ export class AgentSessionRecordStore {
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
+  listVisibleSessionIds = (): string[] =>
+    [...this.state.visibleSessionIds].filter((sessionId) => this.state.records.has(sessionId))
+
+  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
+    present: this.state.visibleSessionIdsIndexPresent,
+    sessionIds: this.listVisibleSessionIds()
+  })
+
+  /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
+  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
+    return this.transact(() => {
+      if (visible) {
+        if (!this.state.records.has(sessionId)) {
+          throw new Error('agent_session_identity_required')
+        }
+        this.state.visibleSessionIds.add(sessionId)
+      } else {
+        this.state.visibleSessionIds.delete(sessionId)
+      }
+      this.state.visibleSessionIdsIndexPresent = true
+    })
+  }
+
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)

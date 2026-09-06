@@ -161,7 +161,7 @@ export function registerSshHandlers(
   setPersistedStore(store)
   registerAdvertisedUrlRefresh(getCurrentMainWindow)
 
-  registerCredentialHandler(getCurrentMainWindow)
+  registerCredentialHandler()
 
   const callbacks = createSshConnectionCallbacks()
   if (connectionManager) {

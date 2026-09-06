@@ -42,13 +42,19 @@ import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-setting
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
 
+type PersistenceStartupDetails = Record<string, unknown> | (() => Record<string, unknown>)
+
 function logPersistenceStartupMilestone(
   event: string,
-  details: Record<string, unknown> = {}
+  details: PersistenceStartupDetails = {}
 ): void {
-  if (isStartupDiagnosticsEnabled()) {
-    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+  if (!isStartupDiagnosticsEnabled()) {
+    return
   }
+  // Why: snapshot `t` before resolving lazy details — otherwise an expensive details closure is billed to the milestone it measures.
+  const t = Math.round(performance.now())
+  const resolvedDetails = typeof details === 'function' ? details() : details
+  logStartupDiagnostic(event, { t, ...resolvedDetails })
 }
 
 import type { StoreRuntimeState } from './store-runtime-state'
@@ -279,10 +285,10 @@ export class LoadedStateParsingOperations {
       migrated.githubCache = readGithubCacheSnapshot(this.runtime.dataFile) ?? migrated.githubCache
     }
 
-    logPersistenceStartupMilestone('persistence-load-done', {
+    logPersistenceStartupMilestone('persistence-load-done', () => ({
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
-    })
+    }))
     return migrated
   }
 }

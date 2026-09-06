@@ -7,17 +7,12 @@
 // read would silently skip that revision. Rows carry the revision, which is why
 // `after` is the only direction that can answer `cursor_compacted`.
 
-import {
-  agentJournalSubmissionKey,
-  boundJournalKeyComponent
-} from '../../../shared/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
-  AgentJournalSnapshot,
-  AgentJournalSubmission
+  AgentJournalSnapshot
 } from '../../../shared/agent-session-journal-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import {
   AGENT_SESSION_HISTORY_DEFAULT_LIMIT,
   AGENT_SESSION_HISTORY_MAX_LIMIT,
@@ -28,95 +23,16 @@ import {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
+import {
+  boundHistoryItemsByBytes,
+  HISTORY_PAGE_CONTENT_BUDGET_BYTES,
+  historyEntryBytes,
+  newestWholeSequenceGroups,
+  oversizedHistoryItem,
+  submissionBytesByItemId
+} from './agent-session-history-page-bounds'
 
-/** Byte budget for one history page. Half the outbound channel cap, so the RPC
- *  envelope and page framing always fit beside the items: row counts alone
- *  cannot protect the channel — forty legal 256 KiB messages serialize past the
- *  4 MiB outbound cap, and an overflow closes the client's socket on every
- *  reopen. Pages degrade to fewer rows instead; `hasOlder`/`hasNewer` keep the
- *  client paging. */
-export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
-
-/** Reserved for everything the page carries beyond its items and removal ids:
- *  cursors, session/epoch ids, and the RPC envelope. Charged up front so the
- *  content budget bounds the COMPLETE serialized result, not just the rows. */
-const HISTORY_PAGE_ENVELOPE_RESERVE_BYTES = 64 * 1024
-
-const HISTORY_PAGE_CONTENT_BUDGET_BYTES =
-  AGENT_SESSION_HISTORY_MAX_PAGE_BYTES - HISTORY_PAGE_ENVELOPE_RESERVE_BYTES
-
-/** Item bytes plus the submission the page would carry alongside it. */
-function historyEntryBytes(
-  item: AgentJournalRenderItem,
-  submissionBytes: ReadonlyMap<string, number>
-): number {
-  return Buffer.byteLength(JSON.stringify(item), 'utf8') + (submissionBytes.get(item.itemId) ?? 0)
-}
-
-function submissionBytesByItemId(
-  submissions: readonly AgentJournalSubmission[]
-): Map<string, number> {
-  return new Map(
-    submissions.map((submission) => [
-      agentJournalSubmissionKey(submission.clientMessageId),
-      Buffer.byteLength(JSON.stringify(submission), 'utf8')
-    ])
-  )
-}
-
-/** Visible stand-in for an item whose body alone exceeds the page budget. The
- *  full body stays in the journal — this bounds what ONE PAGE carries, it never
- *  rewrites the record. */
-function oversizedHistoryItem(
-  item: AgentJournalRenderItem,
-  byteLength: number
-): AgentJournalRenderItem {
-  return {
-    ...item,
-    // A pre-bounding id can exceed the budget by itself; the stand-in must not
-    // re-inflate the page it exists to bound. Bounding is deterministic, so
-    // re-reads keep deduplicating on the same key.
-    itemId: boundJournalKeyComponent(item.itemId),
-    body: {
-      kind: 'status',
-      text: `[Orca: item truncated — ${byteLength} bytes exceeds the history page budget]`
-    }
-  }
-}
-
-/**
- * Keep the edge of the window nearest the requested position within the byte
- * budget: `newest` for tail/backward pages, `oldest` for forward catch-up. The
- * page stays contiguous, so the dropped remainder is exactly what the next page
- * serves. Never empties a non-empty window — a single over-budget item degrades
- * to a visible marker so the client always makes progress.
- */
-function boundHistoryItemsByBytes(
-  items: AgentJournalRenderItem[],
-  keep: 'newest' | 'oldest',
-  submissionBytes: ReadonlyMap<string, number>,
-  maxBytes: number
-): { items: AgentJournalRenderItem[]; dropped: number } {
-  const ordered = keep === 'newest' ? items.toReversed() : items
-  const kept: AgentJournalRenderItem[] = []
-  let total = 0
-  for (const item of ordered) {
-    const bytes = historyEntryBytes(item, submissionBytes)
-    if (kept.length === 0 && bytes > maxBytes) {
-      kept.push(oversizedHistoryItem(item, bytes))
-      break
-    }
-    if (total + bytes > maxBytes) {
-      break
-    }
-    kept.push(item)
-    total += bytes
-  }
-  return {
-    items: keep === 'newest' ? kept.toReversed() : kept,
-    dropped: items.length - kept.length
-  }
-}
+export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from './agent-session-history-page-bounds'
 
 /** Clamped, never rejected: a client asking for more than the host will serve
  *  should get a smaller page and keep paging, not an error mid-scroll. */
@@ -151,7 +67,7 @@ export function readAgentSessionHistory(
   const older = cursor
     ? snapshot.items.filter((item) => item.sequence < cursor.sequence)
     : snapshot.items
-  const windowed = older.slice(Math.max(0, older.length - limit))
+  const windowed = newestWholeSequenceGroups(older, limit)
   const { items, dropped } = boundHistoryItemsByBytes(
     windowed,
     'newest',
@@ -185,7 +101,7 @@ function buildHydrationPage(
   snapshot: AgentJournalSnapshot,
   fence?: number
 ): AgentSessionHistoryPage {
-  const items = snapshot.items.slice(-AGENT_SESSION_HISTORY_MAX_LIMIT)
+  const items = newestWholeSequenceGroups(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
   const bounded = boundHistoryItemsByBytes(
     items,
     'newest',

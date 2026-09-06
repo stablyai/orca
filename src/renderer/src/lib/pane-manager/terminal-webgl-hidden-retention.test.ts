@@ -10,7 +10,8 @@ import {
 
 function createPane(withAddon = true): ManagedPaneInternal {
   return {
-    terminal: { blur: vi.fn() },
+    // options mirrors the real Terminal: suspend parks cursorBlink here.
+    terminal: { blur: vi.fn(), options: { cursorBlink: true } },
     webglAddon: withAddon
       ? ({ dispose: vi.fn() } as unknown as ManagedPaneInternal['webglAddon'])
       : null,

@@ -51,5 +51,9 @@ export type ToolSnapshot = {
   hasToolUpdate?: boolean
   hasToolInputField?: boolean
   lastAssistantMessage?: string
+  /** True when `lastAssistantMessage` was taken from a tool result/error rather than
+   *  assistant prose. Status cards still show it; the native-chat streaming bubble
+   *  must not, or a tool's stdout renders as the agent's reply. */
+  lastAssistantMessageIsToolOutput?: boolean
   clearLastAssistantMessage?: boolean
 }

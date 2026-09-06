@@ -1,19 +1,8 @@
 import { z } from 'zod'
 import { isSafePluginRelativePath } from './plugin-path-safety'
+import { isSafePluginId } from './plugin-id-format'
 
-const PLUGIN_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const DANGEROUS_PLUGIN_NAMES = new Set(['__proto__', 'prototype', 'constructor'])
-
-export const PLUGIN_ID_MAX_LENGTH = 64
-
-export function isSafePluginId(id: string): boolean {
-  return (
-    typeof id === 'string' &&
-    id.length <= PLUGIN_ID_MAX_LENGTH &&
-    PLUGIN_ID_RE.test(id) &&
-    !DANGEROUS_PLUGIN_NAMES.has(id)
-  )
-}
+export { isPluginManifestId, isSafePluginId, PLUGIN_ID_MAX_LENGTH } from './plugin-id-format'
 
 export const pluginIdSchema = z
   .string()
@@ -41,7 +30,3 @@ export const pluginCommandIdSchema = z
   .min(1)
   .max(256)
   .regex(/^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$/, 'must be a portable command id')
-
-export function isPluginManifestId(value: string): boolean {
-  return PLUGIN_ID_RE.test(value)
-}

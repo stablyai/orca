@@ -184,4 +184,77 @@ describe('useIpcEvents Close Tab on the active browser tab', () => {
     expect(closeUnifiedTab).not.toHaveBeenCalled()
     expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
   })
+
+  // Why: in split layouts the activeTabType mirror can say 'terminal' while a browser guest holds
+  // focus (guest focus never reaches the group's focus-capture); the guest-forwarded source id must
+  // close the guest's own workspace anyway.
+  it('closes the source workspace when the active-tab mirror points at a terminal', async () => {
+    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
+    await useIpcEventsForCloseRouting({
+      closeActiveTabListenerRef: listenerRef,
+      getState: () => ({
+        ...activeBrowserWorkspace({}),
+        activeTabType: 'terminal',
+        activeBrowserTabId: null,
+        browserPagesByWorkspace: {
+          // Ownership comes from the canonical maps, not denormalized page fields.
+          'workspace-1': [{ id: 'page-1', workspaceId: 'stale-workspace', worktreeId: 'stale-wt' }]
+        }
+      })
+    })
+
+    requireListener(listenerRef)({ sourceId: 'page-1' })
+
+    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
+    expect(destroyWorkspaceWebviews).toHaveBeenCalled()
+  })
+
+  // Why: an open-but-empty floating panel is the ambient close fallback only; a guest-forwarded
+  // source id names a main-workspace target and must not be swallowed by the panel toggle.
+  it('closes the source workspace even while an empty floating panel is visible', async () => {
+    vi.stubGlobal('document', { querySelector: () => ({}) })
+    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
+    await useIpcEventsForCloseRouting({
+      closeActiveTabListenerRef: listenerRef,
+      getState: () => activeBrowserWorkspace({})
+    })
+
+    requireListener(listenerRef)({ sourceId: 'page-1' })
+
+    expect(closeBrowserTab).toHaveBeenCalledWith('workspace-1', undefined)
+    expect(destroyWorkspaceWebviews).toHaveBeenCalled()
+  })
+
+  it('no-ops on a stale source id instead of closing the ambient active tab', async () => {
+    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
+    await useIpcEventsForCloseRouting({
+      closeActiveTabListenerRef: listenerRef,
+      getState: () => activeBrowserWorkspace({})
+    })
+
+    requireListener(listenerRef)({ sourceId: 'page-that-no-longer-exists' })
+
+    expect(closeBrowserTab).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(closeWebRuntimeSessionTab).not.toHaveBeenCalled()
+  })
+
+  it('no-ops when a source page belongs to no live workspace', async () => {
+    const listenerRef: { current: CloseActiveTabListener | null } = { current: null }
+    await useIpcEventsForCloseRouting({
+      closeActiveTabListenerRef: listenerRef,
+      getState: () => ({
+        ...activeBrowserWorkspace({}),
+        browserPagesByWorkspace: {
+          orphan: [{ id: 'orphan-page', workspaceId: 'workspace-1', worktreeId: 'wt-1' }]
+        }
+      })
+    })
+
+    requireListener(listenerRef)({ sourceId: 'orphan-page' })
+
+    expect(closeBrowserTab).not.toHaveBeenCalled()
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(closeWebRuntimeSessionTab).not.toHaveBeenCalled()
+  })
 })

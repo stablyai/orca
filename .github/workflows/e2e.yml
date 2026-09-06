@@ -27,6 +27,10 @@ on:
         description: Ref to check out (defaults to the workflow ref)
         required: false
         type: string
+      test_files:
+        description: JSON array of specs to run; empty runs the full suite
+        required: false
+        type: string
   schedule:
     # Why: GitHub cron uses UTC; these slots map to 10am and 3pm
     # America/Phoenix for the default-branch E2E run.
@@ -55,9 +59,13 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          npx electron-vite build --mode e2e
-          pnpm run build:web-from-renderer
-          pnpm run build:relay
+          status=0
+          pnpm run build:relay &
+          relay_pid=$!
+          npx electron-vite build --mode e2e || status=1
+          pnpm run build:web-from-renderer || status=1
+          wait "$relay_pid" || status=1
+          exit "$status"
 
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
@@ -71,9 +79,29 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # Build Electron-native dependencies once per workflow. Consumer shards restore
+  # this immutable cache instead of compiling the same ABI concurrently.
+  prepare-native-cache:
+    name: prepare Electron native cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install native build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
   e2e:
     name: e2e ${{ matrix.shard_name }}
-    needs: build
+    needs: [build, prepare-native-cache]
     if: inputs.test_files == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -122,7 +150,7 @@ jobs:
       # Native cache misses need the compiler, Electron needs Xvfb, and paired
       # Quick Open needs ripgrep. Install them in one apt transaction per shard.
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep xvfb zsh openbox x11-utils
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -143,7 +171,7 @@ jobs:
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -159,7 +187,7 @@ jobs:
 
   changed-e2e:
     name: changed e2e specs
-    needs: build
+    needs: [build, prepare-native-cache]
     if: inputs.test_files != ''
     runs-on: ubuntu-latest
     # Why 45: pr.yml now maps SSH source edits onto Docker-backed specs, so this lane can
@@ -177,7 +205,7 @@ jobs:
         # unbounded inventory fallback; the paired fixture exercises that real boundary.
         # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
         # lane now receives those specs from pr.yml's SSH source mapping.
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -193,12 +221,20 @@ jobs:
         env:
           TEST_FILES_JSON: ${{ inputs.test_files }}
         run: |
+          # Why the native IME spec is dropped: it test.skip()s itself without
+          # ORCA_E2E_NATIVE_IBUS_HANGUL, which this lane cannot set because it has no ibus
+          # session. Running it here reported a green skip as coverage.
           mapfile -t TEST_FILES < <(jq -r '.[] | select(
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
-            . != "tests/e2e/paired-startup-exec-readiness.spec.ts"
+            . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
+            . != "tests/e2e/local-ssh-browser-routing.spec.ts" and
+            . != "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts" and
+            . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
+            . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
+            . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
           )' <<<"$TEST_FILES_JSON")
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
-            echo "Changed startup-readiness specs are owned by the dedicated live lane."
+            echo "Changed specs are all owned by dedicated lanes."
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
@@ -213,7 +249,7 @@ jobs:
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
-          xvfb-run --auto-servernum env "${E2E_ENV[@]}" \
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
       - name: Upload Playwright traces
@@ -227,16 +263,18 @@ jobs:
 
   ssh-docker-watcher-isolation:
     name: ssh docker watcher isolation
-    needs: build
-    # Why ssh_source_changed first: this lane used to trigger on SSH source only as a side
+    needs: [build, prepare-native-cache]
     # effect of one route listing a startup-readiness spec — pruning that spec would have
     # silently retired the whole lane. The signal is now derived from the SSH routes directly.
-    # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
+    # The explicit spec clauses stay for their honest purpose: changed-e2e hands these specs to this
     # lane, so editing one must still run it here.
     if: >-
       inputs.test_files == '' ||
       inputs.ssh_source_changed == 'true' ||
+      contains(inputs.test_files, 'tests/e2e/local-ssh-browser-routing.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
+      contains(inputs.test_files, 'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
     runs-on: ubuntu-latest
     # Why 60: this lane now also runs the remaining Docker-SSH specs serially. They average
@@ -251,7 +289,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -266,7 +304,7 @@ jobs:
       # Why: this is the release-path proof that the deployed Linux relay keeps
       # its PTY and explorer live across a real watcher SIGSEGV.
       - name: Run Docker SSH watcher isolation E2E
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
 
       # Why: Playwright empties test-results/ when it starts, so each step here used to
       # destroy the previous step's traces. Only the last lane's failure was ever
@@ -283,7 +321,7 @@ jobs:
       # readiness across live SSH, headed paired, and headless serve topologies.
       - name: Run Docker SSH terminal parking + startup readiness E2E
         if: always()
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
 
       - name: Keep terminal-parking traces
         if: always()
@@ -299,7 +337,7 @@ jobs:
       # legible as an SSH-named failure.
       - name: Run remaining Docker SSH E2E
         if: always()
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker
 
       - name: Keep remaining-ssh-docker traces
         if: always()
@@ -317,3 +355,23 @@ jobs:
           path: e2e-traces/
           retention-days: 7
           if-no-files-found: ignore
+
+  ssh-browser-network-route:
+    name: ssh browser network route
+    if: inputs.test_files == '' || contains(inputs.test_files, 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+      - name: Install SSH client
+        run: sudo apt-get update && sudo apt-get install -y openssh-client
+      - name: Run Docker SSH browser network route journeys
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          ORCA_RUN_DOCKER_SSH_BROWSER_E2E: '1'
+        run: node_modules/.bin/vitest run --config config/vitest.config.ts tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts

@@ -15,6 +15,7 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 export type {
+  AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -106,6 +107,10 @@ export type AgentStatusEntry = {
   prompt: string
   /** Timestamp (ms) of the last status update. */
   updatedAt: number
+  /** Timestamp (ms) the reported evidence was first observed. Separate from `updatedAt`,
+   *  which is the delivery/ordering clock a relay reconnect must restamp to stay monotonic.
+   *  Absent for locally derived rows and old hosts; freshness falls back to `updatedAt`. */
+  evidenceObservedAt?: number
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number
@@ -136,6 +141,10 @@ export type AgentStatusEntry = {
   interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
+  /** True when `lastAssistantMessage` came from a tool result/error, not assistant prose.
+   *  Status/dashboard surfaces still render it; native chat's streaming bubble must not,
+   *  or a tool's stdout is shown as the agent's reply. */
+  lastAssistantMessageIsToolOutput?: boolean
   /** Output of the newest completed (non-boundary) turn, kept across the next `working`.
    *  Why: batched publications can fold a whole done→working turn into one notification,
    *  so `lastAssistantMessage` is already cleared by the time a subscriber observes it. */
@@ -180,6 +189,8 @@ export type AgentStatusPayload = {
    *  AgentStatusEntry field for semantics. Not truncated like toolInput. */
   interactivePrompt?: string
   lastAssistantMessage?: string
+  /** See the AgentStatusEntry field for semantics. */
+  lastAssistantMessageIsToolOutput?: boolean
   interrupted?: boolean
   /** True when this `done` marks a session boundary (connect/resume/clear landing idle,
    *  e.g. Claude SessionStart — STA-3386), not a completed turn. Consumers that react to
@@ -222,6 +233,9 @@ export function pickParsedAgentStatusPayload(
     ...(row.lastAssistantMessage !== undefined
       ? { lastAssistantMessage: row.lastAssistantMessage }
       : {}),
+    ...(row.lastAssistantMessageIsToolOutput !== undefined
+      ? { lastAssistantMessageIsToolOutput: row.lastAssistantMessageIsToolOutput }
+      : {}),
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
@@ -243,25 +257,14 @@ export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
 /** Maximum character length for the interactivePrompt field.
  *  Why: holds full AskUserQuestion JSON — truncating to a preview like toolInput would corrupt it and drop options; capped to still bound cache growth. */
 export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
-/**
- * Freshness threshold for explicit agent status: retained past this so WorktreeCard's
- * sidebar dot can decay "working" back to "active" when the hook stream goes silent.
- */
-export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
-
-export function isFreshNonDoneAgentStatus(
-  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'restoredUnconfirmed'> | undefined,
-  now = Date.now(),
-  staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
-): boolean {
-  // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
-  return Boolean(
-    entry &&
-    entry.state !== 'done' &&
-    entry.restoredUnconfirmed !== true &&
-    now - entry.updatedAt <= staleAfterMs
-  )
-}
+// Re-exported here because every consumer reaches for the entry type and its freshness gate
+// together; the clock rules themselves live in agent-status-freshness.ts.
+export {
+  AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusAuthorityObservedAt,
+  agentStatusEvidenceObservedAt,
+  isFreshNonDoneAgentStatus
+} from './agent-status-freshness'
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.
 const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
@@ -391,6 +394,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
       obj.lastAssistantMessage,
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
     ),
+    // Why: absent/false collapse to undefined so the flag only ever means "known tool output";
+    // an old host that never sends it keeps today's behavior instead of silently suppressing.
+    lastAssistantMessageIsToolOutput:
+      obj.lastAssistantMessageIsToolOutput === true ? true : undefined,
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,

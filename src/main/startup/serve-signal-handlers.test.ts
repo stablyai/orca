@@ -11,9 +11,11 @@ describe('registerServeSignalHandlers', () => {
     signalSource.emit('SIGINT')
     signalSource.emit('SIGINT')
     signalSource.emit('SIGTERM')
+    signalSource.emit('SIGHUP')
 
-    expect(quitApplication).toHaveBeenCalledTimes(3)
+    expect(quitApplication).toHaveBeenCalledTimes(4)
     expect(signalSource.listenerCount('SIGINT')).toBe(1)
     expect(signalSource.listenerCount('SIGTERM')).toBe(1)
+    expect(signalSource.listenerCount('SIGHUP')).toBe(1)
   })
 })

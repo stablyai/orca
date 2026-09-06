@@ -209,6 +209,37 @@ describe('getStatusOp', () => {
     expect(git.mock.calls.filter(([args]) => args.includes('diff'))).toHaveLength(2)
   })
 
+  it('omits line stats without overwriting the reusable line-stats cache', async () => {
+    const statusOutput = `${buildBranchStatusOutput('head-skip', '(detached)')}\n1 .M N... 100644 100644 100644 aaaa aaaa src/a.ts`
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args.includes('status')) {
+        return { stdout: statusOutput, stderr: '' }
+      }
+      if (args.includes('diff')) {
+        return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
+      }
+      throw new Error(`Unexpected git command: ${args.join(' ')}`)
+    })
+
+    const withStats = await getStatusOp(git, streamGitFromCapture(git), {
+      worktreePath: tmpDir
+    })
+    const withoutStats = await getStatusOp(git, streamGitFromCapture(git), {
+      worktreePath: tmpDir,
+      includeLineStats: false
+    })
+    const reused = await getStatusOp(git, streamGitFromCapture(git), {
+      worktreePath: tmpDir,
+      reuseLineStats: true
+    })
+
+    expect(withoutStats.entries).toEqual(
+      withStats.entries.map(({ added: _added, removed: _removed, ...entry }) => entry)
+    )
+    expect(reused.entries).toEqual(withStats.entries)
+    expect(git.mock.calls.filter(([args]) => args.includes('diff'))).toHaveLength(1)
+  })
+
   it('forwards the request abort signal to status and numstat subprocesses', async () => {
     const controller = new AbortController()
     const git = vi.fn<GitExec>(async (args) => {

@@ -139,7 +139,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const preferences = new ProfilePreferences(runtime, scheduling)
   const repos = new RepoLifecycleOperations(runtime, scheduling)
   const bindingRecovery = new TerminalBindingRecoveryOperations(runtime)
-  const sessions = new SessionHostPartitionOperations(runtime, scheduling)
+  const sessions = new SessionHostPartitionOperations(runtime, scheduling, bindingRecovery)
   const sessionSnapshots = new SessionSnapshotOperations(
     runtime,
     sessions,

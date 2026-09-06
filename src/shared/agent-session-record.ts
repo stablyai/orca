@@ -110,6 +110,10 @@ export type AgentSessionLease = {
    */
   minimumNextFence?: number
   deathEvidence: AgentSessionDeathEvidence | null
+  /** A positively observed provider exit whose terminal journal settlement still needs retry. */
+  settlementRetryRequired?: boolean
+  /** Stable lifecycle batch id used when retrying the terminal settlement. */
+  settlementRetryId?: string
 }
 
 export type AgentSessionRecord = {
@@ -217,7 +221,7 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   )
 }
 
-function isAgentSessionOptions(value: unknown): value is Record<string, string> {
+export function isAgentSessionOptions(value: unknown): value is Record<string, string> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
@@ -310,6 +314,10 @@ function isAgentSessionLease(value: unknown): value is AgentSessionLease {
       lease.claimStatus === 'conflicted' ||
       lease.claimStatus === 'released') &&
     typeof lease.unreconciled === 'boolean' &&
+    (lease.settlementRetryRequired === undefined ||
+      typeof lease.settlementRetryRequired === 'boolean') &&
+    (lease.settlementRetryId === undefined ||
+      isBoundedString(lease.settlementRetryId, MAX_ID_LENGTH)) &&
     (lease.deathEvidence === null || isAgentSessionDeathEvidence(lease.deathEvidence))
   )
 }

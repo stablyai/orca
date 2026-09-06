@@ -12,8 +12,13 @@ import type {
   AgentJournalResolution,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import type { AgentSessionHandoffStage, AgentSessionOwnerRuntimeKind } from './agent-session-record'
+import type {
+  AgentSessionHandoffStage,
+  AgentSessionOwnerRuntimeKind,
+  AgentSessionRecord
+} from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 export type AgentSessionHandoffDirection = 'to-tui' | 'to-native'
 export type AgentSessionHandoffMode = 'now' | 'after-turn' | 'stop-turn'
@@ -48,6 +53,20 @@ export type AgentSessionHandoffRequest = {
 }
 
 export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
+
+export type AgentSessionBackgroundTask = {
+  id: string
+  kind: 'agent' | 'workflow' | 'command' | 'monitor' | 'unknown'
+  description?: string
+}
+
+export type AgentSessionBackgroundTaskState = {
+  state: 'monitoring'
+  /** Optional so mixed-version clients can consume state-only hosts. */
+  tasks?: AgentSessionBackgroundTask[]
+  /** Optional so clients only send targeted stops to hosts that accept them. */
+  supportsTaskStop?: boolean
+}
 
 /** Backward paging is the client's normal read; 40 matches the page size the
  *  mobile list renders without a visible fill-in. */
@@ -92,6 +111,8 @@ export type AgentSessionHistoryPage = {
   liveCursor?: AgentJournalCursor
   hasOlder: boolean
   hasNewer: boolean
+  /** Present on hosts that expose provider-owned background task lifecycle. */
+  backgroundTasks?: AgentSessionBackgroundTaskState | null
 }
 
 export type AgentSessionHistoryResult =
@@ -123,6 +144,7 @@ export type AgentSessionSubscribeEvent =
       page: AgentSessionHistoryPage
       fence: number
       handoff?: AgentSessionHandoffStatus
+      backgroundTasks?: AgentSessionBackgroundTaskState | null
     }
   | {
       type: 'batch'
@@ -131,6 +153,7 @@ export type AgentSessionSubscribeEvent =
       /** Added with handoff state so mixed-version cursors retain the ownership fence. */
       fence?: number
       handoff?: AgentSessionHandoffStatus
+      backgroundTasks?: AgentSessionBackgroundTaskState | null
     }
   | {
       type: 'reset'
@@ -139,7 +162,31 @@ export type AgentSessionSubscribeEvent =
       page: AgentSessionHistoryPage
       fence: number
       handoff?: AgentSessionHandoffStatus
+      backgroundTasks?: AgentSessionBackgroundTaskState | null
     }
+  | { type: 'end' }
+
+// ─── Status feed ────────────────────────────────────────────────────────────
+
+/** What a session list needs to know about one session. The host projects it
+ *  from the journal so no client has to replay a transcript to learn whether a
+ *  turn is running. Additive surface: an older host has no such method. */
+export type AgentSessionStatusSummary = {
+  sessionId: string
+  workspaceId: string
+  agent: AgentSessionRecord['provider']
+  /** Null until the journal holds a persisted user or assistant message. */
+  status: StructuredAgentSessionProjectedStatus | null
+  latestPrompt: string
+  providerSession?: AgentProviderSessionMetadata
+  updatedAt: number
+}
+
+/** A summary outlives its provider child: an evicted idle session is still idle, so the host
+ *  keeps the last projection and never retracts one. Tabs, not this feed, decide what is listed. */
+export type AgentSessionStatusEvent =
+  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[] }
+  | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 
 // ─── Mutation envelope ──────────────────────────────────────────────────────
@@ -175,6 +222,17 @@ export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
   'execution_owner_reconciling'
 ] as const
 export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
+
+/** For a host path that raises its refusal as the thrown code. Narrowing through this keeps an
+ *  unrelated fault from being reported to the client as a tidy, wrong refusal. */
+export function isAgentSessionWireRefusalCode(
+  value: unknown
+): value is AgentSessionWireRefusalCode {
+  return (
+    typeof value === 'string' &&
+    (AGENT_SESSION_WIRE_REFUSAL_CODES as readonly string[]).includes(value)
+  )
+}
 
 export type AgentSessionWireRefusal = {
   code: AgentSessionWireRefusalCode
@@ -254,5 +312,11 @@ export type AgentSessionOptionsResult = {
   current: {
     model: string
     effort?: string
+    /**
+     * Option ids whose value the provider reported back, not merely accepted.
+     * Optional: a host that predates it sends nothing and the client keeps
+     * treating the value as unconfirmed, which is what it was before.
+     */
+    confirmed?: readonly string[]
   }
 }

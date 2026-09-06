@@ -89,6 +89,8 @@ export function reserveAgentSessionOwner(args: {
       handoffOperationId: reservation.handoffOperationId,
       claimKeyId: reservation.claimKeyId,
       claimStatus: 'reserved',
+      settlementRetryRequired: undefined,
+      settlementRetryId: undefined,
       deathEvidence: null
     })
   }
@@ -208,6 +210,9 @@ export function evictAgentSessionOwner(args: {
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
+  if (record.lease.settlementRetryRequired) {
+    throw new Error('agent_session_ownership_unknown')
+  }
   const adjudication = adjudicateAgentSessionRestart({
     lease: record.lease,
     probe: args.probe,

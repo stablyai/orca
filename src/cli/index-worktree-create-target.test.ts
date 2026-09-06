@@ -72,6 +72,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'feature',
+      displayName: 'feature',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -147,6 +149,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-gpu',
       name: 'feature',
+      displayName: 'feature',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -259,6 +263,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,

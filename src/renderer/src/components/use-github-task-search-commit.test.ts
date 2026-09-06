@@ -31,6 +31,25 @@ describe('useGitHubTaskSearchCommit', () => {
     expect(onCommit).toHaveBeenCalledWith('rate')
   })
 
+  it('ignores a stale timer when cleanup races with the idle boundary', () => {
+    const onCommit = vi.fn()
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout').mockImplementation(() => {})
+    const view = renderHook(
+      ({ value }) => useGitHubTaskSearchCommit({ enabled: true, onCommit, value }),
+      { initialProps: { value: 'r' } }
+    )
+
+    try {
+      view.rerender({ value: 'ra' })
+      act(() => vi.advanceTimersByTime(GITHUB_TASK_SEARCH_IDLE_MS))
+
+      expect(onCommit).toHaveBeenCalledOnce()
+      expect(onCommit).toHaveBeenCalledWith('ra')
+    } finally {
+      clearTimeoutSpy.mockRestore()
+    }
+  })
+
   it('cancels a pending commit when disabled', () => {
     const onCommit = vi.fn()
     const view = renderHook(

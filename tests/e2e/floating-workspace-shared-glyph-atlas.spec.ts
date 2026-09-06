@@ -2,6 +2,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { sendToTerminal, waitForActivePanePtyId } from './helpers/terminal'
+import { compareTerminalScreenshots } from './terminal-screenshot-diff'
 
 // Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
 // e2e specs avoid importing renderer/shared modules into the Playwright runner.
@@ -368,11 +369,55 @@ test.describe('floating workspace shared glyph atlas @headful', () => {
     const afterSwitch = await captureWorkspaceAfterTrigger(orcaPage, scenario!)
     await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
     await testInfo.attach('after-tab-switch', { body: afterSwitch, contentType: 'image/png' })
-    console.log(`[shared-atlas] tabSwitchIntact=${afterSwitch.equals(baseline)}`)
+    // Why: byte equality trips on sub-pixel antialiasing noise that leaves every
+    // glyph legible. Stale-model corruption blanks the terminal (~3% of pixels),
+    // far past the helper's 1.5% threshold, so the tolerance keeps the teeth.
+    const afterSwitchDiff = compareTerminalScreenshots(baseline, afterSwitch)
+    console.log(
+      `[shared-atlas] tabSwitchIntact=${afterSwitchDiff.matches} diffRatio=${afterSwitchDiff.diffRatio.toFixed(5)} diffPixels=${afterSwitchDiff.diffPixels}`
+    )
 
     expect(
-      afterSwitch.equals(baseline),
+      afterSwitchDiff.matches,
       'workspace terminal must render identically after floating tab switching'
+    ).toBe(true)
+  })
+
+  test('a sibling terminal clearing the shared atlas leaves workspace glyphs intact', async ({
+    orcaPage
+  }, testInfo) => {
+    // Why this trigger and not a panel reveal: Orca's reveal paths escalate to a
+    // registry-wide atlas reset, which repaints every pane and would heal the
+    // corruption before it could be observed — so a reveal-driven test passes whether
+    // or not xterm propagates the invalidation. Clearing straight through the floating
+    // manager reproduces the same shared-atlas wipe with none of that recovery in the
+    // way, which is what makes this the assertion with teeth: it fails if
+    // ITextureAtlas.pageLayoutVersion stops reaching sibling renderers.
+    const scenario = await setUpSharedAtlasScenario(orcaPage)
+    test.skip(!scenario, 'WebGL inactive or terminals do not share a glyph atlas')
+    const { baseline, workspacePtyId, floatingTabIds } = scenario!
+
+    // The panel stays closed: the workspace terminal must be the only thing repainting.
+    await resetAtlasOnTab(orcaPage, floatingTabIds[0])
+
+    // Why refresh and not a full rebuild: xterm skips cells whose content is unchanged,
+    // so this is the repaint that reuses vertices baked against the wiped atlas pages.
+    await refreshTerminalOnTab(orcaPage, scenario!.workspaceTabId)
+    const afterSiblingClear = await captureStableWorkspaceShot(orcaPage, workspacePtyId)
+
+    await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
+    await testInfo.attach('after-sibling-clear', {
+      body: afterSiblingClear,
+      contentType: 'image/png'
+    })
+    const afterSiblingClearDiff = compareTerminalScreenshots(baseline, afterSiblingClear)
+    console.log(
+      `[shared-atlas] siblingClearIntact=${afterSiblingClearDiff.matches} diffRatio=${afterSiblingClearDiff.diffRatio.toFixed(5)} diffPixels=${afterSiblingClearDiff.diffPixels}`
+    )
+
+    expect(
+      afterSiblingClearDiff.matches,
+      'workspace terminal must rebuild its model after a sibling wipes the shared atlas'
     ).toBe(true)
   })
 
@@ -393,10 +438,13 @@ test.describe('floating workspace shared glyph atlas @headful', () => {
     const afterReopen = await captureWorkspaceAfterTrigger(orcaPage, scenario!)
     await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
     await testInfo.attach('after-reopen', { body: afterReopen, contentType: 'image/png' })
-    console.log(`[shared-atlas] reopenIntact=${afterReopen.equals(baseline)}`)
+    const afterReopenDiff = compareTerminalScreenshots(baseline, afterReopen)
+    console.log(
+      `[shared-atlas] reopenIntact=${afterReopenDiff.matches} diffRatio=${afterReopenDiff.diffRatio.toFixed(5)} diffPixels=${afterReopenDiff.diffPixels}`
+    )
 
     expect(
-      afterReopen.equals(baseline),
+      afterReopenDiff.matches,
       'workspace terminal must render identically after a floating panel reopen'
     ).toBe(true)
   })

@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
+import { runAfterFirstWindowShown } from '../startup/first-window-deferral'
 import { reportSecretProtectionGap } from './secret-protection-report'
 
 /**
@@ -27,6 +27,7 @@ const REPORT_FALLBACK_MS = 15_000
 
 export function scheduleSecretProtectionGapReport({
   deferUntilFirstWindow,
+  skipInDevelopment = false,
   ...options
 }: {
   dataFile: string
@@ -40,7 +41,13 @@ export function scheduleSecretProtectionGapReport({
    * the timing serve already had, and the safer of the two.
    */
   deferUntilFirstWindow: boolean
+  /** Development profiles are disposable/isolated and must not trigger OS keychain UI. */
+  skipInDevelopment?: boolean
 }): void {
+  if (skipInDevelopment && !options.force) {
+    return
+  }
+
   if (!deferUntilFirstWindow) {
     reportSecretProtectionGap(options)
     return
@@ -65,21 +72,5 @@ export function scheduleSecretProtectionGapReport({
     }
   }
 
-  let ran = false
-  const run = (): void => {
-    if (ran) {
-      return
-    }
-    ran = true
-    clearTimeout(fallback)
-    // Why setImmediate: keep the blocking keyring probe off the event handler that
-    // reveals the window, so the reveal paints first.
-    setImmediate(report)
-  }
-
-  const fallback = setTimeout(run, REPORT_FALLBACK_MS)
-  fallback.unref?.()
-  app.once('browser-window-created', (_event: Electron.Event, window: BrowserWindow) => {
-    window.once('ready-to-show', run)
-  })
+  runAfterFirstWindowShown(report, REPORT_FALLBACK_MS)
 }

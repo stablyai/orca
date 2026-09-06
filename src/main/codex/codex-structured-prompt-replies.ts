@@ -1,4 +1,20 @@
 import type { CodexAppServerConnection } from './codex-app-server-connection'
+import {
+  CODEX_PROMPT_MAX_ANSWER_BYTES,
+  MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
+  MAX_CODEX_PROMPT_REGISTRY_BYTES,
+  MAX_CODEX_PROMPT_REGISTRY_ENTRIES,
+  codexJournalPromptIdPart,
+  readQuestionIds,
+  readQuestionOptionAnswers
+} from './codex-prompt-registry-bounds'
+export {
+  codexJournalPromptIdPart,
+  MAX_CODEX_PROMPT_REGISTRY_ENTRIES,
+  MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
+  MAX_CODEX_PROMPT_REGISTRY_BYTES,
+  encodeCodexJournalQuestionOptionId
+} from './codex-prompt-registry-bounds'
 
 // Codex asks for approvals and tool input by sending JSON-RPC REQUESTS back to
 // Orca, and the turn blocks until each one is answered. The journal answers them
@@ -26,6 +42,9 @@ export type CodexPendingPrompt = {
   promptKey: string
   /** One entry per question for a user-input request; empty for an approval. */
   questionIds: readonly string[]
+  /** Journal-facing ids can be bounded; replies still need Codex's exact ids. */
+  questionIdAliases: ReadonlyMap<string, string>
+  optionAnswers: ReadonlyMap<string, { questionId: string; answer: string }>
   answers: Map<string, string>
 }
 
@@ -60,16 +79,6 @@ function readString(params: unknown, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-function readQuestionIds(params: unknown): string[] {
-  const questions = (params as { questions?: unknown } | null)?.questions
-  if (!Array.isArray(questions)) {
-    return []
-  }
-  return questions
-    .map((question) => (question as { id?: unknown })?.id)
-    .filter((id): id is string => typeof id === 'string' && id.length > 0)
-}
-
 export function isCodexPromptMethod(method: string): boolean {
   return (
     method === CODEX_COMMAND_APPROVAL_METHOD ||
@@ -88,6 +97,62 @@ export class CodexPromptRegistry {
   private readonly byAddress = new Map<string, CodexPendingPrompt>()
   /** Journal item id to thread-scoped prompt address. */
   private readonly journalItemIds = new Map<string, string>()
+  /** Bound prompts survive LRU eviction of the lookup window until answered. */
+  private readonly boundPrompts = new Map<string, CodexPendingPrompt>()
+
+  get sizes(): { prompts: number; journalBindings: number } {
+    return { prompts: this.byAddress.size, journalBindings: this.journalItemIds.size }
+  }
+
+  get bytes(): number {
+    return this.retainedPromptBytes()
+  }
+
+  private promptBytes(prompt: CodexPendingPrompt): number {
+    let bytes = 0
+    for (const value of [
+      prompt.threadId,
+      prompt.turnId ?? '',
+      prompt.codexItemId,
+      prompt.promptKey
+    ]) {
+      bytes += Buffer.byteLength(value, 'utf8')
+    }
+    for (const id of prompt.questionIds) {
+      bytes += Buffer.byteLength(id, 'utf8')
+    }
+    for (const entry of prompt.optionAnswers.values()) {
+      bytes += Buffer.byteLength(entry.questionId, 'utf8') + Buffer.byteLength(entry.answer, 'utf8')
+    }
+    for (const value of prompt.answers.values()) {
+      bytes += Buffer.byteLength(value, 'utf8')
+    }
+    return bytes
+  }
+
+  private retainedPromptBytes(): number {
+    const prompts = new Set([...this.byAddress.values(), ...this.boundPrompts.values()])
+    return [...prompts].reduce((total, prompt) => total + this.promptBytes(prompt), 0)
+  }
+
+  private trim(): void {
+    while (this.byAddress.size > MAX_CODEX_PROMPT_REGISTRY_ENTRIES) {
+      const oldest = this.byAddress.values().next().value as CodexPendingPrompt | undefined
+      if (!oldest) {
+        break
+      }
+      const address = this.address(oldest.threadId, oldest.promptKey)
+      this.byAddress.delete(address)
+    }
+    while (this.journalItemIds.size > MAX_CODEX_PROMPT_JOURNAL_BINDINGS) {
+      const oldest = this.journalItemIds.keys().next().value as string | undefined
+      if (!oldest) {
+        break
+      }
+      this.journalItemIds.delete(oldest)
+      this.boundPrompts.delete(oldest)
+    }
+  }
 
   private address(threadId: string, promptKey: string): string {
     return `${encodeURIComponent(threadId)}:${encodeURIComponent(promptKey)}`
@@ -105,6 +170,18 @@ export class CodexPromptRegistry {
     if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
       return null
     }
+    const questionIds =
+      request.method === CODEX_USER_INPUT_METHOD ? readQuestionIds(request.params) : []
+    if (questionIds === null) {
+      return null
+    }
+    const optionAnswers =
+      request.method === CODEX_USER_INPUT_METHOD
+        ? readQuestionOptionAnswers(request.params)
+        : new Map<string, { questionId: string; answer: string }>()
+    if (optionAnswers === null) {
+      return null
+    }
     const prompt: CodexPendingPrompt = {
       requestId: request.id,
       method: request.method,
@@ -112,17 +189,53 @@ export class CodexPromptRegistry {
       turnId: readString(request.params, 'turnId'),
       codexItemId,
       promptKey: readString(request.params, 'approvalId') ?? codexItemId,
-      questionIds:
-        request.method === CODEX_USER_INPUT_METHOD ? readQuestionIds(request.params) : [],
+      questionIds,
+      questionIdAliases:
+        request.method === CODEX_USER_INPUT_METHOD
+          ? new Map(questionIds.map((id) => [codexJournalPromptIdPart(id), id]))
+          : new Map(),
+      optionAnswers,
       answers: new Map()
     }
-    this.byAddress.set(this.address(prompt.threadId, prompt.promptKey), prompt)
+    const promptBytes = this.promptBytes(prompt)
+    if (promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES) {
+      return null
+    }
+    while (
+      this.retainedPromptBytes() + promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES &&
+      this.byAddress.size > 0
+    ) {
+      const oldest = this.byAddress.values().next().value as CodexPendingPrompt | undefined
+      if (!oldest) {
+        break
+      }
+      this.byAddress.delete(this.address(oldest.threadId, oldest.promptKey))
+    }
+    if (this.retainedPromptBytes() + promptBytes > MAX_CODEX_PROMPT_REGISTRY_BYTES) {
+      return null
+    }
+    const address = this.address(prompt.threadId, prompt.promptKey)
+    this.byAddress.delete(address)
+    this.byAddress.set(address, prompt)
+    this.trim()
     return prompt
   }
 
   /** Called by the translation module once the prompt has a journal id. */
   bindJournalItemId(journalItemId: string, threadId: string, promptKey: string): void {
-    this.journalItemIds.set(journalItemId, this.address(threadId, promptKey))
+    const existing = this.journalItemIds.get(journalItemId)
+    if (existing) {
+      this.boundPrompts.delete(journalItemId)
+    }
+    this.journalItemIds.delete(journalItemId)
+    const address = this.address(threadId, promptKey)
+    const prompt = this.byAddress.get(address)
+    if (!prompt) {
+      return
+    }
+    this.journalItemIds.set(journalItemId, address)
+    this.boundPrompts.set(journalItemId, prompt)
+    this.trim()
   }
 
   /** Falls back to treating the id as a prompt key, which is what it is before
@@ -130,7 +243,7 @@ export class CodexPromptRegistry {
   find(journalItemId: string): CodexPendingPrompt | null {
     const address = this.journalItemIds.get(journalItemId)
     if (address) {
-      return this.byAddress.get(address) ?? null
+      return this.boundPrompts.get(journalItemId) ?? this.byAddress.get(address) ?? null
     }
     const matches = [...this.byAddress.values()].filter(
       (prompt) => prompt.promptKey === journalItemId
@@ -140,10 +253,13 @@ export class CodexPromptRegistry {
 
   forget(prompt: CodexPendingPrompt): void {
     const address = this.address(prompt.threadId, prompt.promptKey)
-    this.byAddress.delete(address)
-    for (const [journalItemId, boundAddress] of this.journalItemIds) {
-      if (boundAddress === address) {
+    if (this.byAddress.get(address) === prompt) {
+      this.byAddress.delete(address)
+    }
+    for (const [journalItemId, boundPrompt] of this.boundPrompts) {
+      if (boundPrompt === prompt) {
         this.journalItemIds.delete(journalItemId)
+        this.boundPrompts.delete(journalItemId)
       }
     }
   }
@@ -151,6 +267,7 @@ export class CodexPromptRegistry {
   clear(): void {
     this.byAddress.clear()
     this.journalItemIds.clear()
+    this.boundPrompts.clear()
   }
 }
 
@@ -169,12 +286,18 @@ export function applyCodexPromptAnswer(
     }
     return { decision: optionId }
   }
-  const decoded = decodeCodexQuestionOptionId(optionId)
+  const mapped = prompt.optionAnswers.get(optionId)
+  const decoded = mapped ?? decodeCodexQuestionOptionId(optionId)
   const questionId =
-    decoded?.questionId ?? (prompt.questionIds.length === 1 ? prompt.questionIds[0] : null)
+    (decoded?.questionId
+      ? (prompt.questionIdAliases.get(decoded.questionId) ?? decoded.questionId)
+      : null) ?? (prompt.questionIds.length === 1 ? prompt.questionIds[0] : null)
   const answer = decoded?.answer ?? optionId
   if (!questionId || !prompt.questionIds.includes(questionId)) {
     throw new Error(`${optionId} does not name a question on Codex item ${prompt.codexItemId}`)
+  }
+  if (Buffer.byteLength(answer, 'utf8') > CODEX_PROMPT_MAX_ANSWER_BYTES) {
+    throw new Error('codex prompt answer exceeds bounded registry state')
   }
   prompt.answers.set(questionId, answer)
   if (prompt.questionIds.some((id) => !prompt.answers.has(id))) {

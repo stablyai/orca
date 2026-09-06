@@ -22,6 +22,7 @@ vi.mock('node:fs/promises', () => ({
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
+  toHostFilesystemPath,
   toHostRemovalPath
 } from './local-worktree-filesystem'
 
@@ -103,6 +104,27 @@ describe('local worktree filesystem runtime access', () => {
     })
   })
 
+  it('uses the same Win32 namespace for host directory creation on Windows', async () => {
+    await withPlatform('win32', async () => {
+      const longPath = `C:\\repo\\${'nested\\'.repeat(40)}feature`
+
+      expect(toHostFilesystemPath(longPath)).toBe(`\\\\?\\${longPath}`)
+    })
+  })
+
+  it('leaves POSIX WSL paths unchanged on a Windows host', async () => {
+    await withPlatform('win32', async () => {
+      expect(toHostFilesystemPath('/home/me/worktrees')).toBe('/home/me/worktrees')
+    })
+  })
+
+  it('leaves WSL UNC paths unchanged on a Windows host', async () => {
+    await withPlatform('win32', async () => {
+      const wslPath = String.raw`\\wsl.localhost\Ubuntu\home\me\worktrees`
+      expect(toHostFilesystemPath(wslPath)).toBe(wslPath)
+    })
+  })
+
   it('retries transient host removal failures on Windows', async () => {
     vi.useFakeTimers()
     await withPlatform('win32', async () => {
@@ -166,7 +188,11 @@ describe('local worktree filesystem runtime access', () => {
         1,
         expect.objectContaining({
           program: 'wsl.exe',
-          args: expect.arrayContaining(['-d', 'Ubuntu'])
+          args: expect.arrayContaining(['-d', 'Ubuntu']),
+          // Why a concrete directory (#16463): the guest path is inside the
+          // command, and these run while a worktree is being removed -- which is
+          // the cwd an omitted one would inherit.
+          cwd: expect.any(String)
         })
       )
       const removeArgs = runProcessMock.mock.calls[2]?.[0].args as string[]

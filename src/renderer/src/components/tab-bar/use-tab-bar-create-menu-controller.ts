@@ -105,7 +105,8 @@ export function useTabBarCreateMenuController({
   }
   const focusNewActiveTerminalWhenReady = (
     previousActiveTabId: string | null,
-    expiresAt: number
+    expiresAt: number,
+    now: number
   ): void => {
     const state = useAppStore.getState()
     if (
@@ -116,12 +117,12 @@ export function useTabBarCreateMenuController({
       focusTerminalTabSurface(state.activeTabId)
       return
     }
-    if (Date.now() >= expiresAt) {
+    if (now >= expiresAt) {
       return
     }
     pendingNewTabMenuFocusRetryRef.current = window.setTimeout(() => {
       pendingNewTabMenuFocusRetryRef.current = null
-      focusNewActiveTerminalWhenReady(previousActiveTabId, expiresAt)
+      focusNewActiveTerminalWhenReady(previousActiveTabId, expiresAt, Date.now())
     }, NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS)
   }
   const queueNewActiveTerminalFocusAfterNewTabMenuClose = (): void => {
@@ -130,7 +131,8 @@ export function useTabBarCreateMenuController({
       // Why: paired web/SSH tab creation is async; await the host snapshot's new terminal instead of the pre-existing active tab.
       focusNewActiveTerminalWhenReady(
         previousActiveTabId,
-        Date.now() + NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS
+        Date.now() + NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS,
+        Date.now()
       )
     }
   }

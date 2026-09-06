@@ -43,10 +43,9 @@ jobs:
           node-version-file: package.json
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          version: 10.24.0
-          run_install: false
+          install: false
 
       # Why: Linux golden E2E uses the same native install path as PR/release CI,
       # which needs pnpm to bypass its non-executable bundled gyp_main.py.
@@ -99,12 +98,17 @@ jobs:
           $env:SKIP_BUILD = '1'
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
           pnpm run --if-present test:e2e:workspace-session-golden
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm run --if-present test:e2e:windows-fresh-startup-golden
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm run --if-present test:e2e:tab-bar-agent-launch-golden
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path tests/e2e/golden-fresh-profile-terminal.spec.ts) {
             pnpm run test:e2e -- tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
           pnpm run --if-present test:e2e:source-control-golden
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload Playwright traces
         if: failure()

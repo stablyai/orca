@@ -78,6 +78,8 @@ import {
   TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS,
   TERMINAL_TAB_PARK_FLIP_WINDOW_MS
 } from './terminal-park-verdict-flip-telemetry'
+import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-terminal-worktree-visibility'
+import { queueTerminalPaneSplitRequest } from './terminal-pane-split-request-routing'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 const WORKTREE_ID = 'wt-1'
@@ -345,6 +347,26 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 
+  it('temporarily unparks only the exact target of a queued runtime split', () => {
+    const args = { ...hookArgs(false), coldParkTerminalPanes: true }
+    const { result } = renderHook(() => useTerminalTabColdParking(args))
+    expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
+
+    act(() => {
+      queueTerminalPaneSplitRequest({
+        tabId: 'tab-2',
+        paneRuntimeId: 9,
+        direction: 'vertical'
+      })
+    })
+    expect(result.current).toEqual(new Set(['tab-1']))
+
+    act(() => {
+      vi.advanceTimersByTime(BACKGROUND_WORKTREE_MEASURE_WINDOW_MS)
+    })
+    expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
+  })
+
   // Why: a measure window also ends when the user opens the worktree; the
   // hysteresis is then owed to nobody, so still-hidden background tabs must not
   // sit out a cool-down (Terminal.tsx clears the worktree clock the same way).
@@ -480,6 +502,29 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS)
       rerender(hookArgs(false))
     })
+    expect(result.current).toEqual(new Set(['tab-2']))
+  })
+
+  it('does not exempt a tab from a truncated malformed pane key', () => {
+    const { result, rerender } = renderHook(
+      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
+      { initialProps: hookArgs(false) }
+    )
+    act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
+    })
+    expect(result.current).toEqual(new Set(['tab-2']))
+
+    mocks.storeState.sleepingAgentSessionsByPaneKey = {
+      'tab-2x': {
+        paneKey: 'tab-2x',
+        worktreeId: WORKTREE_ID
+      }
+    }
+    act(() => {
+      rerender(hookArgs(false))
+    })
+
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 
