@@ -63,6 +63,12 @@ export const SUPPORTED_GLOBAL_SKILL_TOPOLOGIES: ReadonlySet<SkillInstallationTop
   'provider-alias'
 ])
 
+// Why: include independent-copy - Windows skill installs use file copies, not symlinks (#11455).
+export const ROUTINE_OUTDATED_SKILL_TOPOLOGIES: ReadonlySet<SkillInstallationTopology> = new Set([
+  ...SUPPORTED_GLOBAL_SKILL_TOPOLOGIES,
+  'independent-copy'
+])
+
 export type SkillFreshnessInstallation = {
   id: string
   name: string
@@ -138,7 +144,7 @@ export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstalla
     installation.status !== 'newer-known' &&
     !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
     !(
-      SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
+      ROUTINE_OUTDATED_SKILL_TOPOLOGIES.has(installation.topology) &&
       installation.status === 'outdated'
     )
   )
