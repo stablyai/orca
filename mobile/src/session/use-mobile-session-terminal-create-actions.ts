@@ -4,12 +4,13 @@ import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { Terminal, TerminalCreateResult } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
+import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
 import { createSessionQuickCommandLauncher } from './session-quick-command-launch'
-import { createMobileStructuredCodexSession } from './mobile-structured-agent-session-launch'
+import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
@@ -79,9 +80,9 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       if (!client) {
         return
       }
-      // Bare Codex launches follow structured support; prompted launches keep their startup semantics.
-      if (agent === 'codex' && options === undefined) {
-        const structured = await createMobileStructuredCodexSession(client, worktreeId)
+      // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
+      if (isAgentSessionHandleProvider(agent) && options === undefined) {
+        const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
         if (structured.kind === 'created') {
           const previous = activeHandleRef.current
           if (previous) {

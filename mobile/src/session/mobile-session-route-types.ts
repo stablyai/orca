@@ -1,3 +1,4 @@
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
@@ -34,7 +35,7 @@ export type MobileSessionTab =
       id: string
       title: string
       sessionId: string
-      agent: 'codex'
+      agent: AgentSessionHandleProvider
       isActive: boolean
     }
   | {

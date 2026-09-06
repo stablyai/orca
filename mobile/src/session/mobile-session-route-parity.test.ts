@@ -74,8 +74,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 const HEAD_CALLBACK_BODY_SHA256 = '596f85a60076e49fb198028f8fede0e122fe18c5cc7aaad09562a514cc7c2e29'
 const HEAD_EFFECT_SHA256 = 'f81ef4b4794875643dd429e9dfb6cffab037feb68a334e260c0045a258c07d51'
 const HEAD_CONTENT_HOOK_SHA256 = 'd74431115b27c22dd38c29a510604554ca767cdd2585beaa73ec2e2dae0c5de4'
+// Re-frozen when main's structured Claude chat (#18741) generalized the bare-launch gate
+// from an `agent === 'codex'` literal to isAgentSessionHandleProvider.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '778091a23e090f4d9b512e369fdd8a703dd76b0caa08e1fe9b1d8bf46223df46'
+  'b2473556b97f3b8f41fbce728e1a0e5a2bb3808e17a9e022515af1fa7dd97ecc'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   '482c1b9df56a02236e8efcc56fab41de0ea525aa5a03785dc5ac4af8f694c457'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -83,10 +85,10 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
 const HEAD_TIMER_CREATION_SHA256 =
   '688342d48a1b4a46cdffbf0d8953bac245fb6d3c4fe1b5698a1ea6e1e1929bed'
 const HEAD_TIMER_CLEANUP_SHA256 = '8a45ae3c8a01a639a40ffaf3c0fc89a2e0b610623306818c86bad4ef9195b824'
-// Re-frozen when main's iPad hardware-keyboard fix (#12772) added the
-// reopenFocusedInputWhenKeyboardHidden argument: one more runtime string, same JSX.
+// Re-frozen when main's structured Claude chat (#18741) dropped the 'codex' literal
+// from the bare-launch gate: one fewer runtime string, same JSX.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '4be6fc665f971e9eb294814b6d985f7405add51adf3c1bf9b06a8af948fa746e'
+  '12405d53b411f1849d183e018f027a5ffe0150ecc01a069d96a3e6973d922a37'
 // Re-frozen when the repeatable accessory key's press handler dropped its duplicate
 // handleAccessoryKey call: startAccessoryRepeat already sends at press time, so every
 // tap emitted the key twice. Same element count, one attribute body changed.
@@ -527,7 +529,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(476)
+    expect(strings).toHaveLength(475)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(126)
