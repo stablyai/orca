@@ -72,7 +72,10 @@ export type AgentSessionAttachAuthority = {
 
 /** The fields that define WHICH session this call would attach to. Deliberately
  *  excludes the spawn token and the probe: those differ between a first attempt
- *  and its retry, and a retry must replay rather than conflict. */
+ *  and its retry, and a retry must replay rather than conflict. `options` is
+ *  excluded for the same reason — it is the session's initial state, not its
+ *  identity, and the host re-resolves it from settings the user may have changed
+ *  between an unknown-outcome attempt and its retry. */
 export function attachFingerprintFields(params: AgentSessionAttachParams): Record<string, unknown> {
   return {
     location: params.location,
@@ -80,7 +83,6 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     agent: params.agent,
     accountHome: params.accountHome,
     runtimeKind: params.runtimeKind,
-    options: params.options,
     providerHandle: params.providerHandle,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
