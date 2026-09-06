@@ -273,6 +273,8 @@ export type GlobalSettings = {
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
   diffShowWhitespace: boolean
+  /** Opt-in: single-file diffs collapse unchanged regions, as the combined diff view already does; optional for legacy settings. */
+  diffCollapseUnchangedRegions?: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
   /** Bot-marked comment-author logins (stored lowercased); escape hatch for review bots on regular accounts that defeat provider metadata/heuristics. */
   prBotAuthorOverrides: string[]

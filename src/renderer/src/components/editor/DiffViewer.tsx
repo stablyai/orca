@@ -25,6 +25,7 @@ import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchanged-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
@@ -428,6 +429,7 @@ export default function DiffViewer({
               lineNumbers: 'on',
               ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
               ...buildDiffEditorWhitespaceOptions(settings?.diffShowWhitespace),
+              ...buildDiffEditorHideUnchangedOptions(settings?.diffCollapseUnchangedRegions),
               automaticLayout: true,
               renderOverviewRuler: true,
               scrollbar: diffEditorScrollbarOptions,
