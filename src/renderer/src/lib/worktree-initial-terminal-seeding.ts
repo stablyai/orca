@@ -225,16 +225,13 @@ export function ensureFolderWorkspaceInitialTerminal(
   if (providesInitialSurface === true && startup === undefined) {
     return null
   }
-  const state = useAppStore.getState()
-  const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-  const primaryTabId = ensureWorktreeHasInitialTerminal(
-    state,
-    workspaceKey,
+  return ensureWorktreeHasInitialTerminal(
+    useAppStore.getState(),
+    folderWorkspaceKey(folderWorkspace.id),
     startup,
     undefined,
     undefined,
     undefined,
     { reseedEmptiedWorkspace: providesInitialSurface !== true }
   )
-  return primaryTabId
 }
