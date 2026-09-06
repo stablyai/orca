@@ -119,7 +119,7 @@ export function shouldExcludeQuickOpenRelPath(
     if (relPath === prefix) {
       return true
     }
-    if (relPath.length > prefix.length && relPath.startsWith(`${prefix}/`)) {
+    if (relPath[prefix.length] === '/' && relPath.startsWith(prefix)) {
       return true
     }
   }

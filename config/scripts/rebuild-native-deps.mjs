@@ -20,7 +20,12 @@
 
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { stageWindowsProcessTreeNodeAddonApiHeaders } from './windows-process-tree-gyp-rebuild.mjs'
+import {
+  ensureWindowsProcessTreeCommandLinePatch,
+  inspectWindowsProcessTreeAddon,
+  stageWindowsProcessTreeNodeAddonApiHeaders,
+  windowsProcessTreeAddonPath
+} from './windows-process-tree-gyp-rebuild.mjs'
 import {
   copyFileSync,
   existsSync,
@@ -141,15 +146,21 @@ if (!ignoreModules.includes('cpu-features')) {
   }
 }
 
-if (
-  rebuildPlatform === 'win32' &&
-  modulesToRebuild.includes('@vscode/windows-process-tree') &&
-  existsSync(join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json'))
-) {
-  stageWindowsProcessTreeNodeAddonApiHeaders()
-}
-
 try {
+  // Why inside the try: the patch guard deletes a stale addon binary, and that
+  // delete fails EPERM when the addon is loaded -- exactly the running-Orca case
+  // the catch below is written for. Outside, it aborted `pnpm install` with a
+  // raw stack instead of the "close running Orca/Electron processes" message.
+  if (
+    rebuildPlatform === 'win32' &&
+    modulesToRebuild.includes('@vscode/windows-process-tree') &&
+    existsSync(join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json'))
+  ) {
+    stageWindowsProcessTreeNodeAddonApiHeaders()
+    if (ensureWindowsProcessTreeCommandLinePatch()) {
+      console.warn('[rebuild] Repaired the un-applied windows-process-tree command-line patch.')
+    }
+  }
   await rebuild({
     buildPath: projectDir,
     electronVersion,
@@ -165,6 +176,7 @@ try {
     force: true
   })
   restoreNodePtyWindowsConptyRuntime()
+  assertWindowsProcessTreeAddonIsPatched()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
   if (isWindowsNativeLockError(err)) {
@@ -182,6 +194,40 @@ try {
     }
   }
   process.exit(1)
+}
+
+/**
+ * The binary this rebuild just produced is the one the packaged app ships.
+ *
+ * The relay build asserts its own artifact and `ensure-native-runtime.mjs`
+ * asserts what it loads, but nothing checked the addon that gets copied into the
+ * packaged `node_modules` -- so a rebuild that silently produced the upstream
+ * reader would reach users. Anything but `clean` fails: after a rebuild that
+ * reported success the binary must exist, so `missing` is a broken build, not an
+ * absence to shrug at. This is the caller that needs the state to be a state and
+ * not a boolean.
+ */
+function assertWindowsProcessTreeAddonIsPatched() {
+  if (
+    rebuildPlatform !== 'win32' ||
+    !modulesToRebuild.includes('@vscode/windows-process-tree') ||
+    !existsSync(join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json'))
+  ) {
+    return
+  }
+  const addonPath = windowsProcessTreeAddonPath()
+  const state = inspectWindowsProcessTreeAddon(addonPath)
+  if (state === 'clean') {
+    return
+  }
+  throw new Error(
+    state === 'missing'
+      ? `the rebuild reported success but ${addonPath} is not there, so the packaged app would ` +
+          'ship no windows-process-tree addon at all.'
+      : `${addonPath} still imports ReadProcessMemory, so it was not built from the patched ` +
+          'command-line reader. The packaged app would carry the primitive MDE scores as ' +
+          'credential dumping.'
+  )
 }
 
 function restoreNodePtyWindowsConptyRuntime() {

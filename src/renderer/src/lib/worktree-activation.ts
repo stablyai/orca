@@ -79,6 +79,7 @@ export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
+    revealInSidebar?: boolean
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
@@ -163,10 +164,11 @@ export function activateAndRevealFolderWorkspace(
         opts?.providesInitialSurface
       )
 
-  if (opts?.sidebarRevealBehavior) {
-    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
-  } else {
-    state.revealWorktreeInSidebar(workspaceKey)
+  if (opts?.revealInSidebar !== false) {
+    state.revealWorktreeInSidebar(
+      workspaceKey,
+      opts?.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : undefined
+    )
   }
 
   return { primaryTabId }
@@ -346,8 +348,8 @@ export function activateAndRevealWorkspace(
   opts?: {
     executionHostId?: ExecutionHostId
     providesInitialSurface?: boolean
-    /** Worktree-only: folder workspaces are never filter-hidden, so these are dropped there. */
     revealInSidebar?: boolean
+    /** Worktree-only: folder workspaces are never filter-hidden. */
     clearSidebarFilters?: boolean
   }
 ): ActivateAndRevealResult | false {
@@ -355,8 +357,7 @@ export function activateAndRevealWorkspace(
   if (workspaceScope?.type !== 'folder') {
     return activateAndRevealWorktree(workspaceId, opts)
   }
-  const { revealInSidebar: _reveal, clearSidebarFilters: _clear, ...folderOpts } = opts ?? {}
-  return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, folderOpts)
+  return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
 }
 
 // Why: break the import cycle — nav-history slice (under @/store) can't import activation directly, so register the activator here.

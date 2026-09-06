@@ -102,7 +102,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     error: string | null
   ): void
   protected abstract getDownloadReceivedBytes(item: Electron.DownloadItem): number
-  protected abstract openLinkInOrcaTab(browserTabId: string, rawUrl: string): boolean
+  protected abstract openLinkInOrcaTab(
+    browserTabId: string,
+    rawUrl: string,
+    activate?: boolean
+  ): boolean
 
   protected settingsResolver:
     | (() => {
@@ -143,7 +147,6 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly policyAttachedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()
-  protected readonly clickedLinkFrameNameByGuestId = new Map<number, string>()
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Why: did-start-navigation hides the overlay optimistically; stash the cleared error so did-fail-load(-3) can restore an aborted nav.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()

@@ -32,6 +32,8 @@ import {
 import { join, resolve } from 'node:path'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
 import {
+  ensureWindowsProcessTreeCommandLinePatch,
+  inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
   stageWindowsProcessTreeNodeAddonApiHeaders,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
@@ -89,6 +91,13 @@ function assertPatchApplied() {
         'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
     )
   }
+  if (processCc.includes('OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ')) {
+    throw new Error(
+      'src/process.cc still takes PROCESS_VM_READ for memory or CPU counters it never reads ' +
+        'from the address space. pnpm did not apply ' +
+        'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
+    )
+  }
 }
 
 // pnpm can materialize this CRLF package without applying its patch. Repair the
@@ -123,6 +132,13 @@ function applyWindowsProcessTreeBuildFixes() {
     ''
   )
   processCc = processCc.replace(/process_count < 1024 && /, '')
+  // The memory and CPU readers only ever call GetProcessMemoryInfo/GetProcessTimes,
+  // which need no more than PROCESS_QUERY_LIMITED_INFORMATION; taking VM_READ is
+  // what EDR scores.
+  processCc = processCc.replaceAll(
+    'OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, pid)',
+    'OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)'
+  )
 
   if (bindingGyp !== originalBinding) {
     writeFileSync(bindingPath, bindingGyp)
@@ -131,7 +147,8 @@ function applyWindowsProcessTreeBuildFixes() {
     writeFileSync(processPath, processCc)
   }
   stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)
-  if (bindingGyp !== originalBinding || processCc !== originalProcess) {
+  const repairedCommandLine = ensureWindowsProcessTreeCommandLinePatch(PACKAGE_DIR)
+  if (bindingGyp !== originalBinding || processCc !== originalProcess || repairedCommandLine) {
     console.warn('[windows-process-tree] Repaired un-applied pnpm patch hunks before build.')
   }
 }
@@ -172,6 +189,14 @@ function main() {
   const built = join(PACKAGE_DIR, 'build', 'Release', 'windows_process_tree.node')
   if (!existsSync(built)) {
     throw new Error(`node-gyp reported success but ${built} is missing.`)
+  }
+  // Why check the artifact and not only the source: the source checks above run
+  // before node-gyp, and a stale build directory can outlive them.
+  if (inspectWindowsProcessTreeAddon(built) === 'unpatched') {
+    throw new Error(
+      'The built addon still calls ReadProcessMemory, so it did not come from the patched ' +
+        'command-line reader. A relay would get the primitive MDE scores as credential dumping.'
+    )
   }
   const machine = readPeMachine(built)
   if (machine !== PE_MACHINE[arch]) {

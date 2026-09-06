@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs'
+import { runProcess } from '../../src/shared/child-process/run-process'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -41,7 +43,42 @@ test.describe('Reveal active workspace button', () => {
   test('clears sidebar filters before revealing a hidden current workspace', async ({
     orcaPage,
     testRepoPath
-  }) => {
+  }, testInfo) => {
+    const filterRepoPath = testInfo.outputPath('filter-repo')
+    mkdirSync(filterRepoPath, { recursive: true })
+    for (const args of [
+      ['init', filterRepoPath],
+      [
+        '-C',
+        filterRepoPath,
+        '-c',
+        'user.name=E2E',
+        '-c',
+        'user.email=e2e@test.local',
+        'commit',
+        '--allow-empty',
+        '-m',
+        'Filter fixture'
+      ]
+    ]) {
+      const result = await runProcess({ program: 'git', args })
+      expect(result.code, result.stderr).toBe(0)
+    }
+    const filterRepoId = await orcaPage.evaluate(async (repoPath) => {
+      const result = await window.api.repos.add({ path: repoPath })
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      return result.repo.id
+    }, filterRepoPath)
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(async (id) => {
+          await window.__store!.getState().fetchRepos()
+          return window.__store!.getState().repos.some((repo) => repo.id === id)
+        }, filterRepoId)
+      )
+      .toBe(true)
     await prepareSidebarForScrollTest(orcaPage)
 
     // Other specs can add worktrees to the shared repository before this test runs.
@@ -86,18 +123,11 @@ test.describe('Reveal active workspace button', () => {
     }, targetId)
     await expect(targetRow).toHaveAttribute('aria-current', 'page')
 
-    await orcaPage.evaluate(() => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
-      }
-      store.getState().setFilterRepoIds(['__filtered_repo__'])
-    })
-
-    // Why: the filter's row-hiding side effect is covered deterministically by
-    // visible-worktrees.test.ts. Asserting an empty DOM here over-specifies an
-    // incidental render-settle state that flakes under the shared page; the
-    // contract under test is that reveal clears the filter (asserted below).
+    // Catalog refreshes prune nonexistent IDs, so use a real repo to keep the filter applied.
+    await orcaPage.evaluate((repoId) => {
+      window.__store!.getState().setFilterRepoIds([repoId])
+    }, filterRepoId)
+    await expect(targetRows).toHaveCount(0)
 
     await revealButton.click()
     await orcaPage

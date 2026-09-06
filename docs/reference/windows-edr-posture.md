@@ -13,7 +13,7 @@ two escalated to multi-stage incidents carrying ATT&CK tactic mappings
 The framing this document keeps throughout, because both halves matter:
 
 > **Defender is not malfunctioning. It is describing the code accurately.** Orca
-> really does copy its own signed image under a different name, really does read
+> really does copy its own signed image under a different name, really did read
 > every process's memory on a timer, really does run base64-encoded PowerShell
 > with the execution policy bypassed, and really does take screenshots and
 > synthesise input from a runtime-compiled assembly. Each of those is a
@@ -50,33 +50,49 @@ and `orca-terminal-daemon.exe` report `Valid CN=SignPath Foundation`.
 
 ## The behaviours, and why each one exists
 
-### The daemon runs from a renamed copy of our own image
+### The daemon runs from a copy of our own image
 
 `src/main/daemon/daemon-host-relocation.ts` copies the Electron runtime into
-`%LOCALAPPDATA%\Orca\daemon-host\<version>\` and renames `Orca.exe` to
-`orca-terminal-daemon.exe`. The comment on `DAEMON_HOST_EXE_NAME` states the
-reason without varnish: _"so the NSIS updater's `taskkill /IM Orca.exe` can't
-match it."_
+`%LOCALAPPDATA%\Orca\daemon-host\<version>\` and forks the terminal daemon from
+there.
 
 It exists because the NSIS installer deletes the old install directory and force-
 kills every process imaged under it. Without relocation, an auto-update kills the
 terminal daemon and every live terminal with it. The copy is a run-as-node
 `Orca.exe` rather than `node.exe` so there is no console flash and asar still
-resolves; `config/nsis/daemon-host-uninstall.nsh` reaps it on a real uninstall
+resolves; `config/nsis/orca-installer-hooks.nsh` reaps it on a real uninstall
 (guarded by `${isUpdated}` so an update's `uninstallOldVersion` never fires it).
 
-**How an EDR reads it: MITRE T1036, masquerading.** A signed executable copied
-out of the install directory into `%LOCALAPPDATA%` under a different name, which
-then spawns shells, matches the textbook description closely enough that no
-behavioural engine can be expected to score it low.
+**At the time of these incidents the copy was also renamed** to
+`orca-terminal-daemon.exe`, the image name every incident here reports, and
+`DAEMON_HOST_EXE_NAME`'s comment stated the reason without varnish: _"so the NSIS
+updater's `taskkill /IM Orca.exe` can't match it."_ The rename has since been
+removed; the copy now keeps the app exe's own file name, because the updater's
+kill sweep is path-scoped on every host that has PowerShell and the rename only
+ever bought the no-PowerShell fallback. See
+[`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md).
+
+**How an EDR reads it: MITRE T1036, masquerading** — and, for what remains,
+**T1036.005**. A signed executable copied out of the install directory into
+`%LOCALAPPDATA%` under a different name, which then spawns shells, matches the
+textbook description closely enough that no behavioural engine can be expected to
+score it low. Dropping the rename removes that literal indicator but not the
+underlying shape: execution from a non-standard user-writable location is scored
+on its own. Note also that the strongest form of the T1036 signal was never
+present here — the shipped binary's `OriginalFilename` is empty, so there was no
+embedded name for the old disk name to contradict.
 
 ### Every process gets a handle, on a timer
 
-`src/main/windows/windows-process-table.ts` takes a Toolhelp32 snapshot under
-**one** flag set, `CommandLine | CreationTime`, shared by every caller. pid, ppid
-and name come out of the snapshot itself and open nothing. `CommandLine` is what
-opens a handle: the addon calls `GetProcessCommandLine` per process, which opens
-`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` and walks the PEB with three
+`src/main/windows/windows-process-table.ts` takes a Toolhelp32 snapshot under one
+of **two** flag sets: identity (`None | CreationTime`) for callers that read only
+pid, ppid and name, and detailed (`+ CommandLine`) for callers that match on a
+command line. pid, ppid and name come out of the snapshot itself and open
+nothing, so an identity scan opens nothing at all. `CommandLine` is what opens a
+handle: the addon calls `GetProcessCommandLine` per process, which opens
+`PROCESS_QUERY_LIMITED_INFORMATION` — the same right Task Manager takes — and
+asks the kernel for the string. Upstream it opened
+`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` and walked the PEB with three
 `ReadProcessMemory` calls (`src/process_commandline.cc:32,41-47` in the vendored
 `@vscode/windows-process-tree` 0.8.0 source that `config/patches/` patches).
 
@@ -84,8 +100,9 @@ opens a handle: the addon calls `GetProcessCommandLine` per process, which opens
 `GetProcessMemoryUsage` open a **second** `PROCESS_QUERY_INFORMATION |
 PROCESS_VM_READ` handle per process for a `GetProcessMemoryInfo` call whose
 result no caller read (`src/process.cc:47-63`). Dropping it halves the handles
-opened per snapshot. It does not remove the remote memory read, because the
-command line still performs one.
+opened per snapshot. On its own it removed no memory read — both handles carried
+`PROCESS_VM_READ` at the time — so it composes with the patch below rather than
+substituting for it.
 
 It exists because seven independent readers used to fork `powershell.exe` for a
 `Get-CimInstance Win32_Process` scan. That cost, measured: a PowerShell
@@ -98,41 +115,49 @@ panes multiplied it (#15036). The native snapshot answers the same question in
 See
 [`windows-process-enumeration.md`](./windows-process-enumeration.md).
 
-Asking for fewer fields is cheaper, and the module now asks for the smallest set
-that still answers every caller. There is **no** per-flag-set cache split: one
-TTL-cached snapshot serves everyone, deliberately, because a split would restore
-the per-pane fan-out the cache exists to remove — a 32-wide teardown has to
-collapse into one scan. So the cheap identity-only read is not something any
-caller can select; every read pays for `CommandLine`. An earlier revision of this
-file described a two-cache design with 6.3 ms / 12.3 ms p50 figures at 492
-processes. That design is not in the tree and those numbers describe no code
-path here; the figures that do apply are the module's own, in
+Asking for fewer fields is cheaper, and each caller now asks for the smallest set
+that answers it. There are exactly **two** TTL-cached snapshots, one per flag
+set, never one per caller: the fan-out the cache exists to remove is one scan per
+_caller_, and each reader still serves every caller wanting its flag set, so a
+32-wide teardown still collapses into one scan of each. Teardown identity and the
+owner probe select the identity set and therefore open no handles; the per-pane
+foreground tracker genuinely needs a command line and still pays for one. A third
+cache would need a third flag set, not a third caller. Measured at 492 processes,
+p50: identity 6.3 ms, detailed 12.3 ms — see
 [`windows-process-enumeration.md`](./windows-process-enumeration.md).
 
-**How an EDR reads it:** a cross-process handle plus a remote memory read against
+**How an EDR read it:** a cross-process handle plus a remote memory read against
 every process on the box, repeating on a cadence, is the read half of the
 telemetry that credential dumping and process injection produce. MDE surfaced it
 as "suspicious memory activity".
 
-**That signal is still present.** An earlier revision of this file claimed the
-command line "now comes from the kernel" through `NtQueryInformationProcess`'s
-`ProcessCommandLineInformation` class, needing only
-`PROCESS_QUERY_LIMITED_INFORMATION`, and that `ReadProcessMemory` was absent from
-the compiled addon. None of that is true of the code we ship.
-`process_commandline.cc` calls `NtQueryInformationProcess` with
-`ProcessBasicInformation` only — to locate the PEB — and then issues three
-`ReadProcessMemory` calls against a `PROCESS_VM_READ` handle to read the PEB, the
-`RTL_USER_PROCESS_PARAMETERS`, and the command-line buffer. Nothing asserts an
-import table, and no such assertion would pass.
+**The memory read is gone.** A fourth hunk in
+`config/patches/@vscode__windows-process-tree@0.8.0.patch` has
+`GetProcessCommandLine` call `NtQueryInformationProcess` with
+`ProcessCommandLineInformation` (class 60, Windows 8.1+; Electron's floor is
+Windows 10), which returns a `UNICODE_STRING` the kernel builds and needs only
+`PROCESS_QUERY_LIMITED_INFORMATION`. Measured on ~540 processes, per detailed
+scan: `ReadProcessMemory` 1128 → **0**, desired access `0x0410` → `0x1000`, with
+byte-identical command lines on every process both readers recovered. There is no
+PEB fallback to reinstate it — a hooked `ntdll` answering
+`STATUS_INVALID_INFO_CLASS` for one target would have flipped a process-wide,
+one-way switch back to `PROCESS_VM_READ` on exactly the machines this exists for.
 
-What this change did remove is the `Memory` flag's second handle and its
-`GetProcessMemoryInfo` call, so the per-process handle count per snapshot halves.
-What remains to declare to administrators is unchanged in kind: one
-`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` handle and a PEB read against every
-process on the box, at the shared snapshot's cadence. Moving to
-`ProcessCommandLineInformation` (Windows 8.1+, `PROCESS_QUERY_LIMITED_INFORMATION`
-only) would genuinely retire the remote read, but it is an addon patch nobody has
-written; treat it as unclaimed work, not as shipped.
+Because the property is the *absence* of an import, it is checkable on the
+artifact rather than the source: `inspectWindowsProcessTreeAddon()` answers
+`clean` / `unpatched` / `missing`, and the rebuild, `ensure-native-runtime.mjs`,
+the relay build and `loadWindowsProcessTree()` all key on it. That check is load-
+bearing because the published tarball ships a *loadable* prebuilt built from
+unpatched source, so "it required cleanly" is not evidence.
+
+What to declare to administrators is now one
+`PROCESS_QUERY_LIMITED_INFORMATION` handle per process on a detailed snapshot and
+no remote memory access at all; an identity snapshot opens nothing. What this
+does not narrow is _which_ processes are asked — a detailed scan still queries
+every pid, including `lsass.exe`. Restricting the command-line pass to Orca's own
+subtree needs job-object membership as its source of truth (a ppid-derived
+allowlist would miss the detached, reparented descendants of #9045 and #10475),
+and remains unclaimed work.
 
 ### Encoded, policy-bypassing PowerShell
 
@@ -232,7 +257,8 @@ obfuscated-command-line detector is tuned on.
 
 ### The spawn tree itself
 
-`Orca.exe` → `orca-terminal-daemon.exe` → a shell → an agent CLI is what a
+`Orca.exe` → the relocated daemon host (`orca-terminal-daemon.exe` in the builds
+these incidents cover, `Orca.exe` since) → a shell → an agent CLI is what a
 terminal multiplexer for coding agents *is*. `reg.exe` appears from
 `src/main/win32-utils.ts`,
 `src/main/agent-hooks/managed-hook-owner-identity.ts` and
@@ -363,7 +389,7 @@ The checklist. On Windows, do not reach for:
 | Forking `powershell.exe` to read system state               | The native reader — [`windows-process-enumeration.md`](./windows-process-enumeration.md) is the standing rule for the process table |
 | A process per operation in a loop                           | One long-lived helper with a request channel. A burst of short-lived interpreters under one parent is itself the signal     |
 | `Add-Type -TypeDefinition` at runtime                       | A precompiled, signed assembly, or a native helper                                                                          |
-| Copying our own image under a different name                | An installer or updater that does not need the rename. Where the rename is load-bearing, document it as such                |
+| Copying our own image under a different name                | Copy it verbatim — [`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md) (done for the daemon host)    |
 | Deriving a script runner from a UI preference               | [`windows-setup-shell.md`](./windows-setup-shell.md) — the script declares its own interpreter                              |
 
 Two framing rules that outlast the table:

@@ -223,6 +223,17 @@ export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
 ] as const
 export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
 
+/** For a host path that raises its refusal as the thrown code. Narrowing through this keeps an
+ *  unrelated fault from being reported to the client as a tidy, wrong refusal. */
+export function isAgentSessionWireRefusalCode(
+  value: unknown
+): value is AgentSessionWireRefusalCode {
+  return (
+    typeof value === 'string' &&
+    (AGENT_SESSION_WIRE_REFUSAL_CODES as readonly string[]).includes(value)
+  )
+}
+
 export type AgentSessionWireRefusal = {
   code: AgentSessionWireRefusalCode
   message: string
