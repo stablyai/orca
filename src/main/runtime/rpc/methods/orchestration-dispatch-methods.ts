@@ -165,6 +165,35 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
         }
+        // Why: a crashed agent takes its capability to the grave; the replacement
+        // agent in the same terminal needs fresh authority, minted against the
+        // CURRENT pane/incarnation (not the dead one stored at dispatch time).
+        // Minting rotates the old secret, so a zombie holding it loses authority.
+        let dispatchCapability: string | undefined
+        if (params.recapability) {
+          if (!ctx || (ctx.status !== 'pending' && ctx.status !== 'dispatched')) {
+            throw new OrchestrationError(
+              'dispatch_not_active',
+              `Task ${params.task} has no active dispatch to re-authorize.`
+            )
+          }
+          const workerHandle = ctx.assignee_handle
+          const authority = runtime.getOrchestrationDispatchAuthority(workerHandle)
+          const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(workerHandle) ?? undefined
+          const incarnation =
+            authority?.paneKey && authority.processIncarnation ? authority.processIncarnation : undefined
+          if (!paneKey || !incarnation) {
+            throw new OrchestrationError(
+              'stable_pane_required',
+              `Terminal ${workerHandle} has no stable pane/process incarnation for lifecycle authority.`
+            )
+          }
+          dispatchCapability = db.mintDispatchCapability({
+            dispatchId: ctx.id,
+            paneKey,
+            processIncarnation: incarnation
+          })
+        }
         const workerHandle = ctx?.assignee_handle ?? 'worker'
         const preamble = buildDispatchPreamble({
           taskId: task.id,
@@ -174,6 +203,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle,
+          dispatchCapability,
           devMode: params.devMode,
           ...(ctx ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(workerHandle) } : {})
         })
