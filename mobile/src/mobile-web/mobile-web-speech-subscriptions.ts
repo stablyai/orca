@@ -1,79 +1,35 @@
-import type { MobileWebSubscriptionClosure } from './mobile-web-subscription-closure'
+import {
+  MobileWebSubscriptionLedger,
+  type MobileWebSubscriptionLedgerConfig
+} from './mobile-web-subscription-ledger'
 import type { MobileWebSpeechEvent } from '../../../src/shared/mobile-web/speech-operation-contract'
 import { MobileWebBrokerError } from './mobile-web-broker-error'
 
-type SpeechSubscriber = {
-  requestId: string
-  sequence: number
-  delivery: Promise<void>
-  post: (sequence: number, event: MobileWebSpeechEvent) => Promise<void>
-  closed: (closure: MobileWebSubscriptionClosure) => void
-}
-
-export class MobileWebSpeechSubscriptions {
-  private readonly records = new Map<string, SpeechSubscriber>()
+/** Push-driven: the shell's own dictation runtime feeds every entry, so there is no host handle to
+ *  open and no `closeAll` on a client swap — the authority publishes `session-replaced` instead. */
+export class MobileWebSpeechSubscriptions extends MobileWebSubscriptionLedger<MobileWebSpeechEvent> {
   private disposed = false
 
-  start(args: {
-    requestId: string
-    subscriptionId: string
-    post: (sequence: number, event: MobileWebSpeechEvent) => Promise<void>
-    closed: (closure: MobileWebSubscriptionClosure) => void
-  }): void {
-    if (this.disposed || this.records.has(args.subscriptionId)) {
+  constructor(config: MobileWebSubscriptionLedgerConfig<MobileWebSpeechEvent>) {
+    super({ ...config, operationKey: 'speech.subscribe' })
+  }
+
+  start(args: { requestId: string; subscriptionId: string }): void {
+    if (this.disposed) {
       throw new MobileWebBrokerError('invalid_request')
     }
-    this.records.set(args.subscriptionId, {
-      requestId: args.requestId,
-      sequence: 0,
-      delivery: Promise.resolve(),
-      post: args.post,
-      closed: args.closed
-    })
+    this.admit(args.subscriptionId)
+    this.records.set(args.subscriptionId, this.newRecord(args.requestId))
   }
 
   post(event: MobileWebSpeechEvent): void {
     for (const [subscriptionId, record] of this.records) {
-      const sequence = record.sequence++
-      record.delivery = record.delivery
-        .then(async () => {
-          if (this.records.get(subscriptionId) !== record) {
-            return
-          }
-          await record.post(sequence, event)
-        })
-        .catch(() => {
-          if (this.records.get(subscriptionId) === record) {
-            this.records.delete(subscriptionId)
-            record.closed({ code: 'unavailable', retryable: true })
-          }
-        })
+      this.enqueue(subscriptionId, record, event)
     }
   }
 
-  cancel(subscriptionId: string): string | null {
-    const record = this.records.get(subscriptionId)
-    if (!record) {
-      return null
-    }
-    this.records.delete(subscriptionId)
-    return record.requestId
-  }
-
-  cancelByRequest(requestId: string): void {
-    for (const [subscriptionId, record] of this.records) {
-      if (record.requestId === requestId) {
-        this.records.delete(subscriptionId)
-      }
-    }
-  }
-
-  countForOperation(operationKey: string): number {
-    return operationKey === 'speech.subscribe' ? this.records.size : 0
-  }
-
-  dispose(): void {
+  override dispose(): void {
     this.disposed = true
-    this.records.clear()
+    super.dispose()
   }
 }

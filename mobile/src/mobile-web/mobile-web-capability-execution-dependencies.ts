@@ -1,6 +1,4 @@
-import type { MobileWebPostSubscriptionClosed } from './mobile-web-subscription-closure'
 import type { MobileWebBridgePageMessage } from '../../../src/shared/mobile-web/bridge-contract'
-import type { MobileWebSpeechEvent } from '../../../src/shared/mobile-web/speech-operation-contract'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileWebAccountSubscriptions } from './mobile-web-account-subscriptions'
 import type { MobileWebAgentHistoryAuthority } from './mobile-web-agent-history-authority'
@@ -43,12 +41,6 @@ export type MobileWebCapabilityExecutionDependencies = {
   sourceControlSubscriptions: MobileWebSourceControlSubscriptions
   sourceControlBranchCompare: MobileWebSourceControlBranchComparePager
   speechAuthority: MobileWebSpeechAuthority
-  postSpeechEvent: (
-    subscriptionId: string,
-    sequence: number,
-    event: MobileWebSpeechEvent
-  ) => Promise<void>
-  postSpeechClosed: MobileWebPostSubscriptionClosed
   workspaceSubscriptions: MobileWebWorkspaceSubscriptions
   terminalStreams: MobileWebTerminalStreams
   commitMessageGeneration: MobileWebCommitMessageGeneration

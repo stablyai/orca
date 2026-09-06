@@ -75,15 +75,15 @@ describe('subscription ledger teardown', () => {
 
   it('fans closeAll out across every capability ledger', () => {
     const messages: MobileWebBridgeShellMessage[] = []
-    const subscriptions = new MobileWebCapabilitySubscriptions({
+    const sender = new MobileWebBrokerMessageSender({
+      context: MOBILE_WEB_BRIDGE_ROUNDTRIP_CONTEXT,
       isActive: () => true,
-      messages: new MobileWebBrokerMessageSender({
-        context: MOBILE_WEB_BRIDGE_ROUNDTRIP_CONTEXT,
-        isActive: () => true,
-        postMessage: (message) => {
-          messages.push(message)
-        }
-      }),
+      postMessage: (message) => {
+        messages.push(message)
+      }
+    })
+    const subscriptions = new MobileWebCapabilitySubscriptions({
+      ...sender.subscriptionPosts(),
       browserAuthority: new MobileWebBrowserAuthority(randomBytes),
       nativeChatAuthority: new MobileWebNativeChatAuthority(randomBytes),
       workspaceAuthority: new MobileWebWorkspaceAuthority(randomBytes)
