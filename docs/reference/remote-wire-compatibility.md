@@ -165,8 +165,14 @@ the released app's full input-routing stack or released writer behavior.
 
 The harness does **not** cover the session-tab sync channel, legacy agent-session
 publications, file or Git RPCs, physical mobile keyboards, or the public relay service.
-The mobile journey does not yet cover reconnect or uncertain delivery. Changes on those
-paths still need their own reasoning against the three rules above.
+`cross-version-mobile-input-recovery.unit.test.ts` retains the production logical client
+through current → pre-ordered-input host → current encrypted sessions. After prefix bytes
+reach the PTY but their receipt is dropped, input and JSON fallback stay fenced until an
+explicit compatible recovery. Final exact bytes prove no replay or stray Enter. The legacy
+host is pinned to v1.4.197 because this scenario specifically requires no ordered-input
+support. Session assembly and receipt loss are fixture-owned; this is not public-relay
+reconnection or recovery-UI coverage. Changes on uncovered paths still need their own
+reasoning against the three rules above.
 
 ## Worked example: `agentWait` on terminal and worker reads
 

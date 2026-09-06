@@ -19,7 +19,17 @@ export type MobileWireStreams = Pick<
   MobileRelayRpcStreams,
   'subscribe' | 'handleResponse' | 'handleBinary' | 'clear'
 > &
-  Partial<Pick<MobileRelayRpcStreams, 'supportsTerminalStreamInput' | 'sendTerminalStreamInput'>>
+  Partial<
+    Pick<
+      MobileRelayRpcStreams,
+      | 'supportsTerminalStreamInput'
+      | 'sendTerminalStreamInput'
+      | 'getTerminalStreamInputFailure'
+      | 'recoverTerminalStreamInput'
+      | 'cancelTerminalStreamInput'
+      | 'fenceTerminalStreamInput'
+    >
+  >
 export type MobileWireHostChannel = Pick<
   E2EEChannel,
   'onMessage' | 'onBinaryMessage' | 'handleRawMessage' | 'destroy'

@@ -623,6 +623,7 @@ jobs:
           tests/e2e/cross-version-wire/release-checkout.unit.test.ts
           tests/e2e/cross-version-wire/versioned-mobile-terminal-wire.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-mobile-input.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-mobile-input-recovery.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
           tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
           tests/e2e/cross-version-wire/reported-lossy-initial-snapshot.unit.test.ts
