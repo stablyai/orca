@@ -13,6 +13,8 @@ import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import type { NativeChatTurnActivity } from './native-chat-turn-activity'
+import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
@@ -32,6 +34,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   failedDeliveryMessageIds,
   showTurnStatus = true,
+  turnActivity,
   runtimeContext
 }: {
   session: NativeChatLiveSession
@@ -46,6 +49,7 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds?: ReadonlySet<string>
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
+  turnActivity?: NativeChatTurnActivity | null
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -271,6 +275,9 @@ export function NativeChatMessageList({
               thinking={turnStatuses.active.thinking}
               workedSeconds={turnStatuses.active.workedSeconds}
             />
+          ) : null}
+          {showTurnStatus && isWorking ? (
+            <NativeChatTurnActivityLine activity={turnActivity} />
           ) : null}
           {!showTurnStatus && showTypingIndicator ? <NativeChatTypingIndicatorRow /> : null}
         </div>

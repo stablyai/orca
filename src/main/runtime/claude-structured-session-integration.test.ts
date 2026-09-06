@@ -599,6 +599,46 @@ describe('a structured Claude session over agentSession.*', () => {
       `claude:${PROVIDER_SESSION}:assistant-leaf`
     )
 
+    claude.live().handlers.onMessage?.({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      session_id: PROVIDER_SESSION,
+      uuid: 'background-roster',
+      tasks: [
+        { task_id: 'task-one', task_type: 'local_agent', description: 'First task' },
+        { task_id: 'task-two', task_type: 'local_bash', description: 'Second task' }
+      ]
+    })
+    const itemsBeforeTaskStop = itemsOf(stream)
+    const targetedStopFields = {
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      taskId: 'task-two'
+    }
+    await expect(
+      ok('agentSession.cancel', {
+        envelope: envelope('agentSession.cancel', targetedStopFields, created.fence),
+        ...targetedStopFields
+      })
+    ).resolves.toMatchObject({ turnId: 'background-tasks', cancelled: true })
+    expect(claude.live().calls.filter((entry) => entry.subtype === 'stop_task')).toEqual([
+      { subtype: 'stop_task', params: { taskId: 'task-two' } }
+    ])
+    expect(itemsOf(stream)).toEqual(itemsBeforeTaskStop)
+
+    const staleStopFields = {
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      taskId: 'task-stale'
+    }
+    await expect(
+      ok('agentSession.cancel', {
+        envelope: envelope('agentSession.cancel', staleStopFields, created.fence),
+        ...staleStopFields
+      })
+    ).resolves.toMatchObject({ turnId: 'background-tasks', cancelled: false })
+    expect(claude.live().calls.filter((entry) => entry.subtype === 'stop_task')).toHaveLength(1)
+
     const answeredPermission = Promise.resolve(
       claude.live().handlers.canUseTool?.('Bash', { command: 'ls' }, {
         requestId: 'permission-1',

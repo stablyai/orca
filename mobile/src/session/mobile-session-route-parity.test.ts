@@ -83,8 +83,10 @@ const HEAD_NATIVE_REMOVAL_SHA256 =
 const HEAD_TIMER_CREATION_SHA256 =
   '688342d48a1b4a46cdffbf0d8953bac245fb6d3c4fe1b5698a1ea6e1e1929bed'
 const HEAD_TIMER_CLEANUP_SHA256 = '8a45ae3c8a01a639a40ffaf3c0fc89a2e0b610623306818c86bad4ef9195b824'
+// Re-frozen when main's iPad hardware-keyboard fix (#12772) added the
+// reopenFocusedInputWhenKeyboardHidden argument: one more runtime string, same JSX.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '77fce1bf3cd5c150255a191a107569b11d334da95d3cb47459189965f57f901b'
+  '4be6fc665f971e9eb294814b6d985f7405add51adf3c1bf9b06a8af948fa746e'
 // Re-frozen when the repeatable accessory key's press handler dropped its duplicate
 // handleAccessoryKey call: startAccessoryRepeat already sends at press time, so every
 // tap emitted the key twice. Same element count, one attribute body changed.
@@ -525,7 +527,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(475)
+    expect(strings).toHaveLength(476)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(126)

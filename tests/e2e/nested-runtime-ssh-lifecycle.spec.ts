@@ -720,7 +720,7 @@ test('restores a paired nested SSH route after the HUB restarts', async ({
       if (!(await store.getState().refreshRuntimeEnvironmentStatus(environmentId))) {
         return false
       }
-      return store.getState().switchRuntimeEnvironment(environmentId)
+      return store.getState().setActiveRuntimeEnvironmentPreference(environmentId)
     }, preRestartEnvironmentId)
     expect(existingPairingRecovered).toBe(true)
     await reconnectDisconnectedDockerSshRelayTarget(hubLaunch.page, remote.targetId)

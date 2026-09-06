@@ -20,12 +20,12 @@ function setup(waitForConnected: () => Promise<void> = async () => {}) {
   return { streams, sendFrame, ready }
 }
 
+// mobile-relay-rpc-stream-cancellation.test.ts owns the screencast, client-events, terminal,
+// session-tabs and native-chat routes; this file covers the two remaining server subscriptions.
 describe('relay server subscription cleanup', () => {
   it.each([
     ['files.watch', 'files.unwatch'],
-    ['browser.screencast', 'browser.screencast.unsubscribe'],
-    ['accounts.subscribe', 'accounts.unsubscribe'],
-    ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe']
+    ['accounts.subscribe', 'accounts.unsubscribe']
   ])('releases %s before and after the ready response', async (method, unsubscribeMethod) => {
     for (const cancelBeforeReady of [false, true]) {
       const { streams, sendFrame, ready } = setup()
@@ -82,38 +82,4 @@ describe('relay server subscription cleanup', () => {
     expect(listener).not.toHaveBeenCalled()
     expect(sendFrame).toHaveBeenCalledOnce()
   })
-
-  it.each([
-    [
-      'session.tabs.subscribe',
-      { worktree: 'id:folder' },
-      'session.tabs.unsubscribe',
-      { worktree: 'id:folder' }
-    ],
-    [
-      'nativeChat.subscribe',
-      { subscriptionId: 'chat' },
-      'nativeChat.unsubscribe',
-      { subscriptionId: 'chat' }
-    ],
-    [
-      'terminal.subscribe',
-      { terminal: 'terminal', client: { id: 'mobile' } },
-      'terminal.unsubscribe',
-      { subscriptionId: 'terminal:mobile', client: { id: 'mobile' } }
-    ]
-  ])(
-    'releases %s using its request scope',
-    async (method, params, unsubscribeMethod, unsubscribeParams) => {
-      const { streams, sendFrame } = setup()
-      const cancel = streams.subscribe(method as string, params, vi.fn())
-      await Promise.resolve()
-      cancel()
-      expect(sendFrame).toHaveBeenLastCalledWith({
-        id: 'request-2',
-        method: unsubscribeMethod,
-        params: unsubscribeParams
-      })
-    }
-  )
 })

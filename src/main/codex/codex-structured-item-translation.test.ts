@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { createToolInputDisplay } from '../../shared/native-chat-tool-summary'
+import {
+  briefToolArg,
+  createToolInputDisplay,
+  describeToolInput
+} from '../../shared/native-chat-tool-summary'
 import {
   codexItemBody,
   codexItemIdentity,
@@ -13,6 +17,13 @@ import {
   readCodexThreadItem,
   type CodexThreadItem
 } from './codex-structured-item-translation'
+
+/** The tool-call input a Codex item lands on, which is what the row label and
+ *  the collapsed run header are both derived from. */
+function toolCallInput(item: CodexThreadItem): unknown {
+  const body = codexItemBody(item)
+  return body !== null && body.kind === 'tool-call' ? body.input : null
+}
 
 const THREAD_ID = 'thread-abc'
 const TURN_ID = 'turn-1'
@@ -572,10 +583,226 @@ describe('codex item bodies', () => {
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
-    expect(codexItemBody({ type: 'webSearch', id: 'w' })).toMatchObject({
+    expect(codexItemBody({ type: 'somethingCodexAddedLater', id: 'x' })).toMatchObject({
       kind: 'status',
-      text: 'codex · item:webSearch',
-      providerFrame: { provider: 'codex', kind: 'item:webSearch' }
+      text: 'codex · item:somethingCodexAddedLater',
+      providerFrame: { provider: 'codex', kind: 'item:somethingCodexAddedLater' }
+    })
+  })
+
+  it('gives an mcp tool call a typed body with its own arguments as input', () => {
+    expect(
+      codexItemBody({
+        type: 'mcpToolCall',
+        id: 'mcp-1',
+        server: 'weather',
+        tool: 'get_forecast',
+        status: 'completed',
+        arguments: { city: 'Oslo' },
+        result: { content: [{ type: 'text', text: '12C' }] }
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      // Server-qualified, and the arguments stay top level so the row label can
+      // read `query`/`command`/`file_path` out of them.
+      name: 'weather/get_forecast',
+      input: { city: 'Oslo' },
+      state: 'completed',
+      output: { head: '12C', byteLength: 3, truncated: false, digest: expect.any(String) }
+    })
+  })
+
+  it('passes an mcp tool name through with no casing transform', () => {
+    // Downstream dispatch is exact-match on raw identifiers, so every shape —
+    // bare snake_case included — has to survive byte-identical.
+    for (const tool of ['get_forecast', 'mcp__server__tool', 'ns.tool', 'urn:tool', 'listTools']) {
+      expect(
+        codexItemBody({ type: 'mcpToolCall', id: 'm', tool, status: 'inProgress' }),
+        tool
+      ).toMatchObject({ kind: 'tool-call', name: tool, state: 'running' })
+      expect(
+        codexItemBody({ type: 'mcpToolCall', id: 'm', server: 'srv', tool, status: 'inProgress' }),
+        tool
+      ).toMatchObject({ kind: 'tool-call', name: `srv/${tool}`, state: 'running' })
+    }
+  })
+
+  it('falls back to the bare tool, then to `mcp`, when the item is under-specified', () => {
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 'get_forecast', status: 'inProgress' })
+    ).toMatchObject({ name: 'get_forecast' })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', server: '', tool: 'ping', status: 'completed' })
+    ).toMatchObject({ name: 'ping' })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', server: 'weather', status: 'completed' })
+    ).toMatchObject({ name: 'mcp' })
+  })
+
+  it('keeps non-object mcp arguments addressable and empty ones off the label', () => {
+    // `arguments` is arbitrary JSON upstream; a scalar or array must still reach
+    // the row rather than being dropped or unwrapped into a bare value.
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: 'raw text' })
+    ).toMatchObject({ input: { arguments: 'raw text' } })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: [1, 2] })
+    ).toMatchObject({ input: { arguments: [1, 2] } })
+    // `arguments` is required on the wire, so `{}` — not an absent key — is what
+    // an argument-less MCP tool sends, and passing it through labels the row `{}`.
+    expect(codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: {} })).toEqual({
+      kind: 'tool-call',
+      name: 't',
+      input: null,
+      state: 'running'
+    })
+    expect(codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't' })).toMatchObject({
+      input: null
+    })
+    expect(
+      codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: null })
+    ).toMatchObject({ input: null })
+  })
+
+  it('renders an argument-less mcp call as a bare server/tool row', () => {
+    const input = toolCallInput({
+      type: 'mcpToolCall',
+      id: 'm',
+      server: 'srv',
+      tool: 'list_tools',
+      arguments: {}
+    })
+    expect(describeToolInput(input)).toBe('')
+    expect(briefToolArg(input)).toBe('')
+  })
+
+  it('reports an mcp error as a failed call carrying the server message', () => {
+    expect(
+      codexItemBody({
+        type: 'mcpToolCall',
+        id: 'mcp-2',
+        server: 's',
+        tool: 'ping',
+        status: 'completed',
+        error: { message: 'server unreachable' }
+      })
+    ).toMatchObject({
+      kind: 'tool-call',
+      name: 's/ping',
+      state: 'failed',
+      output: { head: 'server unreachable', truncated: false }
+    })
+  })
+
+  it('models a web search as a tool call that runs until codex sends the action', () => {
+    // The start frame Codex actually emits: empty query, no action. Nothing is
+    // labelable yet, so the input is absent rather than a hull of null keys.
+    expect(codexItemBody({ type: 'webSearch', id: 'w', query: '', action: null })).toEqual({
+      kind: 'tool-call',
+      name: 'web_search',
+      input: null,
+      state: 'running'
+    })
+    expect(
+      codexItemBody({
+        type: 'webSearch',
+        id: 'w',
+        query: 'orca release notes',
+        action: { type: 'search', query: 'orca release notes', queries: null },
+        results: null
+      })
+    ).toEqual({
+      kind: 'tool-call',
+      name: 'web_search',
+      input: {
+        query: 'orca release notes',
+        description: 'search',
+        action: { type: 'search', query: 'orca release notes', queries: null }
+      },
+      state: 'completed'
+    })
+  })
+
+  it('carries the web search hits as the call output', () => {
+    const results = [{ title: 'Orca 1.0', url: 'https://example.com/notes' }]
+    expect(
+      codexItemBody({
+        type: 'webSearch',
+        id: 'w',
+        query: 'orca release notes',
+        action: { type: 'search', query: 'orca release notes', queries: null },
+        results
+      })
+    ).toMatchObject({
+      kind: 'tool-call',
+      name: 'web_search',
+      state: 'completed',
+      output: { head: JSON.stringify(results), truncated: false }
+    })
+    // Nothing to show is no output block at all, not an empty one.
+    for (const empty of [undefined, null, []]) {
+      expect(
+        codexItemBody({
+          type: 'webSearch',
+          id: 'w',
+          query: 'q',
+          action: { type: 'search' },
+          results: empty
+        }),
+        String(empty)
+      ).not.toHaveProperty('output')
+    }
+  })
+
+  it('labels every web search shape without falling back to raw JSON', () => {
+    // Both the row label and the run header read top-level input keys only, so a
+    // shape whose detail sits inside `action` renders as the input's raw JSON.
+    const url = 'https://example.com/docs/page'
+    const shapes: [string, unknown, string, string][] = [
+      ['started', null, '', ''],
+      [
+        'search',
+        { type: 'search', query: 'a sample query', queries: null },
+        'a sample query',
+        'a sample query'
+      ],
+      ['openPage', { type: 'openPage', url }, url, ''],
+      [
+        'findInPage',
+        { type: 'findInPage', url, pattern: 'a needle' },
+        'a sample query',
+        'a sample query'
+      ],
+      ['other', { type: 'other' }, 'other', '']
+    ]
+    for (const [name, action, label, brief] of shapes) {
+      // Codex leaves the item's own `query` empty on most completed searches.
+      const query = name === 'search' || name === 'findInPage' ? 'a sample query' : ''
+      const input = toolCallInput({ type: 'webSearch', id: 'w', query, action })
+      expect(describeToolInput(input), name).toBe(label)
+      expect(briefToolArg(input), name).toBe(brief)
+    }
+  })
+
+  it('leaves subagent items on the generic row until a real renderer exists', () => {
+    expect(
+      codexJournalItem({
+        type: 'subAgentActivity',
+        id: 'a-1',
+        kind: 'started',
+        agentThreadId: 'thread-child',
+        agentPath: '/root/list_directory'
+      })
+    ).toMatchObject({
+      handled: false,
+      body: { kind: 'status', providerFrame: { kind: 'item:subAgentActivity' } }
+    })
+  })
+
+  it('drops the sleep item, which codex itself renders as nothing', () => {
+    expect(codexJournalItem({ type: 'sleep', id: 's-1', durationMs: 20_000 })).toEqual({
+      body: null,
+      handled: true
     })
   })
 
