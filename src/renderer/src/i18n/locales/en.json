@@ -14617,6 +14617,12 @@
           "2076ecfc9c": "Previous change",
           "631dab0df3": "Next change"
         },
+        "EditorPanelHeaderPath": {
+          "3c8f0d21a6": "Loading…",
+          "5d0a8b17c3": "Browse {{value0}}",
+          "7e2c1a9b04": "Could not list this folder.",
+          "9b14e6c2d0": "This folder is empty."
+        },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
           "561251019a": "More actions",
