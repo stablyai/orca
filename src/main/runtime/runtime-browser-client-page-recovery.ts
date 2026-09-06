@@ -45,6 +45,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   }
   authority: RecoveryAuthority
   pages: RuntimeBrowserPageRegistry
+  /** Placements as of the attach inventory. Omitting it recovers against unfenced live state. */
   pagePlacementsAtAttach?: ReadonlyMap<string, RuntimeBrowserClientPage['placement']>
   notifyWorkspace(workspaceId: string): void
   /** Drops a page whose placement recovery destroyed without replacing it. */
@@ -74,16 +75,15 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
     return
   }
   const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
-  const pages = options.pages.listPages().filter((page) => {
-    const observedPlacement = options.pagePlacementsAtAttach?.get(page.browserPageId)
-    return (
-      (!options.pagePlacementsAtAttach ||
-        (observedPlacement && sameRuntimeBrowserPlacement(observedPlacement, page.placement))) &&
-      !options.adoptedPageIds?.has(page.browserPageId) &&
-      isRecoverableByLease(page, options.lease) &&
-      !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
+  const pages = options.pages
+    .listPages()
+    .filter(
+      (page) =>
+        isPlacedAsObservedAtAttach(page, options.pagePlacementsAtAttach) &&
+        !options.adoptedPageIds?.has(page.browserPageId) &&
+        isRecoverableByLease(page, options.lease) &&
+        !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
     )
-  })
   await mapWithConcurrency(
     pages,
     MAX_RECOVERY_CONCURRENCY,
@@ -102,6 +102,23 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
     },
     options.signal
   )
+}
+
+/**
+ * Whether the attach inventory can still speak for this page.
+ *
+ * Readiness is published before recovery runs, so the client can place a page the inventory predates
+ * -- and absence from the inventory means "recreate". Those are left to the attach that can see them.
+ */
+function isPlacedAsObservedAtAttach(
+  page: RuntimeBrowserClientPage,
+  pagePlacementsAtAttach: ReadonlyMap<string, RuntimeBrowserClientPage['placement']> | undefined
+): boolean {
+  if (!pagePlacementsAtAttach) {
+    return true
+  }
+  const observed = pagePlacementsAtAttach.get(page.browserPageId)
+  return observed !== undefined && sameRuntimeBrowserPlacement(observed, page.placement)
 }
 
 /**
