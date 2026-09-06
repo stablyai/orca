@@ -39,6 +39,7 @@ function query(): ParsedTaskQuery {
     scope: 'all',
     state: 'open',
     draft: false,
+    blocked: null,
     assignee: null,
     author: null,
     reviewRequested: null,

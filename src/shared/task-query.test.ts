@@ -106,6 +106,15 @@ describe('parseTaskQuery', () => {
     expect(parsed.reviewRequested).toBe('@me')
   })
 
+  it('parses is:blocked and -is:blocked', () => {
+    expect(parseTaskQuery('is:issue is:open is:blocked').blocked).toBe(true)
+    expect(parseTaskQuery('is:issue is:open -is:blocked').blocked).toBe(false)
+    expect(parseTaskQuery('is:issue is:open is:blocked').freeText).toBe('')
+    expect(serializeTaskQuery(parseTaskQuery('is:issue is:open -is:blocked'))).toBe(
+      'is:issue is:open -is:blocked'
+    )
+  })
+
   it('leaves unknown qualifiers and bare words in freeText', () => {
     const parsed = parseTaskQuery('custom:value hello')
     expect(parsed.freeText).toBe('custom:value hello')

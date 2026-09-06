@@ -29,6 +29,7 @@ function query(overrides: Partial<ParsedTaskQuery> = {}): ParsedTaskQuery {
     scope: 'all',
     state: 'open',
     draft: false,
+    blocked: null,
     assignee: null,
     author: null,
     reviewRequested: null,

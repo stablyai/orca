@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
+import { GitHubIssueBlockedListMarker } from '@/components/github/GitHubIssueBlockedIndicators'
 export function TaskPageGitHubRows({
   model
 }: {
@@ -125,16 +126,18 @@ export function TaskPageGitHubRows({
               )}
             >
               <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
-                {isTaskPageGitHubDraftPR(item) ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>{githubTaskIdPill}</TooltipTrigger>
-                    <TooltipContent side="bottom" sideOffset={6}>
-                      {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  githubTaskIdPill
-                )}
+                <div className="flex min-w-0 items-center gap-1.5">
+                  {isTaskPageGitHubDraftPR(item) ? (
+                    <Tooltip>
+                      <TooltipTrigger asChild>{githubTaskIdPill}</TooltipTrigger>
+                      <TooltipContent side="bottom" sideOffset={6}>
+                        {translate('auto.components.TaskPage.054bf695cc', 'Draft')}
+                      </TooltipContent>
+                    </Tooltip>
+                  ) : (
+                    githubTaskIdPill
+                  )}
+                </div>
               </div>
 
               <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
@@ -157,6 +160,8 @@ export function TaskPageGitHubRows({
                   ) : null}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] text-muted-foreground">
+                  {/* Why: github.com puts Blocked in the metadata row, not beside the #id pill. */}
+                  <GitHubIssueBlockedListMarker item={item} />
                   <span>
                     {item.author ??
                       translate('auto.components.TaskPage.6430594b18', 'unknown author')}

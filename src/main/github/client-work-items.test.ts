@@ -650,6 +650,15 @@ describe('listWorkItems', () => {
     expect(apiPath).not.toContain('-is:merged')
   })
 
+  it('returns zero for a same-repository is:pr is:blocked count query', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+
+    await expect(countWorkItems('/repo-root', 'is:pr is:blocked')).resolves.toBe(0)
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('returns zero without spawning gh when the search bucket is rate-limit blocked', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })

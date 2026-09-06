@@ -1,4 +1,5 @@
 import type { OwnerRepo } from '../../gh-utils'
+import type { GitHubIssueBlockedByRef } from '../../../../shared/github/work-item-types'
 import {
   authorFieldsFromUnknown,
   extractHeadOwnerLogin,
@@ -11,7 +12,83 @@ import {
   deriveWorkItemCheckSummary,
   type MainWorkItem
 } from './work-item-field-coercion'
+
+function isOpenBlockedByNode(node: { state?: unknown; closed?: unknown }): boolean {
+  if (typeof node.closed === 'boolean') {
+    return !node.closed
+  }
+  const state = String(node.state ?? '').toLowerCase()
+  // Why: absent state means we cannot prove closed; treat as open so badges do not under-report.
+  return state === '' || state === 'open'
+}
+
+function blockedByRefsFromUnknown(
+  item: Record<string, unknown>
+): GitHubIssueBlockedByRef[] | undefined {
+  const blockedBy = item.blockedBy
+  if (typeof blockedBy !== 'object' || blockedBy === null) {
+    return undefined
+  }
+  const nodes = (blockedBy as { nodes?: unknown }).nodes
+  if (!Array.isArray(nodes)) {
+    return undefined
+  }
+  const refs: GitHubIssueBlockedByRef[] = []
+  for (const node of nodes) {
+    if (typeof node !== 'object' || node === null) {
+      continue
+    }
+    const blocker = node as {
+      number?: unknown
+      title?: unknown
+      url?: unknown
+      html_url?: unknown
+      state?: unknown
+      closed?: unknown
+    }
+    if (!isOpenBlockedByNode(blocker)) {
+      continue
+    }
+    const number = numberFromUnknown(blocker.number)
+    if (number === undefined) {
+      continue
+    }
+    refs.push({
+      number,
+      title: String(blocker.title ?? ''),
+      url: String(blocker.url ?? blocker.html_url ?? '')
+    })
+  }
+  return refs.length > 0 ? refs : undefined
+}
+
+function blockedByCountFromUnknown(item: Record<string, unknown>): number | undefined {
+  const summary = item.issue_dependencies_summary ?? item.issueDependenciesSummary
+  if (typeof summary === 'object' && summary !== null) {
+    // Why: summary.blockedBy / blocked_by is open blockers only; totalBlockedBy includes closed.
+    const count = numberFromUnknown(
+      (summary as { blocked_by?: unknown; blockedBy?: unknown }).blocked_by ??
+        (summary as { blockedBy?: unknown }).blockedBy
+    )
+    if (count !== undefined) {
+      return count
+    }
+  }
+  // Why: do not use blockedBy.totalCount — it includes closed blockers and would keep the badge.
+  const blockedBy = item.blockedBy
+  if (typeof blockedBy !== 'object' || blockedBy === null) {
+    return undefined
+  }
+  const nodes = (blockedBy as { nodes?: unknown }).nodes
+  if (!Array.isArray(nodes)) {
+    return undefined
+  }
+  return blockedByRefsFromUnknown(item)?.length ?? 0
+}
+
 export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
+  const blockedBy = blockedByRefsFromUnknown(item)
+  const blockedByCount = blockedByCountFromUnknown(item) ?? blockedBy?.length
   return {
     id: `issue:${String(item.number)}`,
     type: 'issue',
@@ -30,7 +107,9 @@ export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
     ...authorFieldsFromUnknown(item),
-    ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
+    ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {}),
+    ...(blockedByCount !== undefined ? { blockedByCount } : {}),
+    ...(blockedBy !== undefined ? { blockedBy } : {})
   }
 }
 

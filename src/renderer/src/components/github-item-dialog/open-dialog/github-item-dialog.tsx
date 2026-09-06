@@ -25,6 +25,7 @@ export default function GitHubItemDialog({
   backLabel = 'Back',
   projectOrigin,
   onUse,
+  onOpenWorkItem,
   onReviewRequestsChange,
   onClose
 }: GitHubItemDialogProps): React.JSX.Element {
@@ -142,7 +143,7 @@ export default function GitHubItemDialog({
     <div className="flex h-full min-h-0 flex-col">
       {isIssuePage ? (
         <GitHubItemDialogIssueHeader
-          workItem={workItem}
+          workItem={displayWorkItem ?? workItem}
           backLabel={backLabel}
           onClose={onClose}
           linkCopied={linkCopied}
@@ -151,6 +152,7 @@ export default function GitHubItemDialog({
           issueAttachedWorkspace={issueAttachedWorkspace}
           handleOpenOrUseIssueWorkspace={handleOpenOrUseIssueWorkspace}
           onUse={onUse}
+          onOpenWorkItem={onOpenWorkItem}
           localState={localState}
           effectiveRepoId={effectiveRepoId}
           repoPath={repoPath}

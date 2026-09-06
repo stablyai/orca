@@ -26,6 +26,7 @@ import { formatRelativeTime } from '@/components/github/work-item-state-presenta
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { WorkItemIssueSourceIndicator } from './work-item-issue-source-indicator'
+import { GitHubIssueBlockedStatusPill } from '@/components/github/GitHubIssueBlockedIndicators'
 
 export function GitHubItemDialogIssueHeader({
   workItem,
@@ -37,6 +38,7 @@ export function GitHubItemDialogIssueHeader({
   issueAttachedWorkspace,
   handleOpenOrUseIssueWorkspace,
   onUse,
+  onOpenWorkItem,
   localState,
   effectiveRepoId,
   repoPath,
@@ -51,6 +53,7 @@ export function GitHubItemDialogIssueHeader({
   issueAttachedWorkspace: object | null
   handleOpenOrUseIssueWorkspace: (item: GitHubWorkItem) => void
   onUse: (item: GitHubWorkItem) => void
+  onOpenWorkItem?: (item: GitHubWorkItem) => void
   localState: GitHubWorkItem['state']
   effectiveRepoId: string | null
   repoPath: string | null
@@ -223,6 +226,7 @@ export function GitHubItemDialogIssueHeader({
               ? translate('auto.components.GitHubItemDialog.ab050dffec', 'Closed')
               : translate('auto.components.GitHubItemDialog.dc1ca081a8', 'Open')}
           </span>
+          <GitHubIssueBlockedStatusPill item={workItem} onOpenWorkItem={onOpenWorkItem} />
           <span className="flex flex-wrap items-center gap-1.5">
             <span className="font-semibold text-foreground">
               {workItem.author ??

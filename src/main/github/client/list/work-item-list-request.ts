@@ -8,7 +8,12 @@ import {
   getOriginGitHubApiRepository
 } from '../../github-api-repository'
 import { WORK_ITEM_PR_LIST_JSON_FIELDS, type MainWorkItem } from './../map/work-item-field-coercion'
-import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-item-search-query'
+import {
+  WORK_ITEM_NUMBER_SORT_QUALIFIER,
+  buildIssueSearchIssuesApiPath,
+  quoteGitHubSearchValue,
+  shouldEmitBlockedSearchQualifier
+} from './work-item-search-query'
 export type WorkItemListRequest = {
   args: string[]
   offset: number
@@ -48,6 +53,16 @@ export function buildWorkItemListRequest(args: {
     searchParts.push('draft:true')
   }
 
+  // Why: blocked-by is issue-only; gh pr list --search never gets advanced_search.
+  const blockedQualifier = shouldEmitBlockedSearchQualifier({
+    host: ownerRepo.host,
+    forIssues: kind === 'issue',
+    blocked: query.blocked
+  })
+  if (blockedQualifier) {
+    searchParts.push(query.blocked === true ? 'is:blocked' : '-is:blocked')
+  }
+
   if (query.assignee) {
     searchParts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
@@ -75,7 +90,15 @@ export function buildWorkItemListRequest(args: {
         'api',
         '--cache',
         '120s',
-        `search/issues?q=${encodeURIComponent(searchParts.join(' '))}&sort=created&order=desc&per_page=${limit}&page=${page}`,
+        buildIssueSearchIssuesApiPath({
+          query: searchParts.join(' '),
+          sort: 'created',
+          order: 'desc',
+          perPage: limit,
+          page,
+          host: ownerRepo.host,
+          blockedQualifier
+        }),
         '--jq',
         '.items'
       ],

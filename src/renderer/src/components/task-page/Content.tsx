@@ -23,7 +23,8 @@ export function TaskPageContent({
     setDialogWorkItem,
     handleDialogReviewRequestsChange,
     closeTaskDetailPage,
-    handleUseWorkItem
+    handleUseWorkItem,
+    openGitHubDetailPage
   } = model
   return taskSource === 'github' && dialogWorkItem ? (
     dialogWorkItem.type === 'pr' ? (
@@ -53,6 +54,7 @@ export function TaskPageContent({
           setDialogWorkItem(null)
           handleUseWorkItem(item)
         }}
+        onOpenWorkItem={openGitHubDetailPage}
         onReviewRequestsChange={handleDialogReviewRequestsChange}
         onClose={closeTaskDetailPage}
       />

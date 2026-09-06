@@ -22,7 +22,12 @@ import {
 } from '../../rate-limit'
 import { sameOwnerRepo } from './../github-exec-scope'
 import { resolvePrWorkItemSource } from './work-item-list-request'
-import { buildSearchQueryString, defaultOpenWorkItemQuery } from './work-item-search-query'
+import {
+  buildIssueSearchIssuesApiPath,
+  buildSearchQueryString,
+  defaultOpenWorkItemQuery,
+  shouldEmitBlockedSearchQualifier
+} from './work-item-search-query'
 export async function countWorkItemsForQuery(
   repoPath: string,
   ownerRepo: OwnerRepo,
@@ -31,6 +36,11 @@ export async function countWorkItemsForQuery(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<number> {
   const searchQ = buildSearchQueryString(ownerRepo, query)
+  const blockedQualifier = shouldEmitBlockedSearchQualifier({
+    host: ownerRepo.host,
+    forIssues: query.scope !== 'pr',
+    blocked: query.blocked
+  })
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(ownerRepo)
@@ -40,7 +50,12 @@ export async function countWorkItemsForQuery(
       'api',
       '--cache',
       '120s',
-      `search/issues?q=${encodeURIComponent(searchQ)}&per_page=1`,
+      buildIssueSearchIssuesApiPath({
+        query: searchQ,
+        perPage: 1,
+        host: ownerRepo.host,
+        blockedQualifier
+      }),
       '--jq',
       '.total_count'
     ],
@@ -76,6 +91,11 @@ export async function countWorkItems(
 
   const parsedQuery = trimmedQuery ? parseTaskQuery(trimmedQuery) : null
   const effectiveQuery = parsedQuery ?? defaultOpenWorkItemQuery()
+  // Why: is:blocked is issue-only, so an is:pr is:blocked query matches nothing;
+  // return 0 rather than the unqualified PR count (listQueriedWorkItems skips both halves).
+  if (effectiveQuery.scope === 'pr' && effectiveQuery.blocked === true) {
+    return 0
+  }
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(ownerRepo)
@@ -107,6 +127,8 @@ export async function countWorkItems(
       effectiveQuery.draft ||
       effectiveQuery.reviewRequested !== null ||
       effectiveQuery.reviewedBy !== null
+    // Why: is:blocked is issue-only; counting PRs under it would inflate or free-text-match.
+    const skipPrForBlockedInclude = effectiveQuery.blocked === true
     if (
       effectiveQuery.scope !== 'pr' &&
       effectiveQuery.state !== 'merged' &&
@@ -123,7 +145,7 @@ export async function countWorkItems(
         )
       )
     }
-    if (effectiveQuery.scope !== 'issue' && prOwnerRepo) {
+    if (effectiveQuery.scope !== 'issue' && !skipPrForBlockedInclude && prOwnerRepo) {
       counts.push(
         countWorkItemsForQuery(
           repoPath,

@@ -13,6 +13,13 @@ import type {
   ProviderCheckSummary
 } from './pull-request-types'
 
+/** Why: detail Relationships lists need number/title/url; list rows only need the count. */
+export type GitHubIssueBlockedByRef = {
+  number: number
+  title: string
+  url: string
+}
+
 export type GitHubWorkItem = {
   id: string
   type: 'issue' | 'pr'
@@ -49,6 +56,10 @@ export type GitHubWorkItem = {
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
+  /** Open blockers from GitHub issue dependencies. Absent when the host/API omits the summary. */
+  blockedByCount?: number
+  /** Blocker issue refs when the payload includes nodes (e.g. `gh issue view --json blockedBy`). */
+  blockedBy?: GitHubIssueBlockedByRef[]
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
   // The Start-from picker passes this to resolvePrBase so fork heads use
   // refs/pull/<N>/head for creation and a separate PR-head push target.

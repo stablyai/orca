@@ -117,6 +117,14 @@ function ProjectViewBody({
             }
           })
         }}
+        onOpenWorkItem={(item) => {
+          rowActions.setDialogRepoItem({
+            workItem: item,
+            repoPath: dialogItem.repoPath,
+            repoId: dialogItem.repoId,
+            origin: dialogItem.origin
+          })
+        }}
         onClose={() => rowActions.setDialogRepoItem(null)}
       />
     )

@@ -18,6 +18,8 @@ export type GitHubItemDialogProps = {
   backLabel?: string
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
+  /** Open another issue in Orca (e.g. a single blocked-by dependency). */
+  onOpenWorkItem?: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (
     itemKey: { id: string; repoId: string },
     reviewRequests: GitHubAssignableUser[]
