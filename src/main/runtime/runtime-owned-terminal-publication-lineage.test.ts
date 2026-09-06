@@ -1,9 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 
-await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+// Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
+await import('./orca-runtime-test-lifecycle.spec')
 const { store, TEST_WORKTREE_ID } = await import('./orca-runtime-test-fixtures.spec')
 
 it.each(['renderer:active-generation', 'headless:active-generation'])(
