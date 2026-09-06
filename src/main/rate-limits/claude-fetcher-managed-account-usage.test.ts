@@ -16,18 +16,30 @@ import {
   writeManagedClaudeKeychainCredentials
 } from '../claude-accounts/keychain'
 
-const { netFetchMock, readFileMock, resolveProxyMock, setProxyMock, appGetPathMock } = vi.hoisted(
-  () => ({
-    netFetchMock: vi.fn(),
-    readFileMock: vi.fn(),
-    resolveProxyMock: vi.fn(),
-    setProxyMock: vi.fn(),
-    appGetPathMock: vi.fn()
-  })
-)
+const {
+  netFetchMock,
+  tokenFetchMock,
+  readFileMock,
+  resolveProxyMock,
+  setProxyMock,
+  appGetPathMock
+} = vi.hoisted(() => ({
+  netFetchMock: vi.fn(),
+  tokenFetchMock: vi.fn(),
+  readFileMock: vi.fn(),
+  resolveProxyMock: vi.fn(),
+  setProxyMock: vi.fn(),
+  appGetPathMock: vi.fn()
+}))
 
 vi.mock('node:fs/promises', () => ({
   readFile: readFileMock
+}))
+
+// Why: the OAuth refresh goes through Node's stack, not Electron's (orca#18716).
+vi.mock('undici', () => ({
+  fetch: tokenFetchMock,
+  EnvHttpProxyAgent: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -261,7 +273,7 @@ describe('fetchClaudeRateLimits', () => {
     mkdirSync(ownedAuthPath, { recursive: true })
     writeFileSync(join(ownedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     vi.mocked(readManagedClaudeKeychainCredentials).mockResolvedValueOnce(staleCredentialsJson)
-    netFetchMock.mockResolvedValueOnce(
+    tokenFetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           access_token: 'fresh-access',
@@ -391,9 +403,9 @@ describe('fetchClaudeRateLimits', () => {
       'utf-8'
     )
 
-    // First net.fetch call is the OAuth refresh (token endpoint); second is the
-    // usage fetch with the refreshed access token.
-    netFetchMock.mockResolvedValueOnce({
+    // The OAuth refresh (token endpoint) goes through Node fetch; the usage
+    // fetch with the refreshed access token still goes through net.fetch.
+    tokenFetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         access_token: 'fresh-access',

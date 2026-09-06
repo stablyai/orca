@@ -188,6 +188,9 @@ importers:
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
+      undici:
+        specifier: ^7.29.0
+        version: 7.29.0
       ws:
         specifier: ^8.21.3
         version: 8.21.3

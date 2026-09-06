@@ -49,7 +49,10 @@ export async function fetchInactiveClaudeAccountUsage(
 
   let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
   if (isOauthTokenExpiring(credentialsJson)) {
-    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+    const refreshed = await refreshClaudeOauthCredentials(credentialsJson, {
+      networkProxySettings: options.networkProxySettings,
+      signal: options.signal
+    })
     if (options.signal?.aborted) {
       return abortedClaudeRateLimitResult()
     }
