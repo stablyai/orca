@@ -1,5 +1,5 @@
 import {
-  parseAutomationRrule,
+  tryParseAutomationRrule,
   parseCronExpression,
   parseSchedule,
   type ParsedCron
@@ -74,7 +74,9 @@ function setContainsRange(values: Set<number>, min: number, max: number): boolea
   return true
 }
 
-function formatParsedRruleSchedule(schedule: ReturnType<typeof parseAutomationRrule>): string {
+function formatParsedRruleSchedule(
+  schedule: NonNullable<ReturnType<typeof tryParseAutomationRrule>>
+): string {
   if (schedule.preset === 'hourly') {
     return `Hourly at :${String(schedule.minute).padStart(2, '0')}`
   }
@@ -149,7 +151,8 @@ export function formatAutomationSchedule(scheduleExpression: string): string {
     if (schedule.kind === 'cron') {
       return classifyParsedCronSchedule(schedule).label
     }
-    return formatParsedRruleSchedule(parseAutomationRrule(trimmed))
+    const preset = tryParseAutomationRrule(trimmed)
+    return preset ? formatParsedRruleSchedule(preset) : 'Custom schedule'
   } catch {
     return 'Invalid schedule'
   }
@@ -175,7 +178,10 @@ export function describeAutomationSchedule(
     if (schedule.kind === 'cron') {
       return toScheduleDescriptor(classifyParsedCronSchedule(schedule))
     }
-    const rrule = parseAutomationRrule(trimmed)
+    const rrule = tryParseAutomationRrule(trimmed)
+    if (rrule === null) {
+      return { kind: 'custom' }
+    }
     if (rrule.preset === 'hourly') {
       return { kind: 'hourly', minute: rrule.minute }
     }
