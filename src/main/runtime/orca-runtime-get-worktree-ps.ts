@@ -14,6 +14,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../startup/branch-rename-hook'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { buildWorktreeListingPage } from './worktree-listing-host-scope'
@@ -156,6 +157,9 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
+      // Structured chat has no agent CLI hooks, so this projection is what the first-work
+      // workspace rename listens to instead of `agentStatus:set`.
+      onSessionStatusChanged: maybeAutoRenameWorkspaceOnFirstStructuredTurn,
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
   }

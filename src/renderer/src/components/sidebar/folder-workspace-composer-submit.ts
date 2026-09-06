@@ -182,9 +182,7 @@ export async function submitFolderWorkspaceCreate({
     linkedTask: toFolderWorkspaceLinkedTask(linkedWorkItem),
     ...(linkedTaskSourceContext ? { linkedTaskSourceContext } : {}),
     ...(quickAgent ? { createdWithAgent: quickAgent } : {}),
-    ...(pendingFirstAgentMessageRename && !structuredLaunch
-      ? { pendingFirstAgentMessageRename: true }
-      : {})
+    ...(pendingFirstAgentMessageRename ? { pendingFirstAgentMessageRename: true } : {})
   })
   if (!workspace) {
     return false

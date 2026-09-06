@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
-import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+import {
+  StructuredAgentSessionStatusFeed,
+  type StructuredAgentSessionStatusFeedDeps
+} from './structured-agent-session-status-feed'
 
 const SESSION = 'status-session'
 const TURN_IDENTITY = {
@@ -52,9 +55,13 @@ function indexed(session: { journal: Awaited<ReturnType<typeof openJournal>> }) 
   }
 }
 
-function feedFor(sessions: Map<string, { journal: Awaited<ReturnType<typeof openJournal>> }>) {
+function feedFor(
+  sessions: Map<string, { journal: Awaited<ReturnType<typeof openJournal>> }>,
+  onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
+) {
   let now = 1_000
   const feed = new StructuredAgentSessionStatusFeed({
+    ...(onStatusChanged ? { onStatusChanged } : {}),
     sessions: {
       get: (sessionId: string) => {
         const session = sessions.get(sessionId)
@@ -237,6 +244,54 @@ describe('StructuredAgentSessionStatusFeed', () => {
     expect(others.at(-1)).toEqual({
       type: 'status',
       session: expect.objectContaining({ status: 'idle' })
+    })
+  })
+  it('reports each projection change to the host observer, marking re-projections as replay', async () => {
+    const journal = await openJournal()
+    const seen: { status: string | null; prompt: string; replay: boolean }[] = []
+    const { feed } = feedFor(new Map([[SESSION, { journal }]]), (summary, options) =>
+      seen.push({ status: summary.status, prompt: summary.latestPrompt, replay: options.replay })
+    )
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fix the auth bug' }] },
+      { fence: 1 }
+    )
+    await journal.appendItem(
+      TURN_IDENTITY,
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
+      { fence: 1 }
+    )
+
+    feed.publish(SESSION, journal)
+    // A second identical publication is deduped, so the observer only ever sees changes.
+    feed.publish(SESSION, journal)
+    // seen[0] is the opening projection the harness's own subscriber triggered.
+    expect(seen.slice(1)).toEqual([
+      { status: 'working', prompt: 'fix the auth bug', replay: false }
+    ])
+
+    // An arriving subscriber re-projects state the host already knew.
+    await journal.appendTombstone(TURN_IDENTITY, { fence: 1 })
+    feed.subscribe({ id: 'list-2', emit: () => undefined })
+    expect(seen.at(-1)).toEqual({ status: 'idle', prompt: 'fix the auth bug', replay: true })
+  })
+
+  it('keeps publishing to subscribers when the host observer throws', async () => {
+    const journal = await openJournal()
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), () => {
+      throw new Error('observer exploded')
+    })
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1 }
+    )
+
+    expect(() => feed.publish(SESSION, journal)).not.toThrow()
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })
     })
   })
 })
