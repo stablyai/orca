@@ -19,7 +19,7 @@ import {
 } from './palette-assignment-ranking'
 import { buildRangesByField, buildSupportingEvidence } from './palette-match-rendering'
 
-type FieldHit = { fieldId: string; match: PaletteFieldMatch }
+type FieldHit = { field: PaletteIndexedField; match: PaletteFieldMatch }
 
 /** One token's proof; a repo/branch composite deliberately retains both hits. */
 export type TokenCandidate = {
@@ -52,17 +52,8 @@ const STRENGTH: Record<PaletteMatchQuality, number> = {
   typo: 5
 }
 
-function maxMetric(hits: readonly FieldHit[], metric: (hit: FieldHit) => number): number {
-  let maximum = 0
-  for (const hit of hits) {
-    maximum = Math.max(maximum, metric(hit))
-  }
-  return maximum
-}
-
-function fieldCoverage(document: PaletteDocument, fieldId: string): number {
-  const field = document.fieldById.get(fieldId)
-  if (!field || field.evidenceId) {
+function fieldCoverage(field: PaletteIndexedField): number {
+  if (field.evidenceId) {
     return 3
   }
   if (field.role === 'primary') {
@@ -74,32 +65,38 @@ function fieldCoverage(document: PaletteDocument, fieldId: string): number {
   return 2
 }
 
-function toCandidate(document: PaletteDocument, hits: readonly FieldHit[]): TokenCandidate {
+function toCandidate(hits: readonly FieldHit[]): TokenCandidate {
   let quality = hits[0].match.quality
   let strength = STRENGTH[quality]
-  for (const hit of hits.slice(1)) {
+  let recovery = strength >= STRENGTH.compact ? 1 : 0
+  let wordMatch = strength >= STRENGTH['literal-substring'] ? 1 : 0
+  let coverage = fieldCoverage(hits[0].field)
+  for (let index = 1; index < hits.length; index += 1) {
+    const hit = hits[index]
     const value = STRENGTH[hit.match.quality]
     if (value > strength) {
       strength = value
       quality = hit.match.quality
     }
+    if (value >= STRENGTH.compact) {
+      recovery = 1
+    }
+    if (value >= STRENGTH['literal-substring']) {
+      wordMatch = 1
+    }
+    coverage = Math.max(coverage, fieldCoverage(hit.field))
   }
   return {
     hits,
     quality,
-    recovery: maxMetric(hits, (hit) =>
-      hit.match.quality === 'compact' || hit.match.quality === 'typo' ? 1 : 0
-    ),
-    wordMatch: maxMetric(hits, (hit) =>
-      ['literal-substring', 'compact', 'typo'].includes(hit.match.quality) ? 1 : 0
-    ),
-    coverage: maxMetric(hits, (hit) => fieldCoverage(document, hit.fieldId)),
+    recovery,
+    wordMatch,
+    coverage,
     strength,
-    identity: hits
-      .map((hit) =>
-        String(document.fields.findIndex((field) => field.id === hit.fieldId)).padStart(6, '0')
-      )
-      .join('\u0000')
+    identity:
+      hits.length === 1
+        ? hits[0].field.proofIdentity
+        : hits.map((hit) => hit.field.proofIdentity).join('\u0000')
   }
 }
 
@@ -124,9 +121,9 @@ function matchCompositePairs(
     const rightMatch = matchPaletteField(rightField, right)
     if (leftMatch && rightMatch) {
       candidates.push(
-        toCandidate(document, [
-          { fieldId: leftField.id, match: leftMatch },
-          { fieldId: rightField.id, match: rightMatch }
+        toCandidate([
+          { field: leftField, match: leftMatch },
+          { field: rightField, match: rightMatch }
         ])
       )
     }
@@ -153,7 +150,7 @@ function collectTokenCandidates(
       continue
     }
     found = true
-    const candidate = toCandidate(document, [{ fieldId: field.id, match }])
+    const candidate = toCandidate([{ field, match }])
     if (!field.evidenceId) {
       candidates.visible.push(candidate)
     } else {
@@ -177,7 +174,7 @@ function toTokenAssignments(
     for (const hit of candidate.hits) {
       assignments.push({
         tokenIndex: tokens[index].index,
-        fieldId: hit.fieldId,
+        fieldId: hit.field.id,
         quality: hit.match.quality,
         ranges: hit.match.ranges
       })

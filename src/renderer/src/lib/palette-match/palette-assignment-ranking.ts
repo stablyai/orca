@@ -53,15 +53,19 @@ export function selectThresholdAssignment(
   return remaining.map((entries) => entries[0])
 }
 
-function candidateMetricKey(candidate: TokenCandidate): string {
-  return METRIC_KEYS.map((key) => candidate[key]).join(':')
+function candidateMetricKey(candidate: TokenCandidate): number {
+  return (
+    (((candidate.recovery * 2 + candidate.wordMatch) * 4 + candidate.coverage) * 6 +
+      candidate.strength) |
+    0
+  )
 }
 
 export function summarizeCandidates(
   candidates: readonly TokenCandidate[],
   diagnostics?: PaletteMatchDiagnostics
 ): TokenCandidate[] {
-  const byMetric = new Map<string, TokenCandidate>()
+  const byMetric = new Map<number, TokenCandidate>()
   for (const candidate of candidates) {
     if (diagnostics) {
       diagnostics.selectionCandidateVisits += 1
@@ -79,13 +83,13 @@ function assignmentPlacement(
   selected: readonly TokenCandidate[],
   normalizedQuery: string
 ): number {
-  const fieldId = selected[0]?.hits.length === 1 ? selected[0].hits[0].fieldId : null
+  const fieldId = selected[0]?.hits.length === 1 ? selected[0].hits[0].field.id : null
   if (!fieldId) {
     return 2
   }
   if (
     selected.some(
-      (candidate) => candidate.hits.length !== 1 || candidate.hits[0].fieldId !== fieldId
+      (candidate) => candidate.hits.length !== 1 || candidate.hits[0].field.id !== fieldId
     )
   ) {
     return 2
@@ -181,7 +185,7 @@ export function collectCompleteVisibleAssignments(args: {
         args.diagnostics.selectionCandidateVisits += 1
       }
       if (candidate.hits.length === 1) {
-        byField.set(candidate.hits[0].fieldId, candidate)
+        byField.set(candidate.hits[0].field.id, candidate)
       }
     }
     return byField
@@ -220,7 +224,7 @@ export function collectRecognizedIdentifierAssignments(args: {
         if (candidate.hits.length !== 1) {
           continue
         }
-        const field = args.document.fieldById.get(candidate.hits[0].fieldId)
+        const field = candidate.hits[0].field
         if (
           field?.identifier?.kind === 'number' &&
           field.text.normalized === args.normalizedQuery &&

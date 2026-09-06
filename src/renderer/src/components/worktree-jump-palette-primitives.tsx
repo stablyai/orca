@@ -1,5 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import React from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
