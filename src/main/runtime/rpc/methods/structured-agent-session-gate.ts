@@ -40,8 +40,28 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
   return host
 }
 
-/** Cleanup remains available after the setting is disabled, but never bypasses wire negotiation
- *  or creates a host. This lets admitted callers retire only resources they already own. */
+/**
+ * WHICH GATE DOES A NEW `agentSession.*` METHOD GET?
+ *
+ * The host setting is admission control, and admission can be revoked while sessions are still
+ * open. So the surface splits by what a method does to work in flight, not by how dangerous it
+ * sounds:
+ *
+ *   - Starts, extends, retains or reads work -> `requireStructuredHost`. Revoked admission means
+ *     no new turns, no new holds, no new reads. create, send, ensure, setOption, requestHandoff,
+ *     subscribe, hold, reveal, history, options and the status stream all live here.
+ *   - Stops or retires work the caller already owns -> `requireStructuredCleanupHost`. close,
+ *     cancel, unsubscribe and release live here.
+ *
+ * Cleanup keeps working after the setting is turned off because the alternative strands the user:
+ * a session opened while the setting was on stays open, and refusing its close leaves a chat with
+ * a live provider child that its own owner can no longer shut down. Stopping is never the thing
+ * the policy exists to prevent.
+ *
+ * Cleanup is not an escape hatch. It still demands the negotiated wire capability, so a client
+ * that never advertised the surface still cannot see it, and it never creates a host — it can
+ * only retire what already exists.
+ */
 export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
   if (!supportsStructuredAgentSessionCapability(ctx)) {
     throw new Error('structured_agent_session_unsupported')

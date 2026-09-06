@@ -1,15 +1,8 @@
 // The wire boundary: who may see `agentSession.*` at all, and what shapes it
-// accepts once they can.
+// accepts once they can. The dispatcher harness lives in the shared fixture.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import {
-  StructuredAgentSessionStatusFeed,
-  type StructuredAgentSessionStatusSubscriber
-} from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import {
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -17,253 +10,31 @@ import {
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RpcRequest, RpcResponse } from '../core'
-import { RpcDispatcher } from '../dispatcher'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { ALL_RPC_METHODS } from './index'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
-
-const SESSION = 'session-alpha'
-const FINGERPRINT = 'f'.repeat(64)
-const OPERATION = '1800000000000-00000000000000000000000000000001'
-
-function envelope(overrides: Record<string, unknown> = {}) {
-  return {
-    sessionId: SESSION,
-    clientOperationId: OPERATION,
-    expectedRuntimeFence: 1,
-    payloadFingerprint: FINGERPRINT,
-    ...overrides
-  }
-}
-
-function sendParams(overrides: Record<string, unknown> = {}) {
-  return {
-    envelope: envelope(),
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
-    ...overrides
-  }
-}
-
-function attachParams(overrides: Record<string, unknown> = {}) {
-  return {
-    envelope: envelope({ expectedRuntimeFence: null }),
-    location: {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: 'workspace-1',
-      workspaceKind: 'git-worktree'
-    },
-    provider: 'codex',
-    agent: 'codex',
-    accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-    runtimeKind: 'native',
-    providerHandle: { kind: 'codex', threadId: 'thread-1' },
-    ...overrides
-  }
-}
-
-function request(method: string, params: unknown): RpcRequest {
-  return { id: 'request-1', authToken: 'token', method, params }
-}
-
-let hostCalls: Record<string, ReturnType<typeof vi.fn>>
-let runtimeCalls: Record<string, ReturnType<typeof vi.fn>>
-
-const STATUS_SESSION = 'session-status'
-const STATUS_ITEMS: AgentJournalRenderItem[] = [
-  {
-    itemId: 'user-1',
-    sequence: 1,
-    revision: 1,
-    observedAt: 1,
-    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] }
-  },
-  {
-    itemId: 'turn-1',
-    sequence: 2,
-    revision: 1,
-    observedAt: 2,
-    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } }
-  }
-]
-
-/** One indexed session over a journal that reads back fixed items; the projection is real. */
-function statusFeed(): StructuredAgentSessionStatusFeed {
-  return new StructuredAgentSessionStatusFeed({
-    sessions: new Map([
-      [
-        STATUS_SESSION,
-        {
-          journal: {
-            isReadOnly: false,
-            snapshot: () => ({ items: STATUS_ITEMS })
-          } as unknown as AgentSessionJournal,
-          params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
-        }
-      ]
-    ]),
-    getRecord: () => null,
-    now: () => 1_000
-  })
-}
-
-function hostStub(): StructuredAgentSessionHost {
-  hostCalls = {
-    attach: vi.fn(async () => ({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 0 },
-      value: {
-        sessionId: SESSION,
-        fence: 1,
-        page: {
-          sessionId: SESSION,
-          epoch: 'epoch-a',
-          direction: 'tail',
-          items: [],
-          removedItemIds: [],
-          submissions: [],
-          window: {
-            oldest: null,
-            newest: null,
-            nextCursor: { epoch: 'epoch-a', sequence: 0 }
-          },
-          liveCursor: { epoch: 'epoch-a', sequence: 0 },
-          hasOlder: false,
-          hasNewer: false
-        },
-        unconfirmedClientMessageIds: []
-      }
-    })),
-    send: vi.fn(async () => ({ ok: true, replayed: false })),
-    cancel: vi.fn(async () => ({ ok: true, replayed: false })),
-    close: vi.fn(async () => undefined),
-    revealSession: vi.fn(async () => ({
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      agent: 'codex' as const,
-      readable: true
-    })),
-    setSessionTabVisibility: vi.fn(async () => undefined),
-    respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
-    setOption: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 0 },
-      value: {
-        status: {
-          owner: 'native',
-          direction: null,
-          phase: 'idle',
-          stage: null,
-          operationId: null
-        }
-      }
-    })),
-    supportsCreate: vi.fn(() => true),
-    handoffStatus: vi.fn(async () => ({ owner: 'native' })),
-    readOptions: vi.fn(async () => ({
-      models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
-      current: { model: 'gpt-live' }
-    })),
-    history: vi.fn(() => ({ ok: true, page: { items: [] } })),
-    subscribe: vi.fn(() => () => undefined),
-    // A real feed, so the snapshot this method hands back is a genuine projection rather
-    // than a shape the stub restated.
-    subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
-      statusFeed().subscribe(subscriber)
-    ),
-    unsubscribe: vi.fn(),
-    release: vi.fn()
-  }
-  return hostCalls as unknown as StructuredAgentSessionHost
-}
-
-function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatcher {
-  runtimeCalls = {
-    getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true })),
-    resolveStructuredAgentSessionCreateIntent: vi.fn(async (params) => ({
-      envelope: params.envelope,
-      location: {
-        executionHostId: 'local',
-        wslDistro: null,
-        workspaceId: 'workspace-1',
-        workspaceKind: 'git-worktree'
-      },
-      provider: params.agent,
-      agent: params.agent,
-      accountHome: {
-        variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
-        path: params.agent === 'claude' ? '/host/.claude' : '/host/.codex'
-      },
-      options:
-        params.agent === 'claude'
-          ? { model: 'opus', effort: 'high' }
-          : { model: 'gpt-5.6-sol', effort: 'medium' },
-      runtimeKind: 'native'
-    })),
-    publishStructuredAgentSessionTab: vi.fn()
-  }
-  const runtime = {
-    getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
-    registerSubscriptionCleanup: vi.fn(),
-    cleanupSubscription: vi.fn(),
-    cleanupSubscriptionsByPrefix: vi.fn(),
-    ...runtimeCalls,
-    ...runtimeOverrides
-  }
-  return new RpcDispatcher({
-    runtime: runtime as unknown as OrcaRuntimeService,
-    methods: STRUCTURED_AGENT_SESSION_METHODS
-  })
-}
-
-/** The reply path is the only one that carries a client's negotiated identity,
- *  which is exactly what the capability gate reads. */
-async function call(
-  method: string,
-  params: unknown,
-  client?: {
-    clientId?: string
-    clientKind?: 'mobile' | 'runtime'
-    clientCapabilities?: string[]
-  },
-  runtimeOverrides: Record<string, unknown> = {}
-): Promise<RpcResponse> {
-  const replies: RpcResponse[] = []
-  await dispatcher(runtimeOverrides).dispatchStreaming(
-    request(method, params),
-    (raw) => replies.push(JSON.parse(raw) as RpcResponse),
-    client
-  )
-  const first = replies[0]
-  if (!first) {
-    throw new Error(`no reply for ${method}`)
-  }
-  return first
-}
-
-const STRUCTURED_CLIENT = {
-  clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-}
-const STRUCTURED_MOBILE_CLIENT = {
-  clientKind: 'mobile' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-}
+import { CLEANUP_METHODS } from './structured-agent-session-gate-classification.test-fixture'
+import {
+  attachParams,
+  call,
+  clearStructuredHostStub,
+  envelope,
+  hostCalls,
+  installStructuredHostStub,
+  runtimeCalls,
+  SESSION,
+  sendParams,
+  STATUS_SESSION,
+  STRUCTURED_CLIENT,
+  STRUCTURED_MOBILE_CLIENT
+} from './structured-agent-session-rpc.test-fixture'
 
 beforeEach(() => {
-  setStructuredAgentSessionHost(hostStub())
+  installStructuredHostStub()
 })
 
 afterEach(() => {
-  setStructuredAgentSessionHost(null)
+  clearStructuredHostStub()
 })
 
 describe('agentSession.reveal', () => {
@@ -455,40 +226,40 @@ describe('capability gating', () => {
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
   })
 
-  it.each([
-    ['agentSession.release', { sessionId: SESSION, holderId: 'surface-1' }],
-    ['agentSession.unsubscribe', { sessionId: SESSION }]
-  ])('keeps %s hidden from remote clients without the capability', async (method, params) => {
-    const response = await call(method, params, {
-      clientKind: 'runtime',
-      clientCapabilities: []
-    })
+  it.each(CLEANUP_METHODS)(
+    'keeps $method hidden from remote clients without the capability',
+    async ({ method, params, hostCall }) => {
+      const response = await call(method, params, {
+        clientKind: 'runtime',
+        clientCapabilities: []
+      })
 
-    expect(response).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
-    })
-    expect(hostCalls.release).not.toHaveBeenCalled()
-  })
+      expect(response).toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+      })
+      expect(hostCalls[hostCall]).not.toHaveBeenCalled()
+    }
+  )
 
-  it.each([
-    ['agentSession.release', { sessionId: SESSION, holderId: 'surface-1' }],
-    ['agentSession.unsubscribe', { sessionId: SESSION }]
-  ])('does not install a host for cleanup-only method %s', async (method, params) => {
-    const ensureHost = vi.fn()
-    setStructuredAgentSessionHost(null)
+  it.each(CLEANUP_METHODS)(
+    'does not install a host for cleanup-only method $method',
+    async ({ method, params }) => {
+      const ensureHost = vi.fn()
+      setStructuredAgentSessionHost(null)
 
-    const response = await call(method, params, STRUCTURED_CLIENT, {
-      getClientSettings: () => ({ experimentalStructuredNativeChat: false }),
-      ensureStructuredAgentSessionHost: ensureHost
-    })
+      const response = await call(method, params, STRUCTURED_CLIENT, {
+        getClientSettings: () => ({ experimentalStructuredNativeChat: false }),
+        ensureStructuredAgentSessionHost: ensureHost
+      })
 
-    expect(response).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
-    })
-    expect(ensureHost).not.toHaveBeenCalled()
-  })
+      expect(response).toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+      })
+      expect(ensureHost).not.toHaveBeenCalled()
+    }
+  )
 
   it('serves an in-process caller, which negotiates no capabilities at all', async () => {
     const response = await call('agentSession.send', sendParams())
