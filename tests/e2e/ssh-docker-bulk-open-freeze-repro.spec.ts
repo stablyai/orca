@@ -83,6 +83,7 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
     registerPostElectronShutdownCleanup
   }, testInfo) => {
     test.setTimeout(420_000)
+    let stopProfile: (() => Promise<void>) | undefined
     let target: DockerSshRelayTarget | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
@@ -133,6 +134,24 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
       const hiddenFloodMaxLagMs = await hiddenProbe.evaluate((probe) => probe.stop())
       await hiddenProbe.dispose()
 
+      const cdp = await orcaPage.context().newCDPSession(orcaPage)
+      await cdp.send('Profiler.enable')
+      await cdp.send('Profiler.start')
+      let profiling = true
+      stopProfile = async () => {
+        if (!profiling) return
+        profiling = false
+        try {
+          const { profile } = await cdp.send('Profiler.stop')
+          await testInfo.attach('bulk-open-renderer.cpuprofile', {
+            body: JSON.stringify(profile),
+            contentType: 'application/json'
+          })
+        } finally {
+          await cdp.detach()
+        }
+      }
+
       // Burst open: return to terminal and cycle panes rapidly.
       const openProbe = await startRendererLagProbe(orcaPage)
       await orcaPage.evaluate(() => window.__store?.getState().setActiveView('terminal'))
@@ -160,6 +179,8 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
         )
         return performance.now() - started
       })
+
+      await stopProfile()
 
       const report = {
         topology: 'docker-ssh' as const,
@@ -201,6 +222,7 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
         )
       }
     } finally {
+      await stopProfile?.()
       if (target) {
         cleanupDockerSshRelayTarget(target)
       }

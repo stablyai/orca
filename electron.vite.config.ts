@@ -308,6 +308,7 @@ export const electronViteConfig: UserConfig = {
     },
     build: {
       manifest: true,
+      sourcemap: 'hidden',
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',

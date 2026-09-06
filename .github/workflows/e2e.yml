@@ -1,4 +1,4 @@
-name: Docker SSH freeze distribution diagnostic
+name: Docker SSH freeze CPU profile diagnostic
 on:
   workflow_dispatch:
 permissions:
@@ -25,6 +25,8 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: freeze-distribution-traces
-          path: test-results/
+          name: freeze-cpu-profiles
+          path: |
+            test-results/
+            out/renderer/assets/*.map
           retention-days: 3
