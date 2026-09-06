@@ -197,7 +197,12 @@ function hasProviderError(payload: unknown): boolean {
 const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = {
   // The `thread/compacted` notification is already chrome; its item form is the
   // same event and must not read as a mysterious opcode row.
-  contextCompaction: 'status-chrome'
+  contextCompaction: 'status-chrome',
+  // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
+  // nothing at all. Every other item type this build does not model carries text
+  // a user would want (review output, an image path, hook prompt text, subagent
+  // progress), so those keep their visible fallback row.
+  sleep: 'status-chrome'
 }
 
 function notificationKind(kind: string): string {

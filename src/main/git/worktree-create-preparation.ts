@@ -195,25 +195,38 @@ export async function finalizePreparedWorktree(
   }
   try {
     return await runWithGitReadCacheInvalidation(async () => {
-      const baseContext = await resolveWorktreeAddBaseContext(
-        repoPath,
-        baseBranch,
-        refreshLocalBaseRef,
-        finalizeGitOptions
-      )
-      const [targetHeadResult, preparedHeadResult] = await Promise.all([
-        gitExecFileAsync(
-          ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
-          gitExecOptions(repoPath, finalizeGitOptions)
-        ),
+      const [targetResult, preparedResult] = await Promise.allSettled([
+        (async () => {
+          const baseContext = await resolveWorktreeAddBaseContext(
+            repoPath,
+            baseBranch,
+            refreshLocalBaseRef,
+            finalizeGitOptions
+          )
+          const targetHead =
+            baseContext.effectiveBaseOid ??
+            (
+              await gitExecFileAsync(
+                ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
+                gitExecOptions(repoPath, finalizeGitOptions)
+              )
+            ).stdout.trim()
+          return { baseContext, targetHead }
+        })(),
         gitExecFileAsync(
           ['rev-parse', '--verify', 'HEAD'],
           gitExecOptions(preparedPath, finalizeGitOptions)
         )
       ])
-      const { stdout: targetHeadOutput } = targetHeadResult
-      const targetHead = targetHeadOutput.trim()
-      const { stdout: preparedHeadOutput } = preparedHeadResult
+      // Settle both reads before failure cleanup can remove the prepared checkout.
+      if (targetResult.status === 'rejected') {
+        throw targetResult.reason
+      }
+      if (preparedResult.status === 'rejected') {
+        throw preparedResult.reason
+      }
+      const { baseContext, targetHead } = targetResult.value
+      const preparedHeadOutput = preparedResult.value.stdout
       if (preparedHeadOutput.trim() !== targetHead) {
         await gitExecFileAsync(
           [...windowsLongPathGitArgs(preparedPath), 'reset', '--hard', targetHead],

@@ -18,7 +18,7 @@ export function createInitialManagedPane(
     overflow: 'hidden'
   })
   host.root.appendChild(pane.container)
-  openTerminal(pane)
+  openTerminal(pane, host.options.terminalLigaturesEnabled?.())
   host.setActivePaneId(pane.id)
   applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions())
 

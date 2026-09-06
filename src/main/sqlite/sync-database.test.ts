@@ -194,9 +194,11 @@ describe('SyncDatabase read-only opens under contention', () => {
     const contended = await contendedDatabase(10_000)
     const startedAt = Date.now()
 
+    const reader = new SyncDatabase(contended.path, { readonly: true })
+    openDatabases.push(reader)
     let thrown: unknown
     try {
-      new SyncDatabase(contended.path, { readonly: true }).prepare('SELECT id FROM items').all()
+      reader.prepare('SELECT id FROM items').all()
     } catch (error) {
       thrown = error
     }
@@ -210,11 +212,9 @@ describe('SyncDatabase read-only opens under contention', () => {
     const contended = await contendedDatabase(10_000)
     const startedAt = Date.now()
 
-    expect(() =>
-      new SyncDatabase(contended.path, { readonly: true, timeout: 400 })
-        .prepare('SELECT id FROM items')
-        .all()
-    ).toThrow(/database is locked/)
+    const reader = new SyncDatabase(contended.path, { readonly: true, timeout: 400 })
+    openDatabases.push(reader)
+    expect(() => reader.prepare('SELECT id FROM items').all()).toThrow(/database is locked/)
 
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(350)
   })
