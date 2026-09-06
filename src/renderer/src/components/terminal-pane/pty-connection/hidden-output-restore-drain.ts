@@ -129,6 +129,15 @@ export function bindHiddenOutputRestoreDrain(session: ConnectPanePtySession): vo
       ) {
         return
       }
+      if (
+        session.hiddenOutputRestorePendingOverflow &&
+        session.hiddenOutputRestoreReplayingSnapshot !== null
+      ) {
+        // A fetched snapshot plus live overflow is backpressure, not unavailable recovery.
+        session.noteHiddenOutputRestoreFloodBackpressure()
+        session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId, { quiet: true })
+        return
+      }
       session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId)
     }, HIDDEN_OUTPUT_RESTORE_FOREGROUND_TIMEOUT_MS)
   }
