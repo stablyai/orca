@@ -49,9 +49,17 @@ describe('packaged runtime resources', () => {
     try {
       await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
 
+      // The first is the exact shape oxc emits for the memoized SDK import in a
+      // shipped build; the second is the spaced variant the pattern also accepts.
       const sources = new Map([
-        ['out/main/index.js', 'import (`@anthropic-ai/claude-agent-sdk`)'],
-        ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
+        [
+          'out/main/index.js',
+          'let p=null;function q(){return p??=import(`@anthropic-ai/claude-agent-sdk`),p}'
+        ],
+        [
+          'out/main/agent-hooks/managed-agent-hook-controls.js',
+          'import (`@anthropic-ai/claude-agent-sdk`)'
+        ]
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
