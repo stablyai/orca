@@ -56,18 +56,19 @@ write_result() {
 
 # Every terminal verdict carries the attempt binding when the request was parsed
 # (empty ATTEMPT_ID/TARGET_VERSION before that), so readServeUpdateResultFor can
-# match rejections to this attempt instead of discarding them as stale.
+# match rejections to this attempt instead of discarding them as stale. Verdict
+# JSON is built with jq so odd characters in the request cannot break parsing.
 reject() {
   log "rejected: $1"
   rm -f "$REQUEST"
-  write_result '{"phase":"rejected","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
+  write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGET_VERSION" --arg reason "$1" '{phase: "rejected", attemptId: $attemptId, targetVersion: $targetVersion, reason: $reason}')"
   exit 0
 }
 
 fail() {
   log "failed: $1"
   rm -f "$REQUEST"
-  write_result '{"phase":"failed","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
+  write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGET_VERSION" --arg reason "$1" '{phase: "failed", attemptId: $attemptId, targetVersion: $targetVersion, reason: $reason}')"
   exit 0
 }
 
@@ -136,14 +137,19 @@ if ! systemctl list-unit-files "$UNIT_NAME" >/dev/null 2>&1; then
   reject "unit not found: $UNIT_NAME"
 fi
 
-# Trust anchor: re-hash the file that will actually be installed.
-# The spooled sha512 is base64 of the raw 64-byte digest; hex-encode the decoded
-# bytes and compare against sha512sum's hex output.
-ACTUAL_SHA=$(sha512sum -- "$ARTIFACT_PATH" | awk '{print $1}')
+# Trust anchor: the helper verifies the bytes it will actually install. Stage the
+# artifact into a root-owned copy FIRST, then hash the staged file: hashing the
+# cache original and copying it later would leave a window where a service-user
+# process could swap the file between hash and install.
+if ! cp -- "$ARTIFACT_PATH" "$STAGING"; then
+  reject "could not stage artifact"
+fi
+ACTUAL_SHA=$(sha512sum -- "$STAGING" | awk '{print $1}')
 # Why the || true: an undecodable digest must reach the length check and produce a
 # rejected verdict, not kill the helper under set -e before any verdict is written.
 EXPECTED_SHA=$(printf '%s' "$SHA512" | { base64 -d 2>/dev/null || true; } | od -An -v -tx1 | tr -d ' \\n')
 if [[ \${#EXPECTED_SHA} -ne 128 || "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+  rm -f "$STAGING"
   reject "artifact hash mismatch"
 fi
 
@@ -169,7 +175,7 @@ if [[ -n "$CURRENT_VERSION" ]]; then
 fi
 
 # From here the app may quit; the helper owns the unit.
-write_result '{"phase":"accepted","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
+write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGET_VERSION" '{phase: "accepted", attemptId: $attemptId, targetVersion: $targetVersion}')"
 log "accepted request from pid $SERVING_PID for $TARGET_VERSION"
 
 OLD_VERSION_RECORD="$CURRENT_VERSION"
@@ -204,9 +210,6 @@ fi
 
 # Copy (never mv) onto the target filesystem so a cross-device artifact still lands,
 # then fsync + atomic rename. A partial copy can never be promoted.
-if ! cp -- "$ARTIFACT_PATH" "$STAGING"; then
-  rollback_and_fail "could not stage artifact"
-fi
 if ! chmod 0755 "$STAGING"; then
   rollback_and_fail "could not chmod staged artifact"
 fi
@@ -253,7 +256,7 @@ if ! wait_for_ready; then
 fi
 
 rm -f "$BACKUP"
-write_result '{"phase":"ok","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'"}'
+write_result "$(jq -nc --arg attemptId "$ATTEMPT_ID" --arg targetVersion "$TARGET_VERSION" '{phase: "ok", attemptId: $attemptId, targetVersion: $targetVersion}')"
 log "update to $TARGET_VERSION applied"
 `
 }

@@ -25,8 +25,8 @@ describe('serve update helper installer', () => {
     expect(script).toContain('mv -f')
     // helper content embedded verbatim
     expect(script).toContain('#!/usr/bin/env bash')
-    expect(script).toContain('"phase":"accepted"')
-    expect(script).toContain('"phase":"ok"')
+    expect(script).toContain('{phase: "accepted"')
+    expect(script).toContain('{phase: "ok"')
     // sudoers rule allows only the helper
     expect(script).toContain('orca ALL=(root) NOPASSWD')
   })
