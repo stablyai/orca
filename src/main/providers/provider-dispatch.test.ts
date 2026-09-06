@@ -180,7 +180,7 @@ describe('PTY provider dispatch', () => {
         rows: 24,
         connectionId: 'unknown-conn'
       })
-    ).rejects.toThrow('No PTY provider for connection "unknown-conn"')
+    ).rejects.toThrow(/^No PTY provider for connection "unknown-conn"/)
   })
 
   it('unregisterSshPtyProvider removes the provider', async () => {
@@ -196,7 +196,7 @@ describe('PTY provider dispatch', () => {
         rows: 24,
         connectionId: 'conn-456'
       })
-    ).rejects.toThrow('No PTY provider for connection "conn-456"')
+    ).rejects.toThrow(/^No PTY provider for connection "conn-456"/)
   })
 
   it('keeps same relay PTY ids distinct across SSH targets', () => {

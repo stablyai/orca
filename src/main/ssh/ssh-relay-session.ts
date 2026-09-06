@@ -640,6 +640,8 @@ export class SshRelaySession {
       // claim another connection holds. Notify the callback but still rethrow.
       // RelayEndpointHeldError is terminal for the same reason: a live incumbent owns the
       // socket path, and backoff cannot make it hand it over. The user resolves it.
+      // RelayEndpointUnresponsiveError is deliberately NOT here: a relay that never answered
+      // may be stalled, and silence is not a decision — it falls through to retry.
       if (
         isRelayVersionMismatchError(err) ||
         isRelayEndpointHeldError(err) ||

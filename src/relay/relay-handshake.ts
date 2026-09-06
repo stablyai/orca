@@ -15,6 +15,9 @@ import { relayLogLine } from './relay-diagnostic-log'
 
 // Why: clients treat this exit code as non-retryable; other non-zero exits are transient.
 export const EXIT_CODE_VERSION_MISMATCH = 42
+// Why distinct from 42: a refused credential is a live daemon saying no, which the client must
+// not confuse with a crashed bridge (exit 0/1) or with a version skew (42).
+export const EXIT_CODE_CREDENTIAL_MISMATCH = 43
 
 // Why: read .version beside the resolved script path, not the arbitrary launch cwd.
 export function readLaunchVersion(): string {
@@ -52,6 +55,8 @@ export type DaemonHandshakeCallbacks = {
   onAccepted: (sock: Socket, leftover: Buffer) => void
   launchVersion: string
   endpointCredential?: string
+  /** Given the credential a client presented, adopt it from disk if legitimate; true when accepted. */
+  adoptRotatedCredential?: (presented: string | undefined) => boolean
 }
 
 // Why: read one handshake frame before attaching the dispatcher; version mismatch closes the socket so the bridge exits 42.
@@ -62,12 +67,7 @@ export function setupDaemonHandshake(sock: Socket, cb: DaemonHandshakeCallbacks)
       if (handshakeResolved) {
         return
       }
-      const accepted = handleDaemonHandshakeFrame(
-        sock,
-        frame,
-        cb.launchVersion,
-        cb.endpointCredential
-      )
+      const accepted = handleDaemonHandshakeFrame(sock, frame, cb)
       if (accepted) {
         handshakeResolved = true
         const leftover = decoder.drain()
@@ -100,9 +100,9 @@ export function detachHandshakeListener(sock: Socket): void {
 function handleDaemonHandshakeFrame(
   sock: Socket,
   frame: DecodedFrame,
-  launchVersion: string,
-  endpointCredential?: string
+  cb: DaemonHandshakeCallbacks
 ): boolean {
+  const { launchVersion, endpointCredential } = cb
   if (frame.type !== MessageType.Handshake) {
     process.stderr.write(
       `[relay] Protocol violation pre-handshake: type=${frame.type}; closing socket\n`
@@ -141,12 +141,19 @@ function handleDaemonHandshakeFrame(
     sock.end()
     return false
   }
+  const presented = 'endpointCredential' in msg ? msg.endpointCredential : undefined
   if (
     endpointCredential !== undefined &&
-    ('endpointCredential' in msg ? msg.endpointCredential : undefined) !== endpointCredential
+    presented !== endpointCredential &&
+    !cb.adoptRotatedCredential?.(presented)
   ) {
     relayLogLine('[relay] Endpoint credential mismatch; closing socket')
-    sock.destroy()
+    try {
+      sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-credential-mismatch' }))
+    } catch {
+      /* best-effort — the close alone still refuses */
+    }
+    sock.end()
     return false
   }
   process.stderr.write(`[relay] Handshake OK from version=${msg.version}\n`)
@@ -207,6 +214,16 @@ export function runConnectHandshake(
           () => {
             sock.destroy()
             process.exit(EXIT_CODE_VERSION_MISMATCH)
+          }
+        )
+        return
+      }
+      if (msg.type === 'orca-relay-handshake-credential-mismatch') {
+        process.stderr.write(
+          `[relay-connect] Endpoint credential refused by daemon; exiting ${EXIT_CODE_CREDENTIAL_MISMATCH}\n`,
+          () => {
+            sock.destroy()
+            process.exit(EXIT_CODE_CREDENTIAL_MISMATCH)
           }
         )
         return
