@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { Platform, type Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { isHardwareKeyboardConnected } from '@orca/expo-hardware-keyboard-navigation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { TerminalModes, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
@@ -144,7 +145,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     lifecycleIdentity: client,
     lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
     liveInputEnabled,
-    reopenFocusedInputWhenKeyboardHidden: Platform.OS === 'android',
+    reopenFocusedInputWhenKeyboardHidden: () =>
+      Platform.OS === 'android' && !isHardwareKeyboardConnected(),
     timerRef: liveInputFocusTimerRef
   })
   useFocusEffect(

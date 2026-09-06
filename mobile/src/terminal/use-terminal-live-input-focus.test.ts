@@ -15,7 +15,7 @@ type HarnessProps = {
   readonly lifecycleIdentity: object | null
   readonly lifecycleKey: string
   readonly liveInputEnabled: boolean
-  readonly reopenFocusedInputWhenKeyboardHidden: boolean
+  readonly reopenFocusedInputWhenKeyboardHidden: boolean | (() => boolean)
   readonly timerRef: TerminalLiveInputFocusTimerRef
 }
 
@@ -101,6 +101,29 @@ function connectedProps(
 describe('terminal live input focus hook', () => {
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('samples keyboard attachment at deferred focus and restores reopening after detach', () => {
+    vi.useFakeTimers()
+    let hardwareConnected = false
+    const input = createFocusTarget(true)
+    const harness = createHarness({
+      ...connectedProps({ current: input }),
+      reopenFocusedInputWhenKeyboardHidden: () => !hardwareConnected
+    })
+
+    harness.handlers().handleTerminalTap('terminal-a')
+    hardwareConnected = true
+    vi.runAllTimers()
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.isFocused?.()).toBe(true)
+
+    hardwareConnected = false
+    harness.handlers().handleTerminalTap('terminal-a')
+    vi.runAllTimers()
+    expect(input.blur).toHaveBeenCalledTimes(1)
+    expect(input.isFocused?.()).toBe(true)
+    harness.unmount()
   })
 
   it('defers initial terminal surface focus until the WebView touch has completed', () => {
