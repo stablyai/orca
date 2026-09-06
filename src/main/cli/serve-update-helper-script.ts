@@ -54,17 +54,20 @@ write_result() {
   mv -f "$tmp" "$RESULT"
 }
 
+# Every terminal verdict carries the attempt binding when the request was parsed
+# (empty ATTEMPT_ID/TARGET_VERSION before that), so readServeUpdateResultFor can
+# match rejections to this attempt instead of discarding them as stale.
 reject() {
   log "rejected: $1"
   rm -f "$REQUEST"
-  write_result '{"phase":"rejected","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
+  write_result '{"phase":"rejected","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
   exit 0
 }
 
 fail() {
   log "failed: $1"
   rm -f "$REQUEST"
-  write_result '{"phase":"failed","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
+  write_result '{"phase":"failed","attemptId":"'"$ATTEMPT_ID"'","targetVersion":"'"$TARGET_VERSION"'","reason":'"$(printf '%s' "$1" | jq -Rs .)"'}'
   exit 0
 }
 
