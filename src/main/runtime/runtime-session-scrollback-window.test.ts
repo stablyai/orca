@@ -1,12 +1,14 @@
 /**
  * OOM regression twin of daemon-session-scrollback-window.test.ts: the runtime's
- * per-PTY headless mirror used the emulator default (5000 rows) while the daemon
- * had already been OOM-killed at that depth and cut to a flat window — every
- * live PTY in the runtime process linearly retained grid the desktop renderer
- * already owns.
+ * per-PTY headless mirror used the unbounded emulator default while the daemon
+ * had already been OOM-killed at full depth. Unlike the daemon twin, this
+ * mirror also feeds desktop hidden-output recovery (serializeHiddenOutputRecoveryBuffer
+ * serves parked-pane reveals at the user's configured depth), so the default
+ * must cover the desktop default rather than truncate it.
  */
 import { describe, expect, it } from 'vitest'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../shared/terminal-scrollback-policy'
 import {
   resolveRuntimeSessionScrollbackRows,
   RUNTIME_SESSION_SCROLLBACK_ROWS
@@ -17,6 +19,12 @@ describe('resolveRuntimeSessionScrollbackRows', () => {
     expect(resolveRuntimeSessionScrollbackRows({} as NodeJS.ProcessEnv)).toBe(
       RUNTIME_SESSION_SCROLLBACK_ROWS
     )
+  })
+
+  it('covers the desktop hidden-output recovery depth by default', () => {
+    // Capping below the desktop default would silently truncate parked-pane
+    // reveals from the configured depth to the mirror's window.
+    expect(RUNTIME_SESSION_SCROLLBACK_ROWS).toBe(DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT)
   })
 
   it('accepts the inclusive override bounds and rejects everything outside them', () => {
@@ -53,6 +61,11 @@ describe('runtime headless emulator scrollback window', () => {
       // Newest line always present; the oldest has scrolled past the window.
       expect(text).toContain(`LINE_${String(total).padStart(5, '0')}`)
       expect(text).not.toContain('LINE_00001')
+      // Daemon-twin bounds: catch a future drift in the resolved window, not
+      // just the two endpoints.
+      const retainedMatches = text.match(/LINE_\d{5}/g) ?? []
+      expect(retainedMatches.length).toBeLessThanOrEqual(RUNTIME_SESSION_SCROLLBACK_ROWS + 24)
+      expect(retainedMatches.length).toBeGreaterThan(RUNTIME_SESSION_SCROLLBACK_ROWS - 50)
     } finally {
       emulator.dispose()
     }

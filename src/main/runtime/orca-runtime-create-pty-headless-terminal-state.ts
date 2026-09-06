@@ -22,9 +22,10 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
       cols: dims.cols,
       rows: dims.rows,
       // Why bounded: retained grid is this process's dominant per-PTY heap term;
-      // the daemon twin was OOM-killed at the 5000-row default. Deep desktop
-      // scrollback lives in the renderer, mobile seeds are capped at
-      // MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, rebuilds restore from durable history.
+      // the daemon twin was OOM-killed at full depth. This mirror also serves
+      // desktop hidden-output recovery at the user's configured depth, so the
+      // default covers the desktop default instead of truncating it — the env
+      // override trades recovery depth for memory.
       scrollback: resolveRuntimeSessionScrollbackRows(),
       pathFlavor,
       remotePosixFileUriAuthority:
