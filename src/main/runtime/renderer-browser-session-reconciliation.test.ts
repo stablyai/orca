@@ -18,6 +18,18 @@ const rendererPage: RuntimeMobileSessionBrowserTab = {
   canGoForward: false,
   isActive: false
 }
+const clientPage: RuntimeMobileSessionBrowserTab = {
+  ...rendererPage,
+  id: 'client',
+  browserWorkspaceId: 'client',
+  browserPageId: 'client',
+  placement: {
+    kind: 'client',
+    browserHostClientId: 'host',
+    browserHostGeneration: 1,
+    pageHostGeneration: 1
+  }
+}
 const snapshot: RuntimeMobileSessionTabsSnapshot = {
   worktree: 'wt',
   publicationEpoch: 'renderer:1',
@@ -29,82 +41,51 @@ const snapshot: RuntimeMobileSessionTabsSnapshot = {
   tabGroups: [{ id: 'group', activeTabId: 'renderer-tab', tabOrder: ['renderer-tab'] }]
 }
 
-it('keeps renderer-owned browser pages when refreshing client-hosted pages on an attached desktop', () => {
+/** Drives the reconcile against a stub host and returns the published snapshot, if any. */
+function reconcile(
+  host: {
+    live?: RuntimeMobileSessionBrowserTab[]
+    attached?: boolean
+    offscreen?: boolean
+  },
+  existing: RuntimeMobileSessionTabsSnapshot = snapshot
+): RuntimeMobileSessionTabsSnapshot | undefined {
   const storeMobileSessionSnapshot = vi.fn()
-  const reconcile =
-    OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs.prototype as unknown as {
-      reconcileHeadlessMobileSessionBrowserTabs(
-        worktreeId: string,
-        snapshot: RuntimeMobileSessionTabsSnapshot
-      ): void
-    }
-  reconcile.reconcileHeadlessMobileSessionBrowserTabs.call(
+  const runtime = OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs.prototype as unknown as {
+    reconcileHeadlessMobileSessionBrowserTabs(
+      worktreeId: string,
+      existing: RuntimeMobileSessionTabsSnapshot
+    ): void
+  }
+  runtime.reconcileHeadlessMobileSessionBrowserTabs.call(
     {
-      buildHeadlessMobileSessionBrowserTabs: () => [],
-      getAvailableAuthoritativeWindow: () => ({}),
-      offscreenBrowserBackend: null,
+      buildHeadlessMobileSessionBrowserTabs: () => host.live ?? [],
+      getAvailableAuthoritativeWindow: () => (host.attached === false ? null : {}),
+      offscreenBrowserBackend: host.offscreen === true ? {} : null,
       storeMobileSessionSnapshot
     },
     'wt',
-    snapshot
+    existing
   )
-  const published = storeMobileSessionSnapshot.mock.calls[0]?.[1] ?? snapshot
+  return storeMobileSessionSnapshot.mock.calls[0]?.[1]
+}
+
+it('keeps renderer-owned browser pages when refreshing client-hosted pages on an attached desktop', () => {
+  const published = reconcile({}) ?? snapshot
+
   expect(published.tabs).toContainEqual(rendererPage)
-  expect(published.tabGroups[0].tabOrder).toContain('renderer-tab')
+  expect(published.tabGroups?.[0].tabOrder).toContain('renderer-tab')
 })
 
 it.each([false, true])('retires absent offscreen pages when attached=%s', (attached) => {
-  const storeMobileSessionSnapshot = vi.fn()
-  const reconcile =
-    OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs.prototype as unknown as {
-      reconcileHeadlessMobileSessionBrowserTabs(
-        worktreeId: string,
-        snapshot: RuntimeMobileSessionTabsSnapshot
-      ): void
-    }
-  reconcile.reconcileHeadlessMobileSessionBrowserTabs.call(
-    {
-      buildHeadlessMobileSessionBrowserTabs: () => [],
-      getAvailableAuthoritativeWindow: () => (attached ? {} : null),
-      offscreenBrowserBackend: {},
-      storeMobileSessionSnapshot
-    },
-    'wt',
-    snapshot
-  )
-  expect(storeMobileSessionSnapshot.mock.calls[0]?.[1].tabs).toEqual([])
+  expect(reconcile({ attached, offscreen: true })?.tabs).toEqual([])
 })
 
 it('removes retired client pages and publishes live ones while retaining renderer rows and group order', () => {
-  const clientPage: RuntimeMobileSessionBrowserTab = {
-    ...rendererPage,
-    id: 'client',
-    browserWorkspaceId: 'client',
-    browserPageId: 'client',
-    placement: {
-      kind: 'client',
-      browserHostClientId: 'host',
-      browserHostGeneration: 1,
-      pageHostGeneration: 1
-    }
-  }
   const livePage = { ...clientPage, id: 'live', browserWorkspaceId: 'live', browserPageId: 'live' }
-  const storeMobileSessionSnapshot = vi.fn()
-  const reconcile =
-    OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs.prototype as unknown as {
-      reconcileHeadlessMobileSessionBrowserTabs(
-        worktreeId: string,
-        snapshot: RuntimeMobileSessionTabsSnapshot
-      ): void
-    }
-  reconcile.reconcileHeadlessMobileSessionBrowserTabs.call(
-    {
-      buildHeadlessMobileSessionBrowserTabs: () => [livePage],
-      getAvailableAuthoritativeWindow: () => ({}),
-      offscreenBrowserBackend: null,
-      storeMobileSessionSnapshot
-    },
-    'wt',
+
+  const published = reconcile(
+    { live: [livePage] },
     {
       ...snapshot,
       tabs: [rendererPage, clientPage],
@@ -113,12 +94,12 @@ it('removes retired client pages and publishes live ones while retaining rendere
       ]
     }
   )
-  const published = storeMobileSessionSnapshot.mock.calls[0]?.[1]
-  expect(published.tabs).toEqual([rendererPage, livePage])
-  expect(published.tabGroups[0].tabOrder).toEqual(['renderer-tab', 'live'])
-  expect(published.activeTabId).toBe('renderer-tab')
-  expect(published.publicationEpoch).toBe(snapshot.publicationEpoch)
-  expect(published.snapshotVersion).toBe(snapshot.snapshotVersion + 1)
+
+  expect(published?.tabs).toEqual([rendererPage, livePage])
+  expect(published?.tabGroups?.[0].tabOrder).toEqual(['renderer-tab', 'live'])
+  expect(published?.activeTabId).toBe('renderer-tab')
+  expect(published?.publicationEpoch).toBe(snapshot.publicationEpoch)
+  expect(published?.snapshotVersion).toBe(snapshot.snapshotVersion + 1)
 })
 
 it('keeps the renderer publication epoch when selecting a client-hosted browser tab', () => {
@@ -130,6 +111,7 @@ it('keeps the renderer publication epoch when selecting a client-hosted browser 
       options: { focusesHost: boolean }
     ): void
   }
+
   runtime.markHeadlessBrowserSessionTabActive.call(
     {
       offscreenBrowserBackend: {},
@@ -142,6 +124,7 @@ it('keeps the renderer publication epoch when selecting a client-hosted browser 
     'renderer-page',
     { focusesHost: false }
   )
+
   expect(storeMobileSessionSnapshot.mock.calls[0]?.[1].publicationEpoch).toBe(
     snapshot.publicationEpoch
   )

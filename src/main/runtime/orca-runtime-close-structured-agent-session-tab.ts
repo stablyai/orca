@@ -206,8 +206,7 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
       snapshot,
       tabId: tab.id,
       ...(targetGroupId !== undefined ? { targetGroupId } : {}),
-      focusesHost,
-      publicationEpoch: snapshot.publicationEpoch
+      focusesHost
     })
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     // Why: browser group membership is otherwise live-only; persist it so a
