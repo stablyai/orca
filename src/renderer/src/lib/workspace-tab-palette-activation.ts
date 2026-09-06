@@ -11,6 +11,7 @@ import { activateAndRevealWorktree } from './worktree-activation'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   findAmbiguousWorktreeIds,
+  hasOpenFileExecutionHostEvidence,
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
@@ -84,11 +85,9 @@ function validateTarget(
       return 'missing-file'
     }
     const file = files[0]
-    const hasExplicitHost = Boolean(
-      file.operationProvenance || file.externalSshTargetId || file.runtimeEnvironmentId
-    )
     // A hostless file falls back to local ownership, which only decides the match when IDs collide.
-    const requiresOwnershipCheck = hasExplicitHost || ambiguousWorktreeIds.has(worktree.id)
+    const requiresOwnershipCheck =
+      hasOpenFileExecutionHostEvidence(file) || ambiguousWorktreeIds.has(worktree.id)
     if (requiresOwnershipCheck && !isOpenFileOwnedByWorktree(file, worktree)) {
       return 'missing-file'
     }

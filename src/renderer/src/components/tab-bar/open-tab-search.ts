@@ -85,10 +85,9 @@ export type OpenTabSearchInput = {
 
 type RankedResult = {
   result: OpenTabSearchResult
-  sourceRank: number
   matchRank: PaletteDocumentRank
   activity: PaletteActivityRank
-  score: number
+  position: readonly [number, number]
   identity: string
 }
 
@@ -161,10 +160,9 @@ function rank<TEngine extends EngineResult>(
     const converted = toResult(result)
     return [
       {
-        sourceRank: SOURCE_RANK[source],
         matchRank: result.rank,
         activity: result.activity,
-        score: result.score,
+        position: [SOURCE_RANK[source], result.score],
         result: converted,
         identity: converted.id
       }
@@ -172,7 +170,7 @@ function rank<TEngine extends EngineResult>(
   })
 }
 
-function searchOpenTabCandidates({
+export function searchOpenTabCandidates({
   workspaceTabs,
   browserPages,
   simulatorTabs,
@@ -267,13 +265,13 @@ function searchOpenTabCandidates({
         {
           rank: a.matchRank,
           activity: a.activity,
-          position: [a.sourceRank, a.score],
+          position: a.position,
           identity: a.identity
         },
         {
           rank: b.matchRank,
           activity: b.activity,
-          position: [b.sourceRank, b.score],
+          position: b.position,
           identity: b.identity
         }
       )
@@ -282,10 +280,17 @@ function searchOpenTabCandidates({
 }
 
 export function searchOpenTabs(input: OpenTabSearchInput): OpenTabSearchResult[] {
+  return capOpenTabSearchCandidates(searchOpenTabCandidates(input), input.retainedResultId)
+}
+
+export function capOpenTabSearchCandidates(
+  candidates: readonly OpenTabSearchResult[],
+  retainedResultId?: string | null
+): OpenTabSearchResult[] {
   const capped = capPaletteSection(
-    searchOpenTabCandidates(input),
+    candidates,
     OPEN_TAB_SEARCH_RESULT_LIMIT,
-    (result) => result.id === input.retainedResultId
+    (result) => result.id === retainedResultId
   )
   return [...capped.visible]
 }

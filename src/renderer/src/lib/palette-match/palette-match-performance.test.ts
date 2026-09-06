@@ -6,7 +6,7 @@ import { preparePaletteQuery } from './palette-query'
 import { buildWorktreePaletteDocuments } from '../worktree-palette-document'
 import { searchWorktreeDocuments } from '../worktree-palette-search'
 import { comparePaletteEntityRanks, createPaletteSearchContext } from './palette-ranking'
-import type { PaletteDocument } from './palette-document'
+import { buildPaletteDocument, type PaletteDocument } from './palette-document'
 import type { PaletteQueryToken } from './palette-query'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -201,6 +201,55 @@ describe('palette matcher performance budget', () => {
     expect(diagnostics.selectionCandidateVisits / documents.size).toBeLessThan(
       PALETTE_MATCH_BUDGET.selectionCandidateVisitsPerCandidate
     )
+  })
+
+  it('does not revisit an all-visible assignment for unmatched evidence units', () => {
+    const buildDocument = (evidenceCount: number): PaletteDocument =>
+      buildPaletteDocument({
+        id: `visible-${evidenceCount}`,
+        visibleFields: [
+          {
+            id: 'title',
+            profile: 'structured-label',
+            text: 'atlas',
+            role: 'primary',
+            destinationEligible: true
+          }
+        ],
+        evidence: Array.from({ length: evidenceCount }, (_, index) => ({
+          unit: {
+            id: `evidence-${index}`,
+            kind: 'comment',
+            text: `unrelated ${index}`,
+            accessibilityLabel: 'Comment'
+          },
+          fields: [
+            {
+              id: `evidence-field-${index}`,
+              profile: 'prose' as const,
+              text: `unrelated ${index}`,
+              evidenceId: `evidence-${index}`,
+              renderOffset: 0
+            }
+          ]
+        }))
+      })
+    const query = preparePaletteQuery('atlas')
+    if (query.state !== 'ready') {
+      throw new Error('Expected ready query')
+    }
+    const selectionVisits = (document: PaletteDocument): number => {
+      const diagnostics: PaletteMatchDiagnostics = { selectionCandidateVisits: 0 }
+      matchPaletteDocument({
+        document,
+        tokens: query.tokens,
+        normalizedQuery: query.normalized,
+        diagnostics
+      })
+      return diagnostics.selectionCandidateVisits
+    }
+
+    expect(selectionVisits(buildDocument(100))).toBe(selectionVisits(buildDocument(0)))
   })
 
   it('keeps retained match and range payload within budget', () => {

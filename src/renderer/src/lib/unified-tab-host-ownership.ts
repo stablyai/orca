@@ -75,6 +75,12 @@ export function isOpenFileOwnedByWorktree(
   return isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)
 }
 
+export function hasOpenFileExecutionHostEvidence(
+  file: Pick<OpenFile, 'externalSshTargetId' | 'operationProvenance' | 'runtimeEnvironmentId'>
+): boolean {
+  return Boolean(file.operationProvenance || file.externalSshTargetId || file.runtimeEnvironmentId)
+}
+
 export function getUnifiedTabPaletteExecutionHostId(
   tab: Pick<Tab, 'executionHostId'> | undefined,
   worktree: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>

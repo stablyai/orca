@@ -164,6 +164,23 @@ describe('workspace-tab-palette-search', () => {
     expect(entries.map((entry) => entry.tab.id)).toEqual(['unified-editor-dup'])
     expect(entries[0]?.secondaryText).toBe(SRC_APP_RELATIVE_PATH)
   })
+
+  it('omits an editor row whose explicit file host disagrees with its unique worktree', () => {
+    const remote = makeWorktree({ hostId: 'ssh:remote' })
+    const editor = makeUnifiedTab({
+      id: 'remote-editor',
+      entityId: SRC_APP_PATH,
+      contentType: 'editor',
+      executionHostId: 'ssh:remote'
+    })
+    const entries = buildEntries({
+      worktrees: [remote],
+      unifiedTabsByWorktree: { 'wt-1': [editor] },
+      openFiles: [makeOpenFile({ externalSshTargetId: 'other-host' })]
+    })
+
+    expect(entries).toEqual([])
+  })
   it('emits one entry per tab id when a session persisted the same id twice', () => {
     // Why: the palette keys rows by tab id, and duplicated persisted records used
     // to render the row twice under one React key, stranding a ghost row.

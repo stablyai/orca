@@ -24,6 +24,7 @@ import type {
 import {
   findAmbiguousWorktreeIds,
   getUnifiedTabPaletteExecutionHostId,
+  hasOpenFileExecutionHostEvidence,
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
@@ -264,7 +265,9 @@ export function buildSearchableWorkspaceTabEntries({
         ?.find(
           (candidate) =>
             candidate.worktreeId === worktree.id &&
-            (!ambiguousWorktreeIds.has(worktree.id) ||
+            (!(
+              hasOpenFileExecutionHostEvidence(candidate) || ambiguousWorktreeIds.has(worktree.id)
+            ) ||
               isOpenFileOwnedByWorktree(candidate, worktree))
         )
       if (!file) {

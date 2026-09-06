@@ -132,6 +132,10 @@ export type PaletteDocumentRank = {
   recovery: number
   wordMatch: number
   coverage: number
+  /** Tokens proved only by container fields; fewer preserves direct-match relevance. */
+  containerOnlyTokenCount: number
+  /** Tokens that required compact or typo recovery; fewer breaks equal-severity ties. */
+  recoveryTokenCount: number
   strength: number
   /** 0 prefix, 1 later word boundary, 2 distributed/other. */
   placement: number
@@ -150,6 +154,18 @@ const RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
   'recovery',
   'wordMatch',
   'coverage',
+  'containerOnlyTokenCount',
+  'recoveryTokenCount',
+  'strength',
+  'placement'
+]
+
+// Aggregate token counts distinguish entities without replacing the best rendered proof.
+const PROOF_RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
+  'destination',
+  'recovery',
+  'wordMatch',
+  'coverage',
   'strength',
   'placement'
 ]
@@ -159,6 +175,8 @@ const SEMANTIC_RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
   'recovery',
   'wordMatch',
   'coverage',
+  'containerOnlyTokenCount',
+  'recoveryTokenCount',
   'strength'
 ]
 
@@ -184,10 +202,32 @@ export function comparePaletteDocumentRank(a: PaletteDocumentRank, b: PaletteDoc
   return compareRankKeys(a, b, RANK_KEYS)
 }
 
+export function comparePaletteProofRank(a: PaletteDocumentRank, b: PaletteDocumentRank): number {
+  return compareRankKeys(a, b, PROOF_RANK_KEYS)
+}
+
 export function createRecognizedPaletteRank(): PaletteDocumentRank {
-  return { destination: 0, recovery: 0, wordMatch: 0, coverage: 0, strength: 0, placement: 0 }
+  return {
+    destination: 0,
+    recovery: 0,
+    wordMatch: 0,
+    coverage: 0,
+    containerOnlyTokenCount: 0,
+    recoveryTokenCount: 0,
+    strength: 0,
+    placement: 0
+  }
 }
 
 export function createPaletteFallbackRank(): PaletteDocumentRank {
-  return { destination: 3, recovery: 0, wordMatch: 0, coverage: 0, strength: 0, placement: 0 }
+  return {
+    destination: 3,
+    recovery: 0,
+    wordMatch: 0,
+    coverage: 0,
+    containerOnlyTokenCount: 0,
+    recoveryTokenCount: 0,
+    strength: 0,
+    placement: 0
+  }
 }

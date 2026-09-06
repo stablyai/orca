@@ -13,16 +13,17 @@ type BrowserWorkspaceTabTarget = {
 
 export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): Tab | null {
   const state = useAppStore.getState()
-  const worktree = params.executionHostId
-    ? state.getKnownWorktreeById(params.worktreeId, params.executionHostId)
-    : undefined
-  if (params.executionHostId && !worktree) {
-    return null
-  }
   // A hostless tab cannot be attributed when the same worktree ID exists on several hosts.
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(
     getIndexedAllWorktrees(state.worktreesByRepo)
   )
+  if (!params.executionHostId && ambiguousWorktreeIds.has(params.worktreeId)) {
+    return null
+  }
+  const worktree = state.getKnownWorktreeById(params.worktreeId, params.executionHostId)
+  if (!worktree) {
+    return null
+  }
   // setActiveBrowserTab resolves its backing tab globally by workspace ID.
   const tabs = Object.values(state.unifiedTabsByWorktree).flat()
   const browserTabs = tabs.filter(

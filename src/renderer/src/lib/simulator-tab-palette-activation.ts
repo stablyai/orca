@@ -1,7 +1,8 @@
 import { useAppStore } from '@/store'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorktree } from './worktree-activation'
-import { isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
+import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
 
 export type SimulatorTabPaletteActivationFailure = 'missing-tab' | 'missing-worktree'
 
@@ -29,10 +30,13 @@ export function activateSimulatorTabPaletteResult({
     (candidate) => candidate.id === tabId
   )
   const tab = tabs[0]
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(
+    getIndexedAllWorktrees(initialState.worktreesByRepo)
+  )
   if (
     tabs.length !== 1 ||
     tab.contentType !== 'simulator' ||
-    !isUnifiedTabOwnedByWorktree(tab, worktree, new Set())
+    !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
   ) {
     return { status: 'failed', reason: 'missing-tab' }
   }

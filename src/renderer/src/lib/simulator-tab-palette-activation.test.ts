@@ -157,6 +157,20 @@ describe('activateSimulatorTabPaletteResult', () => {
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
+  it('rejects a hostless tab when its worktree id exists on multiple hosts', () => {
+    seedStore({
+      worktreesByRepo: {
+        local: [makeWorktree()],
+        remote: [makeWorktree({ repoId: 'repo-2', hostId: 'ssh:remote', path: '/tmp/remote' })]
+      }
+    })
+
+    expect(activateSimulatorTabPaletteResult({ ...target, executionHostId: 'ssh:remote' })).toEqual(
+      { status: 'failed', reason: 'missing-tab' }
+    )
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
   it('reports an unknown worktree without activating', () => {
     seedStore({ worktreesByRepo: {} })
 

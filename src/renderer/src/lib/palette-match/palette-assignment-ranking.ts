@@ -108,6 +108,10 @@ function rankSelected(
     recovery: Math.max(...selected.map((candidate) => candidate.recovery)),
     wordMatch: Math.max(...selected.map((candidate) => candidate.wordMatch)),
     coverage: Math.max(...selected.map((candidate) => candidate.coverage)),
+    containerOnlyTokenCount: selected.filter((candidate) =>
+      candidate.hits.every((hit) => hit.field.role === 'container')
+    ).length,
+    recoveryTokenCount: selected.filter((candidate) => candidate.recovery > 0).length,
     strength: Math.max(...selected.map((candidate) => candidate.strength)),
     placement
   }

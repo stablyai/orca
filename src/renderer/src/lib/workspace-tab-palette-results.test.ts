@@ -286,8 +286,35 @@ describe('searchWorkspaceTabs ranking', () => {
 
     const results = searchWorkspaceTabs([containerEntry, directEntry], 'auth aurora')
 
-    expect(results.map((result) => result.tabId)).toEqual(['container-tab', 'direct-tab'])
+    expect(results.map((result) => result.tabId)).toEqual(['direct-tab', 'container-tab'])
     expect(results.map((result) => result.rank?.coverage)).toEqual([2, 2])
+    expect(results.map((result) => result.rank?.containerOnlyTokenCount)).toEqual([1, 2])
+  })
+
+  it('ranks one recovered token above an otherwise-equal all-recovered match', () => {
+    const oneRecovery = makeEntry({ id: 'one-recovery' })
+    const twoRecoveries = makeEntry({ id: 'two-recoveries' })
+    oneRecovery.document = buildPaletteTabDocument({
+      id: 'one-recovery',
+      title: 'alphx bravo',
+      secondaryTexts: [],
+      worktreeName: 'workspace',
+      branch: 'main',
+      repoName: 'repo'
+    })
+    twoRecoveries.document = buildPaletteTabDocument({
+      id: 'two-recoveries',
+      title: 'alphx bravx',
+      secondaryTexts: [],
+      worktreeName: 'workspace',
+      branch: 'main',
+      repoName: 'repo'
+    })
+
+    const results = searchWorkspaceTabs([twoRecoveries, oneRecovery], 'alpha bravo')
+
+    expect(results.map((result) => result.tabId)).toEqual(['one-recovery', 'two-recoveries'])
+    expect(results.map((result) => result.rank?.recoveryTokenCount)).toEqual([1, 2])
   })
 
   it('ranks direct tab title matches ahead of container-only worktree matches', () => {

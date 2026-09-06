@@ -2,7 +2,7 @@ import { matchPaletteField, type PaletteFieldMatch } from './match-field'
 import { resolvePaletteResultQualityClass, type PaletteMatchQuality } from './match-quality'
 import { createPaletteQueryToken, type PaletteQueryToken } from './palette-query'
 import {
-  comparePaletteDocumentRank,
+  comparePaletteProofRank,
   type PaletteDocument,
   type PaletteDocumentMatch,
   type PaletteTokenAssignment
@@ -103,7 +103,7 @@ function toCandidate(hits: readonly FieldHit[]): TokenCandidate {
 function matchCompositePairs(
   document: PaletteDocument,
   token: PaletteQueryToken,
-  isFieldAllowed: (field: PaletteIndexedField) => boolean
+  isFieldAllowed?: (field: PaletteIndexedField) => boolean
 ): TokenCandidate[] {
   if (!token.repoBranch || !document.compositePairs.length) {
     return []
@@ -114,7 +114,11 @@ function matchCompositePairs(
   for (const pair of document.compositePairs) {
     const leftField = document.fieldById.get(pair.leftFieldId)
     const rightField = document.fieldById.get(pair.rightFieldId)
-    if (!leftField || !rightField || !isFieldAllowed(leftField) || !isFieldAllowed(rightField)) {
+    if (
+      !leftField ||
+      !rightField ||
+      (isFieldAllowed && (!isFieldAllowed(leftField) || !isFieldAllowed(rightField)))
+    ) {
       continue
     }
     const leftMatch = matchPaletteField(leftField, left)
@@ -134,7 +138,7 @@ function matchCompositePairs(
 function collectTokenCandidates(
   document: PaletteDocument,
   token: PaletteQueryToken,
-  isFieldAllowed: (field: PaletteIndexedField) => boolean
+  isFieldAllowed?: (field: PaletteIndexedField) => boolean
 ): TokenCandidates | null {
   const candidates: TokenCandidates = {
     visible: matchCompositePairs(document, token, isFieldAllowed),
@@ -142,7 +146,7 @@ function collectTokenCandidates(
   }
   let found = candidates.visible.length > 0
   for (const field of document.fields) {
-    if (!isFieldAllowed(field)) {
+    if (isFieldAllowed && !isFieldAllowed(field)) {
       continue
     }
     const match = matchPaletteField(field, token)
@@ -207,10 +211,9 @@ export function matchPaletteDocument(args: {
   isFieldAllowed?: (field: PaletteIndexedField) => boolean
   diagnostics?: PaletteMatchDiagnostics
 }): PaletteDocumentMatch | null {
-  const isFieldAllowed = args.isFieldAllowed ?? (() => true)
   const candidates: TokenCandidates[] = []
   for (const token of args.tokens) {
-    const collected = collectTokenCandidates(args.document, token, isFieldAllowed)
+    const collected = collectTokenCandidates(args.document, token, args.isFieldAllowed)
     if (!collected) {
       return null
     }
@@ -244,7 +247,13 @@ export function matchPaletteDocument(args: {
     args.normalizedQuery,
     null
   )
-  for (const evidenceId of args.document.evidenceUnits.keys()) {
+  const matchedEvidenceIds = new Set<string>()
+  for (const candidate of candidates) {
+    for (const evidenceId of candidate.byEvidenceId.keys()) {
+      matchedEvidenceIds.add(evidenceId)
+    }
+  }
+  for (const evidenceId of matchedEvidenceIds) {
     ranked.push(
       ...collectScopeAssignments({
         document: args.document,
@@ -270,7 +279,7 @@ export function matchPaletteDocument(args: {
     return null
   }
   ranked.sort((a, b) => {
-    const rank = comparePaletteDocumentRank(a.rank, b.rank)
+    const rank = comparePaletteProofRank(a.rank, b.rank)
     if (rank !== 0) {
       return rank
     }

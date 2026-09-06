@@ -69,6 +69,20 @@ it('refuses a hostless browser tab for a remote worktree whose ID also exists lo
   ).toBeNull()
 })
 
+it('refuses hostless activation when the caller omits a host for an ambiguous worktree id', () => {
+  seedState(
+    {
+      local: [makeWorktree({ id: 'wt' })],
+      remote: [makeWorktree({ id: 'wt', repoId: 'repo-remote', hostId: 'ssh:remote' })]
+    },
+    { ...browserTab, executionHostId: 'ssh:remote' }
+  )
+
+  expect(
+    getActivatableBrowserWorkspaceTab({ worktreeId: 'wt', workspaceId: 'workspace' })
+  ).toBeNull()
+})
+
 it('accepts a hostless browser tab when the worktree ID is unambiguous', () => {
   seedState({ remote: [makeWorktree({ id: 'wt', hostId: 'ssh:remote' })] }, browserTab)
 

@@ -1,6 +1,7 @@
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import {
   comparePaletteTabResults,
+  isOmniboxPaletteTabFieldAllowed,
   matchPaletteTabDocument,
   preparePaletteTabQuery,
   isPaletteTabQueryRejected
@@ -35,6 +36,7 @@ const NO_RANGES: readonly MatchRange[] = []
 export type WorkspaceTabPaletteSearchResult = {
   /** Worktree ids collide across hosts; activation must not resolve by id alone. */
   executionHostId?: ExecutionHostId
+  paletteIdentity: string
   tabId: string
   entityId: string
   worktreeId: string
@@ -113,6 +115,12 @@ function baseResult(
   const activity = preparePaletteActivity(resolveWorkspaceTabLastActiveAt(entry), context)
   return {
     ...(executionHostId ? { executionHostId } : {}),
+    paletteIdentity: encodePaletteIdentity([
+      'workspace',
+      executionHostId ?? '',
+      entry.worktree.id,
+      entry.tab.id
+    ]),
     tabId: entry.tab.id,
     entityId: entry.tab.entityId,
     worktreeId: entry.worktree.id,
@@ -148,19 +156,11 @@ function matchEntry(
   context: PaletteSearchContext,
   fieldMode: 'all' | 'omnibox'
 ): WorkspaceTabPaletteSearchResult | null {
-  const isOmniboxFieldAllowed = (field: { id: string }): boolean =>
-    field.id !== 'worktree' && field.id !== 'repo'
-  const match = matchPaletteTabDocument(entry.document, query, {
-    isFieldAllowed: fieldMode === 'omnibox' ? isOmniboxFieldAllowed : undefined
-  })
-  if (!match) {
+  const unrestrictedMatch = matchPaletteTabDocument(entry.document, query)
+  if (!unrestrictedMatch) {
     // Why kept separate: agent text is not part of the structured field set, so it
     // never contributes to token coverage — it only recovers a row nothing else found.
-    const unrestrictedStructuredMatch =
-      fieldMode === 'omnibox' ? matchPaletteTabDocument(entry.document, query) : null
-    const snippet = unrestrictedStructuredMatch
-      ? null
-      : matchWorkspaceTabAgentSnippet(entry.agentMetadata, query)
+    const snippet = matchWorkspaceTabAgentSnippet(entry.agentMetadata, query)
     if (!snippet) {
       return null
     }
@@ -171,6 +171,17 @@ function matchEntry(
       qualityClass: 'fuzzy-evidence',
       rank: snippet.rank
     }
+  }
+
+  const match =
+    fieldMode !== 'omnibox' ||
+    (unrestrictedMatch.worktreeRanges.length === 0 && unrestrictedMatch.repoRanges.length === 0)
+      ? unrestrictedMatch
+      : matchPaletteTabDocument(entry.document, query, {
+          isFieldAllowed: isOmniboxPaletteTabFieldAllowed
+        })
+  if (!match) {
+    return null
   }
 
   const secondaryText =
@@ -235,23 +246,13 @@ export function searchWorkspaceTabs(
           {
             rank: a.rank,
             positionScore: a.score,
-            identity: encodePaletteIdentity([
-              'workspace',
-              a.executionHostId ?? '',
-              a.worktreeId,
-              a.tabId
-            ]),
+            identity: a.paletteIdentity,
             activity: a.activity
           },
           {
             rank: b.rank,
             positionScore: b.score,
-            identity: encodePaletteIdentity([
-              'workspace',
-              b.executionHostId ?? '',
-              b.worktreeId,
-              b.tabId
-            ]),
+            identity: b.paletteIdentity,
             activity: b.activity
           }
         )

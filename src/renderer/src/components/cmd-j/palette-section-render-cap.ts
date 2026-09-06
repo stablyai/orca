@@ -35,7 +35,15 @@ export function capPaletteSection<T>(
     return { visible: items, overflowCount: 0 }
   }
   const visible = items.slice(0, cap)
-  const retained = retain ? items.slice(cap).find(retain) : undefined
+  let retained: T | undefined
+  if (retain) {
+    for (let index = cap; index < items.length; index += 1) {
+      if (retain(items[index])) {
+        retained = items[index]
+        break
+      }
+    }
+  }
   if (retained !== undefined && cap > 0) {
     visible.splice(cap - 1, 1, retained)
   }

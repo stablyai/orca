@@ -8,6 +8,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-te
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import {
   comparePaletteTabResults,
+  isOmniboxPaletteTabFieldAllowed,
   matchPaletteTabDocument,
   preparePaletteTabQuery
 } from './palette-match/tab-match'
@@ -49,6 +50,7 @@ export type SearchableSimulatorTab = {
 export type SimulatorPaletteSearchResult = {
   /** Worktree ids collide across hosts; activation must not resolve by id alone. */
   executionHostId?: ExecutionHostId
+  paletteIdentity: string
   tabId: string
   worktreeId: string
   groupId: string
@@ -150,12 +152,19 @@ function baseResult(
   entry: SearchableSimulatorTab,
   context: PaletteSearchContext
 ): SimulatorPaletteSearchResult {
+  const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
   const activity = preparePaletteActivity(
     maxValidPaletteActivityTimestamp([entry.tab.lastFocusedAt, entry.tab.createdAt]),
     context
   )
   return {
-    executionHostId: getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree),
+    ...(executionHostId ? { executionHostId } : {}),
+    paletteIdentity: encodePaletteIdentity([
+      'simulator',
+      executionHostId ?? '',
+      entry.worktree.id,
+      entry.tab.id
+    ]),
     tabId: entry.tab.id,
     worktreeId: entry.worktree.id,
     groupId: entry.tab.groupId,
@@ -270,10 +279,7 @@ export function searchSimulatorTabs(
   const results: SimulatorPaletteSearchResult[] = []
   for (const entry of entries) {
     const match = matchPaletteTabDocument(entry.document, prepared, {
-      isFieldAllowed:
-        options.fieldMode === 'omnibox'
-          ? (field) => field.id !== 'worktree' && field.id !== 'repo'
-          : undefined
+      isFieldAllowed: options.fieldMode === 'omnibox' ? isOmniboxPaletteTabFieldAllowed : undefined
     })
     if (!match) {
       continue
@@ -304,23 +310,13 @@ export function searchSimulatorTabs(
           {
             rank: a.rank,
             positionScore: a.score,
-            identity: encodePaletteIdentity([
-              'simulator',
-              a.executionHostId ?? '',
-              a.worktreeId,
-              a.tabId
-            ]),
+            identity: a.paletteIdentity,
             activity: a.activity
           },
           {
             rank: b.rank,
             positionScore: b.score,
-            identity: encodePaletteIdentity([
-              'simulator',
-              b.executionHostId ?? '',
-              b.worktreeId,
-              b.tabId
-            ]),
+            identity: b.paletteIdentity,
             activity: b.activity
           }
         )

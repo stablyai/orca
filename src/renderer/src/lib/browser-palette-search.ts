@@ -5,6 +5,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-te
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import {
   comparePaletteTabResults,
+  isOmniboxPaletteTabFieldAllowed,
   matchPaletteTabDocument,
   preparePaletteTabQuery
 } from './palette-match/tab-match'
@@ -45,6 +46,7 @@ export type SearchableBrowserPage = {
 export type BrowserPaletteSearchResult = {
   /** Worktree ids collide across hosts; activation must not resolve by id alone. */
   executionHostId?: ExecutionHostId
+  paletteIdentity: string
   pageId: string
   workspaceId: string
   worktreeId: string
@@ -163,6 +165,13 @@ function baseResult(
   const activity = preparePaletteActivity(entry.lastActiveAt, context)
   return {
     ...(executionHostId ? { executionHostId } : {}),
+    paletteIdentity: encodePaletteIdentity([
+      'browser',
+      executionHostId ?? '',
+      entry.worktree.id,
+      entry.workspace.id,
+      entry.page.id
+    ]),
     pageId: entry.page.id,
     workspaceId: entry.workspace.id,
     worktreeId: entry.worktree.id,
@@ -215,10 +224,7 @@ export function searchBrowserPages(
     const base = baseResult(entry, context)
     const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
     const match = matchPaletteTabDocument(entry.document, prepared, {
-      isFieldAllowed:
-        options.fieldMode === 'omnibox'
-          ? (field) => field.id !== 'worktree' && field.id !== 'repo'
-          : undefined
+      isFieldAllowed: options.fieldMode === 'omnibox' ? isOmniboxPaletteTabFieldAllowed : undefined
     })
     if (!match) {
       continue
@@ -248,25 +254,13 @@ export function searchBrowserPages(
           {
             rank: a.rank,
             positionScore: a.score,
-            identity: encodePaletteIdentity([
-              'browser',
-              a.executionHostId ?? '',
-              a.worktreeId,
-              a.workspaceId,
-              a.pageId
-            ]),
+            identity: a.paletteIdentity,
             activity: a.activity
           },
           {
             rank: b.rank,
             positionScore: b.score,
-            identity: encodePaletteIdentity([
-              'browser',
-              b.executionHostId ?? '',
-              b.worktreeId,
-              b.workspaceId,
-              b.pageId
-            ]),
+            identity: b.paletteIdentity,
             activity: b.activity
           }
         )

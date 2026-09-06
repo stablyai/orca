@@ -9,7 +9,11 @@ import {
   selectOpenTabSearchEntryState,
   type OpenTabSearchEntries
 } from './open-tab-search-entries'
-import { searchOpenTabs, type OpenTabSearchResult } from './open-tab-search'
+import {
+  capOpenTabSearchCandidates,
+  searchOpenTabCandidates,
+  type OpenTabSearchResult
+} from './open-tab-search'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 
 const EMPTY_RESULTS: OpenTabSearchResult[] = []
@@ -51,25 +55,26 @@ export function useOpenTabSearch({
     [agentState, state]
   )
   const deferredQuery = useDeferredValue(query)
-  const evaluationSnapshot = useMemo(
-    () => ({ deferredQuery, enabled, entries }),
-    [deferredQuery, enabled, entries]
-  )
+  const evaluationSnapshot = useMemo(() => ({ deferredQuery, enabled }), [deferredQuery, enabled])
   const context = usePaletteSearchEvaluationContext(evaluationSnapshot)
+  const candidates = useMemo(
+    () =>
+      entries
+        ? searchOpenTabCandidates({
+            ...entries,
+            query: deferredQuery,
+            context
+          })
+        : EMPTY_RESULTS,
+    [context, deferredQuery, entries]
+  )
 
   return useMemo(
     () => ({
       query: deferredQuery,
       entries,
-      results: entries
-        ? searchOpenTabs({
-            ...entries,
-            query: deferredQuery,
-            context,
-            retainedResultId
-          })
-        : EMPTY_RESULTS
+      results: capOpenTabSearchCandidates(candidates, retainedResultId)
     }),
-    [context, deferredQuery, entries, retainedResultId]
+    [candidates, deferredQuery, entries, retainedResultId]
   )
 }

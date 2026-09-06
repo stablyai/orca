@@ -120,6 +120,7 @@ function makeResult(
     score: 0,
     qualityClass: null,
     rank: null,
+    paletteIdentity: 'terminal\u0000wt-1\u0000group-1\u0000unified-terminal-1',
     lastActiveAt: null,
     activity: { ageBucket: null, timestamp: 0 },
     ...overrides

@@ -15,6 +15,8 @@ function rank(overrides: Partial<PaletteDocumentRank> = {}): PaletteDocumentRank
     recovery: 0,
     wordMatch: 0,
     coverage: 0,
+    containerOnlyTokenCount: 0,
+    recoveryTokenCount: 0,
     strength: 0,
     placement: 2,
     ...overrides

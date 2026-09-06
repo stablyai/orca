@@ -18,6 +18,10 @@ import { comparePaletteEntityRanks, type PaletteActivityRank } from './palette-r
 
 const NO_RANGES: readonly MatchRange[] = []
 
+export function isOmniboxPaletteTabFieldAllowed(field: Pick<PaletteIndexedField, 'id'>): boolean {
+  return field.id !== PALETTE_TAB_WORKTREE_FIELD_ID && field.id !== PALETTE_TAB_REPO_FIELD_ID
+}
+
 export type PaletteTabIndexedMatch = { index: number; ranges: readonly MatchRange[] }
 
 export type PaletteTabMatch = {
