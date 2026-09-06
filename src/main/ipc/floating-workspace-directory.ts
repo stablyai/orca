@@ -28,7 +28,7 @@ function resolveFloatingWorkspaceInput(input: string): string {
   return path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(home, expanded)
 }
 
-async function canonicalizeAccessibleDirectory(dirPath: string): Promise<string | null> {
+export async function canonicalizeAccessibleDirectory(dirPath: string): Promise<string | null> {
   try {
     const dirStats = await stat(dirPath)
     if (!dirStats.isDirectory()) {

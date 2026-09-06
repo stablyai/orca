@@ -38,6 +38,7 @@ import {
 } from '../browser/browser-session-proxy'
 import { installDocPreviewProtocolHandler } from '../browser/doc-preview-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
+import { registerNpmPackageInfoHandlers } from '../ipc/npm-package-info-ipc'
 import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
@@ -267,6 +268,10 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why: the preview session is protocol-scoped, so the handler must exist before any preview webview attaches.
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()
+  // Why here even though no renderer calls it yet (Slice 2 adds the call
+  // site): the IPC contract must actually exist for `ipcRenderer.invoke` to
+  // resolve rather than reject with "No handler registered".
+  registerNpmPackageInfoHandlers(store)
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
   initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,

@@ -4604,6 +4604,13 @@
           "74b1413279": "外观",
           "ccbd1e2c69": "自定义 {{value0}} 外观"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "信任此位置吗？",
+          "body": "{{path}} 尚未被信任。信任它后，Orca 可以运行仅限于此文件夹的本地工具——例如从本地 npm 客户端读取软件包详情——该决定同样适用于其中嵌套的所有内容。",
+          "trustParent": "改为信任 {{parentPath}}",
+          "decline": "不信任",
+          "trustWorkspace": "信任此位置"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} 已存在。",
           "6f09f58541": "删除工作区",
@@ -6065,6 +6072,10 @@
           "5195f0b9ef": "在编辑富 Markdown 时显示浏览器拼写下划线和建议。",
           "7ddd66fede": "编辑器自动换行",
           "9b18de6eea": "在文件编辑器中自动换行长行，而无需水平滚动。"
+        },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "包元数据查询",
+          "b3496fe6cc": "将鼠标悬停在 package.json 中的依赖项上时，显示说明、最新版本和链接。禁用此设置将停止所有网络查询，包括本地 npm CLI（它也会访问注册表）；从 node_modules 读取的已安装版本仍然可以正常显示。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "本地主机，127.0.0.1，*.internal",
@@ -8811,8 +8822,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "为此项目位置记录的信任决定。信任可继承，因此为某个文件夹记录的决定同样适用于其中嵌套的所有内容。",
+          "settingDescription": "查看或更改为此项目位置记录的信任决定。"
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "已信任",
+          "trustedDescription": "你已信任 {{path}}。该决定记录在这个确切位置上，并适用于其中嵌套的所有内容。",
+          "inheritedHeading": "信任继承自 {{ancestorPath}}",
+          "inheritedDescription": "{{path}} 本身没有记录任何决定，因此继承了为 {{ancestorPath}} 记录的决定。",
+          "untrustedHeading": "未信任",
+          "declinedDescription": "你拒绝了对 {{path}} 的信任。在你于此处更改之前，Orca 会保留该决定。",
+          "undecidedDescription": "尚未为 {{path}} 记录信任决定。Orca 会将没有记录决定的位置视为未信任。",
+          "notApplicableHeading": "不适用",
+          "notApplicableDescription": "{{path}} 通过远程连接访问。工作区信任仅记录关于本机位置的决定。",
+          "effect": "该决定决定 Orca 是否从本地 npm 客户端而不是公共注册表读取软件包详情。",
+          "trustProject": "信任此项目",
+          "declineProject": "不信任此项目",
+          "revoke": "撤销信任",
+          "revokeAncestor": "撤销对 {{ancestorPath}} 的信任"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "工作区信任",
+            "workspaceTrustDescription": "查看或更改为此项目位置记录的信任决定。",
+            "trust": "信任",
+            "workspaceTrustKeyword": "工作区信任",
+            "trusted": "已信任",
+            "untrusted": "未信任",
+            "revokeTrust": "撤销信任",
+            "trustedLocation": "受信任的位置",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "GitHub",
@@ -13059,6 +13098,16 @@
         "NotesSendMenu": {
           "44dc5e60a6": "发送笔记",
           "433928cd9f": "将 {{value0}} 发送给智能体"
+        },
+        "PackageJsonDependencyHoverMarkdown": {
+          "d3f501d912": "已安装",
+          "5107bd60a9": "未安装",
+          "20c64d5223": "最新版本",
+          "029b0fdf8a": "主页",
+          "45cf3d1be0": "仓库",
+          "c3f3a43d24": "有主版本更新",
+          "fe70f0740d": "有次版本更新",
+          "7776f659ae": "有补丁更新"
         },
         "PdfFind": {
           "cd65b1d6b0": "关闭",

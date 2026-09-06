@@ -7,6 +7,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
 import { getRepositoryGitHooksSearchEntries } from './repository-git-hooks-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './repository-git-worktree-search-entries'
+import { getRepositoryWorkspaceTrustSearchEntries } from './repository-workspace-trust-search-entries'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -163,6 +164,8 @@ export function getRepositoryPaneSearchEntries(
           }
         ]),
     ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
+    // Not gated on `isFolder`: trust is path-scoped, so a folder-opened project needs it too.
+    ...getRepositoryWorkspaceTrustSearchEntries(repo),
     {
       title: translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
       description: translate(

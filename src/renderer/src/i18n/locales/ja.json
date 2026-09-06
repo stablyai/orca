@@ -4556,6 +4556,13 @@
           "74b1413279": "外観",
           "ccbd1e2c69": "{{value0}} の外観をカスタマイズする"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "この場所を信頼しますか？",
+          "body": "{{path}} はまだ信頼されていません。信頼すると、このフォルダーに限定してOrcaがローカルツールを実行できるようになります（ローカルのnpmクライアントからパッケージの詳細を読み取るなど）。この決定は、このフォルダー内のすべての項目にも適用されます。",
+          "trustParent": "代わりに {{parentPath}} を信頼する",
+          "decline": "信頼しない",
+          "trustWorkspace": "この場所を信頼する"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} はすでに存在します。",
           "6f09f58541": "ワークスペースの削除",
@@ -8800,8 +8807,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "このプロジェクトの場所に記録された信頼の決定です。信頼は継承されるため、フォルダーに記録された決定は、その中にネストされたすべてにも適用されます。",
+          "settingDescription": "このプロジェクトの場所に記録された信頼の決定を確認または変更します。"
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "信頼済み",
+          "trustedDescription": "{{path}} を信頼しました。この決定はその正確な場所に記録され、その中にネストされたすべてに適用されます。",
+          "inheritedHeading": "{{ancestorPath}} から継承された信頼",
+          "inheritedDescription": "{{path}} 自体には決定が記録されていないため、{{ancestorPath}} に記録された決定を継承します。",
+          "untrustedHeading": "信頼されていません",
+          "declinedDescription": "{{path}} の信頼を拒否しました。ここで変更するまで、Orcaはその決定を保持します。",
+          "undecidedDescription": "{{path}} には信頼の決定が記録されていません。Orcaは、決定が記録されていない場所を信頼されていないものとして扱います。",
+          "notApplicableHeading": "対象外",
+          "notApplicableDescription": "{{path}} はリモート接続経由でアクセスします。ワークスペースの信頼は、このマシン上の場所に関する決定のみを記録します。",
+          "effect": "この決定は、Orcaがパッケージの詳細を公開レジストリではなくローカルのnpmクライアントから読み取るかどうかを決めます。",
+          "trustProject": "このプロジェクトを信頼する",
+          "declineProject": "このプロジェクトを信頼しない",
+          "revoke": "信頼を取り消す",
+          "revokeAncestor": "{{ancestorPath}} の信頼を取り消す"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "ワークスペースの信頼",
+            "workspaceTrustDescription": "このプロジェクトの場所に記録された信頼の決定を確認または変更します。",
+            "trust": "信頼",
+            "workspaceTrustKeyword": "ワークスペースの信頼",
+            "trusted": "信頼済み",
+            "untrusted": "信頼されていない",
+            "revokeTrust": "信頼の取り消し",
+            "trustedLocation": "信頼された場所",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "GitHub",
@@ -10284,6 +10319,10 @@
           "saveFailed": "表示設定のデフォルトを保存できませんでした。",
           "updateServer": "ソースのデフォルトを設定するには、このサーバーを更新してください。",
           "updateServerDefaults": "表示のデフォルトを設定するには、このサーバーを更新してください。"
+        },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "パッケージメタデータの検索",
+          "b3496fe6cc": "package.json内の依存関係にカーソルを合わせると、説明、最新バージョン、リンクを表示します。この設定を無効にすると、レジストリにも問い合わせるnpm CLIを含むすべてのネットワーク検索が停止しますが、node_modulesから読み取るインストール済みバージョンの表示は引き続き機能します。"
         }
       },
       "right": {
@@ -13003,6 +13042,16 @@
         "NotesSendMenu": {
           "44dc5e60a6": "メモを送信する",
           "433928cd9f": "{{value0}} を Agent に送信します"
+        },
+        "PackageJsonDependencyHoverMarkdown": {
+          "d3f501d912": "インストール済み",
+          "5107bd60a9": "未インストール",
+          "20c64d5223": "最新",
+          "029b0fdf8a": "ホームページ",
+          "45cf3d1be0": "リポジトリ",
+          "c3f3a43d24": "メジャーアップデートがあります",
+          "fe70f0740d": "マイナーアップデートがあります",
+          "7776f659ae": "パッチアップデートがあります"
         },
         "PdfFind": {
           "cd65b1d6b0": "閉じる",

@@ -37,6 +37,9 @@ const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWa
 const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
 const AddRepoDialog = lazy(() => import('../components/sidebar/AddRepoDialog'))
 const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolderDialog'))
+const WorkspaceTrustPromptDialog = lazy(
+  () => import('../components/sidebar/WorkspaceTrustPromptDialog')
+)
 const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/AddProjectFromFolderDialog')
 )
@@ -201,6 +204,11 @@ export function AppRootSurfaces(props: {
         {activeModal === 'confirm-non-git-folder' ? (
           <ModalBoundary boundaryId="modal.confirm-non-git-folder" resetKey>
             <NonGitFolderDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'confirm-workspace-trust' ? (
+          <ModalBoundary boundaryId="modal.confirm-workspace-trust" resetKey>
+            <WorkspaceTrustPromptDialog />
           </ModalBoundary>
         ) : null}
         {activeModal === 'confirm-add-project-from-folder' ? (

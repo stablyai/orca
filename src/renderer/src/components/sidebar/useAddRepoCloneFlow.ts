@@ -8,6 +8,7 @@ import { getCloneDestinationAutoFill } from './clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { ensureWorkspaceTrustConfirmed } from '@/lib/ensure-workspace-trust-confirmed'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -171,6 +172,19 @@ export function useAddRepoCloneFlow({
       await fetchWorktrees(ownedRepo.id, ownerOptions)
       if (gen !== cloneGenRef.current || requestHostToken !== hostTokenRef.current) {
         return
+      }
+      // Why here and not right after the clone: a flow the user abandoned or
+      // superseded must not write a trust decision, and a refresh that throws
+      // must not report a failed clone on a workspace already granted trust
+      // (Req: Intake Resolves a Trust Outcome Before Completing).
+      // SSH/runtime clones are excluded: their repo lives on a remote filesystem,
+      // never a path this machine can canonicalize.
+      if (!sshTargetId?.trim() && target.kind !== 'environment') {
+        await ensureWorkspaceTrustConfirmed(
+          useAppStore.getState(),
+          { kind: 'repo', repoId: ownedRepo.id },
+          ownedRepo.path
+        )
       }
       await onGitRepoReady(ownedRepo.id, 'clone_url', ownerOptions.executionHostId)
     } catch (err) {

@@ -55,6 +55,7 @@ export function buildDefaultSettings(args: {
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
     markdownReviewToolsEnabled: true,
+    npmPackageInfoOnlineLookupsEnabled: true,
     primarySelectionMiddleClickPaste: args.primarySelectionMiddleClickPaste,
     primarySelectionMiddleClickPasteDefaultedForLinux: args.primarySelectionDefaultedForLinux,
     primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:

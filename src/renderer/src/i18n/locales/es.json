@@ -4575,6 +4575,13 @@
           "74b1413279": "Apariencia",
           "ccbd1e2c69": "Personaliza la apariencia de {{value0}}"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "¿Confiar en esta ubicación?",
+          "body": "{{path}} aún no es confiable. Confiar en ella permite que Orca ejecute herramientas locales limitadas a esta carpeta, como leer detalles de paquetes desde tu cliente npm local, y la decisión se aplica también a todo lo que esté dentro de ella.",
+          "trustParent": "Confiar en {{parentPath}} en su lugar",
+          "decline": "No confiar",
+          "trustWorkspace": "Confiar en esta ubicación"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} ya existe.",
           "6f09f58541": "Eliminar espacio de trabajo",
@@ -8778,8 +8785,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "La decisión de confianza registrada para la ubicación de este proyecto. La confianza es heredable, por lo que una decisión registrada para una carpeta también cubre todo lo que esté anidado dentro de ella.",
+          "settingDescription": "Revisa o cambia la decisión de confianza registrada para la ubicación de este proyecto."
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "De confianza",
+          "trustedDescription": "Confiaste en {{path}}. La decisión queda registrada para esa ubicación exacta y cubre todo lo que esté anidado dentro de ella.",
+          "inheritedHeading": "Confianza heredada de {{ancestorPath}}",
+          "inheritedDescription": "No hay ninguna decisión registrada para {{path}} en sí, por lo que hereda la registrada para {{ancestorPath}}.",
+          "untrustedHeading": "Sin confianza",
+          "declinedDescription": "Rechazaste la confianza para {{path}}. Orca conserva esa decisión hasta que la cambies aquí.",
+          "undecidedDescription": "No hay ninguna decisión de confianza registrada para {{path}}. Orca trata como no confiable toda ubicación sin decisión registrada.",
+          "notApplicableHeading": "No aplicable",
+          "notApplicableDescription": "Se accede a {{path}} mediante una conexión remota. La confianza del espacio de trabajo solo registra decisiones sobre ubicaciones de esta máquina.",
+          "effect": "Esta decisión determina si Orca lee los detalles de los paquetes desde tu cliente npm local en lugar del registro público.",
+          "trustProject": "Confiar en este proyecto",
+          "declineProject": "No confiar en este proyecto",
+          "revoke": "Revocar la confianza",
+          "revokeAncestor": "Revocar la confianza de {{ancestorPath}}"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "Confianza del espacio de trabajo",
+            "workspaceTrustDescription": "Revisa o cambia la decisión de confianza registrada para la ubicación de este proyecto.",
+            "trust": "confianza",
+            "workspaceTrustKeyword": "confianza del espacio de trabajo",
+            "trusted": "de confianza",
+            "untrusted": "sin confianza",
+            "revokeTrust": "revocar confianza",
+            "trustedLocation": "ubicación de confianza",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "github",
@@ -10284,6 +10319,10 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "Búsquedas de metadatos de paquetes",
+          "b3496fe6cc": "Muestra la descripción, la versión más reciente y los enlaces al pasar el cursor sobre una dependencia en package.json. Al desactivar esta opción se detienen todas las búsquedas en red, incluida la CLI local de npm (que también consulta un registro); la versión instalada, leída desde node_modules, sigue funcionando."
         }
       },
       "right": {
@@ -13003,6 +13042,16 @@
         "NotesSendMenu": {
           "44dc5e60a6": "Enviar notas",
           "433928cd9f": "Enviar {{value0}} a un agente"
+        },
+        "PackageJsonDependencyHoverMarkdown": {
+          "d3f501d912": "Instalado",
+          "5107bd60a9": "No instalado",
+          "20c64d5223": "Última",
+          "029b0fdf8a": "Sitio web",
+          "45cf3d1be0": "Repositorio",
+          "c3f3a43d24": "Actualización mayor disponible",
+          "fe70f0740d": "Actualización menor disponible",
+          "7776f659ae": "Actualización de parche disponible"
         },
         "PdfFind": {
           "cd65b1d6b0": "Cerrar",

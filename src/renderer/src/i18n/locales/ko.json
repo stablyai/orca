@@ -4561,6 +4561,13 @@
           "74b1413279": "외관",
           "ccbd1e2c69": "{{value0}} 모양 맞춤설정"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "이 위치를 신뢰하시겠습니까?",
+          "body": "{{path}}는 아직 신뢰되지 않았습니다. 신뢰하면 Orca가 이 폴더로 범위가 제한된 로컬 도구를 실행할 수 있습니다(예: 로컬 npm 클라이언트에서 패키지 세부 정보 읽기). 이 결정은 이 폴더 내부의 모든 항목에도 적용됩니다.",
+          "trustParent": "대신 {{parentPath}} 신뢰",
+          "decline": "신뢰하지 않음",
+          "trustWorkspace": "이 위치 신뢰"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}}이(가) 이미 있습니다.",
           "6f09f58541": "워크스페이스 삭제",
@@ -6022,6 +6029,10 @@
           "5195f0b9ef": "리치 Markdown을 편집하는 동안 브라우저 맞춤법 밑줄과 제안을 표시합니다.",
           "7ddd66fede": "편집기 자동 줄 바꿈",
           "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
+        },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "패키지 메타데이터 조회",
+          "b3496fe6cc": "package.json에서 종속성에 마우스를 올리면 설명, 최신 버전, 링크를 표시합니다. 이 설정을 끄면 레지스트리에도 접속하는 로컬 npm CLI를 포함한 모든 네트워크 조회가 중단되지만, node_modules에서 읽는 설치된 버전 표시는 계속 작동합니다."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
@@ -8768,8 +8779,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "이 프로젝트 위치에 기록된 신뢰 결정입니다. 신뢰는 상속되므로 폴더에 기록된 결정은 그 안에 중첩된 모든 항목에도 적용됩니다.",
+          "settingDescription": "이 프로젝트 위치에 기록된 신뢰 결정을 검토하거나 변경합니다."
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "신뢰됨",
+          "trustedDescription": "{{path}}를 신뢰했습니다. 이 결정은 해당 위치에 정확히 기록되며 그 안에 중첩된 모든 항목에 적용됩니다.",
+          "inheritedHeading": "{{ancestorPath}}에서 상속된 신뢰",
+          "inheritedDescription": "{{path}} 자체에는 기록된 결정이 없으므로 {{ancestorPath}}에 기록된 결정을 상속합니다.",
+          "untrustedHeading": "신뢰되지 않음",
+          "declinedDescription": "{{path}}에 대한 신뢰를 거부했습니다. 여기에서 변경할 때까지 Orca는 그 결정을 유지합니다.",
+          "undecidedDescription": "{{path}}에 대해 기록된 신뢰 결정이 없습니다. Orca는 기록된 결정이 없는 위치를 신뢰되지 않은 것으로 처리합니다.",
+          "notApplicableHeading": "해당 없음",
+          "notApplicableDescription": "{{path}}는 원격 연결을 통해 접근합니다. 워크스페이스 신뢰는 이 컴퓨터의 위치에 대한 결정만 기록합니다.",
+          "effect": "이 결정은 Orca가 공개 레지스트리 대신 로컬 npm 클라이언트에서 패키지 세부 정보를 읽을지 여부를 결정합니다.",
+          "trustProject": "이 프로젝트 신뢰",
+          "declineProject": "이 프로젝트를 신뢰하지 않음",
+          "revoke": "신뢰 취소",
+          "revokeAncestor": "{{ancestorPath}}의 신뢰 취소"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "워크스페이스 신뢰",
+            "workspaceTrustDescription": "이 프로젝트 위치에 기록된 신뢰 결정을 검토하거나 변경합니다.",
+            "trust": "신뢰",
+            "workspaceTrustKeyword": "워크스페이스 신뢰",
+            "trusted": "신뢰됨",
+            "untrusted": "신뢰되지 않음",
+            "revokeTrust": "신뢰 취소",
+            "trustedLocation": "신뢰된 위치",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "GitHub",
@@ -13070,6 +13109,16 @@
         "NotesSendMenu": {
           "44dc5e60a6": "메모 보내기",
           "433928cd9f": "agent에게 {{value0}} 보내기"
+        },
+        "PackageJsonDependencyHoverMarkdown": {
+          "d3f501d912": "설치됨",
+          "5107bd60a9": "설치되지 않음",
+          "20c64d5223": "최신",
+          "029b0fdf8a": "홈페이지",
+          "45cf3d1be0": "저장소",
+          "c3f3a43d24": "메이저 업데이트 사용 가능",
+          "fe70f0740d": "마이너 업데이트 사용 가능",
+          "7776f659ae": "패치 업데이트 사용 가능"
         },
         "PdfFind": {
           "cd65b1d6b0": "닫기",

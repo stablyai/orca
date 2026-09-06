@@ -5468,6 +5468,13 @@
           "74b1413279": "Appearance",
           "ccbd1e2c69": "Customize {{value0}} appearance"
         },
+        "WorkspaceTrustPromptDialog": {
+          "title": "Trust this location?",
+          "body": "{{path}} is not trusted yet. Trusting it lets Orca run local tools scoped to this folder — such as reading package details from your local npm client — and the decision applies to everything nested beneath it too.",
+          "trustParent": "Trust {{parentPath}} instead",
+          "decline": "Don't trust",
+          "trustWorkspace": "Trust this location"
+        },
         "WorktreeCard": {
           "a88c92d0e3": "{{value0}}/{{value1}} already exists.",
           "6f09f58541": "Delete workspace",
@@ -10002,8 +10009,36 @@
             }
           }
         },
+        "RepositoryWorkspaceTrustSection": {
+          "description": "The trust decision recorded for this project location. Trust is inheritable, so a decision recorded for a folder also covers everything nested beneath it.",
+          "settingDescription": "Review or change the trust decision recorded for this project location."
+        },
+        "RepositoryWorkspaceTrustStatus": {
+          "trustedHeading": "Trusted",
+          "trustedDescription": "You trusted {{path}}. The decision is recorded for that exact location and covers everything nested beneath it.",
+          "inheritedHeading": "Trust inherited from {{ancestorPath}}",
+          "inheritedDescription": "No decision is recorded for {{path}} itself, so it inherits the one recorded for {{ancestorPath}}.",
+          "untrustedHeading": "Not trusted",
+          "declinedDescription": "You declined trust for {{path}}. Orca keeps that decision until you change it here.",
+          "undecidedDescription": "No trust decision is recorded for {{path}}. Orca treats a location with no recorded decision as not trusted.",
+          "notApplicableHeading": "Not applicable",
+          "notApplicableDescription": "{{path}} is reached over a remote connection. Workspace trust records decisions about locations on this machine only.",
+          "effect": "This decision governs whether Orca reads package details from your local npm client instead of the public registry.",
+          "trustProject": "Trust this project",
+          "declineProject": "Don't trust this project",
+          "revoke": "Revoke trust",
+          "revokeAncestor": "Revoke trust for {{ancestorPath}}"
+        },
         "repository": {
           "search": {
+            "workspaceTrust": "Workspace Trust",
+            "workspaceTrustDescription": "Review or change the trust decision recorded for this project location.",
+            "trust": "trust",
+            "workspaceTrustKeyword": "workspace trust",
+            "trusted": "trusted",
+            "untrusted": "untrusted",
+            "revokeTrust": "revoke trust",
+            "trustedLocation": "trusted location",
             "bc7e504b8e": ".orca/issue-command",
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "github",
@@ -11780,6 +11815,10 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "NpmPackageInfoLookupSetting": {
+          "47381de1d4": "Package Metadata Lookups",
+          "b3496fe6cc": "Show live description, version, and links when hovering a dependency in package.json. Disabling this stops all network lookups, including the local npm CLI (it also queries a registry) — the installed version from node_modules keeps working."
         }
       },
       "right": {
@@ -14742,6 +14781,16 @@
         "NotesSendMenu": {
           "44dc5e60a6": "Send notes",
           "433928cd9f": "Send {{value0}} to an agent"
+        },
+        "PackageJsonDependencyHoverMarkdown": {
+          "d3f501d912": "Installed",
+          "5107bd60a9": "Not installed",
+          "20c64d5223": "Latest",
+          "029b0fdf8a": "Homepage",
+          "45cf3d1be0": "Repository",
+          "c3f3a43d24": "Major update available",
+          "fe70f0740d": "Minor update available",
+          "7776f659ae": "Patch update available"
         },
         "PdfFind": {
           "cd65b1d6b0": "Close",

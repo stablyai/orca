@@ -11,6 +11,8 @@ import { Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
+import { RepositoryWorkspaceTrustSection } from './RepositoryWorkspaceTrustSection'
+import { getRepositoryWorkspaceTrustSearchTitle } from './repository-workspace-trust-search-entries'
 import { McpConfigSection } from './McpConfigSection'
 import { WorktreeSymlinksSection } from './WorktreeSymlinksSection'
 import { SparsePresetSettingsSection } from './SparsePresetSettingsSection'
@@ -202,6 +204,9 @@ export function RepositoryPane({
       'Custom GitHub Issue Command'
     ].includes(entry.title)
   )
+  const workspaceTrustEntries = allEntries.filter(
+    (entry) => entry.title === getRepositoryWorkspaceTrustSearchTitle()
+  )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Shared Paths')
   const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
@@ -380,6 +385,13 @@ export function RepositoryPane({
           </>
         ) : null}
       </section>
+    ) : null,
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, workspaceTrustEntries) ? (
+      <RepositoryWorkspaceTrustSection
+        key="workspace-trust"
+        repo={repo}
+        forceVisible={forceFullPaneForRepoMatch}
+      />
     ) : null,
     hooksSection,
     !isFolder &&

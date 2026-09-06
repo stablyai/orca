@@ -459,6 +459,29 @@ describe('registerSettingsHandlers', () => {
     )
   })
 
+  it('does not accept workspace trust grants from generic renderer settings IPC', async () => {
+    store.getSettings.mockReturnValue({ workspaceTrustEntries: [] })
+    store.updateSettings.mockReturnValue({ workspaceTrustEntries: [] })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      workspaceTrustEntries: [
+        { id: 'forged', path: '/home/user/anything', trusted: true, decidedAt: 1, origin: 'intake' }
+      ],
+      workspaceTrustMigratedExistingWorkspaces: true
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {},
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
   it('does not accept plugin authority grants from generic renderer settings IPC', async () => {
     store.getSettings.mockReturnValue({ pluginConsents: {}, disabledPlugins: [] })
     store.updateSettings.mockReturnValue({ pluginConsents: {}, disabledPlugins: [] })
