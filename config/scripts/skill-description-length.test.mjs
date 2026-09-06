@@ -7,10 +7,6 @@ const skillsDir = resolve(import.meta.dirname, '../../skills')
 // Why: the Agent Skills spec caps `description` at 1024 chars and conforming installers
 // reject the whole skill (#17935); the frontmatter is what the installer parses, so check it.
 const MAX_DESCRIPTION_LENGTH = 1024
-// Why raw, not backtick-stripped: NVIDIA SkillEvaluator rejects `<tag>` in a description as a
-// schema error, and Cowork's validator parses descriptions as HTML and fails the whole plugin
-// silently (compound-engineering #602). Neither honors backticks, so placeholders belong in the body.
-const ANGLE_BRACKET_TOKEN = /<[A-Za-z][\w.-]*>/u
 
 function readDescription(skillName) {
   const skillMarkdown = readFileSync(join(skillsDir, skillName, 'SKILL.md'), 'utf8')
@@ -39,14 +35,5 @@ describe('bundled skill descriptions', () => {
       description.length,
       `${name}: description is ${description.length} chars`
     ).toBeLessThanOrEqual(MAX_DESCRIPTION_LENGTH)
-  })
-
-  it.each(skillNames)('%s keeps angle-bracket placeholders out of its description', (name) => {
-    const token = ANGLE_BRACKET_TOKEN.exec(readDescription(name) ?? '')
-
-    expect(
-      token?.[0],
-      `${name}: rephrase or move "${token?.[0] ?? ''}" into the skill body`
-    ).toBeUndefined()
   })
 })

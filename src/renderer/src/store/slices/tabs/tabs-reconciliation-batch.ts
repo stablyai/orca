@@ -49,6 +49,13 @@ export function writeBatchedWorkspaceRecordEntry<T>(
     ;(current as Record<string, T | undefined>)[worktreeId] = value
     return current
   }
+  // Why: the reconciliation gate writes every map when any one changed; spreading an
+  // already-equal entry would rerender its selectors for no data change. Nothing was
+  // cloned, so ownership is deliberately not claimed. Absent keys still get stored,
+  // matching the spread (`in` check).
+  if (worktreeId in current && Object.is(current[worktreeId], value)) {
+    return current
+  }
   const next = { ...current, [worktreeId]: value } as Record<string, T>
   batch?.ownedStateKeys.add(stateKey)
   return next

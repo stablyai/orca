@@ -128,7 +128,11 @@ export function projectWorktreeTabModelReconciliation(
     return liveEditorIds.has(tab.entityId)
   }
 
-  const validTabs = reconciledUnifiedTabs.filter(isRenderableTab)
+  const renderableTabs = reconciledUnifiedTabs.filter(isRenderableTab)
+  // Why: hand the stored array back when nothing was filtered, so an unrelated
+  // change (orphans, layout) does not give `unifiedTabsByWorktree` a new identity.
+  const validTabs =
+    renderableTabs.length === reconciledUnifiedTabs.length ? reconciledUnifiedTabs : renderableTabs
   const validTabIds = new Set(validTabs.map((tab) => tab.id))
   const nextGroupsWithEmpty = reconciledGroups.map((group) => {
     const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId))
@@ -147,10 +151,14 @@ export function projectWorktreeTabModelReconciliation(
       ? group
       : { ...group, tabOrder, activeTabId, recentTabIds }
   })
-  const nextGroups =
+  const prunedGroups =
     validTabs.length > 0
       ? nextGroupsWithEmpty.filter((group) => group.tabOrder.length > 0)
       : nextGroupsWithEmpty
+  const groupsChanged =
+    prunedGroups.length !== groups.length ||
+    prunedGroups.some((group, index) => group !== groups[index])
+  const nextGroups = groupsChanged ? prunedGroups : groups
   const currentActiveGroupId =
     state.activeGroupIdByWorktree[worktreeId] ??
     ensuredGroupState?.activeGroupIdByWorktree[worktreeId]
@@ -160,10 +168,7 @@ export function projectWorktreeTabModelReconciliation(
     : (nextGroups.find((group) => group.activeTabId !== null)?.id ??
       nextGroups[0]?.id ??
       currentActiveGroupId)
-  const groupsChanged =
-    nextGroups.length !== groups.length ||
-    nextGroups.some((group, index) => group !== groups[index])
-  const tabsChanged = validTabs.length !== unifiedTabs.length || restoredLegacyTabs.length > 0
+  const tabsChanged = validTabs !== unifiedTabs
   const activeGroupChanged = nextActiveGroupId !== currentActiveGroupId
   const baseNextLayout =
     restoredLegacyTabs.length > 0 && reconciliationGroup

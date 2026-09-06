@@ -1,12 +1,13 @@
 ---
 name: orca-per-workspace-env
 description: >-
-  Set up, review, debug, or validate an Orca per-workspace environment recipe: the
-  on-demand, disposable runtime (cloud sandbox, VM, SSH host, or local container)
-  Orca creates fresh for each workspace. Use to stand up a new recipe end to end,
-  fix an `environmentRecipes` entry in `orca.yaml`, scaffold provider lifecycle
-  scripts, or resolve an `orca vm recipe doctor` failure. Use `orca-cli` for
-  ordinary worktree and workspace creation with no recipe involved.
+  Set up, review, debug, or validate Orca per-workspace environment recipes —
+  on-demand, disposable runtimes (cloud sandboxes, VMs, or local) created fresh
+  for each workspace. Covers first-time setup (provider prerequisites, the
+  reusable base snapshot, the coding-agent auth snapshot, credentials, and
+  state), not just the per-workspace lifecycle scripts. Use to stand up
+  per-workspace environments, fix an `environmentRecipes` entry in `orca.yaml`, scaffold
+  provider lifecycle scripts, or resolve an `orca vm recipe doctor` failure.
 ---
 
 # Per-Workspace Environments
@@ -14,6 +15,16 @@ description: >-
 This file is a discovery stub, not the usage guide. The full, version-matched per-workspace
 environment reference is served by the `orca` binary itself — kept out of this file on
 purpose so it can never drift from the binary that will actually run your commands.
+
+Engage Orca whenever you set up, review, debug, or validate a per-workspace environment
+recipe — the on-demand, disposable runtimes (cloud sandboxes, VMs, or local) created fresh
+for each workspace. This covers first-time setup (provider prerequisites, the reusable base
+snapshot, the coding-agent auth snapshot, credentials, and state), not just the
+per-workspace lifecycle scripts. Use it to stand up per-workspace environments, fix an
+`environmentRecipes` entry in `orca.yaml`, scaffold provider lifecycle scripts, or resolve
+an `orca vm recipe doctor` failure. Orca is a thin wrapper: you guide, detect, and scaffold;
+you never own the user's cloud account, billing, images, or credentials, and never spend
+money without an explicit user OK.
 
 ## Resolve the CLI for this session
 
@@ -63,7 +74,7 @@ ORCA vm recipe doctor <recipe-id> --repo-path <repo> --json
 ```
 
 The doctor command above is the free static check. Never add `--provision` without the
-user's explicit approval: it creates provider resources and spends the user's cloud money.
+user's explicit approval because it creates provider resources and may spend money.
 
 Then tell the user that updating Orca restores the full, version-matched guide via
 `ORCA skills get orca-per-workspace-env`. Beyond these commands, ask the user rather than

@@ -344,7 +344,7 @@ on any other OS keeps using the scan.
 
 ## Why the package is patched
 
-`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries four hunks.
+`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries five changes.
 
 1. **Spectre mitigation.** The upstream `binding.gyp` requires Spectre-mitigated
    libraries, which Orca's Windows build agents do not install. `node-pty` is
@@ -360,6 +360,32 @@ on any other OS keeps using the scan.
    `node_addon_api.gyp` resolves outside the repo and hourly Windows builds
    die at configure. `node-pty` is patched the same way for the same reason.
 4. **No PEB reads, no `PROCESS_VM_READ`.** See below.
+5. **The `CreationTime` flag (4).** Upstream exposes no process start time, and
+   `isWindowsProcessStartTimeAvailable()` gates structured Claude and Codex
+   chat on it, so without this change win32 silently fell back to the legacy
+   transcript path. `GetProcessCreationTime` opens
+   `PROCESS_QUERY_LIMITED_INFORMATION` and converts `GetProcessTimes`' FILETIME
+   to Unix ms; a process that denies the handle is emitted with the field
+   absent, never zero, because callers must be able to tell "cannot identify"
+   from a timestamp.
+5. **`supportedProcessDataFlags`.** `addon.cc` exports the flag bits the
+   compiled binary understands, and `lib/index.js` re-exports it.
+
+   Why a fifth hunk and not just the enum: unlike `node-pty`, this package
+   publishes a prebuilt `.node` at the same `build/Release/` path node-gyp
+   writes to. pnpm patches the source tree and leaves that prebuilt alone, so a
+   host can hold a patched `lib/index.js` — `ProcessDataFlag.CreationTime` and
+   all — over a binary that ignores flag 4. CI produced exactly that: the gate
+   read available and every row came back without `creationTimeMs`. Neither a
+   load check nor a path check can see the difference, so the binary has to say
+   so itself.
+
+   Two readers depend on it. `isWindowsProcessStartTimeAvailable()` returns
+   false unless this bit is set, because claiming otherwise leaves
+   `captureWindowsDescendantSnapshot` returning null forever while structured
+   chat believes it has a reaper. And `windows-process-tree-creation-time.cjs`
+   asserts it during install, which is what forces a from-source rebuild —
+   the same role `node-pty-job-ownership.cjs` plays for node-pty's job exports.
 
 The typings claim `commandLine` is truncated at 512 characters. Measured, it is
 not: the longest observed on a real host was 26,059.
@@ -494,10 +520,10 @@ already has, which is why the addon is checked again at load.
 
 ## What the snapshot does not provide
 
-`CreationDate` (process start time) has no equivalent. Anything using a start
-time to prove a PID has not been recycled — daemon identity, managed-hook
-ownership, and CPU accounting in the memory collector — still reads it through
-its own query. Those callers are not migrated.
+`CreationDate` (process start time) now has an equivalent — `creationTimeMs`,
+above — but only inside this module. Daemon identity, managed-hook ownership and
+CPU accounting in the memory collector still read a start time through their own
+queries; those callers are not migrated.
 
 Committed private bytes have no equivalent either, and the one memory value the
 addon can produce is unusable for the sizes Orca now sees: `process.cc` stores
@@ -509,10 +535,12 @@ counters in the same pass. Migrating it to the native table would cost both, and
 it is why this module no longer sets the `Memory` flag at all: the field had no
 reader, and asking for it opened a handle per process on every snapshot.
 
-Start time is a proxy for identity, not identity. The durable answer for the
-process trees Orca itself spawns is an inherited handle: a job object names the
-tree Orca created, so no start-time comparison is needed. Those readers should
-be resolved that way rather than by adding a start time to this module.
+Start time is a proxy for identity, not identity. For the process trees Orca
+itself spawns the durable answer is still an inherited handle: a job object
+names the tree Orca created, so no start-time comparison is needed. The
+`creationTimeMs` this snapshot now carries is for the trees Orca did **not**
+create the handle for — a recovered agent session, a descendant walked out of
+the table — where a bare PID is all there is to re-identify.
 
 Do not adopt `getProcessCpuUsage()` from the package. It takes both CPU samples
 inside one call with a blocking `Sleep(1000)` in the middle, which would hold a

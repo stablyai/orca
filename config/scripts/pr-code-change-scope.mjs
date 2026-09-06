@@ -140,6 +140,8 @@ const NATIVE_RUNTIME_PREFIXES = [
   'config/scripts/ensure-native-runtime',
   'config/scripts/rebuild-native-deps',
   'config/scripts/node-pty-job-ownership',
+  'config/scripts/windows-process-tree-creation-time',
+  'config/scripts/windows-process-tree-gyp-rebuild',
   'config/scripts/electron-builder-native-rebuild',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree'
@@ -224,6 +226,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',
   'src/main/windows/windows-process-tree-command-line-patch.test.ts',
+  'src/main/windows/windows-process-table-native-addon.win32.test.ts',
   'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
