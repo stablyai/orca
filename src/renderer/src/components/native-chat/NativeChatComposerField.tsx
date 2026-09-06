@@ -14,6 +14,9 @@ import type {
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
+import { ComposerPromptTextarea } from '@/components/ComposerPromptTextarea'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -27,6 +30,7 @@ export type NativeChatComposerFieldProps = {
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   sendButtonDisabled: boolean
   isWorking: boolean
+  sendWhileWorking?: boolean
   attachDisabled: boolean
   dictationDisabled: boolean
   isDictating: boolean
@@ -51,6 +55,9 @@ export type NativeChatComposerFieldProps = {
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
+  context?: AgentSessionContextSnapshot
+  canCompact?: boolean
+  onCompact?: () => Promise<void>
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -98,6 +105,7 @@ export function NativeChatComposerField({
   imageAttachments,
   sendButtonDisabled,
   isWorking,
+  sendWhileWorking,
   attachDisabled,
   dictationDisabled,
   isDictating,
@@ -121,7 +129,10 @@ export function NativeChatComposerField({
   onStop,
   sessionOptionsSurface,
   sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  sessionOptionsPickerRequest,
+  context = EMPTY_AGENT_SESSION_CONTEXT,
+  canCompact = false,
+  onCompact
 }: NativeChatComposerFieldProps): React.JSX.Element {
   // Value the IME started from, and whether a programmatic clear was dropped on top of it.
   const compositionBaseRef = useRef('')
@@ -199,11 +210,10 @@ export function NativeChatComposerField({
                 ))}
               </div>
             ) : null}
-            <textarea
+            <ComposerPromptTextarea
               ref={textareaRef}
               defaultValue={draft}
               disabled={disabled}
-              rows={2}
               onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
               onKeyDown={(event) => {
                 if (!imeEnterGesture.ownsKeyDown(event)) {
@@ -244,16 +254,6 @@ export function NativeChatComposerField({
                   : undefined
               }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
-              // Why: coarse-pointer min-height follows the app's touch target convention.
-              // field-sizing:content grows the field with the draft; the 8lh cap (plus
-              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
-              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
-              // so re-wrap on window/pane resize is handled without a measure pass.
-              className={cn(
-                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
-                '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
-              )}
             />
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
@@ -261,6 +261,7 @@ export function NativeChatComposerField({
                 dictationDisabled={dictationDisabled}
                 sendDisabled={sendButtonDisabled}
                 isWorking={isWorking}
+                sendWhileWorking={sendWhileWorking}
                 isDictating={isDictating}
                 isDictationHoldMode={isDictationHoldMode}
                 onAttach={onAttach}
@@ -272,6 +273,9 @@ export function NativeChatComposerField({
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
+                context={context}
+                canCompact={canCompact}
+                onCompact={onCompact}
               />
             </div>
           </div>

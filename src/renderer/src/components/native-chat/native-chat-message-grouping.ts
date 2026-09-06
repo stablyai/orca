@@ -1,13 +1,3 @@
-// Pure grouping logic for the native chat message list. Kept out of the .tsx so
-// the pairing/ordering rules are unit-testable without rendering. Two jobs:
-//   1. Order messages stably (timestamp then id; null timestamps sort first as
-//      the shared model documents) — the assembler already sorts, but the list
-//      re-sorts defensively so a caller passing unordered fixtures still reads
-//      correctly.
-//   2. Within an assistant turn, pair each tool-call block with the tool-result
-//      that answers it so the view can render one collapsible step instead of
-//      two disconnected rows.
-
 import {
   isToolCallBlock,
   isToolResultBlock,
@@ -16,6 +6,7 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../../../shared/native-chat-types'
+import { findNativeChatFinalMessageIndex } from '../../../../shared/native-chat-final-message'
 import { compareMessages } from './native-chat-session-assembler'
 
 /** A tool-call block paired with the result that answered it, when one exists.
@@ -45,6 +36,30 @@ export type NativeChatRenderItem =
       step: NativeChatToolStep
     }
 
+export type NativeChatConversationItem =
+  | { kind: 'message'; id: string; message: NativeChatMessage }
+  | {
+      kind: 'assistant-turn'
+      id: string
+      segments: NativeChatTurnSegment[]
+      activityMessages: NativeChatMessage[]
+      finalMessage: NativeChatMessage | null
+      startedAt: number | null
+      completedAt: number | null
+      outcome: NativeChatTurnCompletion['outcome'] | null
+      working: boolean
+      turnId: string | null
+    }
+
+export type NativeChatTurnSegment =
+  | { kind: 'activity'; id: string; messages: NativeChatMessage[] }
+  | { kind: 'message'; id: string; message: NativeChatMessage }
+
+export type NativeChatTurnCompletion = {
+  outcome: 'completed' | 'interrupted' | 'failed'
+  completedAt: number
+}
+
 /** Order messages stably: null timestamps first (model rule), then ascending
  *  timestamp, ties broken by id. Shares the assembler's comparator so both
  *  paths order identically. */
@@ -52,11 +67,164 @@ export function orderNativeChatMessages(messages: NativeChatMessage[]): NativeCh
   return [...messages].sort(compareMessages)
 }
 
-/** Collect every tool-result across the whole conversation in document order so
- *  a call can find its answer even when the result lands in a later message (the
- *  common transcript shape: assistant emits the call, a following tool message
- *  carries the result). Results carry no originating name in our model, so they
- *  are handed out FIFO to calls. */
+/** Group the transcript into user/system rows and assistant turns. Within a
+ * turn the last completed assistant prose is the final answer; preceding
+ * reasoning and tool records remain in their original activity chronology. */
+export function buildNativeChatConversationItems(
+  messages: NativeChatMessage[],
+  working: boolean,
+  workingStartedAt: number | null = null,
+  activeTurnId: string | null = null,
+  turnCompletions?: Readonly<Record<string, NativeChatTurnCompletion>>
+): NativeChatConversationItem[] {
+  const items: NativeChatConversationItem[] = []
+  let turn:
+    | {
+        id: string
+        turnId: string | null
+        startedAt: number | null
+        messages: NativeChatMessage[]
+      }
+    | undefined
+
+  const flush = (last = false): void => {
+    if (!turn) {
+      return
+    }
+    const isActive = working && (activeTurnId ? turn.turnId === activeTurnId : last)
+    const completion = turn.turnId ? turnCompletions?.[turn.turnId] : undefined
+    items.push(
+      buildAssistantTurn(
+        turn.messages,
+        isActive ? (workingStartedAt ?? turn.startedAt) : turn.startedAt,
+        isActive,
+        `assistant-turn:${turn.id}`,
+        turn.turnId,
+        completion,
+        turnCompletions === undefined
+      )
+    )
+    turn = undefined
+  }
+
+  for (const message of messages) {
+    if (message.role === 'user' || message.role === 'system') {
+      if (message.role === 'user' && turn?.turnId && message.turnId === turn.turnId) {
+        turn.messages.push(message)
+        continue
+      }
+      flush()
+      items.push({ kind: 'message', id: message.id, message })
+      if (message.role === 'user') {
+        turn = {
+          id: message.id,
+          turnId: message.turnId ?? null,
+          startedAt: message.timestamp,
+          messages: []
+        }
+      }
+      continue
+    }
+    if (turn && (!message.turnId || !turn.turnId || message.turnId === turn.turnId)) {
+      turn.messages.push(message)
+      turn.turnId ??= message.turnId ?? null
+      continue
+    }
+    flush()
+    turn = {
+      id: message.id,
+      turnId: message.turnId ?? null,
+      startedAt: message.timestamp,
+      messages: [message]
+    }
+  }
+  flush(true)
+
+  if (working && !items.some((item) => item.kind === 'assistant-turn' && item.working)) {
+    const current = items.at(-1)
+    items.push(
+      buildAssistantTurn(
+        [],
+        workingStartedAt ?? (current?.kind === 'message' ? current.message.timestamp : null),
+        true,
+        `assistant-turn:${current?.id ?? 'live'}`,
+        activeTurnId,
+        undefined,
+        turnCompletions === undefined
+      )
+    )
+  }
+  return items
+}
+
+function buildAssistantTurn(
+  messages: NativeChatMessage[],
+  anchorTimestamp: number | null,
+  working = false,
+  id = `assistant-turn:${messages[0]?.id ?? 'empty'}`,
+  turnId: string | null = null,
+  completion?: NativeChatTurnCompletion,
+  inferCompletion = true
+): Extract<NativeChatConversationItem, { kind: 'assistant-turn' }> {
+  const successful = completion?.outcome === 'completed' || (inferCompletion && !completion)
+  const finalIndex = working || !successful ? -1 : findNativeChatFinalMessageIndex(messages, true)
+  const finalMessage = finalIndex !== -1 ? messages[finalIndex]! : null
+  const activityMessages = messages.filter(
+    (message, index) => index !== finalIndex && message.role !== 'user' && message.role !== 'system'
+  )
+  const timestamps = messages.flatMap((message) =>
+    message.timestamp == null ? [] : [message.timestamp]
+  )
+  return {
+    kind: 'assistant-turn',
+    id,
+    segments: buildTurnSegments(messages, finalIndex),
+    activityMessages,
+    finalMessage,
+    startedAt: anchorTimestamp ?? timestamps[0] ?? null,
+    completedAt:
+      !working && (completion?.outcome === 'completed' || (inferCompletion && !completion))
+        ? (completion?.completedAt ??
+          finalMessage?.timestamp ??
+          timestamps.at(-1) ??
+          anchorTimestamp)
+        : null,
+    outcome: working
+      ? null
+      : (completion?.outcome ?? (inferCompletion && !completion ? 'completed' : null)),
+    working,
+    turnId
+  }
+}
+
+function buildTurnSegments(
+  messages: NativeChatMessage[],
+  finalIndex: number
+): NativeChatTurnSegment[] {
+  const segments: NativeChatTurnSegment[] = []
+  let activity: NativeChatMessage[] = []
+  const flushActivity = (): void => {
+    if (activity.length) {
+      segments.push({ kind: 'activity', id: `activity:${activity[0]!.id}`, messages: activity })
+      activity = []
+    }
+  }
+  messages.forEach((message, index) => {
+    if (index === finalIndex) {
+      return
+    }
+    if (message.role === 'user' || message.role === 'system') {
+      flushActivity()
+      segments.push({ kind: 'message', id: message.id, message })
+    } else {
+      activity.push(message)
+    }
+  })
+  flushActivity()
+  return segments
+}
+
+/** Collect results across messages; provider IDs match exact calls and legacy results stay FIFO. */
 function collectToolResults(messages: NativeChatMessage[]): NativeChatToolResultBlock[] {
   const results: NativeChatToolResultBlock[] = []
   for (const message of messages) {
@@ -69,16 +237,15 @@ function collectToolResults(messages: NativeChatMessage[]): NativeChatToolResult
   return results
 }
 
-/**
- * Flatten ordered messages into render items, pairing tool calls with results.
- * Result pairing is FIFO across the conversation: tool results in our model
- * carry no back-reference to a call id, so we match the Nth call to the Nth
- * result in document order — the order both providers emit them. A call with no
- * remaining result renders as in-flight (`result: null`).
- */
+/** Flatten messages into render items, pairing exact provider IDs before legacy FIFO results. */
 export function buildNativeChatRenderItems(messages: NativeChatMessage[]): NativeChatRenderItem[] {
   const ordered = orderNativeChatMessages(messages)
   const resultQueue = collectToolResults(ordered)
+  const resultsById = new Map(
+    resultQueue.flatMap((result) =>
+      result.toolCallId ? [[result.toolCallId, result] as const] : []
+    )
+  )
   let resultCursor = 0
 
   const items: NativeChatRenderItem[] = []
@@ -88,9 +255,15 @@ export function buildNativeChatRenderItems(messages: NativeChatMessage[]): Nativ
 
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
-        const result = resultQueue[resultCursor] ?? null
-        if (result) {
-          resultCursor += 1
+        let result = block.toolCallId ? (resultsById.get(block.toolCallId) ?? null) : null
+        if (!block.toolCallId) {
+          while (resultQueue[resultCursor]?.toolCallId) {
+            resultCursor += 1
+          }
+          result = resultQueue[resultCursor] ?? null
+          if (result) {
+            resultCursor += 1
+          }
         }
         steps.push({ call: block, result })
       } else if (isToolResultBlock(block)) {

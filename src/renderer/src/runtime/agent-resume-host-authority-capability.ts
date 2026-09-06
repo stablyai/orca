@@ -29,6 +29,7 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   'prime-agent': undefined,
   // Ungated to match how main shipped copilot resume; gating it is its own change.
   copilot: undefined,
+  openclaude: undefined,
   omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>

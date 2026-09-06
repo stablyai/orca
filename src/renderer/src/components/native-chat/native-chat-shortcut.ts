@@ -1,3 +1,6 @@
+import { useEffect } from 'react'
+import type { TerminalPaneTitleController } from '../terminal-pane/use-terminal-pane-title-state'
+import type { AppState } from '@/store/types'
 /** Platform-correct binding for the native-chat view toggle.
  *
  *  Key: Cmd/Ctrl + Shift + J. The primary modifier follows AGENTS.md — metaKey
@@ -30,4 +33,58 @@ export function matchesNativeChatToggleShortcut(
     return false
   }
   return e.key.toLowerCase() === 'j'
+}
+
+export const NATIVE_CHAT_TOGGLE_REQUEST_EVENT = 'orca-native-chat-toggle-request'
+
+export function requestNativeChatToggle(terminalTabId: string): void {
+  window.dispatchEvent(
+    new CustomEvent<{ terminalTabId: string }>(NATIVE_CHAT_TOGGLE_REQUEST_EVENT, {
+      detail: { terminalTabId }
+    })
+  )
+}
+
+export function useNativeChatToggleRequest({
+  chatLeafId,
+  effectiveChatViewMode,
+  managerRef,
+  setChatLeafId,
+  setTabViewMode,
+  tabId,
+  unifiedTabId
+}: Pick<TerminalPaneTitleController, 'chatLeafId' | 'managerRef' | 'setChatLeafId' | 'tabId'> & {
+  effectiveChatViewMode: boolean
+  unifiedTabId: string | null | undefined
+  setTabViewMode: AppState['setTabViewMode']
+}): void {
+  useEffect(() => {
+    const handleRequest = (event: Event): void => {
+      const request = event as CustomEvent<{ terminalTabId?: string }>
+      if (request.detail?.terminalTabId !== tabId || !unifiedTabId) {
+        return
+      }
+      const activeLeafId = managerRef.current?.getActivePane()?.leafId
+      if (!activeLeafId) {
+        return
+      }
+      if (effectiveChatViewMode && chatLeafId === activeLeafId) {
+        setChatLeafId(null)
+        setTabViewMode(unifiedTabId, 'terminal')
+      } else {
+        setChatLeafId(activeLeafId)
+        setTabViewMode(unifiedTabId, 'chat')
+      }
+    }
+    window.addEventListener(NATIVE_CHAT_TOGGLE_REQUEST_EVENT, handleRequest)
+    return () => window.removeEventListener(NATIVE_CHAT_TOGGLE_REQUEST_EVENT, handleRequest)
+  }, [
+    chatLeafId,
+    effectiveChatViewMode,
+    managerRef,
+    setChatLeafId,
+    setTabViewMode,
+    tabId,
+    unifiedTabId
+  ])
 }

@@ -57,4 +57,5 @@ export type TerminalSideEffectBatch = {
   tabId?: string
   paneKey?: string
   connectionId?: string | null
+  roomDeliveryId?: string
 }

@@ -20,7 +20,7 @@ export async function readNativeSessionOptions(input: {
   }
   return {
     ...restored,
-    model: reported.current.model,
+    ...(reported.current.model ? { model: reported.current.model } : {}),
     ...(reported.current.effort ? { effort: reported.current.effort } : {})
   }
 }

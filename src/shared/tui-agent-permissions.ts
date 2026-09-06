@@ -26,6 +26,7 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   hermes: '--yolo',
   copilot: '--yolo',
   grok: '--permission-mode bypassPermissions',
+  omp: '--yolo',
   devin: '--permission-mode bypass',
   ante: '--yolo',
   trae: '--yolo',

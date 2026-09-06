@@ -93,10 +93,15 @@ export function nativeChatOptionsPillTitle(
 }
 
 export function nativeChatOptionsPillLabel(
-  descriptors: readonly SessionOptionDescriptor[]
+  descriptors: readonly SessionOptionDescriptor[],
+  fallbackEffort?: string | null
 ): string {
   const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
-  const labels: string[] = []
+  // A session can report an effort without advertising an effort picker.
+  const labels: string[] =
+    !effort && fallbackEffort
+      ? [nativeChatSessionChoiceLabel({ value: fallbackEffort, label: fallbackEffort })]
+      : []
   for (const descriptor of descriptors) {
     if (descriptor.valueSource === 'unknown') {
       continue

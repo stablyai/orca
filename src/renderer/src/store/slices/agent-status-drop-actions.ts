@@ -85,7 +85,8 @@ export function createAgentStatusDropActions(
         if (hasRetained) {
           delete nextRetained[paneKey]
         }
-        const needsSuppressor = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
+        const needsSuppressor =
+          opts?.rendererOnly !== true && hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
         return {
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
@@ -112,7 +113,7 @@ export function createAgentStatusDropActions(
       if (liveExisted) {
         freshness.scheduleDeferred()
       }
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && opts?.rendererOnly !== true) {
         window.api?.agentStatus?.drop?.(paneKey)
       }
     },

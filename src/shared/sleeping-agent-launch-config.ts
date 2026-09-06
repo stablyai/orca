@@ -1,4 +1,15 @@
 import type { SleepingAgentLaunchConfig } from './agent-session-resume'
+import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import type { TuiAgent } from './tui-agent'
+
+export function sleepingAgentCommand(
+  agent: TuiAgent,
+  baseCommand: { command: string; commandWithoutSessionOptions: string }
+): string {
+  return getAgentSessionOptionCatalog(agent)?.capturesOptionsInLaunchCommand
+    ? baseCommand.command
+    : baseCommand.commandWithoutSessionOptions
+}
 
 export function buildSleepingAgentLaunchConfig(args: {
   agentCommand?: string | null

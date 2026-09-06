@@ -16,6 +16,7 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
+import { DEFAULT_ENABLED_STRUCTURED_MACHINE_AGENTS } from './structured-agent-provider'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -126,6 +127,8 @@ export function buildDefaultSettings(args: {
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     experimentalStructuredNativeChat: false,
+    experimentalRoomLiveSteering: false,
+    enabledHarnessStreamingAgents: [...DEFAULT_ENABLED_STRUCTURED_MACHINE_AGENTS],
     nativeChatSessionOptions: {},
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,

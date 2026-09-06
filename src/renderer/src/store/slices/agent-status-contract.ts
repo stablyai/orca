@@ -43,6 +43,7 @@ export type DropHibernatedAgentPaneOptions = {
 }
 
 export type DropAgentStatusOptions = {
+  rendererOnly?: boolean
   /** The pane itself is gone (pane close, stale-row teardown). Row-only dismissals leave the
    *  cleared-at cutoff and manual-unread stamp in place so a still-live pane's next hook event
    *  cannot resurrect activity the user already cleared. */
@@ -86,6 +87,7 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string
   restoredUnconfirmed?: boolean
+  roomDeliveryId?: string
   /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
    *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
   observation?: AgentStatusObservation

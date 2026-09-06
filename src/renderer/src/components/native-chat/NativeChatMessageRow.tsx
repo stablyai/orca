@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useRef } from 'react'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
+import type { StreamingMarkdownFade } from '@/components/sidebar/streaming-markdown-fade'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
@@ -14,13 +15,16 @@ import {
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { literalRoomTransportText } from './native-chat-room-transport'
+import type { NativeChatImageLoadContext } from './NativeChatImageAttachments'
+import { NativeChatCopyButton } from './NativeChatCopyButton'
 
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
  *  lifted card, assistant prose as body copy, reasoning de-emphasized.
  *  Memoized: a stream frame republishes the whole transcript, but settled rows
  *  keep their block identity, so only the changed row re-renders. */
-export const MessageRow = memo(function MessageRow({
+export const NativeChatMessageRow = memo(function NativeChatMessageRow({
   message,
   expandSignal,
   activeTurnIsWorking,
@@ -30,7 +34,9 @@ export const MessageRow = memo(function MessageRow({
   deliveryFailed = false,
   activityExpandOverride,
   structuredActivityUi = true,
-  runtimeContext
+  runtimeContext,
+  imageLoadContext,
+  streamingFade
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -43,6 +49,8 @@ export const MessageRow = memo(function MessageRow({
   activityExpandOverride?: boolean
   structuredActivityUi?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  imageLoadContext?: NativeChatImageLoadContext
+  streamingFade?: StreamingMarkdownFade
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set: a streaming turn re-renders this row on every frame, and these
@@ -58,7 +66,10 @@ export const MessageRow = memo(function MessageRow({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
+  const isSubagentTask = message.subagentEvent?.kind === 'task'
   const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
+  const literalTransport = literalRoomTransportText(markdown)
+  const renderedText = literalTransport ?? markdown
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -83,35 +94,42 @@ export const MessageRow = memo(function MessageRow({
 
   if (isUser) {
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {markdown ? (
-            <>
+      <div ref={rowRef} className="group flex w-full flex-col items-end justify-end gap-1">
+        <div className="flex w-full items-center justify-end gap-1">
+          <div className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+            <NativeChatCopyButton text={renderedText} />
+          </div>
+          <div className="max-w-[77%] rounded-2xl bg-muted px-3 py-2 text-sm text-foreground">
+            {renderedText ? (
+              <>
+                <NativeChatImageAttachments
+                  blocks={prose}
+                  loadContext={imageLoadContext}
+                  runtimeContext={runtimeContext}
+                />
+                {literalTransport !== null ? (
+                  <div className="whitespace-pre-wrap break-words">{renderedText}</div>
+                ) : (
+                  <CommentMarkdown
+                    content={renderedText}
+                    variant="document"
+                    className="text-sm"
+                    onLinkClick={onLinkClick}
+                    allowFileUriLinks={allowFileUriLinks}
+                  />
+                )}
+              </>
+            ) : (
               <NativeChatImageAttachments
                 blocks={prose}
+                loadContext={imageLoadContext}
                 runtimeContext={runtimeContext}
-                enablePreview={runtimeContext !== undefined}
               />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
-            </>
-          ) : (
-            <NativeChatImageAttachments
-              blocks={prose}
-              runtimeContext={runtimeContext}
-              enablePreview={runtimeContext !== undefined}
-            />
-          )}
+            )}
+          </div>
         </div>
         {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
+          <div className="max-w-[77%] text-[11px] text-destructive/80">
             {translate(
               'components.native-chat.launchPromptNotDelivered',
               'Not delivered — check the terminal'
@@ -122,16 +140,24 @@ export const MessageRow = memo(function MessageRow({
     )
   }
 
-  // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. The controls reveal on hover (and on keyboard focus-within).
-  const showControls = !isReasoning && !isSystem && markdown.length > 0
+  if (isSubagentTask) {
+    return (
+      <div
+        ref={rowRef}
+        className="w-fit rounded-md border border-border bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground"
+      >
+        {markdown}
+      </div>
+    )
+  }
+
+  const showControls = !isReasoning && !isSystem && renderedText.length > 0
 
   return (
     <div
       ref={rowRef}
       className={cn(
-        'group relative max-w-full select-text text-sm leading-relaxed text-foreground',
-        // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
+        'group flex max-w-full select-text flex-col text-sm leading-relaxed text-foreground',
         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
       )}
@@ -139,17 +165,22 @@ export const MessageRow = memo(function MessageRow({
       <NativeChatImageAttachments
         blocks={prose}
         runtimeContext={runtimeContext}
-        enablePreview={runtimeContext !== undefined}
+        loadContext={imageLoadContext}
       />
-      {markdown ? (
-        <CommentMarkdown
-          content={markdown}
-          variant="document"
-          className="text-sm"
-          onLinkClick={onLinkClick}
-          allowFileUriLinks={allowFileUriLinks}
-          linkifyFilePaths={onLinkClick !== undefined}
-        />
+      {renderedText ? (
+        literalTransport !== null ? (
+          <div className="whitespace-pre-wrap break-words">{renderedText}</div>
+        ) : (
+          <CommentMarkdown
+            content={renderedText}
+            variant="document"
+            className="text-sm"
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={allowFileUriLinks}
+            streamingFade={streamingFade}
+            linkifyFilePaths={onLinkClick !== undefined}
+          />
+        )
       ) : null}
       {tools.length > 0 ? (
         <NativeChatToolRun
@@ -162,9 +193,9 @@ export const MessageRow = memo(function MessageRow({
       ) : null}
       {showControls ? (
         <NativeChatAgentControls
-          markdown={markdown}
+          markdown={renderedText}
           onScrollToTop={scrollToTop}
-          className="pointer-events-none mt-1 -mb-5 w-fit select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className="mt-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         />
       ) : null}
     </div>

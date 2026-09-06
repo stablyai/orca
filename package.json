@@ -159,6 +159,7 @@
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "1.3.0",
     "@anthropic-ai/claude-agent-sdk": "0.3.251",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
@@ -169,6 +170,7 @@
     "@xterm/headless": "6.1.0-beta.302",
     "agent-browser": "~0.27.0",
     "electron-updater": "^6.8.9",
+    "fflate": "^0.8.3",
     "i18next": "^26.3.1",
     "jsonc-parser": "^3.3.1",
     "node-pty": "^1.1.0",

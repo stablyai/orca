@@ -1,3 +1,4 @@
+import type { StructuredMachineAgent } from '../../shared/structured-agent-provider'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
@@ -17,7 +18,7 @@ export type StructuredAgentSessionCreateSupport = {
  * however wrong it was. The runtime hands over the two facts it owns and this decides.
  */
 export function resolveStructuredAgentSessionCreateSupport(input: {
-  agent: 'claude' | 'codex'
+  agent: StructuredMachineAgent
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
   getSettings: () => ClaudeManagedAccountGateSettings

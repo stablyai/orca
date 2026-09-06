@@ -75,14 +75,13 @@ export function markCodexLeadTurnInterrupted(state: HookListenerState, paneKey: 
 export function codexLeadStateForHookEvent(
   eventName: string | undefined
 ): CodexLeadTurnState['state'] | undefined {
-  if (eventName === 'Stop') {
+  if (eventName === 'Stop' || eventName === 'SessionStart') {
     return 'done'
   }
   if (eventName === 'PermissionRequest') {
     return 'waiting'
   }
   if (
-    eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse'
@@ -148,6 +147,7 @@ export function reconcileRemoteCodexState(
     prompt,
     state: codexRosterEffectiveState(roster, lead.state),
     model: lead.model ?? payload.model,
+    ...(eventName === 'SessionStart' && !agentId ? { sessionBoundary: true } : {}),
     subagents: codexRosterToSnapshots(roster)
   }
 }

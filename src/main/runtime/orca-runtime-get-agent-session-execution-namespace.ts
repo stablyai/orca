@@ -20,6 +20,7 @@ import {
 import type { AgentSessionLaunchArgs } from '../../shared/agent-session-record'
 import { resolveStartupShell } from '../../shared/tui-agent-startup-shell'
 import { resolveAgentSessionResumeArgs } from './agent-session-resume-args'
+import type { SessionOptionValue } from '../../shared/agent-session-option-catalog-types'
 
 export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntimeWithResolveWorktreeRemovalTarget {
   protected getAgentSessionExecutionNamespace(
@@ -76,16 +77,27 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
 
   protected toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
-  ): Record<string, string> | undefined {
+  ): Record<string, SessionOptionValue> | undefined {
     if (!preferences) {
       return undefined
     }
     const options = {
       ...(preferences.model ? { model: preferences.model } : {}),
       ...(preferences.effort ? { effort: preferences.effort } : {}),
-      ...(preferences.mode ? { mode: preferences.mode } : {})
+      ...(preferences.mode === 'fast'
+        ? { fastMode: true }
+        : preferences.mode === 'standard'
+          ? { fastMode: false }
+          : {})
     }
     return Object.keys(options).length > 0 ? options : undefined
+  }
+
+  protected appendExtraAgentLaunchArgs(
+    base: string | null,
+    extra: string | undefined
+  ): string | null {
+    return extra?.trim() ? (base?.trim() ? `${base} ${extra}` : extra) : base
   }
 
   async ensureAgentSession(
@@ -142,12 +154,15 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       agent: request.agent,
       providerSession: identity.providerSession,
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveAgentSessionResumeArgs({
-        requestArgs: request.agentArgs,
-        persistedArgs: handoffAuthority?.launchArgs,
-        defaultArgs: resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-        shell: resolveStartupShell(platform, shell)
-      }),
+      agentArgs: this.appendExtraAgentLaunchArgs(
+        resolveAgentSessionResumeArgs({
+          requestArgs: request.agentArgs,
+          persistedArgs: handoffAuthority?.launchArgs,
+          defaultArgs: resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
+          shell: resolveStartupShell(platform, shell)
+        }),
+        request.extraAgentArgs
+      ),
       agentEnv: {
         ...resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
         ...(handoffAuthority && request.agent === 'codex'
@@ -170,15 +185,21 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
+    const trustedLocalStartup = _caller.clientKind === undefined
     const terminal = await this.createTerminal(`id:${workspace.id}`, {
-      command: startup.launchCommand,
-      env: startup.env,
-      launchConfig: startup.launchConfig,
+      command: trustedLocalStartup && request.command ? request.command : startup.launchCommand,
+      env: trustedLocalStartup && request.env ? request.env : startup.env,
+      ...(trustedLocalStartup && request.envToDelete ? { envToDelete: request.envToDelete } : {}),
+      launchConfig:
+        trustedLocalStartup && request.launchConfig ? request.launchConfig : startup.launchConfig,
       startupCommandDelivery: startup.startupCommandDelivery,
       launchAgent: request.agent,
+      resumeProviderSession: identity.providerSession,
       presentation: request.presentation ?? 'background',
       tabId: request.placement?.tabId,
       leafId: request.placement?.leafId,
+      persistHostSessionBinding: request.persistHostSessionBinding ?? true,
+      ...(request.surfaceOwner === false ? { surfaceOwner: false } : {}),
       agentSessionClaim: claim,
       ...(handoffAuthority
         ? {

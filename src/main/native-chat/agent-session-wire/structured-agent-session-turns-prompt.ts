@@ -1,6 +1,7 @@
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
   decodeAgentSessionQuestionAnswers,
+  encodeAgentSessionQuestionAnswers,
   isValidAgentSessionQuestionAnswers
 } from '../../../shared/agent-session-question-answer'
 import type {
@@ -72,7 +73,7 @@ export async function performPrompt(
     freeText.answer.trim().length > 0
   const grouped =
     item.body.kind === 'question' && prompt.questions
-      ? decodeAgentSessionQuestionAnswers(input.optionId)
+      ? decodeAgentSessionQuestionAnswers(input.optionId, prompt.questions)
       : null
   const acceptsGrouped =
     grouped !== null &&
@@ -110,7 +111,7 @@ export async function performPrompt(
       sessionId: ctx.sessionId,
       itemId: input.itemId,
       kind: input.kind,
-      optionId: input.optionId,
+      optionId: acceptsGrouped ? encodeAgentSessionQuestionAnswers(grouped!) : input.optionId,
       fence: ctx.fence
     })
   } catch (error) {

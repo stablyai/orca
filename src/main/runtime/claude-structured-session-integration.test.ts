@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -43,7 +46,10 @@ const WORKSPACE = 'workspace-claude'
 // which structured-agent-session.test.ts pins in both its satisfied and refused states.
 const CLIENT = {
   clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ]
 }
 
 const { readClaudeTranscriptLeafUuid, resolveSessionFilePath } = vi.hoisted(() => ({
@@ -79,6 +85,7 @@ function fakeClaude() {
       sent: [],
       pid: 4321 + connections.length,
       closed: false,
+      reinitialize: async () => ({}),
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (selfExit) {
@@ -429,6 +436,29 @@ afterEach(async () => {
 })
 
 describe('a structured Claude session over agentSession.*', () => {
+  it('reopens a never-used conversation with the same id and commits its resumed ownership', async () => {
+    resolveSessionFilePath.mockResolvedValue(null)
+    await ok('agentSession.create', createIntentParams())
+    const host = getStructuredAgentSessionHost()!
+    await host.close(SESSION)
+    await host.hold(SESSION, 'empty-session-check')
+    expect(claude.live().launch.options.sessionId).toBe(PROVIDER_SESSION)
+    expect(claude.live().launch.options.resume).toBeUndefined()
+    const record = host.deps.store.getRecord(SESSION)!
+    expect(record.providerHandleChain.at(-1)).toMatchObject({
+      origin: 'resumed',
+      handle: { provider: 'claude', sessionId: PROVIDER_SESSION }
+    })
+    expect(record.lease.claimStatus).toBe('live')
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'OK' }] }
+    await expect(
+      ok('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, record.lease.runtimeFence),
+        body
+      })
+    ).resolves.toMatchObject({ submission: { dispatchState: 'accepted' } })
+  })
+
   it('strips ambient Anthropic auth from the child once a managed account is pinned', async () => {
     claudeAuthPolicy = { stripAuthEnv: true }
     claudeLaunchEnv = { ANTHROPIC_BASE_URL: 'https://gateway.example.test' }

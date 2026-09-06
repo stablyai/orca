@@ -5,9 +5,14 @@ import type { AgentSessionRecordStore } from '../runtime/agent-session-record-st
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
 
 const SESSION_ID = 'session-1'
-const IDENTITY = { sessionId: SESSION_ID } as Parameters<
-  ReturnType<typeof createCodexStructuredLaunchResolver>
->[0]['identity']
+const IDENTITY: Parameters<ReturnType<typeof createCodexStructuredLaunchResolver>>[0]['identity'] =
+  {
+    sessionId: SESSION_ID,
+    workspaceId: 'workspace-1',
+    hostId: LOCAL_EXECUTION_HOST_ID,
+    agent: 'codex',
+    providerHandle: { kind: 'opaque', agent: 'codex', value: SESSION_ID }
+  }
 
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -89,6 +94,18 @@ describe('codex structured launch resolution', () => {
     )({ identity: IDENTITY })
 
     expect(launch.resumeThreadId).toBe('thread-current')
+    expect(launch.resumeOrigin).toBe('resumed')
+  })
+
+  it('resumes an adopted thread before its first provider proof is committed', async () => {
+    const identity = {
+      ...IDENTITY,
+      providerHandle: { kind: 'codex' as const, threadId: 'thread-adopted' }
+    }
+    const launch = await resolverFor(record())({ identity })
+
+    expect(launch.resumeThreadId).toBe('thread-adopted')
+    expect(launch.resumeOrigin).toBe('adopted')
   })
 
   it('places the durable user configuration before the app-server subcommand', async () => {

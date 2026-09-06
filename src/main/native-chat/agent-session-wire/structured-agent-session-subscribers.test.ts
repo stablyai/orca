@@ -123,7 +123,10 @@ describe('AgentSessionSubscribers', () => {
       sessions: new Map([
         [
           SESSION,
-          { journal, params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' } }
+          {
+            journal,
+            params: { location: { workspaceId: 'workspace-1' }, provider: 'codex', agent: 'codex' }
+          }
         ]
       ]),
       getRecord: () => null,

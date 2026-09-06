@@ -94,6 +94,7 @@ export type ClaudeControlSurface = {
   stopTask: (taskId: string, options?: ClaudeControlOptions) => Promise<void>
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
   initializationResult: (options?: ClaudeControlOptions) => Promise<unknown>
+  reinitialize: (options?: ClaudeControlOptions) => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
 }
 
@@ -144,6 +145,8 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
     initializationResult: (options) =>
       runClaudeControl('initialize', () => query.initializationResult(), options?.timeoutMs),
+    reinitialize: (options) =>
+      runClaudeControl('initialize', () => query.reinitialize(), options?.timeoutMs),
     getSettings: (options) => {
       const read = claudeQuerySettingsReader(query)
       return read

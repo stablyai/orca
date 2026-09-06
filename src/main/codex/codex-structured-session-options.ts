@@ -8,6 +8,15 @@ import type { CodexOpenedThread } from './codex-structured-thread-open'
 import type { CodexSession } from './codex-structured-session-state'
 import { isCodexTurnOptionKey } from './codex-structured-turn-start'
 import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import {
+  CODEX_SESSION_OPTION_CATALOG,
+  createCodexCatalogOptions
+} from '../../shared/agent-session-option-catalog-claude-codex'
+import { buildNativeChatSessionOptionSnapshot } from '../../shared/native-chat-session-option-snapshot'
+import {
+  applyNativeChatReportedSessionOptions,
+  createNativeChatSessionOptionRecord
+} from '../../shared/native-chat-session-option-state'
 
 const MODEL_PAGE_LIMIT = 100
 const MAX_MODEL_PAGES = 20
@@ -16,6 +25,18 @@ export function restoredCodexSessionOptions(
   options: Readonly<Record<string, string>> | undefined
 ): Map<string, string> {
   return new Map(Object.entries(options ?? {}).filter(([key]) => isCodexTurnOptionKey(key)))
+}
+
+export function codexStructuredSessionOptionUpdate(
+  key: string,
+  value: string
+): { key: string; value: string } {
+  return key === 'fastMode'
+    ? {
+        key: 'serviceTier',
+        value: value === 'true' ? 'priority' : value === 'false' ? 'default' : ''
+      }
+    : { key, value }
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -139,6 +160,48 @@ export function readLiveCodexSessionOptions(
     connection: session.connection,
     current: { ...(model ? { model } : {}), ...(effort ? { effort } : {}) },
     timeoutMs
+  }).then((result) => ({
+    ...result,
+    descriptors: codexStructuredSessionDescriptors(result, session.options.get('serviceTier'))
+  }))
+}
+
+function codexStructuredSessionDescriptors(
+  result: AgentSessionOptionsResult,
+  serviceTier: string | undefined
+) {
+  const catalog = {
+    ...CODEX_SESSION_OPTION_CATALOG,
+    defaultModelIsCliDefault: true as const,
+    models: result.models.map((model) => ({
+      id: model.id,
+      label: model.label,
+      ...(model.description ? { description: model.description } : {}),
+      ...(model.isDefault ? { isDefault: true } : {}),
+      options: createCodexCatalogOptions({
+        effortChoices: model.efforts,
+        ...(model.defaultEffort ? { defaultEffort: model.defaultEffort } : {}),
+        supportsFastMode: true
+      })
+    }))
+  }
+  const record = createNativeChatSessionOptionRecord('codex')
+  applyNativeChatReportedSessionOptions(record, {
+    model: result.current.model,
+    ...(result.current.effort ? { effort: result.current.effort } : {}),
+    ...(serviceTier === 'priority'
+      ? { fastMode: true }
+      : serviceTier === 'default'
+        ? { fastMode: false }
+        : {})
+  })
+  return buildNativeChatSessionOptionSnapshot({
+    catalog,
+    models: catalog.models,
+    record,
+    mode: 'live',
+    modelLabel: 'Model',
+    liveTransport: 'agent-session'
   })
 }
 

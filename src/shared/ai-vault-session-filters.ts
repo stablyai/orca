@@ -276,7 +276,10 @@ function getGroupIdentity(
   return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
 }
 
-function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
+export function isAiVaultSessionInWorkspacePath(
+  workspacePath: string,
+  sessionCwd: string
+): boolean {
   if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
     return true
   }

@@ -1,11 +1,14 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { StructuredAgentSessionCommandOutcome } from '../../../../shared/structured-agent-session-composer'
+import type { AgentSessionContextSnapshot } from '../../../../shared/agent-session-context'
 import type {
   SessionOptionDescriptor,
-  SessionOptionsSurface
+  SessionOptionsSurface,
+  SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
+import type { NativeChatQueuedMessage } from '../../../../shared/native-chat-queue'
 
 export type NativeChatOptionPickerRequest = {
   id: string
@@ -31,12 +34,28 @@ export type NativeChatComposerProps = {
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
+  /** Provider-reported active model for the session control. */
+  reportedModel?: string | null
+  /** Provider-reported reasoning effort for the session control. */
+  reportedEffort?: string | null
+  /** Authoritative context usage when the harness exposes it. */
+  context?: AgentSessionContextSnapshot
+  onCompactionRequested?: () => void
+  restartSession?: (values: Record<string, SessionOptionValue>) => Promise<void> | void
   /** Guard desktop sends while a mobile client owns the terminal input lease. */
   canSend?: boolean
   /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
+  /** Keep new prompts behind an existing paused/uncertain PTY queue. */
+  queueOnly?: boolean
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
+  /** Queue a prompt while a PTY-backed agent is working. */
+  onQueue?: (
+    text: string,
+    imagePaths: readonly string[],
+    kind: NativeChatQueuedMessage['kind']
+  ) => Promise<void>
   /** Render an optimistic echo until the real transcript turn lands. */
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
   /** Remove an optimistic echo when its delayed submit is canceled. */
@@ -66,6 +85,7 @@ export type NativeChatLaunchSeed = {
 export type NativeChatComposerHandle = {
   focus: () => boolean
   insertTypedText: (text: string) => boolean
+  replaceDraft: (text: string, imagePaths: readonly string[]) => void
   /** Routes pane-level paste events back to the composer field. */
   handlePasteEvent: (event: {
     clipboardData: DataTransfer | null

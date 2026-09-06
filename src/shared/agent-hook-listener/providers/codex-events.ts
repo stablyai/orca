@@ -29,7 +29,11 @@ export function buildCodexStatusPayload(
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  options: { stateName: 'working' | 'waiting' | 'done'; updateLead: boolean }
+  options: {
+    stateName: 'working' | 'waiting' | 'done'
+    updateLead: boolean
+    sessionBoundary?: boolean
+  }
 ): ParsedAgentStatusPayload | null {
   const snapshot = options.updateLead
     ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
@@ -50,6 +54,7 @@ export function buildCodexStatusPayload(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    sessionBoundary: options.sessionBoundary,
     subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
   })
 }
@@ -110,26 +115,28 @@ export function normalizeCodexEvent(
     return normalizeCodexSubagentLifecycleEvent(state, eventName, paneKey, hookPayload)
   }
 
+  const agentId = readString(hookPayload, 'agent_id')
+  const rootSessionStart = eventName === 'SessionStart' && !agentId
+
   // Why: Codex's request_user_input (0.145+) is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting like grok's ask_user_question.
   const isUserInputPreTool =
     eventName === 'PreToolUse' &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name'))
   const stateName =
-    eventName === 'SessionStart' ||
+    (eventName === 'SessionStart' && !rootSessionStart) ||
     eventName === 'UserPromptSubmit' ||
     (eventName === 'PreToolUse' && !isUserInputPreTool) ||
     eventName === 'PostToolUse'
       ? 'working'
       : eventName === 'PermissionRequest' || isUserInputPreTool
         ? 'waiting'
-        : eventName === 'Stop'
+        : rootSessionStart || eventName === 'Stop'
           ? 'done'
           : null
   if (!stateName) {
     return null
   }
 
-  const agentId = readString(hookPayload, 'agent_id')
   if (agentId) {
     upsertCodexSubagent(
       getOrCreateCodexSubagentRoster(state, paneKey),
@@ -174,6 +181,7 @@ export function normalizeCodexEvent(
   )
   return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
-    updateLead: true
+    updateLead: true,
+    sessionBoundary: rootSessionStart
   })
 }

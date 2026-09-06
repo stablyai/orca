@@ -30,6 +30,19 @@ export function decodeCodexTranscriptLine(
   const timestamp = parseTimestamp(record.timestamp)
   const baseId = extractString(payload.id) ?? fallbackId
 
+  if (record.type === 'inter_agent_communication_metadata') {
+    return {
+      id: baseId,
+      role: 'system',
+      blocks: [],
+      timestamp,
+      source: 'transcript',
+      subagentEvent: {
+        kind: 'turn-boundary',
+        triggerTurn: payload.trigger_turn === true
+      }
+    }
+  }
   if (record.type === 'response_item') {
     return codexResponseItem(payload, baseId, timestamp)
   }
@@ -57,6 +70,20 @@ function codexResponseItem(
   id: string,
   timestamp: number | null
 ): NativeChatMessage | null {
+  if (payload.type === 'agent_message') {
+    return {
+      id,
+      role: 'system',
+      blocks: [],
+      timestamp,
+      source: 'transcript',
+      subagentEvent: {
+        kind: 'agent-message',
+        author: extractString(payload.author),
+        recipient: extractString(payload.recipient)
+      }
+    }
+  }
   if (payload.type === 'message') {
     const role =
       payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : null
@@ -87,16 +114,27 @@ function codexResponseItem(
     payload.type === 'local_shell_call' ||
     payload.type === 'custom_tool_call'
   ) {
-    const name = extractString(payload.name) ?? 'tool'
+    const name =
+      extractString(payload.name) ?? (payload.type === 'local_shell_call' ? 'shell' : 'tool')
+    // Why: Codex records the orchestration wrapper as custom `exec`; native
+    // Pre/PostToolUse hooks provide the real nested operations instead.
+    if (payload.type === 'custom_tool_call' && name === 'exec') {
+      return null
+    }
+    const turnId = extractString(payload.call_id)
     return {
       id,
+      ...(turnId ? { turnId } : {}),
       role: 'assistant',
       blocks: [{ type: 'tool-call', name, input: codexCallInput(payload) }],
       timestamp,
       source: 'transcript'
     }
   }
-  if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
+  if (payload.type === 'custom_tool_call_output') {
+    return null
+  }
+  if (payload.type === 'function_call_output') {
     return {
       id,
       role: 'tool',

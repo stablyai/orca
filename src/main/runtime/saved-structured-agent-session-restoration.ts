@@ -6,10 +6,10 @@ function savedSessionId(tab: Tab): string | null {
   if (tab.executionHostId && tab.executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return null
   }
-  if (tab.agentSessionAgent === 'claude') {
-    return null
+  if (tab.structuredSessionId) {
+    return tab.agentSessionAgent === 'claude' ? null : tab.structuredSessionId
   }
-  return tab.structuredSessionId ?? (tab.contentType === 'agent-session' ? tab.entityId : null)
+  return tab.contentType === 'agent-session' ? tab.entityId : null
 }
 
 /** Visible chats restore first; closed historical journals stay lazy. */

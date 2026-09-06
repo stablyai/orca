@@ -24,7 +24,8 @@ export class CodexJournalPrompts {
 
   constructor(
     private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'bindPromptItemId'>,
-    private readonly detailFor: (threadId: string, itemId: string) => string | null
+    private readonly detailFor: (threadId: string, itemId: string) => string | null,
+    private readonly activeTurn: (threadId: string) => string | null = () => null
   ) {}
 
   handle(event: {
@@ -34,13 +35,20 @@ export class CodexJournalPrompts {
     codexItemId: string
     promptKey: string
   }): CodexJournalTranslationAdmission {
+    const turnId = this.activeTurn(event.threadId)
     if (event.method === CODEX_USER_INPUT_METHOD) {
       const questions = codexQuestionItems({
         threadId: event.threadId,
         promptKey: event.promptKey,
         params: event.params
       })
-      const promptItems = questions.map(({ identity, body }) => ({ identity, body }))
+      const promptItems = questions.map(({ identity, body }) => ({
+        identity: {
+          ...identity,
+          ...(turnId ? { turn: { turnId } } : {})
+        },
+        body
+      }))
       const admission = this.admit(event, promptItems)
       if (!admission.accepted) {
         return admission
@@ -60,6 +68,9 @@ export class CodexJournalPrompts {
       threadId: event.threadId,
       promptKey: event.promptKey
     })
+    if (turnId) {
+      identity.turn = { turnId }
+    }
     const body = codexApprovalItem({
       method: event.method,
       params: event.params,

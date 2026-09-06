@@ -1,4 +1,7 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalTurn
+} from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -9,6 +12,8 @@ import {
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
   claudeMessageBody,
+  claudeLifecycleIdentity,
+  claudeLifecycleBody,
   claudeMessageIdentity,
   claudeHasReplayContent,
   claudeRecord,
@@ -23,12 +28,7 @@ import {
   readClaudeMessageEnvelope,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import {
-  claudeApprovalItem,
-  claudePromptIdentity,
-  claudeQuestionItems
-} from './claude-structured-prompt-items'
-import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
+import { publishClaudePrompt } from './claude-structured-prompt-items'
 import { readableProviderFrameText } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import {
   CLAUDE_UNRENDERABLE_CONTENT_TEXT,
@@ -53,32 +53,9 @@ export type ClaudeJournalTranslator = {
   handle: (event: ClaudeStructuredSessionEvent) => void
   flush: () => void
   /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
+  readonly currentTurnId: string | null
   readonly pendingStreamedBlocks: number
   dispose: () => void
-}
-
-export function createClaudeSessionJournalTranslator(
-  sink: StructuredAgentSessionEventSink | undefined,
-  prompts: ClaudePromptRegistry,
-  fallbackIdPrefix: string
-): ClaudeJournalTranslator | null {
-  return sink
-    ? createClaudeJournalTranslator({
-        sink,
-        fallbackIdPrefix,
-        bindPromptItemId: (itemId, promptKey, questionId) =>
-          prompts.bindJournalItemId(itemId, promptKey, questionId)
-      })
-    : null
-}
-
-function lifecycleIdentity(sessionId: string, turnId: string): AgentJournalItemIdentity {
-  return {
-    provider: 'legacy',
-    agent: 'claude',
-    sessionId,
-    recordId: `turn-lifecycle:${turnId}`
-  }
 }
 
 export function createClaudeJournalTranslator(
@@ -88,31 +65,49 @@ export function createClaudeJournalTranslator(
   const promptItems = new Map<string, AgentJournalItemIdentity[]>()
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   let currentTurn: { sessionId: string; turnId: string } | null = null
+  let lastAssistant: AgentJournalItemIdentity | null = null
+  const sink: StructuredAgentSessionEventSink = {
+    ...deps.sink,
+    appendItem: (identity, body, options) =>
+      deps.sink.appendItem(
+        currentTurn && !identity.turn && !(body.kind === 'message' && body.role === 'user')
+          ? { ...identity, turn: { turnId: currentTurn.turnId } }
+          : identity,
+        body,
+        options
+      )
+  }
   const providerFallback = createClaudeProviderFrameFallback(
-    deps.sink,
+    sink,
     deps.fallbackIdPrefix ?? 'acquisition'
   )
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     persist: (identity, text) => {
-      deps.sink.appendItem(identity, claudeStreamingMessageBody(text))
-      deps.sink.publish()
+      const reasoning =
+        identity.provider === 'orca' && identity.clientMessageId.startsWith('claude-thinking:')
+      const body = reasoning
+        ? {
+            kind: 'message' as const,
+            role: 'reasoning' as const,
+            blocks: [{ type: 'text' as const, text }]
+          }
+        : { ...claudeStreamingMessageBody(text), assistantPhase: 'commentary' as const }
+      sink.appendItem(identity, body)
+      sink.publish()
     }
   })
 
-  const publishLifecycle = (sessionId: string, turnId: string, running: boolean): void => {
-    const identity = lifecycleIdentity(sessionId, turnId)
-    if (running) {
-      deps.sink.appendItem(identity, {
-        kind: 'status',
-        text: 'Claude is working…',
-        turnLifecycle: { turnId, state: 'running' }
-      })
-    } else {
-      deps.sink.appendTombstone(identity)
-    }
-    deps.sink.publish()
+  const publishLifecycle = (
+    sessionId: string,
+    turnId: string,
+    running: boolean,
+    outcome: 'completed' | 'interrupted' | 'failed' = 'completed'
+  ): void => {
+    const identity = claudeLifecycleIdentity(sessionId, turnId)
+    sink.appendItem(identity, claudeLifecycleBody(turnId, running, outcome))
+    sink.publish()
   }
 
   const handleStream = (message: Record<string, unknown>): boolean => {
@@ -120,14 +115,34 @@ export function createClaudeJournalTranslator(
     if (!delta) {
       return false
     }
+    if (delta.role === 'assistant' && message.parent_tool_use_id === null) {
+      lastAssistant = delta.identity
+    }
     streamedText.append(delta.identity, delta.text)
     return true
   }
 
-  const handleMessage = (message: Record<string, unknown>, startsTurn: boolean): boolean => {
+  const handleMessage = (
+    message: Record<string, unknown>,
+    startsTurn: boolean,
+    turn?: AgentJournalTurn
+  ): boolean => {
     const envelope = readClaudeMessageEnvelope(message)
     if (!envelope) {
       return false
+    }
+    if (
+      envelope.role === 'user' &&
+      startsTurn &&
+      claudeHasReplayContent(envelope) &&
+      message.parent_tool_use_id === null
+    ) {
+      if (currentTurn) {
+        publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+      }
+      lastAssistant = null
+      currentTurn = { sessionId: envelope.sessionId, turnId: envelope.uuid }
+      publishLifecycle(envelope.sessionId, envelope.uuid, true)
     }
     let changed = false
     const body = claudeMessageBody(envelope)
@@ -137,15 +152,21 @@ export function createClaudeJournalTranslator(
       claudeMessageIdentity(envelope)
     streamedText.forget(agentJournalItemKey(identity))
     if (body) {
-      deps.sink.appendItem(identity, body)
+      const ownedIdentity = turn
+        ? { ...identity, turn }
+        : startsTurn
+          ? { ...identity, turn: { turnId: envelope.uuid, root: true as const } }
+          : identity
+      if (envelope.role === 'assistant' && envelope.parentToolUseId === null) {
+        body.assistantPhase = 'commentary'
+        lastAssistant = ownedIdentity
+      }
+      sink.appendItem(ownedIdentity, body)
       changed = true
     }
     for (const tool of claudeToolUses(envelope)) {
       tools.set(tool.id, tool)
-      deps.sink.appendItem(
-        claudeToolIdentity(envelope.sessionId, tool.id),
-        claudeToolBody({ tool })
-      )
+      sink.appendItem(claudeToolIdentity(envelope.sessionId, tool.id), claudeToolBody({ tool }))
       changed = true
     }
     for (const result of claudeToolResults(envelope)) {
@@ -154,7 +175,7 @@ export function createClaudeJournalTranslator(
         name: 'tool',
         input: null
       }
-      deps.sink.appendItem(
+      sink.appendItem(
         claudeToolIdentity(envelope.sessionId, result.toolUseId),
         claudeToolBody({ tool, result })
       )
@@ -162,11 +183,21 @@ export function createClaudeJournalTranslator(
       tools.delete(result.toolUseId)
       changed = true
     }
+    if (claudeToolUses(envelope).length > 0 && envelope.parentToolUseId === null) {
+      lastAssistant = null
+    }
     const thinking = claudeThinkingText(envelope)
     if (thinking) {
-      deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
-        kind: 'status',
-        text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+      const thinkingIdentity =
+        streamedBlocks.reconcile(envelope, 'reasoning') ??
+        claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
+      streamedText.forget(agentJournalItemKey(thinkingIdentity))
+      sink.appendItem(thinkingIdentity, {
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [
+          { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+        ]
       })
       changed = true
     }
@@ -185,46 +216,10 @@ export function createClaudeJournalTranslator(
       providerFallback.append(`message:${envelope.role}:empty`, message)
       changed = true
     }
-    if (
-      envelope.role === 'user' &&
-      startsTurn &&
-      claudeHasReplayContent(envelope) &&
-      message.parent_tool_use_id === null
-    ) {
-      if (currentTurn) {
-        publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
-      }
-      currentTurn = { sessionId: envelope.sessionId, turnId: envelope.uuid }
-      publishLifecycle(envelope.sessionId, envelope.uuid, true)
-    }
     if (changed) {
-      deps.sink.publish()
+      sink.publish()
     }
     return true
-  }
-
-  const handlePrompt = (event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void => {
-    const identities: AgentJournalItemIdentity[] = []
-    if (event.prompt.kind === 'question') {
-      for (const question of claudeQuestionItems({
-        sessionId: event.sessionId,
-        prompt: event.prompt
-      })) {
-        identities.push(question.identity)
-        deps.sink.appendItem(question.identity, question.body)
-        deps.bindPromptItemId?.(agentJournalItemKey(question.identity), event.prompt.promptKey)
-      }
-    } else {
-      const identity = claudePromptIdentity({
-        sessionId: event.sessionId,
-        promptKey: event.prompt.promptKey
-      })
-      identities.push(identity)
-      deps.sink.appendItem(identity, claudeApprovalItem(event.prompt))
-      deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
-    }
-    promptItems.set(event.prompt.promptKey, identities)
-    deps.sink.publish()
   }
 
   return {
@@ -232,7 +227,12 @@ export function createClaudeJournalTranslator(
       if (event.type === 'ended') {
         streamedText.flush()
         if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+          publishLifecycle(
+            currentTurn.sessionId,
+            currentTurn.turnId,
+            false,
+            event.cause === 'unexpected-exit' ? 'failed' : 'interrupted'
+          )
           currentTurn = null
         }
         return
@@ -242,17 +242,36 @@ export function createClaudeJournalTranslator(
       }
       streamedText.flush()
       if (event.type === 'prompt') {
-        handlePrompt(event)
+        promptItems.set(
+          event.prompt.promptKey,
+          publishClaudePrompt(sink, event, deps.bindPromptItemId)
+        )
       } else if (event.type === 'prompt-cancelled') {
         for (const identity of promptItems.get(event.promptKey) ?? []) {
-          deps.sink.appendTombstone(identity)
+          sink.appendTombstone(identity)
         }
         promptItems.delete(event.promptKey)
-        deps.sink.publish()
+        sink.publish()
       } else if (event.type === 'message' && event.message.type === 'result') {
-        if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
-          currentTurn = null
+        const failure = claudeResultFailure(event.message)
+        const interrupted =
+          event.message.terminal_reason === 'aborted_streaming' ||
+          event.message.terminal_reason === 'aborted_tools'
+        const outcome = interrupted ? 'interrupted' : failure ? 'failed' : 'completed'
+        const finalText = outcome === 'completed' ? claudeText(event.message.result) : null
+        if (finalText && currentTurn) {
+          const identity =
+            lastAssistant ??
+            claudeMessageIdentity({
+              sessionId: currentTurn.sessionId,
+              uuid: claudeText(event.message.uuid) ?? `${currentTurn.turnId}:final`
+            })
+          sink.appendItem(identity, {
+            kind: 'message',
+            role: 'assistant',
+            assistantPhase: 'final',
+            blocks: [{ type: 'text', text: finalText }]
+          })
         }
         // The turn is over. A block still awaiting its final keeps the text the
         // flush above journaled, but its live state goes: an interrupted turn
@@ -261,12 +280,16 @@ export function createClaudeJournalTranslator(
         streamedText.settle()
         const kind = claudeProviderFrameKind(event.message)
         // Ordinary turn bookkeeping stays suppressed; a reported failure never does.
-        const failure = claudeResultFailure(event.message)
         if (failure || !isSettledClaudeResultKind(kind)) {
           providerFallback.append(kind, event.message, failure?.text)
         }
+        if (currentTurn) {
+          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false, outcome)
+          currentTurn = null
+        }
+        lastAssistant = null
       } else if (event.type === 'message') {
-        if (!handleMessage(event.message, event.startsTurn === true)) {
+        if (!handleMessage(event.message, event.startsTurn === true, event.turn)) {
           providerFallback.append(claudeProviderFrameKind(event.message), event.message)
         }
       } else if (event.type === 'provider-frame') {
@@ -274,6 +297,9 @@ export function createClaudeJournalTranslator(
       }
     },
     flush: streamedText.flush,
+    get currentTurnId() {
+      return currentTurn?.turnId ?? null
+    },
     get pendingStreamedBlocks() {
       return streamedText.pending
     },

@@ -4,6 +4,7 @@
 // is how a newer client's field becomes a different effect on an older host.
 
 import { z } from 'zod'
+import { STRUCTURED_MACHINE_AGENTS } from '../../../../shared/structured-agent-provider'
 import { isAgentSessionId } from '../../../../shared/agent-session-record'
 import {
   AGENT_SESSION_HISTORY_DIRECTIONS,
@@ -55,6 +56,13 @@ const ProviderHandle = z.discriminatedUnion('kind', [
       sessionId: Identifier('Invalid provider session id'),
       leafUuid: Identifier('Invalid leaf uuid').nullable()
     })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('acp'),
+      agent: Identifier('Invalid agent'),
+      sessionId: Identifier('Invalid provider session id')
+    })
     .strict()
 ])
 
@@ -77,7 +85,7 @@ const ExecutionLocation = z
 
 const AccountHome = z
   .object({
-    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME']),
+    variable: z.enum(['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HOME']),
     path: z.string().min(1).max(4096)
   })
   .strict()
@@ -86,7 +94,7 @@ export const AttachParams = z
   .object({
     envelope: MutationEnvelope,
     location: ExecutionLocation,
-    provider: z.enum(['codex', 'claude']),
+    provider: z.enum(['codex', 'claude', 'acp']),
     agent: Identifier('Invalid agent'),
     accountHome: AccountHome,
     runtimeKind: z.enum(['native', 'tui']),
@@ -98,7 +106,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex'])
+    agent: z.enum(STRUCTURED_MACHINE_AGENTS)
   })
   .strict()
 
@@ -107,7 +115,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex'])
+    agent: z.enum(STRUCTURED_MACHINE_AGENTS)
   })
   .strict()
 
@@ -130,22 +138,24 @@ const SendBlock = z.discriminatedUnion('type', [
     )
 ])
 
-export const SendParams = z
+const SendBody = z
   .object({
-    envelope: MutationEnvelope,
-    retryUnknown: z.literal(true).optional(),
-    body: z
-      .object({
-        kind: z.literal('message'),
-        role: z.literal('user'),
-        blocks: z.array(SendBlock).min(1).max(MAX_BLOCKS)
-      })
-      .strict()
-      .refine(
-        (value) => Buffer.byteLength(JSON.stringify(value.blocks), 'utf8') <= MAX_PROMPT_BYTES,
-        'Message is too large'
-      )
+    kind: z.literal('message'),
+    role: z.literal('user'),
+    blocks: z.array(SendBlock).min(1).max(MAX_BLOCKS)
   })
+  .strict()
+  .refine(
+    (value) => Buffer.byteLength(JSON.stringify(value.blocks), 'utf8') <= MAX_PROMPT_BYTES,
+    'Message is too large'
+  )
+
+export const SendParams = z
+  .object({ envelope: MutationEnvelope, retryUnknown: z.literal(true).optional(), body: SendBody })
+  .strict()
+
+export const SteerParams = z
+  .object({ envelope: MutationEnvelope, retryUnknown: z.literal(true).optional(), body: SendBody })
   .strict()
 
 export const CancelParams = z

@@ -12,6 +12,7 @@ type TranscriptWatchSchedulerOptions = {
 export type TranscriptWatchScheduler = {
   scheduleEventDrain: () => void
   scheduleRetry: (delayMs: number) => boolean
+  scheduleRotationRetry: (retryCount: number) => number
   startReconciliation: () => void
   dispose: () => void
 }
@@ -81,6 +82,10 @@ export function createTranscriptWatchScheduler(
       firstEventAt = null
       armDrain(delayMs)
       return true
+    },
+    scheduleRotationRetry(retryCount: number): number {
+      const delay = Math.min(25 * 2 ** Math.min(retryCount, 7), 2_000)
+      return this.scheduleRetry(delay) ? retryCount + 1 : retryCount
     },
     startReconciliation(): void {
       armReconciliation()

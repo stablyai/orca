@@ -27,6 +27,7 @@ describe('OrcaRuntimeService', () => {
           'ssh:target-1': { displayLabel: 'Build host', defaultWorktreeLocation: '/srv/worktrees' }
         },
         experimentalNewWorktreeCardStyle: true,
+        experimentalRoomLiveSteering: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
@@ -37,6 +38,7 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getClientSettings()).toMatchObject({
       worktreeVisibilityDefaults: { external: 'hide' },
       experimentalNewWorktreeCardStyle: true,
+      experimentalRoomLiveSteering: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
@@ -120,6 +122,7 @@ describe('OrcaRuntimeService', () => {
     let settings = {
       ...store.getSettings(),
       experimentalNewWorktreeCardStyle: false,
+      experimentalRoomLiveSteering: false,
       compactWorktreeCards: false,
       minimaxGroupId: '',
       minimaxUsageModels: 'general'
@@ -137,12 +140,14 @@ describe('OrcaRuntimeService', () => {
     expect(
       await runtime.updateClientSettings({
         experimentalNewWorktreeCardStyle: true,
+        experimentalRoomLiveSteering: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5'
       })
     ).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
+      experimentalRoomLiveSteering: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'
@@ -150,6 +155,7 @@ describe('OrcaRuntimeService', () => {
     expect(updateSettings).toHaveBeenCalledWith(
       {
         experimentalNewWorktreeCardStyle: true,
+        experimentalRoomLiveSteering: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5'
@@ -158,6 +164,7 @@ describe('OrcaRuntimeService', () => {
     )
     expect(runtime.getClientSettings()).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
+      experimentalRoomLiveSteering: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5'

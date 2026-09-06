@@ -81,6 +81,7 @@ function launchIntent(
     worktreeId,
     sessionId,
     agent: 'codex',
+    target: { kind: 'local' },
     params: {
       envelope: {
         sessionId,
@@ -137,6 +138,43 @@ describe('startStructuredAgentLaunch', () => {
     })
   })
 
+  it('applies selected options before dispatching the launch prompt', async () => {
+    const worktreeId = 'wt-selected-options'
+    const intent = launchIntent(worktreeId)
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValue({ sessionId: intent.sessionId, fence: 7 })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
+    mocks.callStructuredAgentSession.mockImplementation(async (_target, method) => {
+      if (method === 'agentSession.options') {
+        return {
+          models: [],
+          current: { model: '' },
+          descriptors: [{ id: 'effort', settable: true }]
+        }
+      }
+      if (method === 'agentSession.history') {
+        return { page: { fence: 7 } }
+      }
+      return { ok: true, value: { submission: { dispatchState: 'accepted' } } }
+    })
+    const launch = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'ready',
+      sessionOptions: { effort: 'high' }
+    })
+    await expect(launch.promptDeliveryResult).resolves.toMatchObject({ delivered: true })
+    const methods = mocks.callStructuredAgentSession.mock.calls.map(([, method]) => method)
+    expect(methods.indexOf('agentSession.setOption')).toBeLessThan(
+      methods.indexOf('agentSession.send')
+    )
+    expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'agentSession.setOption',
+      expect.objectContaining({ key: 'effort', value: 'high' })
+    )
+  })
+
   it('opens the chat without an informational progress toast', async () => {
     const worktreeId = 'wt-open-quiet'
     const intent = launchIntent(worktreeId, 'session-1')
@@ -173,8 +211,20 @@ describe('startStructuredAgentLaunch', () => {
     const codex = startStructuredAgentLaunch(worktreeId, 'codex')
     await flushLaunchSettlement()
 
-    expect(mocks.createIntent).toHaveBeenNthCalledWith(1, worktreeId, 'claude')
-    expect(mocks.createIntent).toHaveBeenNthCalledWith(2, worktreeId, 'codex')
+    expect(mocks.createIntent).toHaveBeenNthCalledWith(
+      1,
+      worktreeId,
+      'claude',
+      { kind: 'local' },
+      undefined
+    )
+    expect(mocks.createIntent).toHaveBeenNthCalledWith(
+      2,
+      worktreeId,
+      'codex',
+      { kind: 'local' },
+      undefined
+    )
     expect(mocks.launch).toHaveBeenCalledTimes(2)
     expect(vi.mocked(mocks.launch).mock.calls.map(([intent]) => intent.params.agent)).toEqual([
       'claude',

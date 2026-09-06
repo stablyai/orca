@@ -223,7 +223,11 @@ describe('codex journal translation', () => {
         turnLifecycle: { turnId: TURN_ID, state: 'running' }
       }),
       expect.objectContaining({ kind: 'tool-call', state: 'running' }),
-      expect.objectContaining({ kind: 'tool-call', state: 'failed' })
+      expect.objectContaining({ kind: 'tool-call', state: 'failed' }),
+      expect.objectContaining({
+        kind: 'status',
+        turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'completed' }
+      })
     ])
     expect(publishes).toHaveLength(1)
   })
@@ -275,7 +279,10 @@ describe('codex journal translation', () => {
         kind: 'approval',
         resolution: expect.objectContaining({ state: 'cancelled' })
       }),
-      { kind: 'status', text: 'Provider exited: lost child' }
+      { kind: 'status', text: 'Provider exited: lost child' },
+      expect.objectContaining({
+        turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'failed' }
+      })
     ])
     expect(publishes).toHaveLength(1)
   })
@@ -349,7 +356,11 @@ describe('codex journal translation', () => {
         expect.objectContaining({
           body: { kind: 'status', text: 'Provider exited: lost child' }
         }),
-        expect.objectContaining({ kind: 'tombstone' })
+        expect.objectContaining({
+          body: expect.objectContaining({
+            turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'failed' }
+          })
+        })
       ])
     )
   })
@@ -422,7 +433,12 @@ describe('codex journal translation', () => {
       kind: 'item',
       body: { kind: 'status', text: 'Provider exited: lost child' }
     })
-    expect(flattened.at(-1)).toMatchObject({ kind: 'tombstone' })
+    expect(flattened.at(-1)).toMatchObject({
+      kind: 'item',
+      body: expect.objectContaining({
+        turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'failed' }
+      })
+    })
     expectLifecycleBatchBounds(batches)
   })
 
@@ -543,13 +559,16 @@ describe('codex journal translation', () => {
             })
           }),
           expect.objectContaining({
-            kind: 'tombstone',
+            kind: 'item',
             identity: {
               provider: 'legacy',
               agent: 'codex',
               sessionId: SESSION_ID,
               recordId: `turn-lifecycle:${TURN_ID}`
-            }
+            },
+            body: expect.objectContaining({
+              turnLifecycle: { turnId: TURN_ID, state: 'completed', outcome: 'completed' }
+            })
           })
         ]
       }
@@ -789,8 +808,9 @@ describe('codex journal translation', () => {
 
     const reduced = new Map(tap.rows.map((row) => [row.key, row.body]))
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

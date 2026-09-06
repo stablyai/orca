@@ -18,12 +18,15 @@ import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-comman
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatQueuedMessage } from '../../../../shared/native-chat-queue'
 
 export function useNativeChatPtyComposerSend(args: {
   agent: AgentType
   draft: string
   imageAttachments: readonly { path: string }[]
   disabled: boolean
+  isWorking: boolean
+  queueOnly: boolean
   isDispatchingSessionOption: boolean
   launchDraft?: NativeChatLaunchDraft | null
   launchDraftResolved: boolean
@@ -31,6 +34,11 @@ export function useNativeChatPtyComposerSend(args: {
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
   onOptimisticSend?: (text: string, imagePaths?: string[]) => string | undefined
+  onQueue?: (
+    text: string,
+    imagePaths: readonly string[],
+    kind: NativeChatQueuedMessage['kind']
+  ) => Promise<void>
   onSlashCommand?: (command: string) => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   terminalTabId: string
@@ -57,6 +65,22 @@ export function useNativeChatPtyComposerSend(args: {
       return
     }
     const classification = args.classifySend(text)
+    const finish = (): void => {
+      args.setHistory((previous) => pushHistory(previous, text))
+      args.setDraft('')
+      args.setCaret(0)
+      args.clearSkillOrigin()
+      args.clearImageAttachments()
+      args.setNotice(null)
+      useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
+    }
+    if ((args.isWorking || args.queueOnly) && args.onQueue) {
+      void args
+        .onQueue(text, imagePaths, classification === 'command' ? 'command' : 'chat')
+        .then(finish)
+        .catch((cause) => args.setNotice(cause instanceof Error ? cause.message : String(cause)))
+      return
+    }
     const { sendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
@@ -101,12 +125,6 @@ export function useNativeChatPtyComposerSend(args: {
       agent: args.agent,
       runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
     })
-    args.setHistory((previous) => pushHistory(previous, text))
-    args.setDraft('')
-    args.setCaret(0)
-    args.clearSkillOrigin()
-    args.clearImageAttachments()
-    args.setNotice(null)
-    useAppStore.getState().clearNativeChatLaunchDraft(args.terminalTabId)
+    finish()
   }, [args])
 }

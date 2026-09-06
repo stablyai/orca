@@ -119,6 +119,42 @@ describe('useStructuredAgentSession options', () => {
     })
   })
 
+  it('rereads provider descriptors instead of echoing an accepted option', async () => {
+    const descriptors = [
+      {
+        id: 'fast',
+        label: 'Fast mode',
+        category: 'mode' as const,
+        kind: { type: 'boolean' as const, currentValue: false },
+        valueSource: 'reported' as const,
+        settable: true
+      }
+    ]
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options'
+        ? Promise.resolve({ ...OPTIONS, descriptors })
+        : Promise.resolve({
+            ok: true,
+            value: { key: 'fast', value: 'true', options: { fast: 'true' } }
+          })
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'omp',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toEqual(descriptors))
+
+    await act(async () => {
+      expect(await result.current.setStructuredOption('fast', true)).toBe(true)
+    })
+
+    expect(result.current.optionSnapshot[0]?.kind).toMatchObject({ currentValue: false })
+  })
+
   it('surfaces a rejected option transport call and clears pending state', async () => {
     mocks.call.mockImplementation((_target, method) =>
       method === 'agentSession.options'

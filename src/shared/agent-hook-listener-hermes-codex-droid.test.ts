@@ -234,6 +234,21 @@ describe('shared agent-hook-listener', () => {
     expect(working?.payload.interactivePrompt).toBeUndefined()
   })
 
+  it('maps a root Codex SessionStart to an idle session boundary', () => {
+    const started = normalizeHookPayload(
+      state,
+      'codex',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart' } },
+      'production'
+    )
+
+    expect(started?.payload).toMatchObject({
+      agentType: 'codex',
+      state: 'done',
+      sessionBoundary: true
+    })
+  })
+
   it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
     normalizeHookPayload(
       state,

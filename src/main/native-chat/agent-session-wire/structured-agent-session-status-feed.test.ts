@@ -48,7 +48,11 @@ async function openJournal(sessionId = SESSION) {
 function indexed(session: { journal: Awaited<ReturnType<typeof openJournal>> }) {
   return {
     journal: session.journal,
-    params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
+    params: {
+      location: { workspaceId: 'workspace-1' },
+      provider: 'codex' as const,
+      agent: 'codex' as const
+    }
   }
 }
 
@@ -75,6 +79,24 @@ function feedFor(sessions: Map<string, { journal: Awaited<ReturnType<typeof open
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it.each(['openclaude', 'grok', 'omp'])(
+    'publishes the %s agent, not its transport provider',
+    async (agent) => {
+      const journal = await openJournal()
+      const session = indexed({ journal })
+      const feed = new StructuredAgentSessionStatusFeed({
+        sessions: new Map([
+          [SESSION, { ...session, params: { ...session.params, agent, provider: 'acp' as const } }]
+        ]),
+        getRecord: () => null,
+        now: () => 1_000
+      })
+      const events: AgentSessionStatusEvent[] = []
+      feed.subscribe({ id: 'machine', emit: (event) => events.push(event) })
+      expect(events[0]).toMatchObject({ type: 'snapshot', sessions: [{ agent }] })
+    }
+  )
+
   it('opens with every readable session and reports no status before a persisted turn', async () => {
     const journal = await openJournal()
     const { events } = feedFor(new Map([[SESSION, { journal }]]))

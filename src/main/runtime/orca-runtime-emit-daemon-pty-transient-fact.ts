@@ -83,12 +83,17 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     if (!this.terminalSideEffectConsumerAvailable || facts.length === 0) {
       return
     }
+    const attribution = this.resolveTerminalSideEffectAttribution(ptyId)
+    const roomDeliveryId = attribution.paneKey
+      ? this.getRoomDeliveryIdForPaneKey?.(attribution.paneKey)
+      : undefined
     const batch: TerminalSideEffectBatch = {
       ptyId,
       seq: this.ptyOutputSequenceById.get(ptyId) ?? 0,
       facts,
       ...(options.replay ? { replay: true } : {}),
-      ...this.resolveTerminalSideEffectAttribution(ptyId)
+      ...attribution,
+      ...(roomDeliveryId ? { roomDeliveryId } : {})
     }
     if (this.terminalSideEffectLocalConsumerAvailable) {
       try {

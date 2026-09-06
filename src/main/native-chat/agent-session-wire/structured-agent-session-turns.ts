@@ -17,6 +17,7 @@ import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
+import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -46,10 +47,11 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
 async function dispatchSafely(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) => ctx.adapter.dispatch(input)
 ): Promise<AgentSessionDispatchOutcome> {
   try {
-    return await ctx.adapter.dispatch({
+    return await dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
@@ -80,6 +82,7 @@ export async function performSend(
     payloadFingerprint: string
     body: AgentJournalMessageItem
     retryUnknown?: true
+    dispatch?: StructuredAgentSessionAdapter['dispatch']
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -99,7 +102,7 @@ export async function performSend(
     ctx.publish()
   }
 
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body, input.dispatch)
   try {
     await ctx.journal.resolveDispatch(
       outcome.state === 'accepted'
@@ -142,6 +145,28 @@ export async function performSend(
     throw new Error('agent_session_submission_lost')
   }
   return { ok: true, value: { clientMessageId: input.clientMessageId, submission } }
+}
+
+export function performSteer(
+  ctx: AgentSessionTurnContext,
+  input: {
+    clientMessageId: string
+    payloadFingerprint: string
+    body: AgentJournalMessageItem
+    retryUnknown?: true
+  }
+): Promise<TurnOutcome<AgentSessionSendResult>> {
+  const turnId = activeStructuredAgentSessionTurnId(ctx.journal.snapshot().items)
+  if (!turnId) {
+    return performSend(ctx, input)
+  }
+  if (!ctx.adapter.steer) {
+    return Promise.resolve(invalid('The provider does not support steering.'))
+  }
+  return performSend(ctx, {
+    ...input,
+    dispatch: (dispatchInput) => ctx.adapter.steer!({ ...dispatchInput, turnId })
+  })
 }
 
 export async function performCancel(

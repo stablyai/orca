@@ -2,13 +2,15 @@ import React from 'react'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { isStructuredMachineAgent } from '../../../../shared/structured-agent-provider'
 import type { OpenFile } from '../../store/slices/editor'
 import { canSwitchNativeChatView } from '../native-chat/native-chat-availability'
 import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
+import { useAppStore } from '../../store'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
 import BrowserTab from './BrowserTab'
+import { RoomTab } from './RoomTab'
 import type { DropIndicator } from './drop-indicator'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, type TabBarItem } from './tab-bar-item-model'
@@ -77,10 +79,12 @@ export function renderTabBarItems({
   // Why: this is the strip's single activation fan-out, so retiring a client-hosted placeholder
   // here covers every row kind — including re-clicking the tab that was already active, which the
   // group's activeTabId never moves for.
-  function activateRealTab<TArg>(activate: ((arg: TArg) => void) | undefined): (arg: TArg) => void {
-    return (arg) => {
+  function activateRealTab<TArgs extends unknown[]>(
+    activate: ((...args: TArgs) => void) | undefined
+  ): (...args: TArgs) => void {
+    return (...args) => {
       clearClientHostedBrowserRowSelection()
-      activate?.(arg)
+      activate?.(...args)
     }
   }
 
@@ -186,6 +190,24 @@ export function renderTabBarItems({
         />
       )
     }
+    if (item.type === 'room') {
+      return (
+        <RoomTab
+          key={item.id}
+          tab={item.data}
+          isActive={
+            !clientHostedRowOwnsActiveState && runtime.activeGroupTabId === item.unifiedTabId
+          }
+          hasTabsToRight={index < items.length - 1}
+          onActivate={activateRealTab(() => {
+            useAppStore.getState().activateTab(item.unifiedTabId, { worktreeId })
+          })}
+          onClose={() => {
+            useAppStore.getState().closeUnifiedTab(item.unifiedTabId)
+          }}
+        />
+      )
+    }
     if (item.type === 'simulator') {
       const simulatorLabel = item.data.label || 'Mobile Emulator'
       const simulatorFile: OpenFile & { tabId: string } = {
@@ -237,7 +259,7 @@ export function renderTabBarItems({
         color: item.data.color,
         sortOrder: item.data.sortOrder,
         createdAt: item.data.createdAt,
-        ...(isAgentSessionHandleProvider(item.data.agentSessionAgent)
+        ...(isStructuredMachineAgent(item.data.agentSessionAgent ?? '')
           ? { launchAgent: item.data.agentSessionAgent as TuiAgent }
           : {})
       }

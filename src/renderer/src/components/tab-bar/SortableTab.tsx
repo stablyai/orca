@@ -115,10 +115,9 @@ export default function SortableTab({
 
   // Why: use hook status + title evidence so the icon reflects the harness running now, not just the launch command.
   const tabAgent = useTabAgent(tab)
-
   // Why: with a provider icon shown, strip the agent's own leading glyph so the tab doesn't show two icons for one agent.
-  const displayTitle =
-    tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
+  const tabTitle = tab.customTitle ?? tab.title
+  const displayTitle = tabAgent ? stripLeadingAgentTitleDecoration(tabTitle) : tabTitle
 
   const { attributes, listeners, setNodeRef } = useSortable({
     id: tab.id,
@@ -175,7 +174,6 @@ export default function SortableTab({
   })
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeLabel = translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
-  const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
       ref={setNodeRef}

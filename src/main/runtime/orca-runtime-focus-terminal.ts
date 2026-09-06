@@ -8,7 +8,7 @@ import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution
 export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {
   async focusTerminal(
     handle: string,
-    options: { navigateHost?: boolean } = {}
+    options: { navigateHost?: boolean; viewMode?: 'terminal' | 'chat' } = {}
   ): Promise<RuntimeTerminalFocus> {
     const navigateHost = options.navigateHost !== false
     const livePtyIdentity = (): RuntimeTerminalFocus => {
@@ -78,11 +78,20 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyI
           const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
             ptyId: live.pty.ptyId,
             title: getLatestPtyTitle(live.pty),
+            ...(options.viewMode ? { viewMode: options.viewMode } : {}),
             ...(live.pty.launchConfig
-              ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
+              ? {
+                  launchConfig: {
+                    ...copySleepingAgentLaunchConfig(live.pty.launchConfig),
+                    ...(options.viewMode ? { viewMode: options.viewMode } : {})
+                  }
+                }
               : {}),
             ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
             ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
+            ...(this.shouldPreserveTerminalSessionOnClose?.(handle)
+              ? { preserveSessionOnClose: true }
+              : {}),
             ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
             ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
           })

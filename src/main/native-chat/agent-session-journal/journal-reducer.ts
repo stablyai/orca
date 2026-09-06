@@ -18,6 +18,7 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { agentJournalIdentityTurn } from '../../../shared/agent-session-journal-turn'
 import type { JournalRow } from './journal-row-schema'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
@@ -70,6 +71,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
       body: row.body,
       sequence: row.seq,
       observedAt: row.ts,
+      ...(row.turn ? { turn: row.turn } : {}),
       ...(row.recovered ? { recovered: row.recovered } : {})
     })
     return
@@ -91,6 +93,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
           body: mutation.body,
           sequence: row.seq,
           observedAt: row.ts,
+          ...(mutation.turn ? { turn: mutation.turn } : {}),
           ...(row.recovered ? { recovered: row.recovered } : {})
         })
       } else {
@@ -140,16 +143,23 @@ export function resolveJournalItemId(
   ) {
     return itemId
   }
-  const fingerprint = structuredAgentSessionPayloadFingerprint({
-    method: 'agentSession.send',
-    sessionId: state.sessionId,
-    fields: { body }
-  })
+  const fingerprints = new Set(
+    ['agentSession.send', 'agentSession.steer'].map((method) =>
+      structuredAgentSessionPayloadFingerprint({
+        method,
+        sessionId: state.sessionId,
+        fields: { body }
+      })
+    )
+  )
   // Exact payload plus queue order preserves repeated identical sends one-for-one.
   const submission = [...state.submissions.values()]
     .sort((left, right) => left.submittedAt - right.submittedAt)
     .find((candidate) => {
-      if (candidate.dispatchState === 'rejected' || candidate.payloadFingerprint !== fingerprint) {
+      if (
+        candidate.dispatchState === 'rejected' ||
+        !fingerprints.has(candidate.payloadFingerprint)
+      ) {
         return false
       }
       return state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
@@ -185,12 +195,21 @@ function upsertItem(
     state.tombstones.delete(itemId)
     return
   }
-  // Creation sequence is the ordering key; a revision refreshes content only.
-  // `observedAt` is pinned with it: clients sort the timeline by that timestamp,
-  // so letting a revision advance it makes the row jump past everything that
-  // landed in between — the provider's own echo of a send revises the submission
-  // row, which relocated the user's bubble below later rows.
-  state.items.set(itemId, { ...next, sequence: existing.sequence, observedAt: existing.observedAt })
+  // Keep creation ordering stable while retaining the latest revision time.
+  state.items.set(itemId, {
+    ...next,
+    sequence: existing.sequence,
+    observedAt: existing.observedAt,
+    updatedAt: next.observedAt,
+    ...(next.turn || existing.turn
+      ? {
+          turn:
+            next.turn && existing.turn?.turnId === next.turn.turnId
+              ? { ...existing.turn, ...next.turn }
+              : (next.turn ?? existing.turn)
+        }
+      : {})
+  })
   state.tombstones.delete(itemId)
 }
 
@@ -251,6 +270,13 @@ function applyDispatch(
     return
   }
   state.aliases.set(row.providerItemId, agentJournalSubmissionKey(row.clientMessageId))
+  const identity = parseAgentJournalItemKey(row.providerItemId)
+  const turn = row.turn ?? (identity ? agentJournalIdentityTurn(identity) : undefined)
+  const itemId = agentJournalSubmissionKey(row.clientMessageId)
+  const item = state.items.get(itemId)
+  if (item && turn) {
+    state.items.set(itemId, { ...item, turn })
+  }
   state.receipts.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     providerItemId: row.providerItemId,

@@ -3,17 +3,22 @@ import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-l
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
-  ingestTerminalStatus(event: {
-    paneKey: string
-    tabId?: string
-    worktreeId?: string
-    connectionId?: string | null
-    payload: ParsedAgentStatusPayload
-  }): void {
+  ingestTerminalStatus(
+    event: {
+      paneKey: string
+      tabId?: string
+      worktreeId?: string
+      connectionId?: string | null
+      providerSession?: AgentProviderSessionMetadata
+      payload: ParsedAgentStatusPayload
+    },
+    options?: { force?: boolean }
+  ): void {
     const physicalPaneKey = event.paneKey.trim()
     const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
@@ -61,6 +66,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous?.payload.turnCompletedAt !== undefined &&
       previous.payload.turnCompletedAt === this.activeHookTurnCompletedAtByPaneKey.get(paneKey)
     if (
+      !options?.force &&
       !previous?.restoredUnconfirmed &&
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
@@ -94,7 +100,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         tabId,
         worktreeId,
         connectionId,
-        ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+        ...((event.providerSession ?? preservedProviderSession)
+          ? { providerSession: event.providerSession ?? preservedProviderSession }
+          : {}),
         payload: event.payload
       },
       undefined,

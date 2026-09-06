@@ -68,7 +68,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: SSH relay providers register after construction and may reconnect, so destructive cleanup must resolve the current generation.
     getSshProvider: (connectionId) => getSshPtyProvider(connectionId),
     onPtyStopped: clearProviderPtyState,
-    onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
+    onTerminalAgentStatus: (event) =>
+      agentHookServer.ingestTerminalStatus(event, { force: event.force }),
     // Why: serve can be promoted in place, so wire the listener from startup; runtime enables desktop-only scanners only for a ready renderer.
     onTerminalSideEffects: (batch: TerminalSideEffectBatch) => {
       if (state.mainWindow && !state.mainWindow.isDestroyed()) {
@@ -78,7 +79,13 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     getDesktopWindowStatus,
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
-      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+      agentHookServer
+        .getStatusSnapshot()
+        .filter(
+          (entry) =>
+            entry.providerSessionOnly !== true &&
+            runtime.shouldPublishAgentStatusToRenderer(entry.paneKey) !== false
+        ),
     // Why: the filter above hides resume-identity rows from the live-agent views, but
     // those rows carry the provider session mobile native chat addresses transcripts
     // by — Pi publishes identity that way and would otherwise be unreachable.
@@ -115,6 +122,16 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     skillTransactionRecovery: state.skillTransactionRecovery
   })
   state.runtime = runtime
+  runtime.getRoomService()
+  store.onSettingsChanged((updates) => {
+    if (
+      'experimentalStructuredNativeChat' in updates ||
+      'experimentalRoomLiveSteering' in updates ||
+      'enabledHarnessStreamingAgents' in updates
+    ) {
+      runtime.getRoomService().wakeDeliveries()
+    }
+  })
   runtime.prepareLegacyWorkerTerminalRecovery()
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.

@@ -149,6 +149,9 @@ async function importTuiHistory(
   if (!record || !head) {
     throw new Error('agent_session_identity_required')
   }
+  if (head.handle.provider === 'acp') {
+    throw new Error('agent_session_handoff_unsupported')
+  }
   const options = structuredTuiTranscriptImportOptions(record, input.transcriptPath)
   const providerSessionId =
     head.handle.provider === 'claude' ? head.handle.sessionId : head.handle.threadId
@@ -171,6 +174,9 @@ export function structuredTuiTranscriptImportOptions(
 ): LegacyImportOptions {
   if (transcriptPath) {
     return { filePath: transcriptPath }
+  }
+  if (record.provider === 'acp') {
+    throw new Error('agent_session_handoff_unsupported')
   }
   return record.provider === 'claude'
     ? { claudeProjectsDir: join(record.accountHome.path, 'projects') }

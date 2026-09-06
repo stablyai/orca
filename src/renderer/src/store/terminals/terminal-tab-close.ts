@@ -24,7 +24,8 @@ export function createTerminalTabCloseActions(
   return {
     closeTab: (tabId, opts) => {
       const closeReason = opts?.reason ?? 'user'
-      const retiresSession = closeReason === 'user' || closeReason === 'cleanup'
+      const retiresSession =
+        !opts?.preserveSessionOnClose && (closeReason === 'user' || closeReason === 'cleanup')
       const retirementPlan =
         opts?.precomputedRetirementPlan?.tabId === tabId
           ? opts.precomputedRetirementPlan
@@ -85,6 +86,7 @@ export function createTerminalTabCloseActions(
             : undefined
         const capturedSnapshot =
           closeReason === 'user' &&
+          !opts?.preserveSessionOnClose &&
           opts?.captureRecentlyClosed !== false &&
           closedTab &&
           closedWorktreeId
@@ -278,7 +280,9 @@ export function createTerminalTabCloseActions(
         }
       })
       // Why shared with the paired snapshot apply: every path that removes a tab owes it the same sweep, and a second copy of the list is how one path silently misses a new entry.
-      sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)
+      if (!opts?.preserveSessionOnClose) {
+        sweepRetiredTerminalTabState(get(), tabId, closingWorktreeId)
+      }
       for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
         const workspaceItem = tabs.find(
           (entry) => entry.contentType === 'terminal' && entry.entityId === tabId

@@ -56,7 +56,7 @@ function claudeProjectsDirs(): string[] {
 // WSL roots are a separate lazy tier — see resolveCodexSessionFile.
 // Why: resolveOrcaManagedCodexHomePath avoids the mkdirSync performed by the
 // getter; creating the runtime home belongs to launch, not this resolve poll.
-function codexSessionsDirs(): string[] {
+export function codexSessionsDirs(): string[] {
   const candidates = [
     join(resolveOrcaManagedCodexHomePath(), 'sessions'),
     join(process.env.CODEX_HOME?.trim() || join(homedir(), '.codex'), 'sessions')

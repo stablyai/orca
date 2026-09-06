@@ -1,3 +1,4 @@
+import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session-wire'
 import {
   launchStructuredAgentSession,
@@ -35,6 +36,22 @@ async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Pro
   if (hasAdoptedStructuredSession(state.intent)) {
     return
   }
+  if (state.intent.target.kind === 'environment') {
+    await refreshWebRuntimeSessionTabsSnapshot(
+      state.intent.target.environmentId,
+      state.intent.worktreeId,
+      {
+        acceptCurrentSnapshot: true,
+        afterCurrentInFlight: true,
+        errorMode: 'throw'
+      }
+    )
+    throwIfLaunchCancelled(state)
+    if (!hasAdoptedStructuredSession(state.intent)) {
+      throw new Error('structured session tab publication unavailable')
+    }
+    return
+  }
   const snapshots = await refreshLocalStructuredSessionTabs()
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
@@ -67,7 +84,7 @@ async function recoverPublishedSessionReceipt(
 ): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
   const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
-    { kind: 'local' },
+    state.intent.target,
     'agentSession.history',
     { sessionId: state.intent.sessionId, direction: 'tail', limit: 1 }
   )

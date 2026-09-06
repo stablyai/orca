@@ -49,6 +49,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   promptInteractionKey?: string
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** Room delivery owning the current terminal turn. */
+  roomDeliveryId?: string
 } & WithAgentStatusObservation
 
 /** Identity used by UI-only cleanup to evict exactly the status it cleared.
@@ -63,7 +65,7 @@ export type AgentStatusCacheIdentity = {
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =
-  | { paneKey: string }
+  | { paneKey: string; rendererSurfaceHidden?: true }
   | {
       transient: true
       connectionId: string

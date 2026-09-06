@@ -464,6 +464,30 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     })
   })
 
+  it('steers the expected active turn without starting another turn', async () => {
+    const codex = fakeCodex({ 'turn/steer': () => ({ turn: { id: 'turn-1' } }) })
+    const adapter = await acquired(codex)
+
+    const outcome = await adapter.steer!({
+      sessionId: 'session-1',
+      clientMessageId: 'client-2',
+      body: USER_MESSAGE,
+      turnId: 'turn-1',
+      fence: 7
+    })
+
+    expect(outcome.state).toBe('accepted')
+    expect(codex.connections[0].calls.at(-1)).toMatchObject({
+      method: 'turn/steer',
+      params: {
+        threadId: THREAD_ID,
+        expectedTurnId: 'turn-1',
+        clientUserMessageId: 'client-2'
+      }
+    })
+    expect(codex.connections[0].calls.some((call) => call.method === 'turn/start')).toBe(false)
+  })
+
   it('accepts a turn named only by the notification that raced the ack', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []

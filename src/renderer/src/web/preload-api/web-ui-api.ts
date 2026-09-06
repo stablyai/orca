@@ -119,6 +119,15 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       ),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
+    readClipboardImage: async () => {
+      const contentBase64 = await readClipboardImagePngBase64()
+      return contentBase64
+        ? {
+            content: Uint8Array.from(atob(contentBase64), (value) => value.charCodeAt(0)).buffer,
+            mimeType: 'image/png' as const
+          }
+        : null
+    },
     saveClipboardImageAsTempFile: async (args?: {
       connectionId?: string | null
       runtimeEnvironmentId?: string | null
@@ -227,6 +236,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onMobileMarkdownRequest: () => noopUnsubscribe,
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
+    notifyTerminalSurfaceClosed: () => {},
     onTerminalTabCloseRequest: () => noopUnsubscribe,
     respondTerminalTabClose: () => {},
     onSleepWorktree: () => noopUnsubscribe,

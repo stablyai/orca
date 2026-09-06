@@ -188,7 +188,9 @@ describe('ai vault resume command runtime', () => {
       }
     })
 
-    expect(command).toBe("omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'")
+    expect(command).toBe(
+      "omp '--yolo' --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
+    )
     expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
   })
 
@@ -210,7 +212,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
+    ).toBe('omp "--yolo" --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
   })
 
   it('copies syntax that matches the configured cmd shell', () => {
@@ -509,7 +511,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
+    ).toBe("omp '--yolo' --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
   })
 
   it('deletes inherited Codex homes when resuming a real-home session', () => {

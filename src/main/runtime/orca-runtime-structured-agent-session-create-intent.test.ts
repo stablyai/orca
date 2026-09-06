@@ -172,4 +172,48 @@ describe('structured agent-session create intent', () => {
       path: '/accounts/managed/claude-home'
     })
   })
+  it('turns an existing provider session into an authoritative resume intent', async () => {
+    const runtime = new OrcaRuntimeService({
+      getSettings: () => ({ agentDefaultEnv: {} })
+    } as never)
+    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
+      supported: true
+    })
+    const internal = runtime as unknown as {
+      resolveStructuredAgentSessionLocation: () => Promise<{
+        executionHostId: string
+        wslDistro: null
+        workspaceId: string
+        workspaceKind: 'git-worktree'
+      }>
+      resolveRuntimeFileTarget: () => Promise<{ worktree: { path: string } }>
+    }
+    internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'workspace-1',
+      workspaceKind: 'git-worktree' as const
+    }))
+    internal.resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { path: '/repos/workspace-1' }
+    }))
+
+    const intent = await runtime.resolveStructuredAgentSessionCreateIntent({
+      envelope: { sessionId: 'session-1', clientOperationId: 'operation-1' },
+      worktree: 'id:workspace-1',
+      agent: 'openclaude',
+      providerSessionId: 'provider-session-1'
+    })
+
+    expect(intent).toMatchObject({
+      provider: 'claude',
+      agent: 'openclaude',
+      providerHandle: {
+        kind: 'claude',
+        sessionId: 'provider-session-1',
+        leafUuid: null
+      },
+      accountHome: { variable: 'CLAUDE_CONFIG_DIR' }
+    })
+  })
 })

@@ -12,13 +12,14 @@ export type { AgentType }
 
 /** Where a message came from. Used for dedup precedence: a transcript message
  *  supersedes a hook message, which supersedes a scrape message. */
-export const NATIVE_CHAT_SOURCES = ['transcript', 'hook', 'scrape'] as const
+export const NATIVE_CHAT_SOURCES = ['stream', 'transcript', 'hook', 'scrape'] as const
 export type NativeChatSource = (typeof NATIVE_CHAT_SOURCES)[number]
 
 /** Priority rank for a source — higher wins when two sources describe the same
  *  turn. Kept as data so the assembler's precedence is a single lookup, not a
  *  chain of conditionals. */
 export const NATIVE_CHAT_SOURCE_PRIORITY: Record<NativeChatSource, number> = {
+  stream: 4,
   transcript: 3,
   hook: 2,
   scrape: 1
@@ -49,6 +50,7 @@ export type NativeChatTextBlock = {
  *  the renderer only previews it. */
 export type NativeChatToolCallBlock = {
   type: 'tool-call'
+  toolCallId?: string
   name: string
   input: unknown
   /** Provider lifecycle when the structured app-server path can supply it. */
@@ -76,10 +78,13 @@ export type NativeChatEditPatch = {
 /** The result returned to the agent for a prior tool call. */
 export type NativeChatToolResultBlock = {
   type: 'tool-result'
+  toolCallId?: string
   output: string
   isError?: boolean
   /** Present only for edit tools whose result reported resolved hunks. */
   editPatch?: NativeChatEditPatch
+  /** Provider output received before the tool itself completed. */
+  isPartial?: boolean
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field
@@ -110,6 +115,16 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** Provider-authored API failure, not assistant speech. */
+  providerError?: true
+  /** Provider-confirmed assistant channel. Absent on legacy transcript messages. */
+  assistantPhase?: 'commentary' | 'final'
+  /** Codex multi-agent transport metadata. Empty transport records stay
+   *  invisible outside the dedicated subagent transcript projection. */
+  subagentEvent?:
+    | { kind: 'turn-boundary'; triggerTurn: boolean }
+    | { kind: 'agent-message'; author: string | null; recipient: string | null }
+    | { kind: 'task'; parentIdentity: string }
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const

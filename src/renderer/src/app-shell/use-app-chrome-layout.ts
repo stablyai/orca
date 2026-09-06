@@ -41,6 +41,21 @@ export function useAppChromeLayout() {
     activeTabCanExpand,
     effectiveActiveTabExpanded
   } = useAppStore(useShallow(selectActiveTerminalChromeState))
+  const activeWorkspaceTabType = useAppStore((state) => {
+    if (!state.activeWorktreeId) {
+      return null
+    }
+    const groupId =
+      state.activeGroupIdByWorktree[state.activeWorktreeId] ??
+      state.groupsByWorktree[state.activeWorktreeId]?.[0]?.id
+    const activeTabId = state.groupsByWorktree[state.activeWorktreeId]?.find(
+      (group) => group.id === groupId
+    )?.activeTabId
+    return state.unifiedTabsByWorktree[state.activeWorktreeId]?.find(
+      (tab) => tab.id === activeTabId
+    )?.contentType
+  })
+  const roomMode = activeView === 'terminal' && activeWorkspaceTabType === 'room'
   const backgroundTerminalMountRequested = useSyncExternalStore(
     subscribeBackgroundTerminalWorktreeMountRequests,
     hasRequestedBackgroundTerminalWorktreeMount,
@@ -131,6 +146,7 @@ export function useAppChromeLayout() {
     rightSidebarExplorerView,
     rightSidebarOpen,
     rightSidebarTab,
+    roomMode,
     shouldMountTerminalWorkbench,
     showSidebar,
     // Full-page navigation surfaces own the whole content area, so suppress right-sidebar controls.

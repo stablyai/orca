@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffFromText, diffFromToolCall } from './native-chat-diff'
+import { diffFromText, diffFromToolCall, fileDiffsFromToolCall } from './native-chat-diff'
 
 describe('diffFromToolCall', () => {
   it('returns null for non-edit tools', () => {
@@ -65,6 +65,20 @@ describe('diffFromToolCall', () => {
 
   it('returns null when there is no old/new payload', () => {
     expect(diffFromToolCall('Edit', { file_path: '/x' })).toBeNull()
+  })
+})
+
+describe('fileDiffsFromToolCall', () => {
+  it('splits apply_patch edits into clickable per-file changes', () => {
+    const files = fileDiffsFromToolCall('apply_patch', {
+      patch:
+        '*** Begin Patch\n*** Update File: src/a.ts\n@@\n-old\n+new\n*** Add File: src/b.ts\n+one\n+two\n*** End Patch'
+    })
+
+    expect(files).toMatchObject([
+      { path: 'src/a.ts', additions: 1, deletions: 1 },
+      { path: 'src/b.ts', additions: 2, deletions: 0 }
+    ])
   })
 })
 

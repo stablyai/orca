@@ -25,6 +25,7 @@ export function TerminalPaneNativeChatPortal({
     managedPanes,
     readNativeChatTerminalScreen,
     resolveAgentForLeaf,
+    restartCodexSession,
     structuredChatAgent,
     structuredChatTarget,
     structuredSessionId,
@@ -89,6 +90,11 @@ export function TerminalPaneNativeChatPortal({
           resolvedAgent={chatPaneResolvedAgent}
           ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
           onSwitchToTerminal={switchNativeChatToTerminal}
+          restartSession={(values, sessionId) => {
+            if (!restartCodexSession(chatPane.id, values, sessionId)) {
+              throw new Error('Codex session cannot be resumed with the selected options.')
+            }
+          }}
           readTerminalScreen={readNativeChatTerminalScreen}
           contextMenuActions={contextMenuActions}
           orchestrationDispatchStatus={chatPaneDispatchStatus}

@@ -567,6 +567,19 @@ describe('renderer startup runtime routing', () => {
     expect(appSource).toContain('<Toaster closeButton')
   })
 
+  it('renders rooms through the unified workspace tab surface', () => {
+    const appSource = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const panelSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/tab-group/TabGroupPanel.tsx'),
+      'utf8'
+    )
+
+    expect(appSource).not.toContain("activeView === 'rooms'")
+    expect(appSource).not.toContain("setActiveView('rooms')")
+    expect(panelSource).toContain("activeTab?.contentType === 'room'")
+    expect(panelSource).toContain('roomId={activeTab.entityId}')
+  })
+
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
     const source = readSource(SESSION_PERSISTENCE_PATH)
     const checkpointStart = source.indexOf(

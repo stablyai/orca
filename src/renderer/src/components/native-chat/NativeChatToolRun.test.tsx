@@ -308,7 +308,7 @@ describe('NativeChatToolRun', () => {
     )
 
     expect(screen.queryByText('Running sleep 1')).toBeNull()
-    expect(screen.getByText('shell sleep 1')).toBeInTheDocument()
+    expect(screen.getByText('Run command sleep 1')).toBeInTheDocument()
   })
 
   it('keeps failed tool runs visually neutral while collapsed', () => {
@@ -351,7 +351,7 @@ describe('NativeChatToolRun', () => {
       />
     )
 
-    expect(screen.getByText('shell git log -1')).toBeInTheDocument()
+    expect(screen.getByText('Run command git log -1')).toBeInTheDocument()
   })
 
   it('settles an orphaned running call when its turn lifecycle has ended', () => {
@@ -383,7 +383,8 @@ describe('NativeChatToolRun', () => {
     const glyph = container.querySelector('.lucide-eye')
     expect(glyph).toBeInTheDocument()
     expect(glyph).toHaveAttribute('aria-hidden')
-    expect(screen.getByText('read')).toBeInTheDocument()
+    expect(screen.getByText('Read file')).toBeInTheDocument()
+    expect(leadingGlyphs(container)).toEqual(['lucide-eye', 'lucide-eye'])
   })
 
   it('holds one glyph for a category across running, completed, and failed', () => {

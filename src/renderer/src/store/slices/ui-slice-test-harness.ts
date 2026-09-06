@@ -16,6 +16,7 @@ export function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    subagentSheetWidth: 760,
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     rightSidebarTab: 'explorer',

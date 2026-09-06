@@ -61,5 +61,9 @@ export function codexItemIdentity(input: {
       ordinal: input.ordinals.ordinalFor(input.threadId, turnId, item.id)
     }
   }
-  return { provider: 'orca', clientMessageId: `codex-item:${input.threadId}:${item.id}` }
+  return {
+    provider: 'orca',
+    clientMessageId: `codex-item:${input.threadId}:${item.id}`,
+    ...(turnId ? { turn: { turnId } } : {})
+  }
 }

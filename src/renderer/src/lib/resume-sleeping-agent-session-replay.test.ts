@@ -1,13 +1,20 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
 import { buildWorkspaceSessionPayload } from './workspace-session'
+import { closeFailedAutomaticAgentResumeTab } from './sleeping-agent-session-launch'
 
 const initialAppStoreState = useAppStore.getState()
+const NOW = 10_000_000
+
+beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(NOW)
+})
 
 afterEach(() => {
+  vi.restoreAllMocks()
   useAppStore.setState(initialAppStoreState, true)
 })
 
@@ -22,8 +29,8 @@ function makeRecord(
     providerSession: { key: 'session_id', id: 'sess-1' },
     prompt: 'continue',
     state: 'working',
-    capturedAt: 1,
-    updatedAt: 1,
+    capturedAt: NOW,
+    updatedAt: NOW,
     origin: 'live',
     ...overrides
   }
@@ -182,7 +189,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     expect(useAppStore.getState().tabsByWorktree['wt-2']).toHaveLength(1)
   })
 
-  it('clears runtime automatic-resume claims when the tab closes', () => {
+  it('removes a failed automatic-resume tab and its runtime claim', () => {
     const record = makeRecord()
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [] },
@@ -193,8 +200,9 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
     const resumedTab = useAppStore.getState().tabsByWorktree['wt-1']![0]!
     expect(useAppStore.getState().automaticAgentResumeClaimsByTabId[resumedTab.id]).toBeDefined()
 
-    useAppStore.getState().closeTab(resumedTab.id)
+    closeFailedAutomaticAgentResumeTab(resumedTab.id)
 
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toEqual([])
     expect(useAppStore.getState().automaticAgentResumeClaimsByTabId[resumedTab.id]).toBeUndefined()
   })
 

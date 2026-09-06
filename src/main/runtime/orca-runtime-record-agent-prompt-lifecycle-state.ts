@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector } from './orca-runtime-create-terminal-side-effect-command-code-detector'
+import type { RecentPtyOutputMark } from './recent-pty-output-buffer'
 import type { AgentStatus } from '../../shared/agent-detection'
 import { findLastCompleteOscTitleRange } from './orca-runtime-core'
 import { extractLastOscTitle } from '../../shared/osc-title-extraction'
@@ -101,7 +102,8 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
   synchronizePtyOutputSequenceFromProvider(
     ptyId: string,
     providerSequence: { value: number; generation: 'continued' | 'reset' },
-    runtimeSequenceAtSpawnStart = 0
+    runtimeSequenceAtSpawnStart = 0,
+    recentOutputMark?: RecentPtyOutputMark | null
   ): number {
     if (
       !Number.isFinite(providerSequence.value) ||
@@ -124,6 +126,9 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     const providerBaseline = providerOffset + baseline
 
     if (providerSequence.generation === 'reset') {
+      if (recentOutputMark) {
+        this.recentPtyOutputById.get(ptyId)?.retainAfter(recentOutputMark)
+      }
       this.advancePtyLifecycleGeneration(ptyId)
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
@@ -178,6 +183,10 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
       })
     }
     return synchronizedSequence
+  }
+
+  markRecentPtyOutput(ptyId: string): RecentPtyOutputMark | null {
+    return this.recentPtyOutputById.get(ptyId)?.mark() ?? null
   }
 
   subscribeToTerminalData(

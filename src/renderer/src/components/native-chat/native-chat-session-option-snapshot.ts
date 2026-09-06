@@ -29,6 +29,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   liveTransport: NativeChatLiveOptionTransport
+  restartAgentPickerOptions?: boolean
 }): SessionOptionDescriptor[] {
   return buildSharedSnapshot({
     ...args,

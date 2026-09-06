@@ -22,7 +22,8 @@ import {
 } from '../../../providers/ssh-pty-errors'
 import type { IPtyProvider } from '../../../providers/types'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { resolvePersistedStablePaneOwner, spawnForStablePane } from './stable-owner'
+import { resolvePersistedStablePaneOwner } from './stable-owner'
+import { spawnForStablePane } from './stable-pane-spawn'
 
 const CONNECTION = 'conn-1'
 const WORKTREE = 'repo-1::/tmp/pane-absence'

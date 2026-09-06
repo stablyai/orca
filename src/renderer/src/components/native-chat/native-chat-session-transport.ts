@@ -8,6 +8,7 @@ import {
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import {
   parseRuntimeNativeChatReadSessionResult,
+  parseRuntimeAgentSessionContext,
   parseRuntimeNativeChatTurnLifecycle,
   RUNTIME_NATIVE_CHAT_READ_ERROR
 } from './native-chat-runtime-contract'
@@ -43,8 +44,8 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
  *  using this adapter (R3). Preserves whatever `subscribe` returns (sync fn on
  *  desktop, promise on the web bridge) — the hook's teardown handles both (R6). */
 const localNativeChatTransport: NativeChatSessionTransport = {
-  readSession: (agent, sessionId, limit, transcriptPath) =>
-    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
+  readSession: (agent, sessionId, limit, transcriptPath, paneKey) =>
+    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, paneKey),
   subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
 }
 
@@ -52,12 +53,12 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) => {
+    readSession: async (agent, sessionId, limit, transcriptPath, paneKey) => {
       try {
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath },
+          { agent, sessionId, limit, transcriptPath, paneKey },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -66,7 +67,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       }
     },
     subscribe: (args, onFrame) => {
-      const { subscriptionId, agent, sessionId, transcriptPath, limit } = args
+      const { subscriptionId, agent, sessionId, transcriptPath, paneKey, limit } = args
       let cancelled = false
       let receivedInitial = false
       let handleUnsubscribe: (() => void) | null = null
@@ -110,6 +111,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                 agent,
                 sessionId,
                 transcriptPath,
+                paneKey,
                 limit,
                 capabilities: { transcriptPending: 1 }
               },
@@ -142,11 +144,13 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                   error?: string
                   lifecycle?: unknown
                   pending?: boolean
+                  context?: unknown
                 }
                 const lifecycle = parseRuntimeNativeChatTurnLifecycle(frame?.lifecycle)
                 // No transcript behind this window yet — forwarded so the view can
                 // stop spinning, but it is not the settled initial read.
                 const pending = frame?.pending === true
+                const context = parseRuntimeAgentSessionContext(frame?.context)
                 if (
                   (frame?.type === 'appended' ||
                     frame?.type === 'snapshot' ||
@@ -163,7 +167,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                       hasMore: frame.hasMore ?? frame.messages.length >= (limit ?? 300),
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {}),
-                      ...(pending ? { pending: true } : {})
+                      ...(pending ? { pending: true } : {}),
+                      ...(context ? { context } : {})
                     })
                   } else if (frame.type === 'snapshot') {
                     onFrame({
@@ -172,7 +177,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                       hasMore: frame.hasMore ?? false,
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {}),
-                      ...(pending ? { pending: true } : {})
+                      ...(pending ? { pending: true } : {}),
+                      ...(context ? { context } : {})
                     })
                   } else {
                     onFrame(
@@ -181,12 +187,14 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                             type: 'replacement',
                             messages: frame.messages,
                             hasMore: frame.hasMore ?? false,
-                            ...(lifecycle ? { lifecycle } : {})
+                            ...(lifecycle ? { lifecycle } : {}),
+                            ...(context ? { context } : {})
                           }
                         : {
                             type: 'appended',
                             messages: frame.messages,
-                            ...(lifecycle ? { lifecycle } : {})
+                            ...(lifecycle ? { lifecycle } : {}),
+                            ...(context ? { context } : {})
                           }
                     )
                   }
@@ -200,7 +208,8 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     type: 'snapshot',
                     messages: [],
                     hasMore: false,
-                    ...(frame?.error ? { error: frame.error } : {})
+                    ...(frame?.error ? { error: frame.error } : {}),
+                    ...(context ? { context } : {})
                   })
                 }
               },

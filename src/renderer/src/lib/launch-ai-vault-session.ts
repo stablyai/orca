@@ -6,13 +6,17 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import { callRuntimeRpc, hasRuntimeRpcErrorCode } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session-resume'
+import { isResumableTuiAgent } from '../../../shared/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session'
+import type { RuntimeEnsureAgentSessionResult } from '../../../shared/agent-session-host-authority'
 
 export type LaunchAiVaultSessionInNewTabResult =
   | { tabId: string; groupId?: string }
@@ -68,36 +72,90 @@ export function launchAiVaultSessionInNewTab(args: {
       targetGroupId
   }
 
-  const tab = args.cwd
-    ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
-    : store.createTab(args.worktreeId, targetGroupId)
-  store.queueTabStartupCommand(tab.id, {
-    command: args.command,
-    ...(args.env ? { env: args.env } : {}),
-    ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
-    ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
-    ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
-    telemetry: {
-      agent_kind: tuiAgentToAgentKind(args.agent),
-      launch_source: 'sidebar',
-      request_kind: 'resume'
+  const launchLegacyLocalTab = (): { tabId: string; groupId?: string } => {
+    const tab = store.createTab(args.worktreeId, targetGroupId, undefined, {
+      ...(args.cwd ? { startupCwd: args.cwd } : {}),
+      launchAgent: args.agent
+    })
+    store.queueTabStartupCommand(tab.id, {
+      command: args.command,
+      ...(args.env ? { env: args.env } : {}),
+      ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+      ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+      ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
+      launchAgent: args.agent,
+      telemetry: {
+        agent_kind: tuiAgentToAgentKind(args.agent),
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
+    })
+    store.setActiveTabType('terminal')
+
+    const fresh = useAppStore.getState()
+    const termIds = (fresh.tabsByWorktree[args.worktreeId] ?? []).map((item) => item.id)
+    const editorIds = fresh.openFiles
+      .filter((file) => file.worktreeId === args.worktreeId)
+      .map((file) => file.id)
+    const browserIds = (fresh.browserTabsByWorktree?.[args.worktreeId] ?? []).map((item) => item.id)
+    const base = reconcileTabOrder(
+      fresh.tabBarOrderByWorktree[args.worktreeId],
+      termIds,
+      editorIds,
+      browserIds
+    )
+    const order = base.filter((id) => id !== tab.id)
+    order.push(tab.id)
+    fresh.setTabBarOrder(args.worktreeId, order)
+
+    return { tabId: tab.id, ...(targetGroupId ? { groupId: targetGroupId } : {}) }
+  }
+
+  if (args.providerSession && isResumableTuiAgent(args.agent)) {
+    const resolvedTargetGroupId = targetGroupId
+    const runtimeLaunch = callRuntimeRpc<RuntimeEnsureAgentSessionResult>(
+      { kind: 'local' },
+      'terminal.ensureAgentSession',
+      {
+        kind: 'explicit',
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        agent: args.agent,
+        providerSession: args.providerSession,
+        ...(args.launchConfig?.ompResumeFilePath
+          ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
+          : {}),
+        ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
+        command: args.command,
+        ...(args.env ? { env: args.env } : {}),
+        ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+        ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+        presentation: 'focused'
+      }
+    ).then(
+      ({ terminal }) => {
+        if (resolvedTargetGroupId && terminal.tabId) {
+          useAppStore.getState().moveUnifiedTabToGroup(terminal.tabId, resolvedTargetGroupId)
+        }
+        useAppStore.getState().setActiveTabType('terminal')
+        return { status: 'created' as const }
+      },
+      (error: unknown) => {
+        if (hasRuntimeRpcErrorCode(error, 'agent_session_legacy_required')) {
+          launchLegacyLocalTab()
+          return { status: 'created' as const }
+        }
+        return {
+          status: 'failed' as const,
+          message: error instanceof Error ? error.message : String(error)
+        }
+      }
+    )
+    return {
+      tabId: null,
+      ...(targetGroupId ? { groupId: targetGroupId } : {}),
+      runtimeLaunch
     }
-  })
-  store.setActiveTabType('terminal')
+  }
 
-  const fresh = useAppStore.getState()
-  const termIds = (fresh.tabsByWorktree[args.worktreeId] ?? []).map((t) => t.id)
-  const editorIds = fresh.openFiles.filter((f) => f.worktreeId === args.worktreeId).map((f) => f.id)
-  const browserIds = (fresh.browserTabsByWorktree?.[args.worktreeId] ?? []).map((t) => t.id)
-  const base = reconcileTabOrder(
-    fresh.tabBarOrderByWorktree[args.worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tab.id)
-  order.push(tab.id)
-  fresh.setTabBarOrder(args.worktreeId, order)
-
-  return { tabId: tab.id, groupId: targetGroupId }
+  return launchLegacyLocalTab()
 }

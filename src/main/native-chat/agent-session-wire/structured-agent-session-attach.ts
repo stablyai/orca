@@ -1,3 +1,4 @@
+import type { AgentType } from '../../../shared/agent-status-types'
 // Attach: reserve the session record, then open its journal.
 //
 // `create` and `ensure` are the same transition with a different starting
@@ -51,7 +52,7 @@ export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
-  agent: AgentSessionHandleProvider
+  agent: AgentType
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
   /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
@@ -125,7 +126,9 @@ export function journalIdentityFor(
             sessionId: head.handle.sessionId,
             leafUuid: head.handle.leafUuid
           }
-        : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
+        : head?.handle.provider === 'acp'
+          ? { kind: 'acp', agent: head.handle.agent, sessionId: head.handle.sessionId }
+          : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,
@@ -195,6 +198,7 @@ export function reserveRequestFor(input: {
     sessionId: input.sessionId,
     location: params.location,
     provider: params.provider,
+    agent: params.agent,
     accountHome: params.accountHome,
     ...(params.options ? { options: params.options } : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),

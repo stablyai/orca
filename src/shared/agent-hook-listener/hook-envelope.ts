@@ -83,6 +83,7 @@ export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHtt
   }
   return {
     ...metadata,
+    ...(readHookHeader(headers, 'x-orca-agent') === 'openclaude' ? { agent: 'openclaude' } : {}),
     payload: body
   }
 }

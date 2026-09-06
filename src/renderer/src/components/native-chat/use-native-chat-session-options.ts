@@ -10,7 +10,8 @@ import {
 } from '../../../../shared/native-chat-session-option-defaults'
 import type {
   PersistedNativeChatSessionOptions,
-  SessionOptionDescriptor
+  SessionOptionDescriptor,
+  SessionOptionValue
 } from '../../../../shared/native-chat-session-options'
 import { useAppStore } from '../../store'
 import {
@@ -21,6 +22,7 @@ import type { NativeChatSessionOptionDispatchCommand } from './native-chat-sessi
 import {
   ensureNativeChatModelEnrichment,
   readNativeChatEnrichedModels,
+  readNativeChatEnrichedReportedValues,
   subscribeNativeChatEnrichedModels
 } from './native-chat-session-option-enrichment'
 import {
@@ -88,14 +90,30 @@ export function useNativeChatSessionOptions(args: {
   terminalTabId: string
   targetPtyId: string | null
   dispatchCommand: NativeChatSessionOptionDispatchCommand
+  restartSession?: (values: Record<string, SessionOptionValue>) => Promise<void> | void
+  reportedModel?: string | null
+  reportedEffort?: string | null
+  reportedContextWindow?: string | null
+  reportedFastMode?: boolean | null
   onAgentPicker?: () => void
   readTerminalScreen?: () => string | null
 }): {
   surface: NativeChatPtySessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
 } {
-  const { agent, terminalTabId, targetPtyId, dispatchCommand, onAgentPicker, readTerminalScreen } =
-    args
+  const {
+    agent,
+    terminalTabId,
+    targetPtyId,
+    dispatchCommand,
+    restartSession,
+    reportedModel,
+    reportedEffort,
+    reportedContextWindow,
+    reportedFastMode,
+    onAgentPicker,
+    readTerminalScreen
+  } = args
   // The screen text that last parsed into reported values, so a later model
   // discovery can re-resolve it against the host's real ids.
   const reportedScreenRef = useRef<string | null>(null)
@@ -114,12 +132,15 @@ export function useNativeChatSessionOptions(args: {
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
     const reportedValues =
-      agent === 'claude'
+      (agent === 'claude'
         ? readClaudeSessionOptionsFromTerminalScreen(
             readTerminalScreen?.(),
             discoveredModels ?? undefined
           )
-        : null
+        : null) ??
+      (discoveryContext
+        ? readNativeChatEnrichedReportedValues(agent, discoveryContext.hostKey)
+        : null)
     return createNativeChatPtySessionOptions({
       agent,
       scopeKey,
@@ -131,6 +152,7 @@ export function useNativeChatSessionOptions(args: {
       mode: targetPtyId ? 'live' : 'draft',
       reportedValues,
       dispatchCommand,
+      restartSession,
       onAgentPicker,
       persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
         enqueueSessionOptionSettingsWrite((persisted) =>
@@ -150,9 +172,29 @@ export function useNativeChatSessionOptions(args: {
     discoveryContext,
     onAgentPicker,
     readTerminalScreen,
+    restartSession,
     targetPtyId,
     terminalTabId
   ])
+
+  useEffect(() => {
+    const model = reportedModel?.trim()
+    const effort = reportedEffort?.trim()
+    const contextWindow = reportedContextWindow?.trim()
+    if (surface && (model || effort || contextWindow || typeof reportedFastMode === 'boolean')) {
+      const currentModel = surface.getSnapshot().find((descriptor) => descriptor.id === 'model')
+        ?.kind.currentValue
+      const authoritativeModel = model || currentModel
+      if (authoritativeModel) {
+        surface.reportSessionOptions({
+          model: authoritativeModel,
+          ...(effort ? { effort } : {}),
+          ...(contextWindow ? { contextWindow } : {}),
+          ...(typeof reportedFastMode === 'boolean' ? { fastMode: reportedFastMode } : {})
+        })
+      }
+    }
+  }, [reportedContextWindow, reportedEffort, reportedFastMode, reportedModel, surface])
 
   useEffect(() => {
     if (!surface || agent !== 'claude') {
@@ -209,14 +251,22 @@ export function useNativeChatSessionOptions(args: {
     const unsubscribe = subscribeNativeChatEnrichedModels(
       agent,
       discoveryContext.hostKey,
-      (models) => {
+      ({ models, reportedValues }) => {
         surface.replaceModels(models)
         const screen = agent === 'claude' ? reportedScreenRef.current : null
-        const reportedValues = screen
+        const screenValues = screen
           ? readClaudeSessionOptionsFromTerminalScreen(screen, models)
           : null
-        if (reportedValues) {
-          surface.reportSessionOptions(reportedValues)
+        if (screenValues) {
+          surface.reportSessionOptions(screenValues)
+        } else if (reportedValues) {
+          // Why: discovery defaults describe the config, not this session; they
+          // must never override a model the surface already tracks.
+          const currentModel = surface.getSnapshot().find((option) => option.id === 'model')
+            ?.kind.currentValue
+          if (!currentModel) {
+            surface.reportSessionOptions(reportedValues)
+          }
         }
         // A failed settings write must not surface as an unhandled rejection.
         void retirePersistedModelMissingFromDiscovery(agent, models).catch(() => undefined)

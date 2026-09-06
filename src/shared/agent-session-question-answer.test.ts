@@ -39,6 +39,23 @@ describe('agent-session grouped question answers', () => {
     ]
 
     expect(isValidAgentSessionQuestionAnswers(questions, answers)).toBe(true)
+    for (const encoded of [
+      'answers:[]',
+      'answers:{"q1":true}',
+      'answers:{"unknown":["Web"]}',
+      'answers:{"q1":["Web"],"q2":["one","two"]}'
+    ]) {
+      expect(decodeAgentSessionQuestionAnswers(encoded, questions)).toBeNull()
+    }
+    expect(
+      isValidAgentSessionQuestionAnswers(
+        questions,
+        decodeAgentSessionQuestionAnswers(
+          'answers:{"q1":["not offered"],"q2":["SSH host"]}',
+          questions
+        )!
+      )
+    ).toBe(false)
     expect(
       isValidAgentSessionQuestionAnswers(questions, [
         { questionId: 'q1', optionIds: ['unknown'] },

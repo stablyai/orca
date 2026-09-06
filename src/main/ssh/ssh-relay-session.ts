@@ -1561,6 +1561,7 @@ export class SshRelaySession {
         providerPromptId?: unknown
         compactTrigger?: unknown
         toolUseId?: unknown
+        toolActivity?: unknown
         toolAgentId?: unknown
         teammateName?: unknown
         toolAgentType?: unknown
@@ -1594,6 +1595,7 @@ export class SshRelaySession {
           providerPromptId: envelope.providerPromptId,
           compactTrigger: envelope.compactTrigger,
           toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
+          toolActivity: envelope.toolActivity,
           toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
           teammateName:
             typeof envelope.teammateName === 'string' ? envelope.teammateName : undefined,

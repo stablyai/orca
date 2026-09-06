@@ -13,6 +13,7 @@ import type { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
+  requireStructuredAgentCapability,
   requireStructuredCapability,
   requireStructuredHost as requireHost,
   structuredCallerFor as callerFor,
@@ -45,6 +46,7 @@ import {
   RespondParams,
   SendParams,
   SetOptionParams,
+  SteerParams,
   SubscribeParams,
   UnsubscribeParams
 } from './structured-agent-session-schemas'
@@ -86,6 +88,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       if (!supportsStructuredSessions(ctx)) {
         throw new Error('structured_agent_session_unsupported')
       }
+      requireStructuredAgentCapability(ctx, params.agent)
       return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
     }
   }),
@@ -101,6 +104,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       // a client can tell "nothing was created" from "the outcome is unknown".
       const prepared = await resolveUncommittedStructuredCreate(async () => {
         if ('worktree' in params) {
+          requireStructuredAgentCapability(ctx, params.agent)
           const intentFingerprint = computeAgentSessionPayloadFingerprint({
             method: 'agentSession.create',
             sessionId: params.envelope.sessionId,
@@ -120,8 +124,8 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
           const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
           const attachParams: AgentSessionAttachParams = {
             ...resolvedAttach,
-            provider: resolved.provider as 'claude' | 'codex',
-            agent: resolved.agent as 'claude' | 'codex',
+            provider: resolved.provider,
+            agent: resolved.agent,
             envelope: { ...params.envelope, payloadFingerprint: hostFingerprint }
           }
           return {
@@ -171,6 +175,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.send',
     params: SendParams,
     handler: async (params, ctx) => requireHost(ctx).send(callerFor(ctx), params)
+  }),
+  defineMethod({
+    name: 'agentSession.steer',
+    params: SteerParams,
+    handler: async (params, ctx) => requireHost(ctx).steer(callerFor(ctx), params)
   }),
   defineMethod({
     name: 'agentSession.cancel',

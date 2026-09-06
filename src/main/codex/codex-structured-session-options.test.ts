@@ -3,7 +3,9 @@ import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import {
   applyCodexStructuredSessionOption,
+  codexStructuredSessionOptionUpdate,
   readCodexStructuredSessionOptions,
+  readLiveCodexSessionOptions,
   reportedCodexThreadOptions,
   restoredCodexSessionOptions
 } from './codex-structured-session-options'
@@ -35,6 +37,17 @@ function optionSession(request: CodexAppServerConnection['request']): CodexSessi
 }
 
 describe('structured Codex session options', () => {
+  it('maps Fast mode to the app-server service tier', () => {
+    expect(codexStructuredSessionOptionUpdate('fastMode', 'true')).toEqual({
+      key: 'serviceTier',
+      value: 'priority'
+    })
+    expect(codexStructuredSessionOptionUpdate('fastMode', 'false')).toEqual({
+      key: 'serviceTier',
+      value: 'default'
+    })
+  })
+
   it('filters restored records to recognized turn options', () => {
     expect(
       Object.fromEntries(
@@ -130,6 +143,30 @@ describe('structured Codex session options', () => {
         effort: 'high'
       })
     ).toEqual({ model: 'gpt-live', effort: 'high' })
+  })
+
+  it('exposes model, effort, and Fast mode to structured clients', async () => {
+    const session = optionSession(
+      vi.fn(async () => ({
+        data: [
+          {
+            model: 'gpt-live',
+            supportedReasoningEfforts: [{ reasoningEffort: 'medium' }, { reasoningEffort: 'high' }],
+            defaultReasoningEffort: 'medium'
+          }
+        ],
+        nextCursor: null
+      }))
+    )
+    session.options.set('serviceTier', 'priority')
+
+    const result = await readLiveCodexSessionOptions(session, undefined)
+
+    expect(result.descriptors?.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
+    expect(result.descriptors?.find(({ id }) => id === 'fastMode')).toMatchObject({
+      kind: { type: 'boolean', currentValue: true },
+      settable: true
+    })
   })
 
   it('reconciles an incompatible effort when only the model changes', async () => {

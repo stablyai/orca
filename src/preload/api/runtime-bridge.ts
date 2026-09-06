@@ -8,6 +8,7 @@ import type {
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RoomEvent } from '../../shared/rooms'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../runtime-environment-subscriptions'
 import type { PreloadApi } from '../api-types'
 
@@ -107,6 +108,14 @@ export const runtimeApi = {
     ) => callback(data)
     ipcRenderer.on('runtime:nativeChatLaunchDraftResolved', listener)
     return () => ipcRenderer.removeListener('runtime:nativeChatLaunchDraftResolved', listener)
+  },
+  onRoomEvent: (callback: (event: { roomId: string; event: RoomEvent }) => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { roomId: string; event: RoomEvent }
+    ) => callback(data)
+    ipcRenderer.on('runtime:roomEvent', listener)
+    return () => ipcRenderer.removeListener('runtime:roomEvent', listener)
   },
   onBrowserDriverChanged: (
     callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void

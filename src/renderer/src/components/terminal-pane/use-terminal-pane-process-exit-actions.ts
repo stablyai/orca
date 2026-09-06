@@ -8,6 +8,14 @@ import { clearPaneTerminalError } from './terminal-error-accumulation'
 import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
+import { buildAgentResumeStartupPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import {
+  resolveTuiAgentLaunchArgs,
+  resolveTuiAgentLaunchEnv
+} from '../../../../shared/tui-agent-launch-defaults'
+import { normalizeAgentProviderSession } from '../../../../shared/agent-session-resume'
+import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 
 /** Owns the restart/close actions for panes whose PTY process has exited. */
 export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseController) {
@@ -180,6 +188,58 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     [setPaneProcessExitsByPaneId]
   )
 
+  const restartCodexSession = useCallback(
+    (
+      paneId: number,
+      sessionOptions: Record<string, SessionOptionValue>,
+      providerSessionId?: string | null
+    ): boolean => {
+      const pane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
+      if (!pane) {
+        return false
+      }
+      const state = useAppStore.getState()
+      const status = state.agentStatusByPaneKey[makePaneKey(tabId, pane.leafId)]
+      const providerSession = normalizeAgentProviderSession(
+        status?.providerSession ??
+          (providerSessionId ? { key: 'session_id', id: providerSessionId } : null)
+      )
+      const launchConfig = status ? state.getAgentLaunchConfigForStatusEntry(status) : undefined
+      const common = {
+        agent: 'codex' as const,
+        cmdOverrides: {
+          ...state.settings?.agentCmdOverrides,
+          ...(launchConfig?.agentCommand ? { codex: launchConfig.agentCommand } : {})
+        },
+        agentArgs:
+          launchConfig?.agentArgs ??
+          resolveTuiAgentLaunchArgs('codex', state.settings?.agentDefaultArgs),
+        agentEnv:
+          launchConfig?.agentEnv ??
+          resolveTuiAgentLaunchEnv('codex', state.settings?.agentDefaultEnv),
+        sessionOptions,
+        platform: CLIENT_PLATFORM
+      }
+      const plan = providerSession
+        ? buildAgentResumeStartupPlan({ ...common, providerSession })
+        : buildAgentStartupPlan({ ...common, prompt: '', allowEmptyPromptLaunch: true })
+      if (!plan) {
+        return false
+      }
+      handleRestartCodexPane(paneId, {
+        command: plan.launchCommand,
+        startupCommandDelivery: 'shell-ready',
+        launchAgent: 'codex',
+        launchConfig: plan.launchConfig,
+        ...(providerSession ? { resumeProviderSession: providerSession } : {}),
+        sessionOptions,
+        ...(plan.env ? { env: plan.env } : {})
+      })
+      return true
+    },
+    [handleRestartCodexPane, managerRef, tabId]
+  )
+
   const handleRestartExitedPane = useCallback(
     (processExit: PaneProcessExit) => {
       clearPaneProcessExit(processExit.paneId)
@@ -248,7 +308,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     pendingCodexPaneRestartIds
   ])
 
-  return { handleRestartExitedPane, handleCloseExitedPane }
+  return { handleRestartExitedPane, handleCloseExitedPane, restartCodexSession }
 }
 
 export type TerminalPaneProcessExitController = ReturnType<typeof useTerminalPaneProcessExitActions>

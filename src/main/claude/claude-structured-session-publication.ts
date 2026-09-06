@@ -1,3 +1,4 @@
+import { ClaudeConversationActivity } from '../harness-conversation/claude-activity'
 import type { AgentSessionAcquisition } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ClaudeInitObservation } from './claude-structured-init-proof'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
@@ -5,6 +6,10 @@ import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import {
+  readClaudeSettingsEffort,
+  readClaudeSettingsModel
+} from './claude-structured-session-options'
 
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
@@ -21,12 +26,12 @@ export function createClaudeSessionPublication(input: {
   linkId?: string
   observedAt: number
   options?: ReadonlyMap<string, string>
+  launchModel?: string
   capabilities: readonly string[]
-  /** Read from `get_settings`; `system/init` never reports an effort. */
-  effort: string | null
+  settings: unknown
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
-  const model = input.init.model
-  const effort = input.effort
+  const model = input.init.model ?? readClaudeSettingsModel(input.settings)
+  const effort = readClaudeSettingsEffort(input.settings)
   return {
     acquisition: {
       process: input.process,
@@ -41,6 +46,7 @@ export function createClaudeSessionPublication(input: {
       acquisitionGeneration: input.acquisitionGeneration
     },
     session: {
+      contextActivity: new ClaudeConversationActivity(),
       connection: input.connection,
       providerSessionId: input.init.providerSessionId,
       claudeConfigDir: input.claudeConfigDir,
@@ -55,6 +61,7 @@ export function createClaudeSessionPublication(input: {
       dispatchSequence: 0,
       optionMutationSequence: 0,
       options: new Map(input.options),
+      ...(input.launchModel ? { launchModel: input.launchModel } : {}),
       capabilities: input.capabilities,
       reportedOptions: {
         ...(model ? { model } : {}),

@@ -1,6 +1,8 @@
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { isStructuredMachineAgentEnabled } from '../../../shared/structured-agent-provider'
+import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -19,6 +21,7 @@ export type AgentLaunchRoutingInput = {
   settings:
     | Pick<
         GlobalSettings,
+        | 'enabledHarnessStreamingAgents'
         | 'experimentalNativeChat'
         | 'experimentalStructuredNativeChat'
         | 'openAgentTabsInChatByDefault'
@@ -89,18 +92,20 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   const projectRuntime = input.projectRuntime
   const runtimeRefused =
     projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl'
+  const host = parseExecutionHostId(input.executionHostId)
+  const target = host ? runtimeTargetForExecutionHostId(host.id) : null
   const structuredSupported =
-    isAgentSessionHandleProvider(input.agent) &&
-    input.promptDelivery !== 'draft' &&
+    isStructuredMachineAgentEnabled(input.agent, input.settings?.enabledHarnessStreamingAgents) &&
     input.workspaceKind !== 'floating' &&
     input.requiresTuiLaunchCustomization !== true &&
-    input.executionHostId === 'local' &&
+    target !== null &&
     // Codex's Windows refusal is deliberate and settled elsewhere, so it stays a client-side
     // answer. Claude's is measured by the executing host at create time (agentSession.createSupport)
     // because only that host knows whether it can read a provider child's start time.
-    (input.agent !== 'codex' || input.platform !== 'win32') &&
+    (target?.kind === 'environment' || input.agent !== 'codex' || input.platform !== 'win32') &&
     !runtimeRefused &&
-    input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+    (target?.kind === 'environment' ||
+      input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY))
 
   return structuredSupported ? 'structured-native-chat' : 'legacy-native-chat'
 }

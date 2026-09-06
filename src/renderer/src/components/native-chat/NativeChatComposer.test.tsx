@@ -244,6 +244,26 @@ describe('NativeChatComposer', () => {
     )
   })
 
+  it('queues PTY chat input while the agent is working without writing to the terminal', async () => {
+    const onQueue = vi.fn(async () => undefined)
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey="tab-1:leaf-1"
+        targetPtyId="pty-1"
+        agent="codex"
+        isWorking
+        onQueue={onQueue}
+      />
+    )
+
+    act(() => mocks.fieldProps?.onSend?.())
+    await waitFor(() => expect(onQueue).toHaveBeenCalledWith('hello', [], 'chat'))
+
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+    expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
   it('associates a delayed submit with its optimistic cache entry', () => {
     const onOptimisticSend = vi.fn(() => 'pending-1')
     render(
@@ -700,6 +720,11 @@ describe('NativeChatComposer', () => {
             id: 'effort',
             valueSource: 'reported',
             kind: expect.objectContaining({ currentValue: 'medium' })
+          }),
+          expect.objectContaining({
+            id: 'contextWindow',
+            valueSource: 'reported',
+            kind: expect.objectContaining({ currentValue: 'standard' })
           })
         ])
       )

@@ -27,6 +27,7 @@ export function buildRelayHookEnvelope(
     providerPromptId: event.providerPromptId,
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
+    toolActivity: event.toolActivity,
     toolAgentId: event.toolAgentId,
     teammateName: event.teammateName,
     toolAgentType: event.toolAgentType,

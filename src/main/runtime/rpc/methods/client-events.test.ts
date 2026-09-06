@@ -24,6 +24,9 @@ function makeRuntime(): {
   )
   const runtime = {
     onClientEvent,
+    getRoomService: () => ({
+      db: { notificationReplay: { list: () => ({ cursor: 42 }) } }
+    }),
     registerSubscriptionCleanup: (_id: string, cleanup: () => void) => {
       cleanups.push(cleanup)
     }
@@ -60,6 +63,26 @@ describe('runtime.clientEvents.subscribe', () => {
     expect(onClientEvent).toHaveBeenCalledWith(expect.any(Function), {
       consumesTerminalSideEffects: true
     })
+    cleanups.forEach((cleanup) => cleanup())
+    await done
+  })
+
+  it('includes the room notification baseline in the ready snapshot', async () => {
+    const { runtime, cleanups } = makeRuntime()
+    const emit = vi.fn()
+
+    const done = subscribeMethod.handler(
+      undefined,
+      { runtime, connectionId: 'conn-1' } as RpcContext,
+      emit
+    )
+
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'ready',
+        snapshot: expect.objectContaining({ roomNotificationSequence: 42 })
+      })
+    )
     cleanups.forEach((cleanup) => cleanup())
     await done
   })

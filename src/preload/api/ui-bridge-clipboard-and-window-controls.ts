@@ -50,14 +50,21 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.send('ui:mobileMarkdownResponse', response)
   },
   onCloseTerminal: (
-    callback: (data: { tabId: string; paneRuntimeId?: number }) => void
+    callback: (data: {
+      tabId: string
+      paneRuntimeId?: number
+      preserveSessionOnClose?: boolean
+    }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { tabId: string; paneRuntimeId?: number }
+      data: { tabId: string; paneRuntimeId?: number; preserveSessionOnClose?: boolean }
     ) => callback(data)
     ipcRenderer.on('ui:closeTerminal', listener)
     return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
+  },
+  notifyTerminalSurfaceClosed: (tabId: string): void => {
+    ipcRenderer.send('ui:terminalSurfaceClosed', { tabId })
   },
   onTerminalTabCloseRequest: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
@@ -90,6 +97,10 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.invoke('clipboard:readText', options),
   readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readSelectionText', options),
+  readClipboardImage: (): Promise<{
+    content: ArrayBuffer
+    mimeType: 'image/png'
+  } | null> => ipcRenderer.invoke('clipboard:readImage'),
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null

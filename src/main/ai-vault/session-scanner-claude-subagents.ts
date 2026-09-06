@@ -160,6 +160,8 @@ async function parseSubagentTranscript(args: {
     const meta = await readSubagentMeta(args.filePath)
     return {
       ...session,
+      id: args.agentId,
+      sessionId: args.agentId,
       // Why: the spawn description is the name the main agent gave this Task;
       // it beats the transcript-derived fallback (the raw Task prompt).
       title: meta.description ?? session.title,

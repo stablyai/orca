@@ -36,8 +36,11 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     }
   }
 
-  getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
-    return this.terminalAgentStatus.getStatus(handle)
+  getTerminalAgentStatus(
+    handle: string,
+    options?: { confirmForeground?: boolean }
+  ): Promise<RuntimeTerminalAgentStatus> {
+    return this.terminalAgentStatus.getStatus(handle, options)
   }
 
   protected getTerminalAgentStatusPtyId(handle: string): string {

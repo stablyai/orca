@@ -1,3 +1,4 @@
+import { EMPTY_AGENT_SESSION_CONTEXT } from '../../../../shared/agent-session-context'
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
@@ -33,6 +34,7 @@ function settledMessages(): NativeChatMessage[] {
     id: `message-${index}`,
     role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
     blocks: [{ type: 'text' as const, text: `settled line ${index}` }],
+    ...(index % 2 ? { assistantPhase: 'final' as const } : {}),
     timestamp: index + 1,
     source: 'transcript' as const
   }))
@@ -41,6 +43,8 @@ function settledMessages(): NativeChatMessage[] {
 function sessionWith(messages: NativeChatMessage[]): NativeChatLiveSession {
   return {
     messages,
+    context: EMPTY_AGENT_SESSION_CONTEXT,
+    markCompactionRequested: () => {},
     status: 'ready',
     sessionId: 'session-1',
     agent: 'codex',
@@ -64,7 +68,8 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
     )
 
     const afterFirstPaint = proseCalls.count
-    expect(afterFirstPaint).toBeGreaterThanOrEqual(TRANSCRIPT_LENGTH)
+    // The active tail renders through activity details, not the settled-message row.
+    expect(afterFirstPaint).toBeGreaterThanOrEqual(TRANSCRIPT_LENGTH - 1)
 
     // A streaming turn publishes a frame per SDK event; only the tail message's blocks change.
     const STREAM_FRAMES = 20

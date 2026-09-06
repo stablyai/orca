@@ -1,5 +1,10 @@
 export const RECENT_PTY_OUTPUT_LIMIT = 64 * 1024
 
+export type RecentPtyOutputMark = Readonly<{
+  buffer: RecentPtyOutputBuffer
+  totalAppended: number
+}>
+
 // Compact the backing array once this many fully-dropped head slots accumulate,
 // so the array itself stays bounded under long chunk floods.
 const DROPPED_HEAD_COMPACT_THRESHOLD = 1024
@@ -23,6 +28,7 @@ export class RecentPtyOutputBuffer {
   // single over-limit append is stored pre-sliced), so backfill replay knows
   // the original line context of its leading text is gone.
   private headChunkIsPartial = false
+  private totalAppended = 0
   // Original chunk boundaries are owed only to the one-time path-candidate
   // backfill; compact() ends that obligation and lets read() collapse.
   private preserveChunkBoundaries: boolean
@@ -41,6 +47,7 @@ export class RecentPtyOutputBuffer {
     if (data.length === 0) {
       return
     }
+    this.totalAppended += data.length
     if (data.length >= this.limit) {
       this.chunks = [data.slice(-this.limit)]
       this.headIndex = 0
@@ -70,6 +77,59 @@ export class RecentPtyOutputBuffer {
       this.chunks = this.chunks.slice(this.headIndex)
       this.headIndex = 0
     }
+  }
+
+  mark(): RecentPtyOutputMark {
+    return { buffer: this, totalAppended: this.totalAppended }
+  }
+
+  retainAfter(mark: RecentPtyOutputMark): boolean {
+    if (mark.buffer !== this) {
+      return false
+    }
+    const retainedLength = this.totalAppended - mark.totalAppended
+    if (!Number.isSafeInteger(retainedLength) || retainedLength < 0) {
+      this.clear()
+      return false
+    }
+    if (retainedLength >= this.totalLen) {
+      return true
+    }
+    this.dropPrefix(this.totalLen - retainedLength)
+    return true
+  }
+
+  private dropPrefix(length: number): void {
+    let remaining = length
+    while (remaining > 0 && this.headIndex < this.chunks.length) {
+      const headRemaining = this.chunks[this.headIndex].length - this.headOffset
+      if (headRemaining <= remaining) {
+        this.chunks[this.headIndex] = ''
+        this.headIndex += 1
+        this.headOffset = 0
+        this.headChunkIsPartial = false
+        this.totalLen -= headRemaining
+        remaining -= headRemaining
+      } else {
+        this.chunks[this.headIndex] = this.chunks[this.headIndex].slice(this.headOffset + remaining)
+        this.headOffset = 0
+        this.headChunkIsPartial = true
+        this.totalLen -= remaining
+        remaining = 0
+      }
+    }
+    if (this.headIndex >= DROPPED_HEAD_COMPACT_THRESHOLD) {
+      this.chunks = this.chunks.slice(this.headIndex)
+      this.headIndex = 0
+    }
+  }
+
+  private clear(): void {
+    this.chunks = []
+    this.headIndex = 0
+    this.headOffset = 0
+    this.totalLen = 0
+    this.headChunkIsPartial = false
   }
 
   read(): string {

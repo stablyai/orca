@@ -116,7 +116,12 @@ export class RuntimeAgentRowStore {
       if (row.terminalHandle !== args.handle && (!args.paneKey || row.paneKey !== args.paneKey)) {
         continue
       }
-      consider(row.state, row.receivedAt, row.restoredUnconfirmed, row.stateStartedAt)
+      consider(
+        row.state,
+        row.receivedAt,
+        row.restoredUnconfirmed || row.providerSessionOnly === true,
+        row.stateStartedAt
+      )
     }
     return bestStatus
       ? { status: bestStatus, updatedAt: bestUpdatedAt, stateStartedAt: bestStateStartedAt }

@@ -2,14 +2,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionRestartRestoreGate } from './structured-agent-session-restart-restore-gate'
 
 describe('StructuredAgentSessionRestartRestoreGate', () => {
-  it('runs one successful restore across concurrent and later discovery', async () => {
+  it('runs every batch across concurrent and later discovery', async () => {
     const gate = new StructuredAgentSessionRestartRestoreGate()
     const restore = vi.fn(async () => undefined)
 
     await Promise.all([gate.run(restore), gate.run(restore), gate.run(restore)])
     await gate.run(restore)
 
-    expect(restore).toHaveBeenCalledOnce()
+    expect(restore).toHaveBeenCalledTimes(4)
   })
 
   it('allows a failed restore to be retried', async () => {

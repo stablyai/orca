@@ -5,7 +5,11 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
+import {
+  isMacPlatform,
+  matchesNativeChatToggleShortcut,
+  requestNativeChatToggle
+} from './native-chat-shortcut'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   isNativeChatTabWideFallbackSafe,
@@ -99,7 +103,7 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       }
       e.preventDefault()
       e.stopPropagation()
-      state.toggleTabViewMode(tab.id)
+      requestNativeChatToggle(tab.entityId)
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => {

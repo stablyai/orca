@@ -55,13 +55,15 @@ function makeExecutable(path: string): void {
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveEnv?: () => Record<string, string>,
-  stripAuthEnv = false
+  stripAuthEnv = false,
+  canStartEmptySession?: () => Promise<boolean>
 ) {
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveCommand: () => '/usr/local/bin/claude',
     resolveAuthPolicy: () => ({ stripAuthEnv }),
+    canStartEmptySession,
     ...(resolveEnv ? { resolveEnv } : {})
   })
 }
@@ -100,6 +102,29 @@ const RESUMABLE = record({
 })
 
 describe('claude structured launch resolution', () => {
+  it.each([true, false])(
+    'uses the original id without resume only with empty-session proof (%s)',
+    async (empty) => {
+      const saved = record({
+        providerHandleChain: [
+          {
+            handle: { provider: 'claude', sessionId: 'provider-current', leafUuid: null }
+          }
+        ] as AgentSessionRecord['providerHandleChain']
+      })
+      const launch = await resolverFor(
+        saved,
+        undefined,
+        false,
+        async () => empty
+      )({ identity: identityAt(null) })
+      expect(launch.providerSessionId).toBe('provider-current')
+      expect(launch.resumed).toBe(true)
+      expect(launch.options.resume).toBe(empty ? undefined : 'provider-current')
+      expect(launch.options.sessionId).toBe(empty ? 'provider-current' : undefined)
+    }
+  )
+
   it('pre-mints a stable provider id and pins interactive setting sources', async () => {
     const first = await resolverFor(record())({ identity: IDENTITY })
     const second = await resolverFor(record())({ identity: IDENTITY })

@@ -9,13 +9,17 @@ import {
   cancelClaudeTurn,
   stopClaudeBackgroundTasks
 } from './claude-structured-control-actions'
-import { dispatchClaudeTurn } from './claude-structured-dispatch'
+import { dispatchClaudeTurn, cancelPendingClaudeSteers } from './claude-structured-dispatch'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
 export { CLAUDE_STRUCTURED_INIT_TIMEOUT_MS } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
+import {
+  readClaudeStructuredSessionOptions,
+  updateClaudeStructuredCommands,
+  readClaudeStructuredContext
+} from './claude-structured-session-options'
 import {
   ClaudeAcquisitionRegistry,
   type ClaudeAcquisitionAttempt,
@@ -195,6 +199,16 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         : event.type === 'message'
           ? (session?.backgroundTasks.observe(event.message, event.startsTurn === true) ?? false)
           : false
+    if (event.type === 'message') {
+      session?.contextActivity?.observeContext(event.message)
+      if (
+        session &&
+        event.message.type === 'system' &&
+        event.message.subtype === 'commands_changed'
+      ) {
+        updateClaudeStructuredCommands(session, event.message)
+      }
+    }
     session?.translator?.handle(event)
     this.deps.onEvent?.(event)
     if (backgroundTasksChanged) {
@@ -221,10 +235,22 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
     )
 
-  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) => {
+  steer: NonNullable<StructuredAgentSessionAdapter['steer']> = (input) => {
+    const session = this.session(input.sessionId)
+    if (session.fence !== input.fence) {
+      return Promise.resolve({ state: 'rejected', reason: 'conversation_turn_mismatch' })
+    }
+    return dispatchClaudeTurn(
+      session,
+      input,
+      this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
+    )
+  }
+
+  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.session(input.sessionId)
     const acquisitionGeneration = session.acquisitionGeneration
-    return cancelClaudeTurn(session, this.deps.requestTimeoutMs, () => {
+    const result = await cancelClaudeTurn(session, this.deps.requestTimeoutMs, () => {
       // Keep every ownership check adjacent to the provider interrupt. The
       // session map check fences a replaced child; the turn check fences a
       // delayed cancel after a newer turn was admitted on the same child.
@@ -238,6 +264,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
             session.activeTurnSequence === session.dispatchSequence)
       )
     })
+    if (result.cancelled) {
+      cancelPendingClaudeSteers(session, input.turnId)
+    }
+    return result
   }
   stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'] = (input) => {
     const session = this.session(input.sessionId)
@@ -267,6 +297,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     setClaudeStructuredOption(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
+
+  readContext = (sessionId: string) => readClaudeStructuredContext(this.sessions.get(sessionId))
+  readConfiguration = (sessionId: string) => this.sessions.get(sessionId)?.configuration ?? null
 
   readOptionRestoreFailures = (sessionId: string): readonly string[] => [
     ...(this.sessions.get(sessionId)?.restoreSkippedOptions ?? [])

@@ -59,6 +59,7 @@ export function agentStatusEntryEqual(
     a.interrupted === b.interrupted &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    a.roomDeliveryId === b.roomDeliveryId &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )

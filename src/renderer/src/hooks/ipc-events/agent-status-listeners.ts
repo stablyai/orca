@@ -82,6 +82,11 @@ export function registerAgentStatusListeners(args: {
         }
       }
       const store = useAppStore.getState()
+      if (data.rendererSurfaceHidden === true) {
+        store.dropAgentStatus(data.paneKey, { rendererOnly: true })
+        store.clearSleepingAgentSession(data.paneKey)
+        return
+      }
       if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
         return
       }

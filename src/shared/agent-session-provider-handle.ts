@@ -7,18 +7,21 @@
  * identity root, and the chain records which is which so a fork is never presented as a resume.
  */
 
-export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex'] as const
+import type { AgentType } from './agent-status-types'
+
+export const AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS = ['claude', 'codex', 'acp'] as const
 
 export type AgentSessionHandleProvider = (typeof AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS)[number]
 
 /** Runtime guard for persisted/remote provider metadata. Unknown values must not impersonate Codex. */
 export function isAgentSessionHandleProvider(value: unknown): value is AgentSessionHandleProvider {
-  return value === 'claude' || value === 'codex'
+  return value === 'claude' || value === 'codex' || value === 'acp'
 }
 
 export type AgentSessionProviderHandle =
   | { provider: 'claude'; sessionId: string; leafUuid: string | null }
   | { provider: 'codex'; threadId: string }
+  | { provider: 'acp'; agent: AgentType; sessionId: string }
 
 export type AgentSessionProviderHandleOrigin = 'created' | 'adopted' | 'resumed' | 'forked'
 
@@ -62,14 +65,20 @@ export function isAgentSessionProviderHandle(value: unknown): value is AgentSess
       (handle.leafUuid === null || isHandleField(handle.leafUuid))
     )
   }
-  return handle.provider === 'codex' && isHandleField(handle.threadId)
+  if (handle.provider === 'codex') {
+    return isHandleField(handle.threadId)
+  }
+  return handle.provider === 'acp' && isHandleField(handle.agent) && isHandleField(handle.sessionId)
 }
 
 /** Stable string identity for one handle. Two handles with the same key name the same writer target. */
 export function agentSessionProviderHandleKey(handle: AgentSessionProviderHandle): string {
-  return handle.provider === 'claude'
-    ? `claude:${JSON.stringify([handle.sessionId, handle.leafUuid])}`
-    : `codex:${JSON.stringify(handle.threadId)}`
+  if (handle.provider === 'claude') {
+    return `claude:${JSON.stringify([handle.sessionId, handle.leafUuid])}`
+  }
+  return handle.provider === 'codex'
+    ? `codex:${JSON.stringify(handle.threadId)}`
+    : `acp:${JSON.stringify([handle.agent, handle.sessionId])}`
 }
 
 /**
@@ -77,9 +86,12 @@ export function agentSessionProviderHandleKey(handle: AgentSessionProviderHandle
  * whatever the provider called it.
  */
 export function agentSessionProviderHandleRoot(handle: AgentSessionProviderHandle): string {
-  return handle.provider === 'claude'
-    ? `claude:${JSON.stringify(handle.sessionId)}`
-    : `codex:${JSON.stringify(handle.threadId)}`
+  if (handle.provider === 'claude') {
+    return `claude:${JSON.stringify(handle.sessionId)}`
+  }
+  return handle.provider === 'codex'
+    ? `codex:${JSON.stringify(handle.threadId)}`
+    : `acp:${JSON.stringify([handle.agent, handle.sessionId])}`
 }
 
 export function agentSessionProviderHandlesEqual(

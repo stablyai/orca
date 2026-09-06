@@ -2,19 +2,26 @@ import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
-type RoutedAgent = 'claude' | 'codex'
+import {
+  isStructuredMachineAgent,
+  type StructuredMachineAgent
+} from '../../../shared/structured-agent-provider'
 
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
   private readonly owners = new Map<string, StructuredAgentSessionAdapter>()
 
   constructor(
-    private readonly adapters: Record<RoutedAgent, StructuredAgentSessionAdapter>,
+    private readonly adapters: Partial<
+      Record<StructuredMachineAgent, StructuredAgentSessionAdapter>
+    >,
     private readonly closeAdapters: () => Promise<void>
   ) {}
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean => {
     const adapter = this.adapterForAgent(agent)
-    return adapter ? (adapter.supportsLocation?.(location) ?? false) : false
+    return adapter
+      ? (adapter.supportsCreate?.(location, agent) ?? adapter.supportsLocation?.(location) ?? false)
+      : false
   }
 
   supportsLocation = (location: AgentSessionExecutionLocation): boolean =>
@@ -59,12 +66,24 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
     sessionId
   ) => this.owners.get(sessionId)?.backgroundTaskState?.(sessionId)
+  steer(input: Parameters<NonNullable<StructuredAgentSessionAdapter['steer']>>[0]) {
+    const adapter = this.owner(input.sessionId)
+    return (
+      adapter.steer?.(input) ??
+      Promise.resolve({ state: 'rejected' as const, reason: 'conversation_steer_unsupported' })
+    )
+  }
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.owner(input.sessionId).answerPrompt(input)
 
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
+
+  readContext = (sessionId: string) => this.owners.get(sessionId)?.readContext?.(sessionId) ?? null
+
+  readConfiguration = (sessionId: string) =>
+    this.owners.get(sessionId)?.readConfiguration?.(sessionId) ?? null
 
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions
@@ -130,6 +149,6 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   }
 
   private adapterForAgent(agent: string): StructuredAgentSessionAdapter | null {
-    return agent === 'claude' || agent === 'codex' ? this.adapters[agent] : null
+    return isStructuredMachineAgent(agent) ? (this.adapters[agent] ?? null) : null
   }
 }

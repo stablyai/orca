@@ -59,6 +59,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.promptDelivery ?? null,
           request.agentArgs ?? null,
           request.agentArgs === undefined ? 'host-default' : 'client-override',
+          request.extraAgentArgs ?? null,
           request.launchPreferences?.model ?? null,
           request.launchPreferences?.effort ?? null,
           request.launchPreferences?.mode ?? null,
@@ -66,7 +67,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           request.presentation ?? null,
           request.placement?.tabId ?? null,
           request.placement?.leafId ?? null,
-          request.viewMode ?? null
+          request.viewMode ?? null,
+          request.surfaceOwner ?? null,
+          request.persistHostSessionBinding ?? null
         ])
       )
       .digest('base64url')
@@ -135,6 +138,7 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.promptDelivery ?? null,
             request.agentArgs ?? null,
             request.agentArgs === undefined ? 'host-default' : 'client-override',
+            request.extraAgentArgs ?? null,
             request.launchPreferences?.model ?? null,
             request.launchPreferences?.effort ?? null,
             request.launchPreferences?.mode ?? null,
@@ -142,7 +146,9 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
             request.presentation ?? null,
             request.placement?.tabId ?? null,
             request.placement?.leafId ?? null,
-            request.viewMode ?? null
+            request.viewMode ?? null,
+            request.surfaceOwner ?? null,
+            request.persistHostSessionBinding ?? null
           ])
         )
         .digest('base64url')
@@ -162,10 +168,12 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
       const startupArgs = {
         agent: request.agent,
         cmdOverrides: settings.agentCmdOverrides ?? {},
-        agentArgs:
+        agentArgs: this.appendExtraAgentLaunchArgs(
           request.agentArgs !== undefined
             ? request.agentArgs
             : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
+          request.extraAgentArgs
+        ),
         agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         platform,
@@ -220,6 +228,8 @@ export class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithGetAgentSe
           leafId: operationLeafId,
           preAllocatedHandle: operationHandle,
           viewMode: request.viewMode,
+          persistHostSessionBinding: request.persistHostSessionBinding ?? true,
+          ...(request.surfaceOwner === false ? { surfaceOwner: false } : {}),
           agentSessionCreateOperationId: executionOperationId,
           signal: caller.signal,
           onPtySpawnCommitted: () => {

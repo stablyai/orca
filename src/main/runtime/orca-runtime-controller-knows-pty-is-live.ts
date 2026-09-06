@@ -128,15 +128,19 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
       signal?: AbortSignal
+      clearInput?: boolean
+      imagePaths?: readonly string[]
     } = {}
   ): Promise<RuntimeTerminalSend> {
     const payload = buildAgentPromptPasteBytes(prompt)
+    const imagePayloads = (options.imagePaths ?? []).map(buildAgentPromptPasteBytes)
+    const submissionPayload = `${imagePayloads.join('')}${payload}`
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
         throw new Error('terminal_not_writable')
       }
-      await assertTerminalInputWithinLimitWithYield(payload)
+      await assertTerminalInputWithinLimitWithYield(submissionPayload)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
       const submits = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
@@ -144,16 +148,13 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         async () => {
           this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
           this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(
-            handle,
-            pty.pty.ptyId,
-            generation,
-            payload,
-            options
-          )
+          return await this.writeTerminalAgentPrompt(handle, pty.pty.ptyId, generation, payload, {
+            ...options,
+            prefixPastePayloads: imagePayloads
+          })
         }
       )
-      const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
+      const bytesWritten = Buffer.byteLength(submissionPayload, 'utf8') + submits
       return { handle, accepted: true, bytesWritten }
     }
 
@@ -161,7 +162,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     if (!leaf.writable || !leaf.ptyId) {
       throw new Error('terminal_not_writable')
     }
-    await assertTerminalInputWithinLimitWithYield(payload)
+    await assertTerminalInputWithinLimitWithYield(submissionPayload)
     // Why: same absence gate as sendTerminal — a stale graph mirror must not
     // accept a prompt into a void; unknown liveness still proceeds.
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
@@ -171,9 +172,12 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     const submits = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
       this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
       this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, {
+        ...options,
+        prefixPastePayloads: imagePayloads
+      })
     })
-    const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
+    const bytesWritten = Buffer.byteLength(submissionPayload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
   }
 }

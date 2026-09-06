@@ -12,11 +12,9 @@ import type {
   AgentJournalResolution,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import type {
-  AgentSessionHandoffStage,
-  AgentSessionOwnerRuntimeKind,
-  AgentSessionRecord
-} from './agent-session-record'
+import type { SessionOptionDescriptor } from './native-chat-session-options'
+import type { AgentType } from './agent-status-types'
+import type { AgentSessionHandoffStage, AgentSessionOwnerRuntimeKind } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
@@ -174,7 +172,7 @@ export type AgentSessionSubscribeEvent =
 export type AgentSessionStatusSummary = {
   sessionId: string
   workspaceId: string
-  agent: AgentSessionRecord['provider']
+  agent: AgentType
   /** Null until the journal holds a persisted user or assistant message. */
   status: StructuredAgentSessionProjectedStatus | null
   latestPrompt: string
@@ -310,6 +308,7 @@ export type AgentSessionModelOption = {
 export type AgentSessionOptionsResult = {
   models: AgentSessionModelOption[]
   current: {
+    /** Empty when neither the provider nor an explicit selection names the model. */
     model: string
     effort?: string
     /**
@@ -319,4 +318,7 @@ export type AgentSessionOptionsResult = {
      */
     confirmed?: readonly string[]
   }
+  descriptors?: SessionOptionDescriptor[]
+  canCompact?: boolean
+  canSteer?: boolean
 }

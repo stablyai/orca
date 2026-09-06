@@ -7,7 +7,8 @@ import {
 } from '../../../providers/ssh-pty-errors'
 import type { Store } from '../../../persistence'
 import type { IPtyProvider } from '../../../providers/types'
-import { spawnForStablePane, type StablePaneOwner } from './stable-owner'
+import type { StablePaneOwner } from './stable-owner'
+import { spawnForStablePane } from './stable-pane-spawn'
 
 const LEAF = '1b3f2c4d-5e6a-4b7c-8d9e-0f1a2b3c4d5e'
 const SIBLING_LEAF = '2c4d3e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f'

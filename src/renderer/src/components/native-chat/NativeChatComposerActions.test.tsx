@@ -27,8 +27,8 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('./NativeChatSessionOptionPickers', () => ({
-  NativeChatSessionOptionPickers: () => <div data-testid="session-option-pickers" />
+vi.mock('../agent-session-controls/AgentSessionControls', () => ({
+  AgentSessionControls: () => <div data-testid="session-option-pickers" />
 }))
 
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -112,6 +112,34 @@ describe('NativeChatComposerActions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop the agent' }), { detail: 2 })
 
     expect(onSend).not.toHaveBeenCalled()
+    expect(onStop).not.toHaveBeenCalled()
+  })
+
+  it('turns a working composer into Add to queue when sending remains available', () => {
+    const onSend = vi.fn()
+    const onStop = vi.fn()
+    render(
+      <NativeChatComposerActions
+        attachDisabled={false}
+        dictationDisabled={false}
+        sendDisabled={false}
+        isWorking
+        sendWhileWorking
+        isDictating={false}
+        isDictationHoldMode={false}
+        onAttach={vi.fn()}
+        onDictationToggle={vi.fn()}
+        onDictationHoldStart={vi.fn()}
+        onDictationHoldEnd={vi.fn()}
+        onSend={onSend}
+        onStop={onStop}
+        sessionOptionsSurface={null}
+        sessionOptionsSnapshot={[]}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
+    expect(onSend).toHaveBeenCalledOnce()
     expect(onStop).not.toHaveBeenCalled()
   })
 })

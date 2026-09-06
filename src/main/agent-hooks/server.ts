@@ -1,4 +1,5 @@
 // This main-process adapter keeps listener internals in shared/ so the relay can host the same pipeline without Electron.
+import { join } from 'node:path'
 import { clearAllListenerCaches } from '../../shared/agent-hook-listener/listener-state'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { parseFormEncodedBody } from '../../shared/agent-hook-listener/request-body'
@@ -6,6 +7,10 @@ import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/lis
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { AgentHookServerLifecycle } from './server/server-lifecycle'
 import { isValidPaneKey } from './server/server-status-identity'
+import {
+  type NativeChatHookActivityStore,
+  nativeChatHookActivityStore
+} from '../native-chat/hook-activity-store'
 
 export type {
   AgentHookAuthorityAttestation,
@@ -24,9 +29,39 @@ export {
 export { isValidPaneKey }
 
 /** Public composition seam for the loopback hook listener and relay status adapter. */
-export class AgentHookServer extends AgentHookServerLifecycle {}
+export class AgentHookServer extends AgentHookServerLifecycle {
+  constructor(private readonly nativeChatActivity: NativeChatHookActivityStore | null = null) {
+    super()
+    if (nativeChatActivity) {
+      this.subscribeEnrichedStatus((event) => nativeChatActivity.ingest(event))
+    }
+  }
 
-export const agentHookServer = new AgentHookServer()
+  override async start(options?: {
+    env?: string
+    userDataPath?: string
+    endpointNamespace?: string
+  }): Promise<void> {
+    if (this.server) {
+      return
+    }
+    this.nativeChatActivity?.reset()
+    if (options?.userDataPath) {
+      this.configureEndpointPaths(options.userDataPath, options.endpointNamespace)
+    }
+    this.nativeChatActivity?.setRoot(
+      this.endpointDir ? join(this.endpointDir, 'native-chat-activity') : null
+    )
+    await super.start(options)
+  }
+
+  override stop(): void {
+    super.stop()
+    this.nativeChatActivity?.reset()
+  }
+}
+
+export const agentHookServer = new AgentHookServer(nativeChatHookActivityStore)
 
 // Why: exported for test coverage of the per-agent field extractors.
 export const _internals = {

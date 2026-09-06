@@ -117,7 +117,10 @@ function readTranscriptDirectory(directory: string): string[] {
 }
 
 // Why: Codex files each rollout under its OWN local start date, so a session running past midnight spawns children into a sibling day directory.
-function childDayDirectory(parentPath: string, startedAt: number): string | undefined {
+export function codexSubagentDayDirectory(
+  parentPath: string,
+  startedAt: number
+): string | undefined {
   const dayDir = dirname(parentPath)
   const monthDir = dirname(dayDir)
   const yearDir = dirname(monthDir)
@@ -142,7 +145,7 @@ function childDayDirectory(parentPath: string, startedAt: number): string | unde
   )
 }
 
-function resolveChildTranscript(
+export function resolveCodexSubagentTranscript(
   parentPath: string,
   threadId: string,
   startedAt: number,
@@ -153,7 +156,7 @@ function resolveChildTranscript(
   }
   const suffix = `-${threadId}.jsonl`
   const parentDir = dirname(parentPath)
-  const childDir = childDayDirectory(parentPath, startedAt)
+  const childDir = codexSubagentDayDirectory(parentPath, startedAt)
   const directories = childDir && childDir !== parentDir ? [parentDir, childDir] : [parentDir]
   for (const directory of directories) {
     let entries = entriesByDirectory.get(directory)
@@ -169,7 +172,7 @@ function resolveChildTranscript(
   return undefined
 }
 
-function readActivity(recordValue: JsonRecord):
+export function readCodexSubagentActivity(recordValue: JsonRecord):
   | {
       id: string
       description?: string
@@ -268,7 +271,7 @@ export function reconcileCodexSubagentTranscript(
     state.subagents.clear()
   }
   for (const recordValue of readJsonlCursor(state.parent) ?? []) {
-    const activity = readActivity(recordValue)
+    const activity = readCodexSubagentActivity(recordValue)
     if (!activity) {
       continue
     }
@@ -295,7 +298,7 @@ export function reconcileCodexSubagentTranscript(
   const now = Date.now()
   for (const [id, tracked] of state.subagents) {
     if (!tracked.filePath) {
-      tracked.filePath = resolveChildTranscript(
+      tracked.filePath = resolveCodexSubagentTranscript(
         normalizedPath,
         id,
         tracked.startedAt,

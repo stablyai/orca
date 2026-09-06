@@ -25,6 +25,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { StructuredMachineAgent } from './structured-agent-provider'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -207,6 +208,10 @@ export type GlobalSettings = {
   experimentalNativeChat?: boolean
   /** Opt-in updated structured runtime; off keeps the existing PTY-backed native chat path. */
   experimentalStructuredNativeChat?: boolean
+  /** Automatically steer agent-authored room messages into active machine turns. */
+  experimentalRoomLiveSteering?: boolean
+  /** Agents allowed to use the structured runtime when live streaming is enabled. */
+  enabledHarnessStreamingAgents?: StructuredMachineAgent[]
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */

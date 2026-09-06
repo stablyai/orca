@@ -288,11 +288,11 @@ describe('tab title tooltips', () => {
     expectTabContainerWidth(markup, root)
   })
 
-  it("shows the provider icon while stripping the agent's leading status glyph from the label", () => {
+  it('shows the provider icon while stripping its leading glyph from a custom title', () => {
     mockTabAgent = 'claude'
     const markup = renderToStaticMarkup(
       <SortableTab
-        tab={makeTerminalTab({ title: '✳ Claude Code' })}
+        tab={makeTerminalTab({ customTitle: '✳ Claude Code' })}
         unifiedTabId="terminal-1"
         groupId="group-1"
         tabCount={1}

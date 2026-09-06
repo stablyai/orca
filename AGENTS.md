@@ -14,11 +14,7 @@ Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not
 
 # Style
 
-## Reuse Before Reimplementing
-
-Before writing new logic at any scale — a function, component, IPC channel, state store, or whole subsystem/flow — check whether an existing implementation already does the job (or nearly does). Extend or generalize it instead of building a parallel version; only write from scratch when nothing fits. Keep the check proportionate: a quick search for trivial code, a real one before building anything substantial.
-
-## Concise/Brief Non-obvious Comments ONLY
+## Concise/Brief Non-obviosu comments ONLY
 
 - DO NOT: be verbose, explain the obvious, walk through the code ("WHY not HOW")
 - BE CONCISE. 1 LINE if possible
@@ -32,12 +28,6 @@ NEVER add a `max-lines` disable (`eslint-disable max-lines`, `oxlint-disable max
 Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuff` for files, folders, or modules. They carry zero info and tend to become dumping grounds. Name files after what they _actually_ contain — prefer the concrete domain concept (e.g. `tab-group-state.ts`, `terminal-orphan-cleanup.ts`) over the generic role (`tabs-helpers.ts`, `terminal-utils.ts`). If you find yourself reaching for `helpers`, the file probably has more than one responsibility and should be split, or there's a better name hiding in the code that describes what the functions operate on.
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
-
-# Verifying Changes
-
-- **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
-- **Test**: `pnpm test [path/to/file.test.ts]`
-- **Lint**: `oxlint`, or `pnpm run check:code-quality:changed` for changed files (full `pnpm lint` is slow); format with `pnpm format`
 
 # Considerations
 
@@ -62,7 +52,7 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 
 ## SSH Use Case
 
-All changes must consider the SSH use case. Don't assume local-only execution. Before changing anything that reports on, stops, or lists remote work, follow [`docs/reference/ssh-execution-boundary.md`](./docs/reference/ssh-execution-boundary.md): the execution host owns everything that touches execution, and loss of contact is never evidence of process death — the verdict vocabulary is `live` / `unverifiable` / `exited`, with no synonyms.
+All changes must consider the SSH use case. Don't assume local-only execution.
 
 ## Folder Workspace Use Case
 
@@ -84,12 +74,6 @@ When adding or changing a Git command:
 - Keep the real-binary compatibility contract in PR CI current. When adopting a newer Git feature, add its version boundary so the preferred command and fallback both run against representative Git releases.
 - Preserve commands that begin with global Git options such as `-c` before the subcommand, including auto-maintenance suppression used by worktree-create fetches.
 
-## Git Scan Safety
-
-- Never enumerate every ref and then run `git ls-tree -r` or `git show` once per ref. That ref × tree fan-out can retain gigabytes of output before a downstream `sort -u` or search can make progress.
-- Prefer `rg` over the checked-out files for source searches. For history or refs, use a named ref, an explicit namespace/path, `--max-count`, and a bounded output; do not use an unqualified `--all` scan as a first diagnostic.
-- Keep repository-wide commands targeted to the current repository and worktree. If an unbounded scan is genuinely required, measure the ref count first, explain the cost, and get confirmation before running it.
-
 ## Git Provider Compatibility
 
 Source-control and review changes must consider GitLab and other supported git providers, not only GitHub. Keep provider-specific behavior behind explicit checks, and avoid GitHub-only naming for generic review concepts.
@@ -97,3 +81,70 @@ Source-control and review changes must consider GitLab and other supported git p
 ## GitHub CLI Usage
 
 Be mindful of the user's `gh` CLI API rate limit — batch requests where possible and avoid unnecessary calls. All code, commands, and scripts must be compatible with macOS, Linux, and Windows.
+
+### Порядок сборки и деплоя локального приложения для тестирования
+
+Проверки перед сборкой:
+
+- `pnpm exec oxfmt` только для изменённых файлов либо штатная команда проекта.
+- точечный oxlint для изменённых файлов;
+- typecheck;
+- целевые rooms-тесты;
+- `rtk git diff --check`.
+
+macOS-среда уже подготовлена:
+
+- Xcode установлен;
+- `xcode-select` переключён на `/Applications/Xcode.app/Contents/Developer`;
+- лицензия принята;
+- `xcodebuild -runFirstLaunch` выполнен.
+
+Штатная локальная сборка:
+`CSC_IDENTITY_AUTO_DISCOVERY=false pnpm build:mac`
+
+Важно:
+
+- НЕ использовать Developer ID;
+- НЕ использовать Apple signing certificate;
+- НЕ делать notarization;
+- НЕ ждать release signing;
+- итоговая подпись только быстрая ad-hoc.
+
+После сборки найди актуальный arm64 bundle в `dist/` и обязательно проверь:
+`file <bundle>/Contents/MacOS/Orca`
+
+Он должен быть arm64 или universal с arm64.
+
+Ad-hoc подпись:
+`codesign --force --deep --sign - <bundle>`
+
+Проверка:
+`codesign --verify --deep --strict <bundle>`
+`codesign -dv --verbose=2 <bundle> 2>&1 | grep -E 'Signature=|Identifier='`
+
+Должно быть:
+`Signature=adhoc`
+`Identifier=com.stablyai.orca`
+
+Установка:
+
+- Orca перед заменой должна быть закрыта.
+- Убить старый продакшн-демон (иначе новое приложение сохранит старый демон,
+  пока у него есть живые сессии, и новый код не влезет):
+  `pkill -f "daemon-entry.js --socket $HOME/Library/Application Support/orca/daemon/"`
+  и дождаться исчезновения процесса. Dev-демон (`orca-dev`) не трогать —
+  паттерн выше его не ловит.
+- Заменить `/Applications/Orca.app` новым bundle без создания резервной копии и ZIP-архива.
+- Повторно проверить установленную подпись и архитектуру.
+- После успешной проверки установленного приложения удалить весь каталог `<repo>/dist/`.
+  Перед удалением проверить, что это обычный каталог внутри текущего корня репозитория,
+  а не symlink. Не удалять `out/` и native `.build` каталоги.
+- Приложение самостоятельно НЕ запускать.
+
+## Эталон ChatGPT/Codex Desktop
+
+Для статического анализа ChatGPT Desktop и его Codex UI используй распакованное актуальное приложение:
+
+`/Users/egorbogomolov/PycharmProjects/orca/.tmp/chatgpt-unpacked/`
+
+Это read-only эталон. Основные renderer-бандлы находятся в `webview/assets/`; ищи по ним через `rg`. Код собран и минифицирован, поэтому имена файлов и идентификаторов нестабильны — отслеживай поведение по строкам, компонентам, событиям и местам вызова. Ничего оттуда не редактируй, не импортируй и не коммить. После обновления ChatGPT распакуй заново `/Applications/ChatGPT.app/Contents/Resources/app.asar`.

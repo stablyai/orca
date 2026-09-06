@@ -47,7 +47,7 @@ export function providerHistoryId(handle: AgentSessionProviderHandle): string {
   if (handle.kind === 'codex') {
     return handle.threadId
   }
-  return handle.kind === 'claude' ? handle.sessionId : handle.value
+  return handle.kind === 'opaque' ? handle.value : handle.sessionId
 }
 
 export async function openAgentSessionJournalWithRecovery(input: {

@@ -17,6 +17,7 @@ export type CatalogMidSessionApply =
     }
   | { kind: 'toggle-command'; command: string }
   | { kind: 'agent-picker'; command: string; delivery?: CatalogCommandDelivery }
+  | { kind: 'restart' }
   | { kind: 'unsupported' }
 
 export type CatalogOptionApply = {
@@ -35,6 +36,8 @@ export type CatalogOption = {
   label: string
   description?: string
   category?: SessionOptionDescriptor['category']
+  /** False preserves an unstated provider/user default until this option is chosen. */
+  launchDefault?: false
   kind:
     | {
         type: 'select'
@@ -65,6 +68,9 @@ export type AgentSessionOptionCatalog = {
    * must be able to drop it rather than only add. Membership only — option menus
    * still come from the seed. */
   discoveredModelsAreAuthoritative?: true
+  /** True for agents (codex) whose model/effort flags die with the process and must
+   * be embedded in the cold-restore launch command. Claude keeps options in-session. */
+  capturesOptionsInLaunchCommand?: true
   /** Set only when the `isDefault` model is provably what the CLI runs with no model
    * flag, so an untouched draft may show it as selected. Off means `isDefault` stays
    * decorative: agents whose default comes from account or user config would otherwise

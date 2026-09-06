@@ -3,10 +3,12 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalMessageItem,
+  AgentJournalTurn,
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalIdentityTurn } from '../../../shared/agent-session-journal-turn'
 import type { JournalReducerState } from './journal-reducer'
 import type {
   JournalDispatchRow,
@@ -76,6 +78,9 @@ export function journalDispatchRowBuilder(
       clientMessageId: input.clientMessageId,
       dispatchState: input.state,
       providerItemId,
+      ...(input.state === 'accepted' && agentJournalIdentityTurn(input.providerIdentity)
+        ? { turn: agentJournalIdentityTurn(input.providerIdentity) }
+        : {}),
       reason: input.state === 'accepted' ? null : (input.reason ?? null),
       seq,
       fence: input.fence,
@@ -111,7 +116,15 @@ export function journalLifecycleBatchRowBuilder(
           )) + 1
       revisions.set(resolved, revision)
       return mutation.kind === 'item'
-        ? { kind: 'item', itemId, revision, body: mutation.body }
+        ? {
+            kind: 'item',
+            itemId,
+            revision,
+            body: mutation.body,
+            ...(agentJournalIdentityTurn(mutation.identity, mutation.body)
+              ? { turn: agentJournalIdentityTurn(mutation.identity, mutation.body) }
+              : {})
+          }
         : { kind: 'tombstone', itemId, revision }
     })
     const row: JournalLifecycleBatchRow = {
@@ -155,6 +168,9 @@ export function buildJournalItemRow(input: {
     revision,
     body: input.body,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
+    ...(agentJournalIdentityTurn(input.identity, input.body)
+      ? { turn: agentJournalIdentityTurn(input.identity, input.body) }
+      : {}),
     ...(input.recovered ? { recovered: input.recovered } : {})
   }
 }
@@ -205,6 +221,7 @@ export function buildJournalDispatchRow(input: {
   fence: number
   ts: number
   recovered?: true
+  turn?: AgentJournalTurn
 }): JournalDispatchRow {
   return {
     kind: 'dispatch',
@@ -212,6 +229,7 @@ export function buildJournalDispatchRow(input: {
     state: input.dispatchState,
     providerItemId: input.providerItemId,
     reason: input.reason,
+    ...(input.turn ? { turn: input.turn } : {}),
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
     ...(input.recovered ? { recovered: input.recovered } : {})
   }

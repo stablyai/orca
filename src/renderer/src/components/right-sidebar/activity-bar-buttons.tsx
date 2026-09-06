@@ -15,7 +15,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export type ActivityBarItem = {
-  id: ActiveRightSidebarTab
+  id: RightSidebarActivityTab
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
   shortcut: string
@@ -28,6 +28,8 @@ export type ActivityBarItem = {
   /** Host-owned health indicator; plugin content cannot style this chrome. */
   statusIndicator?: CheckStatus
 }
+
+export type RightSidebarActivityTab = ActiveRightSidebarTab | 'room'
 
 const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   success: 'bg-emerald-500',
@@ -50,8 +52,8 @@ export function TopActivityOverflowMenu({
   checksStatus
 }: {
   items: ActivityBarItem[]
-  activeTab: ActiveRightSidebarTab
-  onSelect: (tab: ActiveRightSidebarTab) => void
+  activeTab: RightSidebarActivityTab
+  onSelect: (tab: RightSidebarActivityTab) => void
   checksStatus?: CheckStatus | null
 }): React.JSX.Element {
   const hiddenChecksStatus =

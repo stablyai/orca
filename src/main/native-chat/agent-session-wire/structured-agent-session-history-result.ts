@@ -15,7 +15,7 @@ export function structuredAgentSessionProviderSessionMetadata(
   return head
     ? {
         key: 'session_id',
-        id: head.handle.provider === 'claude' ? head.handle.sessionId : head.handle.threadId
+        id: head.handle.provider === 'codex' ? head.handle.threadId : head.handle.sessionId
       }
     : undefined
 }

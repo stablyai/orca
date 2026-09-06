@@ -14,11 +14,13 @@ const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
 
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
+  '@agentclientprotocol/sdk',
   '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
   '@parcel/watcher',
   'electron-updater',
+  'fflate',
   'i18next',
   'jsonc-parser',
   'node-pty',

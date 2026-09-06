@@ -29,6 +29,7 @@ import { hostname } from 'node:os'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { createHarnessConversationDriverFactory } from '../harness-conversation/driver-factory'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner {
   async getWorktreePs(
@@ -156,6 +157,9 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
+      createMachineDriver: createHarnessConversationDriverFactory(() =>
+        this.requireStore().getSettings()
+      ),
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
   }
