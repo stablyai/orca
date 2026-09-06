@@ -1,10 +1,18 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
 
 export function fitPanes(manager: PaneManager): void {
   manager.fitAllPanes()
 }
 
 export function focusActivePane(manager: PaneManager): void {
+  // Deferred layout work must not dismiss a menu that opened after it was queued.
+  if (
+    typeof document !== 'undefined' &&
+    hasVisibleOverlay({ ignoreSelector: '[data-worktree-sidebar]' })
+  ) {
+    return
+  }
   // Why: tab rename focuses the input on the next frame. A queued terminal
   // layout focus can land in between mount and focus, blurring rename closed.
   if (typeof document !== 'undefined' && document.querySelector('[data-tab-rename-input="true"]')) {
