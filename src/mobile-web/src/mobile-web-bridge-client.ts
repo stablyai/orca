@@ -5,18 +5,14 @@ import {
   type MobileWebBridgeShellMessage,
   type MobileWebShellFeature
 } from '../../shared/mobile-web/bridge-contract'
-import {
-  MobileWebHapticSelectionResultSchema,
-  type MobileWebSessionSnapshotResult,
-  type MobileWebSessionSubscribePayload,
-  type MobileWebWorkspaceChange
+import type {
+  MobileWebSessionSnapshotResult,
+  MobileWebSessionSubscribePayload,
+  MobileWebWorkspaceChange
 } from '../../shared/mobile-web/bridge-operation-contract'
-import {
-  MobileWebTerminalDeviceInputResultSchema,
-  MobileWebTerminalRequestSchema,
-  type MobileWebTerminalDeviceInputResult,
-  type MobileWebTerminalEvent,
-  type MobileWebTerminalRequest
+import type {
+  MobileWebTerminalEvent,
+  MobileWebTerminalRequest
 } from '../../shared/mobile-web/terminal-stream-contract'
 import { MobileWebBridgeClientError } from './mobile-web-bridge-client-error'
 import type {
@@ -52,6 +48,7 @@ import type { MobileWebSourceControlReviewRequestClient } from './mobile-web-sou
 import { MobileWebSourceControlSyncRequestClient } from './mobile-web-source-control-sync-request-client'
 import { MobileWebSpeechRequestClient } from './mobile-web-speech-request-client'
 import { MobileWebTaskRequestClient } from './mobile-web-task-request-client'
+import { MobileWebTerminalRequestClient } from './mobile-web-terminal-request-client'
 import { mobileWebWorkspaceClientBindings } from './mobile-web-workspace-client-bindings'
 import { MobileWebWorkspaceRequestClient } from './mobile-web-workspace-request-client'
 import { MobileWebWorkspaceCreationCreateRequestClient } from './mobile-web-workspace-creation-create-request-client'
@@ -143,6 +140,8 @@ export class MobileWebBridgeClient {
   readonly agentHistory: MobileWebAgentHistoryRequestClient
   readonly speech: MobileWebSpeechRequestClient
   readonly task: MobileWebTaskRequestClient
+  readonly terminalRequest!: MobileWebTerminalRequestClient['request']
+  readonly terminalDeviceInputRequest!: MobileWebTerminalRequestClient['deviceInput']
   readonly browserNavigate!: MobileWebBrowserRequestClient['navigate']
   readonly browserPointer!: MobileWebBrowserRequestClient['pointer']
   readonly browserKeyboard!: MobileWebBrowserRequestClient['keyboard']
@@ -204,6 +203,9 @@ export class MobileWebBridgeClient {
     this.native = new MobileWebNativeRequestClient(this.requests)
     this.nativeChat = new MobileWebNativeChatRequestClient(this.requests)
     this.markdown = new MobileWebMarkdownRequestClient(this.requests)
+    const terminalRequests = new MobileWebTerminalRequestClient(this.requests)
+    this.terminalRequest = terminalRequests.request.bind(terminalRequests)
+    this.terminalDeviceInputRequest = terminalRequests.deviceInput.bind(terminalRequests)
     Object.assign(this, mobileWebBrowserNavigationClientBindings(this.requests))
     this.subscriptions = new MobileWebBridgeSubscriptionClient({
       getGrant: (capability) =>
@@ -254,30 +256,6 @@ export class MobileWebBridgeClient {
     ...args: Parameters<MobileWebBridgeSubscriptionClient['subscribeNativeChat']>
   ): MobileWebBridgeSubscription {
     return this.subscriptions.subscribeNativeChat(...args)
-  }
-
-  terminalRequest(
-    payload: Exclude<MobileWebTerminalRequest, { operation: 'subscribe' }>
-  ): Promise<null> {
-    return this.requests.request(
-      'terminal',
-      payload.operation,
-      payload,
-      MobileWebTerminalRequestSchema,
-      MobileWebHapticSelectionResultSchema
-    )
-  }
-
-  terminalDeviceInputRequest(
-    payload: Extract<MobileWebTerminalRequest, { operation: 'clipboardPaste' | 'attachImage' }>
-  ): Promise<MobileWebTerminalDeviceInputResult> {
-    return this.requests.request(
-      'terminal',
-      payload.operation,
-      payload,
-      MobileWebTerminalRequestSchema,
-      MobileWebTerminalDeviceInputResultSchema
-    )
   }
 
   sourceControlSubscribe(
