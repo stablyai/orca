@@ -13,6 +13,7 @@ import { selectExactWorkerProviderSession } from './orchestration/worker-provide
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { OrchestrationError } from './orchestration/orchestration-error'
+import { getWorktreeExecutionHostId } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAdoptTerminalOrphansFromInventory {
   async getTerminalInteractiveWait(
@@ -92,6 +93,8 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     path: string
     branch: string
     displayName: string
+    hostId?: string | null
+    createdWithAgent?: string | null
   } | null> {
     let worktreeId = this.store?.getWorkspaceSession?.()?.activeWorktreeId ?? null
     if (!worktreeId && this.graphStatus === 'ready') {
@@ -107,11 +110,14 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     }
     try {
       const resolved = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+      const repo = this.store?.getRepo?.(resolved.repoId)
       return {
         worktreeId: resolved.id,
         path: resolved.git.path,
         branch: resolved.git.branch,
-        displayName: resolved.displayName
+        displayName: resolved.displayName,
+        hostId: getWorktreeExecutionHostId(resolved, repo),
+        createdWithAgent: resolved.createdWithAgent ?? null
       }
     } catch {
       return null

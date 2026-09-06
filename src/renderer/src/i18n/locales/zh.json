@@ -9994,13 +9994,15 @@
           "keepDisabled": "保持禁用",
           "enable": "启用插件",
           "capability": {
-            "workspaceRead": "读取您聚焦的工作树的名称、分支和终端列表",
+            "workspaceRead": "读取您聚焦的工作树的名称、分支、终端列表、执行主机标签和智能体标签",
             "terminalSend": "在您可见的终端中输入文本（始终是特定终端）",
             "notificationsShow": "显示标有插件名称的桌面通知",
             "storage": "在插件自己的存储文件夹中存储数据",
             "secrets": "在插件自己的加密保险库中存储和读取密钥",
             "eventsSubscribe": "在工作树创建或移除以及智能体状态更改时获得通知",
-            "settingsOwn": "读取和更改插件自己的设置"
+            "settingsOwn": "读取和更改插件自己的设置",
+            "uiFocus": "读取聚焦的界面（种类、截断后的标签标题，以及可选的 worktree/agent 关联键）。未授权则关闭。",
+            "sidecar": "发布旁路帧（例如 Discord 状态），以便配对的界面客户端在安装了 Discord 的设备上应用它们"
           },
           "decisionFailed": "无法保存权限决定。请重试。"
         },

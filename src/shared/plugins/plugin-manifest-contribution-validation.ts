@@ -141,4 +141,14 @@ export function validatePluginManifestContributions(
       message: 'events:subscribe capability required when contributes.events is non-empty'
     })
   }
+  if (
+    manifest.contributes.events.some((event) => event.on === 'ui.focus.changed') &&
+    !manifest.capabilities.some((capability) => capability.kind === 'ui:focus')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['capabilities'],
+      message: 'ui:focus capability required when contributes.events includes ui.focus.changed'
+    })
+  }
 }

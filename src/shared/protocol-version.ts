@@ -172,6 +172,10 @@ export const AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE =
   'Editing automations on this host requires a newer Orca server. Update the HUB and try again.'
 export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'automation.create-idempotency.v1' as const
+// Why: host mailbox + sidecar.clientHost.latest let a plugin on the runtime
+// host publish frames for a paired UI machine. Old clients ignore the
+// capability and must not be sent a new stream opcode.
+export const SIDECAR_CLIENT_HOST_RUNTIME_CAPABILITY = 'sidecar.clientHost.v1' as const
 
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
@@ -190,7 +194,8 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  SIDECAR_CLIENT_HOST_RUNTIME_CAPABILITY
 ] as const
 
 export const RUNTIME_CAPABILITIES = [
@@ -259,7 +264,8 @@ export const RUNTIME_CAPABILITIES = [
   SKILL_DELETE_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  SIDECAR_CLIENT_HOST_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

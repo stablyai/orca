@@ -22,11 +22,11 @@ import {
 } from './plugin-discovery'
 import { PluginEventBus } from './plugin-event-bus'
 import { PluginAuditLog } from './plugin-audit-log'
-import { executePluginHostCallRequest } from './plugin-host-call-adapter'
 import { PluginContentVerifier } from './plugin-content-integrity'
-import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
+import type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { PluginLogBuffer, type PluginLogLine } from './plugin-log-buffer'
 import { PluginPanelController } from './plugin-panel-controller'
+import { PluginSidecarMailbox } from './plugin-sidecar-mailbox'
 import { PluginWorkerController } from './plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 import { collectApprovedWorkerSpecs } from './plugin-worker-reconciliation'
@@ -37,7 +37,13 @@ import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 import { assertPluginWorkerCommand } from './plugin-command-invocation'
-import { deliverPluginEvent } from './plugin-event-delivery'
+import {
+  emitPluginServiceEvent,
+  executePluginServiceHostCall,
+  reportPluginServiceUiFocus,
+  type PluginServiceHostCallContext
+} from './plugin-service-host-calls'
+import { PluginUiFocusSnapshot } from './plugin-ui-focus'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
@@ -53,6 +59,7 @@ export class PluginService {
   private readonly contentVerifier = new PluginContentVerifier()
   readonly contentPacks: PluginContentPackRegistry
   readonly panels: PluginPanelController
+  readonly sidecarMailbox = new PluginSidecarMailbox()
   private readonly changeListeners = new Set<(event: PluginChangeEvent) => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
   private discovered: DiscoveredPlugin[] = []
@@ -61,6 +68,7 @@ export class PluginService {
   private refreshChain: Promise<void> = Promise.resolve()
   private contentPacksReady = false
   private disposed = false
+  private readonly uiFocus = new PluginUiFocusSnapshot()
 
   constructor(options: PluginServiceOptions) {
     this.options = options
@@ -253,22 +261,7 @@ export class PluginService {
     params: unknown,
     options: { viaPanel: boolean }
   ): Promise<PluginPanelActionOutcome> {
-    return executePluginHostCallRequest({
-      pluginKey,
-      request: { method, params },
-      viaPanel: options.viaPanel,
-      resolvePolicy: (boundPluginKey) => ({
-        grantedCapabilities: this.getGrantedCapabilities(boundPluginKey),
-        services: this.runtimeDelegate
-          ? bindPluginHostServices({
-              delegate: this.runtimeDelegate,
-              pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
-              subscribeEvents: (key, events) => this.eventBus.subscribe(key, events)
-            })
-          : null,
-        audit: this.audit
-      })
-    })
+    return executePluginServiceHostCall(this.hostCallContext(), pluginKey, method, params, options)
   }
 
   async invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
@@ -284,19 +277,30 @@ export class PluginService {
     return handle.invokeCommand(commandId, args)
   }
 
+  reportUiFocus(raw: unknown): void {
+    reportPluginServiceUiFocus(this.hostCallContext(), raw)
+  }
+
   emitEvent(event: PluginEventName, payload: unknown): void {
-    if (!this.options.isPluginSystemEnabled() || this.disposed) {
-      return
-    }
-    deliverPluginEvent({
-      event,
-      payload,
-      plugins: this.discovered,
+    emitPluginServiceEvent(this.hostCallContext(), event, payload)
+  }
+
+  private hostCallContext(): PluginServiceHostCallContext {
+    return {
+      userDataPath: this.options.userDataPath,
+      isPluginSystemEnabled: () => this.options.isPluginSystemEnabled(),
+      disposed: this.disposed,
+      discovered: this.discovered,
       eventBus: this.eventBus,
       workerController: this.workerController,
-      isRuntimeApproved: (plugin) => this.isRuntimeApproved(plugin),
-      logWarning: (pluginKey, line) => this.logBuffer.append(pluginKey, 'warn', line)
-    })
+      audit: this.audit,
+      logBuffer: this.logBuffer,
+      runtimeDelegate: this.runtimeDelegate,
+      uiFocus: this.uiFocus,
+      sidecarMailbox: this.sidecarMailbox,
+      getGrantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
+      isRuntimeApproved: (plugin) => this.isRuntimeApproved(plugin)
+    }
   }
 
   async deactivatePlugin(pluginKey: string): Promise<void> {

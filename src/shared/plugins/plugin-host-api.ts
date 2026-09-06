@@ -1,6 +1,12 @@
 import { z } from 'zod'
+import { pluginFocusedSurfaceSchema } from './plugin-focused-surface'
 import { PLUGIN_EVENT_NAMES } from './plugin-manifest'
 import type { PluginCapabilityKind } from './plugin-capabilities'
+import {
+  sidecarPlacementSchema,
+  sidecarPublishParamsSchema,
+  sidecarPublishResultSchema
+} from './plugin-sidecar-contract'
 
 /**
  * Host API v0 — the separately-versioned public facade plugins call. Every
@@ -21,6 +27,24 @@ export const PANEL_ACTION_TEXT_MAX_LENGTH = 4096
 export const PLUGIN_WORKSPACE_TERMINAL_LIMIT = 50
 export const PLUGIN_WORKSPACE_LABEL_MAX_LENGTH = 512
 export const PLUGIN_TERMINAL_ID_MAX_LENGTH = 1024
+export const PLUGIN_AGENT_TYPE_MAX_LENGTH = 40
+export const PLUGIN_AGENT_MODEL_MAX_LENGTH = 120
+export const PLUGIN_AGENT_PROFILE_MAX_LENGTH = 80
+
+export const pluginWorkspaceExecutionHostSchema = z
+  .object({
+    kind: z.enum(['local', 'ssh', 'runtime']),
+    label: z.string().min(1).max(PLUGIN_WORKSPACE_LABEL_MAX_LENGTH)
+  })
+  .strict()
+
+export const pluginWorkspaceAgentContextSchema = z
+  .object({
+    type: z.string().min(1).max(PLUGIN_AGENT_TYPE_MAX_LENGTH).nullable().optional(),
+    model: z.string().min(1).max(PLUGIN_AGENT_MODEL_MAX_LENGTH).nullable().optional(),
+    profile: z.string().min(1).max(PLUGIN_AGENT_PROFILE_MAX_LENGTH).nullable().optional()
+  })
+  .strict()
 
 const workspaceReadContextParams = z.object({}).strict().optional()
 const workspaceReadContextResult = z
@@ -37,10 +61,19 @@ const workspaceReadContextResult = z
           })
           .strict()
       )
-      .max(PLUGIN_WORKSPACE_TERMINAL_LIMIT)
+      .max(PLUGIN_WORKSPACE_TERMINAL_LIMIT),
+    /** Execution host of the focused worktree. Labels only — never hostname. */
+    executionHost: pluginWorkspaceExecutionHostSchema.nullable().optional(),
+    /** Agent type / model / Orca profile labels when the host already knows them. */
+    agent: pluginWorkspaceAgentContextSchema.nullable().optional(),
+    /** Present only for plugins that declared `ui:focus`. Null when unknown. */
+    focusedSurface: pluginFocusedSurfaceSchema.nullable().optional()
   })
   .strict()
   .nullable()
+
+export type PluginWorkspaceExecutionHost = z.infer<typeof pluginWorkspaceExecutionHostSchema>
+export type PluginWorkspaceAgentContext = z.infer<typeof pluginWorkspaceAgentContextSchema>
 
 const terminalSendTextParams = z.object({
   /** Explicit target. Never "the active terminal": a focus change must not
@@ -100,7 +133,14 @@ export type PluginHostMethodSpec = {
   /** pluginApi minor the method appeared in (`1.0` for the v0 set). */
   since: string
   /** Machine-readable resource boundary enforced by the host binding. */
-  scope: 'active-worktree' | 'explicit-terminal' | 'plugin-private' | 'desktop' | 'host-events'
+  scope:
+    | 'active-worktree'
+    | 'explicit-terminal'
+    | 'plugin-private'
+    | 'desktop'
+    | 'host-events'
+    | 'sidecar'
+    | 'ui-focus'
   stability: 'experimental'
   capability: PluginCapabilityKind
   /** Mutations are audit-logged with actor `plugin:<id>`. */
@@ -156,7 +196,8 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'storage',
     mutation: false,
-    panel: false,
+    // Session-bound own store; panel payloads still cap at PANEL_MESSAGE_MAX_BYTES.
+    panel: true,
     params: storageGetParams,
     result: storageGetResult
   }),
@@ -166,7 +207,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'storage',
     mutation: true,
-    panel: false,
+    panel: true,
     params: storageSetParams,
     result: storageSetResult
   }),
@@ -176,7 +217,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'storage',
     mutation: true,
-    panel: false,
+    panel: true,
     params: storageDeleteParams,
     result: storageDeleteResult
   }),
@@ -186,7 +227,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'storage',
     mutation: false,
-    panel: false,
+    panel: true,
     params: storageKeysParams,
     result: storageKeysResult
   }),
@@ -226,7 +267,8 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'settings:own',
     mutation: false,
-    panel: false,
+    // Why: panels need a settings screen; identity is session-bound, never caller-supplied.
+    panel: true,
     params: settingsGetParams,
     result: settingsGetResult
   }),
@@ -236,7 +278,7 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     scope: 'plugin-private',
     capability: 'settings:own',
     mutation: true,
-    panel: false,
+    panel: true,
     params: settingsSetParams,
     result: settingsSetResult
   }),
@@ -249,6 +291,40 @@ export const PLUGIN_HOST_API_V0: readonly PluginHostMethodSpec[] = [
     panel: false,
     params: eventsSubscribeParams,
     result: eventsSubscribeResult
+  }),
+  spec({
+    name: 'sidecar.resolvePlacement',
+    since: '1.1',
+    scope: 'sidecar',
+    capability: 'sidecar',
+    mutation: false,
+    panel: false,
+    params: z.object({}).strict().optional(),
+    result: sidecarPlacementSchema
+  }),
+  spec({
+    name: 'sidecar.publish',
+    since: '1.1',
+    scope: 'sidecar',
+    capability: 'sidecar',
+    mutation: true,
+    panel: false,
+    params: sidecarPublishParamsSchema,
+    result: sidecarPublishResultSchema
+  }),
+  spec({
+    name: 'ui.readFocus',
+    since: '1.2',
+    scope: 'ui-focus',
+    capability: 'ui:focus',
+    mutation: false,
+    panel: true,
+    params: z.object({}).strict().optional(),
+    result: z
+      .object({
+        focusedSurface: pluginFocusedSurfaceSchema.nullable()
+      })
+      .strict()
   })
 ]
 

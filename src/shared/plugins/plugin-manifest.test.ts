@@ -87,4 +87,30 @@ describe('pluginManifestSchema boundaries', () => {
       ).ok
     ).toBe(false)
   })
+
+  it('accepts ui.focus.changed when ui:focus and events:subscribe are declared', () => {
+    expect(
+      parsePluginManifest(
+        manifest({
+          main: 'main.mjs',
+          contributes: { events: [{ on: 'ui.focus.changed' }] },
+          capabilities: [{ kind: 'events:subscribe' }, { kind: 'ui:focus' }]
+        })
+      )
+    ).toMatchObject({ ok: true })
+  })
+
+  it('rejects ui.focus.changed without the ui:focus capability', () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        main: 'main.mjs',
+        contributes: { events: [{ on: 'ui.focus.changed' }] },
+        capabilities: [{ kind: 'events:subscribe' }]
+      })
+    )
+    expect(parsed.ok).toBe(false)
+    if (!parsed.ok) {
+      expect(parsed.error).toContain('ui:focus')
+    }
+  })
 })

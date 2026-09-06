@@ -10785,13 +10785,15 @@
           "keepDisabled": "Garder désactivé",
           "enable": "Activer le plugin",
           "capability": {
-            "workspaceRead": "Lire le nom, la branche et la liste des terminaux de votre worktree actif",
+            "workspaceRead": "Lire le nom, la branche, la liste des terminaux, le libellé de l'hôte d'exécution et les libellés d'agent de votre worktree actif",
             "terminalSend": "Saisir du texte dans un terminal visible (toujours un terminal spécifique)",
             "notificationsShow": "Afficher des notifications de bureau libellées avec le nom du plugin",
             "storage": "Stocker des données dans le dossier de stockage propre au plugin",
             "secrets": "Stocker et lire des secrets dans le coffre chiffré propre au plugin",
             "eventsSubscribe": "Être notifié quand des worktrees sont créés ou supprimés et quand le statut d'un agent change",
-            "settingsOwn": "Lire et modifier les paramètres propres au plugin"
+            "settingsOwn": "Lire et modifier les paramètres propres au plugin",
+            "uiFocus": "Lire la surface d’interface active (type, titre d’onglet tronqué et clés de corrélation worktree/agent optionnelles). Désactivé tant que vous n’accordez pas cette permission.",
+            "sidecar": "Publier des trames sidecar (par exemple la présence Discord) afin qu’un client d’interface jumelé puisse les appliquer sur la machine qui a Discord"
           },
           "decisionFailed": "Impossible d'enregistrer la décision d'autorisation. Réessayez."
         },

@@ -9,6 +9,7 @@ import {
   type PluginConsentRequest
 } from '../../../../shared/plugins/plugin-consent-request'
 import { isQualifiedPluginKey } from '../../../../shared/plugins/plugin-manifest'
+import { pluginUiFocusReportSchema } from '../../../../shared/plugins/plugin-focused-surface'
 
 /**
  * Serve/headless parity surface: the same consent, enablement, panel-action,
@@ -36,6 +37,10 @@ export function setPluginServiceForRpc(
   pluginServiceForRpc = service
   pluginConsentForRpc = writes?.applyConsent ?? null
   pluginEnablementForRpc = writes?.applyEnablement ?? null
+}
+
+export function getPluginServiceForRpc(): PluginService | null {
+  return pluginServiceForRpc
 }
 
 function requirePluginService(): PluginService {
@@ -149,6 +154,19 @@ export const PLUGIN_METHODS: readonly RpcMethod[] = [
       const service = requirePluginService()
       await service.whenReady()
       return service.invokeCommand(params.pluginKey, params.commandId, params.args)
+    }
+  }),
+  defineMethod({
+    // Why: focus lives on the UI machine; plugins run on the host. A paired
+    // client reports the projected surface so remote UI can feed the same
+    // snapshot local Electron reports over IPC. Adding an RPC method does not
+    // bump RUNTIME_PROTOCOL_VERSION.
+    name: 'plugins.reportUiFocus',
+    params: pluginUiFocusReportSchema,
+    handler: async (params) => {
+      const service = requirePluginService()
+      service.reportUiFocus(params)
+      return { ok: true as const }
     }
   })
 ]

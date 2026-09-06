@@ -17,6 +17,7 @@ import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/os
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
+import { usePluginUiFocusReporter } from './use-plugin-ui-focus-reporter'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -35,6 +36,7 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   useLocalStructuredSessionTabsSync()
   // Subscribe to IPC push events
   useIpcEvents()
+  usePluginUiFocusReporter()
   useRemoteRuntimeRecoveryTriggers()
   useAutomationDispatchEvents()
   // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.

@@ -176,4 +176,35 @@ describe('PluginPanelController identity binding', () => {
     ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
     expect(executeHostCall).not.toHaveBeenCalled()
   })
+
+  it('forwards settings actions with the session plugin key only', async () => {
+    const plugin = await createPlugin()
+    const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { settings: {} } })
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall,
+      log: vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        pluginId: 'orca-samples.other',
+        action: 'settings.get'
+      })
+    ).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'settings.get'
+      })
+    ).resolves.toMatchObject({ ok: true })
+    expect(executeHostCall).toHaveBeenCalledExactlyOnceWith(
+      plugin.pluginKey,
+      'settings.get',
+      undefined
+    )
+  })
 })

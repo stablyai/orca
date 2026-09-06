@@ -63,7 +63,8 @@ const commandContributionSchema = z.object({
 export const PLUGIN_EVENT_NAMES = [
   'worktree.created',
   'worktree.removed',
-  'agent.status.changed'
+  'agent.status.changed',
+  'ui.focus.changed'
 ] as const
 export const PLUGIN_EVENT_SUBSCRIPTION_LIMIT = PLUGIN_EVENT_NAMES.length
 

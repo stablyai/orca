@@ -11202,13 +11202,15 @@
           "keepDisabled": "Keep Disabled",
           "enable": "Enable plugin",
           "capability": {
-            "workspaceRead": "Read the name, branch, and terminal list of your focused worktree",
+            "workspaceRead": "Read the name, branch, terminal list, execution-host label, and agent labels of your focused worktree",
             "terminalSend": "Type text into a terminal you can see (always a specific terminal)",
             "notificationsShow": "Show desktop notifications labeled with the plugin name",
             "storage": "Store data in the plugin's own storage folder",
             "secrets": "Store and read secrets in the plugin's own encrypted vault",
             "eventsSubscribe": "Get notified when worktrees are created or removed and when agent status changes",
-            "settingsOwn": "Read and change the plugin's own settings"
+            "settingsOwn": "Read and change the plugin's own settings",
+            "uiFocus": "Read the focused UI surface (kind, a truncated tab title, and optional worktree/agent join keys). Off unless you grant this permission.",
+            "sidecar": "Publish sidecar frames (for example Discord presence) so a paired UI client can apply them on the machine that has Discord"
           },
           "decisionFailed": "Could not save the permission decision. Try again."
         },

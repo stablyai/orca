@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createPluginPanelCallAdmission } from './plugin-panel-call-admission'
+import { PANEL_MESSAGE_MAX_BYTES } from './plugin-panel-bridge'
+import {
+  admitPluginPanelResult,
+  createPluginPanelCallAdmission
+} from './plugin-panel-call-admission'
 
 describe('createPluginPanelCallAdmission', () => {
   it('shares the rate budget across panel sessions for one plugin', () => {
@@ -28,5 +32,16 @@ describe('createPluginPanelCallAdmission', () => {
     expect(admission.admit('orca-samples.one', {})).toBe('rate_limited')
     admission.clear('orca-samples.one')
     expect(admission.admit('orca-samples.one', {})).toBeNull()
+  })
+})
+
+describe('admitPluginPanelResult', () => {
+  it('refuses a host→panel payload that exceeds the panel envelope', () => {
+    expect(admitPluginPanelResult({ value: 'ok' })).toBeNull()
+    expect(admitPluginPanelResult({ value: 'z'.repeat(PANEL_MESSAGE_MAX_BYTES + 1) })).toEqual({
+      ok: false,
+      code: 'invalid_request',
+      error: 'panel message exceeds the size limit'
+    })
   })
 })

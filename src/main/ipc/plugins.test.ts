@@ -5,6 +5,7 @@ import type { Store } from '../persistence'
 
 const electronMocks = vi.hoisted(() => ({ handle: vi.fn(), on: vi.fn() }))
 vi.mock('electron', () => ({
+  app: { getPath: vi.fn().mockReturnValue('/tmp/orca-plugins-test') },
   ipcMain: { handle: electronMocks.handle, on: electronMocks.on }
 }))
 
