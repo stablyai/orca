@@ -421,9 +421,11 @@ jobs:
           sudo mkdir -p /run/sshd
           sudo /usr/sbin/sshd -f "$fixture/sshd_config" -E "$fixture/sshd.log"
           ssh -i "$fixture/client_key" -p 22222 -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 127.0.0.1 true || { sudo cat "$fixture/sshd.log"; exit 1; }
-          echo "ORCA_E2E_SSH_PORT=22222" >> "$GITHUB_ENV"
-          echo "ORCA_E2E_SSH_USER=$(id -un)" >> "$GITHUB_ENV"
-          echo "ORCA_E2E_SSH_IDENTITY_FILE=$fixture/client_key" >> "$GITHUB_ENV"
+          {
+            echo "ORCA_E2E_SSH_PORT=22222"
+            echo "ORCA_E2E_SSH_USER=$(id -un)"
+            echo "ORCA_E2E_SSH_IDENTITY_FILE=$fixture/client_key"
+          } >> "$GITHUB_ENV"
       - name: Run localhost SSH terminal and hook journey
         env:
           SKIP_BUILD: '1'
