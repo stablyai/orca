@@ -43,6 +43,10 @@ export function buildRuntimeMobileAgentStatusProjection(
   // A status ping replaces one entry and re-spreads the map; reuse every other entry.
   const entries = new Map<string, AgentStatusProjectionCacheEntry>()
   const parts: string[] = []
+  // Why tracked: if every entry was reused and the key set is unchanged, the joined
+  // string is character-identical to the cached one by construction, so the join —
+  // which is O(total serialized bytes of every live agent status) — can be skipped.
+  let everyEntryReused = cached != null
   // Code-unit order, not `localeCompare`: this projection is only ever compared with `===`, so it
   // must be deterministic, not locale-correct — and an ICU collator per comparison is ~4.5k calls
   // per ping at the 500-entry cap.
@@ -50,14 +54,20 @@ export function buildRuntimeMobileAgentStatusProjection(
     a < b ? -1 : a > b ? 1 : 0
   )) {
     const previous = cached?.entries.get(paneKey)
-    const entryCache =
-      previous?.entry === entry
-        ? previous
-        : { entry, projection: serializeAgentStatusEntry(paneKey, entry) }
+    const reused = previous?.entry === entry
+    const entryCache = reused
+      ? previous
+      : { entry, projection: serializeAgentStatusEntry(paneKey, entry) }
+    everyEntryReused &&= reused
     entries.set(paneKey, entryCache)
     parts.push(entryCache.projection)
   }
-  const projection = `[${parts.join(',')}]`
+  // The size check covers removals; an addition already fails the reuse test above,
+  // and the sort makes a matching key set imply a matching order.
+  const projection =
+    everyEntryReused && cached != null && entries.size === cached.entries.size
+      ? cached.projection
+      : `[${parts.join(',')}]`
   graphState.cachedAgentStatusProjection = {
     source: agentStatusByPaneKey,
     entries,
