@@ -86,15 +86,38 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
       throw new Error('Open dialog is missing its Radix identity')
     }
     const dialog = page.locator(`[role="dialog"][id=${JSON.stringify(dialogId)}]`)
-    const cancelOrBack = dialog.getByRole('button', { name: /^(Cancel|Back)$/ })
-    await ((await cancelOrBack
-      .first()
-      .isVisible()
-      .catch(() => false))
-      ? cancelOrBack.first().click()
-      : page.keyboard.press('Escape'))
-    // Back can replace the picker with its parent without reducing the dialog count.
-    await expect(dialog).toBeHidden({ timeout: 3_000 })
+    const back = dialog.getByRole('button', { name: 'Back', exact: true })
+    if (await back.isVisible()) {
+      await back.click()
+      // The picker and host form reuse the same Radix dialog.
+      await expect(back).toBeHidden({ timeout: 3_000 })
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible({
+        timeout: 3_000
+      })
+      continue
+    }
+    const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true })
+    await ((await cancel.isVisible()) ? cancel.click() : page.keyboard.press('Escape'))
+    await expect(dialog).toBeHidden({ timeout: 3_000 }).catch(async (error) => {
+      console.log('[dialog-exit-diagnostic]', JSON.stringify(await page.evaluate(() => ({
+        visibility: document.visibilityState,
+        dialogs: Array.from(document.querySelectorAll('[role="dialog"]')).map((element) => {
+          const style = getComputedStyle(element)
+          return {
+            id: element.id, state: element.getAttribute('data-state'),
+            title: element.querySelector('h2')?.textContent,
+            animationName: style.animationName, duration: style.animationDuration,
+            delay: style.animationDelay, playState: style.animationPlayState,
+            display: style.display, visibility: style.visibility, opacity: style.opacity,
+            animations: element.getAnimations().map((animation) => ({
+              playState: animation.playState, currentTime: animation.currentTime,
+              pending: animation.pending, timing: animation.effect?.getComputedTiming()
+            }))
+          }
+        })
+      }))))
+      throw error
+    })
   }
   await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
 }

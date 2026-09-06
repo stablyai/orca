@@ -583,7 +583,23 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
           ]),
         { timeout: 30_000 }
       )
-      .toEqual([false, false, false])
+      .toEqual([false, false, false]).catch(async (error) => {
+        const inventory = await callRuntime(client.page, 'session.tabs.list', {
+          worktree: `id:${worktree.id}`
+        })
+        const terminals = await callRuntime(client.page, 'terminal.list', {
+          worktree: `id:${worktree.id}`, handles: [terminal],
+          requireFreshPtyLiveness: true, includeVisualLayouts: false
+        })
+        const mirrors = await Promise.all([client.page, observer.page].map((page) =>
+          page.evaluate(({ worktreeId, tabId }) => {
+            const state = window.__store?.getState()
+            return { tabs: state?.tabsByWorktree[worktreeId], layout: state?.terminalLayoutsByTabId[tabId] }
+          }, { worktreeId: worktree.id, tabId: webTabId })
+        ))
+        console.log('[paired-close-diagnostic]', JSON.stringify({ inventory, terminals, mirrors }))
+        throw error
+      })
     terminal = null
 
     await restoreHeadedHost(electronApp, orcaPage)
