@@ -55,6 +55,7 @@ export type BrowserPaletteSearchResult = {
   /** Raw page URL, so callers can dedupe a row against another list of destinations. */
   url: string
   secondaryText: string
+  /** Matched formatted/raw URLs with highlight offsets into each `text`; exposes hits beyond the displayed URL. */
   secondaryMatches: readonly { text: string; ranges: readonly MatchRange[] }[]
   workspaceLabel: string | null
   repoName: string

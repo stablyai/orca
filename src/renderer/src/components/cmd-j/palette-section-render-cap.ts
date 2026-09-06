@@ -35,6 +35,7 @@ export function capPaletteSection<T>(
     return { visible: items, overflowCount: 0 }
   }
   const visible = items.slice(0, cap)
+  // Keep the selected match visible after reranking without increasing the DOM row cap.
   let retained: T | undefined
   if (retain) {
     for (let index = cap; index < items.length; index += 1) {

@@ -22,6 +22,7 @@ export type UseOpenTabSearchOptions = {
   enabled: boolean
   query: string
   worktreeId: string
+  /** Keyboard-selected result's `id`; keep it inside the display cap while it still matches. */
   retainedResultId?: string | null
 }
 
