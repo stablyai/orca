@@ -238,6 +238,38 @@ describeOnWindows('resolveWindowsCmdShim', () => {
     expect(resolveWindowsCmdShim(shim, env)?.prefixArgs).toEqual([join(dir, 'ci2.js')])
   })
 
+  it('walks PATH once per shim directory, not once per spawn', () => {
+    // The parse cache spares the shim read but not the interpreter walk, so an
+    // already-parsed shim was still paying one `stat` per PATH entry on every
+    // spawn. Proven by effect rather than by counting: `early` gains a node.exe
+    // only AFTER the first resolution, so a second call that still answers
+    // `late` cannot have re-walked PATH. Delete the node cache and this fails.
+    const early = mkdtempSync(join(tmpdir(), 'orca-shim-path-early-'))
+    const late = mkdtempSync(join(tmpdir(), 'orca-shim-path-late-'))
+    const shimDir = mkdtempSync(join(tmpdir(), 'orca-shim-path-'))
+    try {
+      writeFileSync(join(late, 'node.exe'), '')
+      writeFileSync(join(shimDir, 'cli.js'), '')
+      const shim = join(shimDir, 'walk.cmd')
+      writeFileSync(shim, npmProgNodeShim('cli.js'))
+      const pathEnv = { ...env, Path: undefined, PATH: `${early};${late}` }
+
+      expect(resolveWindowsCmdShim(shim, pathEnv)?.program).toBe(join(late, 'node.exe'))
+
+      writeFileSync(join(early, 'node.exe'), '')
+      expect(resolveWindowsCmdShim(shim, pathEnv)?.program).toBe(join(late, 'node.exe'))
+
+      // A PATH edit must miss: caching the walk must not outlive its input.
+      expect(resolveWindowsCmdShim(shim, { ...pathEnv, PATH: `${early};${late};` })?.program).toBe(
+        join(early, 'node.exe')
+      )
+    } finally {
+      removeTreeSync(early)
+      removeTreeSync(late)
+      removeTreeSync(shimDir)
+    }
+  })
+
   it('keeps cmd.exe out of the spawn for a recognised shim', () => {
     const resolved = resolveSpawn(
       {

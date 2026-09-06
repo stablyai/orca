@@ -163,6 +163,23 @@ type ParseCacheEntry = {
 const parseCache = new Map<string, ParseCacheEntry>()
 const PARSE_CACHE_LIMIT = 256
 
+/**
+ * The interpreter each shim directory resolves to, keyed by that directory and
+ * the PATH that was searched.
+ *
+ * Why cached at all: the parse cache spares the shim read but not this walk, so
+ * a 30-entry PATH cost 30 `stat`s on every spawn of an already-parsed shim —
+ * synchronous I/O on `resolveSpawn`, where one dead network mount in PATH
+ * blocks the calling thread each time.
+ *
+ * Held for the process's life, including the `null` misses. A `node.exe`
+ * installed after the first probe is therefore not picked up until restart: the
+ * stale miss just keeps the working cmd.exe fallback, and re-probing to catch
+ * an install mid-session is what this cache exists to avoid.
+ */
+const nodeCache = new Map<string, string | null>()
+const NODE_CACHE_LIMIT = 256
+
 function statFile(path: string): Stats | null {
   try {
     const stats = statSync(path)
@@ -176,8 +193,9 @@ function readParsedShim(program: string): ParsedWindowsCmdShim | null {
   // This `stat` puts synchronous I/O on the spawn path, where `resolveSpawn`
   // previously had none: a shim on an unresponsive network share now blocks the
   // caller's thread until the filesystem gives up. Judged acceptable because a
-  // `.cmd` on such a share was already about to be spawned from it, but it is
-  // the one cost of resolution that is paid even when nothing resolves.
+  // `.cmd` on such a share was already about to be spawned from it. It is the
+  // only such cost paid when nothing resolves — the interpreter lookup runs
+  // only for a shim that already parsed, and is itself cached.
   const stats = statFile(program)
   if (!stats || stats.size > MAX_SHIM_BYTES) {
     return null
@@ -223,12 +241,33 @@ function firstEnvKey(env: NodeJS.ProcessEnv, name: string): string | undefined {
  * cmd path — a `.cmd` node in particular is a hop we could not remove anyway.
  */
 function resolveShimNode(directory: string, env: NodeJS.ProcessEnv): string | null {
+  const path = firstEnvKey(env, 'PATH')
+  const pathValue = (path ? env[path] : undefined) ?? ''
+  // Both inputs are in the key because both decide the answer: the shim prefers
+  // its own directory, and falls back to PATH. A PATH edit between spawns
+  // therefore misses rather than serving the previous interpreter. A newline
+  // separates them because Windows allows one in neither a path nor a PATH.
+  const key = `${directory}\n${pathValue}`
+  const cached = nodeCache.get(key)
+  if (cached !== undefined) {
+    return cached
+  }
+  const resolved = probeShimNode(directory, pathValue)
+  // Same wholesale eviction as the parse cache, for the same reason: the cap is
+  // per-process and one entry per distinct shim directory Orca ever spawns from.
+  if (nodeCache.size >= NODE_CACHE_LIMIT) {
+    nodeCache.clear()
+  }
+  nodeCache.set(key, resolved)
+  return resolved
+}
+
+function probeShimNode(directory: string, pathValue: string): string | null {
   const sibling = win32.join(directory, 'node.exe')
   if (statFile(sibling)) {
     return sibling
   }
-  const pathKey = firstEnvKey(env, 'PATH')
-  for (const entry of (pathKey ? env[pathKey] : undefined)?.split(';') ?? []) {
+  for (const entry of pathValue.split(';')) {
     const trimmed = entry.trim().replace(/^"(.*)"$/, '$1')
     // A relative PATH entry resolves against the child's working directory, so
     // we cannot answer it here.
