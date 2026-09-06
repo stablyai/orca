@@ -175,6 +175,7 @@ describe('dispatchTerminalNotification', () => {
         }),
         worktreeId: 'wt-primary',
         paneKey,
+        executionHostId: 'local',
         repoLabel: 'orca',
         worktreeLabel: 'master',
         terminalTitle: 'codex',
