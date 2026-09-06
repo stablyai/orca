@@ -18035,15 +18035,19 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["ssh"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": [
+        "macos",
+        "linux"
+      ],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Three controlled headed repetitions passed with unchanged budgets; the uninstrumented ten-repeat validation is pending.",
+      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/18018",
         "https://github.com/stablyai/orca/pull/18546",
         "https://github.com/stablyai/orca/issues/12547",
         "https://github.com/stablyai/orca/issues/16764",
-        "https://github.com/stablyai/orca/actions/runs/34037450427"
+        "https://github.com/stablyai/orca/actions/runs/34037450427",
+        "https://github.com/stablyai/orca/actions/runs/34037669843"
       ],
       "invariant": "Transport loss and frozen-host silence must preserve the remote session; host relay loss may rebind a pane without accumulating reattachable leases. Reconnects must preserve usable terminal content, bounded PTYs/fds/processes, complete large listings, and independently recoverable watcher processes. Electron test shutdown must release inherited pipes after confirmed root exit without closing live-process pipes.",
       "oracle": "Poll a changed connected SSH authority after injected faults, then require terminal output and appropriate PTY identity. Read remote process/fd state, listFiles replies, and rendered explorer rows. Resolve Playwright cleanup only after the root process exits and its inherited pipes close; live-process pipes remain untouched.",
@@ -18131,6 +18135,15 @@
           "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "durationSeconds": 312,
           "summary": "Six specs: ten passed, two existing fixme skipped, clean worker shutdown. Baseline same enabled suite: ten passed but worker teardown timed out (7.3m)."
+        },
+        {
+          "date": "2026-09-06",
+          "runner": "ci",
+          "platform": "linux",
+          "result": "passed",
+          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
+          "durationSeconds": 396,
+          "summary": "Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075."
         }
       ],
       "runtimeBudget": {
