@@ -99,11 +99,16 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
     clearMirrorState()
   }, [cancelPendingMirror, clearMirrorState])
 
-  const clearMirrorCapture = useCallback(() => {
-    clearMirrorState()
-    setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
-  }, [clearMirrorState, liveInputRef, setLiveInputCapture])
+  const clearMirrorCapture = useCallback(
+    (resetNative = true) => {
+      clearMirrorState()
+      setLiveInputCapture('')
+      if (resetNative) {
+        liveInputRef.current?.setNativeProps({ text: '' })
+      }
+    },
+    [clearMirrorState, liveInputRef, setLiveInputCapture]
+  )
 
   const clearPendingLiveInputCommit = useCallback(() => {
     cancelPendingMirror()
@@ -231,7 +236,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   )
 
   const queueLiveInputControl = useCallback<TerminalLiveControlQueue>(
-    (handle, bytes, send): Promise<boolean> => {
+    (handle, bytes, send, options): Promise<boolean> => {
       if (
         handle !== activeHandleRef.current ||
         (!send && !liveInputTerminalHandlesRef.current.has(handle))
@@ -251,7 +256,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
         )
       }
       // End this field now; a receipt must never clear text from a later native event.
-      clearMirrorCapture()
+      clearMirrorCapture(options?.nativeFieldReset !== true)
       pendingLiveInputHandleRef.current = handle
       const generation = pendingLiveInputFlushRef.current.generation
       const reportFailure = sendLiveTerminalInputRef.current.captureFailureReporter?.(handle)

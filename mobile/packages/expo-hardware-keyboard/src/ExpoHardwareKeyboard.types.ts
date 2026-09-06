@@ -12,9 +12,15 @@ export type HardwareKeyboardKeyEvent = {
   readonly key: string
   readonly modifiers: HardwareKeyboardModifiers
   readonly repeat: boolean
+  readonly fieldBoundary?: {
+    readonly text: string
+    readonly eventCount: number
+    readonly target: number
+  }
 }
 
 export type HardwareKeyboardCaptureViewProps = {
+  readonly nativeFieldBoundaries?: boolean
   readonly mode?: 'terminal' | 'submit'
   readonly enabled?: boolean
   readonly onHardwareKey?: (event: { nativeEvent: HardwareKeyboardKeyEvent }) => void

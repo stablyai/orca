@@ -1,6 +1,9 @@
 import { Pressable, TextInput, Platform } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
-import { HardwareKeyboardCaptureView } from '@orca/expo-hardware-keyboard'
+import {
+  HardwareKeyboardCaptureView,
+  type HardwareKeyboardKeyEvent
+} from '@orca/expo-hardware-keyboard'
 import { useCallback, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { getTerminalLiveInputKeyboardType } from '../terminal/terminal-keyboard-type'
@@ -49,6 +52,7 @@ export function MobileTerminalLiveInputBar({
   const canSend = connectionCanSend && !controller.terminalInputFailure
   return (
     <HardwareKeyboardCaptureView
+      nativeFieldBoundaries={Platform.OS === 'android'}
       style={[styles.inputBar, styles.liveInputBar]}
       enabled={canSend && routeFocused}
       onHardwareKey={({ nativeEvent }) => {
@@ -96,7 +100,20 @@ export function MobileTerminalLiveInputBar({
         onTouchStart={hardwareInputFocus.handleTouchStart}
         style={styles.liveInputCapture}
         value={liveInputCapture}
-        onChange={handleLiveInputChange}
+        onChange={(event) => {
+          const hardwareKey = (
+            event.nativeEvent as typeof event.nativeEvent & {
+              hardwareKey?: HardwareKeyboardKeyEvent
+            }
+          ).hardwareKey
+          if (hardwareKey) {
+            if (canSend && routeFocused) {
+              handleLiveInputHardwareKey(hardwareKey)
+            }
+          } else {
+            handleLiveInputChange(event)
+          }
+        }}
         onKeyPress={handleLiveInputKeyPress}
         onSubmitEditing={() => {
           const submit = handleLiveInputSubmit()

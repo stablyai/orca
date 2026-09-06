@@ -34,7 +34,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-terminal-writer.test.ts src/shared/runtime-rpc-call-queue.test.ts src/main/runtime/runtime-terminal-writer-pty.integration.test.ts",
         "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/transport/terminal-ordered-input-history.test.ts mobile/src/transport/logical-terminal-stream-input-history.test.ts",
-        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/terminal/use-terminal-live-input-commit.test.ts mobile/src/terminal/terminal-live-control-barrier.test.ts mobile/src/session/mobile-attachment-retained-blur.test.ts"
+        "pnpm exec vitest run --config mobile/vitest.config.ts mobile/src/terminal/use-terminal-live-input-commit.test.ts mobile/src/terminal/terminal-live-control-barrier.test.ts mobile/src/session/mobile-attachment-retained-blur.test.ts mobile/src/hardware-keyboard/hardware-keyboard-field-boundary-compatibility.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/runtime-terminal-writer.test.ts",
@@ -44,7 +44,8 @@
         "mobile/src/transport/logical-terminal-stream-input-history.test.ts",
         "mobile/src/terminal/use-terminal-live-input-commit.test.ts",
         "mobile/src/terminal/terminal-live-control-barrier.test.ts",
-        "mobile/src/session/mobile-attachment-retained-blur.test.ts"
+        "mobile/src/session/mobile-attachment-retained-blur.test.ts",
+        "mobile/src/hardware-keyboard/hardware-keyboard-field-boundary-compatibility.test.ts"
       ],
       "assertionRefs": [
         {
@@ -78,7 +79,11 @@
           "assertions": [
             "keeps Backspace after earlier Return and navigation while prefix receipts are delayed",
             "keeps new typing after Return while the earlier prefix receipt is delayed",
-            "suppresses later typing when the earlier Return fails"
+            "suppresses later typing when the earlier Return fails",
+            "ignores stale native text after a native-owned control boundary",
+            "preserves legitimate retyping of the same prefix after a native reset",
+            "ends a native-reset baseline even when the control has no terminal mapping",
+            "preserves Alt+Enter terminal bytes across a native reset"
           ]
         }
       ],
@@ -113,7 +118,7 @@
       ],
       "knownGaps": [
         "No native mobile-to-PTY or physical Bluetooth proof in this gate.",
-        "Manual native Android-to-PTY single-sequence runs at 300/400/500 ms simulated application-frame RTT passed. Three rapid sequences at 400 ms lost Tab despite kernel delivery; native tracing locates a missing Tab between pre-IME and normal window dispatch. Rapid runs also exposed text-boundary corruption. No native soak claim.",
+        "Manual native Android-to-PTY single-sequence runs at 300/400/500 ms simulated application-frame RTT passed. Rapid Tab loss and text corruption motivated Android pre-IME capture with an atomic field reset delivered on the TextInput's own noncoalescing change stream. Revised native runs at 400 ms passed three mixed sequences (57 bytes), first/Enter/x while JavaScript stalled six seconds (7 bytes), and Ctrl+1/Alt+Enter/modified deletion (23 bytes). These are isolated manual native-to-local-PTY checks with stubbed runtime metadata, not Bluetooth, public relay or soak proof.",
         "Native Android negotiated rejection and post-write-unknown recovery passed at 300 ms simulated application-frame RTT: hardware Enter explicitly resubscribes, queued Return is suppressed, and no input is replayed. Public relay and physical-device recovery remain unproved.",
         "Receipt-serialized held controls retain an RTT-per-control latency cost.",
         "No real daemon, SSH, WSL, Linux or Windows stress run.",

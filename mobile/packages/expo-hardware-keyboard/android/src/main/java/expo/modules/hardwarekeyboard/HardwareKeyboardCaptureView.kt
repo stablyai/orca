@@ -5,15 +5,20 @@ import android.view.KeyEvent
 import android.view.KeyCharacterMap
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
+import android.text.SpannableStringBuilder
+import com.facebook.react.views.text.ReactTextUpdate
+import com.facebook.react.views.textinput.ReactEditText
+import com.facebook.react.bridge.ReactContext
+import com.facebook.react.uimanager.UIManagerHelper
+import expo.modules.hardwarekeyboardnavigation.HardwareKeyboardNavigationRegistry
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
  * ViewGroup host for the RN TextInput. Intercepts terminal special keys and
- * Ctrl-modified printable keys on ACTION_DOWN; leaves plain/Shift printable,
- * Enter (onSubmitEditing), Ctrl+Space (IME switch), and Meta/system shortcuts
- * to TextInput / the system.
+ * Ctrl-modified printable keys on ACTION_DOWN. Native terminal boundaries also
+ * own Enter; printable text, composition, and system shortcuts remain native.
  */
 class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
   ExpoView(context, appContext) {
@@ -22,29 +27,57 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
 
   var captureEnabled: Boolean = true
   var captureMode: String = "terminal"
-  private val capturedKeys = mutableSetOf<Int>()
+  var nativeFieldBoundaries: Boolean = false
+  private val capturedKeys = mutableSetOf<Pair<Int, Int>>()
 
   // Yoga owns child bounds; LinearLayout would collapse the hidden input after its siblings.
   override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) = Unit
 
+  override fun onDetachedFromWindow() {
+    capturedKeys.clear()
+    super.onDetachedFromWindow()
+  }
+
+  override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+    if (!hasWindowFocus) capturedKeys.clear()
+    super.onWindowFocusChanged(hasWindowFocus)
+  }
+
   override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-    if (event.action == KeyEvent.ACTION_UP && capturedKeys.remove(event.keyCode)) {
+    if (nativeFieldBoundaries && captureMode == "terminal") return super.dispatchKeyEvent(event)
+    return captureKeyEvent(event) { super.dispatchKeyEvent(event) }
+  }
+
+  override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean {
+    if (!nativeFieldBoundaries || captureMode != "terminal") return super.dispatchKeyEventPreIme(event)
+    val input = findFocus() as? ReactEditText ?: return super.dispatchKeyEventPreIme(event)
+    val composing = input.text?.let { BaseInputConnection.getComposingSpanStart(it) >= 0 } ?: false
+    if (captureEnabled && isPhysicalKeyboardEvent(event) &&
+      HardwareKeyboardNavigationRegistry.dispatch(event, canStartCapture = !composing)) return true
+    return captureKeyEvent(event) { super.dispatchKeyEventPreIme(event) }
+  }
+
+  private fun captureKeyEvent(event: KeyEvent, fallback: () -> Boolean): Boolean {
+    val identity = event.deviceId to event.keyCode
+    if (event.action == KeyEvent.ACTION_UP && capturedKeys.remove(identity)) {
       return true
     }
+    // A fresh down supersedes a release lost during device or focus changes.
+    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) capturedKeys.remove(identity)
     if (!captureEnabled || event.action != KeyEvent.ACTION_DOWN || !isPhysicalKeyboardEvent(event)) {
-      return super.dispatchKeyEvent(event)
+      return fallback()
     }
 
-    val input = findFocus() as? EditText ?: return super.dispatchKeyEvent(event)
+    val input = findFocus() as? EditText ?: return fallback()
     if (BaseInputConnection.getComposingSpanStart(input.text) >= 0) {
-      return super.dispatchKeyEvent(event)
+      return fallback()
     }
 
     val meta = event.metaState
     val hasMeta = (meta and KeyEvent.META_META_ON) != 0
     // Why: Meta stays system-owned so Cmd/Win shortcuts are not stolen.
     if (hasMeta) {
-      return super.dispatchKeyEvent(event)
+      return fallback()
     }
 
     val ctrl = (meta and KeyEvent.META_CTRL_ON) != 0
@@ -54,9 +87,9 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     if (captureMode == "submit") {
       val enter = event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
       if (!enter || ctrl || alt || shift) {
-        return super.dispatchKeyEvent(event)
+        return fallback()
       }
-      capturedKeys.add(event.keyCode)
+      capturedKeys.add(identity)
       if (!repeat) {
         onHardwareKey(mapOf("key" to "Enter", "modifiers" to mapOf(
           "ctrl" to false, "alt" to false, "shift" to false, "meta" to false
@@ -65,20 +98,22 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
       return true
     }
 
-    // Why: Enter is owned by TextInput onSubmitEditing (same as TS mapper ignore).
+    // Legacy capture leaves Enter to TextInput's onSubmitEditing.
     if (
       event.keyCode == KeyEvent.KEYCODE_ENTER ||
       event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
     ) {
-      return super.dispatchKeyEvent(event)
+      if (!nativeFieldBoundaries) return fallback()
     }
 
     // Why: Ctrl+Space switches input methods; must not become terminal NUL.
     if (ctrl && event.keyCode == KeyEvent.KEYCODE_SPACE) {
-      return super.dispatchKeyEvent(event)
+      return fallback()
     }
 
-    val key = canonicalKey(event) ?: return super.dispatchKeyEvent(event)
+    val key = canonicalKey(event) ?: return fallback()
+    if (nativeFieldBoundaries && !ctrl && !alt && !shift &&
+      (key == "Backspace" || key == "Delete") && input.text.isNotEmpty()) return fallback()
     val isSpecial = isTerminalSpecialKey(key)
     val isAlternateLayoutPrintable =
       key.length == 1 &&
@@ -89,12 +124,10 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
       ctrl && !isAlternateLayoutPrintable && key.length == 1 && key[0] in '!'..'~'
 
     if (!isSpecial && !isCtrlPrintable) {
-      return super.dispatchKeyEvent(event)
+      return fallback()
     }
 
-    capturedKeys.add(event.keyCode)
-    onHardwareKey(
-      mapOf(
+    val payload = mutableMapOf<String, Any>(
         "key" to key,
         "modifiers" to mapOf(
           "ctrl" to ctrl,
@@ -103,8 +136,27 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
           "meta" to false
         ),
         "repeat" to repeat
-      )
     )
+    if (nativeFieldBoundaries && input is ReactEditText) {
+      val reactContext = input.context as? ReactContext ?: return fallback()
+      val dispatcher = UIManagerHelper.getEventDispatcherForReactTag(reactContext, input.id)
+        ?: return fallback()
+      capturedKeys.add(identity)
+      val text = input.text.toString()
+      val count = input.incrementAndGetEventCounter()
+      input.maybeSetTextFromJS(ReactTextUpdate(
+        SpannableStringBuilder(""), count, false, input.gravity, input.breakStrategy,
+        if (android.os.Build.VERSION.SDK_INT >= 26) input.justificationMode else 0
+      ))
+      input.setSelection(0)
+      payload["fieldBoundary"] = mapOf("text" to text, "eventCount" to count, "target" to input.id)
+      dispatcher.dispatchEvent(HardwareKeyboardFieldBoundaryEvent(
+        UIManagerHelper.getSurfaceId(input), input.id, count, payload
+      ))
+      return true
+    }
+    capturedKeys.add(identity)
+    onHardwareKey(payload)
     return true
   }
 
@@ -122,6 +174,7 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
 
   private fun canonicalKey(event: KeyEvent): String? {
     return when (event.keyCode) {
+      KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> "Enter"
       KeyEvent.KEYCODE_DPAD_UP -> "ArrowUp"
       KeyEvent.KEYCODE_DPAD_DOWN -> "ArrowDown"
       KeyEvent.KEYCODE_DPAD_LEFT -> "ArrowLeft"
@@ -159,7 +212,7 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
   }
 
   private fun isTerminalSpecialKey(key: String): Boolean {
-    return key == "ArrowUp" || key == "ArrowDown" || key == "ArrowLeft" || key == "ArrowRight" ||
+    return key == "Enter" || key == "ArrowUp" || key == "ArrowDown" || key == "ArrowLeft" || key == "ArrowRight" ||
       key == "Escape" || key == "Tab" || key == "Backspace" || key == "Delete" ||
       key == "Home" || key == "End" || key == "PageUp" || key == "PageDown" ||
       key.startsWith("F")

@@ -15,7 +15,8 @@ describe('terminal iOS IME keyboard', () => {
   it('subscribes live capture to onChange so the marked-text report survives', () => {
     // onChangeText hands over only a string, discarding the preedit report that
     // decides whether the text may reach the PTY at all.
-    expect(commandDockSource).toContain('onChange={handleLiveInputChange}')
+    expect(commandDockSource).toContain('onChange={(event) => {')
+    expect(commandDockSource).toContain('handleLiveInputChange(event)')
     expect(commandDockSource).not.toContain('onChangeText={handleLiveInputChange}')
   })
 

@@ -9,6 +9,56 @@ import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
 type TerminalLiveInputCommitHandlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
 
 describe('physical terminal controls', () => {
+  it('preserves Alt+Enter terminal bytes across a native reset', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ pipeline: true })
+    handlers.handleLiveInputHardwareKey({
+      key: 'Enter',
+      repeat: false,
+      modifiers: { ctrl: false, alt: true, meta: false, shift: false },
+      fieldBoundary: { text: 'first', target: 10, eventCount: 2 }
+    })
+    handlers.handleLiveInputChange({ nativeEvent: { text: 'x', target: 10, eventCount: 3 } })
+    await vi.waitFor(() => expect(sent.join('')).toBe('first\x1b\rx'))
+  })
+
+  it('ends a native-reset baseline even when the control has no terminal mapping', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ pipeline: true })
+    handlers.handleLiveInputHardwareKey({
+      key: '1',
+      repeat: false,
+      modifiers: { ctrl: true, alt: false, meta: false, shift: false },
+      fieldBoundary: { text: 'first', target: 10, eventCount: 2 }
+    })
+    handlers.handleLiveInputChange({ nativeEvent: { text: 'x', target: 10, eventCount: 3 } })
+    await vi.waitFor(() => expect(sent.join('')).toBe('firstx'))
+  })
+
+  it('ignores stale native text after a native-owned control boundary', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ pipeline: true })
+    changeLiveInput(handlers, 'first')
+    handlers.handleLiveInputHardwareKey({
+      key: 'Enter',
+      repeat: false,
+      modifiers: { ctrl: false, alt: false, meta: false, shift: false },
+      fieldBoundary: { text: 'first', target: 10, eventCount: 2 }
+    })
+    handlers.handleLiveInputChange({ nativeEvent: { text: 'first', target: 10, eventCount: 1 } })
+    handlers.handleLiveInputChange({ nativeEvent: { text: 'x', target: 10, eventCount: 3 } })
+    await vi.waitFor(() => expect(sent.join('')).toBe('first\rx'))
+  })
+
+  it('preserves legitimate retyping of the same prefix after a native reset', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ pipeline: true })
+    handlers.handleLiveInputHardwareKey({
+      key: 'Enter',
+      repeat: false,
+      modifiers: { ctrl: false, alt: false, meta: false, shift: false },
+      fieldBoundary: { text: 'first', target: 10, eventCount: 2 }
+    })
+    handlers.handleLiveInputChange({ nativeEvent: { text: 'firstx', target: 10, eventCount: 3 } })
+    await vi.waitFor(() => expect(sent.join('')).toBe('first\rfirstx'))
+  })
+
   it('keeps new typing after Return while the earlier prefix receipt is delayed', async () => {
     let release!: () => void
     const pending = new Promise<void>((resolve) => {
@@ -174,7 +224,7 @@ function createTerminalLiveInputCommitHarness({
     current: async (_handle, bytes) => {
       sent.push(bytes)
       await waitForSend?.(bytes)
-      return currentSendResult
+      return bytes.length > 0 && currentSendResult
     }
   }
   sendLiveTerminalInputRef.current.supportsPipeline = () => pipeline

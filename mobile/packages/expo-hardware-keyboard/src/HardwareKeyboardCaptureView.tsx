@@ -1,6 +1,9 @@
 import React from 'react'
 import { View, type ViewProps } from 'react-native'
-import { getNativeHardwareKeyboardCaptureView } from './ExpoHardwareKeyboardModule'
+import {
+  getNativeHardwareKeyboardCaptureView,
+  supportsNativeFieldBoundaries
+} from './ExpoHardwareKeyboardModule'
 import type { HardwareKeyboardCaptureViewProps } from './ExpoHardwareKeyboard.types'
 
 type Props = HardwareKeyboardCaptureViewProps & ViewProps
@@ -14,6 +17,7 @@ const NativeView = getNativeHardwareKeyboardCaptureView()
 export function HardwareKeyboardCaptureView({
   enabled = true,
   mode = 'terminal',
+  nativeFieldBoundaries = false,
   onHardwareKey,
   children,
   style,
@@ -28,7 +32,14 @@ export function HardwareKeyboardCaptureView({
   }
 
   return (
-    <NativeView enabled={enabled} mode={mode} onHardwareKey={onHardwareKey} style={style} {...rest}>
+    <NativeView
+      enabled={enabled}
+      mode={mode}
+      onHardwareKey={onHardwareKey}
+      style={style}
+      {...(supportsNativeFieldBoundaries() ? { nativeFieldBoundaries } : {})}
+      {...rest}
+    >
       {children}
     </NativeView>
   )

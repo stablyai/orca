@@ -12,6 +12,11 @@ export type TerminalLiveHardwareKeyEvent = {
   readonly key: string
   readonly modifiers: TerminalLiveHardwareKeyModifiers
   readonly repeat: boolean
+  readonly fieldBoundary?: {
+    readonly text: string
+    readonly eventCount: number
+    readonly target: number
+  }
 }
 
 export type TerminalLiveHardwareKeyDecision =
@@ -68,7 +73,7 @@ export function mapTerminalLiveHardwareKeyEvent(
     return { kind: 'ignore' }
   }
 
-  if (event.key === 'Enter') {
+  if (event.key === 'Enter' && !event.fieldBoundary) {
     return { kind: 'ignore' }
   }
 
@@ -80,6 +85,10 @@ export function mapTerminalLiveHardwareKeyEvent(
   const isSpecial = SPECIAL_DOM_KEYS.has(key)
   const isSingleChar = key.length === 1
   const hasTerminalModifier = event.modifiers.ctrl || event.modifiers.alt || event.modifiers.shift
+
+  if (key === 'Enter' && !hasTerminalModifier) {
+    return getHardwareControlSendDecision('\r', options)
+  }
 
   if (!isSpecial && isSingleChar && !event.modifiers.ctrl) {
     return { kind: 'ignore' }

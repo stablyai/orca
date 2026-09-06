@@ -12,7 +12,8 @@ export type TerminalLiveExternalSend = (
 export type TerminalLiveControlQueue = (
   handle: string,
   bytes: string,
-  send?: TerminalLiveExternalAction
+  send?: TerminalLiveExternalAction,
+  options?: { readonly nativeFieldReset?: boolean }
 ) => Promise<boolean>
 // Only a callback that has not dispatched input may return cancelled.
 export type TerminalLiveDispatchResult = boolean | 'cancelled'

@@ -30,6 +30,8 @@ type TerminalLiveInputChangeEvent = {
   readonly nativeEvent: {
     readonly text: string
     readonly isComposing?: boolean
+    readonly eventCount?: number
+    readonly target?: number
   }
 }
 
@@ -72,6 +74,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const liveInputInteractionGenerationRef = useRef(0)
+  const nativeFieldBoundaryRef = useRef<{ target: number; eventCount: number } | null>(null)
   const advanceLiveInputInteractionGeneration = useCallback(() => {
     liveInputInteractionGenerationRef.current += 1
   }, [])
@@ -148,6 +151,15 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputChange = useCallback(
     ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
+      const boundary = nativeFieldBoundaryRef.current
+      if (
+        boundary &&
+        nativeEvent.target === boundary.target &&
+        nativeEvent.eventCount != null &&
+        nativeEvent.eventCount <= boundary.eventCount
+      ) {
+        return
+      }
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
         return
@@ -252,12 +264,27 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       if (!connected || !activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         return
       }
+      const boundary = event.fieldBoundary
+      if (boundary) {
+        const previous = nativeFieldBoundaryRef.current
+        if (previous?.target === boundary.target && previous.eventCount >= boundary.eventCount) {
+          return
+        }
+        nativeFieldBoundaryRef.current = {
+          target: boundary.target,
+          eventCount: boundary.eventCount
+        }
+        void applyLiveInputMirror(activeHandle, normalizeTerminalTextInput(boundary.text), false)
+      }
       const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
       const decision = mapTerminalLiveHardwareKeyEvent(event, {
         heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
         sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
       })
       if (decision.kind === 'ignore') {
+        if (boundary) {
+          void queueLiveInputControl(activeHandle, '', async () => true, { nativeFieldReset: true })
+        }
         return
       }
       if (decision.kind === 'local-edit') {
@@ -269,12 +296,15 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       }
       advanceLiveInputInteractionGeneration()
       // Physical controls end the mirror baseline and share the existing send barrier.
-      void queueLiveInputControl(activeHandle, decision.bytes)
+      void queueLiveInputControl(activeHandle, decision.bytes, undefined, {
+        nativeFieldReset: boundary != null
+      })
     },
     [
       activeHandle,
       advanceLiveInputInteractionGeneration,
       connected,
+      applyLiveInputMirror,
       queueLiveInputControl,
       handleLiveInputAccessoryBytes,
       liveInputTerminalHandles,
