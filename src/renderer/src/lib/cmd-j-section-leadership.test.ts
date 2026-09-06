@@ -11,13 +11,14 @@ import type { PaletteDocumentRank } from './palette-match/palette-document'
 
 function rank(overrides: Partial<PaletteDocumentRank> = {}): PaletteDocumentRank {
   return {
-    exactIntent: 1,
+    destination: 2,
+    recovery: 0,
+    wordMatch: 0,
+    coverage: 0,
     containerOnlyTokenCount: 0,
-    wholeQuery: 3,
-    worstQuality: 5,
-    usesSupportingEvidence: 0,
-    fuzzyTokenCount: 0,
-    fieldHopCount: 1,
+    recoveryTokenCount: 0,
+    strength: 0,
+    placement: 2,
     ...overrides
   }
 }
@@ -110,38 +111,48 @@ describe('intent section leadership', () => {
 
 describe('ranked item comparison', () => {
   it('compares match rank lexicographically before list order', () => {
-    const strong = { rank: rank({ wholeQuery: 0 }), order: 99, id: 'b' }
-    const weak = { rank: rank({ wholeQuery: 2 }), order: 0, id: 'a' }
+    const strong = { rank: rank({ strength: 0 }), order: 99, identity: 'b' }
+    const weak = { rank: rank({ strength: 2 }), order: 0, identity: 'a' }
     expect(comparePaletteRankedItems(strong, weak)).toBeLessThan(0)
   })
 
   it('prefers recently active item when match rank ties', () => {
-    const recent = { rank: rank(), order: 10, id: 'z', lastActiveAt: 2000 }
-    const older = { rank: rank(), order: 0, id: 'a', lastActiveAt: 1000 }
+    const recent = {
+      rank: rank(),
+      order: 10,
+      identity: 'z',
+      activity: { ageBucket: 0, timestamp: 2000 }
+    }
+    const older = {
+      rank: rank(),
+      order: 0,
+      identity: 'a',
+      activity: { ageBucket: 0, timestamp: 1000 }
+    }
     expect(comparePaletteRankedItems(recent, older)).toBeLessThan(0)
   })
 
   it('falls back to the section order when match rank and recency tie', () => {
-    const first = { rank: rank(), order: 1, id: 'z', lastActiveAt: 1000 }
-    const second = { rank: rank(), order: 2, id: 'a', lastActiveAt: 1000 }
+    const first = { rank: rank(), order: 1, identity: 'z' }
+    const second = { rank: rank(), order: 2, identity: 'a' }
     expect(comparePaletteRankedItems(first, second)).toBeLessThan(0)
   })
 
   it('breaks a full tie on the stable id', () => {
-    const a = { rank: rank(), order: 1, id: 'a' }
-    const b = { rank: rank(), order: 1, id: 'b' }
+    const a = { rank: rank(), order: 1, identity: 'a' }
+    const b = { rank: rank(), order: 1, identity: 'b' }
     expect(comparePaletteRankedItems(a, b)).toBeLessThan(0)
   })
 
   it('keeps unmatched rows behind matched ones', () => {
-    const matched = { rank: rank(), order: 9, id: 'z' }
-    const unmatched = { rank: null, order: 0, id: 'a' }
+    const matched = { rank: rank(), order: 9, identity: 'z' }
+    const unmatched = { rank: null, order: 0, identity: 'a' }
     expect(comparePaletteRankedItems(matched, unmatched)).toBeLessThan(0)
   })
 
   it('orders empty-query rows by their section order alone', () => {
-    const a = { rank: null, order: 0, id: 'z' }
-    const b = { rank: null, order: 1, id: 'a' }
+    const a = { rank: null, order: 0, identity: 'z' }
+    const b = { rank: null, order: 1, identity: 'a' }
     expect(comparePaletteRankedItems(a, b)).toBeLessThan(0)
   })
 })

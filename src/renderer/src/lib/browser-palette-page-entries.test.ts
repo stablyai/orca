@@ -210,13 +210,7 @@ describe('buildSearchableBrowserPages', () => {
     ])
   })
 
-  it('re-hosts a same-id page entry when the sibling row is missing from the catalog', () => {
-    // Why: host qualification is gated on both same-id rows being present. With one reaped, a
-    // local-stamped tab still renders but carries the surviving row's host — so a wrong-host
-    // Cmd-J activation means the catalog lost a row, not that host qualification regressed.
-    // This characterizes today's fallback, it does not bless it: overriding a tab's own 'local'
-    // stamp may be the wrong answer, and changing it is tracked as the unified-tab-host-ownership
-    // follow-up. Update this expectation with that change rather than treating it as a contract.
+  it('does not re-host a tab whose stamped owner is absent from the catalog', () => {
     const sharedId = 'repo-shared::/workspace'
     const remote = makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
     const entries = buildSearchableBrowserPages({
@@ -239,9 +233,7 @@ describe('buildSearchableBrowserPages', () => {
       activeTabType: 'terminal'
     })
 
-    expect(entries.map((entry) => [entry.page.id, entry.executionHostId])).toEqual([
-      ['page-local', 'runtime:host-b']
-    ])
+    expect(entries).toEqual([])
   })
 
   it('does not route one ambiguous legacy browser bucket to both hosts', () => {
@@ -258,6 +250,25 @@ describe('buildSearchableBrowserPages', () => {
         worktreeOrder,
         browserTabsByWorktree: { [sharedId]: [workspace] },
         browserPagesByWorkspace: { [workspace.id]: [makePage({ worktreeId: sharedId })] },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'terminal'
+      })
+    ).toEqual([])
+  })
+
+  it('omits a browser row whose backing tab id is duplicated', () => {
+    const browserTab = browserUnifiedTab('shared-tab', 'ws-1', 'wt-1')
+    expect(
+      buildSearchableBrowserPages({
+        worktrees: [worktreeA],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+        browserPagesByWorkspace: { 'ws-1': [makePage()] },
+        unifiedTabsByWorktree: {
+          'wt-1': [browserTab, { ...browserTab, contentType: 'terminal' }]
+        },
         activeBrowserTabId: null,
         activeWorktreeId: null,
         activeTabType: 'terminal'
@@ -373,14 +384,50 @@ describe('buildSearchableBrowserPages', () => {
     })
 
     expect(entries.map((entry) => entry.lastActiveAt)).toEqual([4000, 9000])
+    expect(entries.map((entry) => entry.lastFocusedAt)).toEqual([4000, undefined])
+  })
+
+  it('moves the workspace-focus proxy when the active browser page changes', () => {
+    const browserTab: Tab = {
+      id: 'tab-ws-1',
+      entityId: 'ws-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'browser',
+      label: 'Example',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      lastFocusedAt: 8_000
+    }
+    const pages = [makePage({ createdAt: 1_000 }), makePage({ id: 'page-2', createdAt: 2_000 })]
+    const build = (activePageId: string) =>
+      buildSearchableBrowserPages({
+        worktrees: [worktreeA],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: {
+          'wt-1': [makeWorkspace({ activePageId, pageIds: ['page-1', 'page-2'] })]
+        },
+        browserPagesByWorkspace: { 'ws-1': pages },
+        unifiedTabsByWorktree: { 'wt-1': [browserTab] },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'browser'
+      })
+
+    expect(build('page-1').map((entry) => entry.lastActiveAt)).toEqual([8_000, 2_000])
+    expect(build('page-2').map((entry) => entry.lastActiveAt)).toEqual([1_000, 8_000])
+    expect(build('page-1').map((entry) => entry.lastFocusedAt)).toEqual([8_000, undefined])
+    expect(build('page-2').map((entry) => entry.lastFocusedAt)).toEqual([undefined, 8_000])
   })
 
   it('feeds Cmd+J browser search the same ranking as the inline builder did', () => {
     const results = searchBrowserPages(buildFixture(), 'docs')
 
-    // Current page first, then the two url-only matches in the active worktree,
-    // then the other worktree's title match.
-    expect(results.map((result) => result.pageId)).toEqual(['page-1', 'page-2', 'page-3', 'page-4'])
+    // Primary title proofs lead URL-only proofs even across worktrees.
+    expect(results.map((result) => result.pageId)).toEqual(['page-1', 'page-4', 'page-2', 'page-3'])
     expect(results[0].isCurrentPage).toBe(true)
   })
 })

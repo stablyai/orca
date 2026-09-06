@@ -21,6 +21,7 @@ import {
   type OpenTabSearchInput,
   type OpenTabSearchResult
 } from './open-tab-search'
+import { createPaletteSearchContext } from '@/lib/palette-match/palette-ranking'
 
 const worktree: Worktree = {
   id: 'wt-1',
@@ -71,7 +72,8 @@ function makeWorkspaceTab({
   occupantAgent = null,
   tabSortIndex = 0,
   groupSortIndex = 0,
-  isCurrentTab = false
+  isCurrentTab = false,
+  createdAt = 0
 }: {
   id: string
   title: string
@@ -83,10 +85,13 @@ function makeWorkspaceTab({
   tabSortIndex?: number
   groupSortIndex?: number
   isCurrentTab?: boolean
+  createdAt?: number
 }): SearchableWorkspaceTab {
   const searchTexts = secondarySearchTexts ?? (secondaryText ? [secondaryText] : [])
+  const tab = makeTab(id, contentType) as SearchableWorkspaceTab['tab']
+  tab.createdAt = createdAt
   return {
-    tab: makeTab(id, contentType) as SearchableWorkspaceTab['tab'],
+    tab,
     worktree,
     repoName: REPO_NAME,
     worktreeSortIndex: 0,
@@ -218,7 +223,62 @@ function search(input: Partial<OpenTabSearchInput> & { query: string }): OpenTab
   })
 }
 
+function readableId(result: OpenTabSearchResult): string {
+  return `open-tab:${result.source}:${result.source === 'browser' ? result.pageId : result.tabId}`
+}
+
 describe('searchOpenTabs ranking', () => {
+  it('uses the shared Atlas order before applying the four-row cap', () => {
+    const now = 100 * 24 * 60 * 60 * 1000
+    const age = (milliseconds: number): number => now - milliseconds
+    const workspaceTabs = [
+      makeWorkspaceTab({
+        id: 'old-prefix-2d',
+        title: 'atlas-follow-up-draft-2026-09-01.md',
+        createdAt: age(2 * 24 * 60 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'old-prefix-3d',
+        title: 'atlas-meeting-todo.md',
+        createdAt: age(3 * 24 * 60 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'recent-title',
+        title: 'Clarify Atlas action items',
+        createdAt: age(30_000)
+      }),
+      makeWorkspaceTab({
+        id: 'recent-path',
+        title: 'questions-and-answers.md',
+        secondaryText: 'notes/atlas/questions.md',
+        createdAt: age(30 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'older-path',
+        title: 'worklog.md',
+        secondaryText: 'notes/atlas/worklog.md',
+        createdAt: age(9 * 60 * 60 * 1000)
+      }),
+      makeWorkspaceTab({
+        id: 'older-title',
+        title: 'Advance Atlas security review',
+        createdAt: age(19 * 60 * 60 * 1000)
+      })
+    ]
+    const results = search({
+      query: 'atlas',
+      context: createPaletteSearchContext(now),
+      workspaceTabs
+    })
+
+    expect(results.map((result) => (result.source === 'workspace' ? result.tabId : ''))).toEqual([
+      'recent-title',
+      'older-title',
+      'old-prefix-2d',
+      'old-prefix-3d'
+    ])
+  })
+
   it('ranks a title-prefix match above a title-substring match from another source', () => {
     const results = search({
       query: 'zebra',
@@ -226,13 +286,10 @@ describe('searchOpenTabs ranking', () => {
       browserPages: [makeBrowserPage({ id: 'page-1', title: 'Zebra release notes' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
-      'open-tab:browser:page-1',
-      'open-tab:workspace:tab-1'
-    ])
+    expect(results.map(readableId)).toEqual(['open-tab:browser:page-1', 'open-tab:workspace:tab-1'])
   })
 
-  it('ranks any title match above any secondary match', () => {
+  it('ranks a primary word match above a comparable secondary word match', () => {
     const results = search({
       query: 'zebra',
       workspaceTabs: [
@@ -246,13 +303,13 @@ describe('searchOpenTabs ranking', () => {
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Trailing zebra' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:simulator:sim-1',
       'open-tab:workspace:tab-secondary'
     ])
   })
 
-  // Both land in the secondary tier, so match rank has to beat tab position: the
+  // Both use secondary coverage, so match rank has to beat tab position: the
   // agent tab sits earlier in the group and would win a position-only tie-break.
   it('ranks a path match above an agent-snippet match on tabs in the same group', () => {
     const results = search({
@@ -274,13 +331,13 @@ describe('searchOpenTabs ranking', () => {
       ]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-path',
       'open-tab:workspace:tab-agent'
     ])
   })
 
-  it('breaks tier ties on source order, then on engine score', () => {
+  it('breaks semantic and activity ties on source order, then engine score', () => {
     const results = search({
       query: 'zebra',
       workspaceTabs: [
@@ -291,7 +348,7 @@ describe('searchOpenTabs ranking', () => {
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Zebra emulator' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-early',
       'open-tab:workspace:tab-late',
       'open-tab:browser:page-1',
@@ -312,11 +369,48 @@ describe('searchOpenTabs ranking', () => {
     })
 
     expect(results).toHaveLength(OPEN_TAB_SEARCH_RESULT_LIMIT)
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-0',
       'open-tab:workspace:tab-1',
       'open-tab:workspace:tab-2',
       'open-tab:workspace:tab-3'
+    ])
+  })
+
+  it('reserves one capped slot for a retained eligible result', () => {
+    const input = {
+      query: 'zebra',
+      workspaceTabs: [0, 1, 2, 3, 4].map((index) =>
+        makeWorkspaceTab({ id: `tab-${index}`, title: `Zebra ${index}`, tabSortIndex: index })
+      )
+    }
+    const uncappedSelection = searchOpenTabs({
+      browserPages: [],
+      simulatorTabs: [],
+      ...input
+    })[3]
+    input.workspaceTabs[4].tab.createdAt = Date.now()
+    const retained = searchOpenTabs({
+      browserPages: [],
+      simulatorTabs: [],
+      ...input,
+      retainedResultId: uncappedSelection.id
+    })
+
+    expect(retained).toHaveLength(OPEN_TAB_SEARCH_RESULT_LIMIT)
+    expect(retained.some((result) => result.id === uncappedSelection.id)).toBe(true)
+  })
+
+  it('ranks an exact browser destination above a workspace typo', () => {
+    const results = search({
+      query: 'zebra',
+      workspaceTabs: [makeWorkspaceTab({ id: 'tab-typo', title: 'zebrb' })],
+      browserPages: [makeBrowserPage({ id: 'page-exact', title: 'Notes', url: 'zebra' })]
+    })
+
+    expect(results.map(readableId)).toEqual([
+      'open-tab:browser:page-exact',
+      'open-tab:workspace:tab-typo'
     ])
   })
 })
@@ -334,7 +428,7 @@ describe('searchOpenTabs filtering', () => {
       ]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
+    expect(results.map(readableId)).toEqual([
       'open-tab:workspace:tab-1',
       'open-tab:browser:page-1',
       'open-tab:simulator:sim-1'
@@ -372,10 +466,47 @@ describe('searchOpenTabs filtering', () => {
       ]
     })
 
-    expect(results.map((result) => result.id)).toEqual([
-      'open-tab:workspace:tab-1',
-      'open-tab:browser:page-1'
+    expect(results.map(readableId)).toEqual(['open-tab:workspace:tab-1', 'open-tab:browser:page-1'])
+  })
+
+  it('keeps branch matches while excluding worktree and repository fields', () => {
+    expect(
+      search({
+        query: 'main',
+        workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'Notes' })]
+      }).map(readableId)
+    ).toEqual(['open-tab:workspace:tab-1'])
+  })
+
+  it('uses an admissible title proof when the unrestricted match prefers the worktree', () => {
+    const entry = makeWorkspaceTab({ id: 'tab-1', title: 'atlaz' })
+    entry.document = buildPaletteTabDocument({
+      id: 'tab-1',
+      title: 'atlaz',
+      secondaryTexts: [],
+      worktreeName: 'atlas',
+      branch: BRANCH_NAME,
+      repoName: REPO_NAME
+    })
+
+    expect(search({ query: 'atlas', workspaceTabs: [entry] }).map(readableId)).toEqual([
+      'open-tab:workspace:tab-1'
     ])
+  })
+
+  it('does not create a snippet fallback when only excluded structured fields match', () => {
+    expect(
+      search({
+        query: 'aurora',
+        workspaceTabs: [
+          makeWorkspaceTab({
+            id: 'tab-1',
+            title: 'Notes',
+            agentSnippets: ['aurora agent notes']
+          })
+        ]
+      })
+    ).toEqual([])
   })
 
   // Both tokens land on the "ios simulator" alias, so the row fills no title or
@@ -386,7 +517,7 @@ describe('searchOpenTabs filtering', () => {
       simulatorTabs: [makeSimulatorTab({ id: 'sim-1', label: 'Pixel 8' })]
     })
 
-    expect(results.map((result) => result.id)).toEqual(['open-tab:simulator:sim-1'])
+    expect(results.map(readableId)).toEqual(['open-tab:simulator:sim-1'])
   })
 })
 
@@ -431,6 +562,51 @@ describe('searchOpenTabs result fields', () => {
       relativePath: 'src/zebra.ts',
       matchedText: '/tmp/wt-1/src/zebra.ts'
     })
+  })
+
+  it('keeps editor paths scoped to their host and worktree when tab ids repeat', () => {
+    const local = makeWorkspaceTab({
+      id: 'same-tab',
+      title: 'Atlas',
+      contentType: 'editor',
+      secondaryText: 'local/atlas.ts'
+    })
+    const remote = makeWorkspaceTab({
+      id: 'same-tab',
+      title: 'Atlas',
+      contentType: 'editor',
+      secondaryText: 'remote/atlas.ts'
+    })
+    remote.worktree = { ...worktree, hostId: 'ssh:remote' }
+    remote.tab = { ...remote.tab, executionHostId: 'ssh:remote' }
+    const sibling = makeWorkspaceTab({
+      id: 'same-tab',
+      title: 'Atlas',
+      contentType: 'editor',
+      secondaryText: 'sibling/atlas.ts'
+    })
+    sibling.worktree = { ...worktree, id: 'wt-2' }
+    sibling.tab = { ...sibling.tab, worktreeId: 'wt-2' }
+
+    expect(search({ query: 'Atlas', workspaceTabs: [local, remote, sibling] })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          executionHostId: 'local',
+          worktreeId: 'wt-1',
+          relativePath: 'local/atlas.ts'
+        }),
+        expect.objectContaining({
+          executionHostId: 'ssh:remote',
+          worktreeId: 'wt-1',
+          relativePath: 'remote/atlas.ts'
+        }),
+        expect.objectContaining({
+          executionHostId: 'local',
+          worktreeId: 'wt-2',
+          relativePath: 'sibling/atlas.ts'
+        })
+      ])
+    )
   })
 
   it('copies a confident occupant agent onto workspace results', () => {

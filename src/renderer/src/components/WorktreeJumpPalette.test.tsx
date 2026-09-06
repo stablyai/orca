@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
 
@@ -181,9 +182,11 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
 }
 
 function getWorktreeRows(): string[] {
-  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item*="worktree:"]')].map(
-    (node) => node.textContent ?? ''
-  )
+  return [
+    ...testContainer.querySelectorAll<HTMLElement>(
+      `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
+    )
+  ].map((node) => node.textContent ?? '')
 }
 
 describe('WorktreeJumpPalette', () => {
@@ -405,15 +408,14 @@ describe('WorktreeJumpPalette', () => {
 
     await renderPalette(state)
 
-    // Both rows render; the second carries a disambiguated command value so the two never
-    // share a React key.
+    // Host-qualified command values keep both rows independently selectable.
     const rows = testContainer.querySelectorAll<HTMLButtonElement>(
-      '[data-command-item$="worktree:shared"]'
+      `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
     )
     expect(rows).toHaveLength(2)
     expect([...rows].map((candidate) => candidate.getAttribute('data-command-item'))).toEqual([
-      'worktree:shared',
-      'palette-dup:1:worktree:shared'
+      encodePaletteIdentity(['worktree', 'local|shared']),
+      encodePaletteIdentity(['worktree', 'ssh:box|shared'])
     ])
 
     // The first row names ITS OWN host — the wrong-host open is gone.
@@ -435,7 +437,7 @@ describe('WorktreeJumpPalette', () => {
     })
 
     const rows = testContainer.querySelectorAll<HTMLButtonElement>(
-      '[data-command-item$="worktree:shared"]'
+      `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
     )
     expect(rows).toHaveLength(2)
 
@@ -445,14 +447,48 @@ describe('WorktreeJumpPalette', () => {
     })
   })
 
-  it('keeps a lone host-qualified row on its clean command value', async () => {
+  it('keeps the host in a lone row command value', async () => {
     const ssh = makeWorktree('single', 'SSH workspace', { hostId: 'ssh:box' })
 
     await renderPalette({ worktreesByRepo: { 'repo-1': [ssh] }, showSleepingWorkspaces: true })
 
     expect(
-      testContainer.querySelector('[data-command-item="worktree:single"]')?.textContent
+      testContainer.querySelector(
+        `[data-command-item="${encodePaletteIdentity(['worktree', 'ssh:box|single'])}"]`
+      )?.textContent
     ).toContain('SSH workspace')
+  })
+
+  it('routes same-target SSH rows through their paired runtime owner', async () => {
+    const hubA = makeWorktree('shared-runtime', 'Hub A workspace', {
+      hostId: 'ssh:same-private-target',
+      runtimeOwnerEnvironmentId: 'hub-a'
+    })
+    const hubB = makeWorktree('shared-runtime', 'Hub B workspace', {
+      hostId: 'ssh:same-private-target',
+      runtimeOwnerEnvironmentId: 'hub-b'
+    })
+
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [hubA, hubB] },
+      showSleepingWorkspaces: true
+    })
+    await act(async () => setCommandQuery?.('workspace'))
+    await flushEffects()
+
+    const hubARow = testContainer.querySelector<HTMLButtonElement>(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-a|shared-runtime'])}"]`
+    )
+    const hubBRow = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-b|shared-runtime'])}"]`
+    )
+    expect(hubARow).not.toBeNull()
+    expect(hubBRow).not.toBeNull()
+
+    await act(async () => fireEvent.click(hubARow!))
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared-runtime', {
+      executionHostId: 'runtime:hub-a'
+    })
   })
 
   it('does not badge a runtime-owned row with its physical SSH repo', async () => {
@@ -467,7 +503,9 @@ describe('WorktreeJumpPalette', () => {
       showSleepingWorkspaces: true
     })
 
-    const row = testContainer.querySelector('[data-command-item="worktree:runtime-repo"]')
+    const row = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:missing-runtime|runtime-repo'])}"]`
+    )
     expect(row?.textContent).toContain('Runtime workspace')
     expect(row?.textContent).not.toContain('Physical SSH repo')
   })
@@ -498,14 +536,16 @@ describe('WorktreeJumpPalette', () => {
       showSleepingWorkspaces: true
     })
 
-    const activeRow = testContainer.querySelector('[data-command-item="worktree:active-wt"]')
+    const activeRow = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', '|active-wt'])}"]`
+    )
     expect(activeRow?.textContent).toContain('23d')
     const activeSpan = activeRow?.querySelector('span[aria-label="Last active 23d ago"]')
     expect(activeSpan).not.toBeNull()
     expect(activeSpan?.textContent).toBe('23d')
 
     const noActivityRow = testContainer.querySelector(
-      '[data-command-item="worktree:no-activity-wt"]'
+      `[data-command-item="${encodePaletteIdentity(['worktree', '|no-activity-wt'])}"]`
     )
     expect(noActivityRow?.querySelector('span[aria-label*="Last active"]')).toBeNull()
   })

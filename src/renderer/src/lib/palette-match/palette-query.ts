@@ -31,7 +31,13 @@ export type PaletteQueryToken = {
 export type PreparedPaletteQuery =
   | { state: 'empty' }
   | { state: 'invalid'; reason: 'too-large' | 'too-many-tokens' }
-  | { state: 'ready'; normalized: string; tokens: readonly PaletteQueryToken[] }
+  | {
+      state: 'ready'
+      normalized: string
+      tokens: readonly PaletteQueryToken[]
+      /** Count before duplicate-token removal; destination recognition uses the complete query. */
+      tokenCountBeforeDeduplication: number
+    }
 
 function splitComponents(text: string): string[] {
   const components: string[] = []
@@ -82,10 +88,7 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (isWorktreePaletteQueryTooLarge(query)) {
     return { state: 'invalid', reason: 'too-large' }
   }
-  // Why collapse runs: field text is always single-spaced, so an uncollapsed double
-  // space can never satisfy the whole-query equality/prefix tier and the exact-name
-  // match silently loses its rank. Safe here — this string feeds only scoreWholeQuery
-  // and carries no offset mapping back into the source text.
+  // Field text is single-spaced, and this value has no source-offset mapping to preserve.
   const normalized = normalizePaletteText(query).normalized.replace(/ +/g, ' ').trim()
   if (!normalized) {
     return { state: 'empty' }
@@ -93,7 +96,8 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
 
   const seen = new Set<string>()
   const tokens: PaletteQueryToken[] = []
-  for (const raw of normalized.split(' ')) {
+  const rawTokens = normalized.split(' ').filter(Boolean)
+  for (const raw of rawTokens) {
     if (!raw || seen.has(raw)) {
       continue
     }
@@ -107,7 +111,12 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (tokens.length > PALETTE_QUERY_MAX_TOKENS) {
     return { state: 'invalid', reason: 'too-many-tokens' }
   }
-  return { state: 'ready', normalized, tokens }
+  return {
+    state: 'ready',
+    normalized,
+    tokens,
+    tokenCountBeforeDeduplication: rawTokens.length
+  }
 }
 
 export function isLetterOnlyWord(word: string): boolean {

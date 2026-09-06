@@ -23,6 +23,8 @@ describe('palette field quality allocation', () => {
           id: String(i),
           profile: profiles[i % profiles.length],
           text: 'scan daily 1234 workspace',
+          role: 'primary',
+          destinationEligible: true,
           ...(i % 2 === 0 ? { identifier: { kind: 'number' as const } } : {})
         })!
       )
@@ -56,6 +58,8 @@ describe('palette quality restrictions remain local to each match', () => {
         id: 'id',
         profile: 'identifier',
         text: '12345',
+        role: 'primary',
+        destinationEligible: true,
         identifier: { kind }
       })!
       const prefix = createPaletteQueryToken('123', 0)
@@ -75,7 +79,13 @@ describe('palette quality restrictions remain local to each match', () => {
   it.each<PaletteFieldProfile>(['structured-label', 'identifier', 'path', 'prose', 'exact-alias'])(
     'preserves typo restrictions for %s without mutating the profile',
     (profile) => {
-      const field = indexPaletteField({ id: 'id', profile, text: 'scan' })!
+      const field = indexPaletteField({
+        id: 'id',
+        profile,
+        text: 'scan',
+        role: 'primary',
+        destinationEligible: true
+      })!
       expect(matchPaletteField(field, createPaletteQueryToken('s', 0))).toEqual({
         quality: 'field-prefix',
         ranges: [{ start: 0, end: 1 }]

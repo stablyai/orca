@@ -75,6 +75,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               titleRanges={result.titleRanges}
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
+              secondaryMatches={result.secondaryMatches}
               worktreeName={result.worktreeName}
               worktreeRanges={result.worktreeRanges}
               sessionAge={sessionAge}
@@ -96,6 +97,11 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
                 </>
               }
             />
+            {result.typeAliasMatches.length ? (
+              <span className="sr-only">
+                {result.typeAliasMatches.map((match) => match.text).join(', ')}
+              </span>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <PaletteHostBadgeChip badge={workspaceTabHostBadge} />

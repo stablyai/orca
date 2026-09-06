@@ -1,18 +1,23 @@
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import {
+  getPaletteWorktreeIdentity,
+  isPaletteCurrentWorktree,
+  resolvePaletteRepoForWorktree
+} from './palette-repo-resolution'
 import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
 } from './browser-palette-search'
 import {
   findAmbiguousWorktreeIds,
+  findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
+import { maxValidPaletteActivityTimestamp } from './palette-match/palette-ranking'
 
 type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
 
@@ -48,11 +53,21 @@ export function buildSearchableBrowserPages({
 }: BuildSearchableBrowserPagesOptions): SearchableBrowserPage[] {
   const entries: SearchableBrowserPage[] = []
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
+  const allUnifiedTabs = Object.values(unifiedTabsByWorktree ?? {}).flatMap((tabs) => tabs ?? [])
+  const duplicateTabIds = findDuplicateIds(allUnifiedTabs)
+  const duplicateWorkspaceIds = findDuplicateIds(
+    allUnifiedTabs
+      .filter((tab) => tab.contentType === 'browser')
+      .map((tab) => ({ id: tab.entityId }))
+  )
+  const duplicateStoredWorkspaceIds = findDuplicateIds(
+    Object.values(browserTabsByWorktree).flatMap((workspaces) => workspaces ?? [])
+  )
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
     const worktreeSortIndex =
-      worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
+      worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
     const focusedAtByWorkspaceId = new Map<string, number>()
@@ -67,17 +82,35 @@ export function buildSearchableBrowserPages({
       }
     }
     for (const workspace of browserTabsByWorktree[worktree.id] ?? []) {
-      const unifiedTab = unifiedTabs.find(
-        (tab) =>
-          tab.contentType === 'browser' &&
-          tab.entityId === workspace.id &&
-          isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      if (
+        duplicateWorkspaceIds.has(workspace.id) ||
+        duplicateStoredWorkspaceIds.has(workspace.id)
+      ) {
+        continue
+      }
+      const workspaceTabs = unifiedTabs.filter(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
       )
-      if (!unifiedTab && ambiguousWorktreeIds.has(worktree.id)) {
+      const unifiedTab = workspaceTabs.find((tab) =>
+        isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      )
+      if (!unifiedTab && (workspaceTabs.length > 0 || ambiguousWorktreeIds.has(worktree.id))) {
+        continue
+      }
+      if (unifiedTab && duplicateTabIds.has(unifiedTab.id)) {
         continue
       }
       const workspaceFocusedAt = focusedAtByWorkspaceId.get(workspace.id)
-      for (const page of browserPagesByWorkspace[workspace.id] ?? []) {
+      const pages = browserPagesByWorkspace[workspace.id] ?? []
+      const duplicatePageIds = findDuplicateIds(pages)
+      for (const page of pages) {
+        if (
+          duplicatePageIds.has(page.id) ||
+          page.workspaceId !== workspace.id ||
+          page.worktreeId !== worktree.id
+        ) {
+          continue
+        }
         entries.push({
           page,
           workspace,
@@ -95,8 +128,12 @@ export function buildSearchableBrowserPages({
             activeWorktreeId,
             activeWorkspaceExecutionHostId
           ),
-          // Never older than the page itself: it was opened while the workspace was focused.
-          lastActiveAt: workspaceFocusedAt ? Math.max(workspaceFocusedAt, page.createdAt) : null,
+          // Workspace focus is a lossy proxy for only its currently active page.
+          lastFocusedAt: workspace.activePageId === page.id ? workspaceFocusedAt : undefined,
+          lastActiveAt:
+            workspace.activePageId === page.id && workspaceFocusedAt
+              ? maxValidPaletteActivityTimestamp([workspaceFocusedAt, page.createdAt])
+              : maxValidPaletteActivityTimestamp([page.createdAt]),
           document: buildSearchableBrowserPageDocument({ page, workspace, worktree, repoName })
         })
       }

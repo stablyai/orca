@@ -12,13 +12,15 @@ import {
 } from './tab-document'
 import type { MatchRange } from './normalized-text'
 import type { PaletteResultQualityClass } from './match-quality'
-import {
-  comparePaletteDocumentRank,
-  type PaletteDocument,
-  type PaletteDocumentRank
-} from './palette-document'
+import type { PaletteDocument, PaletteDocumentRank } from './palette-document'
+import type { PaletteIndexedField } from './indexed-field'
+import { comparePaletteEntityRanks, type PaletteActivityRank } from './palette-ranking'
 
 const NO_RANGES: readonly MatchRange[] = []
+
+export function isOmniboxPaletteTabFieldAllowed(field: Pick<PaletteIndexedField, 'id'>): boolean {
+  return field.id !== PALETTE_TAB_WORKTREE_FIELD_ID && field.id !== PALETTE_TAB_REPO_FIELD_ID
+}
 
 export type PaletteTabIndexedMatch = { index: number; ranges: readonly MatchRange[] }
 
@@ -30,40 +32,45 @@ export type PaletteTabMatch = {
   branchRanges: readonly MatchRange[]
   repoRanges: readonly MatchRange[]
   workspaceRanges: readonly MatchRange[]
+  secondaryMatches: readonly PaletteTabIndexedMatch[]
+  typeAliasMatches: readonly PaletteTabIndexedMatch[]
+  /** First display-preferred proof retained for older row adapters. */
   secondary: PaletteTabIndexedMatch | null
   typeAlias: PaletteTabIndexedMatch | null
 }
 
-function firstIndexed(
+function indexedMatches(
   rangesByField: ReadonlyMap<string, readonly MatchRange[]>,
   prefix: string
-): PaletteTabIndexedMatch | null {
-  let best: PaletteTabIndexedMatch | null = null
+): PaletteTabIndexedMatch[] {
+  const matches: PaletteTabIndexedMatch[] = []
   for (const [fieldId, ranges] of rangesByField) {
     const index = parsePaletteTabIndexedFieldId(fieldId, prefix)
-    if (index === null) {
-      continue
-    }
-    if (!best || index < best.index) {
-      best = { index, ranges }
+    if (index !== null) {
+      matches.push({ index, ranges })
     }
   }
-  return best
+  return matches.sort((a, b) => a.index - b.index)
 }
 
 export function matchPaletteTabDocument(
   document: PaletteDocument,
-  query: Extract<PreparedPaletteQuery, { state: 'ready' }>
+  query: Extract<PreparedPaletteQuery, { state: 'ready' }>,
+  options: { isFieldAllowed?: (field: PaletteIndexedField) => boolean } = {}
 ): PaletteTabMatch | null {
   const match = matchPaletteDocument({
     document,
     tokens: query.tokens,
-    normalizedQuery: query.normalized
+    normalizedQuery: query.normalized,
+    tokenCountBeforeDeduplication: query.tokenCountBeforeDeduplication,
+    isFieldAllowed: options.isFieldAllowed
   })
   if (!match) {
     return null
   }
   const ranges = match.rangesByField
+  const secondaryMatches = indexedMatches(ranges, PALETTE_TAB_SECONDARY_FIELD_PREFIX)
+  const typeAliasMatches = indexedMatches(ranges, PALETTE_TAB_ALIAS_FIELD_PREFIX)
   return {
     qualityClass: match.qualityClass,
     rank: match.rank,
@@ -72,8 +79,10 @@ export function matchPaletteTabDocument(
     branchRanges: ranges.get(PALETTE_TAB_BRANCH_FIELD_ID) ?? NO_RANGES,
     repoRanges: ranges.get(PALETTE_TAB_REPO_FIELD_ID) ?? NO_RANGES,
     workspaceRanges: ranges.get(PALETTE_TAB_WORKSPACE_FIELD_ID) ?? NO_RANGES,
-    secondary: firstIndexed(ranges, PALETTE_TAB_SECONDARY_FIELD_PREFIX),
-    typeAlias: firstIndexed(ranges, PALETTE_TAB_ALIAS_FIELD_PREFIX)
+    secondaryMatches,
+    typeAliasMatches,
+    secondary: secondaryMatches[0] ?? null,
+    typeAlias: typeAliasMatches[0] ?? null
   }
 }
 
@@ -96,26 +105,14 @@ export type PaletteTabRankInputs = {
   rank: PaletteDocumentRank
   /** Existing positional score: current tab, current worktree, then list order. */
   positionScore: number
-  id: string
-  /** Timestamp of most recent activity (focus or agent interaction). */
-  lastActiveAt?: number
+  identity: string
+  activity: PaletteActivityRank
 }
 
-/** Lexicographic match rank first, then recent activity, then positional order. */
+/** Shared semantic, bucketed-recency, placement, position, and identity order. */
 export function comparePaletteTabResults(a: PaletteTabRankInputs, b: PaletteTabRankInputs): number {
-  const byRank = comparePaletteDocumentRank(a.rank, b.rank)
-  if (byRank !== 0) {
-    return byRank
-  }
-  if (a.lastActiveAt !== b.lastActiveAt) {
-    const aTime = a.lastActiveAt ?? 0
-    const bTime = b.lastActiveAt ?? 0
-    if (aTime !== bTime) {
-      return bTime - aTime
-    }
-  }
-  if (a.positionScore !== b.positionScore) {
-    return a.positionScore - b.positionScore
-  }
-  return a.id.localeCompare(b.id)
+  return comparePaletteEntityRanks(
+    { rank: a.rank, activity: a.activity, position: a.positionScore, identity: a.identity },
+    { rank: b.rank, activity: b.activity, position: b.positionScore, identity: b.identity }
+  )
 }
