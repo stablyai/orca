@@ -1,4 +1,4 @@
-name: Docker SSH freeze distribution diagnostic
+name: Docker SSH frame scheduling diagnostic
 on:
   workflow_dispatch:
 permissions:
@@ -21,10 +21,10 @@ jobs:
           pnpm run build:relay
           pnpm exec electron-vite build --mode e2e
       - name: Measure existing freeze oracle distribution
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --project=electron-headless --workers=1 --repeat-each=10
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --project=electron-headless --workers=1 --repeat-each=3
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: freeze-distribution-traces
+          name: freeze-frame-control-traces
           path: test-results/
           retention-days: 3

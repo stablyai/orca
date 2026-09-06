@@ -83,6 +83,9 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
     registerPostElectronShutdownCleanup
   }, testInfo) => {
     test.setTimeout(420_000)
+    orcaPage.on('console', (message) => {
+      if (message.text().startsWith('[freeze-frame-control interaction]')) console.log(message.text())
+    })
     let target: DockerSshRelayTarget | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
@@ -99,6 +102,19 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
       await connectDockerSshRelayTarget(orcaPage, target, {
         remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
       })
+
+      const idleFrames = await orcaPage.evaluate(async () => {
+        const samples = []
+        let previous = performance.now()
+        for (let index = 0; index < 4; index++) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          const now = performance.now()
+          samples.push({ gapMs: now - previous, visibility: document.visibilityState, focused: document.hasFocus() })
+          previous = now
+        }
+        return samples
+      })
+      console.log('[freeze-frame-control idle]', JSON.stringify(idleFrames))
 
       const runId = `${Date.now()}`
       // First terminal on the SSH worktree.
@@ -148,16 +164,20 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
 
       const interactionProbeMs = await orcaPage.evaluate(async () => {
         const started = performance.now()
+        const frames: { elapsedMs: number; visibility: string; focused: boolean }[] = []
+        const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => {
+          frames.push({ elapsedMs: performance.now() - started, visibility: document.visibilityState, focused: document.hasFocus() })
+          resolve()
+        }))
         const state = window.__store?.getState()
         const view = state?.activeView
         state?.setActiveView(view === 'tasks' ? 'terminal' : 'tasks')
-        await new Promise<void>((r) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => r()))
-        )
+        await frame()
+        await frame()
         state?.setActiveView(view ?? 'terminal')
-        await new Promise<void>((r) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => r()))
-        )
+        await frame()
+        await frame()
+        console.log('[freeze-frame-control interaction]', JSON.stringify(frames))
         return performance.now() - started
       })
 
