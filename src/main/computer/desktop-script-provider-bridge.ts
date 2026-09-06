@@ -57,11 +57,17 @@ async function mapped(
 /**
  * Only a run that produced no stdout at all may be replayed.
  *
- * Why the stdout guard: operations are not idempotent, and the response embeds
- * window titles and element names. Matching the policy pattern against a
- * snapshot that merely contains the word "SecurityError" would replay the
- * operation — a second click, a second keystroke, a second paste. A helper
- * blocked by the execution policy never reaches its first line of output.
+ * What the stdout guard covers: operations are not idempotent, and the response
+ * embeds window titles and element names, so a snapshot that merely contains
+ * the word "SecurityError" must not be read as a policy block and replayed as a
+ * second click, keystroke or paste. It closes that injection route only.
+ *
+ * What it does not cover: one-shot mode runs the operation to completion and
+ * writes stdout only afterwards, so stdout is empty for the whole action, not
+ * just before it starts. A crash after the click but before the write looks
+ * identical to a helper that never started. Nothing here can tell those apart —
+ * only a policy pattern that cannot match a non-policy failure keeps the replay
+ * off, which is why its `\b` is load-bearing rather than cosmetic.
  */
 function isPolicyBlockedStart(error: unknown): error is BridgeProcessFailure {
   return (
