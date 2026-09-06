@@ -15,9 +15,12 @@ import { describe, expect, it } from 'vitest'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
-const sourceNodePtyJobOwnershipPath = fileURLToPath(
-  new URL('./node-pty-job-ownership.cjs', import.meta.url)
-)
+// The import walk sees `from './x.mjs'` only, so the createRequire'd CJS
+// siblings have to be named. Without them the temp project cannot even load.
+const REQUIRED_CJS_SIBLINGS = [
+  'node-pty-job-ownership.cjs',
+  'windows-process-tree-creation-time.cjs'
+]
 
 describe('ensure-native-runtime', () => {
   it('rechecks Node native modules in fresh child processes after rebuilding', () => {
@@ -197,10 +200,12 @@ function mkTempProject() {
   // Walked, not listed: the script imports windows-process-tree-gyp-rebuild.mjs, and a fixture
   // missing it fails every case with a module-resolution error instead of the defect under test.
   copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
-  copyFileSync(
-    sourceNodePtyJobOwnershipPath,
-    join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')
-  )
+  for (const name of REQUIRED_CJS_SIBLINGS) {
+    copyFileSync(
+      fileURLToPath(new URL(`./${name}`, import.meta.url)),
+      join(projectDir, 'config', 'scripts', name)
+    )
+  }
   return projectDir
 }
 
