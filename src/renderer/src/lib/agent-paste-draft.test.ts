@@ -26,6 +26,7 @@ const testState = vi.hoisted(() => ({
   subscribeToPtyData: vi.fn(),
   replayPreHandlerPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
+  getPtyKittyKeyboardFlags: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
@@ -61,12 +62,17 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
   subscribeToRuntimeTerminalData: testState.subscribeToRuntimeTerminalData
 }))
 
+vi.mock('@/components/terminal-pane/terminal-pty-kitty-keyboard-flags', () => ({
+  getPtyKittyKeyboardFlags: testState.getPtyKittyKeyboardFlags
+}))
+
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const SHOW_CURSOR = '\x1b[?25h'
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
 const CODEX_DYNAMIC_COMPOSER_PROMPT_RENDER = '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}'
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
+const ENTER_SUBMIT_INPUT = '\r'
 const CODEX_SUBMIT_INPUT = '\x1b[13;5u'
 const CODEX_SUBMIT_RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
 
@@ -96,6 +102,8 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.replayPreHandlerPtyData.mockReset()
     testState.isRemoteRuntimePtyId.mockReset()
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
+    testState.getPtyKittyKeyboardFlags.mockReset()
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(0)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
     testState.inspectRuntimeTerminalProcess.mockReset()
@@ -174,7 +182,7 @@ describe('pasteDraftWhenAgentReady', () => {
       2,
       {},
       'pty-1',
-      CODEX_SUBMIT_INPUT
+      ENTER_SUBMIT_INPUT
     )
     expect(testState.unsubscribe).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
@@ -773,7 +781,8 @@ describe('pasteDraftWhenAgentReady', () => {
     )
   })
 
-  it('uses the Codex submit input for exact PTY submits', async () => {
+  it('falls back to Enter when configured Codex Ctrl+Enter has no Kitty keyboard proof', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
     const promise = submitPromptToAgentPty({
       tabId: 'tab-1',
       ptyId: 'pty-1',
@@ -787,19 +796,54 @@ describe('pasteDraftWhenAgentReady', () => {
     await expect(promise).resolves.toBe(true)
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
       1,
-      {},
+      { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } },
       'pty-1',
       PASTED_ISSUE_URL
     )
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
       2,
-      {},
+      { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } },
+      'pty-1',
+      ENTER_SUBMIT_INPUT
+    )
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      3,
+      { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } },
+      'pty-1',
+      ENTER_SUBMIT_INPUT
+    )
+  })
+
+  it('uses configured Codex Ctrl+Enter for exact PTY submits with Kitty keyboard proof', async () => {
+    testState.appState.settings = { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } }
+    testState.getPtyKittyKeyboardFlags.mockReturnValue(1)
+    const promise = submitPromptToAgentPty({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.getPtyKittyKeyboardFlags).toHaveBeenCalledWith('pty-1')
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      1,
+      { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } },
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
+      2,
+      { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } },
       'pty-1',
       CODEX_SUBMIT_INPUT
     )
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(
       3,
-      {},
+      { agentPostPasteSubmitInputs: { codex: 'ctrl-enter' } },
       'pty-1',
       CODEX_SUBMIT_INPUT
     )

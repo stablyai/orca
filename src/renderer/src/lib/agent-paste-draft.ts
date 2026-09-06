@@ -1,8 +1,14 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveAgentPostPasteSubmitInput } from '../../../shared/tui-agent-post-paste-submit'
+import {
+  resolveTerminalCtrlEnterInput,
+  TERMINAL_ENTER_INPUT
+} from '../../../shared/terminal-ctrl-enter-input'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { useAppStore } from '@/store'
+import { getPtyKittyKeyboardFlags } from '@/components/terminal-pane/terminal-pty-kitty-keyboard-flags'
 import {
   inspectRuntimeTerminalProcess,
   sendRuntimePtyInputVerified
@@ -34,8 +40,6 @@ export {
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
 export { BRACKETED_PASTE_END }
 export const POST_PASTE_SUBMIT_DELAY_MS = 50
-const POST_PASTE_ENTER_INPUT = '\r'
-const POST_PASTE_CTRL_ENTER_INPUT = '\x1b[13;5u'
 
 // Why: "the tab has a PTY" and "the agent's composer accepts input" are separate
 // states with separate failure modes, so they get separate budgets. A PTY that
@@ -46,13 +50,19 @@ const PTY_SPAWN_TIMEOUT_MS = 8000
 
 export function getSettingsForAgentTabRuntimeOwner(
   tabId: string
-): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
+):
+  | Pick<GlobalSettings, 'activeRuntimeEnvironmentId' | 'agentPostPasteSubmitInputs'>
+  | null
+  | undefined {
   const store = useAppStore.getState()
   for (const [worktreeId, tabs] of Object.entries(store.tabsByWorktree ?? {})) {
     if (tabs?.some((tab) => tab.id === tabId)) {
       // Why: legacy remote PTY ids may not embed their runtime owner. The tab's
       // worktree still identifies which host should receive readiness/send RPCs.
-      return getSettingsForWorktreeRuntimeOwner(store, worktreeId)
+      return {
+        ...getSettingsForWorktreeRuntimeOwner(store, worktreeId),
+        agentPostPasteSubmitInputs: store.settings?.agentPostPasteSubmitInputs
+      }
     }
   }
   return store.settings
@@ -205,7 +215,10 @@ export async function sendBracketedPasteToRunningAgent(args: {
 }
 
 async function sendBracketedPasteToAgent(args: {
-  settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+  settings?: Pick<
+    GlobalSettings,
+    'activeRuntimeEnvironmentId' | 'agentPostPasteSubmitInputs'
+  > | null
   ptyId: string
   content: string
   submit: boolean
@@ -213,7 +226,11 @@ async function sendBracketedPasteToAgent(args: {
 }): Promise<boolean> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit, agent } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
-  const submitInput = resolvePostPasteSubmitInput(agent)
+  const submitInput = resolvePostPasteSubmitSequence(
+    agent,
+    settings?.agentPostPasteSubmitInputs,
+    ptyId
+  )
   try {
     // Why: paste + submit (+ retry submit) must be one transaction, or a concurrent
     // paste on this PTY can slip between them and submit a half-written prompt.
@@ -247,10 +264,16 @@ async function sendBracketedPasteToAgent(args: {
   }
 }
 
-function resolvePostPasteSubmitInput(agent?: TuiAgent): string {
-  return agent && TUI_AGENT_CONFIG[agent]?.postPasteSubmitInput === 'ctrl-enter'
-    ? POST_PASTE_CTRL_ENTER_INPUT
-    : POST_PASTE_ENTER_INPUT
+function resolvePostPasteSubmitSequence(
+  agent: TuiAgent | undefined,
+  configuredInputs: GlobalSettings['agentPostPasteSubmitInputs'] | undefined,
+  ptyId: string
+): string {
+  const configuredInput = resolveAgentPostPasteSubmitInput(agent, configuredInputs)
+  if (configuredInput === 'ctrl-enter') {
+    return resolveTerminalCtrlEnterInput(getPtyKittyKeyboardFlags(ptyId))
+  }
+  return TERMINAL_ENTER_INPUT
 }
 
 function waitForAgentDraftInputReadyOnTab(args: {
