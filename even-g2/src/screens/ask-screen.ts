@@ -5,11 +5,7 @@
 // reducer's cursor bound matches what's rendered here.
 import { GLYPH_CURSOR_PREFIX } from '../hud/hud-glyphs'
 import type { HudScreenPage } from '../hud/hud-page-spec'
-import {
-  DEFAULT_MAX_CHARS_PER_PAGE,
-  DEFAULT_MAX_LINES_PER_PAGE,
-  paginateHudBody
-} from '../hud/hud-text-pagination'
+import { DEFAULT_MAX_CHARS_PER_PAGE, paginateHudBody } from '../hud/hud-text-pagination'
 import { topFrame } from '../navigation/hud-navigation-frames'
 import type { ScreenFrame } from '../navigation/nav-contract'
 import type { HudState } from '../state/hud-store'
@@ -17,6 +13,13 @@ import type { HudState } from '../state/hud-store'
 export const DEFAULT_ASK_OPTION_COUNT = 3
 
 const DEFAULT_ASK_FOOTER = 'scroll=choose  click=send  2tap=back'
+
+// HIGH #5: pre-wraps the body to this conservative glyph width before pagination, so a single
+// unbroken long line (e.g. a 1200-char prompt with no newlines) is counted as the many visual
+// rows it will actually render as, instead of surviving pagination as one giant unsplit "line"
+// whose tail — where the option strip lives — buildHudPage's hard BODY_MAX_CHARS(1000) slice
+// would otherwise cut off silently.
+const ASK_BODY_MAX_GLYPHS_PER_LINE = 48
 
 // Findings #1/#8 (partial, honest — full option-text parsing is v2): the strip is shown as
 // numbered slots without claiming what each one means, since v1 sends raw digits without
@@ -30,11 +33,19 @@ export function renderAskScreen(state: HudState): Extract<HudScreenPage, { layou
   const frame = topFrame(state.nav) as Extract<ScreenFrame, { screen: 'ask' }>
   const entry = state.inbox.entries.find((e) => e.notificationId === frame.notificationId)
   const title = entry?.title ?? 'Needs input'
-  const interaction = state.askInteraction
+  // HIGH #3: an interaction only applies to THIS screen's exact host+prompt — a stale one left
+  // over from a different host or a superseded ask must never be rendered here.
+  const interaction =
+    state.askInteraction !== null &&
+    state.askInteraction.hostId === frame.hostId &&
+    state.askInteraction.notificationId === frame.notificationId
+      ? state.askInteraction
+      : null
   const optionsUnavailable =
     interaction !== null &&
-    interaction.notificationId === frame.notificationId &&
-    (interaction.phase === 'failed' || interaction.phase === 'unresolved')
+    (interaction.phase === 'failed' ||
+      interaction.phase === 'unresolved' ||
+      interaction.phase === 'stalled')
   const optionArea = optionsUnavailable
     ? OPTIONS_UNAVAILABLE_TEXT
     : buildOptionStrip(frame.selectedOption, DEFAULT_ASK_OPTION_COUNT)
@@ -46,10 +57,14 @@ export function renderAskScreen(state: HudState): Extract<HudScreenPage, { layou
   // Finding #1: body is always the notification's own text (the real human summary) — never a
   // guess at option semantics. A synthesized ask (finding #14 — blocked with no notification
   // yet) has no entry at all, so say so plainly instead of rendering an empty page.
+  // HIGH #5: maxGlyphsPerLine force-wraps a long unbroken line before the char/line budgets are
+  // applied — see ASK_BODY_MAX_GLYPHS_PER_LINE's comment — so the strip below is never at risk
+  // of being sliced off by buildHudPage's separate, larger BODY_MAX_CHARS truncation.
   const bodyText = entry?.body ?? 'Waiting on input — no details yet'
   const bodyPages = paginateHudBody(bodyText.split('\n'), {
-    maxLinesPerPage: DEFAULT_MAX_LINES_PER_PAGE - 1,
-    maxCharsPerPage: DEFAULT_MAX_CHARS_PER_PAGE - optionArea.length - 1
+    maxCharsPerPage: DEFAULT_MAX_CHARS_PER_PAGE - optionArea.length - 1,
+    maxGlyphsPerLine: ASK_BODY_MAX_GLYPHS_PER_LINE,
+    reservedLines: 1
   })
   const firstBodyPage = bodyPages[0] ?? ''
   const truncated = bodyPages.length > 1
@@ -58,20 +73,17 @@ export function renderAskScreen(state: HudState): Extract<HudScreenPage, { layou
     layout: 'text',
     header: `Orca · ${title}`,
     body: `${firstBodyPage}\n${optionArea}`,
-    footer: askFooter(interaction, frame.notificationId, truncated)
+    footer: askFooter(interaction, truncated)
   }
 }
 
-// HIGH #2/#3/#12: the footer now renders HudState.askInteraction's phase directly — set by
+// HIGH #2/#3/#6: the footer now renders HudState.askInteraction's phase directly — set by
 // nav-ports.ts's sendAskAnswer/scheduleConfirmationPoll — instead of only ever an optimistic
-// "answered ✓" derived from a bare sentAt timestamp.
-function askFooter(
-  interaction: HudState['askInteraction'],
-  notificationId: string,
-  truncated: boolean
-): string {
+// "answered ✓" derived from a bare sentAt timestamp. `interaction` is already pre-filtered to
+// this exact host+prompt by the caller (HIGH #3).
+function askFooter(interaction: HudState['askInteraction'], truncated: boolean): string {
   const truncatedMark = truncated ? '  ⋯more' : ''
-  if (!interaction || interaction.notificationId !== notificationId) {
+  if (!interaction) {
     return `${DEFAULT_ASK_FOOTER}${truncatedMark}`
   }
   switch (interaction.phase) {
@@ -79,6 +91,8 @@ function askFooter(
       return 'Sending…'
     case 'checking':
       return 'Sent — checking…'
+    case 'stalled':
+      return 'Sent — check phone'
     case 'failed':
       return 'Not sent — click to retry'
     case 'unresolved':

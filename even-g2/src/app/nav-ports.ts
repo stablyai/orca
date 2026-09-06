@@ -1,35 +1,38 @@
 // Integrator wiring (Unit 8, spec S10 step 5): the concrete NavPorts HudInputRouter drives its
 // effects through, wired to real bridge/transport/session state.
 //
-// CRITICAL #10/#11, HIGH #2/#3/#12: sendAskAnswer resolves the worktree's unique waiting
-// terminal (never desktop focus), latches against double-sends via HudState.askInteraction, and
-// drives that same slice through 'sending' -> 'checking' -> 'answered'/'unresolved' so
-// ask-screen.ts's footer can render the real outcome instead of only ever an optimistic
-// "answered".
+// CRITICAL #10/#11, HIGH #2/#3/#6: sendAskAnswer resolves the worktree's unique waiting terminal
+// (never desktop focus), re-validates the exact prompt (notificationId) it was asked to answer
+// both before and after that async resolution, latches against double-sends via
+// HudState.askInteraction (scoped by host + notificationId; see ask-interaction-tracking.ts),
+// and drives that same slice through 'sending' -> 'checking' -> 'answered'/'stalled'/'failed'/
+// 'unresolved' so ask-screen.ts's footer can render the real outcome instead of only ever an
+// optimistic "answered".
 import type { GlassesBridge } from '../glasses/glasses-bridge'
 import type { HudRenderQueue } from '../hud/hud-render-queue'
 import { topFrame } from '../navigation/hud-navigation-frames'
 import type { NavPorts } from '../navigation/hud-input-router'
 import type { RpcResponse, RpcSuccess } from '../transport/orca-rpc-wire'
-import type { AskInteraction, HudState, HudStore } from '../state/hud-store'
-import { currentAsk } from '../state/notification-inbox-state'
+import type { HudState, HudStore } from '../state/hud-store'
+import {
+  ASK_RETRY_BLOCKED_PHASES,
+  CONFIRMATION_POLL_DEADLINE_MS,
+  isAskStillLive,
+  ownsAskInteraction,
+  reconcileStalledAskInteraction,
+  REAL_TIMER,
+  scheduleConfirmationPoll,
+  setAskPhase,
+  type NavPortsTimer
+} from './ask-interaction-tracking'
 import {
   resolveActiveTerminalHandle,
   resolveWaitingTerminalHandle
 } from './agent-terminal-resolution'
-import type { ActiveHostSession, HostSessionManager } from './host-session-manager'
+import type { HostSessionManager } from './host-session-manager'
 import { patchTerminalTailFrameId } from './terminal-tail-frame-patch'
 
-/** Injectable so tests can drive the bounded confirmation poll (finding #12) deterministically. */
-export type NavPortsTimer = {
-  setTimeout(cb: () => void, ms: number): unknown
-  clearTimeout(handle: unknown): void
-}
-
-const REAL_TIMER: NavPortsTimer = {
-  setTimeout: (cb, ms) => setTimeout(cb, ms),
-  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
-}
+export type { NavPortsTimer } from './ask-interaction-tracking'
 
 export type NavPortsDeps = {
   bridge: GlassesBridge
@@ -85,84 +88,20 @@ function isSendAccepted(response: RpcResponse): boolean {
   return result.send?.accepted === true
 }
 
-type AskPhase = NonNullable<AskInteraction>['phase']
-
-function setAskPhase(
-  store: HudStore,
-  notificationId: string,
-  worktreeId: string,
-  phase: AskPhase
-): void {
-  store.update((s) => ({
-    ...s,
-    askInteraction: { notificationId, worktreeId, phase, updatedAt: Date.now() }
-  }))
-}
-
-/** currentAsk() is the ground truth for "which notification is this ask" (finding #13); a
- *  worktreeId with no matching current ask (already answered/expired) still gets a stable id
- *  of its own so the interaction can be tracked/rendered. */
-function resolveAskNotificationId(state: HudState, worktreeId: string): string {
-  const ask = currentAsk(state)
-  return ask && ask.worktreeId === worktreeId ? ask.notificationId : worktreeId
-}
-
-const BLOCKED_RETRY_PHASES: ReadonlySet<AskPhase> = new Set(['sending', 'checking', 'unresolved'])
-
-// Bounded confirmation poll (HIGH #12): after an accepted send, refresh worktree.ps a few times
-// over roughly a second to observe whether the worktree actually left `permission`, rather than
-// leaving the footer optimistically "answered" forever on nothing but the RPC accept.
-const CONFIRMATION_POLL_INTERVALS_MS = [300, 300, 300]
-
-function scheduleConfirmationPoll(
-  deps: NavPortsDeps,
-  session: ActiveHostSession,
-  notificationId: string,
-  worktreeId: string,
-  attemptsLeft: number = CONFIRMATION_POLL_INTERVALS_MS.length
-): void {
-  const timer = deps.timer ?? REAL_TIMER
-  const delay =
-    CONFIRMATION_POLL_INTERVALS_MS[CONFIRMATION_POLL_INTERVALS_MS.length - attemptsLeft]!
-  timer.setTimeout(() => {
-    if (deps.sessions.current() !== session) {
-      return // host switched mid-poll — a fresher session (if any) owns this worktree's state
-    }
-    const interaction = deps.store.getState().askInteraction
-    if (
-      !interaction ||
-      interaction.notificationId !== notificationId ||
-      interaction.phase !== 'checking'
-    ) {
-      return // superseded: answered another way, a new send started, or the wearer moved on
-    }
-    const row = deps.store.getState().dashboard.rows.find((r) => r.worktreeId === worktreeId)
-    if (row === undefined || row.status !== 'permission') {
-      setAskPhase(deps.store, notificationId, worktreeId, 'answered')
-      return
-    }
-    if (attemptsLeft <= 1) {
-      // Bounded attempts exhausted, still `permission`: sent, but delivery/consumption can't be
-      // confirmed from here — honest rather than optimistic.
-      setAskPhase(deps.store, notificationId, worktreeId, 'unresolved')
-      return
-    }
-    session.dashboard.refreshNow()
-    scheduleConfirmationPoll(deps, session, notificationId, worktreeId, attemptsLeft - 1)
-  }, delay)
-}
-
 /**
  * Resolves the worktree's unique waiting terminal (CRITICAL #10 — never terminal.resolveActive,
  * which tracks desktop focus, not who asked) and sends the quick-action keys in one
- * terminal.send call. Latches against concurrent/duplicate sends and drives askInteraction
- * through its phases (CRITICAL #11, HIGH #2/#3/#12) so the ask screen can show what actually
- * happened instead of only ever an optimistic "answered".
+ * terminal.send call. Re-validates the exact prompt (HIGH #2) both before sending and again
+ * after the async resolution, latches against concurrent/duplicate sends for that SAME prompt
+ * (CRITICAL #11, HIGH #3), and drives askInteraction through its phases (HIGH #3/#6, see
+ * ask-interaction-tracking.ts) so the ask screen can show what actually happened instead of only
+ * ever an optimistic "answered".
  */
 async function sendAskAnswer(
   deps: NavPortsDeps,
   hostId: string,
   worktreeId: string,
+  notificationId: string,
   keys: string
 ): Promise<void> {
   const session = deps.sessions.current()
@@ -174,38 +113,55 @@ async function sendAskAnswer(
   }
 
   const state = deps.store.getState()
-  const notificationId = resolveAskNotificationId(state, worktreeId)
 
-  // Latch (CRITICAL #11): defensive re-check — the reducer already screens repeat clicks via
-  // NavContext.askSendInFlight, but effects are a queue, not a call stack, so re-verify here too.
+  // Latch (CRITICAL #11/HIGH #3): defensive re-check — the reducer already screens repeat clicks
+  // via NavContext.askSendInFlight, but effects are a queue, not a call stack, so re-verify here
+  // too. Scoped to the SAME host + notificationId: a different prompt is never blocked by this.
   const existing = state.askInteraction
-  if (existing && existing.worktreeId === worktreeId && BLOCKED_RETRY_PHASES.has(existing.phase)) {
+  if (
+    existing &&
+    existing.hostId === hostId &&
+    existing.notificationId === notificationId &&
+    ASK_RETRY_BLOCKED_PHASES.has(existing.phase)
+  ) {
     return
   }
 
-  // Re-validate against the freshest dashboard snapshot (CRITICAL #11): the ask may have expired
-  // (answered from the phone, or the agent moved on) between the click and this call landing.
-  const row = state.dashboard.rows.find((r) => r.worktreeId === worktreeId)
-  if (row?.status !== 'permission') {
-    setAskPhase(deps.store, notificationId, worktreeId, 'failed')
+  // Re-validate against the freshest state (CRITICAL #11/HIGH #2): the ask may have expired
+  // (answered from the phone, superseded by a newer prompt, or the agent moved on) between the
+  // click and this call landing.
+  if (!isAskStillLive(state, hostId, worktreeId, notificationId)) {
+    setAskPhase(deps.store, hostId, notificationId, worktreeId, 'failed')
     return
   }
 
-  setAskPhase(deps.store, notificationId, worktreeId, 'sending')
+  setAskPhase(deps.store, hostId, notificationId, worktreeId, 'sending')
 
   let resolution: Awaited<ReturnType<typeof resolveWaitingTerminalHandle>>
   try {
     resolution = await resolveWaitingTerminalHandle(session.client, worktreeId)
   } catch {
-    setAskPhase(deps.store, notificationId, worktreeId, 'unresolved') // HIGH #2/#3: never swallow
+    // HIGH #2/#3: never swallow, but never stomp a newer prompt/host that has since claimed the
+    // interaction slot either.
+    if (
+      deps.sessions.current() === session &&
+      ownsAskInteraction(deps.store.getState(), hostId, notificationId)
+    ) {
+      setAskPhase(deps.store, hostId, notificationId, worktreeId, 'unresolved')
+    }
     return
   }
   if (deps.sessions.current() !== session) {
     return // host switched while resolving — the new session's own effects own this now
   }
+  // Re-validate again (HIGH #2): the prompt the wearer saw may be gone by the time resolution
+  // landed — abort rather than send to whatever terminal is waiting NOW for a DIFFERENT ask.
+  if (!isAskStillLive(deps.store.getState(), hostId, worktreeId, notificationId)) {
+    return
+  }
   if (!('handle' in resolution)) {
     // Fail closed (CRITICAL #10): zero or more than one terminal needs input — never guess.
-    setAskPhase(deps.store, notificationId, worktreeId, 'failed')
+    setAskPhase(deps.store, hostId, notificationId, worktreeId, 'failed')
     return
   }
 
@@ -216,24 +172,43 @@ async function sendAskAnswer(
       text: keys
     })
   } catch {
-    setAskPhase(deps.store, notificationId, worktreeId, 'unresolved') // HIGH #2/#3: never swallow
+    if (
+      deps.sessions.current() === session &&
+      ownsAskInteraction(deps.store.getState(), hostId, notificationId)
+    ) {
+      setAskPhase(deps.store, hostId, notificationId, worktreeId, 'unresolved') // HIGH #2/#3
+    }
     return
   }
   if (deps.sessions.current() !== session) {
     return
   }
+  if (!ownsAskInteraction(deps.store.getState(), hostId, notificationId)) {
+    return // a newer prompt/host already claimed the slot while terminal.send was in flight
+  }
   if (!isSendAccepted(response)) {
     // Rejected send (HIGH #3): keep the ask actionable — the footer offers a retry.
-    setAskPhase(deps.store, notificationId, worktreeId, 'failed')
+    setAskPhase(deps.store, hostId, notificationId, worktreeId, 'failed')
     return
   }
 
-  setAskPhase(deps.store, notificationId, worktreeId, 'checking')
+  setAskPhase(deps.store, hostId, notificationId, worktreeId, 'checking')
   session.dashboard.refreshNow()
-  scheduleConfirmationPoll(deps, session, notificationId, worktreeId)
+  scheduleConfirmationPoll(
+    deps,
+    session,
+    hostId,
+    notificationId,
+    worktreeId,
+    (deps.timer ?? REAL_TIMER).now() + CONFIRMATION_POLL_DEADLINE_MS
+  )
 }
 
 export function createNavPorts(deps: NavPortsDeps): NavPorts {
+  // HIGH #6: reconcile a 'stalled' ask on every subsequent store update — see
+  // reconcileStalledAskInteraction's doc comment.
+  deps.store.subscribe(() => reconcileStalledAskInteraction(deps.store))
+
   return {
     shutdownDialog(): void {
       void deps.bridge.shutDownPage(1)
@@ -248,8 +223,8 @@ export function createNavPorts(deps: NavPortsDeps): NavPorts {
       terminalTailGeneration++ // invalidate any in-flight openTerminalTail resolution
       deps.sessions.current()?.terminalTail.close()
     },
-    sendAskAnswer(hostId: string, worktreeId: string, keys: string): void {
-      void sendAskAnswer(deps, hostId, worktreeId, keys)
+    sendAskAnswer(hostId: string, worktreeId: string, notificationId: string, keys: string): void {
+      void sendAskAnswer(deps, hostId, worktreeId, notificationId, keys)
     },
     refreshDashboard(): void {
       deps.sessions.current()?.dashboard.refreshNow()

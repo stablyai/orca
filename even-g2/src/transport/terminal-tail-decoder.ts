@@ -60,6 +60,10 @@ export class TerminalTailDecoder {
   private completedLines: string[] = []
   private currentLine = '' // raw, uncleaned: only the in-progress line, cleaned lazily in lines()
   private readonly decoder = new TextDecoder()
+  // Finding #4 (residual): distinguishes "nothing has ever arrived" from "a real but currently
+  // blank line" — both otherwise present as completedLines:[]/currentLine:'' — so lines() can
+  // return [] (no output yet) instead of a phantom [''] before any content is received.
+  private hasContent = false
 
   constructor(opts: TerminalTailDecoderOptions = {}) {
     this.maxLines = opts.maxLines ?? 120
@@ -91,10 +95,12 @@ export class TerminalTailDecoder {
 
   lines(): string[] {
     // Why: an empty currentLine after content ending exactly on a newline boundary is not a
-    // real trailing blank line — only surface it when it's the sole line seen so far.
+    // real trailing blank line — only surface it when it's the sole line seen so far, and only
+    // once something has actually arrived (finding #4 residual: never fabricate a blank line
+    // for a terminal that hasn't sent anything yet).
     const cleanedCurrent = expandTabs(stripAnsi(this.currentLine))
     const currentWrapped =
-      cleanedCurrent.length > 0 || this.completedLines.length === 0
+      cleanedCurrent.length > 0 || (this.hasContent && this.completedLines.length === 0)
         ? hardWrap(cleanedCurrent, this.maxCols)
         : []
     const all =
@@ -110,9 +116,13 @@ export class TerminalTailDecoder {
   private reset(): void {
     this.completedLines = []
     this.currentLine = ''
+    this.hasContent = false
   }
 
   private appendText(text: string): void {
+    if (text.length > 0) {
+      this.hasContent = true
+    }
     const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
     const parts = normalized.split('\n')
     this.currentLine += parts[0] ?? ''

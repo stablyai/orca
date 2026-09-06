@@ -69,9 +69,13 @@ function pushRingBuffer(
   return next.length > RING_BUFFER_LIMIT ? next.slice(next.length - RING_BUFFER_LIMIT) : next
 }
 
-/** Finding #13: dedupe by notificationId — a redelivery (getMissedSince overlap with a live
+/** Finding #13/#4: dedupe by notificationId — a redelivery (getMissedSince overlap with a live
  *  push, or a duplicate retry) replaces the existing entry in place rather than appending a
- *  second copy, which would otherwise let stale/duplicate entries confuse "the current ask". */
+ *  second copy, which would otherwise let stale/duplicate entries confuse "the current ask".
+ *  Finding #4: a retirement tombstone is PERMANENT — a redelivery must never un-retire an entry
+ *  just because the fresh copy classifies differently (e.g. its worktree has since left
+ *  `permission` entirely, so the fresh copy isn't even kind:'ask' to begin with, and would
+ *  otherwise never get re-tombstoned by the reclassifier below). */
 function upsertEntry(
   entries: NotificationInboxEntry[],
   entry: NotificationInboxEntry
@@ -81,20 +85,26 @@ function upsertEntry(
     return pushRingBuffer(entries, entry)
   }
   const next = [...entries]
-  next[index] = entry
+  next[index] = next[index]!.retiredAsk ? { ...entry, kind: 'info', retiredAsk: true } : entry
   return next
 }
 
-/** The most recent (by receivedAt), still-eligible (never `retiredAsk`) entry for a worktree —
- *  the notification tied to its CURRENT waiting episode, if any has arrived. Shared by
- *  `currentAsk` and the reclassifier so they can never disagree (finding #13). */
+/** The most recent (by receivedAt), still-eligible entry for a worktree — the notification tied
+ *  to its CURRENT waiting episode, if any has arrived. Shared by `currentAsk` and the
+ *  reclassifier so they can never disagree (finding #13). Excludes retired entries (finding #13)
+ *  AND entries that predate the worktree's current permission-episode watermark (finding #4) —
+ *  an old completion/info notification from a PRIOR episode must never stand in for a new one. */
 function latestEligibleEntryForWorktree(
-  entries: NotificationInboxEntry[],
+  state: HudState,
   worktreeId: string
 ): NotificationInboxEntry | null {
+  const episodeStartedAt = state.inbox.permissionEpisodeStartedAt?.[worktreeId]
   let latest: NotificationInboxEntry | null = null
-  for (const entry of entries) {
+  for (const entry of state.inbox.entries) {
     if (entry.worktreeId !== worktreeId || entry.retiredAsk) {
+      continue
+    }
+    if (episodeStartedAt !== undefined && entry.receivedAt < episodeStartedAt) {
       continue
     }
     if (!latest || entry.receivedAt >= latest.receivedAt) {
@@ -120,7 +130,7 @@ export function currentAsk(state: HudState): { notificationId: string; worktreeI
     return null
   }
   for (const row of permissionRows) {
-    const entry = latestEligibleEntryForWorktree(state.inbox.entries, row.worktreeId)
+    const entry = latestEligibleEntryForWorktree(state, row.worktreeId)
     if (entry) {
       return { notificationId: entry.notificationId, worktreeId: row.worktreeId }
     }
@@ -148,6 +158,10 @@ export class NotificationInboxController {
   private seenReadyBefore = false
   private lastSeenSeq = 0
   private lastSeenEpoch: string | null = null
+  // Finding #4: edge-detects a worktree transitioning INTO `permission` so reclassify can stamp
+  // a fresh episode watermark — comparing against the dashboard's CURRENT permission set alone
+  // can't tell "just entered" from "has been permission all along".
+  private previousPermissionWorktreeIds = new Set<string>()
 
   constructor(
     private readonly store: HudStore,
@@ -177,13 +191,19 @@ export class NotificationInboxController {
     if (data.type === 'dismiss') {
       this.store.update((s) => ({
         ...s,
-        inbox: { entries: s.inbox.entries.filter((e) => e.notificationId !== data.notificationId) }
+        inbox: {
+          ...s.inbox,
+          entries: s.inbox.entries.filter((e) => e.notificationId !== data.notificationId)
+        }
       }))
       return
     }
     this.noteWatermark(data)
     const entry = this.toEntry(data)
-    this.store.update((s) => ({ ...s, inbox: { entries: upsertEntry(s.inbox.entries, entry) } }))
+    this.store.update((s) => ({
+      ...s,
+      inbox: { ...s.inbox, entries: upsertEntry(s.inbox.entries, entry) }
+    }))
   }
 
   private handleReady(event: NotificationReadyEvent): void {
@@ -218,7 +238,7 @@ export class NotificationInboxController {
         const entry = this.toEntry(item)
         this.store.update((s) => ({
           ...s,
-          inbox: { entries: upsertEntry(s.inbox.entries, entry) }
+          inbox: { ...s.inbox, entries: upsertEntry(s.inbox.entries, entry) }
         }))
       }
       if (typeof result?.epoch === 'string') {
@@ -244,17 +264,39 @@ export class NotificationInboxController {
    *  Any other entry that was 'ask' gets retired (finding #13): either its worktree left
    *  `permission` entirely, or a newer entry took over as the current episode's notification.
    *  Retirement is permanent (`retiredAsk`) so a later, unrelated episode on the same worktree
-   *  can't resurrect a historical notification before its own notification arrives. */
+   *  can't resurrect a historical notification before its own notification arrives.
+   *
+   *  Finding #4: also stamps `permissionEpisodeStartedAt` the moment a worktree is first OBSERVED
+   *  entering `permission` (edge-triggered against `previousPermissionWorktreeIds`), BEFORE
+   *  computing which entry is eligible this pass — so an old completion/info notification from a
+   *  prior, already-closed episode can never be picked up as the new episode's ask. */
   private reclassifyPermissionAsks(): void {
     this.store.update((s) => {
+      const permissionWorktreeIds = new Set(
+        s.dashboard.rows.filter((r) => r.status === 'permission').map((r) => r.worktreeId)
+      )
+      const episodeStartedAt = { ...s.inbox.permissionEpisodeStartedAt }
+      let episodeChanged = false
+      for (const worktreeId of permissionWorktreeIds) {
+        if (!this.previousPermissionWorktreeIds.has(worktreeId)) {
+          episodeStartedAt[worktreeId] = (this.inputs.now ?? Date.now)()
+          episodeChanged = true
+        }
+      }
+      this.previousPermissionWorktreeIds = permissionWorktreeIds
+      const withEpisode: HudState = episodeChanged
+        ? { ...s, inbox: { ...s.inbox, permissionEpisodeStartedAt: episodeStartedAt } }
+        : s
+
       const currentEpisodeIds = new Set(
-        s.dashboard.rows
-          .filter((r) => r.status === 'permission')
-          .map((r) => latestEligibleEntryForWorktree(s.inbox.entries, r.worktreeId)?.notificationId)
+        [...permissionWorktreeIds]
+          .map(
+            (worktreeId) => latestEligibleEntryForWorktree(withEpisode, worktreeId)?.notificationId
+          )
           .filter((id): id is string => id !== undefined)
       )
-      let changed = false
-      const entries = s.inbox.entries.map((entry) => {
+      let entriesChanged = false
+      const entries = withEpisode.inbox.entries.map((entry) => {
         if (!entry.worktreeId) {
           return entry
         }
@@ -262,16 +304,19 @@ export class NotificationInboxController {
           if (entry.kind === 'ask') {
             return entry
           }
-          changed = true
+          entriesChanged = true
           return { ...entry, kind: 'ask' as const }
         }
         if (entry.kind !== 'ask') {
           return entry
         }
-        changed = true
+        entriesChanged = true
         return { ...entry, kind: 'info' as const, retiredAsk: true as const }
       })
-      return changed ? { ...s, inbox: { entries } } : s
+      if (!episodeChanged && !entriesChanged) {
+        return s
+      }
+      return { ...withEpisode, inbox: { ...withEpisode.inbox, entries } }
     })
   }
 

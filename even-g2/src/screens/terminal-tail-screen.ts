@@ -26,9 +26,19 @@ import { paginateHudBody } from '../hud/hud-text-pagination'
 import { topFrame } from '../navigation/hud-navigation-frames'
 import type { ScreenFrame } from '../navigation/nav-contract'
 import type { HudState } from '../state/hud-store'
+import { terminalTailBrowseFreeze } from '../state/terminal-tail-state'
+
+// Finding #19 (residual): a raw terminal column can run far past what the 576px-wide body can
+// show on one visual row — pre-wrap at a conservative glyph width so an oversized line counts
+// as the multiple rows it will actually render as, instead of silently overflowing the page.
+const MAX_GLYPHS_PER_LINE = 56
+
+function paginationOptions() {
+  return { maxGlyphsPerLine: MAX_GLYPHS_PER_LINE }
+}
 
 export function terminalTailPageCount(lines: string[]): number {
-  return Math.max(1, paginateHudBody(lines).length)
+  return Math.max(1, paginateHudBody(lines, paginationOptions()).length)
 }
 
 type TerminalTailFrame = Extract<ScreenFrame, { screen: 'terminalTail' }>
@@ -45,14 +55,22 @@ export function renderTerminalTailScreen(state: HudState): TextPage {
   const header = `term · ${name}`
 
   // No terminal handle resolved yet: the openTerminalTail effect hasn't patched the frame's
-  // '' placeholder with a real terminal id, so there is nothing to subscribe to at all.
+  // '' placeholder with a real terminal id, so there is nothing to subscribe to at all — but
+  // the resolution round-trip is still in flight, so this is transient, not a dead end.
   if (frame.terminalId === '') {
-    return nonContentPage(header, 'No active terminal')
+    return nonContentPage(header, 'Resolving terminal…')
   }
 
   const tail = state.terminalTail
   const matchesFrame = tail.terminalId === frame.terminalId
-  if (!matchesFrame || tail.loading) {
+  if (!matchesFrame) {
+    // tail.loading: a subscribe for this frame's terminal id is in flight (finding #4 residual:
+    // distinct from the "No active terminal" end state below — this one is still resolving).
+    // Otherwise: no subscription exists for this frame's terminal and none is pending — e.g.
+    // abnormalExit tore the stream down and reopenTerminalTail hasn't fired yet.
+    return nonContentPage(header, tail.loading ? 'Resolving terminal…' : 'No active terminal')
+  }
+  if (tail.loading) {
     return nonContentPage(header, 'Loading terminal…')
   }
   if (tail.unavailable) {
@@ -62,7 +80,10 @@ export function renderTerminalTailScreen(state: HudState): TextPage {
     return nonContentPage(header, 'No output yet')
   }
 
-  const pages = paginateHudBody(tail.lines)
+  // Finding: freeze the browsed line snapshot while scrolled into history (page !== 0) so
+  // appended output doesn't shift which page is on screen; page 0 always follows live output.
+  const browseLines = terminalTailBrowseFreeze.resolve(frame.terminalId, tail.lines, frame.page)
+  const pages = paginateHudBody(browseLines, paginationOptions())
   const pageCount = Math.max(1, pages.length)
   const offset = Math.min(Math.max(frame.page, 0), pageCount - 1)
   const index = pageCount - 1 - offset // offset 0 = latest (last) page

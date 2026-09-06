@@ -16,6 +16,37 @@ import {
 import type { HudStore } from './hud-store'
 import type { RpcPort } from '../transport/orca-rpc-wire'
 
+// Finding: while the wearer is browsing history on the terminal-tail screen (frame.page !== 0),
+// terminal-tail-screen.ts paginates against `state.terminalTail.lines`, which keeps growing as
+// output arrives — so the offset-from-latest page identity shifts underfoot mid-read. This
+// freezes the line snapshot paginated while browsing (captured the moment page leaves 0) so
+// appended output doesn't move the current view; returning to page 0 drops the freeze so live
+// output resumes immediately (no need to wait for the next frame).
+export class TerminalTailBrowseFreeze {
+  private snapshot: { terminalId: string; lines: string[] } | null = null
+
+  /** Lines terminal-tail-screen.ts should paginate for this render. */
+  resolve(terminalId: string, liveLines: string[], page: number): string[] {
+    if (page === 0) {
+      this.snapshot = null
+      return liveLines
+    }
+    if (!this.snapshot || this.snapshot.terminalId !== terminalId) {
+      this.snapshot = { terminalId, lines: liveLines }
+    }
+    return this.snapshot.lines
+  }
+
+  /** Test hook: clears the freeze so cases don't leak into each other. */
+  reset(): void {
+    this.snapshot = null
+  }
+}
+
+// Single shared instance: only one terminal-tail screen is ever visible at a time, mirroring
+// TerminalTailController's single-active-subscription design above.
+export const terminalTailBrowseFreeze = new TerminalTailBrowseFreeze()
+
 export type TailDecoder = {
   pushFrame(frame: TerminalStreamFrame): void
   lines(): string[]

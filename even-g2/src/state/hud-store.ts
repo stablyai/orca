@@ -53,6 +53,12 @@ export type NotificationInboxEntry = {
 
 export type NotificationInboxSlice = {
   entries: NotificationInboxEntry[] // ring buffer, last 20
+  // Finding #4 (permission-episode membership): wall-clock time each worktreeId most recently
+  // transitioned INTO `permission`, maintained by NotificationInboxController. An entry whose
+  // receivedAt predates its worktree's watermark belongs to an OLDER, already-closed episode and
+  // must never be mistaken for the current prompt. Optional (and absent worktreeId = no episode
+  // observed yet) so states built without running the real controller keep compiling unchanged.
+  permissionEpisodeStartedAt?: Record<string, number>
 }
 
 export type TerminalTailSlice = {
@@ -83,13 +89,20 @@ export type TerminalTailSlice = {
 // - 'answered': a confirmation refresh observed the worktree leave `permission`.
 // - 'failed': the host explicitly told us the answer did not go through (no unique waiting
 //   terminal, or terminal.send responded but `accepted: false`) — retry is safe and expected.
-// - 'unresolved': we cannot tell what happened (a request threw/timed out, or bounded
-//   confirmation checks were exhausted while still `permission`) — never optimistic, and
-//   further sends are blocked until the wearer checks their phone.
+// - 'unresolved': we cannot tell what happened (a request threw/timed out) — never optimistic,
+//   and further sends are blocked until the wearer checks their phone.
+// - 'stalled': terminal.send was accepted but the bounded confirmation poll's elapsed deadline
+//   passed while the worktree still reports `permission` (HIGH #6) — recoverable, NOT a
+//   permanent verdict: a later dashboard refresh that shows the worktree actually left
+//   `permission` reconciles this to 'answered' instead of leaving the wearer stuck forever.
+//
+// HIGH #3: `hostId` scopes the interaction to the host it belongs to, so a host switch can never
+// let a stale interaction's phase apply to (or block) a different host's ask.
 export type AskInteraction = {
+  hostId: string
   notificationId: string
   worktreeId: string
-  phase: 'idle' | 'sending' | 'checking' | 'answered' | 'failed' | 'unresolved'
+  phase: 'idle' | 'sending' | 'checking' | 'answered' | 'failed' | 'unresolved' | 'stalled'
   updatedAt: number
 } | null
 

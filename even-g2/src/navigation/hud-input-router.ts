@@ -22,7 +22,7 @@ export type NavPorts = {
   connectHost(hostId: string): void
   openTerminalTail(worktreeId: string): void
   closeTerminalTail(terminalId: string): void
-  sendAskAnswer(hostId: string, worktreeId: string, keys: string): void
+  sendAskAnswer(hostId: string, worktreeId: string, notificationId: string, keys: string): void
   refreshDashboard(): void
   pausePolling(): void
   resumePolling(): void
@@ -98,6 +98,7 @@ export class HudInputRouter {
         return ports.sendAskAnswer(
           effect.hostId,
           effect.worktreeId,
+          effect.notificationId,
           askQuickActionToKeys(effect.option)
         )
       case 'refreshDashboard':

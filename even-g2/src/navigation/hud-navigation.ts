@@ -166,16 +166,28 @@ function reduceAskClick(state: NavState, ctx: NavContext, frame: AskFrame): Redu
   if (worktreeId === null) {
     return unchanged(state)
   }
-  // CRITICAL #11: ignore the click rather than emit a second sendAskAnswer while one is already
-  // in flight, or while the last attempt's outcome is still unknown.
-  if (ctx.askSendInFlight(worktreeId)) {
+  // CRITICAL #11: ignore the click rather than emit a second sendAskAnswer for the SAME prompt
+  // while one is already in flight, or while its last attempt's outcome is still unknown (HIGH
+  // #3: scoped by notificationId, not worktreeId, so a genuinely new episode is never stuck).
+  if (ctx.askSendInFlight(frame.notificationId)) {
     return unchanged(state)
   }
   const option = resolveAskQuickAction(
     frame.selectedOption,
     ctx.askOptionCount(frame.notificationId)
   )
-  return { state, effects: [{ kind: 'sendAskAnswer', hostId: frame.hostId, worktreeId, option }] }
+  return {
+    state,
+    effects: [
+      {
+        kind: 'sendAskAnswer',
+        hostId: frame.hostId,
+        worktreeId,
+        notificationId: frame.notificationId,
+        option
+      }
+    ]
+  }
 }
 
 // --- listSelect: click on a native list container. ---

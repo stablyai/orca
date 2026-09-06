@@ -1,6 +1,7 @@
 // Unit 6: terminal.* RPC handlers for MockOrcaServer, split out of mock-orca-server.ts to keep
 // that file under the line budget. Each handler receives the tiny `TerminalRpcContext` (response
 // plumbing MockOrcaServer already owns) plus the shared MockTerminalRegistry.
+import type { RuntimeTerminalAgentStatus } from '@orca-shared/runtime-terminal-contracts'
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
@@ -100,9 +101,11 @@ export function handleTerminalResolveActive(
   ctx.respond(socket, state, ctx.success(request.id, { handle }))
 }
 
-/** CRITICAL finding #10: backs terminal.agentStatus, which agent-terminal-resolution.ts's
+/** CRITICAL finding #1: backs terminal.agentStatus, which agent-terminal-resolution.ts's
  *  resolveWaitingTerminalHandle uses instead of terminal.resolveActive (desktop focus) to find
- *  the worktree's unique terminal actually needing input. */
+ *  the worktree's unique terminal actually needing input. Real shape verified against
+ *  RuntimeTerminalAgentStatus (src/shared/runtime-terminal-contracts.ts) — the import makes any
+ *  drift between this mock and the real contract a compile error. */
 export function handleTerminalAgentStatus(
   ctx: TerminalRpcContext,
   socket: MemorySocketLike,
@@ -111,7 +114,12 @@ export function handleTerminalAgentStatus(
   request: RpcRequestLike
 ): void {
   const terminalId = String(request.params?.terminal ?? '')
-  const agentStatus = { state: registry.needsInput(terminalId) ? 'waiting' : 'working' }
+  const status = registry.agentStatusFor(terminalId)
+  const agentStatus: RuntimeTerminalAgentStatus = {
+    handle: terminalId,
+    isRunningAgent: status !== null,
+    status
+  }
   ctx.respond(socket, state, ctx.success(request.id, { agentStatus }))
 }
 

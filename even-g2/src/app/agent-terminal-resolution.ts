@@ -5,6 +5,10 @@
 // agentIdentity is absent or a worktree hosts multiple agents. terminal.resolveActive is the
 // host's own authoritative "the" active terminal for a worktree; if it returns no handle, there
 // is no terminal to answer to and callers must not send.
+import type {
+  RuntimeTerminalAgentStatus,
+  RuntimeTerminalSummary
+} from '@orca-shared/runtime-terminal-contracts'
 import type { RpcPort, RpcSuccess } from '../transport/orca-rpc-wire'
 
 type ResolveActiveResult = { handle?: string | null }
@@ -24,23 +28,23 @@ export async function resolveActiveTerminalHandle(
   return result.handle ?? null
 }
 
-type TerminalListResult = { terminals?: { handle: string }[] }
+type TerminalListResult = { terminals?: Pick<RuntimeTerminalSummary, 'handle'>[] }
 
-// VERIFIED host fact: terminal.agentStatus {terminal} -> { agentStatus }, agentStatus.state in
-// {'working','blocked','waiting','done','idle'} (src/shared/agent-status-types.ts). 'waiting'
-// and 'blocked' both mean "needs input" — the RuntimeTerminalSummary rows terminal.list returns
-// carry no status field, so each candidate terminal needs its own terminal.agentStatus call.
-const NEEDS_INPUT_STATES: ReadonlySet<string> = new Set(['waiting', 'blocked'])
-
+// VERIFIED contract (src/shared/runtime-terminal-contracts.ts): terminal.agentStatus {terminal}
+// -> RuntimeTerminalAgentStatus = { handle, isRunningAgent, status }, where status is
+// 'working' | 'permission' | 'idle' | null. "Needs input" is precisely status === 'permission'.
+// terminal.list's RuntimeTerminalSummary rows carry no status field, so each candidate terminal
+// needs its own terminal.agentStatus call.
 export type WaitingTerminalResolution = { handle: string } | { ambiguous: true } | { none: true }
 
 /**
- * Resolves the worktree's UNIQUE terminal currently needing input (CRITICAL finding #10):
+ * Resolves the worktree's UNIQUE terminal currently needing input (CRITICAL finding #1):
  * terminal.resolveActive tracks desktop FOCUS, not which terminal actually asked, so it is not
  * safe for routing ask-answer keystrokes — a focus change between the notification firing and
  * the wearer clicking would send the answer to the wrong agent. Fails closed to `none`/
- * `ambiguous` on zero or multiple matches, or on any RPC failure: never guess which terminal to
- * write to.
+ * `ambiguous` on zero or multiple matches, AND on any probe that can't be verified (RPC failure
+ * or a throw): an unverifiable candidate must never be silently excluded, since that would let
+ * us "prove" uniqueness we haven't actually established.
  */
 export async function resolveWaitingTerminalHandle(
   port: RpcPort,
@@ -54,33 +58,39 @@ export async function resolveWaitingTerminalHandle(
   if (terminals.length === 0) {
     return { none: true }
   }
-  const statuses = await Promise.all(
-    terminals.map((terminal) => probeNeedsInput(port, terminal.handle))
+  const outcomes = await Promise.all(
+    terminals.map((terminal) => probeAgentStatus(port, terminal.handle))
   )
-  const waiting = terminals.filter((_, i) => statuses[i]).map((t) => t.handle)
+  if (outcomes.some((outcome) => outcome === 'unverifiable')) {
+    // Fail closed (never guess): at least one candidate's status couldn't be observed, so
+    // uniqueness of the waiting terminal can't be proven even if the others look conclusive.
+    return { ambiguous: true }
+  }
+  const waiting = terminals.filter((_, i) => outcomes[i] === 'permission').map((t) => t.handle)
   if (waiting.length === 1) {
     return { handle: waiting[0]! }
   }
   return waiting.length === 0 ? { none: true } : { ambiguous: true }
 }
 
-type TerminalAgentStatusResult = { agentStatus?: { state?: string } | null }
+type TerminalAgentStatusResult = { agentStatus?: RuntimeTerminalAgentStatus }
 
-/** A failed/unreadable individual probe excludes that terminal rather than guessing it's
- *  waiting — consistent with the fail-closed contract above. */
-async function probeNeedsInput(port: RpcPort, terminal: string): Promise<boolean> {
+type ProbeOutcome = 'permission' | 'other' | 'unverifiable'
+
+/** A failed RPC, a throw, or a malformed/missing agentStatus payload is `unverifiable` — the
+ *  caller fails the whole resolution closed rather than treating it as "not waiting". */
+async function probeAgentStatus(port: RpcPort, terminal: string): Promise<ProbeOutcome> {
   try {
     const response = await port.sendRequest('terminal.agentStatus', { terminal })
     if (!response.ok) {
-      return false
+      return 'unverifiable'
     }
     const agentStatus = ((response as RpcSuccess).result as TerminalAgentStatusResult).agentStatus
-    return (
-      agentStatus !== null &&
-      agentStatus !== undefined &&
-      NEEDS_INPUT_STATES.has(agentStatus.state ?? '')
-    )
+    if (!agentStatus) {
+      return 'unverifiable'
+    }
+    return agentStatus.status === 'permission' ? 'permission' : 'other'
   } catch {
-    return false
+    return 'unverifiable'
   }
 }

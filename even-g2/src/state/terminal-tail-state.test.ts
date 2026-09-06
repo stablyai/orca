@@ -4,7 +4,12 @@ import {
   TerminalStreamOpcode
 } from '@orca-shared/terminal-stream-protocol'
 import { createHudStore, type HudState } from './hud-store'
-import { TerminalTailController, type TailDecoder, type TailTimer } from './terminal-tail-state'
+import {
+  TerminalTailBrowseFreeze,
+  TerminalTailController,
+  type TailDecoder,
+  type TailTimer
+} from './terminal-tail-state'
 import type { RpcPort, RpcResponse } from '../transport/orca-rpc-wire'
 
 function fixtureState(): HudState {
@@ -319,5 +324,39 @@ describe('TerminalTailController', () => {
       expect(store.getState().terminalTail.terminalId).toBe('term-2')
       expect(store.getState().terminalTail.unavailable).toBeUndefined()
     })
+  })
+})
+
+describe('TerminalTailBrowseFreeze', () => {
+  it('follows live lines at page 0', () => {
+    const freeze = new TerminalTailBrowseFreeze()
+    expect(freeze.resolve('t1', ['a'], 0)).toEqual(['a'])
+    expect(freeze.resolve('t1', ['a', 'b'], 0)).toEqual(['a', 'b'])
+  })
+
+  it('freezes the snapshot captured when browsing starts, ignoring later live growth', () => {
+    const freeze = new TerminalTailBrowseFreeze()
+    expect(freeze.resolve('t1', ['a', 'b'], 1)).toEqual(['a', 'b'])
+    expect(freeze.resolve('t1', ['a', 'b', 'c'], 1)).toEqual(['a', 'b']) // still frozen
+    expect(freeze.resolve('t1', ['a', 'b', 'c'], 2)).toEqual(['a', 'b']) // still browsing, still frozen
+  })
+
+  it('drops the freeze and resumes live lines once back at page 0', () => {
+    const freeze = new TerminalTailBrowseFreeze()
+    freeze.resolve('t1', ['a', 'b'], 1)
+    expect(freeze.resolve('t1', ['a', 'b', 'c'], 0)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('re-snapshots for a different terminal id instead of reusing a stale freeze', () => {
+    const freeze = new TerminalTailBrowseFreeze()
+    freeze.resolve('t1', ['a', 'b'], 1)
+    expect(freeze.resolve('t2', ['x', 'y', 'z'], 1)).toEqual(['x', 'y', 'z'])
+  })
+
+  it('reset() clears any in-progress freeze', () => {
+    const freeze = new TerminalTailBrowseFreeze()
+    freeze.resolve('t1', ['a', 'b'], 1)
+    freeze.reset()
+    expect(freeze.resolve('t1', ['a', 'b', 'c'], 1)).toEqual(['a', 'b', 'c'])
   })
 })

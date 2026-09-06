@@ -4,6 +4,10 @@ import type { RpcPort, RpcResponse } from '../transport/orca-rpc-wire'
 import type { ActiveHostSession, HostSessionManager } from './host-session-manager'
 import { createNavPorts, type NavPortsDeps, type NavPortsTimer } from './nav-ports'
 
+// wt-1 has no inbox entry in the fixture below, so currentAsk() synthesizes this id (finding
+// #14) — the real notificationId a reduceAskClick effect would carry for that same ask.
+const ASK_NOTIFICATION_ID = 'synthetic-ask:wt-1'
+
 function initialState(overrides: Partial<HudState> = {}): HudState {
   return {
     connection: { hostId: 'host-a', state: 'connected', compat: null },
@@ -41,11 +45,14 @@ type FakeSessionOptions = {
   listResult?: RpcResponse
   /** Handles terminal.list reports for the worktree; default a single 'term-1'. */
   terminals?: string[]
-  /** Which of `terminals` report an agentStatus.state of 'waiting' (needs input). */
+  /** Which of `terminals` report a real agentStatus.status of 'permission' (needs input). */
   waitingHandles?: string[]
   sendResult?: RpcResponse
+  /** worktree.ps status for wt-1 for the confirmation poll (HIGH #6); mutate to simulate the
+   *  wearer answering from their phone mid-poll. Defaults to always still 'permission'. */
+  worktreeStatus?: () => string
   /** Throws instead of resolving, per method — models a transport failure (HIGH #2/#3). */
-  throwOn?: 'terminal.list' | 'terminal.send'
+  throwOn?: 'terminal.list' | 'terminal.send' | 'worktree.ps'
 }
 
 function fakeSession(opts: FakeSessionOptions = {}): {
@@ -57,6 +64,7 @@ function fakeSession(opts: FakeSessionOptions = {}): {
 } {
   const terminals = opts.terminals ?? ['term-1']
   const waitingHandles = opts.waitingHandles ?? ['term-1']
+  const worktreeStatus = opts.worktreeStatus ?? (() => 'permission')
   const sendRequest = vi.fn(async (method: string, params?: unknown): Promise<RpcResponse> => {
     if (method === 'terminal.resolveActive') {
       return opts.resolveActiveResult ?? okResponse({ handle: 'term-1' })
@@ -69,8 +77,14 @@ function fakeSession(opts: FakeSessionOptions = {}): {
     }
     if (method === 'terminal.agentStatus') {
       const handle = (params as { terminal: string }).terminal
-      const state = waitingHandles.includes(handle) ? 'waiting' : 'working'
-      return okResponse({ agentStatus: { state } })
+      const status = waitingHandles.includes(handle) ? 'permission' : 'working'
+      return okResponse({ agentStatus: { handle, isRunningAgent: true, status } })
+    }
+    if (method === 'worktree.ps') {
+      if (opts.throwOn === 'worktree.ps') {
+        throw new Error('socket closed mid-request')
+      }
+      return okResponse({ worktrees: [{ worktreeId: 'wt-1', status: worktreeStatus() }] })
     }
     if (opts.throwOn === 'terminal.send') {
       throw new Error('socket closed mid-request')
@@ -99,22 +113,31 @@ function fakeSessions(session: ActiveHostSession | null): HostSessionManager {
   } as unknown as HostSessionManager
 }
 
-/** Deterministic stand-in for the real timer (finding #12's bounded confirmation poll) — queues
- *  callbacks instead of scheduling them, so tests drive the poll with `runAll()` rather than
- *  waiting on real time. */
-function fakeTimer(): { timer: NavPortsTimer; runAll: () => void } {
-  const pending: (() => void)[] = []
+/** Deterministic stand-in for the real timer (HIGH #6's bounded confirmation poll) — queues
+ *  callbacks instead of scheduling them, and advances a fake clock by each callback's own delay
+ *  so the poll's elapsed-deadline math is exercised without racing real wall-clock time against
+ *  a synchronous test body. `runAll` awaits microtask flushes between ticks so a poll step's own
+ *  `await` (its worktree.ps read) resolves and schedules its next tick before draining further. */
+function fakeTimer(): { timer: NavPortsTimer; runAll: () => Promise<void> } {
+  const pending: { cb: () => void; ms: number }[] = []
+  let clock = 0
   return {
     timer: {
-      setTimeout: (cb) => {
-        pending.push(cb)
+      setTimeout: (cb, ms) => {
+        pending.push({ cb, ms })
         return pending.length
       },
-      clearTimeout: () => {}
+      clearTimeout: () => {},
+      now: () => clock
     },
-    runAll: () => {
+    runAll: async () => {
       while (pending.length > 0) {
-        pending.shift()!()
+        const next = pending.shift()!
+        clock += next.ms
+        next.cb()
+        for (let i = 0; i < 10; i++) {
+          await Promise.resolve()
+        }
       }
     }
   }
@@ -136,9 +159,9 @@ function makeDeps(
   }
 }
 
-// sendAskAnswer's new resolution chain (terminal.list -> parallel terminal.agentStatus probes ->
-// terminal.send) is several microtask hops deeper than the old single-RPC resolveActive path;
-// loop generously rather than guess an exact tick count.
+// sendAskAnswer's resolution chain (terminal.list -> parallel terminal.agentStatus probes ->
+// terminal.send) is several microtask hops deeper than a single RPC round trip; loop generously
+// rather than guess an exact tick count.
 async function flush(): Promise<void> {
   for (let i = 0; i < 20; i++) {
     await Promise.resolve()
@@ -151,7 +174,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(sendRequest).not.toHaveBeenCalled()
@@ -171,11 +194,43 @@ describe('sendAskAnswer', () => {
     )
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(sendRequest).not.toHaveBeenCalled()
     expect(store.getState().askInteraction).toMatchObject({ worktreeId: 'wt-1', phase: 'failed' })
+  })
+
+  it('HIGH #2: fails closed when the effect names a prompt that is no longer the current ask', async () => {
+    const { session, sendRequest } = fakeSession()
+    // wt-1 IS in `permission`, but currentAsk() now names a DIFFERENT (newer) notificationId —
+    // the effect's notificationId ('stale-ask') is stale relative to it.
+    const store = createHudStore(
+      initialState({
+        inbox: {
+          entries: [
+            {
+              notificationId: 'fresh-ask',
+              title: 't',
+              body: 'b',
+              worktreeId: 'wt-1',
+              receivedAt: 1,
+              kind: 'ask'
+            }
+          ]
+        }
+      })
+    )
+    const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
+
+    ports.sendAskAnswer('host-a', 'wt-1', 'stale-ask', '1\r')
+    await flush()
+
+    expect(sendRequest).not.toHaveBeenCalled()
+    expect(store.getState().askInteraction).toMatchObject({
+      notificationId: 'stale-ask',
+      phase: 'failed'
+    })
   })
 
   it('CRITICAL #10: fails closed (never guesses) when no terminal is waiting', async () => {
@@ -183,7 +238,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(sendRequest).toHaveBeenCalledTimes(1) // terminal.list only, never terminal.send
@@ -198,7 +253,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     // terminal.list + 2x terminal.agentStatus, never terminal.send
@@ -212,7 +267,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(store.getState().askInteraction).toMatchObject({ phase: 'failed' })
@@ -223,7 +278,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(store.getState().askInteraction).toMatchObject({ phase: 'unresolved' })
@@ -234,7 +289,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(store.getState().askInteraction).toMatchObject({ phase: 'unresolved' })
@@ -247,7 +302,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(store.getState().askInteraction).toMatchObject({ phase: 'failed' })
@@ -258,7 +313,7 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(store.getState().askInteraction).toMatchObject({ phase: 'failed' })
@@ -270,47 +325,79 @@ describe('sendAskAnswer', () => {
     const { timer } = fakeTimer()
     const ports = createNavPorts(makeDeps(store, fakeSessions(session), timer))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
 
     expect(store.getState().askInteraction).toMatchObject({ worktreeId: 'wt-1', phase: 'checking' })
   })
 
-  it('HIGH #12: confirms answered once a bounded refresh observes the worktree left permission', async () => {
-    const { session, refreshNow } = fakeSession()
+  it('HIGH #6: confirms answered once the bounded poll observes the worktree left permission', async () => {
+    let status = 'permission'
+    const { session, refreshNow } = fakeSession({ worktreeStatus: () => status })
     const store = createHudStore(initialState())
-    refreshNow.mockImplementation(() => {
-      store.update((s) => ({
-        ...s,
-        dashboard: {
-          rows: [{ worktreeId: 'wt-1', displayName: 'wt-1', status: 'working' }],
-          fetchedAt: 10,
-          stale: false
-        }
-      }))
-    })
     const { timer, runAll } = fakeTimer()
     const ports = createNavPorts(makeDeps(store, fakeSessions(session), timer))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
-    runAll()
+    status = 'working' // the wearer answered from their phone before our own poll ticks
+    await runAll()
+
+    expect(refreshNow).toHaveBeenCalled()
+    expect(store.getState().askInteraction).toMatchObject({ phase: 'answered' })
+  })
+
+  it('HIGH #6: goes "stalled" (recoverable, not permanent) once the elapsed deadline passes still permission', async () => {
+    const { session } = fakeSession() // worktree.ps always reports 'permission'
+    const store = createHudStore(initialState())
+    const { timer, runAll } = fakeTimer()
+    const ports = createNavPorts(makeDeps(store, fakeSessions(session), timer))
+
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
+    await flush()
+    await runAll()
+
+    expect(store.getState().askInteraction).toMatchObject({ phase: 'stalled' })
+  })
+
+  it('HIGH #6: reconciles a stalled ask to answered once a LATER dashboard refresh shows it cleared', async () => {
+    const { session } = fakeSession()
+    const store = createHudStore(initialState())
+    const { timer, runAll } = fakeTimer()
+    const ports = createNavPorts(makeDeps(store, fakeSessions(session), timer))
+
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
+    await flush()
+    await runAll()
+    expect(store.getState().askInteraction).toMatchObject({ phase: 'stalled' })
+
+    // Some ambient later refresh (the ordinary 5s dashboard poll, foregroundEnter, ...) —
+    // unrelated to this confirmation poll, which has already given up — shows it cleared.
+    store.update((s) => ({
+      ...s,
+      dashboard: {
+        rows: [{ worktreeId: 'wt-1', displayName: 'wt-1', status: 'working' }],
+        fetchedAt: 99,
+        stale: false
+      }
+    }))
 
     expect(store.getState().askInteraction).toMatchObject({ phase: 'answered' })
   })
 
-  it('HIGH #12: sets unresolved (honest, not optimistic) once bounded attempts exhaust while still permission', async () => {
-    const { session, refreshNow } = fakeSession() // never changes dashboard status
+  it('HIGH #6: never overlaps — each tick awaits its own worktree.ps before the next is scheduled', async () => {
+    const { session, sendRequest } = fakeSession()
     const store = createHudStore(initialState())
     const { timer, runAll } = fakeTimer()
     const ports = createNavPorts(makeDeps(store, fakeSessions(session), timer))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
     await flush()
-    runAll()
+    await runAll()
 
-    expect(refreshNow).toHaveBeenCalled()
-    expect(store.getState().askInteraction).toMatchObject({ phase: 'unresolved' })
+    const psCalls = sendRequest.mock.calls.filter(([method]) => method === 'worktree.ps').length
+    // Deadline 1500ms / 300ms interval = 5 ticks, each with exactly one worktree.ps read.
+    expect(psCalls).toBe(5)
   })
 
   it('CRITICAL #11: ignores a rapid second click while the first send is still in flight', async () => {
@@ -318,12 +405,40 @@ describe('sendAskAnswer', () => {
     const store = createHudStore(initialState())
     const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
 
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r')
-    ports.sendAskAnswer('host-a', 'wt-1', '1\r') // rapid double click
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r') // rapid double click
     await flush()
 
     // terminal.list + terminal.agentStatus + terminal.send = 3 calls total, not 6.
     expect(sendRequest).toHaveBeenCalledTimes(3)
+  })
+
+  it('HIGH #3: a stuck interaction from a PRIOR prompt on the same worktree never blocks a new one', async () => {
+    const { session, sendRequest } = fakeSession()
+    const store = createHudStore(initialState())
+    // Simulates the OLD bug precisely: an 'unresolved' interaction left over from a DIFFERENT
+    // notificationId on the SAME worktree — scoping the latch by worktreeId alone would block
+    // every future send to wt-1 forever; scoping by notificationId (HIGH #3) must not.
+    store.update((s) => ({
+      ...s,
+      askInteraction: {
+        hostId: 'host-a',
+        notificationId: 'ask-old',
+        worktreeId: 'wt-1',
+        phase: 'unresolved',
+        updatedAt: 0
+      }
+    }))
+    const ports = createNavPorts(makeDeps(store, fakeSessions(session)))
+
+    ports.sendAskAnswer('host-a', 'wt-1', ASK_NOTIFICATION_ID, '1\r')
+    await flush()
+
+    expect(sendRequest).toHaveBeenCalledTimes(3) // terminal.list + agentStatus + terminal.send
+    expect(store.getState().askInteraction).toMatchObject({
+      notificationId: ASK_NOTIFICATION_ID,
+      phase: 'checking'
+    })
   })
 })
 

@@ -122,7 +122,7 @@ describe('HudInputRouter', () => {
 
     emit({ source: 'text', eventType: undefined }) // CLICK via undefined-quirk
 
-    expect(ports.sendAskAnswer).toHaveBeenCalledWith('h1', 'wt-1', '2\r')
+    expect(ports.sendAskAnswer).toHaveBeenCalledWith('h1', 'wt-1', 'n1', '2\r')
   })
 
   it('drops duplicate sys events within the dedupe window (normalizer quirk)', () => {

@@ -370,6 +370,101 @@ describe('NotificationInboxController', () => {
     })
   })
 
+  describe('redelivery preserves a retirement tombstone (finding #4)', () => {
+    it('does not un-retire an already-retired notificationId on redelivery', () => {
+      const store = createHudStore(
+        fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'permission' }])
+      )
+      const port = new FakeRpcPort()
+      new NotificationInboxController(store, { port, now: () => 1 }).start()
+      port.onData?.({
+        type: 'notification',
+        source: 'terminal-bell',
+        title: 'Needs input',
+        body: 'Approve?',
+        worktreeId: 'w1',
+        notificationId: 'n1'
+      })
+      expect(store.getState().inbox.entries[0]?.kind).toBe('ask')
+
+      // Worktree leaves permission with no fresh notification — 'n1' is retired.
+      store.update((s) => ({
+        ...s,
+        dashboard: {
+          rows: [{ worktreeId: 'w1', displayName: 'w1', status: 'working' }],
+          fetchedAt: 2,
+          stale: false
+        }
+      }))
+      expect(store.getState().inbox.entries[0]).toMatchObject({ kind: 'info', retiredAsk: true })
+
+      // A redelivery of the SAME notificationId (getMissedSince overlap, duplicate retry) while
+      // the worktree is still NOT `permission` — toEntry classifies the fresh copy as 'info',
+      // which the reclassifier's kind==='ask' gate would never touch, so ONLY upsertEntry's own
+      // tombstone-preservation stands between this and a silently resurrected ask.
+      port.onData?.({
+        type: 'notification',
+        source: 'terminal-bell',
+        title: 'Needs input',
+        body: 'Approve?',
+        worktreeId: 'w1',
+        notificationId: 'n1'
+      })
+      expect(store.getState().inbox.entries[0]).toMatchObject({ kind: 'info', retiredAsk: true })
+    })
+  })
+
+  describe('permission-episode membership (finding #4)', () => {
+    it('does not promote an old "done" notification to ask for a brand-new permission episode', () => {
+      let now = 10
+      const store = createHudStore(
+        fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'working' }])
+      )
+      const port = new FakeRpcPort()
+      new NotificationInboxController(store, { port, now: () => now }).start()
+
+      port.onData?.({
+        type: 'notification',
+        source: 'agent-task-complete',
+        title: 'Done',
+        body: 'Finished an earlier task',
+        worktreeId: 'w1',
+        notificationId: 'done-1'
+      })
+      expect(store.getState().inbox.entries[0]?.kind).toBe('done')
+
+      // Time passes; a brand-new wait begins well after that old completion notification.
+      now = 100
+      store.update((s) => ({
+        ...s,
+        dashboard: {
+          rows: [{ worktreeId: 'w1', displayName: 'w1', status: 'permission' }],
+          fetchedAt: 100,
+          stale: false
+        }
+      }))
+
+      // The stale 'done' notification must never stand in as this episode's ask — fall through
+      // to synthesis (finding #14) until the new episode's own notification arrives.
+      expect(currentAsk(store.getState())).toEqual({
+        notificationId: 'synthetic-ask:w1',
+        worktreeId: 'w1'
+      })
+      expect(store.getState().inbox.entries[0]?.kind).toBe('done') // never mutated into 'ask'
+
+      // Once THIS episode's own notification lands, it becomes the ask — not the old one.
+      port.onData?.({
+        type: 'notification',
+        source: 'terminal-bell',
+        title: 'Needs input',
+        body: 'Approve?',
+        worktreeId: 'w1',
+        notificationId: 'ask-1'
+      })
+      expect(currentAsk(store.getState())).toEqual({ notificationId: 'ask-1', worktreeId: 'w1' })
+    })
+  })
+
   describe('currentAsk (findings #13/#14)', () => {
     it('returns null when no worktree is in permission', () => {
       const state = fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'working' }])

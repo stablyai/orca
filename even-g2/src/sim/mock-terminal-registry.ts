@@ -1,7 +1,10 @@
 // Unit 6: fixture-backed terminal bookkeeping for MockOrcaServer — scrollback buffers,
 // terminal.resolveActive answers, and the writable/refused-send scenario knob. Pulled out of
 // MockOrcaServer so the connection/encryption plumbing there stays under the file's line budget.
-import type { RuntimeTerminalSummary } from '@orca-shared/runtime-terminal-contracts'
+import type {
+  RuntimeTerminalAgentStatusState,
+  RuntimeTerminalSummary
+} from '@orca-shared/runtime-terminal-contracts'
 import {
   createFixtureActiveTerminals,
   createFixtureTerminals,
@@ -43,21 +46,28 @@ export class MockTerminalRegistry {
     }
   }
 
-  /** Overrides `terminal.agentStatus`'s `state` for `terminalId` (CRITICAL finding #10:
-   *  agent-terminal-resolution.ts resolves the worktree's unique 'waiting'/'blocked' terminal
-   *  from this, never terminal.resolveActive). Unset means "derive from setActiveTerminal" —
-   *  the fixture's designated active terminal is the one that's waiting by default. */
+  /** Overrides `terminal.agentStatus`'s `status` for `terminalId` (CRITICAL finding #1:
+   *  agent-terminal-resolution.ts resolves the worktree's unique `status === 'permission'`
+   *  terminal from this, never terminal.resolveActive). Unset means "derive from
+   *  setActiveTerminal" — the fixture's designated active terminal is the one needing input by
+   *  default. `true` -> 'permission', `false` -> 'working' (a plain non-waiting agent state). */
   setNeedsInput(terminalId: string, needsInput: boolean): void {
     this.needsInputOverrides.set(terminalId, needsInput)
   }
 
-  needsInput(terminalId: string): boolean {
+  /** Real `RuntimeTerminalAgentStatus.status` (src/shared/runtime-terminal-contracts.ts) — the
+   *  mock's terminal.agentStatus handler wraps this in the real `{handle,isRunningAgent,status}`
+   *  shape so drift from the verified contract is a compile error, not a silent mock fiction. */
+  agentStatusFor(terminalId: string): RuntimeTerminalAgentStatusState {
     const override = this.needsInputOverrides.get(terminalId)
     if (override !== undefined) {
-      return override
+      return override ? 'permission' : 'working'
     }
     const terminal = createFixtureTerminals().find((t) => t.terminalId === terminalId)
-    return terminal !== undefined && this.resolveActive(terminal.worktreeId) === terminalId
+    if (terminal === undefined) {
+      return null
+    }
+    return this.resolveActive(terminal.worktreeId) === terminalId ? 'permission' : 'working'
   }
 
   // ---- RPC-facing queries -------------------------------------------------------------------

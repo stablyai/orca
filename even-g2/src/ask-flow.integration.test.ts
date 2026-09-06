@@ -115,11 +115,13 @@ describe('ask flow integration', () => {
       }
     })
 
-    // CRITICAL finding #10 (agent-terminal-resolution.ts): the keystroke must go to the
-    // worktree's unique terminal.agentStatus-'waiting' terminal (term-wt1-1), never
-    // terminal.resolveActive (desktop focus, not who asked) and never a most-recent-output
-    // guess — the fixture's term-wt1-2 decoy has newer output than term-wt1-1 but is not the
-    // one flagged as needing input (see mock-terminal-registry.ts's needsInput).
+    // CRITICAL finding #1 (agent-terminal-resolution.ts): the keystroke must go to the
+    // worktree's unique terminal whose REAL RuntimeTerminalAgentStatus.status is 'permission'
+    // (term-wt1-1), never terminal.resolveActive (desktop focus, not who asked) and never a
+    // most-recent-output guess — the fixture's term-wt1-2 decoy has newer output than term-wt1-1
+    // but is not the one flagged as needing input (see mock-terminal-registry.ts's
+    // agentStatusFor). If the mock's terminal.agentStatus shape ever drifted from the real
+    // contract, the resolver would fail closed and no terminal.send would ever be observed here.
     const listed = sentRequests.find((r) => r.method === 'terminal.list')
     if (listed?.params?.worktree !== 'id:wt-1') {
       throw new Error('terminal.list was not called for wt-1')

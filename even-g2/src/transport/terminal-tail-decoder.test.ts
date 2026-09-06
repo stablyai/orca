@@ -87,7 +87,9 @@ describe('TerminalTailDecoder', () => {
         cwd: '/Users/dev/should-not-appear-in-tail'
       })
     })
-    expect(decoder.lines()).toEqual([''])
+    // Finding #4 (residual): SnapshotStart's metadata is dropped, not appended, so this is
+    // still "nothing received yet" — not a phantom blank line.
+    expect(decoder.lines()).toEqual([])
     decoder.pushFrame(frame(TerminalStreamOpcode.SnapshotChunk, 'real output\n'))
     expect(decoder.lines()).toEqual(['real output'])
   })
@@ -112,9 +114,15 @@ describe('TerminalTailDecoder', () => {
     expect(decoder.lines()).toEqual(['line one', 'line two'])
   })
 
-  it('starts with an empty lines() before any frame', () => {
+  it('starts with an empty lines() before any frame (finding #4 residual: no phantom blank line)', () => {
     const decoder = new TerminalTailDecoder()
-    expect(decoder.lines()).toEqual([''])
+    expect(decoder.lines()).toEqual([])
+  })
+
+  it('returns [] for a resolved terminal that never produced any output (finding #4 residual)', () => {
+    const decoder = new TerminalTailDecoder()
+    decoder.pushFrame(frame(TerminalStreamOpcode.SnapshotEnd, ''))
+    expect(decoder.lines()).toEqual([])
   })
 
   // Finding #20: a busy terminal must not grow WebView memory unbounded — retention is capped

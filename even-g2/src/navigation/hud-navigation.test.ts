@@ -346,6 +346,7 @@ describe('ask cursor + sendAskAnswer', () => {
         kind: 'sendAskAnswer',
         hostId: 'h1',
         worktreeId: 'wt-1',
+        notificationId: 'n1',
         option: { kind: 'option', digit: 2 }
       }
     ])
@@ -356,7 +357,13 @@ describe('ask cursor + sendAskAnswer', () => {
     const ctx = fixtureCtx({ askOptionCount: () => 3, notificationWorktreeId: () => 'wt-1' })
     const { effects } = reduceHudInput(state, { kind: 'click' }, ctx)
     expect(effects).toEqual([
-      { kind: 'sendAskAnswer', hostId: 'h1', worktreeId: 'wt-1', option: { kind: 'enter' } }
+      {
+        kind: 'sendAskAnswer',
+        hostId: 'h1',
+        worktreeId: 'wt-1',
+        notificationId: 'n1',
+        option: { kind: 'enter' }
+      }
     ])
   })
 
@@ -365,7 +372,13 @@ describe('ask cursor + sendAskAnswer', () => {
     const ctx = fixtureCtx({ askOptionCount: () => 3, notificationWorktreeId: () => 'wt-1' })
     const { effects } = reduceHudInput(state, { kind: 'click' }, ctx)
     expect(effects).toEqual([
-      { kind: 'sendAskAnswer', hostId: 'h1', worktreeId: 'wt-1', option: { kind: 'escape' } }
+      {
+        kind: 'sendAskAnswer',
+        hostId: 'h1',
+        worktreeId: 'wt-1',
+        notificationId: 'n1',
+        option: { kind: 'escape' }
+      }
     ])
   })
 
@@ -376,15 +389,33 @@ describe('ask cursor + sendAskAnswer', () => {
     expect(effects).toEqual([])
   })
 
-  it('CRITICAL #11: ignores the click (no sendAskAnswer effect) while a send is already in flight', () => {
+  it('CRITICAL #11: ignores the click (no sendAskAnswer effect) while a send is already in flight for THIS prompt', () => {
     const state = stateOf({ screen: 'ask', hostId: 'h1', notificationId: 'n1', selectedOption: 0 })
     const ctx = fixtureCtx({
       notificationWorktreeId: () => 'wt-1',
-      askSendInFlight: (worktreeId) => worktreeId === 'wt-1'
+      askSendInFlight: (notificationId) => notificationId === 'n1'
     })
     const { state: next, effects } = reduceHudInput(state, { kind: 'click' }, ctx)
     expect(next).toBe(state)
     expect(effects).toEqual([])
+  })
+
+  it('HIGH #3: does not ignore the click when a DIFFERENT prompt is in flight', () => {
+    const state = stateOf({ screen: 'ask', hostId: 'h1', notificationId: 'n1', selectedOption: 0 })
+    const ctx = fixtureCtx({
+      notificationWorktreeId: () => 'wt-1',
+      askSendInFlight: (notificationId) => notificationId === 'some-other-prompt'
+    })
+    const { effects } = reduceHudInput(state, { kind: 'click' }, ctx)
+    expect(effects).toEqual([
+      {
+        kind: 'sendAskAnswer',
+        hostId: 'h1',
+        worktreeId: 'wt-1',
+        notificationId: 'n1',
+        option: { kind: 'option', digit: 1 }
+      }
+    ])
   })
 })
 

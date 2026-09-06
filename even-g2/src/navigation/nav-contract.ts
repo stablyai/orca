@@ -51,7 +51,16 @@ export type NavEffect =
   | { kind: 'connectHost'; hostId: string }
   | { kind: 'openTerminalTail'; worktreeId: string } // resolve terminal + subscribe
   | { kind: 'closeTerminalTail'; terminalId: string }
-  | { kind: 'sendAskAnswer'; hostId: string; worktreeId: string; option: AskQuickAction }
+  // notificationId is the prompt identity the wearer actually clicked (HIGH #2) — nav-ports
+  // re-validates against it after the async terminal resolution, so an expired ask can never
+  // target whatever LATER became "the" ask for this worktree.
+  | {
+      kind: 'sendAskAnswer'
+      hostId: string
+      worktreeId: string
+      notificationId: string
+      option: AskQuickAction
+    }
   | { kind: 'refreshDashboard' }
   | { kind: 'pausePolling' }
   | { kind: 'resumePolling' }
@@ -81,8 +90,8 @@ export type NavContext = {
   hostIdAt(index: number): string | null
   worktreeIdAt(hostId: string, index: number): string | null
   notificationWorktreeId(notificationId: string): string | null
-  // Added for CRITICAL #11 (click latch): true while a send/confirmation is already in flight
-  // for this worktree's ask, or while the last attempt left the outcome unknown — the reducer
-  // must not emit a second sendAskAnswer effect in either case.
-  askSendInFlight(worktreeId: string): boolean
+  // Added for CRITICAL #11 (click latch), scoped by notificationId not worktreeId (HIGH #3): true
+  // while a send/confirmation for THIS SAME prompt is already in flight, or while its last
+  // attempt left the outcome unknown — never blocks a genuinely new episode's first send.
+  askSendInFlight(notificationId: string): boolean
 }

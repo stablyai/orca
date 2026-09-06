@@ -8,6 +8,7 @@ import { worktreeListPageCount as computeWorktreeListPageCount } from '../screen
 import type { NavContext } from '../navigation/nav-contract'
 import { currentAsk } from '../state/notification-inbox-state'
 import type { DashboardRow, HudState } from '../state/hud-store'
+import { ASK_RETRY_BLOCKED_PHASES } from './ask-interaction-tracking'
 
 function rowsForHost(state: HudState, hostId: string): DashboardRow[] {
   return state.connection.hostId === hostId ? state.dashboard.rows : []
@@ -48,16 +49,17 @@ export function buildNavContext(state: HudState): NavContext {
       const ask = currentAsk(state)
       return ask && ask.notificationId === notificationId ? ask.worktreeId : null
     },
-    // CRITICAL #11: blocks a second sendAskAnswer while one is in flight, and blocks retry
-    // entirely once an attempt left the outcome unknown (never guess a second time).
-    askSendInFlight: (worktreeId) => {
+    // CRITICAL #11/HIGH #3: blocks a second sendAskAnswer for the SAME prompt (notificationId)
+    // on the SAME host while one is in flight, or once an attempt left the outcome unknown
+    // (never guess a second time) — a different notificationId (a new episode) or a host switch
+    // must never be blocked by a stale interaction left over from a prior prompt/host.
+    askSendInFlight: (notificationId) => {
       const interaction = state.askInteraction
       return (
         interaction !== null &&
-        interaction.worktreeId === worktreeId &&
-        (interaction.phase === 'sending' ||
-          interaction.phase === 'checking' ||
-          interaction.phase === 'unresolved')
+        interaction.hostId === state.connection.hostId &&
+        interaction.notificationId === notificationId &&
+        ASK_RETRY_BLOCKED_PHASES.has(interaction.phase)
       )
     }
   }
