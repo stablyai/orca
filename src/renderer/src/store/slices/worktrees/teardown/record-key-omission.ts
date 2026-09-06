@@ -11,36 +11,20 @@
  * to an empty record. Production always initialises them, so the fresh object here
  * costs nothing at runtime.
  */
-
 export function omitRecordKeys<T>(
   record: Record<string, T> | undefined,
-  keys: Iterable<string>
+  keys: Iterable<string>,
 ): Record<string, T> {
   if (!record) {
-    return {}
+    return {};
   }
-  let next: Record<string, T> | null = null
+  let next: Record<string, T> | null = null;
   for (const key of keys) {
     if (!(key in record)) {
-      continue
+      continue;
     }
-    next ??= { ...record }
-    delete next[key]
+    next ??= { ...record };
+    delete next[key];
   }
-  return next ?? record
-}
-
-export function omitRecordKey<T>(
-  record: Record<string, T> | undefined,
-  key: string
-): Record<string, T> {
-  if (!record) {
-    return {}
-  }
-  if (!(key in record)) {
-    return record
-  }
-  const next = { ...record }
-  delete next[key]
-  return next
+  return next ?? record;
 }
