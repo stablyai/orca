@@ -72,6 +72,9 @@ function installBeforeQuitHandler(): void {
     }
     state.isQuitting = true
     state.desktopRelayService?.fenceAndCloseNow()
+    // Why: drops the notification subscription so a late dispatch cannot start a
+    // push (and its unref'd outbox retry) on the way out.
+    state.desktopPushService?.stop()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
     state.unsubscribeAgentAwakeStatusChanges = null

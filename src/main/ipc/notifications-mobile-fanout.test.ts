@@ -74,7 +74,8 @@ describe('registerNotificationHandlers', () => {
       source: 'agent-task-complete',
       title: 'feat/notis - Hermes finished',
       body: 'The diff updates notification formatting.',
-      worktreeId: 'repo::wt1'
+      worktreeId: 'repo::wt1',
+      agentState: 'done'
     })
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })

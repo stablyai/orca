@@ -10,6 +10,13 @@ import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
+import {
+  isRemotePushTrigger,
+  pushNotificationRouteData,
+  shouldSuppressForegroundPush
+} from '../src/notifications/push-receive'
+import { startPushTokenSync } from '../src/notifications/push-registration'
+import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
 import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
@@ -19,18 +26,30 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 // between the native splash and the first React paint.
 SplashScreen.preventAutoHideAsync()
 
+// Why at boot and not only on subscribe: the gateway's FCM payload targets the
+// 'orca-desktop' channel, and a background push can land before any socket has
+// connected. Android drops a notification whose channel does not exist yet.
+ensureDesktopNotificationChannel()
+
 // Why: without this, expo-notifications silently drops notifications when
 // the app is in the foreground. Setting all three to true makes iOS/Android
 // display the banner, play the sound, and show the badge even while the
 // app is active. This runs once at module load time before any notification
 // is scheduled.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false
-  })
+  handleNotification: async (notification) => {
+    // Why the check: a gateway push can arrive for an event the socket already
+    // delivered, and only the handler can stop the OS drawing a second banner.
+    const suppressed = await shouldSuppressForegroundPush(notification.request.content.data).catch(
+      () => false
+    )
+    return {
+      shouldShowBanner: !suppressed,
+      shouldShowList: !suppressed,
+      shouldPlaySound: !suppressed,
+      shouldSetBadge: false
+    }
+  }
 })
 
 export default function RootLayout() {
@@ -43,6 +62,10 @@ export default function RootLayout() {
     // reconcile the server result before another scan can replace that journal.
     void recoverMobileRelayPairing()
   }, [])
+
+  // Why: a rolled APNs/FCM token stops delivering silently, so every paired host
+  // has to be re-registered with the new one as soon as the provider hands it over.
+  useEffect(() => startPushTokenSync(), [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
@@ -94,9 +117,18 @@ export default function RootLayout() {
       }
     }
 
-    async function getNavigationTarget(data: unknown) {
+    async function getNavigationTarget(notification: Notifications.Notification) {
       const hosts = await loadHostCatalog().catch(() => null)
-      return getNotificationNavigationTarget(data, {
+      const data: unknown = notification.request.content.data
+      // A gateway push names its host by key fingerprint, not by this device's hostId.
+      // With no catalog to resolve against, such a push stays unrouted instead of
+      // falling back to whatever hostId its raw data carries.
+      const routeData = pushNotificationRouteData(
+        data,
+        hosts ?? [],
+        isRemotePushTrigger(notification.request.trigger)
+      )
+      return getNotificationNavigationTarget(routeData, {
         knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined,
         credentialStatusByHostId: hosts
           ? new Map(hosts.map((host) => [host.id, host.credentialStatus]))
@@ -124,7 +156,7 @@ export default function RootLayout() {
         }
       }
 
-      const target = await getNavigationTarget(response.notification.request.content.data)
+      const target = await getNavigationTarget(response.notification)
       clearLastNotificationResponse()
       if (disposed) {
         return

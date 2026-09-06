@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
+const unregisterPushMock = vi.hoisted(() => vi.fn(async () => {}))
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(async () => null),
   setItem: vi.fn(async () => undefined),
@@ -16,6 +17,12 @@ vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
 }))
 
+// Why mocked: the real module reaches expo-notifications for the device token, which
+// no node test environment can load.
+vi.mock('../notifications/push-registration', () => ({
+  unregisterPushForRemovedHost: (hostId: string) => unregisterPushMock(hostId)
+}))
+
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
 import {
   getHostNotificationSession,
@@ -25,6 +32,7 @@ import {
 describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
+    unregisterPushMock.mockClear()
     asyncStorage.removeItem.mockClear()
     resetHostNotificationSessionsForTests()
   })
@@ -73,6 +81,27 @@ describe('host removal lifecycle', () => {
     expect(afterRemoval).not.toBe(session)
     expect(afterRemoval.lastDeliveredSeq).toBe(0)
     expect(afterRemoval.lastDeliveredEpoch).toBeNull()
+  })
+
+  it('drops the gateway push registration before the credentials it needs are gone', async () => {
+    removeHostMock.mockResolvedValue(undefined)
+
+    await removeHostAndCloseClient('host-1', vi.fn())
+
+    expect(unregisterPushMock).toHaveBeenCalledWith('host-1')
+    expect(unregisterPushMock.mock.invocationCallOrder[0]).toBeLessThan(
+      removeHostMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('still removes the host when the push unregister cannot land', async () => {
+    removeHostMock.mockResolvedValue(undefined)
+    unregisterPushMock.mockRejectedValueOnce(new Error('socket closed'))
+    const closeHostClient = vi.fn()
+
+    await removeHostAndCloseClient('host-1', closeHostClient)
+
+    expect(closeHostClient).toHaveBeenCalledWith('host-1')
   })
 
   it('erases the persisted watermark, not just the in-memory session', async () => {

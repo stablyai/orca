@@ -400,3 +400,42 @@ after checkout and authentication, before package installation, revision checks,
 Their typed confirmations are `PAUSE_REGIONAL_REHOMING` and `DISABLE_REGIONAL_REHOMING`. Keep the
 default 3,600,000 ms drain grace so existing splices can finish. The job summary contains only fresh
 aggregate active, receipt, registration, completion, and abort counts.
+
+## Mobile push gateway
+
+`Deploy Push Gateway Production` (`.github/workflows/cloud-push-deploy.yml`) is the deploy path
+for `orca-cloud-push`, the mobile push gateway. It is the one `cloud-*` workflow that is not a
+relay operation, and it is here because it shares this repository's Cloud SQL instance, its
+Artifact Registry repository, and its rollout lease.
+
+It needs **no new GitHub environment variable.** It authenticates as the shared production deploy
+identity through the already-published `PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER`
+and `PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT`, and reads `PRODUCTION_GCP_REGION` like the
+rest. That account holds the foundation-owned Cloud SQL rollout lease grant, which names it and nothing
+else, so a dedicated identity could not be given that lease from this root.
+
+`infra/terraform/push-gateway.tf` adds three bindings scoped to the gateway: Cloud Run developer
+on that one service, and service-account user plus token creator on the gateway's runtime
+account. Those three are not the workflow's whole authority. Running as the shared account gives
+the run every role that account already holds for the relay: Artifact Registry writer on
+`orca-cloud`, `roles/run.developer` on the relay director and the fence broker, accessor and
+version-adder on the relay regional-placement secret, and service-account user on the relay
+runtime identities. That widening was accepted as the price of the lease, and it is bounded by
+the provider condition and by the workflow being dispatch-only behind a typed confirmation.
+
+The provider's workflow allowlist gained exactly one entry, `cloud-push-deploy.yml`, on `main` in
+the `production` environment. That entry is required: the allowlist compares complete workflow
+refs by equality, so the `cloud-` filename prefix alone does not admit a new file.
+
+The run builds `apps/push/Dockerfile` **before** taking the lease, so an image build never blocks
+a relay deploy or rehome, then holds the production rollout lease across the deploy itself,
+because the gateway applies its schema while the new revision starts. Under the lease it checks
+the serving revision's Terraform-owned scaling, deploys with `--no-traffic` behind a per-run
+traffic tag and no scaling flag of its own, probes the candidate's own `/ready`, proves the
+runtime identity can reach FCM with a validate-only send, and only then shifts 100% of traffic. A
+failure after the shift returns traffic to the recorded rollback revision; a failure before it
+deletes the candidate. There is no staging gateway, so there is no staging counterpart to run
+first.
+
+Full runbook, including the APNs key rotation and the DNS record the `stablyai/orca-cloud` apps
+root still owes, is in `docs/push-gateway.md`.

@@ -6,8 +6,17 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import {
   loadPushNotificationsEnabled,
-  savePushNotificationsEnabled
+  loadRemotePushAgentStates,
+  loadRemotePushEnabled,
+  savePushNotificationsEnabled,
+  type RemotePushAgentState
 } from '../src/storage/preferences'
+import { BackgroundNotificationsSection } from '../src/notifications/BackgroundNotificationsSection'
+import {
+  setRemotePushAgentStates,
+  setRemotePushEnabled
+} from '../src/notifications/push-registration'
+import { useRemotePushCapableHosts } from '../src/notifications/use-remote-push-capable-hosts'
 import {
   ensureNotificationPermissions,
   getNotificationPermissionState,
@@ -26,14 +35,21 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets()
   const [pushEnabled, setPushEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
+  const [backgroundEnabled, setBackgroundEnabled] = useState(false)
+  const [agentStates, setAgentStates] = useState<readonly RemotePushAgentState[]>([])
+  const remotePushSupport = useRemotePushCapableHosts()
 
   const refreshSettings = useCallback(async () => {
-    const [enabled, permission] = await Promise.all([
+    const [enabled, permission, background, states] = await Promise.all([
       loadPushNotificationsEnabled(),
-      getNotificationPermissionState()
+      getNotificationPermissionState(),
+      loadRemotePushEnabled(),
+      loadRemotePushAgentStates()
     ])
     setPushEnabled(enabled)
     setPermissionState(permission)
+    setBackgroundEnabled(background)
+    setAgentStates(states)
   }, [])
 
   useFocusEffect(
@@ -64,6 +80,26 @@ export default function NotificationsScreen() {
     }
     setPushEnabled(value)
     await savePushNotificationsEnabled(value)
+  }
+
+  const toggleBackground = async (value: boolean) => {
+    if (value) {
+      const granted = await ensureNotificationPermissions()
+      setPermissionState(await getNotificationPermissionState())
+      if (!granted) {
+        return
+      }
+    }
+    setBackgroundEnabled(value)
+    await setRemotePushEnabled(value)
+  }
+
+  const toggleAgentState = async (state: RemotePushAgentState, value: boolean) => {
+    const next = value
+      ? [...new Set([...agentStates, state])]
+      : agentStates.filter((existing) => existing !== state)
+    setAgentStates(next)
+    await setRemotePushAgentStates(next)
   }
 
   const switchEnabled = pushEnabled && permissionState.granted
@@ -105,6 +141,15 @@ export default function NotificationsScreen() {
           </Pressable>
         )}
       </View>
+
+      <BackgroundNotificationsSection
+        supported={remotePushSupport.supported}
+        resolved={remotePushSupport.resolved}
+        enabled={backgroundEnabled}
+        agentStates={agentStates}
+        onToggleEnabled={(value) => void toggleBackground(value)}
+        onToggleAgentState={(state, value) => void toggleAgentState(state, value)}
+      />
     </View>
   )
 }

@@ -1,8 +1,10 @@
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
+import { DESKTOP_NOTIFICATION_CHANNEL_ID } from './desktop-notification-channel'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
 import { ensureNotificationPermissions } from './notification-permissions'
+import { dismissPresentedPushNotification } from './push-tray-dismissal'
 
 export type NotificationEvent = {
   type: 'notification'
@@ -62,17 +64,6 @@ export function setScheduledNotificationsMaxForTests(max?: number): void {
   maxScheduledNotifications = max ?? MAX_SCHEDULED_NOTIFICATIONS
 }
 
-export function configureNotificationChannel(): void {
-  if (Platform.OS === 'android') {
-    void Notifications.setNotificationChannelAsync('orca-desktop', {
-      name: 'Desktop Notifications',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250],
-      lightColor: '#6366f1'
-    })
-  }
-}
-
 export async function showLocalNotification(
   event: NotificationEvent,
   hostId: string
@@ -97,7 +88,7 @@ export async function showLocalNotification(
         title: event.title,
         body: event.body,
         data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+        ...(Platform.OS === 'android' ? { channelId: DESKTOP_NOTIFICATION_CHANNEL_ID } : {})
       },
       trigger: null
     })
@@ -135,7 +126,7 @@ export async function showLocalNotification(
         title: event.title,
         body: event.body,
         data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+        ...(Platform.OS === 'android' ? { channelId: DESKTOP_NOTIFICATION_CHANNEL_ID } : {})
       },
       trigger: null
     })
@@ -173,6 +164,9 @@ export async function dismissLocalNotification(
   if (!event.notificationId) {
     return
   }
+  // Why first and unconditionally: a push the OS presented while Orca was closed has
+  // no entry below, so the local registry alone would leave it in the tray forever.
+  await dismissPresentedPushNotification(event.notificationId)
   const storedKey = getStoredNotificationKey(hostId, event.notificationId)
   const state = scheduledNotificationsByHostAndNotificationId.get(storedKey)
   if (!state) {

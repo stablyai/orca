@@ -9,6 +9,7 @@ import { loadPushNotificationsEnabled } from '../storage/preferences'
 vi.mock('expo-notifications', () => ({
   AndroidImportance: { HIGH: 'high' },
   setNotificationChannelAsync: vi.fn(),
+  getPresentedNotificationsAsync: vi.fn(async () => []),
   getPermissionsAsync: vi.fn(),
   requestPermissionsAsync: vi.fn(),
   scheduleNotificationAsync: vi.fn(),
@@ -18,6 +19,11 @@ vi.mock('expo-notifications', () => ({
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios', Version: 18 }
 }))
+
+// The reconnect catch-up reads the tray to learn which pushes the OS already showed,
+// and mapping those to this host needs the catalog, whose real module pulls the
+// native keychain. No push is presented in these tests, so an empty catalog is enough.
+vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn(async () => []) }))
 
 // In-memory AsyncStorage so the persisted watermark survives across the
 // subscribe/unsubscribe cycles this test exercises (the real device behaviour).
