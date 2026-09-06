@@ -144,7 +144,15 @@ export async function buildWorktreeCreateParams(args: {
       // lets create infer the repo for the common current-workspace case.
       cwdParentWorktree = await resolveCurrentWorktreeSelector(cwd, client)
     } catch (error) {
-      if (error instanceof RuntimeClientError && error.code === 'selector_not_found') {
+      const optionalRemoteCwd =
+        !needsCwdRepoInference &&
+        client.isRemote &&
+        error instanceof RuntimeClientError &&
+        error.code === 'invalid_argument'
+      if (
+        optionalRemoteCwd ||
+        (error instanceof RuntimeClientError && error.code === 'selector_not_found')
+      ) {
         cwdParentWorktree = undefined
       } else {
         throw error

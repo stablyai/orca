@@ -241,4 +241,48 @@ describe('orca worktree create reservation binding', () => {
     expect(output.error.message).not.toContain('Missing repo selector')
     expect(process.exitCode).toBe(1)
   })
+
+  it('does not require remote cwd lineage when an explicit repo supplies the create target', async () => {
+    process.env.ORCA_PAIRING_CODE = 'remote-runtime'
+    callMock.mockResolvedValueOnce(createdWorktreeFixture(undefined))
+    silenceOutput()
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--json'],
+      '/remote-only/path'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.create', {
+      repo: 'id:repo-1',
+      name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      noParent: false,
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
+    })
+    expect(process.exitCode).toBeFalsy()
+  })
+
+  it('does not hide infrastructure failures during optional cwd lineage lookup', async () => {
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('runtime_unavailable', 'runtime transport exploded')
+    )
+    silenceOutput()
+
+    await main(
+      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--json'],
+      '/tmp/managed-or-not'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+    expect(process.exitCode).toBe(1)
+  })
 })
