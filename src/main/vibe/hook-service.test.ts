@@ -13,6 +13,10 @@ let originalHome: string | undefined
 let originalVibeHome: string | undefined
 let originalPlatform: string | undefined
 
+function setPlatform(platform: string): void {
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+}
+
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-vibe-hook-'))
   originalHome = process.env.HOME
@@ -20,6 +24,9 @@ beforeEach(() => {
   originalPlatform = (process as { platform: string }).platform
   process.env.HOME = home
   process.env.VIBE_HOME = join(home, '.vibe')
+  // Why: the non-Windows tests below assume POSIX. Force darwin so they pass on a
+  // Windows host too; the `on Windows` describe overrides this with win32.
+  setPlatform('darwin')
 })
 
 afterEach(() => {
@@ -36,10 +43,6 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   rmSync(home, { recursive: true, force: true })
 })
-
-function setPlatform(platform: string): void {
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-}
 
 const configPath = (): string => join(home, '.vibe', 'hooks.toml')
 const scriptPath = (): string => join(home, '.orca', 'agent-hooks', 'mistral-vibe-hook.sh')
@@ -140,6 +143,41 @@ describe('VibeHookService', () => {
     it('refreshManagedScripts is a no-op', async () => {
       await new VibeHookService().refreshManagedScripts()
       expect(existsSync(scriptPath())).toBe(false)
+    })
+
+    // Why: a home dir reused after a macOS/Linux install holds a stale managed
+    // POSIX block; on win32 Vibe would run it via cmd.exe and fail. install and
+    // remove must clean it up rather than leave a broken hook behind.
+    function seedManagedBlockFromPosix(): string {
+      setPlatform('darwin')
+      new VibeHookService().install()
+      const seeded = readFileSync(configPath(), 'utf-8')
+      setPlatform('win32')
+      return seeded
+    }
+
+    it('install strips a stale managed block inherited from a POSIX install', () => {
+      const seeded = seedManagedBlockFromPosix()
+      expect(seeded).toContain('orca-pre-tool')
+      expect(existsSync(scriptPath())).toBe(true)
+
+      const status = new VibeHookService().install()
+      expect(status.state).toBe('skipped')
+
+      const after = readFileSync(configPath(), 'utf-8')
+      expect(after).not.toContain('orca-managed-vibe-hooks')
+      expect(after).not.toContain('orca-pre-tool')
+    })
+
+    it('remove strips a stale managed block inherited from a POSIX install', () => {
+      seedManagedBlockFromPosix()
+
+      const status = new VibeHookService().remove()
+      expect(status.state).toBe('skipped')
+
+      const after = readFileSync(configPath(), 'utf-8')
+      expect(after).not.toContain('orca-managed-vibe-hooks')
+      expect(after).not.toContain('orca-pre-tool')
     })
   })
 })
