@@ -203,6 +203,7 @@ export async function executeWorktreeCreation(
             result.defaultTabs,
             {
               activateCreatedTabs: false,
+              ...(structuredLaunch ? { callerProvidesSurface: true } : {}),
               ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
             }
           )
