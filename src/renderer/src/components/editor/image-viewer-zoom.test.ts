@@ -17,8 +17,9 @@ describe('image viewer zoom helpers', () => {
     expect(clampImageViewerZoom(20)).toBe(MAX_IMAGE_VIEWER_ZOOM)
   })
 
-  it('handles only ctrl-wheel input as image zoom', () => {
+  it('handles modifier-wheel input as image zoom', () => {
     expect(shouldHandleImageZoomWheel({ ctrlKey: true })).toBe(true)
+    expect(shouldHandleImageZoomWheel({ ctrlKey: false, metaKey: true })).toBe(true)
     expect(shouldHandleImageZoomWheel({ ctrlKey: false })).toBe(false)
   })
 

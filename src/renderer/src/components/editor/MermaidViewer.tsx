@@ -1,103 +1,147 @@
-import React, { useLayoutEffect, useRef } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useAppStore } from '@/store'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
+import { installEditorSaveShortcut } from './editor-shortcuts'
+import {
+  getMermaidTextDiagramModeOptions,
+  isMermaidTextDiagramMode,
+  type MermaidTextDiagramMode
+} from './mermaid-text-diagram-view-modes'
 import MermaidBlock from './MermaidBlock'
+import { useDebouncedMermaidDiagramContent } from './use-debounced-mermaid-diagram-content'
+import ZoomableDiagramSurface from './ZoomableDiagramSurface'
 
 type MermaidViewerProps = {
   content: string
   filePath: string
+  onContentChange?: (content: string) => void
+  onSave?: (content: string) => void | Promise<boolean>
+  readOnly?: boolean
 }
 
-// Why: MermaidViewer is the full-file counterpart to MermaidBlock (which
-// renders fenced mermaid blocks inside markdown). When a user opens a .mmd
-// or .mermaid file in diagram mode, the entire file content is the diagram
-// source — no markdown wrapper, no frontmatter, just mermaid syntax.
 export default function MermaidViewer({
   content,
-  filePath
+  filePath,
+  onContentChange,
+  onSave,
+  readOnly = false
 }: MermaidViewerProps): React.JSX.Element {
-  const rootRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const latestContentRef = useRef(content)
+  const lastEmittedContentRef = useRef(content)
+  const [mode, setMode] = useState<MermaidTextDiagramMode>('chart')
+  const [draftContent, setDraftContent] = useState(content)
+  const [syncedFilePath, setSyncedFilePath] = useState(filePath)
+  const [syncedContent, setSyncedContent] = useState(content)
   const settings = useAppStore((s) => s.settings)
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
-  // Why: Each viewing mode (source vs diagram) produces different DOM heights.
-  // Mode-scoped keys prevent restoring a source-mode scroll position in diagram
-  // mode (same reasoning as MarkdownPreview's scrollCacheKey).
-  const scrollCacheKey = `${filePath}:mermaid-diagram`
+  // File switch: immediate sync so debounce hook flushes. Same-file: only accept
+  // content that differs from what we last emitted (external reload, not echo).
+  if (syncedFilePath !== filePath) {
+    setSyncedFilePath(filePath)
+    setSyncedContent(content)
+    setDraftContent(content)
+    lastEmittedContentRef.current = content
+    latestContentRef.current = content
+  } else if (content !== syncedContent) {
+    setSyncedContent(content)
+    if (content !== lastEmittedContentRef.current) {
+      setDraftContent(content)
+      lastEmittedContentRef.current = content
+      latestContentRef.current = content
+    }
+  }
 
-  useLayoutEffect(() => {
-    const container = rootRef.current
-    if (!container) {
+  const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
+  const trimmedContent = useMemo(() => draftContent.trim(), [draftContent])
+  const renderContent = useDebouncedMermaidDiagramContent(trimmedContent, filePath)
+  const viewOptions = getMermaidTextDiagramModeOptions('auto.components.editor.MermaidViewer')
+  const showSource = mode !== 'chart' || trimmedContent.length === 0
+  const showDiagram = mode !== 'code' && trimmedContent.length > 0
+  const sourceLabel = translate('auto.components.editor.MermaidViewer.source', 'Mermaid source')
+  const sourcePlaceholder = translate(
+    'auto.components.editor.MermaidViewer.sourcePlaceholder',
+    'Type Mermaid source...'
+  )
+
+  useEffect(() => {
+    latestContentRef.current = draftContent
+  }, [draftContent])
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root || !onSave || readOnly) {
       return
     }
 
-    let throttleTimer: ReturnType<typeof setTimeout> | null = null
+    return installEditorSaveShortcut(root, () => {
+      void onSave(latestContentRef.current)
+    })
+  }, [onSave, readOnly])
 
-    const onScroll = (): void => {
-      if (throttleTimer !== null) {
-        clearTimeout(throttleTimer)
-      }
-      throttleTimer = setTimeout(() => {
-        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
-        throttleTimer = null
-      }, 150)
+  const handleSourceChange = (event: React.ChangeEvent<HTMLTextAreaElement>): void => {
+    const nextContent = event.currentTarget.value
+    if (mode === 'chart' && trimmedContent.length === 0 && nextContent.trim().length > 0) {
+      setMode('split')
     }
-
-    container.addEventListener('scroll', onScroll, { passive: true })
-    return () => {
-      // Why: guard against writing 0 when the SVG has not rendered yet (e.g.,
-      // StrictMode double-mount or quick tab switch before mermaid.render()
-      // completes). Without this, a valid cached position gets clobbered.
-      if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
-        setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
-      }
-      if (throttleTimer !== null) {
-        clearTimeout(throttleTimer)
-      }
-      container.removeEventListener('scroll', onScroll)
-    }
-  }, [scrollCacheKey])
-
-  useLayoutEffect(() => {
-    const container = rootRef.current
-    const targetScrollTop = scrollTopCache.get(scrollCacheKey)
-    if (!container || targetScrollTop === undefined) {
-      return
-    }
-
-    let frameId = 0
-    let attempts = 0
-
-    // Why: mermaid.render() is async, so the SVG may not exist on the first
-    // frame. Retry up to 30 frames (~500ms) to match MarkdownPreview's pattern.
-    const tryRestore = (): void => {
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-      const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
-      container.scrollTop = nextScrollTop
-
-      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || maxScrollTop >= targetScrollTop) {
-        return
-      }
-
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(tryRestore)
-      }
-    }
-
-    tryRestore()
-    return () => window.cancelAnimationFrame(frameId)
-  }, [scrollCacheKey, content])
+    setDraftContent(nextContent)
+    lastEmittedContentRef.current = nextContent
+    onContentChange?.(nextContent)
+  }
 
   return (
-    <div ref={rootRef} className="mermaid-viewer h-full min-h-0 overflow-auto scrollbar-editor">
-      <div className="mermaid-viewer-canvas">
-        {/* Why: DOMPurify's SVG profile strips <foreignObject> elements that
-           mermaid uses for HTML labels. Force SVG-native <text> labels so
-           they survive sanitization — same fix as the markdown preview path. */}
-        <MermaidBlock content={content.trim()} isDark={isDark} htmlLabels={false} />
+    <div ref={rootRef} className="mermaid-viewer h-full min-h-0">
+      <div className="mermaid-text-diagram-toolbar">
+        <div className="mermaid-text-diagram-title" title={filename}>
+          {filename}
+        </div>
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          spacing={0}
+          value={mode}
+          onValueChange={(nextMode) => {
+            if (isMermaidTextDiagramMode(nextMode)) {
+              setMode(nextMode)
+            }
+          }}
+        >
+          {viewOptions.map((option) => (
+            <ToggleGroupItem key={option.value} value={option.value}>
+              {option.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </div>
+      <div className={cn('mermaid-text-diagram-body', `is-${mode}`)}>
+        {showSource ? (
+          <textarea
+            className="mermaid-text-diagram-source mermaid-text-diagram-source-editor scrollbar-editor"
+            value={draftContent}
+            readOnly={readOnly || !onContentChange}
+            spellCheck={false}
+            wrap="off"
+            aria-label={sourceLabel}
+            placeholder={sourcePlaceholder}
+            onChange={handleSourceChange}
+          />
+        ) : null}
+        {showDiagram ? (
+          <ZoomableDiagramSurface
+            className="mermaid-text-diagram-chart"
+            diagramKey={renderContent}
+            resetKey={filePath}
+            label={translate('auto.components.editor.MermaidViewer.mermaid', 'Mermaid')}
+          >
+            <MermaidBlock content={renderContent} isDark={isDark} htmlLabels={false} />
+          </ZoomableDiagramSurface>
+        ) : null}
       </div>
     </div>
   )
