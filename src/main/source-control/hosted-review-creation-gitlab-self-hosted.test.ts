@@ -125,6 +125,7 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
 
     await expect(
       getHostedReviewCreationEligibility({
+        executionHostId: 'local',
         repoPath: '/repo',
         branch: 'feature/self-hosted-mr',
         base: 'main',
@@ -180,6 +181,7 @@ gitlab.internal
     })
 
     const result = await getHostedReviewCreationEligibility({
+      executionHostId: 'local',
       repoPath: '/repo',
       branch: 'feature/self-hosted-mr',
       base: 'main',
@@ -231,6 +233,7 @@ gitlab.internal
     })
 
     const eligibilityInput = {
+      executionHostId: 'local' as const,
       repoPath: '/repo',
       branch: 'feature/self-hosted-mr',
       base: 'main',

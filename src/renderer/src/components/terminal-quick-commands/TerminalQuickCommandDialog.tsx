@@ -76,7 +76,10 @@ export function TerminalQuickCommandDialog({
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
   const wasOpenRef = useRef(open)
   const syncedCommandRef = useRef(command)
-  const draftMemoryRef = useRef(createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent))
+  const draftMemoryRef = useRef<ReturnType<typeof createTerminalQuickCommandDialogDraftMemory>>(
+    undefined!
+  )
+  draftMemoryRef.current ??= createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent)
   const initialScope = getTerminalQuickCommandScope(command)
   const lastRepoScopeIdRef = useRef<string | null>(
     initialScope.type === 'repo' ? initialScope.repoId : null

@@ -190,7 +190,7 @@ describe('createShutdownCheckpointGuard', () => {
 
   it('runs the quit checkpoint inside the window-close scope and surfaces a vetoed quit (STA-5505/#15352)', () => {
     const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
+      join(process.cwd(), 'src/renderer/src/components/use-terminal-editor-close-foundation.ts'),
       'utf8'
     )
     const closeStart = source.indexOf('const confirmNativeWindowClose = useCallback(() => {')
@@ -206,17 +206,17 @@ describe('createShutdownCheckpointGuard', () => {
 
   it('wires dirty editor unload vetoes to the paired-web checkpoint reset', () => {
     const source = readFileSync(
-      join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
+      join(process.cwd(), 'src/renderer/src/components/use-terminal-window-lifecycle.ts'),
       'utf8'
     )
     const dirtyGuardStart = source.indexOf(
-      'const dirtyFiles = useAppStore.getState().openFiles.filter((f) => f.isDirty)'
+      'const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)'
     )
     const dirtyGuardEnd = source.indexOf("window.addEventListener('beforeunload', handler)")
     expect(dirtyGuardStart).toBeGreaterThanOrEqual(0)
     expect(dirtyGuardEnd).toBeGreaterThan(dirtyGuardStart)
     expect(source.slice(dirtyGuardStart, dirtyGuardEnd)).toContain(
-      'preventUnloadAndScheduleShutdownCheckpointReset(e, window)'
+      'preventUnloadAndScheduleShutdownCheckpointReset(event, window)'
     )
   })
 })

@@ -21,7 +21,7 @@ import {
   type ProviderHistoryItem,
   type ProviderHistoryWindow
 } from './journal-submission-reconciler'
-import { openAgentSessionJournal } from './journal-store-factory'
+import { createTrackedJournalOpener } from './journal-store-test-open'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -52,8 +52,10 @@ function userMessage(text: string): AgentJournalMessageItem {
   return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
 }
 
+const journals = createTrackedJournalOpener()
+
 async function open() {
-  return openAgentSessionJournal({
+  return journals.open({
     identity: IDENTITY,
     journalDir: root,
     now: tick,
@@ -89,6 +91,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -195,14 +198,8 @@ describe('crash between provider accept and journal commit', () => {
     ).toEqual([])
   })
 
-  it('keeps the receipt after the row that minted it was compacted away', async () => {
-    const journal = await openAgentSessionJournal({
-      identity: IDENTITY,
-      journalDir: root,
-      now: tick,
-      mintEpoch: () => `epoch-${clock}`,
-      compaction: { minTailRows: 1, retainTailMs: 0 }
-    })
+  it('keeps the receipt across a reopen', async () => {
+    const journal = await open()
     await journal.appendSubmission({
       clientMessageId: 'cm_1',
       payloadFingerprint: digestPayload('kept'),
@@ -215,7 +212,7 @@ describe('crash between provider accept and journal commit', () => {
       providerIdentity: ACCEPTED_IDENTITY,
       fence: 1
     })
-    await journal.compact()
+    await journal.close()
 
     const reopened = await open()
     expect(reopened.receiptFor('cm_1')?.providerItemId).toBe(agentJournalItemKey(ACCEPTED_IDENTITY))

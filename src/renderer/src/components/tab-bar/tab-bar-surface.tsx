@@ -157,7 +157,7 @@ export function renderTabBarSurface({
       <SortableContext items={sortableIds}>
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
-          className="relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
+          className="group/tab-strip relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
@@ -181,7 +181,11 @@ export function renderTabBarSurface({
               />
             ) : null}
           </div>
-          <TabStripScrollIndicator metrics={tabStripOverflowState} />
+          <TabStripScrollIndicator
+            metrics={tabStripOverflowState}
+            scrollContainerRef={tabStripRef}
+            disabled={tabStripDragScroll.isTabDragActive}
+          />
         </div>
       </SortableContext>
       {tabStripOverflowState.hasOverflow ? (

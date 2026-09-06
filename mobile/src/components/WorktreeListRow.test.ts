@@ -30,7 +30,9 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
   GitBranch: 'GitBranch',
-  GitPullRequest: 'GitPullRequest'
+  GitPullRequest: 'GitPullRequest',
+  Monitor: 'Monitor',
+  Server: 'Server'
 }))
 
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: vi.fn() }))
@@ -224,5 +226,42 @@ describe('memoized worktree rows', () => {
       status: 'working',
       workingMode: 'monitoring'
     })
+  })
+
+  it('names the host with a glyph that matches the host kind', async () => {
+    const textNodes = (): string[] =>
+      renderer!.root
+        .findAllByType('Text' as never)
+        .flatMap((node) => node.props.children)
+        .filter((child): child is string => typeof child === 'string')
+
+    await act(async () => {
+      renderer = create(
+        createElement(ListRowHarness, {
+          item: { ...baseItem, hostId: 'ssh:ssh-1', hostContextLabel: 'openclaw' },
+          now: 2_000
+        })
+      )
+    })
+    expect(textNodes()).toContain('openclaw')
+    expect(renderer!.root.findAllByType('Server' as never)).toHaveLength(1)
+    expect(renderer!.root.findAllByType('Monitor' as never)).toHaveLength(0)
+
+    await act(async () =>
+      renderer!.update(
+        createElement(ListRowHarness, {
+          item: { ...baseItem, hostContextLabel: 'Local Mac' },
+          now: 2_000
+        })
+      )
+    )
+    expect(textNodes()).toContain('Local Mac')
+    expect(renderer!.root.findAllByType('Monitor' as never)).toHaveLength(1)
+
+    await act(async () =>
+      renderer!.update(createElement(ListRowHarness, { item: baseItem, now: 2_000 }))
+    )
+    expect(textNodes()).not.toContain('Local Mac')
+    expect(renderer!.root.findAllByType('Monitor' as never)).toHaveLength(0)
   })
 })

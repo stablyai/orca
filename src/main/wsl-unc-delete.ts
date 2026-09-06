@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { parseWslPath } from './wsl'
+import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 import {
   containedDeleteCommand,
   rejectionFromWslDeleteStderr,
@@ -69,7 +70,9 @@ function execFileWsl(distro: string, command: string[]): Promise<void> {
       ['-d', distro, '--exec', ...command],
       // Why: a generous bound so deleting a large directory tree on the WSL fs
       // doesn't abort mid-delete, while still capping a wedged wsl.exe.
-      { encoding: 'utf-8', timeout: 30000 },
+      // Why an explicit cwd (#16463): the target rides in argv, and this deletes
+      // worktrees -- so an inherited cwd is exactly the directory about to go.
+      { encoding: 'utf-8', timeout: 30000, cwd: resolveWslInteropSpawnCwd() },
       (error, _stdout, stderr) => {
         if (error) {
           reject(wslDeleteError(error, stderr))

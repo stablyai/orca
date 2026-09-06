@@ -287,13 +287,13 @@ describe('deferred structured agent-session event sink', () => {
     releaseSecond?.()
   })
 
-  it('replaces a queued same-item checkpoint before any blob is created', async () => {
+  it('replaces a queued same-item checkpoint before it runs', async () => {
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const options = { coalescingKey: 'checkpoint:item-1' }
 
-    deferred.sink.appendItem(identity(0), BODY, [], options)
-    deferred.sink.appendItem(identity(1), BODY, [], options)
+    deferred.sink.appendItem(identity(0), BODY, options)
+    deferred.sink.appendItem(identity(1), BODY, options)
     expect(deferred.state().queuedOperations).toBe(1)
 
     deferred.bind(target(6, log))
@@ -306,9 +306,9 @@ describe('deferred structured agent-session event sink', () => {
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const options = { coalescingKey: 'checkpoint:item-1' }
 
-    deferred.sink.appendItem(identity(0), BODY, [], options)
+    deferred.sink.appendItem(identity(0), BODY, options)
     deferred.sink.appendItem(identity(1), BODY)
-    deferred.sink.appendItem(identity(2), BODY, [], options)
+    deferred.sink.appendItem(identity(2), BODY, options)
     deferred.bind(target(6, log))
     await deferred.drained()
 

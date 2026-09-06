@@ -1,7 +1,8 @@
 import type { ActivityEvent } from './activity-thread-types'
 
 // Why: per-pane cap guarantees each agent appears in the left list even when one pane has a long history.
-const EVENTS_PER_PANE_CAP = 5
+// Exported so the event builder can skip building history entries the cap would drop anyway.
+export const EVENTS_PER_PANE_CAP = 5
 
 export function capActivityEvents(events: ActivityEvent[]): ActivityEvent[] {
   const sorted = events.sort((a, b) => b.timestamp - a.timestamp)

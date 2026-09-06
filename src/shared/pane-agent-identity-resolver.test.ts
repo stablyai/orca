@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PANE_AGENT_SOURCE_RANK } from './pane-agent-identity-adapter'
 import {
   PANE_AGENT_EVIDENCE_SOURCES,
   type PaneAgentEvidence,
@@ -11,6 +12,14 @@ const resolve = (evidence: PaneAgentEvidence[], extra = {}) =>
 const H = 'authority-a'
 
 describe('resolvePaneAgentIdentity', () => {
+  it('keeps every evidence source ranked exactly once', () => {
+    expect(PANE_AGENT_SOURCE_RANK).toBe(PANE_AGENT_EVIDENCE_SOURCES)
+    expect(new Set(PANE_AGENT_SOURCE_RANK).size).toBe(PANE_AGENT_SOURCE_RANK.length)
+    for (const source of PANE_AGENT_EVIDENCE_SOURCES) {
+      expect(PANE_AGENT_SOURCE_RANK.indexOf(source)).toBeGreaterThanOrEqual(0)
+    }
+  })
+
   describe('a display title is the last thing consulted', () => {
     it.each(PANE_AGENT_EVIDENCE_SOURCES.filter((s) => s !== 'title' && s !== 'sibling'))(
       'lets %s outrank a conflicting title',
@@ -151,6 +160,17 @@ describe('resolvePaneAgentIdentity', () => {
       expect(result.agent).toBeNull()
       expect(result.supersededSources).toEqual(['live-hook', 'title'])
     })
+  })
+
+  it('fails loudly when an evidence source is missing from the rank', () => {
+    expect(() =>
+      resolve([
+        {
+          source: 'future-source' as PaneAgentEvidence['source'],
+          agent: 'codex'
+        }
+      ])
+    ).toThrow('Unknown pane-agent evidence source')
   })
 
   describe('input order does not decide the answer', () => {

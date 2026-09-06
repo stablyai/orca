@@ -35,7 +35,15 @@ function mergeBatch(
     ...(right.fence !== undefined || left.fence !== undefined
       ? { fence: right.fence ?? left.fence }
       : {}),
-    ...(right.handoff || left.handoff ? { handoff: right.handoff ?? left.handoff } : {})
+    ...(right.handoff || left.handoff ? { handoff: right.handoff ?? left.handoff } : {}),
+    ...(right.backgroundTasks !== undefined || left.backgroundTasks !== undefined
+      ? {
+          backgroundTasks:
+            right.backgroundTasks !== undefined
+              ? right.backgroundTasks
+              : (left.backgroundTasks ?? null)
+        }
+      : {})
   }
 }
 

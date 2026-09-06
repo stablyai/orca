@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
+import { admitSelfInitiatedTreeKill } from './own-chromium-tree-kill-guard'
 
-export type WindowsTreeKiller = (rootPid: number) => Promise<void>
+export type WindowsTreeKiller = (rootPid: number, deps?: { site?: string }) => Promise<void>
 
 /** Bound hung taskkill so killRoot still runs in killWithDescendantSweep. */
 export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5_000
@@ -9,12 +10,21 @@ export const WINDOWS_PROCESS_TREE_KILL_TIMEOUT_MS = 5_000
  * Force-kill a Windows process and every descendant (`taskkill /T /F`).
  * Best-effort: missing/already-dead roots still resolve so callers can finish
  * their own handle cleanup via killRoot.
+ *
+ * Most main-process taskkills run through here; the families that keep their own
+ * spawn (account-login teardowns, codex app-server deadline, git-command abort,
+ * notebook and precheck timeouts) share the same gate, so the refusal and the
+ * breadcrumb live in `admitSelfInitiatedTreeKill` rather than in this function.
  */
 export function terminateWindowsProcessTree(
   rootPid: number,
-  deps: { execFileImpl?: typeof execFile } = {}
+  deps: { execFileImpl?: typeof execFile; site?: string } = {}
 ): Promise<void> {
   if (!Number.isInteger(rootPid) || rootPid <= 0) {
+    return Promise.resolve()
+  }
+  const site = deps.site ?? 'windows-process-tree-kill'
+  if (!admitSelfInitiatedTreeKill({ pid: rootPid, site, scope: 'win-taskkill-tree' })) {
     return Promise.resolve()
   }
   const run = deps.execFileImpl ?? execFile

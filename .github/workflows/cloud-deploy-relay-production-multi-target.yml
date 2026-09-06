@@ -1,0 +1,497 @@
+name: Deploy Relay Production Multi-Target
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-cell-id:
+        description: Existing Terraform source cell ID
+        required: true
+        type: string
+      target-cell-ids:
+        description: Comma-separated distinct Terraform target cell IDs
+        required: true
+        type: string
+      general-cell-ids:
+        description: Comma-separated proven cells that remain eligible for ordinary placement
+        required: false
+        type: string
+      unobserved-connection-bound:
+        description: Exact worst-case unobserved connection bound proven by the passing load gate
+        required: false
+        type: string
+      failed-target-cell-id:
+        description: Registered failed target to fence and supersede
+        required: false
+        type: string
+      replacement-target-cell-id:
+        description: Healthy replacement for registered failed target
+        required: false
+        type: string
+      mode:
+        description: Preflight/audit are read-only; other modes mutate production
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - audit
+          - preflight
+          - cutover-admission
+          - add-migration-cells
+          - promote-general-cell
+          - retire-migration-cell
+          - execute
+          - recover-forward
+          - fence-source
+          - supersede-target
+      confirmation:
+        description: Enter CUTOVER_SELECTOR, ADD_MIGRATION_CELLS, PROMOTE_GENERAL_CELL, RETIRE_MIGRATION_CELL, EVACUATE_MULTI, RECOVER_FORWARD, or FENCE_SOURCE
+        required: false
+        type: string
+      selector-attempt-id:
+        description: Exact durable selector attempt ID for admission mutations
+        required: false
+        type: string
+      monitor-run-id:
+        description: Successful fresh dry-run monitor workflow run ID
+        required: false
+        type: string
+      monitor-run-attempt:
+        description: Exact dry-run monitor workflow attempt
+        required: false
+        type: string
+      broker-operation-id:
+        description: Stable durable broker operation ID for target supersession
+        required: false
+        type: string
+      completed-fence-attempt-id:
+        description: Exact older completed fence attempt to recover without replay
+        required: false
+        type: string
+      completed-fence-commit:
+        description: Exact older fence commit bound to the completed attempt
+        required: false
+        type: string
+      completed-fence-operation:
+        description: Exact DONE Compute resize operation to adopt
+        required: false
+        type: string
+      completed-fence-state-serial:
+        description: Exact Terraform serial before the completed fence
+        required: false
+        type: string
+      completed-fence-plan-generation:
+        description: Exact saved-plan object generation
+        required: false
+        type: string
+      completed-fence-state-generation:
+        description: Exact current Terraform state object generation
+        required: false
+        type: string
+      completed-fence-state-sha256:
+        description: Exact current Terraform state object SHA-256
+        required: false
+        type: string
+      expected-lease-generation:
+        description: Exact live lease generation authorized for conditional takeover
+        required: false
+        type: string
+      expected-lease-operation-id:
+        description: Exact live lease operation ID authorized for takeover
+        required: false
+        type: string
+      expected-lease-request-digest:
+        description: Exact live lease request digest authorized for takeover
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  deploy:
+    if: >-
+      ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' &&
+      github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      DIRECTOR_ORIGIN: https://relay.onorca.dev
+      ADMIN_AUDIENCE: https://relay.onorca.dev/v1/admin/drain
+      SOURCE_CELL_ID: ${{ inputs.source-cell-id }}
+      TARGET_CELL_IDS: ${{ inputs.target-cell-ids }}
+      GENERAL_CELL_IDS: ${{ inputs.general-cell-ids }}
+      UNOBSERVED_CONNECTION_BOUND: ${{ inputs.unobserved-connection-bound }}
+      FAILED_TARGET_CELL_ID: ${{ inputs.failed-target-cell-id }}
+      REPLACEMENT_TARGET_CELL_ID: ${{ inputs.replacement-target-cell-id }}
+      DEPLOY_MODE: ${{ inputs.mode }}
+      MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
+      MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+      SELECTOR_ATTEMPT_ID: ${{ inputs.selector-attempt-id }}
+      BROKER_OPERATION_ID: ${{ inputs.broker-operation-id }}
+      COMPLETED_FENCE_ATTEMPT_ID: ${{ inputs.completed-fence-attempt-id }}
+      COMPLETED_FENCE_COMMIT: ${{ inputs.completed-fence-commit }}
+      COMPLETED_FENCE_OPERATION: ${{ inputs.completed-fence-operation }}
+      COMPLETED_FENCE_STATE_SERIAL: ${{ inputs.completed-fence-state-serial }}
+      COMPLETED_FENCE_PLAN_GENERATION: ${{ inputs.completed-fence-plan-generation }}
+      COMPLETED_FENCE_STATE_GENERATION: ${{ inputs.completed-fence-state-generation }}
+      COMPLETED_FENCE_STATE_SHA256: ${{ inputs.completed-fence-state-sha256 }}
+      EXPECTED_LEASE_GENERATION: ${{ inputs.expected-lease-generation }}
+      EXPECTED_LEASE_OPERATION_ID: ${{ inputs.expected-lease-operation-id }}
+      EXPECTED_LEASE_REQUEST_DIGEST: ${{ inputs.expected-lease-request-digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require private fence-broker environment
+        if: >-
+          ${{ inputs.mode == 'fence-source' ||
+          inputs.mode == 'supersede-target' }}
+        env:
+          FENCE_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_WORKLOAD_IDENTITY_PROVIDER }}
+          FENCE_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_SERVICE_ACCOUNT }}
+          FENCE_BROKER_URI: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_BROKER_URI }}
+        run: |
+          test -n "${FENCE_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${FENCE_SERVICE_ACCOUNT}"
+          test -n "${FENCE_BROKER_URI}"
+
+      - name: Reject direct-runner Terraform fence aborts
+        if: ${{ inputs.mode == 'abort-fence-source' }}
+        run: |
+          echo "Terraform fence aborts require a reviewed private-broker recovery path." >&2
+          exit 1
+
+      - name: Require fresh dry-run evidence reference
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        run: |
+          [[ "${MONITOR_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Download private dry-run evidence
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-dry-run-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-monitor-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.monitor-run-id }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Verify dry-run artifact before cloud authentication
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        run: |
+          node dev/scripts/relay-monitor-evidence.mjs verify-restore \
+            --directory "${RUNNER_TEMP}/relay-monitor-evidence" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" \
+            --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode dry-run
+
+      - name: Reject previously consumed dry-run evidence
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          COUNT="$(gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${MARKER_NAME}&per_page=1" \
+            --jq '.total_count')"
+          test "${COUNT}" = "0"
+
+      - id: google-auth
+        if: ${{ inputs.mode != 'supersede-target' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+
+      - name: Require explicit mutation confirmation
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "${DEPLOY_MODE}" = "cutover-admission" ]]; then
+            test "${CONFIRMATION}" = "CUTOVER_SELECTOR"
+          elif [[ "${DEPLOY_MODE}" = "add-migration-cells" ]]; then
+            test "${CONFIRMATION}" = "ADD_MIGRATION_CELLS"
+          elif [[ "${DEPLOY_MODE}" = "promote-general-cell" ]]; then
+            test "${CONFIRMATION}" = "PROMOTE_GENERAL_CELL"
+          elif [[ "${DEPLOY_MODE}" = "retire-migration-cell" ]]; then
+            test "${CONFIRMATION}" = "RETIRE_MIGRATION_CELL"
+          elif [[ "${DEPLOY_MODE}" = "execute" ]]; then
+            test "${CONFIRMATION}" = "EVACUATE_MULTI"
+          elif [[ "${DEPLOY_MODE}" = "recover-forward" ]]; then
+            test "${CONFIRMATION}" = "RECOVER_FORWARD"
+          elif [[ "${DEPLOY_MODE}" = "fence-source" ]]; then
+            test "${CONFIRMATION}" = "FENCE_SOURCE"
+          elif [[ "${DEPLOY_MODE}" = "supersede-target" ]]; then
+            test "${CONFIRMATION}" = "SUPERSEDE_TARGET"
+          elif [[ "${DEPLOY_MODE}" = "abort-fence-source" ]]; then
+            test "${CONFIRMATION}" = "ABORT_FENCE"
+          else
+            test "${CONFIRMATION}" = "FENCE_SOURCE"
+          fi
+
+      - name: Require exact source-fence broker contract
+        if: ${{ inputs.mode == 'fence-source' }}
+        run: |
+          test "${SOURCE_CELL_ID}" = "production-gce-c3"
+          test "${TARGET_CELL_IDS}" = "production-gce-c7,production-gce-c8,production-gce-c10,production-gce-c13,production-gce-c17,production-gce-c18"
+          [[ "${BROKER_OPERATION_ID}" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
+          if [[ -n "${EXPECTED_LEASE_GENERATION}" ]]; then
+            [[ "${EXPECTED_LEASE_GENERATION}" =~ ^[1-9][0-9]*$ ]]
+            test "${EXPECTED_LEASE_OPERATION_ID}" = "${BROKER_OPERATION_ID}"
+            [[ "${EXPECTED_LEASE_REQUEST_DIGEST}" =~ ^[0-9a-f]{64}$ ]]
+          else
+            test -z "${EXPECTED_LEASE_OPERATION_ID}"
+            test -z "${EXPECTED_LEASE_REQUEST_DIGEST}"
+          fi
+
+      - name: Require exact broker cell contract
+        if: ${{ inputs.mode == 'supersede-target' }}
+        run: |
+          test "${SOURCE_CELL_ID}" = "production-gce-c3"
+          test "${FAILED_TARGET_CELL_ID}" = "production-gce-c12"
+          test "${REPLACEMENT_TARGET_CELL_ID}" = "production-gce-c13"
+          test "${TARGET_CELL_IDS}" = "production-gce-c12,production-gce-c13"
+          if [[ -n "${COMPLETED_FENCE_ATTEMPT_ID}" ]]; then
+            [[ "${COMPLETED_FENCE_ATTEMPT_ID}" =~ ^[0-9a-f-]{36}$ ]]
+            [[ "${COMPLETED_FENCE_COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+            [[ "${COMPLETED_FENCE_OPERATION}" =~ ^[A-Za-z0-9._-]{1,256}$ ]]
+            [[ "${COMPLETED_FENCE_STATE_SERIAL}" =~ ^[0-9]+$ ]]
+            [[ "${COMPLETED_FENCE_PLAN_GENERATION}" =~ ^[1-9][0-9]*$ ]]
+            [[ "${COMPLETED_FENCE_STATE_GENERATION}" =~ ^[1-9][0-9]*$ ]]
+            [[ "${COMPLETED_FENCE_STATE_SHA256}" =~ ^[0-9a-f]{64}$ ]]
+            test -n "${EXPECTED_LEASE_GENERATION}"
+          fi
+          if [[ -n "${EXPECTED_LEASE_GENERATION}" ]]; then
+            [[ "${EXPECTED_LEASE_GENERATION}" =~ ^[1-9][0-9]*$ ]]
+            test "${EXPECTED_LEASE_OPERATION_ID}" = "${BROKER_OPERATION_ID}"
+            [[ "${EXPECTED_LEASE_REQUEST_DIGEST}" =~ ^[0-9a-f]{64}$ ]]
+          else
+            test -z "${EXPECTED_LEASE_OPERATION_ID}"
+            test -z "${EXPECTED_LEASE_REQUEST_DIGEST}"
+          fi
+
+      - name: Read reviewed Terraform topology
+        if: ${{ inputs.mode != 'supersede-target' }}
+        run: |
+          node dev/scripts/infra.mjs init --env production
+          terraform -chdir=infra/terraform output -json relay_gce_cell_deployments > "${RUNNER_TEMP}/relay-gce-topology.json"
+          RUNTIME_SERVICE_ACCOUNT="$(terraform -chdir=infra/terraform output -raw relay_runtime_service_account)"
+          DIRECTOR_MIN_INSTANCES="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/production.tfvars <<< 'var.relay_min_instances')"
+          [[ "${DIRECTOR_MIN_INSTANCES}" =~ ^[1-9][0-9]*$ ]]
+          echo "RUNTIME_SERVICE_ACCOUNT=${RUNTIME_SERVICE_ACCOUNT}" >> "${GITHUB_ENV}"
+          echo "DIRECTOR_MIN_INSTANCES=${DIRECTOR_MIN_INSTANCES}" >> "${GITHUB_ENV}"
+
+      - name: Verify fresh dry-run evidence against live selector
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          SCOPED_RECOVERY_ARGS=()
+          if [[ ("${DEPLOY_MODE}" = "execute" ||
+                "${DEPLOY_MODE}" = "recover-forward") &&
+                "${SOURCE_CELL_ID}" = "production-gce-c12" ]]; then
+            SCOPED_RECOVERY_ARGS=(
+              --scoped-recovery-source-cell-id
+              production-gce-c3
+            )
+          fi
+          node dev/scripts/relay-monitor-evidence.mjs verify-mutation \
+            --directory "${RUNNER_TEMP}/relay-monitor-evidence" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" \
+            --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode dry-run \
+            --mutation-mode "${DEPLOY_MODE}" \
+            --source-cell-id "${SOURCE_CELL_ID}" \
+            "${SCOPED_RECOVERY_ARGS[@]}" \
+            --director-origin "${DIRECTOR_ORIGIN}"
+
+      - name: Recheck all live safety signals
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          pnpm incident:relay-preflight -- \
+            --state-file "${RUNNER_TEMP}/relay-monitor-evidence/relay-${MONITOR_RUN_ID}-dry-run.state.json"
+
+      - name: Create single-use dry-run marker
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          mkdir -p "${RUNNER_TEMP}/relay-monitor-consumption"
+          printf '%s\n' "${GITHUB_RUN_ID}" \
+            > "${RUNNER_TEMP}/relay-monitor-consumption/${MARKER_NAME}"
+
+      - name: Consume dry-run evidence
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' && inputs.mode != 'cutover-admission' && inputs.mode != 'add-migration-cells' && inputs.mode != 'promote-general-cell' && inputs.mode != 'retire-migration-cell' && inputs.mode != 'supersede-target' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-monitor-consumption/relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          retention-days: 90
+          if-no-files-found: error
+
+      - id: google-fence-broker-auth
+        if: >-
+          ${{ inputs.mode == 'fence-source' ||
+          inputs.mode == 'supersede-target' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_BROKER_URI }}
+          id_token_include_email: true
+
+      - name: Invoke private target-supersession broker
+        if: ${{ inputs.mode == 'supersede-target' }}
+        env:
+          BROKER_ID_TOKEN: ${{ steps.google-fence-broker-auth.outputs.id_token }}
+          BROKER_URI: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_BROKER_URI }}
+        run: |
+          [[ "${BROKER_OPERATION_ID}" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
+          if [[ -n "${COMPLETED_FENCE_ATTEMPT_ID}" ]]; then
+            REQUEST="$(jq -cn \
+              --arg operationId "${BROKER_OPERATION_ID}" \
+              --arg fenceCommit "${GITHUB_SHA}" \
+              --arg attemptId "${COMPLETED_FENCE_ATTEMPT_ID}" \
+              --arg completedCommit "${COMPLETED_FENCE_COMMIT}" \
+              --arg gceOperation "${COMPLETED_FENCE_OPERATION}" \
+              --arg stateSerial "${COMPLETED_FENCE_STATE_SERIAL}" \
+              --arg planGeneration "${COMPLETED_FENCE_PLAN_GENERATION}" \
+              --arg stateGeneration "${COMPLETED_FENCE_STATE_GENERATION}" \
+              --arg stateSha256 "${COMPLETED_FENCE_STATE_SHA256}" \
+              --arg leaseGeneration "${EXPECTED_LEASE_GENERATION}" \
+              --arg leaseOperationId "${EXPECTED_LEASE_OPERATION_ID}" \
+              --arg leaseRequestDigest "${EXPECTED_LEASE_REQUEST_DIGEST}" \
+              '{v:1,operationId:$operationId,fenceCommit:$fenceCommit,
+              completedFenceRecovery:{attemptId:$attemptId,fenceCommit:$completedCommit,
+              gceOperation:$gceOperation,terraformStateSerial:($stateSerial|tonumber),
+              planObjectGeneration:$planGeneration,
+              terraformStateObjectGeneration:$stateGeneration,
+              terraformStateObjectSha256:$stateSha256},
+              expectedLease:{generation:$leaseGeneration,operationId:$leaseOperationId,
+              requestDigest:$leaseRequestDigest},confirmation:"SUPERSEDE_TARGET"}')"
+          elif [[ -n "${EXPECTED_LEASE_GENERATION}" ]]; then
+            REQUEST="$(jq -cn \
+              --arg operationId "${BROKER_OPERATION_ID}" \
+              --arg fenceCommit "${GITHUB_SHA}" \
+              --arg leaseGeneration "${EXPECTED_LEASE_GENERATION}" \
+              --arg leaseOperationId "${EXPECTED_LEASE_OPERATION_ID}" \
+              --arg leaseRequestDigest "${EXPECTED_LEASE_REQUEST_DIGEST}" \
+              '{v:1,operationId:$operationId,fenceCommit:$fenceCommit,
+              expectedLease:{generation:$leaseGeneration,operationId:$leaseOperationId,
+              requestDigest:$leaseRequestDigest},confirmation:"SUPERSEDE_TARGET"}')"
+          else
+            REQUEST="$(jq -cn \
+              --arg operationId "${BROKER_OPERATION_ID}" \
+              --arg fenceCommit "${GITHUB_SHA}" \
+              '{v:1,operationId:$operationId,fenceCommit:$fenceCommit,confirmation:"SUPERSEDE_TARGET"}')"
+          fi
+          curl --fail-with-body --max-time 1790 \
+            --request POST "${BROKER_URI}/v1/supersede-target" \
+            --header "Authorization: Bearer ${BROKER_ID_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data "${REQUEST}"
+
+      - name: Invoke private source-fence broker
+        if: ${{ inputs.mode == 'fence-source' }}
+        env:
+          BROKER_ID_TOKEN: ${{ steps.google-fence-broker-auth.outputs.id_token }}
+          BROKER_URI: ${{ vars.PRODUCTION_GCP_RELAY_FENCE_BROKER_URI }}
+        run: |
+          if [[ -n "${EXPECTED_LEASE_GENERATION}" ]]; then
+            REQUEST="$(jq -cn \
+              --arg operationId "${BROKER_OPERATION_ID}" \
+              --arg fenceCommit "${GITHUB_SHA}" \
+              --arg targetCellIds "${TARGET_CELL_IDS}" \
+              --arg leaseGeneration "${EXPECTED_LEASE_GENERATION}" \
+              --arg leaseOperationId "${EXPECTED_LEASE_OPERATION_ID}" \
+              --arg leaseRequestDigest "${EXPECTED_LEASE_REQUEST_DIGEST}" \
+              '{v:1,operationId:$operationId,fenceCommit:$fenceCommit,
+              targetCellIds:($targetCellIds|split(",")),
+              expectedLease:{generation:$leaseGeneration,operationId:$leaseOperationId,
+              requestDigest:$leaseRequestDigest},confirmation:"FENCE_SOURCE"}')"
+          else
+            REQUEST="$(jq -cn \
+              --arg operationId "${BROKER_OPERATION_ID}" \
+              --arg fenceCommit "${GITHUB_SHA}" \
+              --arg targetCellIds "${TARGET_CELL_IDS}" \
+              '{v:1,operationId:$operationId,fenceCommit:$fenceCommit,
+              targetCellIds:($targetCellIds|split(",")),confirmation:"FENCE_SOURCE"}')"
+          fi
+          curl --fail-with-body --max-time 1790 \
+            --request POST "${BROKER_URI}/v1/fence-source" \
+            --header "Authorization: Bearer ${BROKER_ID_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data "${REQUEST}"
+
+      - name: Preflight or run multi-target evacuation
+        if: >-
+          ${{ inputs.mode != 'fence-source' &&
+          inputs.mode != 'supersede-target' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/deploy-relay-gce-multi-target.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --admin-audience "${ADMIN_AUDIENCE}" \
+            --topology-file "${RUNNER_TEMP}/relay-gce-topology.json" \
+            --source-cell-id "${SOURCE_CELL_ID}" \
+            --target-cell-ids "${TARGET_CELL_IDS}" \
+            --general-cell-ids "${GENERAL_CELL_IDS}" \
+            --unobserved-connection-bound "${UNOBSERVED_CONNECTION_BOUND}" \
+            --director-region "${{ vars.PRODUCTION_GCP_REGION }}" \
+            --director-service "orca-cloud-relay" \
+            --director-min-instances "${DIRECTOR_MIN_INSTANCES}" \
+            --selector-attempt-id "${SELECTOR_ATTEMPT_ID}" \
+            --failed-target-cell-id "${FAILED_TARGET_CELL_ID}" \
+            --replacement-target-cell-id "${REPLACEMENT_TARGET_CELL_ID}" \
+            --runtime-service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --environment production \
+            --fence-commit "${GITHUB_SHA}" \
+            --terraform-dir infra/terraform \
+            --terraform-var-file environments/production.tfvars \
+            --mode "${DEPLOY_MODE}" \
+            --connection-ceiling 1000 \
+            --minimum-lease-remaining-ms 600000

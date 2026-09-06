@@ -20,6 +20,8 @@ import { getAgentLaunchPlatformForRepo } from './runtime-agent-launch-resolution
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
@@ -43,7 +45,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     for (const session of host?.listSessionTabs() ?? []) {
-      if (session.agent !== 'codex') {
+      if (session.agent !== 'codex' && session.agent !== 'claude') {
         continue
       }
       let sessionId = session.sessionId
@@ -52,7 +54,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       }
       await this.publishStructuredAgentSessionTab({
         ...session,
-        agent: 'codex',
+        agent: session.agent,
         sessionId,
         activate: false,
         notify: false
@@ -63,7 +65,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'codex'
+    agent: 'claude' | 'codex'
     activate: boolean
     notify?: boolean
   }): Promise<void> {
@@ -94,7 +96,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         ),
         tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
       }
-      this.mobileSessionTabsByWorktree.set(input.workspaceId, snapshot)
+      this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
       if (input.notify !== false) {
         this.emitMobileSessionTabsSnapshot(snapshot)
       }
@@ -103,7 +105,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: 'Codex Chat',
+      title: input.agent === 'claude' ? 'Claude Chat' : 'Codex Chat',
       sessionId: input.sessionId,
       agent: input.agent,
       isActive: input.activate
@@ -143,21 +145,37 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    this.mobileSessionTabsByWorktree.set(input.workspaceId, snapshot)
+    this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
     if (input.notify !== false) {
       this.emitMobileSessionTabsSnapshot(snapshot)
     }
   }
 
   async inspectTerminalProcess(
-    terminalSelector: string
-  ): Promise<{ foregroundProcess: string | null; hasChildProcesses: boolean; unavailable?: true }> {
+    terminalSelector: string,
+    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
+  ): Promise<PtyProcessInspection> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
     if (!leaf?.ptyId || !this.ptyController) {
       throw new Error('terminal_gone')
     }
     if (this.ptyController.inspectProcess) {
-      return this.ptyController.inspectProcess(leaf.ptyId)
+      // Preserve the legacy one-argument call shape when no incarnation
+      // fence was requested; some providers use arity to distinguish the
+      // compatibility path from the fenced remote inspection.
+      const inspection =
+        options === undefined
+          ? await this.ptyController.inspectProcess(leaf.ptyId)
+          : await this.ptyController.inspectProcess(leaf.ptyId, options)
+      const evidence = inspection.foregroundProcessEvidence
+      // The runtime handle is the request identity on this wire; keep the
+      // host-owned leaf PTY id out of the client-facing comparison.
+      const relayPtyId = parseAppSshPtyId(leaf.ptyId)?.relayPtyId
+      const evidenceBelongsToLeaf =
+        evidence !== undefined && (evidence.ptyId === leaf.ptyId || evidence.ptyId === relayPtyId)
+      return evidenceBelongsToLeaf
+        ? { ...inspection, foregroundProcessEvidence: { ...evidence, ptyId: terminalSelector } }
+        : inspection
     }
     const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
     const hasChildProcesses = (await this.ptyController.hasChildProcesses?.(leaf.ptyId)) ?? false

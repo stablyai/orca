@@ -79,6 +79,12 @@ type RemoteWorkspaceSnapshotApplyInput = {
   isPreparationTokenCurrent: (token: DirectSshPreparationToken) => boolean
   waitForWorkspaceSessionReady: (signal?: AbortSignal) => Promise<boolean>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+  /**
+   * Host paths still carrying terminal tabs when this apply gave up placing them. `unverifiable`,
+   * never proof the rows are not ours, so the caller owns getting back to a placed picture — this
+   * apply itself has no way back once the bounded in-apply wait expires.
+   */
+  onUnplacedTabWorktreePaths?: (worktreePaths: readonly string[]) => void
 }
 
 export type RemoteWorkspaceSnapshotApplyResult = 'applied' | 'stale' | 'failed'
@@ -115,7 +121,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   isArrivalCurrent,
   isPreparationTokenCurrent,
   waitForWorkspaceSessionReady,
-  finalizeHydratedTerminals
+  finalizeHydratedTerminals,
+  onUnplacedTabWorktreePaths
 }: RemoteWorkspaceSnapshotApplyInput): Promise<RemoteWorkspaceSnapshotApplyResult> {
   const { authority } = token
   if (!isArrivalCurrent(authority.targetId, arrival)) {
@@ -181,6 +188,7 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     return 'stale'
   }
   const hasUnplacedTerminalTabs = unplacedTabWorktreePaths.length > 0
+  onUnplacedTabWorktreePaths?.([...unplacedTabWorktreePaths])
   snapshotApplyDepth += 1
   try {
     const currentStore = store.getState()

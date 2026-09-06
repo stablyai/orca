@@ -28,7 +28,7 @@ import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anch
 export { createPaneDOM } from './pane-dom-creation'
 
 /** Open terminal into its container and load addons. Must be called after the container is in the DOM. */
-export function openTerminal(pane: ManagedPaneInternal): void {
+export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false): void {
   const {
     terminal,
     container,
@@ -100,6 +100,10 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
 
+  // Configure the first atlas with ligatures instead of immediately rebuilding it.
+  if (ligaturesEnabled) {
+    attachLigatures(pane)
+  }
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
   }

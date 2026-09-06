@@ -195,17 +195,19 @@ describe('useTerminalProviderSnapshotCapability', () => {
     hook.unmount()
   })
 
-  // Why source-pinned: the hook test cannot prove the quiet Terminal parking effect consumes the external revision.
+  // Why source-pinned: the hook test cannot prove the quiet parking effect consumes the external revision.
   it('invalidates the Terminal parking pass when a capability verdict changes', () => {
-    const terminalSource = readFileSync(join(__dirname, '../Terminal.tsx'), 'utf8')
-    const parkingEffectStart = terminalSource.indexOf('// Worktree cold-park policy:')
-    const parkingEffectEnd = terminalSource.indexOf('// Why here: downloads', parkingEffectStart)
-
-    expect(parkingEffectStart).toBeGreaterThan(-1)
-    expect(parkingEffectEnd).toBeGreaterThan(parkingEffectStart)
-    expect(terminalSource.slice(parkingEffectStart, parkingEffectEnd)).toContain(
-      'terminalProviderSnapshotCapabilityRevision'
+    const projectionSource = readFileSync(
+      join(__dirname, '../use-terminal-workspace-projection.ts'),
+      'utf8'
     )
+    const parkingSource = readFileSync(join(__dirname, '../use-terminal-parking-pass.ts'), 'utf8')
+
+    expect(projectionSource).toContain(
+      'const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability('
+    )
+    expect(projectionSource).toContain('terminalProviderSnapshotCapabilityRevision')
+    expect(parkingSource.match(/terminalProviderSnapshotCapabilityRevision/g)).toHaveLength(2)
   })
 
   it('cancels an unknown-capability retry when the hook unmounts', async () => {
