@@ -17,6 +17,8 @@ import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getFolderWorkspaceRowGeometry } from './indentation'
 import { getFolderWorkspaceCardPrDisplay } from '../../folder-workspace-card-pr-display'
 import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
+import type { ActiveSurfaceVariant } from '../../WorktreeCard'
+import type { HostSectionRow } from '../../host-section-rows'
 import type { FolderWorkspaceItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
 
@@ -37,6 +39,7 @@ export type FolderWorkspaceRowContext = {
     scope: 'folder-workspace'
     folderWorkspaceId: string
   }) => FolderWorkspacePathStatus | null
+  getActiveSurfaceVariant: (row: HostSectionRow) => ActiveSurfaceVariant
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
@@ -60,6 +63,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
+  const isActive = ctx.activeWorktreeId === folderWorktree.id
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
     folderWorkspaceId: row.folderWorkspace.id
@@ -91,7 +95,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
       id={getWorktreeOptionId(row.key)}
       role="option"
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
-      aria-current={ctx.activeWorktreeId === folderWorktree.id ? 'page' : undefined}
+      aria-current={isActive ? 'page' : undefined}
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
       data-worktree-row-key={row.key}
@@ -112,8 +116,11 @@ export function renderFolderWorkspaceVirtualRow(args: {
         <WorktreeCard
           worktree={folderWorktree}
           repo={undefined}
-          isActive={ctx.activeWorktreeId === folderWorktree.id}
+          isActive={isActive}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
+          // Why: the Pinned copy and the group copy are both "active"; only the
+          // one the user activated should draw the primary surface.
+          activeSurfaceVariant={isActive ? ctx.getActiveSurfaceVariant(row) : 'primary'}
           contentIndent={cardContentIndent}
           flushSurface
           nativeDragEnabled={false}

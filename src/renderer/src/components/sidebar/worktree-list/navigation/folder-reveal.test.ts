@@ -155,7 +155,10 @@ describe('reveal keys under non-repo grouping', () => {
     expect(keys.some((key) => key.startsWith('workspace-status:'))).toBe(false)
   })
 
-  it('includes Pinned so a collapsed Pinned section can be expanded', () => {
+  it('expands Pinned and nothing else when the card only renders there', () => {
+    // Why "nothing else": expandGroupsForWorktreeReveal persists every toggle it
+    // makes, so returning the project group would permanently un-collapse a
+    // section the user collapsed and the card is not in.
     const pinned = makeFolderWorkspace({ isPinned: true })
     const keys = getFolderWorkspaceRevealGroupKeys(
       folderWorkspaceKey(pinned.id),
@@ -163,7 +166,35 @@ describe('reveal keys under non-repo grouping', () => {
       [group],
       { groupBy: 'repo', workspaceStatuses: [], defaultHostId: 'local' }
     )
-    expect(keys).toContain('pinned')
     expect(keys[0]).toBe('pinned')
+    expect(keys).not.toContain(getProjectGroupHeaderKey(group.id))
+    // The host section wraps Pinned too, so it must still be expanded.
+    expect(keys).toContain('host:ssh:target-1')
+  })
+
+  it('expands the project group instead when the pinned card is duplicated there', () => {
+    const pinned = makeFolderWorkspace({ isPinned: true })
+    const keys = getFolderWorkspaceRevealGroupKeys(
+      folderWorkspaceKey(pinned.id),
+      [pinned],
+      [group],
+      {
+        groupBy: 'repo',
+        workspaceStatuses: [],
+        defaultHostId: 'local',
+        pinnedDisplayPolicy: 'duplicate-in-groups'
+      }
+    )
+    expect(keys).toContain(getProjectGroupHeaderKey(group.id))
+  })
+
+  it('leaves an unpinned workspace reveal untouched', () => {
+    const keys = getFolderWorkspaceRevealGroupKeys(workspaceKey, [folderWorkspace], [group], {
+      groupBy: 'repo',
+      workspaceStatuses: [],
+      defaultHostId: 'local'
+    })
+    expect(keys).not.toContain('pinned')
+    expect(keys).toContain(getProjectGroupHeaderKey(group.id))
   })
 })

@@ -125,4 +125,20 @@ describe('folder workspace host counts', () => {
       { hostId: 'ssh:builder', count: 1 }
     ])
   })
+
+  it('counts a pinned folder workspace once when it renders in two sections', () => {
+    // Why: under showPinnedWorktreesInGroups the same workspace emits a Pinned
+    // row and a project-group row. The host badge counts workspaces, not rows.
+    const pinnedCopy: Extract<Row, { type: 'folder-workspace' }> = {
+      ...FOLDER_ROW,
+      key: 'pinned:folder-workspace:folder-1',
+      sectionKey: 'pinned',
+      folderWorkspace: { ...FOLDER_ROW.folderWorkspace, isPinned: true }
+    }
+
+    expect(hostCounts([LOCAL_ROW, pinnedCopy, FOLDER_ROW])).toEqual([
+      { hostId: 'local', count: 1 },
+      { hostId: 'ssh:builder', count: 1 }
+    ])
+  })
 })

@@ -13,14 +13,14 @@ import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list/g
  * selection. Prefer its natural-group copy, falling back to the Pinned copy
  * when that is the only one rendered.
  */
-function getPreferredRows<Row>(
-  rows: readonly Row[],
-  getIdentity: (row: Row) => string,
-  isPinnedSectionRow: (row: Row) => boolean
-): Row[] {
-  const preferredRows: Row[] = []
+function getPreferredRows<TRow>(
+  rows: readonly TRow[],
+  getIdentity: (row: TRow) => string,
+  isPinnedSectionRow: (row: TRow) => boolean
+): TRow[] {
+  const preferredRows: TRow[] = []
   const seen = new Set<string>()
-  const take = (row: Row): void => {
+  const take = (row: TRow): void => {
     preferredRows.push(row)
     seen.add(getIdentity(row))
   }
@@ -52,23 +52,25 @@ export function getRenderedWorktreesInSidebarOrder(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): Worktree[] {
-  const preferredRowKeys = new Set([
-    ...getPreferredWorktreeRows(
+  const preferredWorktreeRowKeys = new Set(
+    getPreferredWorktreeRows(
       rows.filter((row): row is WorktreeRow => row.type === 'item'),
       pinnedDisplayPolicy
-    ).map((row) => row.rowKey),
-    ...getPreferredRows(
+    ).map((row) => row.rowKey)
+  )
+  const preferredFolderRowKeys = new Set(
+    getPreferredRows(
       rows.filter((row): row is FolderWorkspaceItemRow => row.type === 'folder-workspace'),
       (row) => row.folderWorkspace.id,
       (row) => pinnedDisplayPolicy === 'duplicate-in-groups' && row.sectionKey === PINNED_GROUP_KEY
     ).map((row) => row.key)
-  ])
+  )
 
   const renderedWorktrees: Worktree[] = []
   for (const row of rows) {
-    if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
+    if (row.type === 'item' && preferredWorktreeRowKeys.has(row.rowKey)) {
       renderedWorktrees.push(row.worktree)
-    } else if (row.type === 'folder-workspace' && preferredRowKeys.has(row.key)) {
+    } else if (row.type === 'folder-workspace' && preferredFolderRowKeys.has(row.key)) {
       renderedWorktrees.push(folderWorkspaceToWorktree(row.folderWorkspace))
     }
   }

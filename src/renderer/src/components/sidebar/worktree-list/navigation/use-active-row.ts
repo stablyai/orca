@@ -4,7 +4,33 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
-import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
+import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { PINNED_GROUP_KEY } from '../grouping/group-keys'
+
+/** The identity a row contributes to the active surface. Folder workspaces
+ *  duplicate into Pinned exactly like worktrees, so both kinds resolve here. */
+function getActiveSurfaceRowRef(
+  row: HostSectionRow
+): { rowKey: string; sectionKey: string; worktreeId: string; worktreeIdentity: string } | null {
+  if (row.type === 'item') {
+    return {
+      rowKey: row.rowKey,
+      sectionKey: row.sectionKey,
+      worktreeId: row.worktree.id,
+      worktreeIdentity: composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)
+    }
+  }
+  if (row.type === 'folder-workspace') {
+    const worktree = folderWorkspaceToWorktree(row.folderWorkspace)
+    return {
+      rowKey: row.key,
+      sectionKey: row.sectionKey,
+      worktreeId: worktree.id,
+      worktreeIdentity: composeWorktreeHostIdentity(worktree.hostId, worktree.id)
+    }
+  }
+  return null
+}
 
 // A worktree can render in more than one section; the row the user actually clicked owns
 // the primary active surface so its duplicates stay visually secondary.
@@ -43,27 +69,27 @@ export function usePrimaryActiveWorktreeRow(args: {
       if (current === null || current.worktreeIdentity !== activeIdentity) {
         return null
       }
-      const rowStillVisible = rows.some(
-        (row) =>
-          row.type === 'item' &&
-          composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id) ===
-            current.worktreeIdentity &&
-          row.rowKey === current.rowKey
-      )
+      const rowStillVisible = rows.some((row) => {
+        const ref = getActiveSurfaceRowRef(row)
+        return ref?.worktreeIdentity === current.worktreeIdentity && ref.rowKey === current.rowKey
+      })
       return rowStillVisible ? current : null
     })
   }, [activeIdentity, activeWorktreeId, rows])
 
   const getActiveSurfaceVariant = useCallback(
-    (row: WorktreeItemRow): ActiveSurfaceVariant => {
-      const rowIdentity = composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)
-      if (primaryActiveWorktreeRow?.worktreeIdentity === rowIdentity) {
-        return primaryActiveWorktreeRow.rowKey === row.rowKey ? 'primary' : 'secondary'
+    (row: HostSectionRow): ActiveSurfaceVariant => {
+      const ref = getActiveSurfaceRowRef(row)
+      if (!ref) {
+        return 'primary'
+      }
+      if (primaryActiveWorktreeRow?.worktreeIdentity === ref.worktreeIdentity) {
+        return primaryActiveWorktreeRow.rowKey === ref.rowKey ? 'primary' : 'secondary'
       }
       if (
         pinnedDisplayPolicy === 'duplicate-in-groups' &&
-        activeWorktreeId === row.worktree.id &&
-        isPinnedWorktreeRow(row)
+        activeWorktreeId === ref.worktreeId &&
+        ref.sectionKey === PINNED_GROUP_KEY
       ) {
         return 'secondary'
       }
@@ -74,19 +100,11 @@ export function usePrimaryActiveWorktreeRow(args: {
 
   const handleImmediateWorktreeRowActivate = useCallback(
     (worktreeId: string, rowKey: string | undefined): void => {
-      const row = rowsRef.current.find(
-        (candidate) =>
-          candidate.type === 'item' &&
-          candidate.worktree.id === worktreeId &&
-          candidate.rowKey === rowKey
-      )
+      const ref = rowsRef.current
+        .map(getActiveSurfaceRowRef)
+        .find((candidate) => candidate?.worktreeId === worktreeId && candidate.rowKey === rowKey)
       setPrimaryActiveWorktreeRow(
-        rowKey && row?.type === 'item'
-          ? {
-              worktreeIdentity: composeWorktreeHostIdentity(row.worktree.hostId, worktreeId),
-              rowKey
-            }
-          : null
+        rowKey && ref ? { worktreeIdentity: ref.worktreeIdentity, rowKey } : null
       )
       onImmediateWorktreeActivate(worktreeId, rowKey)
     },
