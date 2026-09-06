@@ -678,6 +678,67 @@ describe('DesktopScriptRuntimeHost', () => {
     host.dispose()
   })
 
+  it('fails a request that spends its whole timeout queued behind others', async () => {
+    vi.useFakeTimers()
+    const { host, children } = createHost({ requestTimeoutMs: 1_000 })
+
+    // Two ahead of it, because one puts the turn exactly on the deadline.
+    const first = host.request({ tool: 'get_app_state', app: 'Frozen' })
+    const second = host.request({ tool: 'get_app_state', app: 'Frozen' })
+    const queued = host.request({ tool: 'click', app: 'Notepad' })
+    // Asserted before the clock moves: both reject while the test is still
+    // inside advanceTimersByTimeAsync.
+    const firstFailed = expect(first).rejects.toMatchObject({ code: 'action_timeout' })
+    // Its own deadline, not the one it would inherit by reaching the head.
+    const queuedFailed = expect(queued).rejects.toMatchObject({
+      code: 'action_timeout',
+      message: /waiting for earlier operations/
+    })
+    await settle()
+    expect(children[0].requests()).toHaveLength(1)
+
+    await vi.advanceTimersByTimeAsync(1_001)
+    await firstFailed
+    await queuedFailed
+
+    // Drain past the abandoned request: it is never handed to a helper, because
+    // a click the caller has been told failed must not still land.
+    children[1].respond({ ok: true, state: {} })
+    await expect(second).resolves.toMatchObject({ ok: true })
+    await settle()
+    expect(children.flatMap((child) => child.requests())).not.toContainEqual(
+      expect.objectContaining({ tool: 'click' })
+    )
+
+    // The request that gave up does not poison the queue behind it.
+    const next = host.request({ tool: 'handshake' })
+    await settle()
+    children[1].respond({ ok: true, capabilities: {} })
+    await expect(next).resolves.toMatchObject({ ok: true })
+    host.dispose()
+  })
+
+  it('gives a queued request its full timeout once it reaches the helper', async () => {
+    vi.useFakeTimers()
+    const { host, children } = createHost({ requestTimeoutMs: 1_000 })
+
+    const head = host.request({ tool: 'handshake' })
+    const queued = host.request({ tool: 'get_app_state', app: 'Slow' })
+    await settle()
+
+    await vi.advanceTimersByTimeAsync(900)
+    children[0].respond({ ok: true, capabilities: {} })
+    await expect(head).resolves.toMatchObject({ ok: true })
+    await settle()
+
+    // Past the point the enqueue deadline would have fired: waiting its turn
+    // must not eat the budget the operation itself is entitled to.
+    await vi.advanceTimersByTimeAsync(900)
+    children[0].respond({ ok: true, state: {} })
+    await expect(queued).resolves.toMatchObject({ ok: true })
+    host.dispose()
+  })
+
   // Both of these deliberately leave `now` unset: the bug was in the default the
   // host picks, so a test that injects a clock cannot see it.
   it('does not stretch the cooldown when the wall clock steps backwards', async () => {

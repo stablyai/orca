@@ -3,6 +3,7 @@ import { windowsPowerShellPath } from '../../shared/child-process/windows-system
 import { reportComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { isReplayableTool } from './desktop-script-action'
 import type { BridgeRequest, BridgeResponse } from './desktop-script-provider-types'
+import { DesktopScriptRequestQueue } from './desktop-script-request-queue'
 import {
   startServeChannel,
   type DesktopScriptServeChannel,
@@ -65,7 +66,6 @@ export function isRuntimeHostUnavailable(error: unknown): boolean {
 export class DesktopScriptRuntimeHost {
   private channel: DesktopScriptServeChannel | null = null
   private pending: PendingRequest | null = null
-  private queueTail: Promise<void> | null = null
   private idleTimer: NodeJS.Timeout | null = null
   private childReady = false
   private childAnswered = false
@@ -79,6 +79,7 @@ export class DesktopScriptRuntimeHost {
   private disposed = false
   private nextRequestId = 1
   private readonly availability: RuntimeHostAvailability
+  private readonly queue: DesktopScriptRequestQueue
   private readonly requestTimeoutMs: number
   private readonly idleShutdownMs: number
 
@@ -88,6 +89,7 @@ export class DesktopScriptRuntimeHost {
   ) {
     this.requestTimeoutMs = options.requestTimeoutMs ?? REQUEST_TIMEOUT_MS
     this.idleShutdownMs = options.idleShutdownMs ?? IDLE_SHUTDOWN_MS
+    this.queue = new DesktopScriptRequestQueue(this.requestTimeoutMs, () => this.armIdleTimer())
     this.availability = new RuntimeHostAvailability(
       options.cooldownMs ?? START_FAILURE_COOLDOWN_MS,
       (message) => (options.warn ?? reportComputerDiagnostic)(message),
@@ -96,21 +98,7 @@ export class DesktopScriptRuntimeHost {
   }
 
   request(request: BridgeRequest): Promise<BridgeResponse> {
-    const run = (): Promise<BridgeResponse> => this.send(request)
-    const result = this.queueTail ? this.queueTail.then(run, run) : run()
-    const tail = result.then(
-      () => undefined,
-      () => undefined
-    )
-    this.queueTail = tail
-    void tail.finally(() => {
-      if (this.queueTail !== tail) {
-        return
-      }
-      this.queueTail = null
-      this.armIdleTimer()
-    })
-    return result
+    return this.queue.enqueue(() => this.send(request))
   }
 
   /** Permanently stop this host. Callers build a new one for a new session. */
