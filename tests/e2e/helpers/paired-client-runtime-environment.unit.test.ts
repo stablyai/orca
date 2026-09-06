@@ -10,11 +10,15 @@ afterEach(() => {
 function fixture(canSelectLocal: boolean) {
   let selected: string | null = 'old-hub'
   const remove = vi.fn(async () => {
-    if (selected !== null) throw new Error('Cannot remove the selected runtime')
+    if (selected !== null) {
+      throw new Error('Cannot remove the selected runtime')
+    }
   })
   const state = {
     setActiveRuntimeEnvironmentPreference: vi.fn(async (id: string | null) => {
-      if (id === null && !canSelectLocal) return false
+      if (id === null && !canSelectLocal) {
+        return false
+      }
       selected = id
       return true
     }),
