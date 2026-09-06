@@ -93,12 +93,13 @@ jobs:
           NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
           echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
-          if [ "$TEST_FILES_JSON" != '[]' ]; then
+          SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --reusable-workflow)"
+          if [ "$SHOULD_RUN" = true ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Changed E2E specs: $TEST_FILES_JSON"
           else
             echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "No changed E2E specs"
+            echo "No specs requiring the reusable E2E workflow"
           fi
 
   static_analysis:

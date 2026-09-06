@@ -132,7 +132,7 @@ approval after each SignPath approval and changes the current automatic inner
 signing timeout fallback; those are explicit release-policy decisions, so this
 PR leaves production signing behavior unchanged.
 
-## Second audit: pending hosted validation
+## Second audit and hosted trials
 
 - Cloud Verify ran 100 times in a sampled 39-hour window (84 PR and 16 push
   runs). Move its four Ubuntu 22.04 jobs from Blacksmith to standard hosted
@@ -168,3 +168,32 @@ Terminal Perf's baseline [33955846492](https://github.com/stablyai/orca/actions/
 failed waiting 30 seconds for workspaceSessionReady in its shared-page fixture,
 before measuring terminal performance. Compare hosted trials against that known
 failure rather than attributing it to dependency cache changes.
+
+Hosted trials for the second audit:
+
+- [Cloud Verify 34002295216](https://github.com/stablyai/orca/actions/runs/34002295216)
+  passed all four jobs on standard hosted Ubuntu: security 57s, test 102s, build
+  35s, Terraform 19s. The test lane is 30s slower than the Blacksmith sample;
+  retain this modest latency tradeoff to conserve shared allowance.
+- [Skill matrix 34002295221](https://github.com/stablyai/orca/actions/runs/34002295221)
+  passed all 13 legs, including historical blob materialization. Checkout took
+  18–20s on Linux, 39–45s on macOS, and 49–58s on Windows, versus the earlier
+  42–84s range across platforms. These are observational samples.
+- [Native IME 34002299594](https://github.com/stablyai/orca/actions/runs/34002299594)
+  passed both deterministic and real IBus checks. Shared dependency setup took
+  29s, versus 35s for the old install/toolchain steps in the sampled baseline.
+- Native-IME-only source/spec changes no longer allocate the reusable E2E
+  build, cache, and consumer jobs just to filter out the native spec. The
+  separate native workflow still runs; SSH-only and mixed spec lists still
+  allocate the reusable workflow. Routing contracts exercise these cases.
+- [Hourly 34001816449](https://github.com/stablyai/orca/actions/runs/34001816449)
+  exercised the new five-second preflight and successfully published macOS.
+  The Windows follow-up failed in its unchanged input-vetting fetch because
+  remote refs differ only by case on its case-insensitive filesystem. The
+  requested SHA was correct; this does not validate an unchanged-main skip yet.
+
+Moving the daily Mac freshness check has lower expected value than hourly:
+only one potential idle allocation per day, and active development usually
+requires that build. Defer another release-graph change until skip frequency
+justifies it. The substantive remaining release occupancy opportunity is the
+separately documented asynchronous signing policy decision.
