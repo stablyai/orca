@@ -5,7 +5,8 @@ import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
-import { sendRequest } from './transport'
+import { mapRuntimeConnectError, sendRequest } from './transport'
+import { RuntimeClientError } from './types'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
@@ -45,6 +46,39 @@ describe('runtime transport timeout validation', () => {
       )
     }
   )
+})
+
+describe('runtime transport connection errors', () => {
+  it.each(['EPERM', 'EACCES'] as const)(
+    'preserves %s instead of recommending a restart',
+    (code) => {
+      const failure = mapRuntimeConnectError(
+        Object.assign(new Error('denied'), { code, errno: -4048, syscall: 'connect' }),
+        'named-pipe'
+      )
+
+      expect(failure).toBeInstanceOf(RuntimeClientError)
+      expect(failure).toMatchObject({
+        code: 'runtime_permission_denied',
+        data: {
+          transportKind: 'named-pipe',
+          osErrorCode: code,
+          osErrorNumber: -4048,
+          syscall: 'connect'
+        }
+      })
+      expect(failure.message).not.toContain('Restart Orca and try again')
+    }
+  )
+
+  it('keeps a missing endpoint in the generic unavailable class', () => {
+    const failure = mapRuntimeConnectError(
+      Object.assign(new Error('missing'), { code: 'ENOENT', syscall: 'connect' }),
+      'named-pipe'
+    )
+
+    expect(failure).toMatchObject({ code: 'runtime_unavailable' })
+  })
 })
 
 // Why: these tests create Unix domain socket servers in temp directories.
