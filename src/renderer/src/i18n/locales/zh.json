@@ -57,7 +57,7 @@
     "showStatusBar": "显示状态栏",
     "showTasksButton": "显示任务按钮",
     "showAutomationsButton": "显示自动化按钮",
-    "showMobileButton": "显示 Orca Mobile 按钮",
+    "showMobileButton": "显示 Orca 手机端按钮",
     "showTitlebarAppName": "显示标题栏应用名称",
     "view": "查看",
     "reload": "重新加载",
@@ -3246,11 +3246,11 @@
             "workspaceSyncError": "工作区同步错误"
           },
           "CaffeinateStatusSegment": {
-            "active": "当前",
+            "active": "生效中",
             "inactive": "未生效",
             "ariaLabel": "{{title}}，{{status}}",
             "onDescription": "始终防止此电脑进入睡眠状态",
-            "autoDescription": "代理工作时防止电脑进入睡眠状态",
+            "autoDescription": "智能体工作时防止电脑进入睡眠状态",
             "offDescription": "允许系统正常进入睡眠状态"
           },
           "StatusBar": {
@@ -4448,7 +4448,7 @@
           "80611a8b10": "搜索",
           "0c3395fd32": "搜索工作树和浏览器选项卡",
           "c86d83b5c3": "新功能",
-          "1b5c41caee": "Orca Mobile",
+          "1b5c41caee": "Orca 手机端",
           "9c95e1ce91": "代理",
           "f323383e9a": "自动化",
           "e7ad3c540d": "打开 Jira 任务",
@@ -5601,7 +5601,7 @@
           "0cd9b8228f": "选择 Dock 和窗口切换器中显示的应用程序图标。",
           "ca1590d42f": "应用程序图标",
           "61d842eca0": "在侧边栏中显示 Orca 手机端 快捷方式。它仍然可以从工具箱中获取。",
-          "9da1020447": "显示 Orca Mobile 按钮",
+          "9da1020447": "显示 Orca 手机端按钮",
           "5db6ba961f": "在左侧边栏顶部显示 Orca 手机端按钮。",
           "fa882a3e6b": "在左侧边栏顶部显示“自动化”按钮。",
           "511f270ebb": "显示自动化按钮",
@@ -6460,7 +6460,7 @@
           "c8491c17ef": "通过扫描二维码从手机控制 Orca。 Beta/早期预览 - 预计会出现错误和重大更改。从以下位置获取 iOS 应用程序",
           "e7a3ae8c4e": "移动端",
           "174f4a3c6d": "通过手机控制终端和代理。",
-          "1de96ec8a6": "显示 Orca Mobile 按钮",
+          "1de96ec8a6": "显示 Orca 手机端按钮",
           "682293cadf": "在左侧边栏顶部显示 Orca 手机端按钮。",
           "d4f2b65f30": "在边栏中显示 Orca 手机端 快捷入口。",
           "installIntro": "从以下应用商店安装 Orca Mobile",
@@ -7845,7 +7845,7 @@
             "5e5b8878bf": "手机",
             "74618577c7": "移动端",
             "682293cadf": "在左侧边栏顶部显示 Orca 手机端按钮。",
-            "1de96ec8a6": "显示 Orca Mobile 按钮",
+            "1de96ec8a6": "显示 Orca 手机端按钮",
             "4c920ab2d1": "日程",
             "58f4e22fa2": "自动化",
             "b186f3cefb": "自动化",
@@ -8683,7 +8683,7 @@
               "f213400800": "移动端",
               "671eb4173c": "通过手机控制终端和代理。",
               "ffd52a96e4": "移动端",
-              "1de96ec8a6": "显示 Orca Mobile 按钮",
+              "1de96ec8a6": "显示 Orca 手机端按钮",
               "682293cadf": "在左侧边栏顶部显示 Orca Mobile 按钮。",
               "e4f4daea0e": "中继",
               "5d5af8e041": "iPhone"
@@ -9324,14 +9324,14 @@
           }
         },
         "agent-awake-copy": {
-          "e5995ce268": "代理工作时保持电脑唤醒",
-          "95d3031db2": "在代理工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
-          "a42f6fbdd8": "在代理工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
+          "e5995ce268": "智能体工作时保持电脑唤醒",
+          "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
+          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
           "modeTitle": "防止电脑休眠"
         },
         "AgentAwakeSetting": {
           "on": "开启",
-          "auto": "代理",
+          "auto": "智能体",
           "off": "关闭"
         },
         "agent-status-hooks-copy": {
@@ -11994,7 +11994,7 @@
           "34f878d04f": "撤销 {{value0}}",
           "94829abdb1": "配对",
           "266c18c105": "打开 Orca 手机端 从上次中断的地方继续，或配对其他设备。",
-          "5410d55d79": "Orca Mobile",
+          "5410d55d79": "Orca 手机端",
           "10d27b4cba": "开始使用",
           "da1d5e5ed0": "可用于",
           "ec0607bf66": "支持的手机平台",

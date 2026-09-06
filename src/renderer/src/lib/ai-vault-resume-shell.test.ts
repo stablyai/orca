@@ -4,6 +4,7 @@ import type { AppState } from '@/store/types'
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'darwin'
 }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'darwin' }))
 
 const clientLoginShell = vi.hoisted(() => ({ value: '' }))
 
