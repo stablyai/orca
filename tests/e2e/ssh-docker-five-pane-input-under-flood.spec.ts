@@ -97,10 +97,27 @@ test.describe('five SSH panes under simultaneous output', () => {
         expect(await waitForActivePanePtyId(orcaPage)).toBe(owner.ptyId)
         await focusActiveTerminalInput(orcaPage)
         const input = `input_${runId}_${round}_${index}`
-        await orcaPage.keyboard.type(input)
-        await orcaPage.keyboard.press('Enter')
+        const inputTrace = await orcaPage.evaluateHandle((tabId) => {
+          const manager = window.__paneManagers!.get(tabId)!
+          const entries = manager.getPanes().map((pane) => ({
+            ptyId: pane.container.dataset.ptyId,
+            data: '',
+            focusedBefore: pane.container.contains(document.activeElement)
+          }))
+          const subscriptions = manager.getPanes().map((pane, index) =>
+            pane.terminal.onData((data) => {
+              entries[index].data = (entries[index].data + data).slice(-512)
+            })
+          )
+          return {
+            entries,
+            dispose: () => subscriptions.forEach((subscription) => subscription.dispose())
+          }
+        }, tabId)
         // The remote process repeats its latest ACK, so flood eviction cannot hide it.
         try {
+          await orcaPage.keyboard.type(input)
+          await orcaPage.keyboard.press('Enter')
           await expect
             .poll(() => getTerminalContent(orcaPage, 80_000), { timeout: 30_000 })
             .toMatch(new RegExp(`${owner.marker}:[1-9][0-9]*:ACK=${input}:`))
@@ -116,10 +133,18 @@ test.describe('five SSH panes under simultaneous output', () => {
             }))
           }, tabId)
           await testInfo.attach(`flood-input-${round}-${index}`, {
-            body: JSON.stringify({ input, owner, panes }),
+            body: JSON.stringify({
+              input,
+              owner,
+              panes,
+              inputEvents: await inputTrace.evaluate((trace) => trace.entries)
+            }),
             contentType: 'application/json'
           })
           throw error
+        } finally {
+          await inputTrace.evaluate((trace) => trace.dispose())
+          await inputTrace.dispose()
         }
       }
     }
