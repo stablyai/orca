@@ -253,14 +253,18 @@ export function appendWorktreeRows(
 }
 
 /** The one folder-workspace row constructor, shared by the project-group,
- *  grouped-lane and flat emitters so their rows cannot diverge. */
+ *  grouped-lane, pinned and flat emitters so their rows cannot diverge.
+ *  Section-qualified like WorktreeRow.rowKey, so a pinned workspace's two copies
+ *  get distinct virtualizer keys and distinct option ids. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
+  sectionKey: string,
   groupDepth: number
 ): FolderWorkspaceRow {
   return {
     type: 'folder-workspace',
-    key: `folder-workspace:${pair.folderWorkspace.id}`,
+    key: `${sectionKey}:folder-workspace:${pair.folderWorkspace.id}`,
+    sectionKey,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,

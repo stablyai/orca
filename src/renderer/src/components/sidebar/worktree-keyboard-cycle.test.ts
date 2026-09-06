@@ -118,7 +118,8 @@ describe('getCyclableWorktreeIds', () => {
     const rows: HostSectionRow[] = [
       {
         type: 'folder-workspace',
-        key: 'folder-workspace:folder-1',
+        key: 'project-group:group-1:folder-workspace:folder-1',
+        sectionKey: 'project-group:group-1',
         folderWorkspace: { id: 'folder-1', projectGroupId: 'group-1' } as never,
         projectGroup: { id: 'group-1' } as never,
         depth: 0,
