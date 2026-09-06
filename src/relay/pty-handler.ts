@@ -4,6 +4,7 @@ import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { removeUnspecifiedPaneIdentityEnv } from '../shared/pane-identity-env'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -840,6 +841,8 @@ export class PtyHandler {
     // pane to another worktree's history file — and wrapping a zsh pane that
     // nothing asked to wrap, since `history` is selected on its presence.
     delete result.ORCA_HISTFILE
+    // Relay processes are often launched from an Orca pane; inherited identity names the parent.
+    removeUnspecifiedPaneIdentityEnv(result, rendererEnv)
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]

@@ -6,6 +6,7 @@ import {
   listWorktrees
 } from '../orca-runtime-test-mocks.spec'
 import {
+  HEADLESS_LEAF_ID,
   TEST_FOLDER_WORKSPACE_PATH,
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
@@ -14,8 +15,94 @@ import {
   makeWorktreeMeta,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import { buildRuntimeTerminalVisualLayouts } from '../runtime-terminal-visual-layout'
 
 describe('OrcaRuntimeService', () => {
+  it('does not project a replacement PTY through a stale restart snapshot', () => {
+    const layouts = buildRuntimeTerminalVisualLayouts({
+      terminals: [
+        {
+          handle: 'term-replacement',
+          ptyId: 'pty-replacement',
+          incarnationId: 'incarnation-new',
+          worktreeId: TEST_WORKTREE_ID,
+          worktreePath: TEST_WORKTREE_PATH,
+          branch: 'main',
+          tabId: 'tab-restarted',
+          leafId: HEADLESS_LEAF_ID,
+          title: 'Replacement',
+          connected: true,
+          writable: true,
+          lastOutputAt: null,
+          preview: ''
+        }
+      ],
+      worktreesById: new Map([[TEST_WORKTREE_ID, { path: TEST_WORKTREE_PATH }]]),
+      snapshots: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer:after-restart:1',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: `tab-restarted::${HEADLESS_LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-restarted::${HEADLESS_LEAF_ID}`,
+              parentTabId: 'tab-restarted',
+              leafId: HEADLESS_LEAF_ID,
+              ptyId: 'pty-old',
+              incarnationId: 'incarnation-old',
+              title: 'Persisted',
+              isActive: true
+            }
+          ]
+        }
+      ],
+      getTabTitle: () => null
+    })
+
+    expect(layouts).toEqual([])
+  })
+
+  it('reports a live terminal as detached when its persisted tab is absent', async () => {
+    const runtime = createRuntime()
+    const internals = runtime as unknown as {
+      recordPtyWorktree: (
+        ptyId: string,
+        worktreeId: string,
+        state?: Record<string, unknown>
+      ) => void
+      mobileSessionTabsByWorktree: Map<string, unknown>
+    }
+    internals.recordPtyWorktree('pty-detached', TEST_WORKTREE_ID, {
+      connected: true,
+      incarnationId: 'incarnation-live',
+      tabId: 'missing-tab',
+      paneKey: `missing-tab:${HEADLESS_LEAF_ID}`
+    })
+    internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:after-restart:1',
+      snapshotVersion: 1,
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null,
+      tabs: []
+    })
+
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`, 10, {
+      includeVisualLayouts: true
+    })
+    expect(listed.terminals[0]).toMatchObject({
+      ptyId: 'pty-detached',
+      connected: true,
+      visualTopologyState: 'detached'
+    })
+    expect(listed.visualLayouts).toBeUndefined()
+  })
+
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
     const runtime = createRuntime()
     const internals = runtime as unknown as {

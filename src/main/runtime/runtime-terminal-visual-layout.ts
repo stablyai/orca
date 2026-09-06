@@ -10,6 +10,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { TerminalPaneLayoutNode } from '../../shared/terminal-tab-types'
+import { getPtyBindings } from './runtime-terminal-visual-topology-state'
 
 type RuntimeTerminalVisualLayoutArgs = {
   terminals: RuntimeTerminalSummary[]
@@ -138,7 +139,13 @@ function buildTab(
     type: 'leaf' as const,
     leafId: firstSurface.leafId
   }
-  const visibleLeafIds = collectVisibleLeafIds(root, parentTabId, summariesByLeafKey)
+  const visibleLeafIds = collectVisibleLeafIds(
+    root,
+    parentTabId,
+    surfaces,
+    firstSurface.parentLayout,
+    summariesByLeafKey
+  )
   if (visibleLeafIds.length === 0) {
     return null
   }
@@ -147,7 +154,14 @@ function buildTab(
       ? requestedActiveLeafId
       : surfaces.find((surface) => surface.isActive && visibleLeafIds.includes(surface.leafId))
           ?.leafId) ?? visibleLeafIds[0]!
-  const panes = buildPane(root, parentTabId, activeLeafId, summariesByLeafKey)
+  const panes = buildPane(
+    root,
+    parentTabId,
+    activeLeafId,
+    surfaces,
+    firstSurface.parentLayout,
+    summariesByLeafKey
+  )
   if (!panes) {
     return null
   }
@@ -162,14 +176,18 @@ function buildTab(
 function collectVisibleLeafIds(
   node: TerminalPaneLayoutNode,
   tabId: string,
+  surfaces: readonly RuntimeMobileSessionTerminalTab[],
+  parentLayout: RuntimeMobileSessionTerminalTab['parentLayout'],
   summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
 ): string[] {
   if (node.type === 'leaf') {
-    return summariesByLeafKey.has(leafKey(tabId, node.leafId)) ? [node.leafId] : []
+    return getVisuallyBoundSummary(tabId, node.leafId, surfaces, parentLayout, summariesByLeafKey)
+      ? [node.leafId]
+      : []
   }
   return [
-    ...collectVisibleLeafIds(node.first, tabId, summariesByLeafKey),
-    ...collectVisibleLeafIds(node.second, tabId, summariesByLeafKey)
+    ...collectVisibleLeafIds(node.first, tabId, surfaces, parentLayout, summariesByLeafKey),
+    ...collectVisibleLeafIds(node.second, tabId, surfaces, parentLayout, summariesByLeafKey)
   ]
 }
 
@@ -177,10 +195,18 @@ function buildPane(
   node: TerminalPaneLayoutNode,
   tabId: string,
   activeLeafId: string | null,
+  surfaces: readonly RuntimeMobileSessionTerminalTab[],
+  parentLayout: RuntimeMobileSessionTerminalTab['parentLayout'],
   summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
 ): RuntimeTerminalVisualPaneNode | null {
   if (node.type === 'leaf') {
-    const summary = summariesByLeafKey.get(leafKey(tabId, node.leafId))
+    const summary = getVisuallyBoundSummary(
+      tabId,
+      node.leafId,
+      surfaces,
+      parentLayout,
+      summariesByLeafKey
+    )
     if (!summary) {
       return null
     }
@@ -194,12 +220,52 @@ function buildPane(
       active: summary.leafId === activeLeafId
     }
   }
-  const first = buildPane(node.first, tabId, activeLeafId, summariesByLeafKey)
-  const second = buildPane(node.second, tabId, activeLeafId, summariesByLeafKey)
+  const first = buildPane(
+    node.first,
+    tabId,
+    activeLeafId,
+    surfaces,
+    parentLayout,
+    summariesByLeafKey
+  )
+  const second = buildPane(
+    node.second,
+    tabId,
+    activeLeafId,
+    surfaces,
+    parentLayout,
+    summariesByLeafKey
+  )
   if (first && second) {
     return { type: 'pane-split', direction: node.direction, first, second }
   }
   return first ?? second
+}
+
+function getVisuallyBoundSummary(
+  tabId: string,
+  leafId: string,
+  surfaces: readonly RuntimeMobileSessionTerminalTab[],
+  parentLayout: RuntimeMobileSessionTerminalTab['parentLayout'],
+  summariesByLeafKey: ReadonlyMap<string, RuntimeTerminalSummary>
+): RuntimeTerminalSummary | null {
+  const summary = summariesByLeafKey.get(leafKey(tabId, leafId))
+  const surface = surfaces.find((candidate) => candidate.leafId === leafId)
+  if (!summary || !surface) {
+    return null
+  }
+  const ptyBindings = getPtyBindings(surface, parentLayout)
+  if (
+    !summary.ptyId ||
+    ptyBindings.length === 0 ||
+    ptyBindings.some((ptyId) => ptyId !== summary.ptyId)
+  ) {
+    return null
+  }
+  if (surface.incarnationId && surface.incarnationId !== summary.incarnationId) {
+    return null
+  }
+  return summary
 }
 
 function buildGroupLayout(

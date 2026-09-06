@@ -93,6 +93,42 @@ describe('PtyHandler', () => {
     expect(spawnOptions.env.PATH).toBe(expectedEnv.PATH)
   })
 
+  it('scrubs inherited pane identity from relay spawns', async () => {
+    const keys = [
+      'ORCA_PANE_KEY',
+      'ORCA_TAB_ID',
+      'ORCA_WORKTREE_ID',
+      'ORCA_TERMINAL_HANDLE',
+      'ORCA_AGENT_LAUNCH_TOKEN'
+    ] as const
+    const saved = new Map(keys.map((key) => [key, process.env[key]]))
+    Object.assign(process.env, {
+      ORCA_PANE_KEY: 'parent-tab:parent-leaf',
+      ORCA_TAB_ID: 'parent-tab',
+      ORCA_WORKTREE_ID: 'parent-worktree',
+      ORCA_TERMINAL_HANDLE: 'term-parent',
+      ORCA_AGENT_LAUNCH_TOKEN: 'launch-parent'
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+    } finally {
+      for (const [key, value] of saved) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+    const spawnCall = mockPtySpawn.mock.calls[0]
+    const env = (spawnCall?.[2] as { env: Record<string, string> } | undefined)?.env
+    expect(env).toBeDefined()
+    const spawnedEnv = env as Record<string, string>
+    for (const key of keys) {
+      expect(spawnedEnv[key]).toBeUndefined()
+    }
+  })
+
   describe('half-activated conda env (#14195)', () => {
     const CONDA_KEYS = [
       'CONDA_SHLVL',

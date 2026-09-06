@@ -34,6 +34,8 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /** Visual-layout membership; detached is live but not currently projected. */
+  visualTopologyState?: 'projected' | 'detached'
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
