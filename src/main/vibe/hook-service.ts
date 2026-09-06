@@ -60,6 +60,22 @@ function unsupportedStatus(configPath: string): AgentHookInstallStatus {
   }
 }
 
+// Why: a home dir reused after a macOS/Linux install can still hold the managed
+// POSIX pre_tool command, which Vibe runs via cmd.exe on Windows and fails
+// before tool calls. Strip any stale managed block so win32 never inherits a
+// broken hook; no-op (no write) when the block is already absent.
+function stripStaleManagedBlock(): void {
+  const configPath = getConfigPath()
+  const text = readConfigToml(configPath)
+  if (text === null || text.length === 0) {
+    return
+  }
+  const { text: nextText, changed } = removeManagedVibeHooks(text)
+  if (changed) {
+    writeConfigToml(configPath, nextText)
+  }
+}
+
 function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(MANAGED_SCRIPT_FILE_NAME)
 }
@@ -160,6 +176,9 @@ export class VibeHookService {
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     if (isUnsupportedPlatform()) {
+      // Why: cannot install on win32, but do not leave a stale POSIX hook from
+      // a prior macOS/Linux install that Vibe would fail to execute.
+      stripStaleManagedBlock()
       return unsupportedStatus(configPath)
     }
     const text = readConfigToml(configPath)
@@ -183,6 +202,9 @@ export class VibeHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     if (isUnsupportedPlatform()) {
+      // Why: on win32 the install path is skipped, but a stale block from a
+      // prior macOS/Linux install should still be cleaned up on explicit remove.
+      stripStaleManagedBlock()
       return unsupportedStatus(configPath)
     }
     const text = readConfigToml(configPath)
