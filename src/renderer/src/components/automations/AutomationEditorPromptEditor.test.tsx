@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
 const installFindShortcut = vi.hoisted(() => vi.fn(() => vi.fn()))
+const cleanupCommandPaletteShortcut = vi.hoisted(() => vi.fn())
+const installCommandPaletteShortcut = vi.hoisted(() => vi.fn(() => cleanupCommandPaletteShortcut))
 const syncContentOnMount = vi.hoisted(() => vi.fn(() => false))
 const syncContentUpdate = vi.hoisted(() => vi.fn())
 
@@ -23,6 +25,7 @@ vi.mock('@/store', () => ({
     })
 }))
 vi.mock('@/components/editor/editor-shortcuts', () => ({
+  installMonacoEditorCommandPaletteShortcut: installCommandPaletteShortcut,
   installMonacoEditorFindShortcut: installFindShortcut
 }))
 vi.mock('@/components/editor/monaco-content-sync', () => ({
@@ -41,6 +44,8 @@ afterEach(() => {
   cleanup()
   editorProps.current = null
   installFindShortcut.mockClear()
+  installCommandPaletteShortcut.mockClear()
+  cleanupCommandPaletteShortcut.mockClear()
   syncContentOnMount.mockClear()
   syncContentUpdate.mockClear()
 })
@@ -64,7 +69,7 @@ describe('AutomationEditorPromptEditor', () => {
     ).toBe('Prompt placeholder')
   })
 
-  it('installs find and syncs an external rewrite after mount', () => {
+  it('installs editor shortcuts and syncs an external rewrite after mount', () => {
     const editorInstance = {
       getContainerDomNode: () => document.createElement('div'),
       onDidDispose: vi.fn()
@@ -82,6 +87,7 @@ describe('AutomationEditorPromptEditor', () => {
     onMount(editorInstance)
 
     expect(installFindShortcut).toHaveBeenCalledWith(editorInstance)
+    expect(installCommandPaletteShortcut).toHaveBeenCalledWith(editorInstance)
     expect(syncContentOnMount).toHaveBeenCalledWith(editorInstance, 'original')
 
     rerender(
@@ -94,6 +100,10 @@ describe('AutomationEditorPromptEditor', () => {
     )
 
     expect(syncContentUpdate).toHaveBeenCalledWith(editorInstance, 'from template')
+
+    const disposeEditor = editorInstance.onDidDispose.mock.calls[0]?.[0] as () => void
+    disposeEditor()
+    expect(cleanupCommandPaletteShortcut).toHaveBeenCalledTimes(1)
   })
 
   it('dismisses on Escape only when find is closed', () => {

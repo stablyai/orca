@@ -8,7 +8,11 @@ import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import {
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut,
+  installMonacoEditorCommandPaletteShortcut
+} from './editor-shortcuts'
 import { getIpynbCodeCellEditorHeight, getIpynbCodeCellPreviewLines } from './ipynb-code-cell-lines'
 import type { IpynbCell } from './ipynb-parse'
 import MonacoCodeExcerpt from './MonacoCodeExcerpt'
@@ -77,12 +81,14 @@ function IpynbCodeCellEditor({
       }
     )
     const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+    const cleanupCommandPaletteShortcut = installMonacoEditorCommandPaletteShortcut(editorInstance)
     const blurSub = editorInstance.onDidBlurEditorWidget(() => {
       onDeactivateRef.current()
     })
     editorInstance.onDidDispose(() => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
+      cleanupCommandPaletteShortcut()
       blurSub.dispose()
     })
     editorInstance.addCommand(monacoInstance.KeyCode.Escape, () => {

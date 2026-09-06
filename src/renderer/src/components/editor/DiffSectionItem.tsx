@@ -16,6 +16,7 @@ import { DiffSectionHeader } from './DiffSectionHeader'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import { installMonacoDiffCommandPaletteShortcuts } from './monaco-diff-command-palette-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
@@ -213,6 +214,8 @@ export function DiffSectionItem({
     lineNumberOptionsSubRef.current?.dispose()
     lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
     const modified = editor.getModifiedEditor()
+    const cleanupCommandPaletteShortcuts = installMonacoDiffCommandPaletteShortcuts(editor)
+    modified.onDidDispose(cleanupCommandPaletteShortcuts)
 
     // Why: measuring before Monaco computes hidden unchanged regions records
     // full-file height, making virtualized combined diffs jump as rows remount.
