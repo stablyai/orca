@@ -81,7 +81,11 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
     if (dialogCount === 0) {
       return
     }
-    const dialog = page.getByRole('dialog').last()
+    const dialogId = await page.getByRole('dialog').last().getAttribute('id')
+    if (!dialogId) {
+      throw new Error('Open dialog is missing its Radix identity')
+    }
+    const dialog = page.locator(`[role="dialog"][id=${JSON.stringify(dialogId)}]`)
     const cancelOrBack = dialog.getByRole('button', { name: /^(Cancel|Back)$/ })
     await ((await cancelOrBack
       .first()
@@ -89,9 +93,8 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
       .catch(() => false))
       ? cancelOrBack.first().click()
       : page.keyboard.press('Escape'))
-    await expect
-      .poll(async () => page.getByRole('dialog').count(), { timeout: 3_000 })
-      .toBeLessThan(dialogCount)
+    // Back can replace the picker with its parent without reducing the dialog count.
+    await expect(dialog).toBeHidden({ timeout: 3_000 })
   }
   await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
 }
