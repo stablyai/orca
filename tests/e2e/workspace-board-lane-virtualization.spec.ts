@@ -405,6 +405,19 @@ test.describe('Workspace board lane virtualization', () => {
       }
       return null
     })
+    if (!startPoint) {
+      console.info('[board-point-diagnostic] ' + JSON.stringify(await emptyLaneScroll.evaluate(element => {
+        const rect = element.getBoundingClientRect()
+        const describe = (el: Element | null) => el ? { tag: el.tagName, role: el.getAttribute('role'), classes: el.className, text: el.textContent?.slice(0,80), pointerEvents: getComputedStyle(el).pointerEvents } : null
+        const hits = []
+        for (let y = Math.ceil(rect.top)+6; y <= Math.floor(rect.top)+40; y +=6) {
+          const x = rect.left + rect.width/2
+          const target = document.elementFromPoint(x,y)
+          hits.push({x,y,target:describe(target), ancestors: target ? Array.from((function*(el:Element|null){while(el){yield el;el=el.parentElement}})(target)).map(describe) : []})
+        }
+        return {rect:rect.toJSON(),viewport:[innerWidth,innerHeight],hits,animations:document.getAnimations().map(a=>({state:a.playState,currentTime:a.currentTime}))}
+      })))
+    }
     expect(startPoint, 'the empty start lane must expose board-owned space').not.toBeNull()
     if (!startPoint) {
       throw new Error('Expected empty board space for the marquee start')
