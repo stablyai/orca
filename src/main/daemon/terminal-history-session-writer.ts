@@ -27,16 +27,21 @@ const LOG_MAX_BYTES = 5 * 1024 * 1024
 // emits generation as the first JSON key, so the number is provably in the head.
 const GENERATION_HEAD_PROBE_BYTES = 128
 
+/**
+ * Read the generation from the head of a checkpoint file without parsing the
+ * body. Returns null for missing/unreadable files, legacy layouts, or any head
+ * that is not exactly `{"generation":<digits>` closed by a JSON token boundary.
+ */
 export function probeCheckpointGenerationHead(path: string): number | null {
   let fd: number | undefined
   try {
     fd = openSync(path, 'r')
     const head = Buffer.alloc(GENERATION_HEAD_PROBE_BYTES)
     const read = readSync(fd, head, 0, GENERATION_HEAD_PROBE_BYTES, 0)
-    // The token boundary after the digits (`,"` next key, or `}` sole key) must
+    // The token boundary after the digits (`,` next key, or `}` sole key) must
     // close the match, or a truncated/corrupt head could accept a digit prefix
     // of something that is not this file's generation.
-    const match = head.toString('utf8', 0, read).match(/^\{"generation":(\d+)(?:"|,|})/)
+    const match = head.toString('utf8', 0, read).match(/^\{"generation":(\d+)(?:,|})/)
     return match ? Number(match[1]) : null
   } catch {
     return null
@@ -151,6 +156,10 @@ export class TerminalHistorySessionWriter {
     this.logGeneration = this.readCheckpointGeneration() ?? 0
   }
 
+  /**
+   * Resolve the persisted checkpoint generation: head probe first, full parse
+   * only for legacy layouts the probe cannot certify.
+   */
   private readCheckpointGeneration(): number | null {
     const probed = probeCheckpointGenerationHead(this.checkpointPath)
     if (probed !== null) {

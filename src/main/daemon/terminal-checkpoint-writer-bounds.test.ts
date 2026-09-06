@@ -171,8 +171,9 @@ describe('bounded terminal checkpoint writer', () => {
     writeFileSync(join(sessionDir, 'checkpoint.json'), '{"generation":123456789')
     expect(probeCheckpointGenerationHead(join(sessionDir, 'checkpoint.json'))).toBeNull()
 
-    // A malformed head must fall back to the full parse, which still fails to
-    // yield a number here (truncated JSON) — so the writer treats it as absent.
+    // A head whose digits are closed by a valid boundary (`,` next key) resolves
+    // directly from the probe even though the body is truncated — boundary
+    // validity, not body completeness, is what the probe certifies.
     writeFileSync(join(sessionDir, 'checkpoint.json'), '{"generation":12,"snapshotAnsi"')
     expect(probeCheckpointGenerationHead(join(sessionDir, 'checkpoint.json'))).toBe(12)
     expect(probeCheckpointGenerationHead(join(dir, 'missing', 'checkpoint.json'))).toBeNull()
