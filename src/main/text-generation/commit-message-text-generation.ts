@@ -8,6 +8,7 @@ import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
 } from '../../shared/pull-request-generation'
+import type { GeneratedIssueFields, IssueDraftContext } from '../../shared/issue-draft-generation'
 import type { Repo } from '../../shared/repo-types'
 import {
   resolveSourceControlAiForOperation,
@@ -26,6 +27,7 @@ import {
   commandBackslashMode as resolveCommandBackslashMode,
   generateBranchName,
   generateCommitMessage,
+  generateIssueFields,
   generatePullRequestFields,
   trimGeneratedCommitMessage as trimCommitMessage
 } from './source-control-text-generation-requests'
@@ -34,6 +36,7 @@ import type {
   DiscoverCommitMessageModelsResult,
   GenerateBranchNameResult,
   GenerateCommitMessageResult,
+  GenerateIssueFieldsResult as GenericGenerateIssueFieldsResult,
   GeneratePullRequestFieldsResult as GenericGeneratePullRequestFieldsResult,
   RemoteCommitMessageExecResult,
   TextGenerationOperation
@@ -51,6 +54,7 @@ export type {
 }
 export type GeneratePullRequestFieldsResult =
   GenericGeneratePullRequestFieldsResult<GeneratedPullRequestFields>
+export type GenerateIssueFieldsResult = GenericGenerateIssueFieldsResult<GeneratedIssueFields>
 
 type ResolveCommitMessageSettingsResult =
   | { ok: true; params: GenerateCommitMessageParams }
@@ -132,6 +136,10 @@ export function cancelGeneratePullRequestFieldsLocal(cwd: string): void {
   cancelLocalGeneration('pull-request-fields', cwd)
 }
 
+export function cancelGenerateIssueFieldsLocal(cwd: string): void {
+  cancelLocalGeneration('issue-fields', cwd)
+}
+
 export function generateCommitMessageFromContext(
   context: CommitMessageDraftContext,
   params: GenerateCommitMessageParams,
@@ -146,6 +154,14 @@ export function generatePullRequestFieldsFromContext(
   target: CommitMessageGenerationTarget
 ): Promise<GeneratePullRequestFieldsResult> {
   return generatePullRequestFields({ context, params, target, spawnAgent: spawnSourceControlAgent })
+}
+
+export function generateIssueFieldsFromContext(
+  context: IssueDraftContext,
+  params: GenerateCommitMessageParams,
+  target: CommitMessageGenerationTarget
+): Promise<GenerateIssueFieldsResult> {
+  return generateIssueFields({ context, params, target, spawnAgent: spawnSourceControlAgent })
 }
 
 export function generateBranchNameFromContext(

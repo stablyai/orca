@@ -65,6 +65,7 @@ describe('feature interactions', () => {
       'mobile-emulator-agent-setup',
       'ai-commit-generation',
       'ai-pr-generation',
+      'ai-issue-generation',
       'claude-account-switching',
       'computer-use-setup',
       'computer-use',
