@@ -1,7 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { resolveGitBashPath } from '../git-bash'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import { listPtyJobProcessIds, terminatePtyJob } from './windows-pty-job'
@@ -58,7 +59,7 @@ describeOnWindows('MSYS terminal job ownership', () => {
         process.kill(childPid)
       }
       proc.kill()
-      rmSync(directory, { recursive: true, force: true })
+      removeTreeSync(directory)
     }
   }, 30_000)
 })

@@ -613,7 +613,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
  #include <vector>
  #include <Windows.h>
  #include <strsafe.h>
-@@ -44,12 +45,40 @@
+@@ -44,12 +45,40 @@ struct pty_baton {
    HANDLE hOut;
    HPCON hpc;
  
@@ -655,7 +655,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
  static volatile LONG ptyCounter;
  
  static pty_baton* get_pty_baton(int id) {
-@@ -102,8 +131,31 @@
+@@ -102,8 +131,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
      // Get process exit code.
      GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
      // Clean up handles
@@ -716,7 +716,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
    } else {
      throw Napi::Error::New(env, "Cannot launch conpty");
    }
-@@ -409,6 +474,15 @@
+@@ -409,6 +474,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -732,7 +732,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +490,10 @@
+@@ -416,7 +490,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -744,7 +744,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +503,48 @@
+@@ -426,8 +503,48 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -795,7 +795,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -440,6 +557,8 @@
+@@ -440,6 +557,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
  
    // Update handle
    handle->hShell = piClient.hProcess;
@@ -804,7 +804,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -544,27 +663,213 @@
+@@ -544,27 +663,213 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -1034,7 +1034,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
  }
  
  /**
-@@ -577,6 +882,9 @@
+@@ -577,6 +882,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
