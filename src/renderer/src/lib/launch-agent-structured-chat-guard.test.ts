@@ -182,7 +182,8 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockWaitForAgentReady).not.toHaveBeenCalled()
   })
 
-  it('keeps a saved Codex model and effort on the structured path', async () => {
+  // Routing only: the host seeds the saved values, so preservation is pinned there.
+  it('takes the structured path when a Codex model and effort are already saved', async () => {
     store.settings.nativeChatSessionOptions = {
       codex: {
         model: 'gpt-5.6-sol',
