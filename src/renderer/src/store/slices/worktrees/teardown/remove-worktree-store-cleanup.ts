@@ -4,6 +4,7 @@ import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
+import { omitRecordKey, omitRecordKeys } from './record-key-omission'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
@@ -19,95 +20,87 @@ export function applyRemoveWorktreeSuccessState(
     for (const repoId of Object.keys(next)) {
       next[repoId] = next[repoId].filter((w) => w.id !== worktreeId)
     }
-    const nextTabs = { ...s.tabsByWorktree }
-    delete nextTabs[worktreeId]
-    const nextLayouts = { ...s.terminalLayoutsByTabId }
-    const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-    const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
-    const nextAutomaticAgentResumeClaimsByTabId = {
-      ...s.automaticAgentResumeClaimsByTabId
-    }
-    const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
-    const nextNativeChatLaunchDraftByTabId = { ...s.nativeChatLaunchDraftByTabId }
-    const nextUnverifiedPtyLossTabIds = { ...s.unverifiedPtyLossTabIds }
+    const nextTabs = omitRecordKey(s.tabsByWorktree, worktreeId)
+    const nextLayouts = omitRecordKeys(s.terminalLayoutsByTabId, tabIds)
+    const nextPtyIdsByTabId = omitRecordKeys(s.ptyIdsByTabId, tabIds)
+    const nextRuntimePaneTitlesByTabId = omitRecordKeys(s.runtimePaneTitlesByTabId, tabIds)
+    const nextAutomaticAgentResumeClaimsByTabId = omitRecordKeys(
+      s.automaticAgentResumeClaimsByTabId,
+      tabIds
+    )
+    const nextNativeChatLaunchPromptByTabId = omitRecordKeys(
+      s.nativeChatLaunchPromptByTabId,
+      tabIds
+    )
+    const nextNativeChatLaunchDraftByTabId = omitRecordKeys(s.nativeChatLaunchDraftByTabId, tabIds)
+    const nextUnverifiedPtyLossTabIds = omitRecordKeys(s.unverifiedPtyLossTabIds, tabIds)
     // Why: closeTab deletes these per-tab maps but removeWorktree missed them, leaking a split pane's expand flags.
-    const nextExpandedPaneByTabId = { ...s.expandedPaneByTabId }
-    const nextCanExpandPaneByTabId = { ...s.canExpandPaneByTabId }
-    for (const tabId of tabIds) {
-      delete nextLayouts[tabId]
-      delete nextPtyIdsByTabId[tabId]
-      delete nextRuntimePaneTitlesByTabId[tabId]
-      delete nextAutomaticAgentResumeClaimsByTabId[tabId]
-      delete nextNativeChatLaunchPromptByTabId[tabId]
-      delete nextNativeChatLaunchDraftByTabId[tabId]
-      delete nextUnverifiedPtyLossTabIds[tabId]
-      delete nextExpandedPaneByTabId[tabId]
-      delete nextCanExpandPaneByTabId[tabId]
-    }
+    const nextExpandedPaneByTabId = omitRecordKeys(s.expandedPaneByTabId, tabIds)
+    const nextCanExpandPaneByTabId = omitRecordKeys(s.canExpandPaneByTabId, tabIds)
     const nextDeleteState = removeDeleteStatesForWorktreeIds(
       s.deleteStateByWorktreeId,
       new Set([worktreeId])
     )
-    const nextLineage = { ...s.worktreeLineageById }
-    delete nextLineage[worktreeId]
-    const nextWorkspaceLineage = { ...s.workspaceLineageByChildKey }
-    delete nextWorkspaceLineage[worktreeWorkspaceKey(worktreeId)]
+    const nextLineage = omitRecordKey(s.worktreeLineageById, worktreeId)
+    const nextWorkspaceLineage = omitRecordKey(
+      s.workspaceLineageByChildKey,
+      worktreeWorkspaceKey(worktreeId)
+    )
     // Clean up editor files belonging to this worktree
     const newOpenFiles = s.openFiles.filter((f) => f.worktreeId !== worktreeId)
-    const nextBrowserTabsByWorktree = { ...s.browserTabsByWorktree }
-    delete nextBrowserTabsByWorktree[worktreeId]
-    const nextActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
-    delete nextActiveFileIdByWorktree[worktreeId]
-    const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
-    delete nextActiveBrowserTabIdByWorktree[worktreeId]
+    const nextBrowserTabsByWorktree = omitRecordKey(s.browserTabsByWorktree, worktreeId)
+    const nextActiveFileIdByWorktree = omitRecordKey(s.activeFileIdByWorktree, worktreeId)
+    const nextActiveBrowserTabIdByWorktree = omitRecordKey(
+      s.activeBrowserTabIdByWorktree,
+      worktreeId
+    )
     // Why: closeBrowserTab records a Cmd+Shift+T undo snapshot, but a deleted worktree's tabs can't be restored; purge it.
-    const nextRecentlyClosedBrowserTabsByWorktree = {
-      ...s.recentlyClosedBrowserTabsByWorktree
-    }
-    delete nextRecentlyClosedBrowserTabsByWorktree[worktreeId]
-    const nextActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
-    delete nextActiveTabTypeByWorktree[worktreeId]
-    const nextActiveTabIdByWorktree = { ...s.activeTabIdByWorktree }
-    delete nextActiveTabIdByWorktree[worktreeId]
-    const nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
+    const nextRecentlyClosedBrowserTabsByWorktree = omitRecordKey(
+      s.recentlyClosedBrowserTabsByWorktree,
+      worktreeId
+    )
+    const nextActiveTabTypeByWorktree = omitRecordKey(s.activeTabTypeByWorktree, worktreeId)
+    const nextActiveTabIdByWorktree = omitRecordKey(s.activeTabIdByWorktree, worktreeId)
     // Why: the tab strip persists visual order per worktree; drop the entry so stale tab IDs aren't retained.
-    delete nextTabBarOrderByWorktree[worktreeId]
-    const nextPendingReconnectTabByWorktree = { ...s.pendingReconnectTabByWorktree }
-    delete nextPendingReconnectTabByWorktree[worktreeId]
+    const nextTabBarOrderByWorktree = omitRecordKey(s.tabBarOrderByWorktree, worktreeId)
+    const nextPendingReconnectTabByWorktree = omitRecordKey(
+      s.pendingReconnectTabByWorktree,
+      worktreeId
+    )
     // Why: split-tab layout/group state is worktree-owned; leaving it makes a deleted worktree look restorable.
-    const nextUnifiedTabsByWorktree = { ...s.unifiedTabsByWorktree }
-    delete nextUnifiedTabsByWorktree[worktreeId]
-    const nextGroupsByWorktree = { ...s.groupsByWorktree }
-    delete nextGroupsByWorktree[worktreeId]
-    const nextLayoutByWorktree = { ...s.layoutByWorktree }
-    delete nextLayoutByWorktree[worktreeId]
-    const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
-    delete nextActiveGroupIdByWorktree[worktreeId]
+    const nextUnifiedTabsByWorktree = omitRecordKey(s.unifiedTabsByWorktree, worktreeId)
+    const nextGroupsByWorktree = omitRecordKey(s.groupsByWorktree, worktreeId)
+    const nextLayoutByWorktree = omitRecordKey(s.layoutByWorktree, worktreeId)
+    const nextActiveGroupIdByWorktree = omitRecordKey(s.activeGroupIdByWorktree, worktreeId)
     // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
-    const nextGitStatusByWorktree = { ...s.gitStatusByWorktree }
-    delete nextGitStatusByWorktree[worktreeId]
-    const nextGitStatusHeadByWorktree = { ...s.gitStatusHeadByWorktree }
-    delete nextGitStatusHeadByWorktree[worktreeId]
-    const nextGitBranchLineTotalByWorktree = { ...s.gitBranchLineTotalByWorktree }
-    delete nextGitBranchLineTotalByWorktree[worktreeId]
-    const nextGitIgnoredPathsByWorktree = { ...s.gitIgnoredPathsByWorktree }
-    delete nextGitIgnoredPathsByWorktree[worktreeId]
-    const nextGitConflictOperationByWorktree = { ...s.gitConflictOperationByWorktree }
-    delete nextGitConflictOperationByWorktree[worktreeId]
-    const nextTrackedConflictPathsByWorktree = { ...s.trackedConflictPathsByWorktree }
-    delete nextTrackedConflictPathsByWorktree[worktreeId]
-    const nextGitBranchChangesByWorktree = { ...s.gitBranchChangesByWorktree }
-    delete nextGitBranchChangesByWorktree[worktreeId]
-    const nextGitBranchCompareSummaryByWorktree = { ...s.gitBranchCompareSummaryByWorktree }
-    delete nextGitBranchCompareSummaryByWorktree[worktreeId]
-    const nextGitBranchCompareRequestKeyByWorktree = {
-      ...s.gitBranchCompareRequestKeyByWorktree
-    }
-    delete nextGitBranchCompareRequestKeyByWorktree[worktreeId]
-    const nextGitBranchCompareRequestStatusHeadByWorktree = {
-      ...s.gitBranchCompareRequestStatusHeadByWorktree
-    }
-    delete nextGitBranchCompareRequestStatusHeadByWorktree[worktreeId]
+    const nextGitStatusByWorktree = omitRecordKey(s.gitStatusByWorktree, worktreeId)
+    const nextGitStatusHeadByWorktree = omitRecordKey(s.gitStatusHeadByWorktree, worktreeId)
+    const nextGitBranchLineTotalByWorktree = omitRecordKey(
+      s.gitBranchLineTotalByWorktree,
+      worktreeId
+    )
+    const nextGitIgnoredPathsByWorktree = omitRecordKey(s.gitIgnoredPathsByWorktree, worktreeId)
+    const nextGitConflictOperationByWorktree = omitRecordKey(
+      s.gitConflictOperationByWorktree,
+      worktreeId
+    )
+    const nextTrackedConflictPathsByWorktree = omitRecordKey(
+      s.trackedConflictPathsByWorktree,
+      worktreeId
+    )
+    const nextGitBranchChangesByWorktree = omitRecordKey(s.gitBranchChangesByWorktree, worktreeId)
+    const nextGitBranchCompareSummaryByWorktree = omitRecordKey(
+      s.gitBranchCompareSummaryByWorktree,
+      worktreeId
+    )
+    const nextGitBranchCompareRequestKeyByWorktree = omitRecordKey(
+      s.gitBranchCompareRequestKeyByWorktree,
+      worktreeId
+    )
+    const nextGitBranchCompareRequestStatusHeadByWorktree = omitRecordKey(
+      s.gitBranchCompareRequestStatusHeadByWorktree,
+      worktreeId
+    )
     // Why: clean up per-file editor state for the removed worktree so stale drafts/view modes don't accumulate.
     const removedFileIds = new Set<string>()
     for (const file of s.openFiles) {
@@ -119,40 +112,27 @@ export function applyRemoveWorktreeSuccessState(
         removedFileIds.add(file.markdownPreviewSourceFileId)
       }
     }
-    const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
-    const nextMarkdownViewMode =
-      removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
-    const nextMarkdownRichModeSizeOverride =
-      removedFileIds.size > 0
-        ? { ...s.markdownRichModeSizeOverride }
-        : s.markdownRichModeSizeOverride
-    const nextEditorViewMode = removedFileIds.size > 0 ? { ...s.editorViewMode } : s.editorViewMode
-    const nextMarkdownFrontmatterVisible =
-      removedFileIds.size > 0 ? { ...s.markdownFrontmatterVisible } : s.markdownFrontmatterVisible
+    const nextEditorDrafts = omitRecordKeys(s.editorDrafts, removedFileIds)
+    const nextMarkdownViewMode = omitRecordKeys(s.markdownViewMode, removedFileIds)
+    const nextMarkdownRichModeSizeOverride = omitRecordKeys(
+      s.markdownRichModeSizeOverride,
+      removedFileIds
+    )
+    const nextEditorViewMode = omitRecordKeys(s.editorViewMode, removedFileIds)
+    const nextMarkdownFrontmatterVisible = omitRecordKeys(
+      s.markdownFrontmatterVisible,
+      removedFileIds
+    )
     // Why: editorCursorLine is keyed by fileId; clear it with the other per-file state so it doesn't leak.
-    const nextEditorCursorLine =
-      removedFileIds.size > 0 ? { ...s.editorCursorLine } : s.editorCursorLine
-    if (removedFileIds.size > 0) {
-      for (const fileId of removedFileIds) {
-        delete nextEditorDrafts[fileId]
-        delete nextMarkdownViewMode[fileId]
-        delete nextMarkdownRichModeSizeOverride[fileId]
-        delete nextEditorViewMode[fileId]
-        delete nextMarkdownFrontmatterVisible[fileId]
-        delete nextEditorCursorLine[fileId]
-      }
-    }
-    const nextExpandedDirs = { ...s.expandedDirs }
-    delete nextExpandedDirs[worktreeId]
-    const nextShowDotfilesByWorktree = { ...s.showDotfilesByWorktree }
-    delete nextShowDotfilesByWorktree[worktreeId]
+    const nextEditorCursorLine = omitRecordKeys(s.editorCursorLine, removedFileIds)
+    const nextExpandedDirs = omitRecordKey(s.expandedDirs, worktreeId)
+    const nextShowDotfilesByWorktree = omitRecordKey(s.showDotfilesByWorktree, worktreeId)
     // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.
-    const nextGitStatusHugeByWorktree = { ...s.gitStatusHugeByWorktree }
-    delete nextGitStatusHugeByWorktree[worktreeId]
-    const nextRightSidebarExplorerViewByWorktree = {
-      ...s.rightSidebarExplorerViewByWorktree
-    }
-    delete nextRightSidebarExplorerViewByWorktree[worktreeId]
+    const nextGitStatusHugeByWorktree = omitRecordKey(s.gitStatusHugeByWorktree, worktreeId)
+    const nextRightSidebarExplorerViewByWorktree = omitRecordKey(
+      s.rightSidebarExplorerViewByWorktree,
+      worktreeId
+    )
     // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -181,49 +161,31 @@ export function applyRemoveWorktreeSuccessState(
       expandedPaneByTabId: nextExpandedPaneByTabId,
       canExpandPaneByTabId: nextCanExpandPaneByTabId,
       deleteStateByWorktreeId: nextDeleteState,
-      baseStatusByWorktreeId: (() => {
-        const nextStatus = { ...s.baseStatusByWorktreeId }
-        delete nextStatus[worktreeId]
-        return nextStatus
-      })(),
-      remoteBranchConflictByWorktreeId: (() => {
-        const nextConflict = { ...s.remoteBranchConflictByWorktreeId }
-        delete nextConflict[worktreeId]
-        return nextConflict
-      })(),
-      fileSearchStateByWorktree: (() => {
-        const nextSearch = { ...s.fileSearchStateByWorktree }
-        // Why: file search state is worktree-scoped; clear it so another worktree can't inherit stale matches.
-        delete nextSearch[worktreeId]
-        return nextSearch
-      })(),
+      baseStatusByWorktreeId: omitRecordKey(s.baseStatusByWorktreeId, worktreeId),
+      remoteBranchConflictByWorktreeId: omitRecordKey(
+        s.remoteBranchConflictByWorktreeId,
+        worktreeId
+      ),
+      fileSearchStateByWorktree: omitRecordKey(s.fileSearchStateByWorktree, worktreeId),
       // Why: these worktree-keyed maps are re-keyed on rename but were missed by removal, leaking one entry each.
-      remoteStatusesByWorktree: (() => {
-        const next = { ...s.remoteStatusesByWorktree }
-        delete next[worktreeId]
-        return next
-      })(),
-      recentlyClosedEditorTabsByWorktree: (() => {
-        const next = { ...s.recentlyClosedEditorTabsByWorktree }
-        delete next[worktreeId]
-        return next
-      })(),
-      recentlyClosedTerminalTabsByWorktree: (() => {
-        const next = { ...s.recentlyClosedTerminalTabsByWorktree }
-        delete next[worktreeId]
-        return next
-      })(),
+      remoteStatusesByWorktree: omitRecordKey(s.remoteStatusesByWorktree, worktreeId),
+      recentlyClosedEditorTabsByWorktree: omitRecordKey(
+        s.recentlyClosedEditorTabsByWorktree,
+        worktreeId
+      ),
+      recentlyClosedTerminalTabsByWorktree: omitRecordKey(
+        s.recentlyClosedTerminalTabsByWorktree,
+        worktreeId
+      ),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.
-      recentlyClosedTabKindsByWorktree: (() => {
-        const next = { ...s.recentlyClosedTabKindsByWorktree }
-        delete next[worktreeId]
-        return next
-      })(),
-      defaultTerminalTabsAppliedByWorktreeId: (() => {
-        const next = { ...s.defaultTerminalTabsAppliedByWorktreeId }
-        delete next[worktreeId]
-        return next
-      })(),
+      recentlyClosedTabKindsByWorktree: omitRecordKey(
+        s.recentlyClosedTabKindsByWorktree,
+        worktreeId
+      ),
+      defaultTerminalTabsAppliedByWorktreeId: omitRecordKey(
+        s.defaultTerminalTabsAppliedByWorktreeId,
+        worktreeId
+      ),
       activeWorktreeId: removedActiveWorktree ? null : s.activeWorktreeId,
       activeWorkspaceExecutionHostId: removedActiveWorktree
         ? null
