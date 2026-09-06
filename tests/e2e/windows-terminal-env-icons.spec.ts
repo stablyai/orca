@@ -96,7 +96,12 @@ test.describe('Windows terminal env and shell identity', () => {
     orcaPage
   }) => {
     test.skip(process.platform !== 'win32', 'WSL shell icons require Windows')
+    console.log('WSL_APP_PROBE', await orcaPage.evaluate(async () => ({
+      available: await window.api.wsl.isAvailable(),
+      distros: await window.api.wsl.listDistros()
+    })))
     const distro = await getFirstWslDistro(orcaPage)
+    expect(distro, 'CI installed Ubuntu must be visible to Orca').toBeTruthy()
     test.skip(!distro, 'WSL icon coverage requires an installed distro')
     await useWslRuntimeForActiveProject(orcaPage, distro!)
 

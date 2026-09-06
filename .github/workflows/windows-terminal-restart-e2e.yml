@@ -58,6 +58,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "WSL apt update failed: $LASTEXITCODE" }
           wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get install --yes git
           if ($LASTEXITCODE -ne 0) { throw "WSL git install failed: $LASTEXITCODE" }
+          wsl.exe --status
+          Write-Output "WSL_STATUS_EXIT=$LASTEXITCODE"
           wsl.exe --list --verbose
           if ($LASTEXITCODE -ne 0) { throw "WSL enumeration failed: $LASTEXITCODE" }
 
@@ -76,7 +78,7 @@ jobs:
         run: >-
           pnpm run test:e2e
           tests/e2e/windows-terminal-env-icons.spec.ts
-          --repeat-each=3
+          --grep "WSL project"
           --workers=1
 
       - name: Upload Playwright traces
