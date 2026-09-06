@@ -41,6 +41,33 @@ describe('parseClaudeUsageRecord', () => {
     })
   })
 
+  it('keeps a Fable 5.1 turn when optional usage fields are missing', () => {
+    const parsed = parseClaudeUsageRecord(
+      JSON.stringify({
+        type: 'assistant',
+        sessionId: 'session-fable-51',
+        timestamp: '2026-09-01T10:00:00.000Z',
+        message: {
+          model: 'claude-fable-5-1',
+          usage: { input_tokens: 100, cache_read_input_tokens: 10 }
+        }
+      })
+    )
+
+    expect(parsed).toEqual({
+      sessionId: 'session-fable-51',
+      timestamp: '2026-09-01T10:00:00.000Z',
+      model: 'claude-fable-5-1',
+      cwd: null,
+      gitBranch: null,
+      inputTokens: 100,
+      outputTokens: 0,
+      cacheReadTokens: 10,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0
+    })
+  })
+
   it('splits the cache-write total by TTL when the breakdown is present', () => {
     const parsed = parseClaudeUsageRecord(
       JSON.stringify({
