@@ -50,25 +50,37 @@ and `orca-terminal-daemon.exe` report `Valid CN=SignPath Foundation`.
 
 ## The behaviours, and why each one exists
 
-### The daemon runs from a renamed copy of our own image
+### The daemon runs from a copy of our own image
 
 `src/main/daemon/daemon-host-relocation.ts` copies the Electron runtime into
-`%LOCALAPPDATA%\Orca\daemon-host\<version>\` and renames `Orca.exe` to
-`orca-terminal-daemon.exe`. The comment on `DAEMON_HOST_EXE_NAME` states the
-reason without varnish: _"so the NSIS updater's `taskkill /IM Orca.exe` can't
-match it."_
+`%LOCALAPPDATA%\Orca\daemon-host\<version>\` and forks the terminal daemon from
+there.
 
 It exists because the NSIS installer deletes the old install directory and force-
 kills every process imaged under it. Without relocation, an auto-update kills the
 terminal daemon and every live terminal with it. The copy is a run-as-node
 `Orca.exe` rather than `node.exe` so there is no console flash and asar still
-resolves; `config/nsis/daemon-host-uninstall.nsh` reaps it on a real uninstall
+resolves; `config/nsis/orca-installer-hooks.nsh` reaps it on a real uninstall
 (guarded by `${isUpdated}` so an update's `uninstallOldVersion` never fires it).
 
-**How an EDR reads it: MITRE T1036, masquerading.** A signed executable copied
-out of the install directory into `%LOCALAPPDATA%` under a different name, which
-then spawns shells, matches the textbook description closely enough that no
-behavioural engine can be expected to score it low.
+**At the time of these incidents the copy was also renamed** to
+`orca-terminal-daemon.exe`, the image name every incident here reports, and
+`DAEMON_HOST_EXE_NAME`'s comment stated the reason without varnish: _"so the NSIS
+updater's `taskkill /IM Orca.exe` can't match it."_ The rename has since been
+removed; the copy now keeps the app exe's own file name, because the updater's
+kill sweep is path-scoped on every host that has PowerShell and the rename only
+ever bought the no-PowerShell fallback. See
+[`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md).
+
+**How an EDR reads it: MITRE T1036, masquerading** — and, for what remains,
+**T1036.005**. A signed executable copied out of the install directory into
+`%LOCALAPPDATA%` under a different name, which then spawns shells, matches the
+textbook description closely enough that no behavioural engine can be expected to
+score it low. Dropping the rename removes that literal indicator but not the
+underlying shape: execution from a non-standard user-writable location is scored
+on its own. Note also that the strongest form of the T1036 signal was never
+present here — the shipped binary's `OriginalFilename` is empty, so there was no
+embedded name for the old disk name to contradict.
 
 ### Every process gets a handle, on a timer
 
@@ -232,7 +244,8 @@ obfuscated-command-line detector is tuned on.
 
 ### The spawn tree itself
 
-`Orca.exe` → `orca-terminal-daemon.exe` → a shell → an agent CLI is what a
+`Orca.exe` → the relocated daemon host (`orca-terminal-daemon.exe` in the builds
+these incidents cover, `Orca.exe` since) → a shell → an agent CLI is what a
 terminal multiplexer for coding agents *is*. `reg.exe` appears from
 `src/main/win32-utils.ts`,
 `src/main/agent-hooks/managed-hook-owner-identity.ts` and
@@ -363,7 +376,7 @@ The checklist. On Windows, do not reach for:
 | Forking `powershell.exe` to read system state               | The native reader — [`windows-process-enumeration.md`](./windows-process-enumeration.md) is the standing rule for the process table |
 | A process per operation in a loop                           | One long-lived helper with a request channel. A burst of short-lived interpreters under one parent is itself the signal     |
 | `Add-Type -TypeDefinition` at runtime                       | A precompiled, signed assembly, or a native helper                                                                          |
-| Copying our own image under a different name                | An installer or updater that does not need the rename. Where the rename is load-bearing, document it as such                |
+| Copying our own image under a different name                | Copy it verbatim — [`windows-daemon-host-relocation.md`](./windows-daemon-host-relocation.md) (done for the daemon host)    |
 | Deriving a script runner from a UI preference               | [`windows-setup-shell.md`](./windows-setup-shell.md) — the script declares its own interpreter                              |
 
 Two framing rules that outlast the table:

@@ -217,6 +217,16 @@ export function hasNativeImeSourceChange(changedPaths) {
   ).some((route) => changedPaths.some(route.matches))
 }
 
+export function shouldRunReusablePrE2e(changedPaths) {
+  // Native IME has its own workflow; SSH still runs inside the reusable workflow.
+  return (
+    hasSshSourceChange(changedPaths) ||
+    selectPrE2eSpecs(changedPaths).some(
+      (spec) => spec !== 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+    )
+  )
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let input = ''
   process.stdin.setEncoding('utf8')
@@ -226,6 +236,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const changedPaths = input.split(/\r?\n/).filter(Boolean)
   if (process.argv.includes('--ssh-source')) {
     process.stdout.write(`${hasSshSourceChange(changedPaths)}\n`)
+  } else if (process.argv.includes('--reusable-workflow')) {
+    process.stdout.write(`${shouldRunReusablePrE2e(changedPaths)}\n`)
   } else if (process.argv.includes('--native-ime-source')) {
     process.stdout.write(`${hasNativeImeSourceChange(changedPaths)}\n`)
   } else {
