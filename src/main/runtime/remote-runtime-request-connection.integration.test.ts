@@ -505,18 +505,20 @@ describe('remote runtime request connection integration', () => {
         activeTabType: null,
         tabs: []
       }
+      const runtimeStatus = {
+        runtimeId: 'shared-runtime-test',
+        startedAt: 1,
+        version: '1.0.0',
+        protocolVersion: 1,
+        minCompatibleDesktopVersion: '1.0.0',
+        minCompatibleMobileVersion: '1.0.0',
+        capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
+      }
       const runtime = {
         getRuntimeId: () => 'shared-runtime-test',
         getStartedAt: () => 1,
-        getStatus: () => ({
-          runtimeId: 'shared-runtime-test',
-          startedAt: 1,
-          version: '1.0.0',
-          protocolVersion: 1,
-          minCompatibleDesktopVersion: '1.0.0',
-          minCompatibleMobileVersion: '1.0.0',
-          capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
-        }),
+        getStatus: () => runtimeStatus,
+        getStatusAfterWindowsProcessStartTimeProbe: async () => runtimeStatus,
         cleanupSubscriptionsForConnection: (connectionId: string) => {
           for (const [id, cleanup] of Array.from(subscriptionCleanups)) {
             if (id.includes(connectionId)) {

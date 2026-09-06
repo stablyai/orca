@@ -5,10 +5,10 @@ export const STATUS_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'status.get',
     params: null,
-    handler: (_params, { runtime, pairedDeviceId }) => {
+    handler: async (_params, { runtime, pairedDeviceId }) => {
       const snapshot = getRemoteServerUpdaterSnapshot(runtime.getRuntimeId())
       return {
-        ...runtime.getStatus(),
+        ...(await runtime.getStatusAfterWindowsProcessStartTimeProbe()),
         ...(pairedDeviceId ? { pairedDeviceId } : {}),
         appVersion: snapshot.appVersion,
         remoteUpdateSupport: snapshot.support

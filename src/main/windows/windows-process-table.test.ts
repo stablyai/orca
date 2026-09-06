@@ -8,6 +8,7 @@ import {
   __setWindowsProcessTreeRequireForTests,
   isWindowsProcessTableAvailable,
   isWindowsProcessStartTimeAvailable,
+  probeWindowsProcessStartTimeAvailability,
   readWindowsProcessIdentityTable,
   readWindowsProcessIdentityTableFresh,
   readWindowsProcessTable,
@@ -18,9 +19,9 @@ import {
 } from './windows-process-table'
 import { resetWindowsCommandLineRecoveryHealthForTests } from './windows-command-line-recovery-health'
 
-/** None | CreationTime, and CommandLine on top of it. Memory (1) is never asked for. */
+/** CreationTime and CommandLine are separate projections. Memory (1) is never asked for. */
 const IDENTITY_FLAGS = 4
-const DETAILED_FLAGS = 6
+const DETAILED_FLAGS = 2
 
 const getAllProcesses = vi.fn()
 
@@ -202,8 +203,8 @@ describe('windows process table', () => {
       Promise.all(Array.from({ length: 16 }, () => readWindowsProcessTable()))
     ])
     expect(coalescingCalls.map((call) => call.flags).sort()).toEqual([
-      IDENTITY_FLAGS,
-      DETAILED_FLAGS
+      DETAILED_FLAGS,
+      IDENTITY_FLAGS
     ])
     expect(identity).toHaveLength(16)
     expect(detailed).toHaveLength(16)
@@ -226,13 +227,12 @@ describe('windows process table', () => {
     // flags, or toIdentityRow failing to forward it. Neither sees the other's
     // failure, so keep both.
     expect(identityRows.map((row) => row.creationTimeMs)).toEqual([undefined, 1_700_000_000_000])
-    expect(detailedRows.map((row) => row.creationTimeMs)).toEqual([undefined, 1_700_000_000_000])
     // Two calls, each with its own flags. Concurrency is asserted separately,
     // against the bare addon: this mock's own latch means it could never report
     // more than one call in flight, whatever this module did.
     expect(coalescingCalls.map((call) => call.flags).sort()).toEqual([
-      IDENTITY_FLAGS,
-      DETAILED_FLAGS
+      DETAILED_FLAGS,
+      IDENTITY_FLAGS
     ])
   }
 
@@ -263,8 +263,8 @@ describe('windows process table', () => {
     const identity = readWindowsProcessIdentityTableFresh()
     await Promise.all([detailed, identity])
     expect(coalescingCalls.map((call) => call.flags).sort()).toEqual([
-      IDENTITY_FLAGS,
-      DETAILED_FLAGS
+      DETAILED_FLAGS,
+      IDENTITY_FLAGS
     ])
     expect(maxConcurrentNativeCalls).toBe(1)
   })
@@ -327,13 +327,79 @@ describe('windows process table', () => {
     vi.useRealTimers()
   })
 
-  it('only advertises PID-safe ownership when the native creation-time field exists', () => {
+  it('only advertises PID-safe ownership after measuring the querying process row', async () => {
+    expect(isWindowsProcessStartTimeAvailable()).toBe(false)
+    getAllProcesses.mockImplementation((cb: (rows: unknown) => void) =>
+      cb([{ ...SELF, creationTimeMs: 1_700_000_000_001 }, NATIVE[1]])
+    )
+    resetWindowsProcessTableForTests()
+    await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(true)
     expect(isWindowsProcessStartTimeAvailable()).toBe(true)
+
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
       getAllProcesses
     }))
     expect(isWindowsProcessStartTimeAvailable()).toBe(false)
+  })
+
+  it('rejects a patched JavaScript enum backed by a binary that omits creation time', async () => {
+    await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(false)
+    expect(isWindowsProcessStartTimeAvailable()).toBe(false)
+    expect(getAllProcesses).toHaveBeenCalledWith(expect.any(Function), IDENTITY_FLAGS)
+    await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(false)
+    expect(getAllProcesses).toHaveBeenCalledTimes(1)
+  })
+
+  it('reprobes after transient failed, empty, and truncated snapshots', async () => {
+    vi.useFakeTimers()
+    getAllProcesses
+      .mockImplementationOnce((cb: (rows: unknown) => void) => cb(undefined))
+      .mockImplementationOnce((cb: (rows: unknown) => void) => cb([]))
+      .mockImplementationOnce((cb: (rows: unknown) => void) => cb([{ pid: 999 }]))
+      .mockImplementationOnce((cb: (rows: unknown) => void) =>
+        cb([{ ...SELF, creationTimeMs: 1_700_000_000_001 }, NATIVE[1]])
+      )
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(false)
+      expect(isWindowsProcessStartTimeAvailable()).toBe(false)
+      await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(false)
+      expect(getAllProcesses).toHaveBeenCalledTimes(attempt + 1)
+      await vi.advanceTimersByTimeAsync(30_000)
+    }
+
+    await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(true)
+    expect(isWindowsProcessStartTimeAvailable()).toBe(true)
+    expect(getAllProcesses).toHaveBeenCalledTimes(4)
+    vi.useRealTimers()
+  })
+
+  it.each([0, -1, 1.5, Number.POSITIVE_INFINITY, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
+    'drops an invalid native creation time (%s)',
+    async (creationTimeMs) => {
+      getAllProcesses.mockImplementation((cb: (rows: unknown) => void) =>
+        cb([
+          { ...SELF, creationTimeMs: 1_700_000_000_001 },
+          { ...NATIVE[1], creationTimeMs }
+        ])
+      )
+      resetWindowsProcessTableForTests()
+
+      const rows = await readWindowsProcessTableFresh()
+      expect(rows[1]).not.toHaveProperty('creationTimeMs')
+    }
+  )
+
+  it('rejects a malformed creation-time enum value', async () => {
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 8 },
+      getAllProcesses
+    }))
+
+    await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(false)
+    expect(isWindowsProcessStartTimeAvailable()).toBe(false)
+    expect(getAllProcesses).not.toHaveBeenCalled()
   })
 
   it('serves repeat reads from the shared snapshot', async () => {
@@ -673,6 +739,22 @@ describe('resolving the native reader', () => {
     expect(resolve).not.toHaveBeenCalledWith(ADDON_SPECIFIER)
   })
 
+  it('falls through when the npm package loads with a malformed API', async () => {
+    const addon = addonReturning(NATIVE)
+    __setWindowsProcessTreeRequireForTests((specifier: string) => {
+      if (specifier === PACKAGE_SPECIFIER) {
+        return { ProcessDataFlag: { None: 0, CommandLine: 2 } }
+      }
+      if (specifier === ADDON_SPECIFIER) {
+        return addon
+      }
+      throw new Error('MODULE_NOT_FOUND')
+    })
+
+    await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(2)
+    expect(addon.getProcessList).toHaveBeenCalledOnce()
+  })
+
   it('falls through to the addon staged beside the relay bundle', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
@@ -695,7 +777,7 @@ describe('resolving the native reader', () => {
     expect(isWindowsProcessTableAvailable()).toBe(true)
   })
 
-  it('asks the addon for the command line, as the package path does', async () => {
+  it('asks the addon only for the command line on the detailed path', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -704,13 +786,10 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessTableFresh()
-    // CommandLine alone: a bare snapshot would silently drop the command line
-    // every agent-recognition caller matches on first, and Memory would add a
-    // second per-process handle nothing reads.
-    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 2)
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), DETAILED_FLAGS)
   })
 
-  it('asks the addon for nothing per-process on the identity path', async () => {
+  it('asks the addon for creation time on the identity path', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -719,9 +798,7 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessIdentityTableFresh()
-    // The relay addon exposes no CreationTime bit, so this is a bare Toolhelp32
-    // walk: zero OpenProcess calls.
-    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 0)
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), IDENTITY_FLAGS)
   })
 
   it('reaches the CIM scan when neither the package nor the addon is present', async () => {

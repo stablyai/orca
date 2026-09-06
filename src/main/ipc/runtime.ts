@@ -55,8 +55,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     }
   )
 
-  ipcMain.handle('runtime:getStatus', (): RuntimeStatus => {
-    return runtime.getStatus()
+  ipcMain.handle('runtime:getStatus', (): Promise<RuntimeStatus> => {
+    return runtime.getStatusAfterWindowsProcessStartTimeProbe()
   })
 
   ipcMain.handle(

@@ -28,9 +28,11 @@ describe('runtime updater RPC methods', () => {
     targetVersion: '1.5.1',
     runtimeId: 'runtime-rpc'
   }))
+  const runtimeStatus = { runtimeId: 'runtime-rpc', liveTabCount: 2, liveLeafCount: 3 }
   const runtime = {
     getRuntimeId: () => 'runtime-rpc',
-    getStatus: () => ({ runtimeId: 'runtime-rpc', liveTabCount: 2, liveLeafCount: 3 })
+    getStatus: () => runtimeStatus,
+    getStatusAfterWindowsProcessStartTimeProbe: vi.fn(async () => runtimeStatus)
   }
 
   beforeEach(() => {
@@ -67,5 +69,6 @@ describe('runtime updater RPC methods', () => {
       appVersion: '1.5.0',
       remoteUpdateSupport: snapshot.support
     })
+    expect(runtime.getStatusAfterWindowsProcessStartTimeProbe).toHaveBeenCalledOnce()
   })
 })

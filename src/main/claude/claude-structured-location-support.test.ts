@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   __setWindowsProcessTreeLoaderForTests,
+  probeWindowsProcessStartTimeAvailability,
   resetWindowsProcessTableForTests
 } from '../windows/windows-process-table'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
@@ -54,12 +55,21 @@ describe('supportsClaudeStructuredLocation', () => {
     ).toBe(false)
   })
 
-  it('accepts Windows local locations once creation-time proof is available', () => {
+  it('accepts Windows local locations once creation-time proof is available', async () => {
     previousPlatform = setPlatform('win32')
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
-      getAllProcesses: () => undefined
+      getAllProcesses: (callback) =>
+        callback([
+          {
+            pid: process.pid,
+            ppid: process.ppid,
+            name: 'orca.exe',
+            creationTimeMs: 1_700_000_000_000
+          }
+        ])
     }))
+    await expect(probeWindowsProcessStartTimeAvailability()).resolves.toBe(true)
     expect(
       supportsClaudeStructuredLocation({
         executionHostId: 'local',

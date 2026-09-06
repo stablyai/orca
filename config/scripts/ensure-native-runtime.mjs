@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import {
+  assertWindowsProcessTreeRuntimeCreationTime,
   ensureWindowsProcessTreeCommandLinePatch,
   inspectWindowsProcessTreeAddon,
   stageWindowsProcessTreeNodeAddonApiHeaders,
@@ -264,7 +265,8 @@ function loadNativeModule(moduleName) {
     // published tarball ships a prebuilt built from unpatched source that is
     // node-addon-api, so it requires cleanly and then reads every process's
     // command line out of its address space. Check the binary, not the load.
-    require(moduleName)
+    const windowsProcessTree = require(moduleName)
+    assertWindowsProcessTreeRuntimeCreationTime(windowsProcessTree)
     if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath()) === 'unpatched') {
       throw new Error(
         'the loaded addon still calls ReadProcessMemory, so it was not built from the patched ' +

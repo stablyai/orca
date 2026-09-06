@@ -8,6 +8,11 @@ export type MobileRpcMock = Mock<(...args: unknown[]) => unknown>
 // Full mobile-surface runtime double: every RPC the mobile allowlist may reach.
 export function createMobileRpcSurfaceRuntime() {
   const getStatus: MobileRpcMock = vi.fn().mockResolvedValue({ graphStatus: 'ok' })
+  // status.get resolves through the Windows start-time probe, so the double
+  // must answer it too -- the real runtime always does.
+  const getStatusAfterWindowsProcessStartTimeProbe: MobileRpcMock = vi
+    .fn()
+    .mockResolvedValue({ graphStatus: 'ok' })
   const pushRuntimeGit: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const selectClaudeAccount: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
   const selectCodexAccount: MobileRpcMock = vi.fn().mockResolvedValue({ ok: true })
@@ -119,6 +124,7 @@ export function createMobileRpcSurfaceRuntime() {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     getStatus,
+    getStatusAfterWindowsProcessStartTimeProbe,
     pushRuntimeGit,
     selectClaudeAccount,
     selectCodexAccount,

@@ -213,7 +213,6 @@ function launchAgentInNewTabInternal(
         agent,
         settings: store.settings,
         executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
-        platform: CLIENT_PLATFORM,
         hostCapabilities: readLocalRuntimeCapabilities(),
         workspaceKind,
         projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),

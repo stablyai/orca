@@ -1,8 +1,9 @@
 # Reading the Windows process table
 
-Orca needs three things from the Windows process table: who a PID's parent is
+Orca needs four things from the Windows process table: who a PID's parent is
 (descendant walks and teardown identity), what a process is running (agent
-recognition), and how much memory/CPU it uses (Resource Manager).
+recognition), when it started (PID-reuse-safe ownership), and how much
+memory/CPU it uses (Resource Manager).
 
 Node cannot answer the first one without native code. That is why seven
 independent readers existed, each forking `powershell.exe` to run
@@ -40,6 +41,10 @@ Neither flag is a wider column on the same query. Each is a separate
 per-process syscall sequence, and they are not equally expensive to the EDR
 watching:
 
+- `CreationTime` (`process.cc`) —
+  `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` plus `GetProcessTimes`.
+  Identity reads request this field so PID ownership can be fenced against
+  reuse without paying for a command line.
 - `CommandLine` (`process_commandline.cc`) —
   `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)`, then
   `NtQueryInformationProcess(ProcessCommandLineInformation)` twice: once to size
@@ -56,25 +61,25 @@ it moved the PEB traffic not at all. Replacing the PEB walk with the kernel
 query is what took `PROCESS_VM_READ` and `ReadProcessMemory` out of the addon
 altogether; the two changes compose, and neither substitutes for the other.
 
-So be precise about what these two flag sets buy now. A detailed scan is one
-`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` per process and no memory
-access at all. What the split buys on top of that is the handle itself: an
-identity scan opens nothing.
+Both projections now open one limited-information handle per process, but for
+different data. Keeping the projections split prevents the detailed 750 ms
+polling path from also opening a second handle for creation time.
 
 So the module exposes two snapshots, and the row types differ so a cheap caller
 cannot read what its flag set did not pay for:
 
 | reader                                     | row type                     | flags                       | per-process handles |
 | ------------------------------------------ | ---------------------------- | --------------------------- | ------------------- |
-| `readWindowsProcessIdentityTable[Fresh]()` | `WindowsProcessIdentityRow`  | `None \| CreationTime`      | none                |
-| `readWindowsProcessTable[Fresh]()`         | `WindowsProcessRow`          | `+ CommandLine`             | one `OpenProcess`   |
+| `readWindowsProcessIdentityTable[Fresh]()` | `WindowsProcessIdentityRow`  | `CreationTime`              | one `OpenProcess`   |
+| `readWindowsProcessTable[Fresh]()`         | `WindowsProcessRow`          | `CommandLine`               | one `OpenProcess`   |
 
 `Memory` is requested by neither. Nothing reads a working set off this table —
 `windows-process-resource-collector.ts` runs its own sweep because it needs
 commit and CPU counters in the same pass, and the addon stores `WorkingSetSize`
 into a `DWORD` so anything above 4 GB wraps anyway.
 
-Measured on Windows 11 with 492 processes (p50 / p95):
+Baseline measured on Windows 11 with 492 processes before enabling the
+creation-time query (p50 / p95):
 
 |                                  | p50     | p95     |
 | -------------------------------- | ------- | ------- |
@@ -147,13 +152,10 @@ mistake you make once.
 
 So: assert what each flag set **did** get, not only what it lacks, and put those
 assertions in the helper both orderings run through, or the reverse order keeps
-the blind spot. The identity set is checked on `creationTimeMs` because that is
-the field it exists to carry. Keep both that check and the flags-array check —
-they catch **different** failures and neither is redundant. The flags array
-catches a read served another flag set's rows (the coalescing bug); the
-positional `creationTimeMs` check catches field shaping — identity dropping
-`CreationTime` from its flags, or `toIdentityRow` failing to forward it — which
-no flags assertion would notice.
+the blind spot. The identity set is checked on `creationTimeMs`, while the
+detailed set is checked on `command`. Keep those checks and the flags-array
+check: the flags catch a read served another projection's rows, while the field
+assertions catch projection shaping.
 
 And pick the mock to match the claim. The coalescing mock models the npm
 wrapper's queue semantics and is the only place to assert those. Concurrency has
@@ -173,6 +175,7 @@ through `toIdentityRow`, so an identity row carries no command line on any host.
 | `codex-structured-turn-processes.ts`          | `command` (turn-process identity) | detailed |
 | `structured-tui-process-identity.ts`          | `command` (child match)       | detailed |
 | `windows-pty-root-identity.ts`                | `pid` / `ppid` only           | identity |
+| `windows-descendant-exit-verification.ts`     | `pid` / `ppid` / `creationTimeMs` | identity |
 | `agent-session-process-identity-probe.ts`     | `creationTimeMs` only         | identity |
 | `relay/windows-port-scan.ts`                  | `name` (port owner label)     | detailed |
 
@@ -185,24 +188,29 @@ for a second scan whenever a pane is polling; revisit if the relay ever scans
 ports without one.
 
 The per-pane foreground tracker is the hot one (750 ms / 2 s cadence) and it
-genuinely needs the command line, so the repeating per-process `OpenProcess` is
-not something the split removes. What the split removes is that handle from
-teardown identity and from the owner probe, which now open nothing.
+genuinely needs the command line, so its repeating per-process `OpenProcess` is
+not something the split removes. The split keeps creation-time queries off that
+hot path while identity and teardown reads avoid command-line recovery.
 
-### `creationTimeMs` does not exist on any shipped build
+### Creation time is capability proof, not an enum check
 
-Nothing in the repo supplies a `CreationTime` flag. The package enum is
-`None`/`Memory`/`CommandLine`, `process_worker.cc` emits no `creationTimeMs`,
-the vendored patch adds none, and `adaptAddon`'s `PROCESS_DATA_FLAG` lacks the
-bit. So `creationTimeMs` is always `undefined` in production and
-`isWindowsProcessStartTimeAvailable()` is always `false` — a latent product gap
-that predates the split and needs its own owner.
+The patched snapshot exposes `creationTimeMs`, and
+`agent-session-process-identity-probe.ts` uses it for Windows process identity.
+The field is omitted when a process denies the query handle or the native
+binary predates the patch. Orca therefore probes its own PID and accepts the
+proof only after the native binary returns a positive, safe-integer timestamp.
+A patched JavaScript enum over a stale binary fails closed.
 
-Two consequences. `IDENTITY_PROJECTION.flags` evaluates to `0` today, so the
-identity reader really does open zero handles. And
-`agent-session-process-identity-probe.ts` early-returns on
-`isWindowsProcessStartTimeAvailable()` rather than scanning the whole table to
-produce `null`. Do not build anything on Windows start time working.
+Transient failed, empty, or truncated snapshots leave the proof unknown and
+may be retried after 30 seconds. A complete own-PID row without creation time is
+conclusive evidence that the loaded binary does not support it. CIM fallback
+never claims the proof because it is not the native identity source used for
+structured-process ownership.
+
+Start time is a PID-reuse guard, not ownership by itself. Structured sessions
+also retain host, provider, account, workspace, spawn-token, and lease-fence
+evidence. For PTY trees Orca creates, an inherited job-object handle remains
+stronger than reconstructing ownership from process-table fields.
 
 Those CIM numbers are from a 1050-process host. The scan scales with process
 count: on a 1486-process Windows SSH host it measured **1.36 s** and produced
@@ -344,7 +352,7 @@ on any other OS keeps using the scan.
 
 ## Why the package is patched
 
-`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries four hunks.
+`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries five changes.
 
 1. **Spectre mitigation.** The upstream `binding.gyp` requires Spectre-mitigated
    libraries, which Orca's Windows build agents do not install. `node-pty` is
@@ -360,6 +368,10 @@ on any other OS keeps using the scan.
    `node_addon_api.gyp` resolves outside the repo and hourly Windows builds
    die at configure. `node-pty` is patched the same way for the same reason.
 4. **No PEB reads, no `PROCESS_VM_READ`.** See below.
+5. **Process creation time.** The addon requests `GetProcessTimes` under
+   `PROCESS_QUERY_LIMITED_INFORMATION` and publishes Unix milliseconds only
+   when Windows returned them. Orca requires a valid value for its own PID
+   before treating the field as available.
 
 The typings claim `commandLine` is truncated at 512 characters. Measured, it is
 not: the longest observed on a real host was 26,059.

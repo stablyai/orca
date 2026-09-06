@@ -135,7 +135,6 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
     agent,
     settings: args.settings,
     executionHostId: args.executionHostId,
-    platform: getClientPlatform(),
     hostCapabilities: readLocalRuntimeCapabilities(),
     workspaceKind: 'folder',
     nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable,

@@ -4,6 +4,7 @@ import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-a
 import { agentSessionOwnerBindingsEqual } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { resolvePinnedCodexRolloutProof } from '../codex/codex-tui-rollout-proof'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
+import { probeWindowsProcessStartTimeAvailability } from '../windows/windows-process-table'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { resolveStructuredAgentSessionCreateSupport } from '../native-chat/structured-agent-session-create-support'
@@ -18,6 +19,8 @@ import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentS
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -54,13 +57,23 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     agent: 'claude' | 'codex'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
+    const windowsProcessStartTimeAvailable =
+      process.platform === 'win32' &&
+      location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+      location.wslDistro === null
+        ? await probeWindowsProcessStartTimeAvailability()
+        : undefined
+    const hasWindowsProcessStartTimeProof =
+      windowsProcessStartTimeAvailable === undefined
+        ? undefined
+        : () => windowsProcessStartTimeAvailable
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
       adapterSupportsCreate:
         agent === 'claude'
-          ? supportsClaudeStructuredLocation(location)
-          : supportsCodexStructuredLocation(location),
+          ? supportsClaudeStructuredLocation(location, hasWindowsProcessStartTimeProof)
+          : supportsCodexStructuredLocation(location, hasWindowsProcessStartTimeProof),
       getSettings: () => this.requireStore().getSettings()
     })
   }
@@ -91,14 +104,23 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     const repo = this.store?.getRepo(target.worktree.repoId)
-    // WSL routing describes *this* machine; no remote or runtime host may inherit it.
-    const wslDistro =
-      repo && target.executionHostId === LOCAL_EXECUTION_HOST_ID
+    const folderScope = parseWorkspaceKey(target.worktree.id)
+    const folderWorkspace = folderScope?.type === 'folder'
+    // WSL routing describes *this* machine; no remote or runtime host may inherit
+    // it. Both branches key on executionHostId: the target no longer carries a
+    // connectionId, which used to spell remote, unresolved and local alike.
+    const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
+    const configuredWslDistro =
+      repo && isLocalHost
         ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
         : null
-    const folderWorkspace = this.store
-      ?.getFolderWorkspaces?.()
-      .some((workspace) => workspace.id === target.worktree.id)
+    // Folder workspaces have no repo Git options, so a WSL UNC path is the only
+    // durable signal that native Windows structured Codex cannot safely use it.
+    const wslDistro =
+      configuredWslDistro ??
+      (folderWorkspace && isLocalHost
+        ? (parseWslUncPath(target.worktree.path)?.distro ?? null)
+        : null)
     return {
       executionHostId: target.executionHostId,
       wslDistro,
@@ -208,6 +230,9 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
     if (!this.hasPersistedStructuredAgentSessionStore()) {
       return
+    }
+    if (process.platform === 'win32') {
+      await probeWindowsProcessStartTimeAvailability()
     }
     // Durable agent records must exist before daemon inventory can be reconciled against them.
     await this.ensureStructuredAgentSessionHost()

@@ -26,11 +26,39 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e7
                "AdditionalOptions": [
                  "/guard:cf",
                  "/sdl",
+diff --git a/src/process.h b/src/process.h
+index 3c9b852e3b..72e164825a 100644
+--- a/src/process.h
++++ b/src/process.h
+@@ -22,18 +22,22 @@ struct ProcessInfo {
+   DWORD ppid;
+   DWORD memory; // Reported in bytes
+   std::string commandLine;
++  ULONGLONG creationTimeMs;
+ };
+ 
+ enum ProcessDataFlags {
+   NONE = 0,
+   MEMORY = 1,
+-  COMMANDLINE = 2
++  COMMANDLINE = 2,
++  CREATIONTIME = 4
+ };
+ 
+ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info, DWORD flags);
+ 
+ void GetProcessMemoryUsage(ProcessInfo& process_info);
+ 
++void GetProcessCreationTime(ProcessInfo& process_info);
++
+ void GetCpuUsage(Cpu& cpu_info, bool first_run);
+ 
+ #endif  // SRC_PROCESS_H_
 diff --git a/src/process.cc b/src/process.cc
 index 3eea92077c4d1d433119361d5c432881859131e9..738775f6fcdfb676054386fe34c0380327ed1863 100644
 --- a/src/process.cc
 +++ b/src/process.cc
-@@ -1,108 +1,112 @@
+@@ -1,108 +1,138 @@
 -/*---------------------------------------------------------------------------------------------
 - *  Copyright (c) Microsoft Corporation. All rights reserved.
 - *  Licensed under the MIT License. See License.txt in the project root for license information.
@@ -174,6 +202,10 @@ index 3eea92077c4d1d433119361d5c432881859131e9..738775f6fcdfb676054386fe34c03803
 +          GetProcessCommandLine(pinfo);
 +        }
 +
++        if (CREATIONTIME & process_data_flags) {
++          GetProcessCreationTime(pinfo);
++        }
++
 +        strcpy(pinfo.name, process_entry.szExeFile);
 +        process_info.push_back(std::move(pinfo));
 +        process_count++;
@@ -200,6 +232,28 @@ index 3eea92077c4d1d433119361d5c432881859131e9..738775f6fcdfb676054386fe34c03803
 +
 +  if (GetProcessMemoryInfo(hProcess, &pmc, sizeof(pmc))) {
 +    process_info.memory = (DWORD)pmc.WorkingSetSize;
++  }
++
++  CloseHandle(hProcess);
++}
++
++void GetProcessCreationTime(ProcessInfo& process_info) {
++  HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_info.pid);
++  if (hProcess == NULL) {
++    return;
++  }
++
++  FILETIME creationTime, exitTime, kernelTime, userTime;
++  if (GetProcessTimes(hProcess, &creationTime, &exitTime, &kernelTime, &userTime)) {
++    ULARGE_INTEGER timestamp;
++    timestamp.LowPart = creationTime.dwLowDateTime;
++    timestamp.HighPart = creationTime.dwHighDateTime;
++    constexpr ULONGLONG WINDOWS_EPOCH_OFFSET_100NS = 116444736000000000ULL;
++    constexpr ULONGLONG HUNDRED_NS_PER_MILLISECOND = 10000ULL;
++    if (timestamp.QuadPart >= WINDOWS_EPOCH_OFFSET_100NS) {
++      process_info.creationTimeMs =
++          (timestamp.QuadPart - WINDOWS_EPOCH_OFFSET_100NS) / HUNDRED_NS_PER_MILLISECOND;
++    }
 +  }
 +
 +  CloseHandle(hProcess);
@@ -448,3 +502,105 @@ index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3
 +  return StoreCommandLineUtf8(process_info, command_line->Buffer,
 +                              command_line->Length / sizeof(wchar_t));
 +}
+diff --git a/src/process_worker.cc b/src/process_worker.cc
+index f59559d31c..1d61c87a56 100644
+--- a/src/process_worker.cc
++++ b/src/process_worker.cc
+@@ -43,6 +43,11 @@ void GetProcessesWorker::OnOK() {
+           Napi::String::New(env, pinfo.commandLine));
+     }
+ 
++    if ((CREATIONTIME & process_data_flags_) && pinfo.creationTimeMs != 0) {
++      object.Set("creationTimeMs",
++                 Napi::Number::New(env, static_cast<double>(pinfo.creationTimeMs)));
++    }
++
+     result.Set(i, object);
+   }
+ 
+diff --git a/lib/index.ts b/lib/index.ts
+index 7b53aad05c..e982c8c0be 100644
+--- a/lib/index.ts
++++ b/lib/index.ts
+@@ -11,7 +11,8 @@ import { IProcessInfo, IProcessTreeNode, IProcessCpuInfo } from '@vscode/windows
+ export enum ProcessDataFlag {
+   None = 0,
+   Memory = 1,
+-  CommandLine = 2
++  CommandLine = 2,
++  CreationTime = 4
+ }
+ 
+ type RequestCallback = (processList: IProcessInfo[]) => void;
+@@ -81,11 +82,12 @@ export function buildProcessTree(rootPid: number, processList: Iterable<IProcess
+   // • the properties are inlined/splatted
+   // • the 'ppid' field is omitted
+   // • the depth of the tree is limited by `maxDepth`
+-  const buildNode = ({ info: { pid, name, memory, commandLine }, children }: IProcessInfoNode, depth: number): IProcessTreeNode => ({
++  const buildNode = ({ info: { pid, name, memory, commandLine, creationTimeMs }, children }: IProcessInfoNode, depth: number): IProcessTreeNode => ({
+     pid,
+     name,
+     memory,
+     commandLine,
++    creationTimeMs,
+     children: depth > 0 ? children.map(c => buildNode(c, depth - 1)) : [],
+   });
+ 
+diff --git a/lib/index.js b/lib/index.js
+index e586cd6ead..07ad1b914a 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -12,6 +12,7 @@ var ProcessDataFlag;
+     ProcessDataFlag[ProcessDataFlag["None"] = 0] = "None";
+     ProcessDataFlag[ProcessDataFlag["Memory"] = 1] = "Memory";
+     ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";
++    ProcessDataFlag[ProcessDataFlag["CreationTime"] = 4] = "CreationTime";
+ })(ProcessDataFlag = exports.ProcessDataFlag || (exports.ProcessDataFlag = {}));
+ // requestInProgress is used for any function that uses CreateToolhelp32Snapshot, as multiple calls
+ // to this cannot be done at the same time.
+@@ -66,11 +67,12 @@ function buildProcessTree(rootPid, processList, maxDepth = MAX_FILTER_DEPTH) {
+     // • the properties are inlined/splatted
+     // • the 'ppid' field is omitted
+     // • the depth of the tree is limited by `maxDepth`
+-    const buildNode = ({ info: { pid, name, memory, commandLine }, children }, depth) => ({
++    const buildNode = ({ info: { pid, name, memory, commandLine, creationTimeMs }, children }, depth) => ({
+         pid,
+         name,
+         memory,
+         commandLine,
++        creationTimeMs,
+         children: depth > 0 ? children.map(c => buildNode(c, depth - 1)) : [],
+     });
+     return buildNode(root, maxDepth);
+diff --git a/typings/windows-process-tree.d.ts b/typings/windows-process-tree.d.ts
+index 70e242b123..fb1b810707 100644
+--- a/typings/windows-process-tree.d.ts
++++ b/typings/windows-process-tree.d.ts
+@@ -7,7 +7,8 @@ declare module '@vscode/windows-process-tree' {
+   export enum ProcessDataFlag {
+     None = 0,
+     Memory = 1,
+-    CommandLine = 2
++    CommandLine = 2,
++    CreationTime = 4
+   }
+ 
+   export interface IProcessInfo {
+@@ -24,6 +25,9 @@ declare module '@vscode/windows-process-tree' {
+      * The string returned is at most 512 chars, strings exceeding this length are truncated.
+      */
+     commandLine?: string;
++
++    /** Process creation time in Unix milliseconds. */
++    creationTimeMs?: number;
+   }
+ 
+   export interface IProcessCpuInfo extends IProcessInfo {
+@@ -35,6 +39,7 @@ declare module '@vscode/windows-process-tree' {
+     name: string;
+     memory?: number;
+     commandLine?: string;
++    creationTimeMs?: number;
+     children: IProcessTreeNode[];
+   }
+ 

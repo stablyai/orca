@@ -51,7 +51,6 @@ import {
   resolveAgentLaunchRoute
 } from '@/lib/agent-launch-routing'
 import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -206,7 +205,6 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
             executionHostId: ephemeralVmRecipe
               ? 'runtime:pending-ephemeral-vm'
               : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? 'local'),
-            platform: CLIENT_PLATFORM,
             hostCapabilities: readLocalRuntimeCapabilities(),
             workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
             promptDelivery: quickDraftPrompt ? 'draft' : 'auto-submit',

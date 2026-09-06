@@ -110,14 +110,14 @@ describe('windows foreground inspection cost per pane', () => {
     return resolved
   }
 
-  it('never sets the Memory flag on the snapshot', async () => {
+  it('requests only command lines on the pane snapshot', async () => {
     await queryWindowsPaneProcessInventory(shellPid(0))
     expect(flagsSeen).toHaveLength(1)
     // Memory is bit 0, and it costs the addon a second OpenProcess per process
     // carrying PROCESS_VM_READ (process.cc `GetProcessMemoryUsage`).
     expect(flagsSeen[0]! & 1).toBe(0)
-    // CommandLine (2) | CreationTime (4).
-    expect(flagsSeen[0]).toBe(6)
+    // CreationTime is isolated to ownership reads so this hot scan opens one handle per process.
+    expect(flagsSeen[0]).toBe(2)
   })
 
   it('projects the shared snapshot once for the whole pane fan-out', async () => {
