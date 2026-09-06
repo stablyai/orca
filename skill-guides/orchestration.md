@@ -3,18 +3,18 @@ name: orchestration
 description: >-
   Use Orca orchestration for structured multi-agent coordination: threaded
   messages, blocking ask/reply flows, task dispatch, worker_done/escalation
-  waits, task DAGs, decision gates, coordinator loops, or decomposing work
-  across agents. Use `orca-cli` instead for full ownership handoffs, including
-  requests phrased as "hand off", "handoff", "handover", "give this to another
-  agent", or "another worktree" when the user did not explicitly ask to
-  supervise, monitor, wait for results, or coordinate a DAG. Use `orca-cli` for
-  terminal control, lightweight terminal prompts, shell commands, Orca
-  worktree management, reading or waiting on terminals, and automation of the
-  browser embedded inside Orca. Use Computer Use for external browser windows,
-  webviews, Orca app UI, or desktop UI outside Orca's embedded browser only when
-  the task requires OS/window-level control such as focus, menus, dialogs,
-  coordinates, or screenshots. Use `orca-cli` for Orca's embedded pages and a
-  page-automation tool such as Playwright or CDP for external pages.
+  waits, task DAGs, decision gates, or coordinator loops. Use `orca-cli`
+  instead for full ownership handoffs, including requests phrased as "hand
+  off", "handoff", "handover", "give this to another agent", or "another
+  worktree" when the user did not explicitly ask to supervise, monitor, wait
+  for results, or coordinate a DAG. Use `orca-cli` for terminal control,
+  lightweight terminal prompts, shell commands, Orca worktree management,
+  reading or waiting on terminals, and the Orca embedded browser. Use Computer
+  Use for external browser windows, webviews, Orca app UI, or desktop UI
+  outside Orca's embedded browser only when the task requires OS/window-level
+  control such as focus, menus, dialogs, coordinates, or screenshots. Use
+  `orca-cli` for Orca's embedded pages and a page-automation tool such as
+  Playwright or CDP for external pages.
 ---
 
 # Orca Inter-Agent Orchestration
@@ -179,6 +179,15 @@ Dispatch rules:
 - If the target is a bare shell, omit `--inject`, dispatch for tracking if needed, then send the prompt manually with `orca terminal send --terminal <handle> --text <prompt> --enter --json`.
 - After 3 consecutive failures on one task, the dispatch context circuit-breaks and the task is marked failed.
 - Use `task-list --brief --json` for coordinator sweeps; it collapses whitespace and caps each echoed spec at 160 characters (`spec_truncated` marks shortened rows). Omit `--brief` when the full spec is required, or when an older CLI rejects it as an unknown flag.
+
+`dispatch` and `worker-start` refuse the following preflight cases with a stable `error.code`; read it before choosing a recovery, and treat `error.data.nextSteps` as the exact recovery text. Older hosts may omit `data`, so treat every field as optional.
+
+| Code                 | Meaning                                                                                                               | Recovery                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `task_not_found`     | No Task with that id, or not in the bound Run (`data.taskId`, `data.runId`)                                           | Check `task-list --json`; create the Task with `task-create` if it does not exist                                              |
+| `task_not_startable` | Task cannot start now: not `ready`, or invalid `--retry-of` (`data.status`, `data.unmetDependencies`, `data.retryOf`) | Wait for running dependencies with `check --wait`; retry or unblock failed ones; inspect `dispatch-show` if already dispatched |
+| `inject_rejected`    | `--inject` refused because no recognized agent runs in the target (`data.terminal`, `data.reason`)                    | Start a recognized agent there or pick another terminal; or dispatch without `--inject` and use `terminal send`                |
+| `runtime_error`      | Any other failure, including a target terminal that already owns an active Dispatch                                   | Read the message, inspect state, and do not retry unchanged                                                                    |
 
 ## How deep workers can nest
 

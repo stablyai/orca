@@ -49,7 +49,7 @@ describe('worktree card agent summary', () => {
     const agent = monitoringAgent()
 
     expect(getAgentDotState(agent)).toBe('monitoring')
-    expect(getCompactAgentSecondary(agent)).toBe('Monitoring background tasks')
+    expect(getCompactAgentSecondary(agent, Date.now())).toBe('Monitoring background tasks')
     expect(summarizeAgents([agent], 'Agent')).toBe('Agent monitoring')
   })
 

@@ -11,7 +11,6 @@ import {
   applyJournalRow,
   createJournalReducerState,
   MAX_JOURNAL_APPLIED_SETTLEMENT_IDS,
-  referencedBlobDigests,
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
@@ -376,58 +375,6 @@ describe('lifecycle settlement deduplication', () => {
     expect(state.appliedSettlementIds.size).toBe(MAX_JOURNAL_APPLIED_SETTLEMENT_IDS)
     expect(state.appliedSettlementIds.has('settlement-0')).toBe(false)
     expect(state.appliedSettlementIds.has('settlement-1')).toBe(true)
-  })
-})
-
-describe('blob retention', () => {
-  it('reports the digests live rows still reference', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      {
-        kind: 'item',
-        itemId: 'inline',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'y', byteLength: 1, digest: 'digest-b', truncated: false }
-        },
-        ...base(2)
-      }
-    ])
-    expect([...referencedBlobDigests(state)]).toEqual(['digest-a'])
-  })
-
-  it('stops referencing a digest once its item is tombstoned', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'diff',
-          path: 'a.ts',
-          patch: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      { kind: 'tombstone', itemId: 'tool', revision: 2, ...base(2) }
-    ])
-    expect(referencedBlobDigests(state).size).toBe(0)
   })
 })
 

@@ -15,7 +15,7 @@ import { formatAgentToolPreview } from './agent-row-tool-preview'
 // Why: follow-up replies ("yes", "ok proceed") are valid hook prompts but are
 // terrible scan labels for a cross-worktree agent list — treat them as non-titles.
 const TERSE_FOLLOW_UP_PATTERN =
-  /^(yes|no|ok|yep|nope|sure|thanks|thank you|please|proceed|continue|go ahead|lgtm|done|looks good|ok proceed)\.?$/i
+  /^(yes|no|ok|yep|nope|sure|thanks|thank you|please|proceed|continue|go ahead|lgtm|done|looks good|ok proceed|hi|hey|hello|yo)\.?$/i
 
 export function isTerseAgentFollowUpPrompt(prompt: string): boolean {
   const trimmed = prompt.trim()
@@ -153,11 +153,48 @@ function isMislabeledUserPrompt(text: string, entry: Pick<AgentStatusEntry, 'pro
   return false
 }
 
+// Why: orchestration workers often start the stop-hook preview with the
+// lifecycle report ("Task complete — worker_done sent") so a 2-line card
+// never reaches the actual reply. Match `worker_done sent` near the start
+// rather than a single dash shape — agents use em dashes, `--`, or markdown.
+const WORKER_DONE_SENT = /\bworker_done sent(?:\s+with outcome \w+)?/i
+const ORCHESTRATION_SUMMARY_PREFIX = /^(?:\*{0,2})summary of what happened:\s*/i
+const ORCHESTRATION_VERDICT_PREFIX = /^(?:\*{0,2})verdict:(?:\*{0,2})\s*/i
+
+function unwrapOrchestrationAssistantPreview(text: string): string {
+  let next = text.trim()
+  const workerDone = WORKER_DONE_SENT.exec(next)
+  if (workerDone && workerDone.index < 96) {
+    next = next.slice(workerDone.index + workerDone[0].length).replace(/^[.\s…*—–-]+/, '')
+  }
+  next = next.replace(ORCHESTRATION_SUMMARY_PREFIX, '').trim()
+  next = next.replace(ORCHESTRATION_VERDICT_PREFIX, '').trim()
+  return next
+}
+
+function usefulAssistantReply(text: string, entry: Pick<AgentStatusEntry, 'prompt'>): string {
+  const trimmed = text.trim()
+  if (!trimmed || isMislabeledUserPrompt(trimmed, entry)) {
+    return ''
+  }
+  const unwrapped = unwrapOrchestrationAssistantPreview(trimmed)
+  if (!unwrapped || /^[.\s…]+$/.test(unwrapped) || isMislabeledUserPrompt(unwrapped, entry)) {
+    return ''
+  }
+  return unwrapped
+}
+
 /** Latest agent activity line — tool step while working, assistant reply otherwise. */
 export function getActivityThreadStatusPreview(
   entry: Pick<
     AgentStatusEntry,
-    'state' | 'toolName' | 'toolInput' | 'lastAssistantMessage' | 'interrupted' | 'prompt'
+    | 'state'
+    | 'toolName'
+    | 'toolInput'
+    | 'lastAssistantMessage'
+    | 'lastCompletedAssistantMessage'
+    | 'interrupted'
+    | 'prompt'
   >,
   agentState?: AgentStatusState | null
 ): string {
@@ -169,9 +206,14 @@ export function getActivityThreadStatusPreview(
   if (toolPreview) {
     return toolPreview
   }
-  const assistant = entry.lastAssistantMessage?.trim() ?? ''
-  if (assistant && !isMislabeledUserPrompt(assistant, entry)) {
+  const assistant = usefulAssistantReply(entry.lastAssistantMessage ?? '', entry)
+  if (assistant) {
     return assistant
+  }
+  // Why: live working/waiting pings clear lastAssistantMessage; the completed-turn
+  // snapshot is the last useful reply once the agent is no longer in-flight.
+  if (state !== 'working' && state !== 'waiting') {
+    return usefulAssistantReply(entry.lastCompletedAssistantMessage ?? '', entry)
   }
   return ''
 }
@@ -180,7 +222,13 @@ export function getActivityThreadStatusPreview(
 export function resolveActivityThreadStatusPreview(
   entry: Pick<
     AgentStatusEntry,
-    'state' | 'toolName' | 'toolInput' | 'lastAssistantMessage' | 'interrupted' | 'prompt'
+    | 'state'
+    | 'toolName'
+    | 'toolInput'
+    | 'lastAssistantMessage'
+    | 'lastCompletedAssistantMessage'
+    | 'interrupted'
+    | 'prompt'
   >,
   agentState: AgentStatusState | null | undefined,
   previousPreview?: string
@@ -195,9 +243,5 @@ export function resolveActivityThreadStatusPreview(
   if (!isTerseAgentFollowUpPrompt(entry.prompt)) {
     return ''
   }
-  const previous = previousPreview?.trim() ?? ''
-  if (previous && !isMislabeledUserPrompt(previous, entry)) {
-    return previous
-  }
-  return ''
+  return usefulAssistantReply(previousPreview ?? '', entry)
 }

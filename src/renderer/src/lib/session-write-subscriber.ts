@@ -124,6 +124,10 @@ export function createSessionWriteSubscriber({
   // reuse the prior identity while a real session change keeps fresh tabs for
   // the eventual getState() patch build. `null` makes the first fire proceed.
   let prev: Record<string, unknown> | null = null
+  // Why held separately from `prev`: `prev` stores the *projected* tab maps, so the raw slice
+  // identity is the only thing the pre-allocation scan below can compare them against.
+  let prevTabsSource: TabsByWorktree | null = null
+  let prevUnifiedTabsSource: UnifiedTabsByWorktree | null = null
   // Why: this set is the only record that a mutation still owes a write — `prev` has already
   // advanced past it, and change detection is identity-based, so a field dropped from here can
   // never be re-detected. It is retired only by a flush that reached `persist` (or found nothing
@@ -168,8 +172,51 @@ export function createSessionWriteSubscriber({
     timer = setTimeout(flushPendingWrite, debounceMs)
   }
 
+  /**
+   * Identity-only scan over exactly SESSION_RELEVANT_FIELDS, allocating nothing.
+   *
+   * Why sound: for the two projected fields an unchanged raw slice is strictly stronger than an
+   * unchanged projection (the projection is a function of the slice), so a `false` here always
+   * implies the full comparison below would have found no changed field. A changed raw slice
+   * falls through to that comparison, where the projection can still collapse it.
+   */
+  const hasSessionFieldIdentityChange = (state: AppState): boolean => {
+    if (prev === null) {
+      return true
+    }
+    for (const key of SESSION_RELEVANT_FIELDS) {
+      const unchanged =
+        key === 'tabsByWorktree'
+          ? state.tabsByWorktree === prevTabsSource
+          : key === 'unifiedTabsByWorktree'
+            ? state.unifiedTabsByWorktree === prevUnifiedTabsSource
+            : prev[key] === state[key]
+      if (!unchanged) {
+        return true
+      }
+    }
+    return false
+  }
+
   const unsub = store.subscribe((state) => {
     if (!shouldPersistWorkspaceSession(state)) {
+      return
+    }
+    // Why: this fires on every store write and almost none of them touch a session field. Scan
+    // identities first so the common case never allocates the 35-field snapshot or the changed
+    // list; only a real identity change pays for them.
+    if (!hasSessionFieldIdentityChange(state)) {
+      if (pendingChangedFields.size === 0) {
+        return
+      }
+      if (shouldSchedulePersist && !shouldSchedulePersist()) {
+        return
+      }
+      // An unrelated update may wake a deferred write but must never reset an armed debounce.
+      if (timer !== null) {
+        return
+      }
+      armFlushTimer()
       return
     }
     const next: Record<string, unknown> = {}
@@ -190,6 +237,8 @@ export function createSessionWriteSubscriber({
       return
     }
     prev = next
+    prevTabsSource = state.tabsByWorktree
+    prevUnifiedTabsSource = state.unifiedTabsByWorktree
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }

@@ -2,10 +2,7 @@ import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types
 import type { Repo } from '../../shared/repo-types'
 import { resolveCreatedWorktree } from '../ipc/created-worktree-reconciliation'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
-import {
-  configureCreatedWorktreePushTarget,
-  prepareWorktreePushTarget
-} from '../ipc/worktree-remote'
+import { configureCreatedWorktreePushTarget } from '../ipc/worktree-remote'
 import {
   addSparseWorktree,
   addWorktree,
@@ -129,15 +126,11 @@ export async function createRuntimeLocalGitWorktree(args: {
   if (args.request.sparseCheckout && sparseDirectories.length === 0) {
     throw new Error('Sparse checkout requires at least one repo-relative directory.')
   }
+  // Why: defer the remote add + fetch (fork case) or the redundant re-fetch
+  // (same-repo case, already fetched while resolving the PR start point) to
+  // first use -- push/pull/fetch/fast-forward materialize it on demand
+  // (#17828). Metadata is persisted untouched; only the git mutation defers.
   const preparedPushTarget = args.request.pushTarget
-    ? await prepareWorktreePushTarget(
-        args.repo.path,
-        args.request.pushTarget,
-        args.store,
-        args.repo.id,
-        args.localWorktreeGitOptions
-      )
-    : undefined
   const suggestLocalBaseRefUpdate =
     !args.settings.refreshLocalBaseRefOnWorktreeCreate &&
     !args.settings.localBaseRefSuggestionDismissed &&
@@ -185,7 +178,7 @@ export async function createRuntimeLocalGitWorktree(args: {
         )) ?? {})
   let addResult: AddWorktreeResult
   try {
-    const preparedResult =
+    const preparedAttempt =
       sparseDirectories.length === 0 && !args.checkoutExistingBranch
         ? await consumePreparedWorktreeCreate({
             repoPath: args.repo.path,
@@ -197,8 +190,9 @@ export async function createRuntimeLocalGitWorktree(args: {
             ...(preparedWorktreeOptions ? { options: preparedWorktreeOptions } : {})
           })
         : null
-    if (preparedResult) {
-      addResult = preparedResult
+    // This path has no create-span recorder, so the miss reason is only observable on the IPC path.
+    if (preparedAttempt?.status === 'hit') {
+      addResult = preparedAttempt.result
     } else if (sparseDirectories.length > 0) {
       addResult =
         (await (addOptions
@@ -241,14 +235,18 @@ export async function createRuntimeLocalGitWorktree(args: {
       args.effectiveSanitizedName!
     )
   }
-  const configuredPushTarget = preparedPushTarget
-    ? await configureCreatedWorktreePushTarget(
-        args.worktreePath,
-        args.branchName,
-        preparedPushTarget,
-        args.localWorktreeGitOptions
-      )
-    : undefined
+  // Why: `--set-upstream-to` requires the remote to already exist -- safe for a
+  // same-repo target (its remote, e.g. `origin`, always exists) but not for a
+  // deferred fork remote, which is materialized lazily at first push/pull/fetch.
+  const configuredPushTarget =
+    preparedPushTarget && !preparedPushTarget.remoteUrl
+      ? await configureCreatedWorktreePushTarget(
+          args.worktreePath,
+          args.branchName,
+          preparedPushTarget,
+          args.localWorktreeGitOptions
+        )
+      : preparedPushTarget
   const { created } = await resolveCreatedWorktree(
     args.repo.path,
     args.worktreePath,

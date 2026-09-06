@@ -40,6 +40,15 @@ Measured on Windows 11 with 1050 processes (p50 / p95):
 | + memory + command line          | 30.6 ms | 33.7 ms |
 | `Get-CimInstance` via PowerShell | 706 ms  | 723 ms  |
 
+Those are the module's published figures. The flag set this module actually
+requests is `CommandLine | CreationTime` — **not** `Memory`, which cost a second
+`OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ)` plus
+`GetProcessMemoryInfo` per process (`src/process.cc:47-63`) for a value nothing
+read. Dropping it halves the handles a snapshot opens. The remaining set sits
+between the two rows above and has not been measured separately; on a real
+Windows host, `Get-Counter '\Process(Orca)\Handle Count'` sampled across a
+snapshot cadence is the check.
+
 Those CIM numbers are from a 1050-process host. The scan scales with process
 count: on a 1486-process Windows SSH host it measured **1.36 s** and produced
 **4.8 MiB** of JSON, against the fallback's 3 s and 8 MiB limits. Both limits
@@ -220,11 +229,13 @@ ownership, and CPU accounting in the memory collector — still reads it through
 its own query. Those callers are not migrated.
 
 Committed private bytes have no equivalent either, and the one memory value the
-snapshot does carry is unusable for the sizes Orca now sees: `process.cc` stores
+snapshot _can_ carry is unusable for the sizes Orca now sees: `process.cc` stores
 `pmc.WorkingSetSize` into a `DWORD`, so anything above 4 GB wraps. That is the
 second reason `windows-process-resource-collector.ts` still runs its own
 `Get-CimInstance` sweep — it needs `PageFileUsage` (commit) and the CPU-time
-counters in the same pass. Migrating it to the native table would cost both.
+counters in the same pass. Migrating it to the native table would cost both, and
+it is why this module no longer sets the `Memory` flag at all: the field had no
+reader, and asking for it opened a handle per process on every snapshot.
 
 Start time is a proxy for identity, not identity. The durable answer for the
 process trees Orca itself spawns is an inherited handle: a job object names the

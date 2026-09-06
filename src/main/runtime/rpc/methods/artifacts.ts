@@ -30,7 +30,7 @@ const WriteRequest = z
       .min(1)
       .max(ARTIFACT_MAX_CONTENT_BYTES)
       .refine((content) => artifactContentByteLength(content) <= ARTIFACT_MAX_CONTENT_BYTES, {
-        message: 'Artifact content exceeds the 5 MiB limit.'
+        message: 'Artifact content exceeds the 10 MiB limit.'
       }),
     contentType: z.enum(['text/html', 'text/markdown']),
     fileName: z.string().min(1).max(512),

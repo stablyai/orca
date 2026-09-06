@@ -168,7 +168,8 @@ export function useMobileNativeChatSessionOptions(args: {
       models: activeModels(catalog, record),
       record,
       mode: 'live',
-      modelLabel: 'Model'
+      modelLabel: 'Model',
+      liveTransport: 'catalog'
     })
   }, [agent, catalog, scopeKey, version])
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
   rethrowAfterAgentSessionAcquisitionCleanup
 } from './structured-agent-session-adapter'
 
@@ -26,6 +27,27 @@ describe('failed agent-session acquisition cleanup', () => {
         new Error('proof failed')
       )
     ).rejects.toBeInstanceOf(AgentSessionAcquisitionExitUnprovenError)
+  })
+
+  it('keeps a first-hand root exit that cleanup observed, with the provider diagnostic', async () => {
+    const cause = new Error('proof failed')
+    const exit = new AgentSessionAcquisitionRootExitObservedError(
+      new Error('claude stream-json exited (code 1): crashed')
+    )
+    const error = await rethrowAfterAgentSessionAcquisitionCleanup(
+      {
+        releaseAcquisition: vi.fn(async () => {
+          throw exit
+        })
+      },
+      'session-1',
+      cause
+    ).catch((thrown: unknown) => thrown)
+
+    expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
+    expect(error).not.toBeInstanceOf(AgentSessionAcquisitionExitUnprovenError)
+    expect((error as Error).message).toBe('claude stream-json exited (code 1): crashed')
+    expect((error as Error).cause).toMatchObject({ errors: [cause, exit] })
   })
 
   it('reports unproven exit when cleanup throws', async () => {

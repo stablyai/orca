@@ -161,7 +161,8 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     // Why: fsync before rename, then fsync the directory; see writeFileDurable.
     const handle = await open(tmpFile, 'w')
     try {
-      await handle.writeFile(payload, 'utf-8')
+      // Already UTF-8 bytes: passing the string here would re-encode the whole state on the main thread.
+      await handle.writeFile(payload)
       await handle.sync()
     } finally {
       await handle.close()

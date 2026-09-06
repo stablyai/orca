@@ -5,7 +5,7 @@ import {
 } from '../../shared/process-output-field-scanner'
 import { parseUnameToRelayPlatform, type RelayPlatform } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
-import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
+import { isSshExecTimeout, isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
@@ -14,7 +14,6 @@ const PLATFORM_PROBE_MARKER = '__ORCA_REMOTE_PLATFORM__'
 const MAX_UNAME_FIELD_CHARS = 64
 const MAX_THROWN_OUTPUT_CHARS = 200
 const MAX_LOGGED_OUTPUT_CHARS = 1000
-const EXEC_TIMEOUT_MESSAGE = /timed out after \d+s$/u
 
 type PlatformProbeOutcome =
   | { kind: 'detected'; platform: RelayPlatform }
@@ -89,7 +88,7 @@ function isTransportShapedError(error: unknown): boolean {
   return (
     isSshSessionLimitError(error) ||
     isUnconfirmedSshCommandTermination(error) ||
-    (error instanceof Error && EXEC_TIMEOUT_MESSAGE.test(error.message))
+    isSshExecTimeout(error)
   )
 }
 

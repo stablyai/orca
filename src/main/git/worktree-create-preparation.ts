@@ -10,6 +10,7 @@ import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
 } from './worktree'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
 import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
@@ -69,46 +70,48 @@ export async function prepareWorktreeCreateCheckout(
   options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   try {
-    await runWithGitReadCacheInvalidation(async () => {
-      const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
-      )
-      try {
-        await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(repoPath),
-            'worktree',
-            'add',
-            '--detach',
-            '--no-checkout',
-            worktreePath,
-            effectiveBase
-          ],
-          { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
+    await withRepoRefMaintenancePaused('worktree-prepare', () =>
+      runWithGitReadCacheInvalidation(async () => {
+        const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
+          hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
         )
-        // The add just wrote the marker; drop any pre-create route before the reset routes Git.
-        invalidateWslLinkedWorktreeGitRouting(worktreePath)
-        // Why: reset materializes files without running user post-checkout hooks before submit.
-        await gitExecFileAsync(
-          [...windowsLongPathGitArgs(worktreePath), 'reset', '--hard', effectiveBase],
-          { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
-        )
-        await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(repoPath),
-            'worktree',
-            'lock',
-            '--reason',
-            lockReason,
-            worktreePath
-          ],
-          { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
-        )
-      } catch (error) {
-        await performDiscardPreparedWorktree(repoPath, worktreePath, options).catch(() => {})
-        throw error
-      }
-    })
+        try {
+          await gitExecFileAsync(
+            [
+              ...windowsLongPathGitArgs(repoPath),
+              'worktree',
+              'add',
+              '--detach',
+              '--no-checkout',
+              worktreePath,
+              effectiveBase
+            ],
+            { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          )
+          // The add just wrote the marker; drop any pre-create route before the reset routes Git.
+          invalidateWslLinkedWorktreeGitRouting(worktreePath)
+          // Why: reset materializes files without running user post-checkout hooks before submit.
+          await gitExecFileAsync(
+            [...windowsLongPathGitArgs(worktreePath), 'reset', '--hard', effectiveBase],
+            { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          )
+          await gitExecFileAsync(
+            [
+              ...windowsLongPathGitArgs(repoPath),
+              'worktree',
+              'lock',
+              '--reason',
+              lockReason,
+              worktreePath
+            ],
+            { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          )
+        } catch (error) {
+          await performDiscardPreparedWorktree(repoPath, worktreePath, options).catch(() => {})
+          throw error
+        }
+      })
+    )
   } finally {
     notifyPreparedWorktreeMutation(repoPath)
   }
@@ -192,25 +195,38 @@ export async function finalizePreparedWorktree(
   }
   try {
     return await runWithGitReadCacheInvalidation(async () => {
-      const baseContext = await resolveWorktreeAddBaseContext(
-        repoPath,
-        baseBranch,
-        refreshLocalBaseRef,
-        finalizeGitOptions
-      )
-      const [targetHeadResult, preparedHeadResult] = await Promise.all([
-        gitExecFileAsync(
-          ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
-          gitExecOptions(repoPath, finalizeGitOptions)
-        ),
+      const [targetResult, preparedResult] = await Promise.allSettled([
+        (async () => {
+          const baseContext = await resolveWorktreeAddBaseContext(
+            repoPath,
+            baseBranch,
+            refreshLocalBaseRef,
+            finalizeGitOptions
+          )
+          const targetHead =
+            baseContext.effectiveBaseOid ??
+            (
+              await gitExecFileAsync(
+                ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
+                gitExecOptions(repoPath, finalizeGitOptions)
+              )
+            ).stdout.trim()
+          return { baseContext, targetHead }
+        })(),
         gitExecFileAsync(
           ['rev-parse', '--verify', 'HEAD'],
           gitExecOptions(preparedPath, finalizeGitOptions)
         )
       ])
-      const { stdout: targetHeadOutput } = targetHeadResult
-      const targetHead = targetHeadOutput.trim()
-      const { stdout: preparedHeadOutput } = preparedHeadResult
+      // Settle both reads before failure cleanup can remove the prepared checkout.
+      if (targetResult.status === 'rejected') {
+        throw targetResult.reason
+      }
+      if (preparedResult.status === 'rejected') {
+        throw preparedResult.reason
+      }
+      const { baseContext, targetHead } = targetResult.value
+      const preparedHeadOutput = preparedResult.value.stdout
       if (preparedHeadOutput.trim() !== targetHead) {
         await gitExecFileAsync(
           [...windowsLongPathGitArgs(preparedPath), 'reset', '--hard', targetHead],

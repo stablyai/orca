@@ -21,9 +21,9 @@ import {
 } from '../../shared/ripgrep-process-availability'
 import type { ChildProcessHandle } from '../../shared/child-process/process-spec'
 import { wslAwareSpawn } from '../git/runner'
-import type { ResolvedRuntimeFileWorktree } from './runtime-file-watcher-leases'
+import type { RuntimeFileExplorerPath } from './runtime-file-command-target'
+import type { IFilesystemProvider } from '../providers/types'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileCommandsWithSearchRuntimeFiles {
   protected async searchLocalRuntimeFiles(
@@ -176,7 +176,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
   protected async resolveFileExplorerPath(
     worktreeSelector: string,
     relativePath: string
-  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }> {
+  ): Promise<RuntimeFileExplorerPath> {
     const [target] = await this.resolveFileExplorerPaths(worktreeSelector, [relativePath])
     return target
   }
@@ -184,7 +184,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
   protected async resolveFileExplorerPaths(
     worktreeSelector: string,
     relativePaths: readonly string[]
-  ): Promise<{ worktree: ResolvedRuntimeFileWorktree; path: string; connectionId?: string }[]> {
+  ): Promise<RuntimeFileExplorerPath[]> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     return relativePaths.map((relativePath) => ({
       worktree: target.worktree,
@@ -192,17 +192,17 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
         target.worktree.path,
         normalizeRuntimeRelativePath(relativePath)
       ),
-      connectionId: target.connectionId
+      executionHostId: target.executionHostId
     }))
   }
 
+  // `null` provider is the caller's "this host is unreachable" answer, not "list it here".
   protected async listRemoteMobileFiles(
     rootPath: string,
-    connectionId: string,
+    provider: IFilesystemProvider | null,
     maxResults?: number,
     signal?: AbortSignal
   ): Promise<string[]> {
-    const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
       return []
     }

@@ -38,15 +38,6 @@ function reportDrop(segment: string | number): void {
   }
 }
 
-function inEntry<T>(segment: string | number, parse: () => T): T {
-  dropPath.push(segment)
-  try {
-    return parse()
-  } finally {
-    dropPath.pop()
-  }
-}
-
 function parseEntry<T extends z.ZodType>(
   schema: T,
   raw: unknown
@@ -59,18 +50,59 @@ function parseEntry<T extends z.ZodType>(
   }
 }
 
-/** Array that drops the elements it cannot parse instead of failing. */
+/** parseEntry with `segment` on the diagnostic path. Takes the schema and value rather than a
+ *  thunk: this runs once per persisted record, and a closure per entry is the dominant load cost. */
+function parseEntryAt<T extends z.ZodType>(
+  segment: string | number,
+  schema: T,
+  raw: unknown
+): { success: true; data: z.output<T> } | { success: false } {
+  dropPath.push(segment)
+  try {
+    return parseEntry(schema, raw)
+  } finally {
+    dropPath.pop()
+  }
+}
+
+/** The keys `z.record(z.string(), z.unknown())` would hand a transform, or null where it would
+ *  reject: not a plain object, or carrying an enumerable symbol key its string key schema fails.
+ *  Why: every entry is re-validated below anyway, so letting zod build a throwaway copy first is a
+ *  second full traversal of the largest maps in the persisted session. */
+function recordEntryKeys(raw: unknown): string[] | null {
+  if (!z.core.util.isPlainObject(raw)) {
+    return null
+  }
+  for (const symbol of Object.getOwnPropertySymbols(raw)) {
+    if (Object.prototype.propertyIsEnumerable.call(raw, symbol)) {
+      return null
+    }
+  }
+  return Object.keys(raw)
+}
+
+/** Array that drops the elements it cannot parse instead of failing.
+ *  Absence stays fatal on its own: both containers issue on `undefined` and, being bare transforms,
+ *  set neither optin nor optout, and zod only swallows an absent key's issues when a field is both.
+ *  salvagedField/salvagedOptional wrap them for fallback semantics, not for absence detection.
+ *  Pinned by zod-salvage-absence.test.ts. */
 export function salvagingArray<T extends z.ZodType>(item: T): z.ZodType<z.output<T>[], unknown> {
-  return z.array(z.unknown()).transform((values) =>
-    values.flatMap((value, index) => {
-      const parsed = inEntry(index, () => parseEntry(item, value))
+  return z.unknown().transform((raw, ctx) => {
+    if (!Array.isArray(raw)) {
+      ctx.addIssue({ code: 'invalid_type', expected: 'array', input: raw })
+      return z.NEVER
+    }
+    const kept: z.output<T>[] = []
+    for (let index = 0; index < raw.length; index += 1) {
+      const parsed = parseEntryAt(index, item, raw[index])
       if (parsed.success) {
-        return [parsed.data]
+        kept.push(parsed.data)
+        continue
       }
       reportDrop(index)
-      return []
-    })
-  )
+    }
+    return kept
+  }) as z.ZodType<z.output<T>[], unknown>
 }
 
 /** Record that drops entries with invalid keys or values instead of failing. */
@@ -79,12 +111,22 @@ export function salvagingRecord<K extends z.ZodType<string>, V extends z.ZodType
   value: V,
   accepts?: (key: string, value: z.output<V>) => boolean
 ): z.ZodType<Record<string, z.output<V>>, unknown> {
-  return z.record(z.string(), z.unknown()).transform((entries) => {
+  return z.unknown().transform((raw, ctx) => {
+    const entryKeys = recordEntryKeys(raw)
+    if (!entryKeys) {
+      ctx.addIssue({ code: 'invalid_type', expected: 'record', input: raw })
+      return z.NEVER
+    }
+    const entries = raw as Record<string, unknown>
     // Why: null prototype so a persisted '__proto__' key cannot poison the result.
     const kept: Record<string, z.output<V>> = Object.create(null)
-    for (const [entryKey, entryValue] of Object.entries(entries)) {
+    for (const entryKey of entryKeys) {
+      // Why: z.record strips '__proto__' before the value schema sees it, so it is not a drop.
+      if (entryKey === '__proto__') {
+        continue
+      }
       const parsed = parseEntry(key, entryKey).success
-        ? inEntry(entryKey, () => parseEntry(value, entryValue))
+        ? parseEntryAt(entryKey, value, entries[entryKey])
         : null
       if (parsed?.success && (!accepts || accepts(entryKey, parsed.data))) {
         kept[entryKey] = parsed.data
@@ -93,7 +135,7 @@ export function salvagingRecord<K extends z.ZodType<string>, V extends z.ZodType
       reportDrop(entryKey)
     }
     return { ...kept }
-  })
+  }) as z.ZodType<Record<string, z.output<V>>, unknown>
 }
 
 function salvaged(name: string, schema: z.ZodType, fallback: () => unknown): z.ZodType {
@@ -102,7 +144,7 @@ function salvaged(name: string, schema: z.ZodType, fallback: () => unknown): z.Z
       ctx.addIssue({ code: 'custom', message: 'required', input: raw })
       return z.NEVER
     }
-    const parsed = inEntry(name, () => parseEntry(schema, raw))
+    const parsed = parseEntryAt(name, schema, raw)
     if (parsed.success) {
       return parsed.data
     }

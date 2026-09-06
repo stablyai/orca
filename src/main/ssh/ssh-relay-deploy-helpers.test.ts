@@ -550,6 +550,27 @@ describe('execCommand', () => {
     expect(channel.stderr.listenerCount('data')).toBe(0)
   })
 
+  it('hands a zero-exit command stderr to onStderr instead of dropping it', async () => {
+    // Why: probes fenced with `|| echo MISSING` always exit 0, so the resolve path used to be the
+    // one place the failure reason was discarded.
+    const channel = createMockChannel()
+    const conn = { exec: vi.fn().mockResolvedValue(channel) }
+    const captured: string[] = []
+    const commandPromise = execCommand(conn as never, "(node -e 'x' || echo MISSING)", {
+      onStderr: (stderr) => captured.push(stderr)
+    })
+
+    await Promise.resolve()
+    channel.stderr.emit('data', Buffer.from('node: --bogus is not allowed in NODE_OPTIONS\n'))
+    channel.emit('data', Buffer.from('MISSING\n'))
+    channel.emit('close', 0)
+
+    await expect(commandPromise).resolves.toBe('MISSING\n')
+    expect(captured).toEqual(['node: --bogus is not allowed in NODE_OPTIONS\n'])
+    // onStderr must not leak into the SSH exec options.
+    expect(conn.exec).toHaveBeenCalledWith("(node -e 'x' || echo MISSING)", {})
+  })
+
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {
     vi.useFakeTimers()
     try {

@@ -1,7 +1,9 @@
 import { stat } from 'node:fs/promises'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
-import { isUnsupportedWorktreeListZError, parseWorktreeList } from './git-handler-utils'
+import { isUnsupportedWorktreeListZError } from './git-handler-utils'
+import { parseWorktreeList } from '../shared/git-worktree-porcelain-parser'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
 
 export type RelayWorktreeInfo = {
   path: string
@@ -40,8 +42,8 @@ const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
  *  harmless backstop. The relay owns the filesystem, so a plain stat is
  *  authoritative. */
 export async function annotatePrunableWorktreesByExistence(
-  worktrees: Record<string, unknown>[]
-): Promise<Record<string, unknown>[]> {
+  worktrees: GitWorktreeInfo[]
+): Promise<GitWorktreeInfo[]> {
   const annotated = [...worktrees]
   let nextIndex = 0
 
@@ -50,7 +52,7 @@ export async function annotatePrunableWorktreesByExistence(
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
-      const worktreePath = typeof worktree?.path === 'string' ? worktree.path : ''
+      const worktreePath = worktree?.path ?? ''
       // Git only marks linked worktrees prunable, and never locked ones (a
       // lock shields the registration even when the directory is missing). The
       // `locked` annotation is only parsed on Git >=2.31, so on older Git a
@@ -80,14 +82,14 @@ export async function annotatePrunableWorktreesByExistence(
   return annotated
 }
 
-function normalizeRelayWorktrees(worktrees: Record<string, unknown>[]): RelayWorktreeInfo[] {
+function normalizeRelayWorktrees(worktrees: GitWorktreeInfo[]): RelayWorktreeInfo[] {
   return worktrees
     .map((worktree) => ({
-      path: typeof worktree.path === 'string' ? worktree.path : '',
-      head: typeof worktree.head === 'string' ? worktree.head : undefined,
-      branch: typeof worktree.branch === 'string' ? worktree.branch : undefined,
+      path: worktree.path,
+      head: worktree.head,
+      branch: worktree.branch,
       locked: worktree.locked === true ? true : undefined,
-      lockReason: typeof worktree.lockReason === 'string' ? worktree.lockReason : undefined
+      lockReason: worktree.lockReason
     }))
     .filter((worktree) => worktree.path.length > 0)
 }

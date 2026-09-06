@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type React from 'react'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
@@ -65,13 +65,16 @@ export function useCombinedDiffViewRestore({
     sectionLoadTokensRef
   } = registry
 
-  const scrollOffsetRef = useRef(combinedDiffScrollTopCache.get(viewStateKey) ?? 0)
-  const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(
-    combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
-  )
-  const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(
-    combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
-  )
+  // Why useState and not `useRef(expr)`: the latter re-reads all three caches on every render and
+  // throws the result away, and an anchor seeds legitimately to null so a nullish guard would keep
+  // re-reading. useState's initializer runs once without writing a ref during render.
+  const [restoreSeed] = useState<{ offset: number; anchor: VirtualizedScrollAnchor }>(() => ({
+    offset: combinedDiffScrollTopCache.get(viewStateKey) ?? 0,
+    anchor: combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
+  }))
+  const scrollOffsetRef = useRef(restoreSeed.offset)
+  const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
+  const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
 
   // Why: tab/worktree switches unmount this viewer; cache by pane key so remount restores sections+scroll before repaint.
   const initializedEntryStateRef = useRef<{

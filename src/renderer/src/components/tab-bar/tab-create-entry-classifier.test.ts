@@ -16,7 +16,7 @@ describe('tab create entry classification', () => {
   it('advertises tab search in the empty-query message', () => {
     expect(classifyTabEntryQuery('', readyFiles([]))).toEqual({
       kind: 'empty',
-      message: 'Search open tabs, files, URLs, agents…'
+      message: 'Search open tabs, history, files, URLs, agents…'
     })
   })
 
@@ -43,6 +43,58 @@ describe('tab create entry classification', () => {
     expect(classifyTabEntryQuery('example.com', readyFiles([]))).toMatchObject({
       kind: 'host-url',
       url: 'https://example.com/'
+    })
+  })
+
+  it('treats domain paths as URLs instead of new files', () => {
+    expect(classifyTabEntryQuery('example.com/profile', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://example.com/profile'
+    })
+    expect(classifyTabEntryQuery('example.com/docs?tab=api#install', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://example.com/docs?tab=api#install'
+    })
+    expect(classifyTabEntryQuery('assistant.ai/profile', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://assistant.ai/profile'
+    })
+  })
+
+  it('keeps source paths and unlisted suffixes as files', () => {
+    expect(
+      classifyTabEntryQuery('example.com/profile', readyFiles(['example.com/profile']))
+    ).toEqual({
+      kind: 'existing-file',
+      matchKind: 'exact-path',
+      relativePath: 'example.com/profile'
+    })
+    expect(
+      getTabEntryOptions('example.com/profile', readyFiles(['example.com/profile'])).map(
+        (option) => option.classification
+      )
+    ).toEqual([
+      { kind: 'existing-file', matchKind: 'exact-path', relativePath: 'example.com/profile' },
+      { kind: 'host-url', url: 'https://example.com/profile' }
+    ])
+    expect(classifyTabEntryQuery('README.md/archive', readyFiles([]))).toEqual({
+      kind: 'new-file',
+      relativePath: 'README.md/archive'
+    })
+    expect(classifyTabEntryQuery('config.local/settings', readyFiles([]))).toEqual({
+      kind: 'new-file',
+      relativePath: 'config.local/settings'
+    })
+    expect(classifyTabEntryQuery('example.test/settings', readyFiles([]))).toEqual({
+      kind: 'new-file',
+      relativePath: 'example.test/settings'
+    })
+  })
+
+  it('accepts any public suffix without a local allowlist', () => {
+    expect(classifyTabEntryQuery('example.museum/exhibit', readyFiles([]))).toEqual({
+      kind: 'host-url',
+      url: 'https://example.museum/exhibit'
     })
   })
 
@@ -190,7 +242,21 @@ describe('tab create entry classification', () => {
       getTabEntryOptions('type script', readyFiles(['docs/typescript-guide.md'])).map(
         (option) => option.classification.kind
       )
-    ).toEqual(['search', 'new-file'])
+    ).toEqual(['search'])
+  })
+
+  it('never offers to create a file from a spaced phrase without path syntax', () => {
+    expect(
+      getTabEntryOptions('release notes', readyFiles(['docs/release notes draft.md'])).map(
+        (option) => option.classification.kind
+      )
+    ).toEqual(['search', 'existing-file'])
+    // Path syntax still marks intent, so spaces inside a real path keep the create row.
+    expect(
+      getTabEntryOptions('docs/release notes.md', readyFiles([])).map(
+        (option) => option.classification.kind
+      )
+    ).toEqual(['new-file', 'search'])
   })
 
   // Fuzzy matching is a subsequence scan, so a short token matches broadly.

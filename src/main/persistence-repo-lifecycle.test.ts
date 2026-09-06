@@ -737,7 +737,10 @@ describe('Store', () => {
 
   it('reassignSshTargetId persists a worktree-meta-only re-point (no matching repo)', async () => {
     const store = await createStore()
-    // A meta on the old SSH host with no repo row — the re-point must still be persisted, not memory-only.
+    // A meta on the old SSH host with no repo row for that host — the re-point must still be
+    // persisted, not memory-only. The repo id stays registered so the load-time orphan sweep,
+    // which only reads repo ids, leaves the row alone.
+    store.addRepo(makeRepo({ id: 'r1', path: '/r1' }))
     store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
 
     const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
@@ -787,6 +790,7 @@ describe('Store', () => {
 
   it('reassignSshTargetId re-keys a session partition stored under the old ssh host id', async () => {
     const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/r1' }))
     store.setWorkspaceSession(
       {
         activeRepoId: null,

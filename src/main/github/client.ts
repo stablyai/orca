@@ -8,7 +8,7 @@ export {
   __resetTrackedUpstreamBranchCacheForTests
 } from './client/lookup/tracked-upstream-cache'
 export { addPRReviewComment, addPRReviewCommentReply } from './client/create/add-pr-review-comment'
-export { checkOrcaStarred, starOrca } from './client/fetch/orca-star'
+export { __resetOrcaStarCheckForTests, checkOrcaStarred, starOrca } from './client/fetch/orca-star'
 export { countWorkItems } from './client/list/count-work-items'
 export { createGitHubPullRequest } from './client/create/create-github-pull-request'
 export { getAuthenticatedViewer } from './client/fetch/authenticated-viewer'
