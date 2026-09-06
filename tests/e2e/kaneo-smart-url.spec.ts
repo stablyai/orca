@@ -27,7 +27,11 @@ for (const theme of ['light', 'dark'] as const) {
     const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
     const input = dialog.locator('[data-workspace-name-input="true"]')
     const create = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
-    await input.fill(TASK.url)
+    const taskUrl =
+      theme === 'light'
+        ? TASK.url
+        : `${TASK.siteUrl}/dashboard/workspace/${TASK.workspaceId}/project/${TASK.projectId}/board?taskId=${TASK.taskId}`
+    await input.fill(taskUrl)
     await expect(
       orcaPage.getByRole('status').filter({ hasText: 'Loading Kaneo task' })
     ).toBeVisible()
