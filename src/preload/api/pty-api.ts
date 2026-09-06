@@ -33,6 +33,7 @@ export type PtyApi = {
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    quickCommandSubmission?: boolean
     connectionId?: string | null
     worktreeId?: string
     sessionId?: string

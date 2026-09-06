@@ -19,6 +19,7 @@ export type CreateOrAttachOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
+  quickCommandSubmission?: boolean
   launchAgent?: TuiAgent
   /** Missing ownership is not permission to create during stable-pane adoption. */
   attachOnly?: boolean

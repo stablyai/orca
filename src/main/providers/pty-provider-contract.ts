@@ -108,6 +108,8 @@ export type PtySpawnOptions = {
   onPtySpawnCommitted?: () => void
   /** Cancels only before physical dispatch; operation identity fences later ambiguity. */
   signal?: AbortSignal
+  /** Preserve multiline quick-command trailing newlines inside bracketed paste. */
+  quickCommandSubmission?: boolean
 }
 
 export type { PtyProcessInfo, PtySpawnResult }

@@ -216,6 +216,7 @@ export type TerminalActions = {
       }
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
+      quickCommandSubmission?: boolean
     }
   ) => void
   queueTabInitialCwd: (tabId: string, cwd: string) => void
@@ -242,6 +243,7 @@ export type TerminalActions = {
     }
     showSessionRestoredBanner?: boolean
     telemetry?: AgentStartedTelemetry
+    quickCommandSubmission?: boolean
   } | null
   queueTabSetupSplit: (
     tabId: string,

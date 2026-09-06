@@ -43,6 +43,7 @@ export type PtyPaneStartup = {
   showSessionRestoredBanner?: boolean
   /** Initial startup may be paired with a setup split that changes its grid. */
   waitForSetupSplitDirection?: SetupSplitDirection
+  quickCommandSubmission?: boolean
 } | null
 
 export type PaneProcessExit = {

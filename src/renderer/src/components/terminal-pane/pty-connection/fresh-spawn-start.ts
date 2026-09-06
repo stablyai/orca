@@ -103,6 +103,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(session.connectionId && startupOverride?.command
         ? { startupCommandDelivery: 'shell-ready' as const }
         : {}),
+      ...(effectiveStartup?.quickCommandSubmission ? { quickCommandSubmission: true } : {}),
       ...(startupOverride?.env
         ? { env: session.mergeStartupEnvWithPaneIdentity(startupOverride.env) }
         : {}),
