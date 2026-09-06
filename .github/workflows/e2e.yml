@@ -246,7 +246,7 @@ jobs:
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
           xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
-            pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}" --repeat-each=3
+            pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
       - name: Upload Playwright traces
         if: failure()
