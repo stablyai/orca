@@ -24,11 +24,19 @@ import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 
 const noopUnsubscribe = (): void => {}
 
-function captureOpenLinkHandler(): (event: { browserPageId: string; url: string }) => void {
-  let handler: ((event: { browserPageId: string; url: string }) => void) | null = null
+function captureOpenLinkHandler(): (event: {
+  browserPageId: string
+  url: string
+  activate?: boolean
+}) => void {
+  let handler:
+    | ((event: { browserPageId: string; url: string; activate?: boolean }) => void)
+    | null = null
   const browserApi = new Proxy(
     {
-      onOpenLinkInOrcaTab: (callback: (event: { browserPageId: string; url: string }) => void) => {
+      onOpenLinkInOrcaTab: (
+        callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
+      ) => {
         handler = callback
         return noopUnsubscribe
       }
@@ -100,5 +108,27 @@ describe('link-opened Orca tabs', () => {
 
     const options = createBrowserTabMock.mock.calls[0][2] as Record<string, unknown>
     expect('sessionProfileId' in options).toBe(false)
+  })
+
+  it('creates modifier-click links in the background', () => {
+    storeState.value = {
+      browserPagesByWorkspace: {
+        'workspace-1': [{ id: 'page-1', workspaceId: 'workspace-1', worktreeId: 'worktree-1' }]
+      },
+      browserTabsByWorktree: {},
+      createBrowserTab: createBrowserTabMock
+    }
+
+    captureOpenLinkHandler()({
+      browserPageId: 'page-1',
+      url: 'https://docs.example.com/background',
+      activate: false
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith(
+      'worktree-1',
+      'https://docs.example.com/background',
+      expect.objectContaining({ activate: false })
+    )
   })
 })

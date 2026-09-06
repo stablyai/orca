@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Globe } from 'lucide-react'
+import { Globe, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { displayableFaviconUrl } from './browser-pane/describe-page/browser-favicon-url'
 
@@ -30,6 +30,15 @@ export function BrowserFavicon({
   // a page loads — so navigating back to the same url retries instead of keeping the fallback.
   if (failedUrl !== null && failedUrl !== displayUrl) {
     setFailedUrl(null)
+  }
+
+  if (loading) {
+    return (
+      <Loader2
+        className={cn('shrink-0 motion-safe:animate-spin', className, fallbackClassName)}
+        aria-hidden="true"
+      />
+    )
   }
 
   if (displayUrl && failedUrl !== displayUrl) {
