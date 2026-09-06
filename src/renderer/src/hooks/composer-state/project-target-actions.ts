@@ -28,6 +28,8 @@ type ProjectTargetActionsInput = Pick<
   | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'setSelectedProjectGroupId'
+  | 'setSelectedProjectHostSetupOverrideId'
+  | 'setSelectedProjectIdOverride'
   | 'setSparseDirectories'
   | 'setSparseEnabled'
   | 'setSparseSelectedPresetId'
@@ -44,7 +46,7 @@ import {
 } from '@/lib/new-workspace-project-options'
 import { translate } from '@/i18n/i18n'
 import { getFolderSourceRepos } from '@/components/sidebar/folder-workspace-composer-helpers'
-import { resolveWorkspaceCreationRepoId } from '@/lib/project-host-workspace-target'
+import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 
 export function useProjectTargetActions(input: ProjectTargetActionsInput) {
   const {
@@ -74,6 +76,8 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     setReuseEligibleBranch,
     setReuseSelectedBranch,
     setSelectedProjectGroupId,
+    setSelectedProjectHostSetupOverrideId,
+    setSelectedProjectIdOverride,
     setSparseDirectories,
     setSparseEnabled,
     setSparseSelectedPresetId,
@@ -104,6 +108,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
         }
         const nextSourceRepo = getFolderSourceRepos(repos, projectGroups, nextProjectGroup)[0]
         setSelectedProjectGroupId(nextProjectGroup.id)
+        setSelectedProjectIdOverride(null)
         setProjectError(null)
         setRepoId(nextSourceRepo?.id ?? '')
         setLinkedIssue('')
@@ -133,7 +138,7 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
       // Why: pass the current host as a preference (focusedHostScope), not a hard hostId — pinning made selecting a project set up only on another host a silent no-op.
-      const nextRepoId = resolveWorkspaceCreationRepoId({
+      const nextTarget = resolveWorkspaceCreationTarget({
         eligibleRepos,
         projects,
         projectHostSetups,
@@ -141,10 +146,20 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
         focusedHostScope: preferredHostId ?? workspaceHostScope,
         actionableHostIds
       })
-      if (!nextRepoId) {
+      if (nextTarget.status === 'ambiguous') {
+        // Why (STA-6080): keep the project selected with no checkout chosen, so the run-target
+        // picker asks which of its setups to create in rather than taking the stored-first one.
+        setSelectedProjectIdOverride(nextTarget.projectId ?? projectId)
+        setSelectedProjectHostSetupOverrideId(null)
+        setRepoId('')
+        setProjectError(null)
         return
       }
-      handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
+      if (nextTarget.status !== 'ready') {
+        return
+      }
+      setSelectedProjectIdOverride(null)
+      handleRepoChange(nextTarget.target.repoId, { forceResetStartFrom: isProjectGroupTarget })
     },
     [
       eligibleRepos,
@@ -175,6 +190,8 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
       setReuseEligibleBranch,
       setReuseSelectedBranch,
       setSelectedProjectGroupId,
+      setSelectedProjectHostSetupOverrideId,
+      setSelectedProjectIdOverride,
       setSparseDirectories,
       setSparseEnabled,
       setSparseSelectedPresetId,

@@ -83,8 +83,9 @@ export default function RunTargetCombobox({
     () => hostOptions.filter((option) => option.kind === 'ready'),
     [hostOptions]
   )
-  const selectedHost =
-    readyHostOptions.find((option) => option.id === hostValue) ?? readyHostOptions[0] ?? null
+  // Why (STA-6080): with no setup chosen, painting the first ready row named a checkout the user
+  // never picked, and it is not the one creation would land in either.
+  const selectedHost = readyHostOptions.find((option) => option.id === hostValue) ?? null
   const selectedRecipe = recipes.find((recipe) => recipe.id === recipeValue) ?? null
   const armedRow = rows.find((row) => row.key === armedKey) ?? rows[0] ?? null
   // Only a committed selection paints the field; typing replaces it.

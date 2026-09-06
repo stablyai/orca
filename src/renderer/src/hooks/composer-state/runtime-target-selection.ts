@@ -33,6 +33,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     repos,
     selectedProjectGroup,
     selectedProjectHostSetupOverrideId,
+    selectedProjectIdOverride,
     settings,
     sshConnectionStates,
     workspaceHostScope,
@@ -99,6 +100,9 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         projects,
         projectHostSetups,
         draftRepoId: repoId,
+        // Why (STA-6080): the project outlives the checkout choice — without it an unanswered
+        // ambiguity would fall back to whichever repo the draft resolver reached for.
+        projectId: selectedProjectIdOverride,
         projectHostSetupId: selectedProjectHostSetupOverrideId,
         focusedHostScope: workspaceHostScope,
         actionableHostIds
@@ -110,9 +114,13 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       projects,
       repoId,
       selectedProjectHostSetupOverrideId,
+      selectedProjectIdOverride,
       workspaceHostScope
     ]
   )
+
+  const runTargetChoiceCandidates =
+    selectedWorkspaceTarget.status === 'ambiguous' ? selectedWorkspaceTarget.candidates : null
 
   const selectedRepo =
     selectedWorkspaceTarget.status === 'ready' && selectedWorkspaceTarget.target.repoId === repoId
@@ -158,7 +166,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   })
 
   const selectedRepoProjectId =
-    selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.projectId : null
+    selectedWorkspaceTarget.status === 'ready'
+      ? selectedWorkspaceTarget.target.projectId
+      : selectedWorkspaceTarget.status === 'ambiguous'
+        ? selectedWorkspaceTarget.projectId
+        : null
 
   const selectedProjectId = selectedProjectGroup
     ? `project-group:${selectedProjectGroup.id}`
@@ -261,6 +273,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     folderDetectedIds,
     folderDetectedAgentIds,
     selectedWorkspaceTarget,
+    runTargetChoiceCandidates,
     selectedRepo,
     selectedRepoIsGit,
     selectedRepoExecutionHostId,

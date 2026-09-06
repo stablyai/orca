@@ -306,6 +306,7 @@ export default function NewWorkspaceComposerCard(
           {...props}
           projectOptions={projectOptions}
           projectHostSetupOptions={projectHostSetupOptions}
+          runTargetChoiceCandidates={props.runTargetChoiceCandidates ?? null}
           ephemeralVmRecipes={ephemeralVmRecipes}
           projectDescriptionId={projectDescriptionId}
           onAddProject={handleAddProject}

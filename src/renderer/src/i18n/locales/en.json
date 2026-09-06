@@ -1686,6 +1686,7 @@
         "ephemeralVm": "Per-Workspace Environment",
         "chooseRunTarget": "Choose target",
         "noRunTargets": "No run targets are ready for this project.",
+        "runTargetChoiceRequired": "This project is set up in {{value0}} places. Choose which one to create in.",
         "perWorkspaceEnvHint": "Provision an on-demand environment from a recipe",
         "branchName": "Branch name",
         "branchNamePlaceholder": "feature/my-branch",

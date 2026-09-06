@@ -47,6 +47,7 @@ export function useComposerTargetState(
     repos: composerTargetStore.repos,
     selectedProjectGroup: initialTargetState.selectedProjectGroup,
     selectedProjectHostSetupOverrideId: initialTargetState.selectedProjectHostSetupOverrideId,
+    selectedProjectIdOverride: initialTargetState.selectedProjectIdOverride,
     settings: composerTargetStore.settings,
     sshConnectionStates: composerTargetStore.sshConnectionStates,
     workspaceHostScope: composerTargetStore.workspaceHostScope,
