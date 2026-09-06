@@ -6,7 +6,6 @@
  * fans out, and it must never be able to reject the IPC handler it runs inside.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ReposChangedNotificationModule from './repos/repos-changed-notification'
 
 const { handleMock, mockStore } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -39,25 +38,13 @@ vi.mock('./registered-worktree-roots-cache', () => ({ invalidateAuthorizedRootsC
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
 vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
 
+import { registerRepoHandlers } from './repos'
+import { setRepoRemoteClientNotifier, notifyReposChanged } from './repos/repos-changed-notification'
+
 type HandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>
 
 const handlers: HandlerMap = new Map()
 const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-
-/** Fresh module instance per test so the module-scoped notifier holder starts unset. */
-async function registerHandlersWithoutNotifier(): Promise<typeof ReposChangedNotificationModule> {
-  vi.resetModules()
-  const repos = await import('./repos')
-  repos.registerRepoHandlers(mainWindow as never, mockStore as never, {} as never)
-  return import('./repos/repos-changed-notification')
-}
-
-async function registerHandlersWithNotifier(
-  notifyReposChangedForRemoteClients: () => void
-): Promise<void> {
-  const notification = await registerHandlersWithoutNotifier()
-  notification.setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients } as never)
-}
 
 beforeEach(() => {
   handlers.clear()
@@ -69,32 +56,36 @@ beforeEach(() => {
   mockStore.removeProject.mockReset()
   mockStore.removeProjectForHost.mockReset()
   mockStore.reorderRepos.mockReset().mockReturnValue(true)
+  registerRepoHandlers(mainWindow as never, mockStore as never, {} as never)
 })
 
 describe('repo IPC mutations notify paired clients', () => {
-  it('broadcasts once for repos:remove and still notifies the local renderer', async () => {
+  // Why no per-test vi.resetModules(): it re-imported the whole graph per test (30s+ under
+  // load) and its late completion let one test's registration bleed into the next. The
+  // notifier holder has overwrite semantics, so each test arranges it explicitly.
+  it('broadcasts once for repos:remove and still notifies the local renderer', () => {
     const notify = vi.fn()
-    await registerHandlersWithNotifier(notify)
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
 
-    await handlers.get('repos:remove')!(null, { repoId: 'repo-1' })
+    handlers.get('repos:remove')!(null, { repoId: 'repo-1' })
 
     expect(notify).toHaveBeenCalledTimes(1)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
   })
 
-  it('broadcasts once for repos:removeForHost', async () => {
+  it('broadcasts once for repos:removeForHost', () => {
     const notify = vi.fn()
-    await registerHandlersWithNotifier(notify)
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
 
-    await handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'ssh:host-1' })
+    handlers.get('repos:removeForHost')!(null, { repoId: 'repo-1', hostId: 'ssh:host-1' })
 
     expect(mockStore.removeProjectForHost).toHaveBeenCalledWith('repo-1', 'ssh:host-1')
     expect(notify).toHaveBeenCalledTimes(1)
   })
 
-  it('broadcasts for non-removal mutations too, via the shared helper', async () => {
+  it('broadcasts for non-removal mutations too, via the shared helper', () => {
     const notify = vi.fn()
-    await registerHandlersWithNotifier(notify)
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
 
     handlers.get('repos:reorder')!(null, { orderedIds: ['repo-1', 'repo-2'] })
 
@@ -102,17 +93,31 @@ describe('repo IPC mutations notify paired clients', () => {
   })
 
   it('does not throw when no notifier has been set', async () => {
-    await registerHandlersWithoutNotifier()
+    setRepoRemoteClientNotifier(null as never)
 
     await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
   })
 
   it('does not reject the handler when the notifier throws', async () => {
-    await registerHandlersWithNotifier(() => {
-      throw new Error('client event stream exploded')
-    })
+    setRepoRemoteClientNotifier({
+      notifyReposChangedForRemoteClients: () => {
+        throw new Error('client event stream exploded')
+      }
+    } as never)
 
     await expect(handlers.get('repos:remove')!(null, { repoId: 'repo-1' })).resolves.toBeUndefined()
+  })
+
+  // Why: the notifier holder is module-scoped; direct callers of the helper must see the
+  // same overwrite semantics the IPC handlers do.
+  it('notifyReposChanged fans out through the module-scoped holder', () => {
+    const notify = vi.fn()
+    setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients: notify } as never)
+
+    notifyReposChanged(mainWindow as never)
+
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
   })
 })

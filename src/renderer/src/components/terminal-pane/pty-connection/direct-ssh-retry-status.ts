@@ -18,7 +18,7 @@ import {
 import { createCommandCodeOutputStatusDetector } from '../../../../../shared/command-code-output-status'
 import { readInFlightCommandCodeTurn } from '../parked-terminal-command-status'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import {
   normalizeCompatibleAgentTitleForOwner,
