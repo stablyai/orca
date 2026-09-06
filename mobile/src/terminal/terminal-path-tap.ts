@@ -1,10 +1,10 @@
+import { parseExplicitFileLinkTarget } from '../../../src/shared/explicit-file-link-target'
 import {
   matchTerminalFileLinkAtColumn,
-  parseTerminalFileLinkTarget,
   type TerminalFileLinkTarget
-} from '../../../src/shared/terminal-file-link-matcher'
+} from '../../../src/shared/terminal-links'
 
 export type TappedFilePath = TerminalFileLinkTarget
 
 export const matchFilePathAtColumn = matchTerminalFileLinkAtColumn
-export const parsePathWithOptionalLineColumn = parseTerminalFileLinkTarget
+export const parsePathWithOptionalLineColumn = parseExplicitFileLinkTarget

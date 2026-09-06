@@ -139,6 +139,22 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     expected: { pathText: 'src/a.ts', line: null, column: null }
   },
   {
+    name: 'non-ASCII path segments with a line suffix',
+    lineText: 'see src/コンポーネント/ボタン.tsx:12 here',
+    tapText: 'ボタン',
+    expected: {
+      pathText: 'src/コンポーネント/ボタン.tsx',
+      line: 12,
+      column: null
+    }
+  },
+  {
+    name: 'accented absolute path',
+    lineText: 'wrote /tmp/rapport-français/résumé.md for you',
+    tapText: 'résumé',
+    expected: { pathText: '/tmp/rapport-français/résumé.md', line: null, column: null }
+  },
+  {
     name: 'bare filename with extension',
     lineText: 'Here you go: README.md',
     tapText: 'README',

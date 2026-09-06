@@ -3,9 +3,10 @@
 // regex backslashes here are single (the real runtime form) — not the doubled
 // form a backtick template literal would otherwise require.
 //
-// This mirrors the unit-tested src/shared/terminal-file-link-matcher.ts; keep
-// the two in sync. The shared module is the source of truth for the algorithm;
-// this string only exists because the native terminal WebView cannot import it.
+// This mirrors the unit-tested src/shared/terminal-links.ts, which the desktop
+// renderer and the mobile TS tap both import; this string only exists because
+// the native terminal WebView cannot. TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES
+// is what holds the copy to the module, so pin new behaviour there.
 //
 // Matches both slash-bearing paths AND bare filenames with an extension
 // (README.md, src/index.ts:5) — like desktop, we propose candidates and let the
@@ -13,7 +14,9 @@
 // often print a bare filename (the markdown link target is consumed, leaving
 // only the label text), so requiring a slash would miss the common case.
 export const TERMINAL_PATH_TAP_JS = String.raw`
-	  var FILE_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[A-Za-z0-9._~\-\/%+@\\()[\]]*(?::\d+)?(?::\d+)?/g;
+	  // Bare filenames stay ASCII to match the module's bare-word pass; only the
+	  // separator-bearing path shape is Unicode-wide.
+	  var FILE_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[\p{L}\p{N}\p{M}._-]+[\\/]|(?=[A-Za-z0-9._-]*\.[A-Za-z0-9]))[\p{L}\p{N}\p{M}._~\-\/%+@\\()[\]]*(?::\d+)?(?::\d+)?/gu;
 	  var SPACED_PATH_RE = /(?:~[\\/]|[\\/]|\.{1,2}[\\/]|[A-Za-z]:[\\/]|[A-Za-z0-9._-]+[\\/])[^()[\]{}'",;<>|\`\r\n]+(?::\d+)?(?::\d+)?/g;
 	  var PATH_LEADING_TRIM = { '(': 1, '[': 1, '{': 1, '"': 1, "'": 1 };
 	  var PATH_TRAILING_TRIM = { ')': 1, ']': 1, '}': 1, '"': 1, "'": 1, ',': 1, ';': 1, '.': 1 };
