@@ -31,7 +31,7 @@ import {
   executeMobileWebNativeChatTerminalOperation,
   isMobileWebNativeChatTerminalOperation
 } from './mobile-web-native-chat-terminal-operations'
-import { sanitizeMobileWebNativeChatMessages } from './mobile-web-native-chat-tool-input'
+import { projectMobileWebNativeChatMessages } from './mobile-web-native-chat-message-projection'
 
 export async function executeMobileWebNativeChatOperation(args: {
   operation: string
@@ -68,11 +68,15 @@ export async function executeMobileWebNativeChatOperation(args: {
         ? { worktreeId: binding.hostWorkspaceId, terminal: binding.hostTerminalId }
         : {})
     })
-    if (!response.ok || !isRecord(response.result) || !Array.isArray(response.result.messages)) {
+    const messages =
+      response.ok && isRecord(response.result)
+        ? projectMobileWebNativeChatMessages(response.result.messages)
+        : null
+    if (!response.ok || !isRecord(response.result) || !messages) {
       throw new MobileWebBrokerError('host_error')
     }
     return MobileWebNativeChatReadResultSchema.parse({
-      messages: sanitizeMobileWebNativeChatMessages(response.result.messages),
+      messages,
       hasMore: response.result.hasMore === true,
       ...(safeOffset(response.result.beforeOffset) === undefined
         ? {}
