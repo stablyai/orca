@@ -100,7 +100,7 @@ describe('createHostedReview with shared symlinks', () => {
     createHostedReview(
       worktree,
       { provider: 'github', base: 'main', head: 'feature', title: 'Feature' },
-      null,
+      'local',
       sharedLinkPaths ? { sharedLinkPaths } : {}
     )
 

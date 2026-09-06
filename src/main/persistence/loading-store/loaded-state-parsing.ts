@@ -51,8 +51,10 @@ function logPersistenceStartupMilestone(
   if (!isStartupDiagnosticsEnabled()) {
     return
   }
+  // Why: snapshot `t` before resolving lazy details — otherwise an expensive details closure is billed to the milestone it measures.
+  const t = Math.round(performance.now())
   const resolvedDetails = typeof details === 'function' ? details() : details
-  logStartupDiagnostic(event, { t: Math.round(performance.now()), ...resolvedDetails })
+  logStartupDiagnostic(event, { t, ...resolvedDetails })
 }
 
 import type { StoreRuntimeState } from './store-runtime-state'

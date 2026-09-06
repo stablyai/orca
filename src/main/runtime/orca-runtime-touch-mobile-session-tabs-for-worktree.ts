@@ -21,7 +21,7 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
     if (!snapshot) {
       return
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, {
+    this.storeMobileSessionSnapshot(worktreeId, {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1
     })

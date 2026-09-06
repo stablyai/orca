@@ -1,4 +1,4 @@
-const { chmodSync, existsSync, readdirSync } = require('node:fs')
+const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
@@ -18,6 +18,7 @@ const {
   verifyPackagedNodePtyJobOwnership
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -89,7 +90,19 @@ const bundledPluginResources = {
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const commonExtraResources = [relayExtraResource, bundledPluginResources, skillFreshnessResources]
+// Why the single file rather than the package root: app.asar carries no node_modules, so main's
+// lazy require in deferred-emoji-shortcode-dataset.ts resolves only out of Resources/node_modules,
+// but emojibase-data is 49 MB of locale datasets and worktree naming reads exactly this 166 KB file.
+const emojiShortcodeDatasetResource = {
+  from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
+  to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
+}
+const commonExtraResources = [
+  relayExtraResource,
+  bundledPluginResources,
+  skillFreshnessResources,
+  emojiShortcodeDatasetResource
+]
 // Why: native speech addons must be real files outside app.asar; copy only the
 // package matching the artifact target instead of every optional variant.
 const macSpeechNativeResource = {
@@ -104,6 +117,29 @@ const winSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-win-x64',
   to: 'node_modules/sherpa-onnx-win-x64'
 }
+// electron-builder replaces these defaults when `depends` is configured; retain
+// Electron's loader requirements alongside Orca's headless-host dependencies.
+const debElectronRuntimeDependencies = [
+  'libgtk-3-0',
+  'libnotify4',
+  'libnss3',
+  'libxss1',
+  'libxtst6',
+  'xdg-utils',
+  'libatspi2.0-0',
+  'libuuid1',
+  'libsecret-1-0'
+]
+const rpmElectronRuntimeDependencies = [
+  'gtk3',
+  'libnotify',
+  'nss',
+  'libXScrnSaver',
+  '(libXtst or libXtst6)',
+  'xdg-utils',
+  'at-spi2-core',
+  '(libuuid or libuuid1)'
+]
 
 // Why mirrored, not imported: this config is CJS loaded by electron-builder outside the TS build.
 // Keep in sync with isMarkdownDocumentName() in src/main/ipc/markdown-documents.ts and with
@@ -115,6 +151,7 @@ module.exports = {
   appId,
   productName: 'Orca',
   protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  toolsets: { appimage: '1.0.3' },
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
     : localBuildVersion
@@ -235,12 +272,21 @@ module.exports = {
     'node_modules/zod/**',
     'node_modules/yaml/**'
   ],
+  artifactBuildCompleted: ({ file, arch }) => {
+    if (file.endsWith('.AppImage')) {
+      verifyStaticAppImagePackage(file, arch)
+    }
+  },
   afterPack: async (context) => {
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
     // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
     // Fail packaging if any bundled native binary exceeds the supported floor.
     if (context.electronPlatformName === 'linux') {
-      verifyLinuxGlibcFloor(context.appOutDir)
+      // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
+      // so a cross-built slice could ship the host's pty.node and only fail at runtime.
+      verifyLinuxGlibcFloor(context.appOutDir, {
+        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
+      })
     }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
@@ -253,6 +299,10 @@ module.exports = {
         : join(context.appOutDir, 'resources')
     if (!existsSync(resourcesDir)) {
       throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
+    }
+    // FpmTarget replaces this with deb/rpm while building those artifacts from the shared app tree.
+    if (context.electronPlatformName === 'linux') {
+      writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
     }
     if (context.electronPlatformName === 'darwin') {
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }
@@ -273,6 +323,7 @@ module.exports = {
       }
       writeMacBuildCompatibility(resourcesDir, { version, commit, architecture })
     }
+    stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
@@ -522,7 +573,8 @@ module.exports = {
       },
       featureWallResources
     ],
-    target: ['AppImage', 'deb'],
+    // Keep local artifacts aligned with the release pipeline.
+    target: ['AppImage', 'deb', 'rpm'],
     maintainer: 'stablyai',
     category: 'Utility'
   },
@@ -536,6 +588,7 @@ module.exports = {
     // Linux host — Chromium needs a display server even for offscreen rendering,
     // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
     depends: [
+      ...debElectronRuntimeDependencies,
       'python3',
       'python3-gi',
       'gir1.2-atspi-2.0',
@@ -557,9 +610,9 @@ module.exports = {
     // Why: see deb depends. RPM distros ship Xvfb as xorg-x11-server-Xvfb (there
     // is no `xvfb` package), so the name differs from the deb here.
     depends: [
+      ...rpmElectronRuntimeDependencies,
       'python3',
       'python3-gobject',
-      'at-spi2-core',
       'xdotool',
       'xclip',
       'xorg-x11-server-Xvfb'
@@ -582,6 +635,16 @@ module.exports = {
     repo: devChannelRepo ?? 'orca',
     releaseType: devChannelRepo ? 'prerelease' : 'release'
   }
+}
+
+// Stamp the effective channel version where node-mode CLI code can read it.
+function stampPackagedCliVersion(resourcesDir, version) {
+  const packageJsonPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json')
+  if (!existsSync(packageJsonPath)) {
+    throw new Error(`Missing unpacked CLI package boundary: ${packageJsonPath}`)
+  }
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
+  writeFileSync(packageJsonPath, `${JSON.stringify({ ...packageJson, version }, null, 2)}\n`)
 }
 
 function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {

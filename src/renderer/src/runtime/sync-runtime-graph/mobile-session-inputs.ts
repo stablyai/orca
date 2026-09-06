@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/stable-pane-id'
 import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
+import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
 import {
   EMPTY_NARROWED_BY_KEY,
   EMPTY_WORKTREE_BROWSER_WORKSPACES,
@@ -50,29 +51,6 @@ export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIn
   return graphState.cachedOpenFileIndexes
 }
 
-export function getEditorDraftVersionByFileId(
-  editorDrafts: AppState['editorDrafts']
-): Map<string, string> {
-  if (
-    graphState.cachedEditorDraftsSource === editorDrafts &&
-    graphState.cachedEditorDraftVersionByFileId
-  ) {
-    return graphState.cachedEditorDraftVersionByFileId
-  }
-  const versions = new Map<string, string>()
-  for (const [fileId, content] of Object.entries(editorDrafts)) {
-    let hash = 2166136261
-    for (let index = 0; index < content.length; index += 1) {
-      hash ^= content.charCodeAt(index)
-      hash = Math.imul(hash, 16777619)
-    }
-    versions.set(fileId, `draft:${content.length}:${(hash >>> 0).toString(16)}`)
-  }
-  graphState.cachedEditorDraftsSource = editorDrafts
-  graphState.cachedEditorDraftVersionByFileId = versions
-  return versions
-}
-
 export function buildMobileSessionAgentStatusByWorktree(
   agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
   tabsByWorktree: AppState['tabsByWorktree']
@@ -102,6 +80,14 @@ export function buildMobileSessionAgentStatusByWorktree(
     bucket.set(paneKey, agentStatusByPaneKey[paneKey])
   }
   return byWorktreeId
+}
+
+// Why: a bare id can name one workspace per host (STA-4343); with two owners no
+// single identity is correct, so publish without one and let main fall back to
+// its generation fence rather than blank the mobile session.
+function resolveWorktreeInstanceId(state: AppState, worktreeId: string): string | undefined {
+  const rows = getIndexedWorktreesById(state.worktreesByRepo ?? {}, worktreeId)
+  return rows.length === 1 ? rows[0]?.instanceId : undefined
 }
 
 export function buildMobileSessionWorktreeInputs(
@@ -146,6 +132,7 @@ export function buildMobileSessionWorktreeInputs(
   const activeTabId = state.activeTabId
   return {
     worktreeId,
+    worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,
     unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,

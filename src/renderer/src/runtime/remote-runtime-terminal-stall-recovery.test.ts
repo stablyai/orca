@@ -11,6 +11,7 @@ import {
   REMOTE_TERMINAL_COMMAND_RESPONSE_TIMEOUT_MS,
   REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS
 } from './remote-terminal-stream-watchdog'
+import { TERMINAL_MULTIPLEX_ACK_FLUSH_MS } from '../../../shared/terminal-multiplex-flow-control'
 
 describe('remote terminal stalled stream recovery', () => {
   const sendBinary = vi.fn()
@@ -99,6 +100,77 @@ describe('remote terminal stalled stream recovery', () => {
       })
     })
     healthy.close()
+  })
+
+  it('keeps a stream alive once the transport takes the ack for its parsed output', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer } =
+      await import('./remote-runtime-terminal-multiplexer')
+    const { takeCurrentTerminalDeliveryCredit } =
+      await import('../lib/pane-manager/terminal-delivery-credit')
+    const credits: (() => void)[] = []
+    const onTransportClose = vi.fn()
+    const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
+      terminal: 'term-acked',
+      client: { id: 'mac-viewer', type: 'desktop' },
+      callbacks: {
+        onData: () => {
+          const credit = takeCurrentTerminalDeliveryCredit()
+          if (credit) {
+            credits.push(credit)
+          }
+        },
+        onSnapshot: vi.fn(),
+        onTransportClose
+      }
+    })
+    sendBinary.mockClear()
+
+    emitOutput(stream.streamId, 'host output the renderer parses')
+    credits[0]?.()
+    await vi.advanceTimersByTimeAsync(TERMINAL_MULTIPLEX_ACK_FLUSH_MS)
+    expect(sentFrames(TerminalStreamOpcode.Ack)).toHaveLength(1)
+
+    await vi.advanceTimersByTimeAsync(REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS)
+
+    expect(onTransportClose).not.toHaveBeenCalled()
+    expect(sentUnsubscribeStreamIds()).toEqual([])
+    stream.close()
+  })
+
+  it('keeps the delivery deadline anchored while sibling frames keep settling', async () => {
+    const { getRemoteRuntimeTerminalMultiplexer } =
+      await import('./remote-runtime-terminal-multiplexer')
+    const { takeCurrentTerminalDeliveryCredit } =
+      await import('../lib/pane-manager/terminal-delivery-credit')
+    const credits: (() => void)[] = []
+    const onTransportClose = vi.fn()
+    const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
+      terminal: 'term-anchored',
+      client: { id: 'mac-viewer', type: 'desktop' },
+      callbacks: {
+        onData: () => {
+          const credit = takeCurrentTerminalDeliveryCredit()
+          if (credit) {
+            credits.push(credit)
+          }
+        },
+        onSnapshot: vi.fn(),
+        onTransportClose
+      }
+    })
+    sendBinary.mockClear()
+
+    emitOutput(stream.streamId, 'frame the renderer never parses')
+    await vi.advanceTimersByTimeAsync(REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS - 5_000)
+    emitOutput(stream.streamId, 'sibling frame that settles')
+    credits[1]?.()
+    await vi.advanceTimersByTimeAsync(TERMINAL_MULTIPLEX_ACK_FLUSH_MS)
+
+    expect(onTransportClose).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
   })
 
   it('probes then restarts a stream when an entered command receives no frames', async () => {

@@ -35,8 +35,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
       this.clickedLinkFrameNameByGuestId.set(guest.id, clickedLinkFrameName)
     }
 
-    // Why: bot detectors probe APIs that differ in Electron webviews; inject overrides each load so manual browsing passes.
-    const disposeAntiDetection = this.injectAntiDetection(guest)
+    const disposeAuthDetachTracking = this.trackDebuggerDetachForAuthUserAgent(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
     const disposePopupPolicy = this.installGuestPopupPolicy(guest, clickedLinkFrameName)
@@ -44,14 +43,14 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
     this.policyCleanupByGuestId.set(guest.id, () => {
-      disposeAntiDetection()
+      disposeAuthDetachTracking()
       disposePopupPolicy()
       disposeNavigationPolicy()
     })
   }
 
   /**
-   * A workspace document is not the web: no popups, no link routing, no anti-detection, and no
+   * A workspace document is not the web: no popups, no link routing, no auth-identity tracking, and no
    * navigation bookkeeping for chrome it does not have. What it does share with a browsing guest is
    * this method's teardown, so a retired preview drops its listeners on the same path.
    */

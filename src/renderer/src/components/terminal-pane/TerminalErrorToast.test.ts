@@ -160,6 +160,18 @@ describe('humanizeTerminalError', () => {
     expect(humanized).toContain('Open a new terminal to continue')
   })
 
+  // A daemon generation old enough to still refuse a pane respawning onto an id it is tearing
+  // down answers with the raw class name; the user must not be told to file an issue for it.
+  it('replaces the daemon session-absence string and its id', () => {
+    const humanized = humanizeTerminalError(
+      "Error invoking remote method 'pty:spawn': SessionNotFoundError: Session not found: wt-1@@pane-a"
+    )
+    expect(humanized).not.toContain('SessionNotFoundError')
+    expect(humanized).not.toContain('wt-1@@pane-a')
+    expect(humanized).toContain('Open a new terminal to continue')
+    expect(isExplainedTerminalError('Session not found: wt-1@@pane-a')).toBe(true)
+  })
+
   it('replaces the identity-mismatch form of PTY-not-found', () => {
     const humanized = humanizeTerminalError('PTY "orca:2f1c@@pty-7" not found (identity mismatch)')
     expect(humanized).not.toContain('identity mismatch')
@@ -171,6 +183,19 @@ describe('humanizeTerminalError', () => {
     const humanized = humanizeTerminalError('SSH_SESSION_EXPIRED: orca:2f1c@@pty-7')
     expect(humanized).not.toContain('may still be running')
     expect(humanized).not.toContain('exited')
+  })
+
+  // A live PTY whose delivery was retired must never get the "open a new terminal" copy: acting on
+  // that abandons a running agent on the host.
+  it('describes a retired output source as reconnecting, not as a lost session', () => {
+    const humanized = humanizeTerminalError(
+      'SSH_PTY_SOURCE_RESTORE_REQUIRED: remote:2f1c:pty-7 checkpointUnavailable'
+    )
+    expect(humanized).not.toContain('SSH_PTY_SOURCE_RESTORE_REQUIRED')
+    expect(humanized).not.toContain('remote:2f1c:pty-7')
+    expect(humanized).not.toContain('checkpointUnavailable')
+    expect(humanized).not.toContain('Open a new terminal')
+    expect(humanized).toContain('still running')
   })
 
   it('replaces only the unreattachable line in an aggregated error', () => {
@@ -201,6 +226,14 @@ describe('isExplainedTerminalError', () => {
     expect(isExplainedTerminalError(LEGACY_HOST_GONE)).toBe(true)
     expect(
       isExplainedTerminalError('connect ECONNREFUSED /tmp/orca-terminal-host-v30-14cb7f94b511.sock')
+    ).toBe(true)
+  })
+
+  it('suppresses the issue link while a live session restores its output source', () => {
+    expect(
+      isExplainedTerminalError(
+        'SSH_PTY_SOURCE_RESTORE_REQUIRED: remote:2f1c:pty-7 checkpointUnavailable'
+      )
     ).toBe(true)
   })
 

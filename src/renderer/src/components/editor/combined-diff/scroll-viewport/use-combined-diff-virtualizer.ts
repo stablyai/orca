@@ -11,6 +11,7 @@ export function useCombinedDiffVirtualizer({
   generation,
   programmaticScrollMarks,
   renderedIndicesRef,
+  rowKeys,
   scrollContainerRef,
   scrollOffsetRef,
   sectionHeights,
@@ -20,6 +21,7 @@ export function useCombinedDiffVirtualizer({
   generation: number
   programmaticScrollMarks: ProgrammaticScrollMarks
   renderedIndicesRef: React.RefObject<Set<number>>
+  rowKeys: readonly string[]
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.RefObject<number>
   sectionHeights: Record<number, number>
@@ -48,14 +50,9 @@ export function useCombinedDiffVirtualizer({
       }
       elementScroll(offset, options, instance)
     },
-    getItemKey: (index) => {
-      const section = sections[index]
-      if (!section) {
-        return `${index}:${generation}`
-      }
-      // Why: contentGeneration is per-section, so a single row's reload remounts only that row.
-      return `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}:${generation}:${section.contentGeneration ?? 0}`
-    }
+    // Why: TanStack re-runs getItemKey for every index on each measurement pass, so the key is
+    // pre-built once per section change instead of a template string per index per pass.
+    getItemKey: (index) => rowKeys[index] ?? `${index}:${generation}`
   })
 
   // Why: keep render pure (React Doctor); retrySection still needs the on-screen set without the virtualizer as a dep.

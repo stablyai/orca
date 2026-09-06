@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import { encodeJsonRpcFrame, MessageType, type JsonRpcResponse } from './protocol'
+import {
+  TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
+  type TerminalUnavailableCause
+} from '../shared/terminal-unavailable-cause'
 
 function decodeResponse(frame: Buffer): JsonRpcResponse | null {
   if (frame[0] !== MessageType.Regular) {
@@ -50,6 +54,56 @@ describe('RelayDispatcher structured errors', () => {
     expect(responses.find((message) => message?.id === 7)?.error).toEqual({
       code: -32000,
       message: 'boom'
+    })
+  })
+
+  it('carries a terminal-unavailable cause across the wire, and rejects a malformed one', async () => {
+    // Why this must cross: the fault is proved on the relay at spawn time, and the only
+    // machinery that can repair it runs on the client. Prose cannot be acted on.
+    vi.useFakeTimers()
+    const written: Buffer[] = []
+    const dispatcher = new RelayDispatcher((data) => {
+      written.push(Buffer.from(data))
+    })
+    dispatchers.push(dispatcher)
+    const cause: TerminalUnavailableCause = {
+      status: 'blocked',
+      reason: 'abi_mismatch',
+      detail: 'built for Node ABI 127, this host runs ABI 115',
+      repairable: true,
+      host: {
+        platform: 'linux',
+        arch: 'x64',
+        libc: 'glibc',
+        glibcVersion: '2.31',
+        nodeAbi: '115',
+        nodeVersion: 'v20.11.0'
+      }
+    }
+    dispatcher.onRequest('pty.spawn', async () => {
+      throw Object.assign(new Error('Remote terminals are unavailable'), {
+        code: TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
+        data: cause
+      })
+    })
+    dispatcher.onRequest('pty.spawnBogus', async () => {
+      throw Object.assign(new Error('Remote terminals are unavailable'), {
+        code: TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,
+        data: { status: 'blocked', repairable: true }
+      })
+    })
+
+    dispatcher.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 8, method: 'pty.spawn' }, 1, 0))
+    dispatcher.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 9, method: 'pty.spawnBogus' }, 2, 0))
+    await vi.advanceTimersByTimeAsync(0)
+
+    const responses = written.map(decodeResponse)
+    expect(responses.find((message) => message?.id === 8)?.error?.data).toEqual(cause)
+    // A cause that does not validate is dropped entirely; a half-read cause must never
+    // authorize a repair.
+    expect(responses.find((message) => message?.id === 9)?.error).toEqual({
+      code: -32000,
+      message: 'Remote terminals are unavailable'
     })
   })
 })

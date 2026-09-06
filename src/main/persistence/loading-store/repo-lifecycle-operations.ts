@@ -13,6 +13,7 @@ import { mergeProjectHostSetupCompatibilityState } from '../tracking-repos/proje
 import { RepoOrderPersistenceOperations } from '../tracking-repos/repo-order-operations'
 import { pruneWorktreeStateForRepo as pruneWorktreeStateForRepoOperation } from '../tracking-repos/repo-worktree-pruning'
 import { collectDeregisteredRepoIds } from '../tracking-repos/deregistered-repo-residue'
+import { retireLocalWorktreeMetadataPruneStateForRepo } from '../../local-worktree-metadata-prune-gate'
 import { hydrateRepo as hydrateRepoOperation } from '../tracking-repos/repo-hydration'
 import { RepoUpdatePersistenceOperations } from '../tracking-repos/repo-update-operations'
 import { ProjectHostSetupPersistenceOperations } from '../tracking-repos/project-host-setup-update'
@@ -221,6 +222,9 @@ export function pruneWorktreeStateForRepo(
     hostId,
     (matchesWorktreeId) => pruneMobileClientTabSelections(owner, matchesWorktreeId)
   )
+  // Why: this drops metadata, lineage, leases and session owners in bulk, which can unpin rows in
+  // other repos, and a full removal retires this repo's own gate state (#17775).
+  retireLocalWorktreeMetadataPruneStateForRepo(id, hostId)
 }
 
 export function pruneMobileClientTabSelections(

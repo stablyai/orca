@@ -10,7 +10,7 @@ const MAX_OBSERVED_BYTES = 64 * 1024
 
 type SubscribeToData = (watcher: (data: string) => void) => Promise<() => void> | (() => void)
 
-export type ClaudeModelSwitchOutcome = 'applied' | 'rejected' | 'interaction-required' | 'unknown'
+export type ClaudeModelSwitchOutcome = 'applied' | 'rejected' | 'unknown'
 
 export type ClaudeModelSwitchConfirmationObserver = {
   ready: Promise<void>
@@ -60,15 +60,6 @@ function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolea
 
 function hasClaudeModelSwitchRejection(buffer: string): boolean {
   return compactTerminalText(buffer).includes('keptmodelas')
-}
-
-function hasClaudeModelSwitchInteraction(buffer: string): boolean {
-  const text = compactTerminalText(buffer)
-  return (
-    text.includes('fable5usesusagecreditsandneedsaone-timeconsent') ||
-    text.includes('pickfablefrom/modelinaninteractivesessiontosetitup') ||
-    (text.includes('switchtofable5?') && text.includes('usagecredits'))
-  )
 }
 
 function subscribeToClaudeModelSwitchData(args: {
@@ -147,10 +138,6 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
     }
     if (hasClaudeModelSwitchRejection(observed)) {
       finish('rejected')
-      return
-    }
-    if (hasClaudeModelSwitchInteraction(observed)) {
-      finish('interaction-required')
       return
     }
     if (!confirmationSubmitted && hasClaudeModelSwitchConfirmation(observed)) {

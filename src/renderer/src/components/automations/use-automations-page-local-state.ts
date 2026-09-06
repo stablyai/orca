@@ -12,8 +12,17 @@ import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationCreateDestination } from './automation-create-destination'
 import type { AutomationListRow } from './automation-list-row-identity'
-import { EMPTY_AUTOMATION_LIST_FILTER, type AutomationListFilter } from './automation-list-view'
-import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
+import {
+  EMPTY_AUTOMATION_LIST_FILTER,
+  type AutomationListFilter,
+  type AutomationListSort
+} from './automation-list-view'
+import type {
+  AutomationPaneTab,
+  AutomationRunPageOrigin,
+  AutomationsPageView,
+  SelectedExternalRunPage
+} from './automation-page-state'
 import type { ExternalAutomationScope } from './external-automation-scope-client'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
@@ -49,6 +58,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [isSaving, setIsSaving] = useState(false)
   const [listSearchQuery, setListSearchQuery] = useState('')
   const [listFilter, setListFilter] = useState<AutomationListFilter>(EMPTY_AUTOMATION_LIST_FILTER)
+  const [listSort, setListSort] = useState<AutomationListSort | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createTarget, setCreateTarget] = useState<AutomationCreateTarget>('orca')
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null)
@@ -60,6 +70,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [editingHostStableKey, setEditingHostStableKey] = useState<string | null>(null)
   const moveCreationKeysRef = useRef(new Map<string, string>())
   const [relativeNow, setRelativeNow] = useState(() => Date.now())
+  const [pageView, setPageView] = useState<AutomationsPageView>('automations')
+  const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
@@ -171,6 +183,8 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     setListSearchQuery,
     listFilter,
     setListFilter,
+    listSort,
+    setListSort,
     createOpen,
     setCreateOpen,
     createTarget,
@@ -186,6 +200,10 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     moveCreationKeysRef,
     relativeNow,
     setRelativeNow,
+    pageView,
+    setPageView,
+    runPageOrigin,
+    setRunPageOrigin,
     activePaneTab,
     setActivePaneTab,
     selectedAutomationRunPageId,

@@ -16,7 +16,7 @@ import {
   type RelayWatcherTeardownState
 } from './relay-watcher-teardown-tracker'
 import { emitRelayWatcherTerminalFailure } from './relay-watcher-terminal-notifier'
-import { assertRelayWatcherRootCapacity } from './relay-watcher-root-capacity'
+import { RelayWatchRootCapacityGate } from './relay-watch-root-capacity-gate'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import {
   trackRelayWatcherSetup,
@@ -33,6 +33,11 @@ const RELAY_WATCH_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 export class RelayFilesystemWatchRegistry {
   private readonly watches = new Map<string, RelayWatcherTeardownState>()
   private readonly pendingSetups = new Map<string, RelayWatcherPendingSetup>()
+  private readonly capacityGate = new RelayWatchRootCapacityGate(
+    this.watches,
+    this.pendingSetups,
+    () => this.teardownTracker
+  )
   private readonly teardownTracker: RelayWatcherTeardownTracker
   private readonly removalFence: RelayWatcherRemovalFence
 
@@ -95,6 +100,10 @@ export class RelayFilesystemWatchRegistry {
     if (rootTeardown) {
       await rootTeardown
     }
+    const capacityRelease = this.capacityGate.release(rootKey, context?.signal)
+    if (capacityRelease) {
+      await capacityRelease
+    }
     const clientId = context?.clientId ?? 0
     const isStale = context?.isStale ?? (() => false)
     const existing = this.watches.get(rootKey)
@@ -107,12 +116,7 @@ export class RelayFilesystemWatchRegistry {
       return
     }
 
-    assertRelayWatcherRootCapacity(
-      this.watches.keys(),
-      this.pendingSetups.keys(),
-      this.teardownTracker.rootPaths(),
-      rootKey
-    )
+    this.capacityGate.assert(rootKey)
 
     const state = createRelayWatcherState(rootKey, rootPath, clientId, isStale, watchId)
     this.watches.set(rootKey, state)

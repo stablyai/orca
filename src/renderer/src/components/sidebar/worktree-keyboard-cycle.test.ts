@@ -165,8 +165,11 @@ describe('WorktreeList keyboard cycling', () => {
 
     // Why: a second buildRows call drifts from the rendered layout (host sections,
     // pinned placement); cycling must read the same rows the viewport renders.
-    expect(navigateWorktree).toContain('getCyclableWorktrees(rows, pinnedDisplayPolicy)')
-    expect(navigateWorktree).toContain('getWorktreeHostIdentity')
+    expect(navigateWorktree).toContain('getCyclableWorktreeRows(rows, pinnedDisplayPolicy)')
+    expect(navigateWorktree).toContain('getCyclableRowIdentity')
+    // Why: the active host is stored resolved while a local row is unqualified; comparing raw identities wraps to the top.
+    expect(navigateWorktree).toContain('resolveActiveCycleIdentity')
+    expect(navigateWorktree).not.toContain('composeWorktreeHostIdentity')
     expect(navigateWorktree).toContain('executionHostId: nextWorktree.hostId')
     expect(navigateWorktree).toContain('resolveCycledWorktreeId')
     expect(navigateWorktree).not.toContain('buildRows(')

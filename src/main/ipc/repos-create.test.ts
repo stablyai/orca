@@ -151,7 +151,7 @@ describe('repos:create', () => {
     gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
     homedirMock.mockReset().mockReturnValue('/Users/alice')
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('registers the repos:create handler', () => {

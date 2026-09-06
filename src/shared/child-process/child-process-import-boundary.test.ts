@@ -29,7 +29,7 @@ const CHILD_PROCESS_IMPORT_ALLOWLIST: readonly string[] = readFileSync(
  * May only ever be DECREASED, and only by migrating a file off
  * `node:child_process`. Raising it is never the fix.
  */
-const DIRECT_IMPORTER_PIN = 160
+const DIRECT_IMPORTER_PIN = 158
 
 const IMPORT_PATTERN =
   /(?:from\s+['"]node:child_process['"]|from\s+['"]child_process['"]|require\(\s*['"]node:child_process['"]|require\(\s*['"]child_process['"])/

@@ -39,22 +39,30 @@ test.describe('Reveal active workspace button', () => {
   // the "outside the virtualized window" test below.
 
   test('clears sidebar filters before revealing a hidden current workspace', async ({
-    orcaPage
+    orcaPage,
+    testRepoPath
   }) => {
     await prepareSidebarForScrollTest(orcaPage)
 
-    const renderedOptions = orcaPage.locator('[data-worktree-sidebar] [role="option"]')
-    await expect(renderedOptions).toHaveCount(2)
-
-    const targetId = await renderedOptions.last().getAttribute('data-worktree-id')
+    // Other specs can add worktrees to the shared repository before this test runs.
+    const targetId = await orcaPage.evaluate((repoPath) => {
+      const state = window.__store!.getState()
+      const repo = state.repos.find((candidate) => candidate.path === repoPath)
+      return repo
+        ? state.worktreesByRepo[repo.id]?.find(
+            (worktree) => worktree.branch === 'refs/heads/e2e-secondary'
+          )?.id
+        : undefined
+    }, testRepoPath)
     if (!targetId) {
-      throw new Error('Bottom workspace row did not expose a data-worktree-id')
+      throw new Error('Seeded secondary worktree is missing')
     }
 
     const targetRows = orcaPage.locator(
       `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
     )
     const targetRow = targetRows.first()
+    await expect(targetRows.and(orcaPage.getByRole('option'))).toHaveCount(1)
     const revealButton = orcaPage.getByRole('button', { name: 'Reveal active workspace' })
 
     await orcaPage.evaluate((targetId) => {
@@ -92,6 +100,10 @@ test.describe('Reveal active workspace button', () => {
     // contract under test is that reveal clears the filter (asserted below).
 
     await revealButton.click()
+    await orcaPage
+      .getByRole('dialog', { name: 'Reveal hidden workspace?' })
+      .getByRole('button', { name: 'Clear filters and reveal' })
+      .click()
 
     await expect(targetRow).toBeVisible()
     await expect(targetRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')

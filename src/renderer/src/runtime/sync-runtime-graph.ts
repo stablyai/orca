@@ -21,6 +21,7 @@ import {
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph/sync-key'
 import { buildMobileSessionTabSnapshots } from './sync-runtime-graph/mobile-session-snapshots'
+import { resetRuntimeMobileSyncProjectionCachesForTests } from './sync-runtime-graph/sync-projections'
 import type { RegisteredTerminalTab } from './sync-runtime-graph/types'
 
 export type { RegisteredTerminalTab, RuntimeMobileSessionSyncKey } from './sync-runtime-graph/types'
@@ -28,6 +29,7 @@ export {
   AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS,
   buildRuntimeMobileAgentStatusProjectionForTests,
   resetRuntimeMobileAgentStatusProjectionCacheForTests,
+  resetRuntimeMobileSyncProjectionCachesForTests,
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
   runtimeMobileSessionSyncKeysEqual,

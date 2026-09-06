@@ -229,129 +229,132 @@ export default function ProjectCombobox({
           </button>
         </div>
       </PopoverAnchor>
-      <PopoverContent
-        align="start"
-        sideOffset={4}
-        // Why opaque + no fade: this popover lands directly on the composer
-        // dialog, not the app canvas. The shared surface is translucent and
-        // fades 0→1, so mid-animation the Name field underneath reads straight
-        // through the list — two layers at once, which is the "double flash".
-        // An opaque surface that zooms without fading resolves it. (`bg-popover`
-        // alone loses to the primitive's arbitrary-value background, hence the
-        // matching arbitrary form.) Every other caller keeps the blur and fade.
-        className={cn(
-          'flex w-[var(--radix-popover-trigger-width)] min-w-[17rem] flex-col p-0',
-          COMBOBOX_POPOVER_SURFACE
-        )}
-        // Focus stays in the field — it's the search box — so the popover must
-        // not steal it on open, nor yank it back on close after a pick.
-        onOpenAutoFocus={(event) => event.preventDefault()}
-        onCloseAutoFocus={(event) => event.preventDefault()}
-        // Why: the field lives in the anchor, not inside the content, so Radix
-        // sees a focus/pointer event "outside" the layer and dismisses it the
-        // instant you tab in. Keep the layer open whenever the interaction is
-        // within this control; genuine outside events still close it.
-        onFocusOutside={(event) => {
-          if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
-            event.preventDefault()
-          }
-        }}
-        onInteractOutside={(event) => {
-          if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
-            event.preventDefault()
-          }
-        }}
-      >
-        {/* The listbox wraps a scrolling pane plus the pinned Add row, so both
-            stay `option` children of one listbox. */}
-        <div
-          id={listId}
-          role="listbox"
-          aria-label={translate(
-            'auto.components.new.workspace.ProjectCombobox.listLabel',
-            'Projects'
+      {/* Closing must remove the selector before a nested dialog takes focus. */}
+      {open ? (
+        <PopoverContent
+          align="start"
+          sideOffset={4}
+          // Why opaque + no fade: this popover lands directly on the composer
+          // dialog, not the app canvas. The shared surface is translucent and
+          // fades 0→1, so mid-animation the Name field underneath reads straight
+          // through the list — two layers at once, which is the "double flash".
+          // An opaque surface that zooms without fading resolves it. (`bg-popover`
+          // alone loses to the primitive's arbitrary-value background, hence the
+          // matching arbitrary form.) Every other caller keeps the blur and fade.
+          className={cn(
+            'flex w-[var(--radix-popover-trigger-width)] min-w-[17rem] flex-col p-0',
+            COMBOBOX_POPOVER_SURFACE
           )}
-          className="flex min-h-0 flex-col"
+          // Focus stays in the field — it's the search box — so the popover must
+          // not steal it on open, nor yank it back on close after a pick.
+          onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
+          // Why: the field lives in the anchor, not inside the content, so Radix
+          // sees a focus/pointer event "outside" the layer and dismisses it the
+          // instant you tab in. Keep the layer open whenever the interaction is
+          // within this control; genuine outside events still close it.
+          onFocusOutside={(event) => {
+            if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
+              event.preventDefault()
+            }
+          }}
+          onInteractOutside={(event) => {
+            if (isWithinComboboxRoot(event.target, ROOT_ATTRIBUTE)) {
+              event.preventDefault()
+            }
+          }}
         >
-          {/* Why: `presentation` — this element exists to scroll, and an
+          {/* The listbox wraps a scrolling pane plus the pinned Add row, so both
+            stay `option` children of one listbox. */}
+          <div
+            id={listId}
+            role="listbox"
+            aria-label={translate(
+              'auto.components.new.workspace.ProjectCombobox.listLabel',
+              'Projects'
+            )}
+            className="flex min-h-0 flex-col"
+          >
+            {/* Why: `presentation` — this element exists to scroll, and an
               unroled div between a listbox and its options breaks the
               ownership relationship assistive tech relies on. */}
-          <div
-            ref={setListNode}
-            role="presentation"
-            className="max-h-72 min-h-0 flex-1 overflow-y-auto p-1 scrollbar-sleek"
-          >
-            {matches.length === 0 ? (
-              // Why: row-height rather than a tall centred block — a 60px panel
-              // next to 32px rows reads as a different kind of surface and
-              // makes an empty result feel like an error.
-              <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
-                {options.length === 0
-                  ? translate(
-                      'auto.components.new.workspace.ProjectCombobox.noProjects',
-                      'No projects yet.'
-                    )
-                  : translate(
-                      'auto.components.new.workspace.ProjectCombobox.empty',
-                      'No projects match your search.'
-                    )}
-              </p>
-            ) : null}
-            {sections.map((section) => (
-              // Why: `role="group"` — a bare div between a listbox and its
-              // options breaks the ownership relationship for screen readers,
-              // which is the only thing that makes the headings announceable.
-              <div key={section.key} role="group" aria-label={section.heading ?? undefined}>
-                {section.heading ? (
-                  <div
-                    aria-hidden="true"
-                    className="px-2 pt-2.5 pb-1 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase"
-                  >
-                    {section.heading}
-                  </div>
-                ) : null}
-                {section.items.map((scored) => (
-                  <ProjectOptionRow
-                    key={scored.option.id}
-                    option={scored.option}
-                    nameHits={scored.nameHits}
-                    detailHits={scored.detailHits}
-                    armed={armedKey === scored.option.id}
-                    current={scored.option.id === value}
-                    ambiguous={ambiguous.has(scored.option.id)}
-                    optionId={armedKey === scored.option.id ? `${listId}-armed` : undefined}
-                    onArm={() => arm(scored.option.id)}
-                    onCommit={() => commit(scored.option.id)}
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
-          {onAddProject ? (
             <div
-              role="option"
-              id={armedKey === ADD_PROJECT_KEY ? `${listId}-armed` : undefined}
-              aria-selected={armedKey === ADD_PROJECT_KEY}
-              data-armed={armedKey === ADD_PROJECT_KEY || undefined}
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseMove={() => arm(ADD_PROJECT_KEY)}
-              onClick={() => commit(ADD_PROJECT_KEY)}
-              className={cn(
-                'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-2 text-sm',
-                armedKey === ADD_PROJECT_KEY && 'bg-accent text-accent-foreground'
-              )}
+              ref={setListNode}
+              role="presentation"
+              className="max-h-72 min-h-0 flex-1 overflow-y-auto p-1 scrollbar-sleek"
             >
-              <FolderPlus className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="truncate">
-                {translate(
-                  'auto.components.new.workspace.ProjectCombobox.addProject',
-                  'Add a new project'
-                )}
-              </span>
+              {matches.length === 0 ? (
+                // Why: row-height rather than a tall centred block — a 60px panel
+                // next to 32px rows reads as a different kind of surface and
+                // makes an empty result feel like an error.
+                <p className="flex h-8 items-center justify-center px-2 text-sm text-muted-foreground">
+                  {options.length === 0
+                    ? translate(
+                        'auto.components.new.workspace.ProjectCombobox.noProjects',
+                        'No projects yet.'
+                      )
+                    : translate(
+                        'auto.components.new.workspace.ProjectCombobox.empty',
+                        'No projects match your search.'
+                      )}
+                </p>
+              ) : null}
+              {sections.map((section) => (
+                // Why: `role="group"` — a bare div between a listbox and its
+                // options breaks the ownership relationship for screen readers,
+                // which is the only thing that makes the headings announceable.
+                <div key={section.key} role="group" aria-label={section.heading ?? undefined}>
+                  {section.heading ? (
+                    <div
+                      aria-hidden="true"
+                      className="px-2 pt-2.5 pb-1 text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase"
+                    >
+                      {section.heading}
+                    </div>
+                  ) : null}
+                  {section.items.map((scored) => (
+                    <ProjectOptionRow
+                      key={scored.option.id}
+                      option={scored.option}
+                      nameHits={scored.nameHits}
+                      detailHits={scored.detailHits}
+                      armed={armedKey === scored.option.id}
+                      current={scored.option.id === value}
+                      ambiguous={ambiguous.has(scored.option.id)}
+                      optionId={armedKey === scored.option.id ? `${listId}-armed` : undefined}
+                      onArm={() => arm(scored.option.id)}
+                      onCommit={() => commit(scored.option.id)}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
-          ) : null}
-        </div>
-      </PopoverContent>
+            {onAddProject ? (
+              <div
+                role="option"
+                id={armedKey === ADD_PROJECT_KEY ? `${listId}-armed` : undefined}
+                aria-selected={armedKey === ADD_PROJECT_KEY}
+                data-armed={armedKey === ADD_PROJECT_KEY || undefined}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseMove={() => arm(ADD_PROJECT_KEY)}
+                onClick={() => commit(ADD_PROJECT_KEY)}
+                className={cn(
+                  'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-2 text-sm',
+                  armedKey === ADD_PROJECT_KEY && 'bg-accent text-accent-foreground'
+                )}
+              >
+                <FolderPlus className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">
+                  {translate(
+                    'auto.components.new.workspace.ProjectCombobox.addProject',
+                    'Add a new project'
+                  )}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        </PopoverContent>
+      ) : null}
     </Popover>
   )
 }

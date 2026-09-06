@@ -1,9 +1,26 @@
+import { normalizePromptField } from './agent-status-field-normalization'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
+}
+
+/** The markers a clipped payload carries in its own text, anchored to the end
+ *  so nothing that merely looks like one inside the body can match. */
+const BOUNDED_TEXT_MARKERS = [
+  /\n… \(\d+ bytes\)$/,
+  /\n\[Orca: output truncated — \d+ bytes total, digest [0-9a-f]+\]$/
+]
+
+/** Recovers the clipped body from a bounded payload's text, and says whether a
+ *  marker was there. A reader that treats the text as content renders the
+ *  marker as a line of it — with a line number, which reads as a real position
+ *  in the file — and reports the body as complete. */
+export function stripBoundedTextMarker(text: string): { text: string; truncated: boolean } {
+  const stripped = BOUNDED_TEXT_MARKERS.reduce((value, marker) => value.replace(marker, ''), text)
+  return { text: stripped, truncated: stripped.length !== text.length }
 }
 
 function itemBlocks(item: AgentJournalRenderItem): {
@@ -144,6 +161,34 @@ export function projectStructuredAgentSessionStatus(
     return 'attention'
   }
   return activeStructuredAgentSessionTurnId(items) ? 'working' : 'idle'
+}
+
+/** The newest user prompt, as the sidebar quotes it. */
+export function latestStructuredAgentSessionPrompt(
+  items: readonly AgentJournalRenderItem[]
+): string {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const body = items[index]?.body
+    if (body?.kind === 'message' && body.role === 'user') {
+      return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+    }
+  }
+  return ''
+}
+
+/** One projection shared by host and client: null status means "no turn yet", not idle.
+ *  The prompt is bounded to the same preview every other agent-status row carries — a send
+ *  admits 256 KB, and one status frame carries every retained session at once. */
+export function projectStructuredAgentSessionStatusSummary(
+  items: readonly AgentJournalRenderItem[]
+): { status: StructuredAgentSessionProjectedStatus | null; latestPrompt: string } {
+  if (!hasPersistedStructuredAgentSessionTurn(items)) {
+    return { status: null, latestPrompt: '' }
+  }
+  return {
+    status: projectStructuredAgentSessionStatus(items),
+    latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items))
+  }
 }
 
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {

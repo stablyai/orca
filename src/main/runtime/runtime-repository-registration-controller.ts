@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepo } from '../git/repo'
@@ -57,7 +61,14 @@ export class RuntimeRepositoryRegistrationController {
       }
       return existing
     }
-    const detected = await detectRepoIconAndUpstream({ repoPath: path, kind })
+    // Local on purpose, whatever `executionHostId` stamps on the row: this controller already
+    // validated and will read `path` in this process. A `runtime:` stamp is how a paired client
+    // addresses the row, not a second machine holding the files.
+    const detected = await detectRepoIconAndUpstream({
+      repoPath: path,
+      kind,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
     const repo: Repo = {
       id: randomUUID(),
       path,
@@ -137,7 +148,11 @@ export class RuntimeRepositoryRegistrationController {
     if (raceWinner) {
       return { repo: raceWinner }
     }
-    const detected = await detectRepoIconAndUpstream({ repoPath: targetPath, kind: repoKind })
+    const detected = await detectRepoIconAndUpstream({
+      repoPath: targetPath,
+      kind: repoKind,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
     const repo: Repo = {
       id: randomUUID(),
       path: targetPath,

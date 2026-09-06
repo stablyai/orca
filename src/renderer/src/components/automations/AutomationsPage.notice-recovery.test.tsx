@@ -15,7 +15,6 @@ import {
   addRuntimeProject,
   api,
   installAutomationsPageHarness,
-  listedRow,
   mocks,
   renderPage,
   runtimeHost,
@@ -26,6 +25,7 @@ import {
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { listedRow } from './automations-page-listed-items'
 import { makeAutomation } from './automations-page-fixtures'
 
 installAutomationsPageHarness()

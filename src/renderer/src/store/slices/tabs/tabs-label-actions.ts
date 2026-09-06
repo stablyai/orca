@@ -18,7 +18,6 @@ export function createTabsLabelActions(
   | 'setTabLabel'
   | 'setTabViewMode'
   | 'toggleTabViewMode'
-  | 'setRenamingTabId'
   | 'setTabCustomLabel'
   | 'setUnifiedTabColor'
   | 'pinTab'
@@ -99,10 +98,6 @@ export function createTabsLabelActions(
         emitNativeChatToggled(committed)
         mirrorTabViewModeToHost(get(), tabId, committed.to)
       }
-    },
-
-    setRenamingTabId: (tabId) => {
-      set({ renamingTabId: tabId })
     },
 
     setTabCustomLabel: (tabId, label, opts) => {
