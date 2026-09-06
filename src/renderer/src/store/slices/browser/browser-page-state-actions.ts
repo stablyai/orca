@@ -9,6 +9,8 @@ import {
   normalizeBrowserTitle,
   normalizeUrl
 } from '../browser-page-records'
+import { normalizeBrowserHistoryUrl } from '../../../../../shared/workspace-session-browser-history'
+import { normalizePersistedBrowserFaviconUrl } from '../../../../../shared/browser-favicon-url'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,
@@ -98,6 +100,20 @@ export function createBrowserPageStateActions(
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
             [workspace.id]: nextPages
+          }
+        }
+        const historyFaviconUrl = normalizePersistedBrowserFaviconUrl(updates.faviconUrl)
+        if (historyFaviconUrl) {
+          // Title and favicon events can arrive in either order; refresh history when the icon wins.
+          const normalizedPageUrl = normalizeBrowserHistoryUrl(page.url)
+          const historyIndex = s.browserUrlHistory.findIndex(
+            (entry) => entry.normalizedUrl === normalizedPageUrl
+          )
+          const historyEntry = s.browserUrlHistory[historyIndex]
+          if (historyEntry && historyEntry.faviconUrl !== historyFaviconUrl) {
+            nextState.browserUrlHistory = s.browserUrlHistory.map((entry, index) =>
+              index === historyIndex ? { ...entry, faviconUrl: historyFaviconUrl } : entry
+            )
           }
         }
         if (!browserWorkspaceMirrorFieldsEqual(workspace, nextWorkspace)) {

@@ -78,11 +78,7 @@ export function createBrowserPageWebviewLoadingHandlers({
     if (!trackNextLoadingEventRef.current) {
       return
     }
-    faviconUrlRef.current = null
-    onUpdatePageStateRef.current(browserTabId, {
-      loading: true,
-      faviconUrl: null
-    })
+    onUpdatePageStateRef.current(browserTabId, { loading: true })
   }
 
   const handleDidStopLoading = (): void => {

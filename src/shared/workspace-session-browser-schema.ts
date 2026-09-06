@@ -8,6 +8,7 @@ import { normalizeBrowserHistoryEntries } from './workspace-session-browser-hist
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
 import { isDocPreviewUrl } from './doc-preview-scheme'
 import { salvagingArray } from './zod-salvage'
+import { normalizePersistedBrowserFaviconUrl } from './browser-favicon-url'
 
 const browserLoadErrorSchema = z.object({
   code: z.number(),
@@ -113,13 +114,19 @@ export const browserPageSchema = z.object({
   convertedTo: browserPageConversionOriginSchema
 })
 
-const browserHistoryEntrySchema = z.object({
-  url: z.string(),
-  normalizedUrl: z.string(),
-  title: z.string(),
-  lastVisitedAt: z.number(),
-  visitCount: z.number()
-})
+const browserHistoryEntrySchema = z
+  .object({
+    url: z.string(),
+    normalizedUrl: z.string(),
+    title: z.string(),
+    faviconUrl: z.string().nullable().optional(),
+    lastVisitedAt: z.number(),
+    visitCount: z.number()
+  })
+  .transform(({ faviconUrl, ...entry }) => {
+    const normalizedFaviconUrl = normalizePersistedBrowserFaviconUrl(faviconUrl)
+    return normalizedFaviconUrl ? { ...entry, faviconUrl: normalizedFaviconUrl } : entry
+  })
 
 export const browserHistoryEntriesSchema = salvagingArray(browserHistoryEntrySchema).transform(
   (entries) => normalizeBrowserHistoryEntries(entries)

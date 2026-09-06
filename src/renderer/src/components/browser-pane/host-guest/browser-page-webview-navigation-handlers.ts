@@ -5,6 +5,10 @@ import {
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import {
+  browserNavigationChangesFaviconOrigin,
+  firstBrowserFaviconUrl
+} from '../../../../../shared/browser-favicon-url'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
@@ -30,7 +34,9 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
   addressBarInputRef: RefObject<HTMLInputElement | null>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
-  addBrowserHistoryEntryRef: MutableRefObject<(url: string, title: string) => void>
+  addBrowserHistoryEntryRef: MutableRefObject<
+    (url: string, title: string, faviconUrl?: string) => void
+  >
   faviconUrlRef: MutableRefObject<string | null>
   setAddressBarValue: Dispatch<SetStateAction<string>>
   annotationViewportBridgeTokenRef: MutableRefObject<string>
@@ -39,6 +45,7 @@ export type BrowserPageWebviewNavigationHandlersArgs = {
 
 export type BrowserPageWebviewNavigationHandlers = {
   handleDidStartNavigation: (event: Electron.DidStartNavigationEvent) => void
+  handleDidRedirectNavigation: (event: Electron.DidRedirectNavigationEvent) => void
   handleFullDidNavigate: (event: BrowserPageNavigateEvent) => void
   handleDidNavigateInPage: (event: BrowserPageNavigateEvent) => void
   handleTitleUpdate: (event: { title?: string }) => void
@@ -62,6 +69,24 @@ export function createBrowserPageWebviewNavigationHandlers({
   annotationViewportBridgeTokenRef,
   setBrowserOverlayViewport
 }: BrowserPageWebviewNavigationHandlersArgs): BrowserPageWebviewNavigationHandlers {
+  const clearFaviconAcrossOrigins = (
+    event: Electron.DidStartNavigationEvent | Electron.DidRedirectNavigationEvent
+  ): void => {
+    if (!event.isMainFrame || event.isInPlace || !event.url || !faviconUrlRef.current) {
+      return
+    }
+    let currentUrl: string | null = null
+    try {
+      currentUrl = webview.getURL() || null
+    } catch {
+      // An unattached guest has no trustworthy current origin.
+    }
+    if (browserNavigationChangesFaviconOrigin(currentUrl, event.url)) {
+      faviconUrlRef.current = null
+      onUpdatePageStateRef.current(browserTabId, { faviconUrl: null })
+    }
+  }
+
   const handleDidStartNavigation = (event: Electron.DidStartNavigationEvent): void => {
     if (!event.isMainFrame || event.isInPlace || !event.url) {
       return
@@ -72,7 +97,12 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (pendingRecoveryNavigation?.targetUrl === startedUrl) {
       pendingRecoveryNavigation.started = true
     }
+    // Chromium may not re-announce an unchanged favicon after a same-origin navigation.
+    clearFaviconAcrossOrigins(event)
   }
+
+  const handleDidRedirectNavigation = (event: Electron.DidRedirectNavigationEvent): void =>
+    clearFaviconAcrossOrigins(event)
 
   const handleDidNavigate = (
     event: { url?: string; isMainFrame?: boolean },
@@ -127,21 +157,14 @@ export function createBrowserPageWebviewNavigationHandlers({
       const browserModelUrl = redactKagiSessionToken(currentUrl)
       const title = getBrowserDisplayTitle(event.title, browserModelUrl)
       onUpdatePageStateRef.current(browserTabId, { title })
-      addBrowserHistoryEntryRef.current(browserModelUrl, title)
+      addBrowserHistoryEntryRef.current(browserModelUrl, title, faviconUrlRef.current ?? undefined)
     } catch {
       // Why: title-updated can fire before dom-ready, making getURL() throw.
     }
   }
 
   const handleFaviconUpdate = (event: { favicons?: string[] }): void => {
-    const faviconUrl = event.favicons?.[0] ?? null
-    faviconUrlRef.current =
-      faviconUrl &&
-      (faviconUrl.startsWith('https://') ||
-        faviconUrl.startsWith('http://') ||
-        faviconUrl.startsWith('data:image/'))
-        ? faviconUrl
-        : null
+    faviconUrlRef.current = firstBrowserFaviconUrl(event.favicons)
     onUpdatePageStateRef.current(browserTabId, { faviconUrl: faviconUrlRef.current })
   }
 
@@ -173,6 +196,7 @@ export function createBrowserPageWebviewNavigationHandlers({
 
   return {
     handleDidStartNavigation,
+    handleDidRedirectNavigation,
     handleFullDidNavigate,
     handleDidNavigateInPage,
     handleTitleUpdate,

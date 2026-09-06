@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseWorkspaceSession } from './workspace-session-schema'
 import { MAX_BROWSER_HISTORY_ENTRIES } from './workspace-session-browser-history'
+import { MAX_PERSISTED_BROWSER_FAVICON_URL_LENGTH } from './browser-favicon-url'
 
 describe('parseWorkspaceSession', () => {
   it('accepts a minimal valid session', () => {
@@ -504,6 +505,12 @@ describe('parseWorkspaceSession', () => {
         url: `https://example.com/${index}`,
         normalizedUrl: `https://example.com/${index}`,
         title: `Example ${index}`,
+        faviconUrl:
+          index === 0
+            ? 'https://example.com/favicon.ico'
+            : index === 1
+              ? `data:image/png,${'a'.repeat(MAX_PERSISTED_BROWSER_FAVICON_URL_LENGTH)}`
+              : null,
         lastVisitedAt: 1_700_000_000_000 - index,
         visitCount: 1
       }))
@@ -512,6 +519,10 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
+      expect(result.value.browserUrlHistory?.[0]?.faviconUrl).toBe(
+        'https://example.com/favicon.ico'
+      )
+      expect(result.value.browserUrlHistory?.[1]?.faviconUrl).toBeUndefined()
       expect(result.value.browserUrlHistory?.at(-1)?.url).toBe('https://example.com/199')
     }
   })

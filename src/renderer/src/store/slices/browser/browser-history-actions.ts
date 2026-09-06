@@ -13,6 +13,7 @@ import {
 } from '../../../../../shared/workspace-doc-history'
 import { browserPageDocLocationsEqual } from '../../../../../shared/browser-page-doc-location'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { normalizePersistedBrowserFaviconUrl } from '../../../../../shared/browser-favicon-url'
 
 export function createBrowserHistoryActions(
   set: BrowserSliceSet,
@@ -60,18 +61,25 @@ export function createBrowserHistoryActions(
       })
     },
 
-    addBrowserHistoryEntry: (url, title) => {
+    addBrowserHistoryEntry: (url, title, faviconUrl) => {
       const safeUrl = redactKagiSessionToken(url)
       if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
         return
       }
       const normalized = normalizeBrowserHistoryUrl(safeUrl)
+      const normalizedFaviconUrl = normalizePersistedBrowserFaviconUrl(faviconUrl)
       set((s) => {
         const existing = s.browserUrlHistory.find((entry) => entry.normalizedUrl === normalized)
         let next: BrowserHistoryEntry[] = existing
           ? s.browserUrlHistory.map((entry) =>
               entry === existing
-                ? { ...entry, title, lastVisitedAt: Date.now(), visitCount: entry.visitCount + 1 }
+                ? {
+                    ...entry,
+                    title,
+                    ...(normalizedFaviconUrl ? { faviconUrl: normalizedFaviconUrl } : {}),
+                    lastVisitedAt: Date.now(),
+                    visitCount: entry.visitCount + 1
+                  }
                 : entry
             )
           : [
@@ -79,6 +87,7 @@ export function createBrowserHistoryActions(
                 url: safeUrl,
                 normalizedUrl: normalized,
                 title,
+                ...(normalizedFaviconUrl ? { faviconUrl: normalizedFaviconUrl } : {}),
                 lastVisitedAt: Date.now(),
                 visitCount: 1
               },

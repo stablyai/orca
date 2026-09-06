@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { MAX_PERSISTED_BROWSER_FAVICON_URL_LENGTH } from '../../../../shared/browser-favicon-url'
 import {
   createBrowserMockApi,
   createTestStore,
@@ -300,6 +301,34 @@ describe('createBrowserSlice annotations', () => {
 
     expect(store.getState().browserPagesByWorkspace).toBe(browserPagesByWorkspace)
     expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+  })
+
+  it('persists a captured favicon with history and refreshes it with the page state', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      title: 'Example'
+    })
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const initialFavicon = 'https://example.com/favicon.ico'
+    const refreshedFavicon = 'https://cdn.example.com/favicon.png'
+
+    store.getState().addBrowserHistoryEntry('https://example.com', 'Example', initialFavicon)
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(initialFavicon)
+
+    store.getState().updateBrowserPageState(pageId, { faviconUrl: refreshedFavicon })
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBe(refreshedFavicon)
+
+    store
+      .getState()
+      .addBrowserHistoryEntry(
+        'https://large-icon.example',
+        'Large icon',
+        `data:image/png,${'a'.repeat(MAX_PERSISTED_BROWSER_FAVICON_URL_LENGTH)}`
+      )
+    expect(store.getState().browserUrlHistory[0]?.faviconUrl).toBeUndefined()
   })
 
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', () => {

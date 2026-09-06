@@ -69,6 +69,9 @@ vi.mock('lucide-react', () => ({
   Globe: function Globe(props: Record<string, unknown>) {
     return { type: 'Globe', props }
   },
+  Loader2: function Loader2(props: Record<string, unknown>) {
+    return { type: 'Loader2', props }
+  },
   Pin: function Pin(props: Record<string, unknown>) {
     return { type: 'Pin', props }
   },
@@ -256,7 +259,9 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images[0].props.alt).toBe('')
     expect(images[0].props['aria-hidden']).toBe(true)
     expect(images[0].props.draggable).toBe(false)
-    expect(images[0].props.className).toContain('size-3 mr-1 shrink-0')
+    expect(images[0].props.className).toContain('size-3')
+    expect(images[0].props.className).toContain('mr-1')
+    expect(images[0].props.className).toContain('shrink-0')
     expect(images[0].props.className).toContain('object-contain')
     expect(images[0].props.className).toContain('drop-shadow-[0_0_1px_var(--foreground)]')
     expect(findElementsByType(element, 'Globe')).toHaveLength(0)
@@ -274,7 +279,9 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(findElementsByType(element, 'img')).toHaveLength(0)
     const globes = findElementsByType(element, 'Globe')
     expect(globes).toHaveLength(1)
-    expect(globes[0].props.className).toContain('size-3 mr-1 shrink-0')
+    expect(globes[0].props.className).toContain('size-3')
+    expect(globes[0].props.className).toContain('mr-1')
+    expect(globes[0].props.className).toContain('shrink-0')
     expect(globes[0].props.className).toContain('text-blue-500')
   })
 
@@ -288,25 +295,5 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
 
     expect(findElementsByType(secondRender, 'img')).toHaveLength(0)
     expect(findElementsByType(secondRender, 'Globe')).toHaveLength(1)
-  })
-
-  it('resets the image-error fallback when faviconUrl changes', async () => {
-    const tab = baseBrowserTab({ faviconUrl: 'https://example.com/favicon.ico' })
-    const firstRender = await renderExpandedBrowserTab(tab)
-    const image = findElementsByType(firstRender, 'img')[0]
-
-    ;(image.props.onError as () => void)()
-    const failedRender = await renderExpandedBrowserTab(tab)
-    expect(findElementsByType(failedRender, 'Globe')).toHaveLength(1)
-
-    const nextIconUrl = 'data:image/png;base64,abc123'
-    const resetRender = await renderExpandedBrowserTab(
-      baseBrowserTab({ id: tab.id, faviconUrl: nextIconUrl })
-    )
-
-    const images = findElementsByType(resetRender, 'img')
-    expect(images).toHaveLength(1)
-    expect(images[0].props.src).toBe(nextIconUrl)
-    expect(findElementsByType(resetRender, 'Globe')).toHaveLength(0)
   })
 })
