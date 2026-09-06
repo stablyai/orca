@@ -3,6 +3,7 @@ package expo.modules.hardwarekeyboard
 import android.content.Context
 import android.view.KeyEvent
 import android.view.KeyCharacterMap
+import android.view.InputDevice
 import android.view.inputmethod.BaseInputConnection
 import android.widget.EditText
 import android.text.SpannableStringBuilder
@@ -86,6 +87,18 @@ class HardwareKeyboardCaptureView(context: Context, appContext: AppContext) :
     val shift = (meta and KeyEvent.META_SHIFT_ON) != 0
     val repeat = event.repeatCount > 0
     if (captureMode == "submit") {
+      val arrow = when (event.keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> true
+        else -> false
+      }
+      if (arrow && event.hasNoModifiers() && event.isFromSource(InputDevice.SOURCE_KEYBOARD) &&
+        event.device?.keyboardType == InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
+        if (fallback()) return true
+        // Android's exact-source check lets combined keyboard/DPAD arrows escape the editor.
+        capturedKeys.add(identity)
+        return true
+      }
       val enter = event.keyCode == KeyEvent.KEYCODE_ENTER || event.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
       if (!enter || ctrl != submitWithPrimaryModifier || alt || shift) {
         return fallback()

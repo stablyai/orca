@@ -3,6 +3,9 @@ allowBuilds:
 
 minimumReleaseAge: 4320
 
+# Match Windows' default so Prefab never sees '=' in patched React Native paths.
+virtualStoreDirMaxLength: 60
+
 overrides:
   xcode>uuid: 11.1.1
 

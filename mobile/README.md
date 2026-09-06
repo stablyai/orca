@@ -52,6 +52,29 @@ pnpm exec expo run:ios
 pnpm start --dev-client
 ```
 
+### Patched React Native builds
+
+Both platforms build React Native from source through `expo-build-properties` in
+`app.json`, so the fixes in `patches/react-native@0.83.10.patch` reach the installed
+app. Android's prebuilt `react-android` library does not include our text-input
+undo fix. After changing the patch, run `pnpm install`, regenerate native projects
+with `pnpm exec expo prebuild --no-install`, and rebuild the native app; Metro
+reload alone cannot apply it.
+
+Android source builds also compile Hermes and C++ dependencies. Set `ANDROID_HOME`
+or `ANDROID_SDK_ROOT` to your Android SDK directory, even if `local.properties`
+already specifies it. Install the native build tools for your host (Xcode command
+line tools on macOS; a C/C++ toolchain on Linux; Visual Studio C++ build tools and
+an MSVC/NMake developer environment on Windows). Gradle may download the required
+NDK, CMake 3.30.5, and third-party sources; expect a substantially longer first
+build. Keep all release ABIs enabled; limiting `reactNativeArchitectures` is only
+appropriate for a targeted local emulator/device check.
+
+The mobile pnpm workspace uses the Windows-default 60-character virtual-store
+directory limit on every host. This keeps `=` out of the patched React Native
+directory name, which Android's Prefab CLI otherwise misinterprets as an option
+during source builds. Keep this setting when regenerating dependencies.
+
 ## Pair With Desktop Orca
 
 1. Open Orca desktop.
