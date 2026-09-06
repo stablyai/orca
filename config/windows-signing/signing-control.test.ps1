@@ -7,7 +7,7 @@ function Test-Case([string]$name, [scriptblock]$body) {
   Write-Host "PASS $name"
 }
 function Assert-Throws([scriptblock]$body, [string]$message) {
-  try { & $body } catch {
+  try { & $body 6> $null } catch {
     if ("$_" -notlike "*$message*") { throw "Expected '$message', received '$_'" }
     return
   }
@@ -96,6 +96,28 @@ try {
     & "$control/restore-inner.ps1"
     if ((Get-Content 'dist/win-unpacked/Orca.exe') -ne 'signed-fixture') { throw 'Restore failed' }
   }
+  $env:RUNNER_TEMP = Join-Path $temporary 'runner'
+  New-Item -ItemType Directory -Force 'signed-inner/uninstaller' | Out-Null
+  Test-Case 'missing signed uninstaller blocks rebuild' {
+    Assert-Throws { & "$control/restore-uninstaller.ps1" } 'SignPath must return'
+  }
+  Set-Content 'signed-inner/uninstaller/orca-uninstaller.exe' 'signed-uninstaller'
+  Test-Case 'signed uninstaller restored outside checkout' { & "$control/restore-uninstaller.ps1" }
+  $signedUninstaller = Join-Path $env:RUNNER_TEMP 'uninstaller-signing/signed/orca-uninstaller.exe'
+  Test-Case 'missing embedding receipt blocks publication' {
+    Assert-Throws { & "$control/verify-uninstaller.ps1" } 'must embed'
+  }
+  Test-Case 'wrong embedding receipt blocks publication' {
+    Set-Content "$signedUninstaller.embedded-sha256" ('a' * 64)
+    Assert-Throws { & "$control/verify-uninstaller.ps1" } 'does not match'
+  }
+  (Get-FileHash -LiteralPath $signedUninstaller -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content "$signedUninstaller.embedded-sha256"
+  Test-Case 'signed uninstaller and embedding receipt verified' { & "$control/verify-uninstaller.ps1" }
+  Test-Case 'bad uninstaller signature blocks publication' {
+    $global:OrcaSigningTestBadSignature = $true
+    Assert-Throws { & "$control/verify-uninstaller.ps1" } 'Unexpected rehearsal'
+    $global:OrcaSigningTestBadSignature = $false
+  }
   $env:GITHUB_WORKSPACE = $temporary
   $env:GITHUB_REPOSITORY = 'stablyai/orca'
   $env:GITHUB_RUN_ID = '123'
@@ -107,9 +129,10 @@ try {
   $env:MODE = 'save'
   $env:REQUEST_ID = '11111111-1111-4111-8111-111111111111'
   $env:LOCALAPPDATA = Join-Path $temporary 'local'
+  $env:ELECTRON_BUILDER_CACHE = "$env:LOCALAPPDATA/electron-builder/Cache"
   $env:GITHUB_ENV = Join-Path $temporary 'github-env'
-  New-Item -ItemType Directory -Force "$env:LOCALAPPDATA/electron-builder/Cache/nsis" | Out-Null
-  Set-Content "$env:LOCALAPPDATA/electron-builder/Cache/nsis/elevate.exe" 'cache'
+  New-Item -ItemType Directory -Force "$env:LOCALAPPDATA/electron-builder/Cache/nsis@1.2.1/nsis-bundle" | Out-Null
+  Set-Content "$env:LOCALAPPDATA/electron-builder/Cache/nsis@1.2.1/nsis-bundle/elevate.exe" 'cache'
   Set-Content 'dist/orca-windows-setup.exe' 'installer'
   Set-Content 'dist/latest.yml' 'metadata'
   function git { $global:LASTEXITCODE = 0; return ('b' * 40) }
@@ -123,13 +146,28 @@ try {
   function gh {
     $global:LASTEXITCODE = 0
     if ($args[0] -eq 'api') {
-      return (@{total_count = 1; artifacts = @(@{name = "orca-signing-inner-123-1-$env:REQUEST_ID"; expired = $false; workflow_run = @{id = 123; head_sha = $env:GITHUB_SHA}})} | ConvertTo-Json -Depth 5)
+      return (@{total_count = 1; artifacts = @(@{name = "orca-signing-$env:STAGE-123-1-$env:REQUEST_ID"; expired = $false; workflow_run = @{id = 123; head_sha = $env:GITHUB_SHA}})} | ConvertTo-Json -Depth 5)
     }
     Copy-Item 'original-checkpoint' 'signing-checkpoint' -Recurse
   }
   Test-Case 'rerun restores original build and request' {
     & "$control/checkpoint.ps1"
     if ((Get-Content $env:GITHUB_ENV -Raw) -notlike "*SIGNPATH_REQUEST_ID=$env:REQUEST_ID*") { throw 'Request identity missing' }
+  }
+  Test-Case 'installer checkpoint restores receipt and versioned tool cache on a fresh runner' {
+    $env:MODE = 'save'
+    $env:STAGE = 'installer'
+    $env:GITHUB_RUN_ATTEMPT = '1'
+    & "$control/checkpoint.ps1"
+    Remove-Item 'original-checkpoint' -Recurse -Force
+    Copy-Item 'signing-checkpoint' 'original-checkpoint' -Recurse
+    Remove-Item "$env:RUNNER_TEMP/uninstaller-signing" -Recurse -Force
+    Remove-Item $env:ELECTRON_BUILDER_CACHE -Recurse -Force
+    $env:MODE = 'restore'
+    $env:GITHUB_RUN_ATTEMPT = '2'
+    & "$control/checkpoint.ps1"
+    & "$control/verify-uninstaller.ps1"
+    if (-not (Test-Path "$env:ELECTRON_BUILDER_CACHE/nsis@1.2.1/nsis-bundle/elevate.exe")) { throw 'Versioned tool cache lost on resume' }
   }
   Test-Case 'corrupt checkpoint rejected' {
     Add-Content 'original-checkpoint/checkpoint.tar.gz' 'corrupt'

@@ -42,13 +42,14 @@ jobs:
           SIGNING_POLICY: ${{ inputs.signing_policy }}
           ENVIRONMENT_PREFIX: ${{ inputs.environment_prefix }}
           TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
-        run: |-
+        run: |
           $ErrorActionPreference = 'Stop'
           if ($env:PUBLISH -eq 'true') {
             if ($env:SIGNING_POLICY -ne 'release-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows') { throw 'Publication requires production signing gates.' }
           } elseif ($env:SIGNING_POLICY -ne 'test-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows-rehearsal' -or $env:TEST_CERTIFICATE_THUMBPRINT -notmatch '^[a-fA-F0-9]{40}$') {
             throw 'Rehearsal requires isolated gates and a pinned test certificate.'
           }
+          "ELECTRON_BUILDER_CACHE=$(Join-Path $env:RUNNER_TEMP 'signing-electron-builder-cache')" >> $env:GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -64,6 +65,7 @@ jobs:
           git archive "$WORKFLOW_SHA" config/windows-signing | tar -x -C "$RUNNER_TEMP/signing-control"
           git checkout "$WORKFLOW_SHA" -- .github/actions/install-signpath-module
           git checkout "$WORKFLOW_SHA" -- config/scripts/resolve-7za-path.mjs config/scripts/generate-windows-blockmap.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/windows-uninstaller-signing.cjs config/scripts/replace-cached-nsis-elevate.mjs
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
@@ -78,11 +80,9 @@ jobs:
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
-          path: |-
-            ~\AppData\Local\electron\Cache
-            ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: electron-builder-win-
+          path: ${{ runner.temp }}/signing-electron-builder-cache
+          key: electron-builder-signing-${{ inputs.signing_policy }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-builder-signing-${{ inputs.signing_policy }}-
         if: github.run_attempt == 1
       - name: Install dependencies
         uses: nick-fields/retry@v4
@@ -136,9 +136,10 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+          command: if (Test-Path -LiteralPath $env:ORCA_WIN_UNINSTALLER_EXPORT_PATH) { Remove-Item -LiteralPath $env:ORCA_WIN_UNINSTALLER_EXPORT_PATH -Force -ErrorAction Stop }; node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config "$env:RUNNER_TEMP/signing-control/config/windows-signing/electron-builder-signing.config.cjs" --win --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ORCA_WIN_UNINSTALLER_EXPORT_PATH: ${{ runner.temp }}/uninstaller-signing/unsigned/orca-uninstaller.exe
         if: github.run_attempt == 1
       - name: Verify Windows node-pty ConPTY runtime
         shell: pwsh
@@ -289,13 +290,14 @@ jobs:
           SIGNING_POLICY: ${{ inputs.signing_policy }}
           ENVIRONMENT_PREFIX: ${{ inputs.environment_prefix }}
           TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
-        run: |-
+        run: |
           $ErrorActionPreference = 'Stop'
           if ($env:PUBLISH -eq 'true') {
             if ($env:SIGNING_POLICY -ne 'release-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows') { throw 'Publication requires production signing gates.' }
           } elseif ($env:SIGNING_POLICY -ne 'test-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows-rehearsal' -or $env:TEST_CERTIFICATE_THUMBPRINT -notmatch '^[a-fA-F0-9]{40}$') {
             throw 'Rehearsal requires isolated gates and a pinned test certificate.'
           }
+          "ELECTRON_BUILDER_CACHE=$(Join-Path $env:RUNNER_TEMP 'signing-electron-builder-cache')" >> $env:GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -311,6 +313,7 @@ jobs:
           git archive "$WORKFLOW_SHA" config/windows-signing | tar -x -C "$RUNNER_TEMP/signing-control"
           git checkout "$WORKFLOW_SHA" -- .github/actions/install-signpath-module
           git checkout "$WORKFLOW_SHA" -- config/scripts/resolve-7za-path.mjs config/scripts/generate-windows-blockmap.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/windows-uninstaller-signing.cjs config/scripts/replace-cached-nsis-elevate.mjs
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
@@ -325,11 +328,9 @@ jobs:
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
-          path: |-
-            ~\AppData\Local\electron\Cache
-            ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: electron-builder-win-
+          path: ${{ runner.temp }}/signing-electron-builder-cache
+          key: electron-builder-signing-${{ inputs.signing_policy }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-builder-signing-${{ inputs.signing_policy }}-
         if: github.run_attempt == 1
       - name: Install dependencies
         uses: nick-fields/retry@v4
@@ -367,6 +368,14 @@ jobs:
         shell: pwsh
         run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/restore-inner.ps1"'
         env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+        if: github.run_attempt == 1
+      - name: Restore signed uninstaller for the installer rebuild
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/restore-uninstaller.ps1"'
+        env: &a1
           TAG: ${{ inputs.tag }}
           SIGNING_POLICY: ${{ inputs.signing_policy }}
           TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
@@ -444,7 +453,7 @@ jobs:
           CUT_BY: ${{ github.triggering_actor || github.actor }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          INNER_SIGNING_SUBMITTED: 'true'
+          INNER_SIGNING_SUBMITTED: "true"
         run: |
           if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
             throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
@@ -521,13 +530,14 @@ jobs:
           SIGNING_POLICY: ${{ inputs.signing_policy }}
           ENVIRONMENT_PREFIX: ${{ inputs.environment_prefix }}
           TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
-        run: |-
+        run: |
           $ErrorActionPreference = 'Stop'
           if ($env:PUBLISH -eq 'true') {
             if ($env:SIGNING_POLICY -ne 'release-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows') { throw 'Publication requires production signing gates.' }
           } elseif ($env:SIGNING_POLICY -ne 'test-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows-rehearsal' -or $env:TEST_CERTIFICATE_THUMBPRINT -notmatch '^[a-fA-F0-9]{40}$') {
             throw 'Rehearsal requires isolated gates and a pinned test certificate.'
           }
+          "ELECTRON_BUILDER_CACHE=$(Join-Path $env:RUNNER_TEMP 'signing-electron-builder-cache')" >> $env:GITHUB_ENV
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -543,6 +553,7 @@ jobs:
           git archive "$WORKFLOW_SHA" config/windows-signing | tar -x -C "$RUNNER_TEMP/signing-control"
           git checkout "$WORKFLOW_SHA" -- .github/actions/install-signpath-module
           git checkout "$WORKFLOW_SHA" -- config/scripts/resolve-7za-path.mjs config/scripts/generate-windows-blockmap.mjs
+          git checkout "$WORKFLOW_SHA" -- config/scripts/windows-uninstaller-signing.cjs config/scripts/replace-cached-nsis-elevate.mjs
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
@@ -555,11 +566,9 @@ jobs:
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
         with:
-          path: |-
-            ~\AppData\Local\electron\Cache
-            ~\AppData\Local\electron-builder\Cache
-          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: electron-builder-win-
+          path: ${{ runner.temp }}/signing-electron-builder-cache
+          key: electron-builder-signing-${{ inputs.signing_policy }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-builder-signing-${{ inputs.signing_policy }}-
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
@@ -605,6 +614,15 @@ jobs:
           TAG: ${{ inputs.tag }}
           SIGNING_POLICY: ${{ inputs.signing_policy }}
           TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+      - name: Verify embedded uninstaller signature and receipt
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/verify-uninstaller.ps1"'
+        env: *a1
+      - name: Verify shipped uninstaller during rehearsal
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/verify-shipped-uninstaller.ps1"'
+        env: *a1
+        if: "!inputs.publish"
       - name: Upload Windows inner signing evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -613,6 +631,8 @@ jobs:
           path: |
             inner-signing-evidence.txt
             inner-signing-list.txt
+
+            uninstaller-signing-evidence.txt
           if-no-files-found: ignore
           retention-days: 30
       - name: Publish signed Windows release artifacts

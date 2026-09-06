@@ -31,3 +31,8 @@ Write-Host "Staged $($list.Count) unsigned PE files for signing:"
 $list | ForEach-Object { Write-Host "  $_" }
 Write-Host "Skipped $($skipped.Count) already-signed files:"
 $skipped | ForEach-Object { Write-Host "  $_" }
+
+$exported = Join-Path $env:RUNNER_TEMP 'uninstaller-signing/unsigned/orca-uninstaller.exe'
+if (-not (Test-Path -LiteralPath $exported -PathType Leaf)) { throw 'The NSIS build did not export an uninstaller for signing.' }
+New-Item -ItemType Directory -Force (Join-Path $stage.FullName 'uninstaller') | Out-Null
+Copy-Item -LiteralPath $exported -Destination (Join-Path $stage.FullName 'uninstaller/orca-uninstaller.exe') -Force

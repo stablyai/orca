@@ -10,16 +10,21 @@ if ($env:MODE -eq 'save') {
   if ($env:GITHUB_RUN_ATTEMPT -ne '1') { throw 'Never create a signing checkpoint on a rerun.' }
   if ($env:REQUEST_ID -notmatch '^[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$') { throw 'Invalid signing request ID.' }
   New-Item -ItemType Directory -Force $directory | Out-Null
-  $cache = Join-Path $env:GITHUB_WORKSPACE 'signing-nsis-cache'
-  New-Item -ItemType Directory -Force $cache | Out-Null
-  foreach ($name in @('nsis', 'nsis-resources')) {
-    $from = Join-Path "$env:LOCALAPPDATA/electron-builder/Cache" $name
-    if (Test-Path -LiteralPath $from) {
-      Copy-Item -LiteralPath $from -Destination $cache -Recurse -Force
+  $cache = Join-Path $env:GITHUB_WORKSPACE 'signing-tool-cache'
+  if (-not $env:ELECTRON_BUILDER_CACHE -or -not (Test-Path -LiteralPath $env:ELECTRON_BUILDER_CACHE -PathType Container)) { throw 'The isolated electron-builder cache is required.' }
+  if (Test-Path -LiteralPath $cache) { Remove-Item -LiteralPath $cache -Recurse -Force }
+  Copy-Item -LiteralPath $env:ELECTRON_BUILDER_CACHE -Destination $cache -Recurse -Force
+  if (@(Get-ChildItem $cache -Recurse -File -Filter elevate.exe).Count -eq 0) { throw 'The NSIS tool cache must be checkpointed with the build.' }
+  $uninstaller = Join-Path $env:GITHUB_WORKSPACE 'signing-uninstaller'
+  if (Test-Path -LiteralPath $uninstaller) { Remove-Item -LiteralPath $uninstaller -Recurse -Force }
+  New-Item -ItemType Directory -Force $uninstaller | Out-Null
+  if ($stage -eq 'installer') {
+    & "$PSScriptRoot/verify-uninstaller.ps1"
+    foreach ($name in @('orca-uninstaller.exe', 'orca-uninstaller.exe.embedded-sha256')) {
+      Copy-Item -LiteralPath "$env:RUNNER_TEMP/uninstaller-signing/signed/$name" -Destination $uninstaller -Force
     }
   }
-  if (-not (Test-Path -LiteralPath "$cache/nsis")) { throw 'The NSIS tool cache must be checkpointed with the build.' }
-  tar -czf "$directory/checkpoint.tar.gz" dist/win-unpacked dist/orca-windows-setup.exe dist/latest.yml inner-signing-list.txt signing-nsis-cache
+  tar -czf "$directory/checkpoint.tar.gz" dist/win-unpacked dist/orca-windows-setup.exe dist/latest.yml inner-signing-list.txt signing-tool-cache signing-uninstaller
   if ($LASTEXITCODE -ne 0) { throw 'Could not archive the exact Windows build.' }
   $manifest = @{
     version = 1; repository = $env:GITHUB_REPOSITORY; runId = $env:GITHUB_RUN_ID
@@ -48,21 +53,20 @@ if ($env:MODE -eq 'save') {
   $entries = @(tar -tzf "$directory/checkpoint.tar.gz")
   if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect checkpoint archive.' }
   foreach ($entry in $entries) {
-    if ($entry -match '(^[/\\]|^[A-Za-z]:|(^|[/\\])\.\.([/\\]|$))' -or $entry -notmatch '^(dist/(win-unpacked(/|$)|orca-windows-setup\.exe$|latest\.yml$)|inner-signing-list\.txt$|signing-nsis-cache(/|$))') { throw "Unexpected checkpoint entry: $entry" }
+    if ($entry -match '(^[/\\]|^[A-Za-z]:|(^|[/\\])\.\.([/\\]|$))' -or $entry -notmatch '^(dist/(win-unpacked(/|$)|orca-windows-setup\.exe$|latest\.yml$)|inner-signing-list\.txt$|signing-tool-cache(/|$)|signing-uninstaller(/|$))') { throw "Unexpected checkpoint entry: $entry" }
   }
   $types = @(tar -tvzf "$directory/checkpoint.tar.gz")
   if ($LASTEXITCODE -ne 0 -or @($types | Where-Object { $_ -notmatch '^[d-]' }).Count -gt 0) { throw 'Checkpoint links and special files are not supported.' }
   tar -xzf "$directory/checkpoint.tar.gz" -C $env:GITHUB_WORKSPACE
   if ($LASTEXITCODE -ne 0) { throw 'Could not restore Windows build checkpoint.' }
-  $cacheRoot = "$env:LOCALAPPDATA/electron-builder/Cache"
-  New-Item -ItemType Directory -Force $cacheRoot | Out-Null
-  foreach ($name in @('nsis', 'nsis-resources')) {
-    $from = Join-Path "$env:GITHUB_WORKSPACE/signing-nsis-cache" $name
-    $to = Join-Path $cacheRoot $name
-    if (Test-Path -LiteralPath $from) {
-      if (Test-Path -LiteralPath $to) { Remove-Item -LiteralPath $to -Recurse -Force }
-      Copy-Item -LiteralPath $from -Destination $to -Recurse -Force
-    }
+  if (-not $env:ELECTRON_BUILDER_CACHE) { throw 'Missing isolated tool cache destination.' }
+  if (Test-Path -LiteralPath $env:ELECTRON_BUILDER_CACHE) { Remove-Item -LiteralPath $env:ELECTRON_BUILDER_CACHE -Recurse -Force }
+  Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/signing-tool-cache" -Destination $env:ELECTRON_BUILDER_CACHE -Recurse -Force
+  if ($stage -eq 'installer') {
+    $signedDirectory = Join-Path $env:RUNNER_TEMP 'uninstaller-signing/signed'
+    if (Test-Path -LiteralPath $signedDirectory) { Remove-Item -LiteralPath $signedDirectory -Recurse -Force }
+    New-Item -ItemType Directory -Force (Split-Path $signedDirectory) | Out-Null
+    Copy-Item -LiteralPath "$env:GITHUB_WORKSPACE/signing-uninstaller" -Destination $signedDirectory -Recurse -Force
   }
   "SIGNPATH_REQUEST_ID=$($manifest.requestId)" >> $env:GITHUB_ENV
   "SIGNING_CHECKPOINT_SOURCE_SHA=$sourceSha" >> $env:GITHUB_ENV
