@@ -12,7 +12,8 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
-import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
+import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { translate } from '@/i18n/i18n'
@@ -91,7 +92,10 @@ export function NativeChatStructuredSession(
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
-  const fileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
+  const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
+    fileLinkContext,
+    rootRef
+  )
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
@@ -181,8 +185,8 @@ export function NativeChatStructuredSession(
             workingStartedAt={null}
             showTurnStatus
             turnActivity={controller.turnActivity}
-            onLinkClick={fileLinkClick}
-            allowFileUriLinks={fileLinkClick !== undefined}
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={onLinkClick !== undefined}
             runtimeContext={imageRuntimeContext}
           />
         )}
@@ -343,6 +347,7 @@ export function NativeChatStructuredSession(
         />
       )}
       {paneCommands.menu}
+      <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>
   )
 }
