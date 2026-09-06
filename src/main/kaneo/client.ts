@@ -1,6 +1,8 @@
 import { normalizeKaneoSiteUrl, parseKaneoTaskUrl } from '../../shared/kaneo-task-url'
 import type { KaneoConnectArgs, KaneoTask } from '../../shared/kaneo-types'
 import { getKaneoStatus, readKaneoCredential, saveKaneoCredential } from './credential-store'
+import { getMainHttpClient } from '../network/http-client'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const MAX_RESPONSE_BYTES = 512 * 1024
 
@@ -10,13 +12,14 @@ async function request(
   signal?: AbortSignal
 ): Promise<unknown> {
   const timeout = AbortSignal.timeout(15_000)
-  const response = await fetch(`${credential.siteUrl}/api${path}`, {
+  const httpClient = getMainHttpClient()
+  const response = await httpClient.fetch(`${credential.siteUrl}/api${path}`, {
     headers: { Authorization: `Bearer ${credential.apiKey}`, Accept: 'application/json' },
     redirect: 'error',
     signal: signal ? AbortSignal.any([signal, timeout]) : timeout
   })
   if (!response.ok) {
-    await response.body?.cancel()
+    await cancelUnreadResponseBody(response)
     if (response.status === 401) {
       throw new Error('Kaneo rejected the API key. Reconnect Kaneo in Settings → Integrations.')
     }
@@ -49,9 +52,13 @@ async function request(
       }
       chunks.push(result.value)
     }
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+    try {
+      return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+    } catch {
+      throw new Error('Kaneo returned an invalid JSON response.')
+    }
   } finally {
-    await reader.cancel()
+    await reader.cancel().catch(() => {})
     reader.releaseLock()
   }
 }

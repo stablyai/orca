@@ -153,7 +153,7 @@ function KaneoConnectionForm({
               <Input
                 id={`${id}-site`}
                 type="url"
-                placeholder="https://kaneo.example.com"
+                placeholder={translate('kaneo.instanceUrlPlaceholder', 'https://kaneo.example.com')}
                 value={siteUrl}
                 onChange={(e) => setSiteUrl(e.target.value)}
                 required
