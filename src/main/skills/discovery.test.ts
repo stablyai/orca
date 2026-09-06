@@ -306,7 +306,7 @@ describe('skill discovery', () => {
     const claudeSkills = join(home, '.claude', 'skills')
     await mkdir(join(claudeSkills, 'orchestration'), { recursive: true })
     await writeFile(join(claudeSkills, 'orchestration', 'SKILL.md'), '# orchestration')
-    // `npx skills add --global` links a provider home onto an existing install.
+    // `npx skills@latest add --global` links a provider home onto an existing install.
     await mkdir(join(home, '.grok'), { recursive: true })
     await symlink(
       claudeSkills,

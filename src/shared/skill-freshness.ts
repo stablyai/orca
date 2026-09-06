@@ -1,3 +1,4 @@
+import { SKILLS_CLI_PACKAGE_SPEC } from './agent-feature-install-commands'
 import type { SkillProvider, SkillSourceKind } from './skills'
 
 export type SkillBundleFileIdentity = {
@@ -216,7 +217,9 @@ export function canonicalizeSkillUpdateNames(names: readonly string[]): string[]
 
 export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
   const canonicalNames = canonicalizeSkillUpdateNames(names)
-  return canonicalNames ? `npx skills update ${canonicalNames.join(' ')} --global` : null
+  return canonicalNames
+    ? `npx ${SKILLS_CLI_PACKAGE_SPEC} update ${canonicalNames.join(' ')} --global`
+    : null
 }
 
 // Why: `skills update` has no --json (that flag only exists on `list`), so the

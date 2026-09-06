@@ -99,7 +99,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
       await act(async () => {
         root?.render(
           <OnboardingInlineCommandTerminal
-            command="npx skills add orchestration"
+            command="npx skills@latest add orchestration"
             prepareCommandForShell={prepareCommandForShell}
             shellOverride="powershell.exe"
             title="Skill setup"
@@ -114,7 +114,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
       await act(async () => {
         root?.render(
           <OnboardingInlineCommandTerminal
-            command="npx skills add orchestration"
+            command="npx skills@latest add orchestration"
             forceHostRuntime
             prepareCommandForShell={prepareCommandForShell}
             shellOverride="powershell.exe"
@@ -128,9 +128,12 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
         vi.advanceTimersByTime(250)
       })
 
-      expect(prepareCommandForShell).toHaveBeenCalledWith('npx skills add orchestration', 'wsl.exe')
       expect(prepareCommandForShell).toHaveBeenCalledWith(
-        'npx skills add orchestration',
+        'npx skills@latest add orchestration',
+        'wsl.exe'
+      )
+      expect(prepareCommandForShell).toHaveBeenCalledWith(
+        'npx skills@latest add orchestration',
         'powershell.exe'
       )
       expect(mocks.createTab).toHaveBeenCalledWith(
@@ -141,11 +144,11 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
       )
       expect(pasted).toContainEqual({
         tabId: 'tab-1',
-        text: 'wsl.exe:npx skills add orchestration'
+        text: 'wsl.exe:npx skills@latest add orchestration'
       })
       expect(pasted).toContainEqual({
         tabId: 'tab-2',
-        text: 'powershell.exe:npx skills add orchestration'
+        text: 'powershell.exe:npx skills@latest add orchestration'
       })
     } finally {
       window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, handlePaste)
@@ -160,7 +163,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
     await act(async () => {
       root?.render(
         <OnboardingInlineCommandTerminal
-          command="npx skills add --skill orchestration --global"
+          command="npx skills@latest add --skill orchestration --global"
           title="Skill setup"
           ariaLabel="Skill setup terminal"
           worktreeId="settings-orchestration-skill-terminal"

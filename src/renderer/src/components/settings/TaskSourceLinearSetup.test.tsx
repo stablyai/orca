@@ -27,7 +27,7 @@ vi.mock('./CliSkillRuntimeSetup', () => ({
 
 vi.mock('@/lib/linear-agent-skill-update-command', () => ({
   getLinearAgentSkillUpdateTarget: () => ({
-    command: 'npx skills update orca-linear --global',
+    command: 'npx skills@latest update orca-linear --global',
     skillName: 'orca-linear'
   })
 }))

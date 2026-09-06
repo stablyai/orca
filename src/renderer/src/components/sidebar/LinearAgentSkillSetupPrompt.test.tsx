@@ -341,10 +341,10 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
     await settleRender()
 
-    expect(document.body.textContent).toContain('npx skills add')
+    expect(document.body.textContent).toContain('npx skills@latest add')
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        installedCommand: 'npx skills update orca-linear --global',
+        installedCommand: 'npx skills@latest update orca-linear --global',
         terminalShellOverride: 'powershell.exe',
         terminalRuntime: expect.objectContaining({ runtime: 'wsl', wslDistro: 'Fedora' }),
         getPrerequisiteStatus: expect.any(Function)
@@ -889,7 +889,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await settleRender()
-    expect(mocks.panelProps.at(-1)?.command).toContain('npx skills add')
+    expect(mocks.panelProps.at(-1)?.command).toContain('npx skills@latest add')
     expect(mocks.panelProps.at(-1)?.terminalRuntime).toEqual(
       expect.objectContaining({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     )

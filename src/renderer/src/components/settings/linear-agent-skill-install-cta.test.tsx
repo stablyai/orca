@@ -116,7 +116,7 @@ describe('LinearAgentSkillInstallCta', () => {
       'Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
     )
     expect(rendered.textContent).toContain(
-      'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
+      'npx skills@latest add https://github.com/stablyai/orca --skill orca-linear --global'
     )
   })
 
@@ -130,7 +130,7 @@ describe('LinearAgentSkillInstallCta', () => {
     })
 
     expect(mocks.clipboardWrite).toHaveBeenCalledWith(
-      'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
+      'npx skills@latest add https://github.com/stablyai/orca --skill orca-linear --global'
     )
     expect(mocks.toastSuccess).toHaveBeenCalled()
   })
@@ -143,7 +143,7 @@ describe('LinearAgentSkillInstallCta', () => {
 
     expect(rendered.textContent).toContain('Installed')
     expect(rendered.textContent).toContain('Agent skill installed. To update it, run:')
-    expect(rendered.textContent).toContain('npx skills update orca-linear --global')
+    expect(rendered.textContent).toContain('npx skills@latest update orca-linear --global')
     expect(rendered.textContent).not.toContain('Not installed')
   })
 
@@ -159,7 +159,7 @@ describe('LinearAgentSkillInstallCta', () => {
 
     const rendered = await renderCta()
 
-    expect(rendered.textContent).toContain('npx skills update linear-tickets --global')
+    expect(rendered.textContent).toContain('npx skills@latest update linear-tickets --global')
   })
 
   it('notes that remote agent environments need their own setup', async () => {

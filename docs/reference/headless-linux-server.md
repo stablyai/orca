@@ -865,9 +865,9 @@ is resolved.
 ## Installing Agent Skills Without A Desktop
 
 Orca's agent skills (CLI usage, orchestration, computer use, etc.) are normally
-installed from Orca Settings, which pre-fills an `npx skills add ... --global`
-command in a terminal for you to run. A headless host has no Settings UI, so
-use `orca skills install` instead:
+installed from Orca Settings, which pre-fills an
+`npx skills@latest add ... --global` command in a terminal for you to run. A
+headless host has no Settings UI, so use `orca skills install` instead:
 
 ```bash
 orca skills install                                      # list installable skills
@@ -877,7 +877,7 @@ orca skills install --all                                 # install every bundle
 orca skills install --all --dry-run                       # print the npx command without running it
 ```
 
-This resolves the same `npx skills add <repo> --skill <name> ...` command
+This resolves the same `npx skills@latest add <repo> --skill <name> ...` command
 Settings would show you (adding `--global` unless `--local` is passed), then
 runs it and forwards its output and exit code. It requires `node`/`npx` on the
 host; it does not need a running Orca runtime.
@@ -905,7 +905,7 @@ If Orca detects no agent at all, `orca skills install` stops and asks for
 
 To refresh already-installed skills, `orca skills update` mirrors the same
 selection flags (`--skill`, `--all`, `--local`, `--dry-run`) and resolves to
-`npx skills update <names...>` with a matching scope flag — `--global`, or
+`npx skills@latest update <names...>` with a matching scope flag — `--global`, or
 `--project` when you pass `--local`:
 
 ```bash
