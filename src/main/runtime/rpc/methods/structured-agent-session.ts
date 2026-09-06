@@ -225,6 +225,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
     handler: async (params, ctx) => requireHost(ctx).readOptions(params.sessionId)
   }),
   defineMethod({
+    name: 'agentSession.commands',
+    params: OptionsParams,
+    handler: async (params, ctx) => requireHost(ctx).readCommands(params.sessionId)
+  }),
+  defineMethod({
     name: 'agentSession.history',
     params: HistoryParams,
     handler: async (params, ctx) => requireHost(ctx).history(params)

@@ -28,6 +28,8 @@ import {
   emitNativeChatSendClassified
 } from '@/lib/native-chat-telemetry'
 
+const EMPTY_SESSION_SKILL_NAMES: readonly string[] = []
+
 export type NativeChatPickerState = {
   autocomplete: ComposerAutocomplete
   listboxId: string
@@ -46,6 +48,8 @@ export function useNativeChatPickerState(args: {
   draft: string
   caret: number
   agentCommands: readonly SlashCommandSuggestion[]
+  /** Skill names the running session reports; empty keeps the host disk scan. */
+  sessionSkillNames?: readonly string[]
   textareaRef: RefObject<HTMLTextAreaElement | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -58,6 +62,7 @@ export function useNativeChatPickerState(args: {
     draft,
     caret,
     agentCommands,
+    sessionSkillNames = EMPTY_SESSION_SKILL_NAMES,
     textareaRef,
     setDraft,
     setCaret,
@@ -86,9 +91,19 @@ export function useNativeChatPickerState(args: {
         discovery.skills,
         profile,
         discovery,
-        dismissed?.context === dismissalContext ? dismissed.triggerKey : null
+        dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
+        sessionSkillNames
       ),
-    [agentCommands, caret, dismissalContext, dismissed, discovery, draft, profile]
+    [
+      agentCommands,
+      caret,
+      dismissalContext,
+      dismissed,
+      discovery,
+      draft,
+      profile,
+      sessionSkillNames
+    ]
   )
 
   useEffect(() => {
@@ -152,7 +167,9 @@ export function useNativeChatPickerState(args: {
         agentCommands,
         discovery.skills,
         profile,
-        discovery
+        discovery,
+        null,
+        sessionSkillNames
       )
       if (
         (next.mode !== 'slash' && next.mode !== 'skill') ||
@@ -161,7 +178,7 @@ export function useNativeChatPickerState(args: {
         setDismissed(null)
       }
     },
-    [agentCommands, dismissalContext, dismissed, discovery, draft, profile]
+    [agentCommands, dismissalContext, dismissed, discovery, draft, profile, sessionSkillNames]
   )
 
   const classifySend = useCallback(

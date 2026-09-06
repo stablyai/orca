@@ -47,9 +47,10 @@ export function buildNativeChatPickerItems(
   commands: readonly SlashCommandSuggestion[],
   skills: readonly DiscoveredSkill[],
   query: string,
-  prefix: '/' | '$'
+  prefix: '/' | '$',
+  sessionSkillNames?: readonly string[]
 ): NativeChatPickerItem[] {
-  const mergedSkills = mergeNativeChatSkills(skills)
+  const mergedSkills = mergeNativeChatSkills(skills, sessionSkillNames)
   const skillNames = new Set(mergedSkills.map((skill) => skill.name))
   const commandNames = new Set(commands.map((command) => command.name))
   const commandItems = rankItems(
@@ -80,7 +81,8 @@ export function buildNativeChatPickerItems(
 }
 
 function mergeNativeChatSkills(
-  skills: readonly DiscoveredSkill[]
+  skills: readonly DiscoveredSkill[],
+  sessionSkillNames?: readonly string[]
 ): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
   const exactPaths = new Map<string, DiscoveredSkill>()
   for (const skill of skills) {
@@ -96,21 +98,37 @@ function mergeNativeChatSkills(
     }
     byName.set(safeName, [...(byName.get(safeName) ?? []), { ...skill, name: safeName }])
   }
-  return [...byName.entries()]
-    .map(([name, namedSkills]) => {
-      const sorted = [...namedSkills].sort(compareDiscoveredSkills)
-      return {
-        kind: 'skill' as const,
-        id: `skill:${name}`,
-        name,
-        description: sorted[0]?.description ? sanitizePickerText(sorted[0].description, 240) : null,
-        sources: sorted.map((skill) => ({
-          sourceKind: skill.sourceKind,
-          skillFilePath: skill.skillFilePath
-        }))
-      }
-    })
+  const discovered = new Map(
+    [...byName.entries()].map(([name, namedSkills]) => [name, pickerSkill(name, namedSkills)])
+  )
+  // Why: when the running session reports its own skills, that report is the
+  // authority on which ones exist — a disk scan cannot see what the session
+  // actually loaded (plugin roots, setting-source filters), and a scanned root
+  // the session ignored must not be offered. The scan stays the source of
+  // description and scope for the names both know about.
+  const names = sessionSkillNames?.length
+    ? sessionSkillNames.filter(isTokenSafe)
+    : [...discovered.keys()]
+  return [...new Set(names)]
+    .map((name) => discovered.get(name) ?? pickerSkill(name, []))
     .sort(comparePickerSkills)
+}
+
+function pickerSkill(
+  name: string,
+  namedSkills: readonly DiscoveredSkill[]
+): Extract<NativeChatPickerItem, { kind: 'skill' }> {
+  const sorted = [...namedSkills].sort(compareDiscoveredSkills)
+  return {
+    kind: 'skill' as const,
+    id: `skill:${name}`,
+    name,
+    description: sorted[0]?.description ? sanitizePickerText(sorted[0].description, 240) : null,
+    sources: sorted.map((skill) => ({
+      sourceKind: skill.sourceKind,
+      skillFilePath: skill.skillFilePath
+    }))
+  }
 }
 
 function rankItems<T extends NativeChatPickerItem>(
@@ -197,12 +215,21 @@ function compareDiscoveredSkills(a: DiscoveredSkill, b: DiscoveredSkill): number
   )
 }
 
+// A session-reported skill this host could not locate on disk sorts last: it is
+// real and invocable, but carries no scope or description to rank on.
+const UNLOCATED_SCOPE_PRIORITY = Object.keys(SCOPE_PRIORITY).length
+
+function skillScopePriority(item: Extract<NativeChatPickerItem, { kind: 'skill' }>): number {
+  const sourceKind = item.sources[0]?.sourceKind
+  return sourceKind === undefined ? UNLOCATED_SCOPE_PRIORITY : SCOPE_PRIORITY[sourceKind]
+}
+
 function comparePickerSkills(
   a: Extract<NativeChatPickerItem, { kind: 'skill' }>,
   b: Extract<NativeChatPickerItem, { kind: 'skill' }>
 ): number {
   return (
-    SCOPE_PRIORITY[a.sources[0].sourceKind] - SCOPE_PRIORITY[b.sources[0].sourceKind] ||
+    skillScopePriority(a) - skillScopePriority(b) ||
     compareBaseSensitivityLocaleText(a.name, b.name)
   )
 }

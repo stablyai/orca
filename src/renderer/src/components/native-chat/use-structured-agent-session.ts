@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type {
+  AgentSessionCommandsResult,
   AgentSessionMutationResult,
   AgentSessionOptionResult,
   AgentSessionOptionsResult,
-  AgentSessionPromptResult
+  AgentSessionPromptResult,
+  AgentSessionSlashCommand
 } from '../../../../shared/agent-session-wire'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
@@ -171,6 +173,28 @@ export function useStructuredAgentSession(args: {
     }
   }, [isVisible, optionCatalog, sessionId, state.fence, target, turnId])
 
+  const [sessionCommands, setSessionCommands] = useState<readonly AgentSessionSlashCommand[]>([])
+  useEffect(() => {
+    if (!isVisible) {
+      return
+    }
+    let stale = false
+    void callStructuredAgentSession<AgentSessionCommandsResult>(target, 'agentSession.commands', {
+      sessionId
+    })
+      .then((result) => {
+        if (!stale) {
+          setSessionCommands(result.commands ?? [])
+        }
+      })
+      // Why: a host that predates this method answers method_not_found, which is
+      // the same as "no catalog" — the composer keeps its curated list.
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [isVisible, sessionId, state.fence, target, turnId])
+
   const optionSnapshot = useMemo(
     () => structuredAgentSessionOptionSnapshot(optionState),
     [optionState]
@@ -270,6 +294,7 @@ export function useStructuredAgentSession(args: {
       ),
     optionSnapshot,
     optionSurface,
+    sessionCommands,
     setStructuredOption
   }
 }

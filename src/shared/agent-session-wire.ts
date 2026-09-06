@@ -305,6 +305,21 @@ export type AgentSessionModelOption = {
   efforts: AgentSessionOptionChoice[]
 }
 
+/** One entry of the `/` menu the running provider reports for itself. `skill`
+ *  marks a name the session loaded as a skill rather than a built-in command;
+ *  commands the provider reserves for a terminal UI are already removed. */
+export type AgentSessionSlashCommand = {
+  name: string
+  kind: 'command' | 'skill'
+}
+
+/** The provider's own command surface, read per session. Additive read-only
+ *  surface: a host that predates it answers `method_not_found`, and the client
+ *  keeps rendering its curated catalog. */
+export type AgentSessionCommandsResult = {
+  commands: AgentSessionSlashCommand[]
+}
+
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
