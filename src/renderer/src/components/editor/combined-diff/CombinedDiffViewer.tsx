@@ -38,6 +38,7 @@ import {
 import { useCombinedDiffNotesActions } from './review-controls/use-combined-diff-notes-actions'
 import { useCombinedDiffSectionActions } from './review-controls/use-combined-diff-section-actions'
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
+import { PierreDiffProviders } from '../pierre-diff/PierreDiffProviders'
 
 export default function CombinedDiffViewer({
   file,
@@ -64,9 +65,6 @@ export default function CombinedDiffViewer({
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
@@ -196,21 +194,20 @@ export default function CombinedDiffViewer({
     shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
     treeMode: entrySet.treeMode
   })
-  const { handleSectionSaveRef, modifiedEditorsRef, openSection, openSectionPreview } =
-    useCombinedDiffSectionActions({
-      activeGroupId,
-      branchCompare: entrySet.branchCompare,
-      canOpenWorkspaceFileBrowserForPath,
-      commitCompare: entrySet.commitCompare,
-      file,
-      isAllMode: entrySet.isAllMode,
-      isBranchMode: entrySet.isBranchMode,
-      isCommitMode: entrySet.isCommitMode,
-      sections,
-      sectionsRef: registry.sectionsRef,
-      setSectionHeights,
-      setSections
-    })
+  const { handleSectionSaveRef, openSection, openSectionPreview } = useCombinedDiffSectionActions({
+    activeGroupId,
+    branchCompare: entrySet.branchCompare,
+    canOpenWorkspaceFileBrowserForPath,
+    commitCompare: entrySet.commitCompare,
+    file,
+    isAllMode: entrySet.isAllMode,
+    isBranchMode: entrySet.isBranchMode,
+    isCommitMode: entrySet.isCommitMode,
+    sections,
+    sectionsRef: registry.sectionsRef,
+    setSectionHeights,
+    setSections
+  })
 
   useCombinedDiffViewPersist({
     combinedGitStatusSignature,
@@ -313,7 +310,7 @@ export default function CombinedDiffViewer({
   const allSectionsCollapsed = sectionRowKeys.allSectionsCollapsed
 
   return (
-    <>
+    <PierreDiffProviders>
       <div className="flex flex-col flex-1 min-h-0">
         <CombinedDiffToolbar
           activeGroupId={activeGroupId}
@@ -365,11 +362,9 @@ export default function CombinedDiffViewer({
             isAllMode={entrySet.isAllMode}
             isBranchMode={entrySet.isBranchMode}
             isCommitMode={entrySet.isCommitMode}
-            isDark={isDark}
             loadSection={loadSection}
             loadDeferredSection={loadDeferredSection}
             markDirectScrollInput={markDirectScrollInput}
-            modifiedEditorsRef={modifiedEditorsRef}
             onScrollbarPointerDown={handleScrollbarPointerDown}
             openSection={openSection}
             openSectionPreview={openSectionPreview}
@@ -395,6 +390,6 @@ export default function CombinedDiffViewer({
         open={notes.clearNotesDialogVisible}
         setOpen={notes.setClearNotesDialogOpen}
       />
-    </>
+    </PierreDiffProviders>
   )
 }

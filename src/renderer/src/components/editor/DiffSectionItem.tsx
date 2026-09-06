@@ -1,35 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DiffOnMount } from '@monaco-editor/react'
-import type { editor as monacoEditor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { PostRenderPhase } from '@pierre/diffs'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
-import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
-import {
-  getDiffCommentPopoverLeft,
-  getDiffCommentPopoverTop
-} from '../diff-comments/diff-comment-popover-position'
-import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
-import { DiffSectionHeader } from './DiffSectionHeader'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import { installEditorSaveShortcut } from './editor-shortcuts'
+import { DiffSectionHeader } from './DiffSectionHeader'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
 import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
-import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
+import { PierreDiffSurface } from './pierre-diff/PierreDiffSurface'
+import { buildPierreFileDiff } from './pierre-diff/pierre-diff-metadata'
+import { buildPierreParseDiffOptions } from './pierre-diff/pierre-diff-options'
+import type { DecoratedDiffComment } from '../diff-comments/decorated-diff-comment'
+
+const EMPTY_DIFF_COMMENTS: readonly DecoratedDiffComment[] = []
 
 export function DiffSectionItem({
   section,
   index,
   isBranchMode,
   sideBySide,
-  isDark,
   settings,
   sectionHeight,
   worktreeId,
@@ -48,15 +43,11 @@ export function DiffSectionItem({
   getCommentableLineNumbers,
   setSectionHeights,
   setSections,
-  modifiedEditorsRef,
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
-  const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
-  const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
   // Why: subscribe to the raw comments array on the worktree (reference-
   // stable across unrelated store updates) and filter by filePath inside a
   // memo. Selecting a fresh `.filter(...)` result would invalidate on every
@@ -68,271 +59,205 @@ export function DiffSectionItem({
     () => (allDiffComments ?? []).filter((c) => c.filePath === section.path && isDiffComment(c)),
     [allDiffComments, section.path]
   )
-  const language = detectLanguage(section.path)
   const isEditable = section.area === 'unstaged'
-  const modelPathBase = useMemo(
-    () =>
-      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
-    [section.contentGeneration, section.key, worktreeId]
-  )
-  const diffEditorFontSize = computeDiffEditorFontSize(
-    settings?.terminalFontSize ?? 13,
-    editorFontZoomLevel
-  )
-
-  const [modifiedEditor, setModifiedEditor] = useState<monacoEditor.ICodeEditor | null>(null)
-  const diffEditorRef = useRef<monacoEditor.IStandaloneDiffEditor | null>(null)
-  const sectionBodyRef = useRef<HTMLDivElement | null>(null)
-  const lineNumberOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
-  const [popover, setPopover] = useState<{
-    lineNumber: number
-    startLine?: number
-    top: number
-    left?: number
-    lineHeight: number
-  } | null>(null)
   const hasLineCommentAction = Boolean(worktreeId || onAddLineComment)
 
-  const { disposeDiffModels, setSectionRootNode } = useDiffSectionModelLifecycle({
-    modelPathBase,
-    collapsed: section.collapsed
-  })
+  const sectionBodyRef = useRef<HTMLDivElement | null>(null)
+  const [pendingComment, setPendingComment] = useState<{
+    lineNumber: number
+    startLine?: number
+  } | null>(null)
 
-  // Why: only forward the pending scroll id when it matches a comment in this
-  // section so unrelated sections don't keep re-rendering their decorator
-  // every time the sidebar requests a scroll elsewhere.
-  const pendingScrollForThisSection = useMemo(() => {
-    if (!scrollToDiffCommentId) {
-      return null
-    }
-    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
-  }, [scrollToDiffCommentId, diffComments])
-
-  useDiffCommentDecorator({
-    editor: hasLineCommentAction ? modifiedEditor : null,
-    filePath: section.path,
-    worktreeId: worktreeId ?? '',
-    comments: inlineComments ?? (worktreeId ? diffComments : []),
-    commentableLineNumbers: getCommentableLineNumbers?.(section),
-    addButtonLabel: addLineCommentLabel,
-    onAddCommentClick: ({ lineNumber, startLine, top }) =>
-      setPopover({
-        lineNumber,
-        startLine,
-        top,
-        left: modifiedEditor
-          ? (getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current) ?? undefined)
-          : undefined,
-        lineHeight: modifiedEditor?.getOption(monaco.editor.EditorOption.lineHeight) ?? 0
-      }),
-    onDeleteComment: (id) => {
-      if (worktreeId) {
-        void deleteDiffComment(worktreeId, id)
+  // Why: a fresh `[]` fallback would invalidate every memo that reads comments.
+  const comments = useMemo(
+    () => inlineComments ?? (worktreeId ? diffComments : EMPTY_DIFF_COMMENTS),
+    [diffComments, inlineComments, worktreeId]
+  )
+  // Why: PR review only accepts comments on lines GitHub exposes in the patch.
+  const commentableLineNumbers = getCommentableLineNumbers?.(section)
+  const handleAddComment = useCallback(
+    (range: { lineNumber: number; startLine?: number }) => {
+      if (commentableLineNumbers && !commentableLineNumbers.includes(range.lineNumber)) {
+        return
       }
+      setPendingComment(range)
     },
-    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
-    pendingScrollCommentId: pendingScrollForThisSection,
-    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
-  })
+    [commentableLineNumbers]
+  )
 
-  useEffect(() => {
-    if (!modifiedEditor || !popover) {
-      return
-    }
-    const update = (): void => {
-      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
-      const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
-      if (top == null) {
-        setPopover(null)
-        return
-      }
-      const left = getDiffCommentPopoverLeft(modifiedEditor, sectionBodyRef.current)
-      setPopover((prev) =>
-        prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
-      )
-    }
-    const scrollSub = modifiedEditor.onDidScrollChange(update)
-    const contentSub = modifiedEditor.onDidContentSizeChange(update)
-    const layoutSub = modifiedEditor.onDidLayoutChange(update)
-    return () => {
-      scrollSub.dispose()
-      contentSub.dispose()
-      layoutSub.dispose()
-    }
-    // Why: depend on popover.lineNumber (not the whole popover object) so the
-    // effect doesn't re-subscribe on every top update it dispatches. The guard
-    // on `popover` above handles the popover-closed case.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modifiedEditor, popover?.lineNumber])
+  const fileDiff = useMemo(
+    () =>
+      buildPierreFileDiff({
+        path: section.path,
+        oldPath: section.oldPath,
+        status: section.status,
+        originalContent: section.originalContent,
+        modifiedContent: section.modifiedContent,
+        // Why: keyed by content generation so the worker AST cache survives virtualization remounts.
+        cacheKey: `${section.key}:${section.contentGeneration ?? 0}`,
+        parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace)
+      }),
+    [
+      section.path,
+      section.oldPath,
+      section.status,
+      section.originalContent,
+      section.modifiedContent,
+      section.key,
+      section.contentGeneration,
+      settings?.diffShowWhitespace
+    ]
+  )
 
-  useEffect(() => {
-    const diffEditor = diffEditorRef.current
-    if (!diffEditor) {
-      return
-    }
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
-    return () => {
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = null
-    }
-  }, [sideBySide])
-
-  const handleSubmitComment = async (body: string): Promise<void> => {
-    if (!popover) {
-      return
-    }
-    const submitted = await submitDiffSectionComment({
-      addDiffComment,
-      body,
-      onAddLineComment,
-      popover,
-      section,
-      worktreeId
-    })
-    if (submitted) {
-      setPopover(null)
-    }
-  }
-
-  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
-    useDiffSectionLayoutMetrics({
-      section,
-      sectionHeight
-    })
-
-  useDiffSectionFallbackCleanup({
-    disposeDiffModels,
-    index,
-    isLargeDiffLimited,
-    setSectionHeights
-  })
-
-  const handleMount: DiffOnMount = (editor, _monaco) => {
-    diffEditorRef.current = editor
-    lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
-    const modified = editor.getModifiedEditor()
-
-    // Why: measuring before Monaco computes hidden unchanged regions records
-    // full-file height, making virtualized combined diffs jump as rows remount.
-    let diffLayoutReady = false
-    let pendingHeightFrame: number | null = null
-    const updateHeight = (): void => {
-      const contentHeight = editor.getModifiedEditor().getContentHeight()
-      setSectionHeights((prev) => {
-        if (prev[index] === contentHeight) {
-          return prev
-        }
-        return { ...prev, [index]: contentHeight }
-      })
-    }
-    const requestHeightUpdate = (): void => {
-      if (pendingHeightFrame !== null) {
-        return
-      }
-      pendingHeightFrame = window.requestAnimationFrame(() => {
-        pendingHeightFrame = null
-        updateHeight()
-      })
-    }
-    const markDiffLayoutReady = (): void => {
-      diffLayoutReady = true
-      requestHeightUpdate()
-    }
-    const contentSizeSub = modified.onDidContentSizeChange(() => {
-      if (diffLayoutReady) {
-        requestHeightUpdate()
-      }
-    })
-    const diffUpdateSub = editor.onDidUpdateDiff(markDiffLayoutReady)
-    if (editor.getLineChanges() !== null) {
-      markDiffLayoutReady()
-    }
-
-    setModifiedEditor(modified)
-    // Why: Monaco disposes inner editors when the DiffEditor container is
-    // unmounted (e.g. section collapse, tab change). Clearing the state
-    // prevents decorator effects and scroll subscriptions from invoking
-    // methods on a disposed editor instance, and avoids `popover` pointing
-    // at a line in an editor that no longer exists.
-    modified.onDidDispose(() => {
-      contentSizeSub.dispose()
-      diffUpdateSub.dispose()
-      if (pendingHeightFrame !== null) {
-        window.cancelAnimationFrame(pendingHeightFrame)
-        pendingHeightFrame = null
-      }
-      lineNumberOptionsSubRef.current?.dispose()
-      lineNumberOptionsSubRef.current = null
-      diffEditorRef.current = null
-      if (modifiedEditorsRef.current.get(index) === modified) {
-        modifiedEditorsRef.current.delete(index)
-      }
-      setModifiedEditor(null)
-      setPopover(null)
-    })
-
-    if (!isEditable) {
-      return
-    }
-
-    modifiedEditorsRef.current.set(index, modified)
-    const original = editor.getOriginalEditor()
-    const cleanupSaveShortcut = installEditorSaveShortcut(modified.getContainerDomNode(), () =>
-      handleSectionSaveRef.current(index)
-    )
-    const cleanupOriginalFindShortcut = installMonacoEditorFindShortcut(original)
-    const cleanupModifiedFindShortcut = installMonacoEditorFindShortcut(modified)
-    const modelContentSub = modified.onDidChangeModelContent(() => {
-      const current = modified.getValue()
+  // Why: virtualized rows unmount when scrolled away, so the draft must live in
+  // section state rather than only inside the mounted editor.
+  const handleEditChange = useCallback(
+    (file: { contents: string }) => {
+      const current = file.contents
       setSections((prev) => {
         let changed = false
         const next = prev.map((s, i) => {
           if (i !== index) {
             return s
           }
-
           const savedModifiedContent =
             s.diffResult?.kind === 'text' ? s.diffResult.modifiedContent : s.modifiedContent
           const dirty = current !== savedModifiedContent
           if (s.modifiedContent === current && s.dirty === dirty) {
             return s
           }
-
           changed = true
-          // Why: virtualized rows unmount when scrolled away, so the draft must
-          // live in section state instead of only in Monaco's mounted model.
           return {
             ...s,
             modifiedContent: current,
             dirty,
             largeDiffRenderLimit: getLiveDiffSectionRenderLimit({
               section: s,
-              modifiedEditor: modified,
               modifiedContent: current
             })
           }
         })
         return changed ? next : prev
       })
-    })
-    modified.onDidDispose(() => {
-      // Why: editable diff sections own both panes' shortcut bridges and the
-      // model subscription for the lifetime of this Monaco diff instance.
-      cleanupSaveShortcut()
-      cleanupOriginalFindShortcut()
-      cleanupModifiedFindShortcut()
-      modelContentSub.dispose()
-    })
-  }
+    },
+    [index, setSections]
+  )
+
+  const handlePostRender = useCallback(
+    (node: HTMLElement, phase: PostRenderPhase) => {
+      if (phase === 'unmount') {
+        return
+      }
+      const contentHeight = node.scrollHeight
+      setSectionHeights((prev) =>
+        prev[index] === contentHeight ? prev : { ...prev, [index]: contentHeight }
+      )
+    },
+    [index, setSectionHeights]
+  )
+
+  const handleSubmitComment = useCallback(
+    async (body: string): Promise<void> => {
+      if (!pendingComment) {
+        return
+      }
+      const submitted = await submitDiffSectionComment({
+        addDiffComment,
+        body,
+        onAddLineComment,
+        popover: pendingComment,
+        section,
+        worktreeId
+      })
+      if (submitted) {
+        setPendingComment(null)
+      }
+    },
+    [addDiffComment, onAddLineComment, pendingComment, section, worktreeId]
+  )
+
+  const handleDeleteComment = useCallback(
+    (id: string) => {
+      if (worktreeId) {
+        void deleteDiffComment(worktreeId, id)
+      }
+    },
+    [deleteDiffComment, worktreeId]
+  )
+
+  const handleUpdateComment = useMemo(
+    () =>
+      worktreeId
+        ? (id: string, body: string) => updateDiffComment(worktreeId, id, body)
+        : undefined,
+    [updateDiffComment, worktreeId]
+  )
+
+  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight, isLargeDiffLimited } =
+    useDiffSectionLayoutMetrics({ section, sectionHeight })
+
+  useDiffSectionFallbackCleanup({ index, isLargeDiffLimited, setSectionHeights })
 
   useEffect(() => {
     loadSection(index)
   }, [index, loadSection])
 
+  // Why: the save chord lives on the section root now that no editor owns a container node.
+  useEffect(() => {
+    const node = sectionBodyRef.current
+    if (!node || !isEditable) {
+      return
+    }
+    return installEditorSaveShortcut(node, () => void handleSectionSaveRef.current(index))
+  }, [handleSectionSaveRef, index, isEditable])
+
+  const renderDiff = useCallback(
+    () => (
+      <PierreDiffSurface
+        fileDiff={fileDiff}
+        sideBySide={sideBySide}
+        settings={settings}
+        isEditable={isEditable}
+        collapseUnchanged
+        worktreeId={worktreeId ?? ''}
+        filePath={section.path}
+        language={detectLanguage(section.path)}
+        comments={comments}
+        onDeleteComment={handleDeleteComment}
+        onUpdateComment={handleUpdateComment}
+        onEditChange={handleEditChange}
+        onPostRender={handlePostRender}
+        onAddComment={hasLineCommentAction ? handleAddComment : undefined}
+        pendingComment={pendingComment}
+        addCommentPlaceholder={addLineCommentPlaceholder}
+        addCommentLabel={addLineCommentLabel}
+        onCancelComment={() => setPendingComment(null)}
+        onSubmitComment={handleSubmitComment}
+      />
+    ),
+    [
+      addLineCommentLabel,
+      addLineCommentPlaceholder,
+      comments,
+      fileDiff,
+      handleDeleteComment,
+      handleAddComment,
+      handleEditChange,
+      handlePostRender,
+      handleSubmitComment,
+      handleUpdateComment,
+      hasLineCommentAction,
+      isEditable,
+      pendingComment,
+      section.path,
+      settings,
+      sideBySide,
+      worktreeId
+    ]
+  )
+
   return (
-    <div ref={setSectionRootNode} className="border-b border-border">
+    <div className="border-b border-border">
       <DiffSectionHeader
         path={section.path}
         dirty={section.dirty}
@@ -362,25 +287,13 @@ export function DiffSectionItem({
           sectionBodyRef={sectionBodyRef}
           sectionBodyHeight={sectionBodyHeight}
           useIntrinsicImageHeight={useIntrinsicImageHeight}
-          popover={popover}
-          addLineCommentPlaceholder={addLineCommentPlaceholder}
-          addLineCommentLabel={addLineCommentLabel}
           isBranchMode={isBranchMode}
           sideBySide={sideBySide}
-          isDark={isDark}
-          language={language}
-          modelPathBase={modelPathBase}
           isEditable={isEditable}
-          diffEditorFontSize={diffEditorFontSize}
-          diffWordWrap={settings?.diffWordWrap}
-          diffShowWhitespace={settings?.diffShowWhitespace}
-          editorFontFamily={resolveEditorFontFamily(settings)}
-          onCancelComment={() => setPopover(null)}
-          onSubmitComment={handleSubmitComment}
+          renderDiff={renderDiff}
           onRetrySection={retrySection}
           onLoadDeferredSection={loadDeferredSection ?? loadSection}
           onSaveLimitedDiff={() => void handleSectionSaveRef.current(index)}
-          onMount={handleMount}
         />
       )}
     </div>

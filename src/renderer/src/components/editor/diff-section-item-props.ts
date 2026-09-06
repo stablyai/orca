@@ -1,5 +1,4 @@
 import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'react'
-import type { editor as monacoEditor } from 'monaco-editor'
 import type { DecoratedDiffComment } from '../diff-comments/decorated-diff-comment'
 import type { DiffSection } from './diff-section-types'
 
@@ -8,10 +7,11 @@ export type DiffSectionItemProps = {
   index: number
   isBranchMode: boolean
   sideBySide: boolean
-  isDark: boolean
   settings: {
+    theme?: 'system' | 'dark' | 'light'
     terminalFontSize?: number
     terminalFontFamily?: string
+    editorFontFamily?: string
     diffWordWrap?: boolean
     diffShowWhitespace?: boolean
   } | null
@@ -35,6 +35,5 @@ export type DiffSectionItemProps = {
   getCommentableLineNumbers?: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: Dispatch<SetStateAction<Record<number, number>>>
   setSections: Dispatch<SetStateAction<DiffSection[]>>
-  modifiedEditorsRef: MutableRefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   handleSectionSaveRef: MutableRefObject<(index: number) => Promise<void>>
 }

@@ -20,11 +20,9 @@ export function CombinedDiffSectionList({
   isAllMode,
   isBranchMode,
   isCommitMode,
-  isDark,
   loadSection,
   loadDeferredSection,
   markDirectScrollInput,
-  modifiedEditorsRef,
   onScrollbarPointerDown,
   openSection,
   openSectionPreview,
@@ -49,11 +47,9 @@ export function CombinedDiffSectionList({
   isAllMode: boolean
   isBranchMode: boolean
   isCommitMode: boolean
-  isDark: boolean
   loadSection: (index: number) => void
   loadDeferredSection: (index: number) => void
   markDirectScrollInput: () => void
-  modifiedEditorsRef: DiffSectionItemProps['modifiedEditorsRef']
   onScrollbarPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void
   openSection: (index: number) => void
   openSectionPreview: (section: DiffSection) => void
@@ -110,7 +106,6 @@ export function CombinedDiffSectionList({
                   index={virtualItem.index}
                   isBranchMode={isBranchMode}
                   sideBySide={sideBySide}
-                  isDark={isDark}
                   settings={settings}
                   sectionHeight={sectionHeights[virtualItem.index]}
                   worktreeId={file.worktreeId}
@@ -136,7 +131,6 @@ export function CombinedDiffSectionList({
                   }
                   setSectionHeights={setSectionHeights}
                   setSections={setSections}
-                  modifiedEditorsRef={modifiedEditorsRef}
                   handleSectionSaveRef={handleSectionSaveRef}
                   renderHeaderTrailingContent={(section) => {
                     const fileNoteCount = commentCountByFilePath.get(section.path) ?? 0
