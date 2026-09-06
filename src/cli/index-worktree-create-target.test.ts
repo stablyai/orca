@@ -263,6 +263,53 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
+  // Why: the legacy fallback matches a repo folder name, and two projects can hold repos with the
+  // same folder name. Selecting either would target a project the caller never named.
+  it('refuses a legacy display-name match that spans two projects', async () => {
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({
+            id: 'setup-a',
+            hostId: 'local',
+            repoId: 'repo-a',
+            projectId: 'github:acme/scalp-it',
+            displayName: 'scalp-it'
+          }),
+          buildSetup({
+            id: 'setup-b',
+            hostId: 'local',
+            repoId: 'repo-b',
+            projectId: 'gitlab:other/scalp-it',
+            displayName: 'scalp-it'
+          })
+        ]
+      })
+    )
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('method_not_found', 'Unknown method: project.list')
+    )
+
+    await main(
+      ['worktree', 'create', '--project', 'scalp-it', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('2 projects have a setup named that')
+    expect(printed).toContain('github:acme/scalp-it')
+    expect(printed).toContain('gitlab:other/scalp-it')
+    expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   // Only a version gap earns the weaker match against the setup's own display name.
   it('falls back to the setup display name when the server has no project.list', async () => {
     const { RuntimeClientError } = await import('./runtime/types.js')

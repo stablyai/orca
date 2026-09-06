@@ -97,7 +97,21 @@ function legacyNameMatchedSetups(
   ready: readonly ProjectHostSetup[],
   projectSelector: string
 ): ProjectHostSetup[] {
-  return ready.filter((candidate) => matchesName(candidate.displayName, projectSelector))
+  const matched = ready.filter((candidate) => matchesName(candidate.displayName, projectSelector))
+  const projectIds = [...new Set(matched.map((candidate) => candidate.projectId))]
+  // Why: two projects can hold repos with the same folder name, and this match is by folder name.
+  // Selecting either would target a project the caller did not name.
+  if (projectIds.length <= 1) {
+    return matched
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Ambiguous --project ${projectSelector}: ${projectIds.length} projects have a setup named that. Use the project id.`,
+    {
+      knownProjects: projectIds.map((id) => ({ id })),
+      nextSteps: projectIds.map((id) => `Use --project ${id}.`)
+    }
+  )
 }
 
 /** Null when the server has no project.list at all, as opposed to no project by that name. */
