@@ -31,10 +31,7 @@ export function shouldReleaseOrchestrationPointer(
   messages: readonly { id: string; type: string }[],
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
 ): boolean {
-  if (
-    mailboxHandle.startsWith('run:') &&
-    db?.hasOutstandingRunDelivery?.(mailboxHandle.slice('run:'.length))
-  ) {
+  if (db?.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
     return true
   }
   if (messages.some((message) => messageTypeHasOrchestrationWaiter(waiters, message.type))) {

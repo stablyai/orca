@@ -110,14 +110,24 @@ export type FlagErrorData = {
   nextSteps: string[]
 }
 
+// Why: edit distance cannot recover a rename. `orchestration check` is the one verb
+// that identifies its caller with `--terminal` while every sibling uses `--from`, so
+// the near-miss ranking answered `--json`/`--run` and left the caller stuck (#16904).
+// A synonym only fires where the typed flag is rejected and its partner is accepted.
+const FLAG_SYNONYMS: Readonly<Record<string, string>> = { from: 'terminal' }
+
 function suggestFlags(flag: string, validFlags: string[]): string[] {
+  const synonym = FLAG_SYNONYMS[flag]
   const scored: { label: string; distance: number }[] = []
   for (const candidate of validFlags) {
     if (Math.abs(flag.length - candidate.length) <= SUGGESTION_THRESHOLD) {
       scored.push({ label: candidate, distance: levenshtein(flag, candidate) })
     }
   }
-  return rankByDistance(scored)
+  const ranked = rankByDistance(scored)
+  return synonym && validFlags.includes(synonym)
+    ? [synonym, ...ranked.filter((name) => name !== synonym)].slice(0, MAX_SUGGESTIONS)
+    : ranked
 }
 
 // Why: include the accepted set so agents can recover without another help call.

@@ -13,6 +13,7 @@ const EXPECTED_MATRIX = {
   '.github/workflows/e2e.yml#e2e': { contents: 'read' },
   '.github/workflows/e2e.yml#prepare-native-cache': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-browser-network-route': { contents: 'read' },
+  '.github/workflows/e2e.yml#ssh-localhost': { contents: 'read' },
   '.github/workflows/e2e.yml#ssh-docker-watcher-isolation': { contents: 'read' },
   '.github/workflows/homebrew-bump.yml#bump-cask': { contents: 'read' },
   '.github/workflows/release-mac-build.yml#build-mac': { contents: 'write' },

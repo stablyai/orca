@@ -306,7 +306,7 @@ describe('legacy SSH orchestration fallback', () => {
       '--timeout-ms',
       '1',
       '--retry-request',
-      'ssh-question-1',
+      '55555555-5555-4555-8555-555555555555',
       '--json'
     ]
     const request = {
@@ -395,6 +395,117 @@ describe('legacy SSH orchestration fallback', () => {
       })
 
       expect(db.getMessageById(answer.message.id)?.read).toBe(1)
+    } finally {
+      db.close()
+    }
+  })
+
+  // Why: the shim parses its own argv, so a shell-emptied --retry-request used to fall through to
+  // undefined and send worker_done under a fresh identity (#15180).
+  it.each([
+    ['valueless', ['--retry-request', '--json'], 'requires a value'],
+    ['non-UUID', ['--retry-request', 'ssh-worker-done-1', '--json'], 'must be the UUID']
+  ])(
+    'refuses a %s --retry-request instead of minting a new send identity',
+    async (_label, retryArgv, expectedMessage) => {
+      const { db, runtime } = createLegacyRuntime()
+      const sqlite = (db as unknown as { db: Database.Database }).db
+      const countMessages = (): number =>
+        (sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count
+      const before = countMessages()
+
+      try {
+        const result = await runRemoteOrcaCli(
+          runtime,
+          {
+            argv: [
+              'orchestration',
+              'send',
+              '--to',
+              COORDINATOR_HANDLE,
+              '--type',
+              'worker_done',
+              '--subject',
+              'done',
+              ...retryArgv
+            ],
+            cwd: '/home/alice/repo',
+            env: WORKER_ENV,
+            runtimeAuthority: RUNTIME_AUTHORITY
+          },
+          LEGACY_FALLBACK_OPTIONS
+        )
+
+        expect(result.exitCode).toBe(1)
+        expect(JSON.parse(result.stdout)).toMatchObject({
+          error: { code: 'invalid_argument', message: expect.stringContaining(expectedMessage) }
+        })
+        expect(countMessages()).toBe(before)
+      } finally {
+        db.close()
+      }
+    }
+  )
+
+  // `check` and `ask` mint their own mutation identity when the flag is absent, so a rejected
+  // value must not fall through to a fresh one and re-run the mutation.
+  it.each([
+    ['check', ['orchestration', 'check', '--terminal', COORDINATOR_HANDLE]],
+    ['ask', ['orchestration', 'ask', '--from', WORKER_HANDLE, '--question', 'continue?']]
+  ])('refuses a valueless --retry-request on orchestration %s', async (_label, commandArgv) => {
+    const { db, runtime } = createLegacyRuntime()
+    const sqlite = (db as unknown as { db: Database.Database }).db
+    const countMessages = (): number =>
+      (sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count
+    const before = countMessages()
+
+    try {
+      const result = await runRemoteOrcaCli(
+        runtime,
+        {
+          argv: [...commandArgv, '--retry-request', '--json'],
+          cwd: '/home/alice/repo',
+          env: WORKER_ENV,
+          runtimeAuthority: RUNTIME_AUTHORITY
+        },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(1)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        error: {
+          code: 'invalid_argument',
+          message: expect.stringContaining('requires a value')
+        }
+      })
+      expect(countMessages()).toBe(before)
+    } finally {
+      db.close()
+    }
+  })
+
+  it.each([
+    ['check', ['orchestration', 'check', '--terminal', COORDINATOR_HANDLE]],
+    ['ask', ['orchestration', 'ask', '--from', WORKER_HANDLE, '--question', 'continue?']]
+  ])('refuses a non-UUID --retry-request on orchestration %s', async (_label, commandArgv) => {
+    const { db, runtime } = createLegacyRuntime()
+
+    try {
+      const result = await runRemoteOrcaCli(
+        runtime,
+        {
+          argv: [...commandArgv, '--retry-request', 'ssh-check-1', '--json'],
+          cwd: '/home/alice/repo',
+          env: WORKER_ENV,
+          runtimeAuthority: RUNTIME_AUTHORITY
+        },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(1)
+      expect(JSON.parse(result.stdout)).toMatchObject({
+        error: { code: 'invalid_argument', message: expect.stringContaining('must be the UUID') }
+      })
     } finally {
       db.close()
     }

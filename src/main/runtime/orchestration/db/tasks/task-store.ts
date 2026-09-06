@@ -5,6 +5,7 @@ import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
 
 // ── Tasks ──
@@ -221,7 +222,12 @@ export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string
       return dep?.status === 'completed'
     })
     if (allDepsCompleted) {
-      this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
+      transitionLifecycleWithDb(this.db, {
+        entity: 'task',
+        id: task.id,
+        from: 'pending',
+        to: 'ready'
+      })
     }
   }
 }

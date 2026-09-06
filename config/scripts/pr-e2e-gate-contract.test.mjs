@@ -376,13 +376,10 @@ describe('PR E2E gate contract', () => {
     // that no runner names runs nowhere and still reports green — the silent skip this file
     // exists to prevent. Asserting reachability rather than a literal keeps that true when
     // the lanes move.
-    // Why these two are exempt: each needs something CI cannot give it, recorded in
+    // The remaining exemption needs performance validation before routine CI, recorded in
     // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
-    const unreachableSpecs = new Set([
-      'tests/e2e/ssh-docker-relay-perf.spec.ts',
-      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts'
-    ])
-    // Why comments are stripped: this file's own runner lists the two exempt specs by name in a
+    const unreachableSpecs = new Set(['tests/e2e/ssh-docker-relay-perf.spec.ts'])
+    // Why comments are stripped: the runner documents the exempt spec by name in a
     // prose comment. A substring scan over raw text would count any spec merely *discussed* in a
     // runner as claimed by it -- the silent skip this assertion exists to catch, re-entering
     // through the documentation.

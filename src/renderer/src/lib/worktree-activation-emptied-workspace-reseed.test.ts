@@ -5,6 +5,7 @@ import {
   activateAndRevealWorkspace,
   activateAndRevealWorktree
 } from './worktree-activation'
+import * as activationGate from './worktree-agent-activation-gate'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
@@ -18,6 +19,7 @@ const initialAppStoreState = useAppStore.getState()
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   useAppStore.setState(initialAppStoreState, true)
 })
 
@@ -30,6 +32,32 @@ function seedClosedLastTerminal(worktreeId: string): void {
 }
 
 describe('activating a workspace whose last terminal was closed', () => {
+  it.each([true, false])(
+    'forwards providesInitialSurface=%s through the async activation gate',
+    async (providesInitialSurface) => {
+      const worktree = makeWorktree()
+      seedEmptyActivatableWorktree(worktree)
+      seedClosedLastTerminal(worktree.id)
+      useAppStore.setState({
+        sleepingAgentSessionsByPaneKey: {
+          'pane-1': { worktreeId: worktree.id }
+        } as never
+      })
+      const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+      gate.mockResolvedValue('empty')
+
+      activateAndRevealWorktree(worktree.id, {
+        providesInitialSurface,
+        notifyHostRuntime: false
+      })
+      await gate.mock.results[0]?.value
+
+      expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(
+        providesInitialSurface ? 0 : 1
+      )
+    }
+  )
+
   it('re-seeds a terminal when the workspace is opened from elsewhere', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
@@ -206,6 +234,30 @@ function seedEmptiedFolderWorkspaceOnTwoHosts(): void {
 }
 
 describe('activating a folder workspace whose last terminal was closed', () => {
+  it.each([true, false])(
+    'forwards providesInitialSurface=%s through the async activation gate',
+    async (providesInitialSurface) => {
+      seedEmptiedFolderWorkspaceOnTwoHosts()
+      useAppStore.setState({
+        sleepingAgentSessionsByPaneKey: {
+          'pane-1': { worktreeId: FOLDER_KEY }
+        } as never
+      })
+      const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+      gate.mockResolvedValue('empty')
+
+      activateAndRevealFolderWorkspace(FOLDER_ID, {
+        executionHostId: 'local',
+        providesInitialSurface
+      })
+      await gate.mock.results[0]?.value
+
+      expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(
+        providesInitialSurface ? 0 : 1
+      )
+    }
+  )
+
   it.each(['local', SSH_HOST_ID] as const)(
     'opens a notification on %s without revealing the folder',
     (executionHostId) => {
