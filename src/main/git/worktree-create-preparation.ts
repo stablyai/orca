@@ -45,16 +45,16 @@ async function performDiscardPreparedWorktree(
     timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
   }
   try {
+    // Preserve the ownership lock if removal cannot start; Git 2.25 supports locked removal.
     await gitExecFileAsync(
-      [...windowsLongPathGitArgs(repoPath), 'worktree', 'unlock', worktreePath],
-      cleanupGitOptions
-    )
-  } catch {
-    // It may be unlocked already or only partially registered.
-  }
-  try {
-    await gitExecFileAsync(
-      [...windowsLongPathGitArgs(repoPath), 'worktree', 'remove', '--force', worktreePath],
+      [
+        ...windowsLongPathGitArgs(repoPath),
+        'worktree',
+        'remove',
+        '--force',
+        '--force',
+        worktreePath
+      ],
       cleanupGitOptions
     )
   } finally {
