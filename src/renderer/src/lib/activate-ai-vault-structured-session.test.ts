@@ -13,7 +13,7 @@ function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSess
     reveal: vi.fn(async () => 'revealed' as const),
     unavailable: vi.fn(),
     gone: vi.fn(),
-    hostTooOld: vi.fn(),
+    hostCannotOpen: vi.fn(),
     ...overrides
   }
 }
@@ -91,6 +91,34 @@ describe('activateAiVaultStructuredSession', () => {
     expect(parts.activate).toHaveBeenCalledTimes(3)
     expect(parts.unavailable).not.toHaveBeenCalled()
     expect(parts.gone).not.toHaveBeenCalled()
+  })
+
+  it('offers an update rather than a eulogy when the host itself cannot open the chat', async () => {
+    // The chat is not gone. Reporting it as gone hides the one remedy that would bring it back.
+    const parts = deps({
+      activate: vi.fn(() => false),
+      reveal: vi.fn(async () => 'host-cannot-open' as const)
+    })
+
+    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
+
+    expect(parts.hostCannotOpen).toHaveBeenCalledOnce()
+    expect(parts.gone).not.toHaveBeenCalled()
+    expect(parts.unavailable).not.toHaveBeenCalled()
+  })
+
+  it('keeps the retryable message when the host never answered', async () => {
+    // Losing contact says nothing about the chat, so this is the one miss worth waiting out.
+    const parts = deps({
+      activate: vi.fn(() => false),
+      reveal: vi.fn(async () => 'unreachable' as const)
+    })
+
+    await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
+
+    expect(parts.unavailable).toHaveBeenCalledOnce()
+    expect(parts.gone).not.toHaveBeenCalled()
+    expect(parts.hostCannotOpen).not.toHaveBeenCalled()
   })
 
   it('ignores a row that is not a structured chat', async () => {

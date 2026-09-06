@@ -73,13 +73,13 @@ describe('revealStructuredSession', () => {
     )
   })
 
-  it('reports a paired host too old rather than sending it an unknown method', async () => {
+  it('reports a paired host that cannot open it rather than sending an unknown method', async () => {
     // The regression this guards: an older paired host answers method_not_found, which is
     // indistinguishable from a refusal, so the user is told the chat is gone when it is not.
     mocks.environmentIdFor.mockReturnValue('legacy-env')
     mocks.supports.mockResolvedValue(false)
 
-    await expect(revealStructuredSession(target)).resolves.toBe('host-too-old')
+    await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
 
     expect(mocks.call).not.toHaveBeenCalled()
   })

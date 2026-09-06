@@ -15,6 +15,8 @@ import {
 } from '../../../shared/agent-session-record.test-fixture'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
 import * as readRestore from './structured-agent-session-read-restore'
+import * as providerSupport from './structured-agent-session-provider-support'
+import { revealStructuredAgentSession } from './structured-agent-session-reveal'
 
 function recordFor(provider: 'claude' | 'codex', sessionId: string): AgentSessionRecord {
   const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
@@ -139,5 +141,96 @@ describe('a record whose journal cannot be read', () => {
     await expect(restorer.restoreOne('session-no-journal-claude')).resolves.toBe(false)
     await expect(restorer.restoreOne('session-no-journal-codex')).resolves.toBe(false)
     expect(live.size).toBe(0)
+  })
+})
+
+describe('the host answer a client acts on', () => {
+  beforeEach(() => {
+    // Eligibility is the router's call; these cases are about what the answer carries.
+    vi.spyOn(providerSupport, 'adapterSupportsRecord').mockReturnValue(true)
+  })
+
+  function record(provider: 'claude' | 'codex', workspaceId: string) {
+    const base = recordFor(provider, 'session-answered')
+    return { ...base, location: { ...base.location, workspaceId } }
+  }
+
+  it("answers with the record's own workspace and provider, never a caller's", async () => {
+    // The security property: a client sends only a session id, so the tab cannot be aimed at
+    // another workspace by asking for one.
+    const stored = record('claude', 'workspace-from-record')
+
+    await expect(
+      revealStructuredAgentSession(
+        { store: { getRecord: () => stored } as never, adapter: {} as never },
+        'session-answered',
+        () => true,
+        async () => true
+      )
+    ).resolves.toEqual({
+      sessionId: 'session-answered',
+      workspaceId: 'workspace-from-record',
+      agent: 'claude',
+      readable: true
+    })
+  })
+
+  it('refuses a session this host holds no record for', async () => {
+    await expect(
+      revealStructuredAgentSession(
+        { store: { getRecord: () => null } as never, adapter: {} as never },
+        'session-absent',
+        () => false,
+        async () => false
+      )
+    ).rejects.toThrow('agent_session_identity_required')
+  })
+
+  it('refuses a record no adapter of this host supports', async () => {
+    vi.mocked(providerSupport.adapterSupportsRecord).mockReturnValue(false)
+
+    await expect(
+      revealStructuredAgentSession(
+        {
+          store: { getRecord: () => record('codex', 'workspace-1') } as never,
+          adapter: {} as never
+        },
+        'session-answered',
+        () => false,
+        async () => false
+      )
+    ).rejects.toThrow('structured_agent_session_unsupported')
+  })
+
+  it('answers not-readable without refusing when the journal could not be restored', async () => {
+    // The tab is still worth publishing: attach recovers what read restore cannot.
+    await expect(
+      revealStructuredAgentSession(
+        {
+          store: { getRecord: () => record('codex', 'workspace-1') } as never,
+          adapter: {} as never
+        },
+        'session-answered',
+        () => false,
+        async () => false
+      )
+    ).resolves.toMatchObject({ readable: false, agent: 'codex' })
+  })
+
+  it('does not restore over a session that is already live', async () => {
+    const restoreReadable = vi.fn(async () => true)
+
+    await expect(
+      revealStructuredAgentSession(
+        {
+          store: { getRecord: () => record('codex', 'workspace-1') } as never,
+          adapter: {} as never
+        },
+        'session-answered',
+        () => true,
+        restoreReadable
+      )
+    ).resolves.toMatchObject({ readable: true })
+    expect(restoreReadable).not.toHaveBeenCalled()
   })
 })

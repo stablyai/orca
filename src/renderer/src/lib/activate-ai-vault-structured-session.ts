@@ -19,8 +19,13 @@ const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
 /** Why four: the three terminal answers a user can act on differ, and folding them together sends
  *  someone to the wrong remedy — wait, give up, or update the host. `unreachable` is the only one
- *  that improves by retrying. */
-export type StructuredSessionRevealOutcome = 'revealed' | 'gone' | 'host-too-old' | 'unreachable'
+ *  that improves by retrying, and `gone` means the host said it holds no such chat, never that the
+ *  host could not answer for a reason of its own. */
+export type StructuredSessionRevealOutcome =
+  | 'revealed'
+  | 'gone'
+  | 'host-cannot-open'
+  | 'unreachable'
 
 type StructuredSessionActivationDeps = {
   activate: typeof activateStructuredAgentSessionById
@@ -31,7 +36,7 @@ type StructuredSessionActivationDeps = {
   }) => Promise<StructuredSessionRevealOutcome>
   unavailable: () => void
   gone: () => void
-  hostTooOld: () => void
+  hostCannotOpen: () => void
 }
 
 const defaultDeps: StructuredSessionActivationDeps = {
@@ -56,14 +61,14 @@ const defaultDeps: StructuredSessionActivationDeps = {
       )
     )
   },
-  // Separate from `gone` because the chat is not gone: the host that holds it is too old to be
-  // asked for it, and telling someone their work is lost when an update would bring it back is the
-  // worse of the two wrong answers.
-  hostTooOld: () => {
+  // Separate from `gone` because the chat is not gone — this host cannot open it, whether it is
+  // too old to know the method or its adapters do not cover that provider. Telling someone their
+  // work is lost when an update would bring it back is the worse of the two wrong answers.
+  hostCannotOpen: () => {
     toast.error(
       translate(
-        'auto.lib.activateAiVaultStructuredSession.hostTooOld',
-        'Reopening this chat requires a newer Orca server. Update the host and try again.'
+        'auto.lib.activateAiVaultStructuredSession.hostCannotOpen',
+        "This host can't reopen that chat. It may need an Orca update."
       )
     )
   }
@@ -92,8 +97,8 @@ export async function activateAiVaultStructuredSession(
       if (revealed !== 'revealed') {
         if (revealed === 'gone') {
           deps.gone()
-        } else if (revealed === 'host-too-old') {
-          deps.hostTooOld()
+        } else if (revealed === 'host-cannot-open') {
+          deps.hostCannotOpen()
         } else {
           // Unreachable: we never got an answer, so this is the one case waiting can still fix.
           deps.unavailable()
@@ -144,13 +149,13 @@ export async function revealStructuredSession(target: {
       return 'unreachable'
     }
     if (!supported) {
-      return 'host-too-old'
+      return 'host-cannot-open'
     }
   }
-  let result: { ok?: boolean } | undefined
+  let result: AgentSessionRevealReply | undefined
   try {
     result = await withStructuredSessionRestoreTimeout(
-      callRuntimeRpc<{ ok?: boolean }>(
+      callRuntimeRpc<AgentSessionRevealReply>(
         host,
         'agentSession.reveal',
         { sessionId: target.sessionId },
@@ -162,9 +167,15 @@ export async function revealStructuredSession(target: {
   } catch {
     return 'unreachable'
   }
-  // The host answered, and its answer was a refusal: this chat is not one it holds a record for.
-  return result?.ok === true ? 'revealed' : 'gone'
+  if (result?.ok === true) {
+    return 'revealed'
+  }
+  // The host raises two different refusals here and they mean opposite things to a user: it holds
+  // no such record, or it holds one it cannot open. Only the first is the chat being gone.
+  return result?.refusal?.code === 'agent_session_identity_required' ? 'gone' : 'host-cannot-open'
 }
+
+type AgentSessionRevealReply = { ok?: boolean; refusal?: { code?: string } }
 
 async function refreshStructuredSessionTabs(worktreeId: string): Promise<void> {
   const state = useAppStore.getState()
