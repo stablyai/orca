@@ -146,6 +146,18 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
         return gate.dropOutputUntilResubscribe([target])
       }, terminal)
     ).toBe(1)
+    await client.page.evaluate(() => {
+      const target = window as typeof window & { __probeBreadcrumbs?: unknown[] }
+      target.__probeBreadcrumbs = []
+      const record = window.api.crashReports.recordBreadcrumb
+      window.api.crashReports.recordBreadcrumb = (entry) => {
+        if (entry.name.startsWith('remote_terminal')) {
+          target.__probeBreadcrumbs!.push({ time: performance.now(), ...entry })
+          target.__probeBreadcrumbs = target.__probeBreadcrumbs!.slice(-100)
+        }
+        return record(entry)
+      }
+    })
     const missingMarker = `PROBE_GAP_MISSING_${Date.now()}`
     await client.page.keyboard.type(missingMarker)
     await client.page.keyboard.press('Enter')
@@ -217,6 +229,17 @@ test('replaces a stale paired stream when the PTY snapshot advanced @headful', a
       .toContain(`${liveMarker}\n`)
     expect(await waitForActivePanePtyId(client.page, 30_000)).toBe(originalPtyId)
   } finally {
+    console.info('[probe-gap-diagnostics] ' + JSON.stringify(await client.page.evaluate(() => {
+      const target = window as typeof window & {
+        __probeBreadcrumbs?: unknown[]
+        __remoteTerminalMultiplexAckGate?: { snapshot: () => unknown }
+      }
+      return {
+        breadcrumbs: target.__probeBreadcrumbs,
+        streams: target.__remoteTerminalMultiplexAckGate?.snapshot(),
+        visibility: document.visibilityState
+      }
+    }).catch((error) => ({ diagnosticError: String(error) }))))
     await client.page
       .evaluate(() => {
         ;(
