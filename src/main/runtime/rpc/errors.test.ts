@@ -196,6 +196,38 @@ describe('mapRuntimeError', () => {
     })
   })
 
+  it('merges helper-attached fence diagnostics with recovery nextSteps', () => {
+    const message =
+      'coordinate click aborted because target pid 7 window 9 is no longer the focused topmost recipient (current: no focused window); 1 press(es) may already have been delivered; run get-app-state and verify state before retrying'
+    const error = Object.assign(
+      new Error(message),
+      { code: 'window_not_focused' },
+      {
+        data: {
+          deliveredPresses: 1,
+          phase: 'after-press',
+          probeNilReason: 'hit-test-miss',
+          nextSteps: ['blind retry']
+        }
+      }
+    )
+
+    const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)
+
+    expect(response.error).toMatchObject({
+      code: 'window_not_focused',
+      data: {
+        deliveredPresses: 1,
+        phase: 'after-press',
+        probeNilReason: 'hit-test-miss',
+        nextSteps: [
+          expect.stringContaining('verify whether the intended action already occurred'),
+          expect.stringContaining('Do not retry the click if it already took effect')
+        ]
+      }
+    })
+  })
+
   it('preserves structured lineage error codes and data for CLI recovery hints', () => {
     const response = mapRuntimeError(
       'req_1',
