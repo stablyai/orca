@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from './persistence'
 import { WORKTREE_CREATE_PREPARATION_TTL_MS } from './worktree-create-preparation-pool'
+import { hasPendingStalePreparationCleanup } from './worktree-create-preparation-stale-cleanup'
 import type { Repo } from '../shared/repo-types'
 import { WORKTREE_CREATE_PREPARATION_DIRECTORY } from '../shared/worktree/create-preparation'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
@@ -502,6 +503,52 @@ describe('worktree create preparation registry', () => {
     await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
 
     expect(mocks.listWorktreeGraph).toHaveBeenCalledTimes(2)
+  })
+
+  it('prepares while stale removal is stalled, shares its scan, and settles removal on reset', async () => {
+    const stalePath = '/workspace/.orca-preparing/999999999-11111111-1111-4111-8111-111111111111'
+    let releaseRemoval!: () => void
+    const removal = new Promise<void>((resolve) => {
+      releaseRemoval = resolve
+    })
+    mocks.listWorktreeGraph.mockResolvedValueOnce([
+      {
+        path: stalePath,
+        branch: undefined,
+        lockReason: 'orca-create-preparation:v1:999999999:stale',
+        head: 'deadbeef',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    mocks.discard.mockImplementation((_repo, path) =>
+      path === stalePath ? removal : Promise.resolve()
+    )
+    let ready = false
+    let reset: Promise<void> | undefined
+    const preparation = prepareWorktreeCreateForRepo(store, repo, 'origin/main').then(() => {
+      ready = true
+    })
+    try {
+      await flushBackgroundWork()
+      expect(mocks.discard).toHaveBeenCalledWith(repo.path, stalePath, {})
+      expect(ready).toBe(true)
+      await prepareWorktreeCreateForRepo(store, repo, 'origin/release')
+      expect(mocks.prepareCheckout).toHaveBeenCalledTimes(2)
+      expect(mocks.listWorktreeGraph).toHaveBeenCalledTimes(1)
+      expect(hasPendingStalePreparationCleanup()).toBe(true)
+      let resetFinished = false
+      reset = _resetWorktreeCreatePreparationsForTests().then(() => {
+        resetFinished = true
+      })
+      await flushBackgroundWork()
+      expect(resetFinished).toBe(false)
+    } finally {
+      releaseRemoval()
+      await preparation
+      await reset
+    }
+    expect(hasPendingStalePreparationCleanup()).toBe(false)
   })
 
   it('unlocks a stale branch-attached final path instead of deleting user work', async () => {
