@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { expect } from './orca-app'
+import { expect, test } from './orca-app'
 import type { PairedElectronClient } from './paired-electron-client'
 import type { ProjectedWorktreeRoute } from './nested-runtime-ssh-client-route'
 import { focusActiveTerminalInput, getTerminalContent } from './terminal'
@@ -100,10 +100,20 @@ export async function assertNestedFilesystemRoute(
     })
 
     await row(sourceName).getByText(sourceName, { exact: true }).dblclick()
+    console.log('[nested-rename-before-fill]', await explorer.locator('input').evaluateAll((inputs) => inputs.map((input) => ({ html: input.outerHTML, value: input.value }))))
     const inlineInput = explorer.locator('input').last()
     await inlineInput.fill(renamedName)
+    console.log('[nested-rename-after-fill]', await explorer.locator('input').evaluateAll((inputs) => inputs.map((input) => ({ html: input.outerHTML, value: input.value }))))
     await inlineInput.press('Enter')
-    await expect(row(renamedName)).toBeVisible({ timeout: 15_000 })
+    await test.info().attach('paired-rename-submitted', { body: await client.page.screenshot(), contentType: 'image/png' })
+    console.log('[nested-rename-submitted]', await explorer.innerText())
+    try {
+      await expect(row(renamedName)).toBeVisible({ timeout: 15_000 })
+    } catch (error) {
+      await test.info().attach('paired-rename-failure', { body: await client.page.screenshot(), contentType: 'image/png' })
+      console.log('[nested-rename-failed]', await explorer.innerText())
+      throw error
+    }
     await expect(row(sourceName)).toHaveCount(0)
     await assertRemoteFilesystemMarker(
       client,

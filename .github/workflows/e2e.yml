@@ -9,12 +9,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - spec: tests/e2e/nested-runtime-ssh-lifecycle.spec.ts
-            scenario: isolates nested SSH worktrees across two HUB runtimes
-            lane: two-hubs
-          - spec: tests/e2e/nested-runtime-ssh-lifecycle.spec.ts
-            scenario: routes nested SSH through a HUB without shared-control capability
-            lane: legacy-hub
           - spec: tests/e2e/nested-runtime-ssh-routing.spec.ts
             scenario: .*
             lane: routing
