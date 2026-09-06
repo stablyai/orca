@@ -24,7 +24,7 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 
 type WorktreeJumpPaletteSelectionLifecycleInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteLocalState &
-  WorktreeJumpPaletteFilter &
+  Pick<WorktreeJumpPaletteFilter, 'filterModel'> &
   WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteProjectTargets &
   WorktreeJumpPaletteQuickActions &
@@ -60,9 +60,6 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   setSelectedItemId,
   setRawFilter,
   filterModel,
-  workspaceHostScope,
-  visibleWorkspaceHostIds,
-  filterRepoIds,
   selectionMovedByUserRef,
   taskSourceUrl,
   listRef,
@@ -87,10 +84,8 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     if (visible && !wasVisibleRef.current) {
       recordFeatureInteraction('cmd-j')
       createLookupGuard.invalidate()
-      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(
-        useAppStore.getState(),
-        activeWorktreeId
-      )
+      const appState = useAppStore.getState()
+      activeGroupSnapshotRef.current = captureCmdJActiveGroupSnapshot(appState, activeWorktreeId)
       previousWorktreeIdRef.current = activeWorktreeId
       previousActiveTabTypeRef.current = activeTabType
       previousBrowserPageIdRef.current =
@@ -114,13 +109,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       setQuery('')
       setSelectedItemId('')
       selectionMovedByUserRef.current = false
-      // Each open starts from the sidebar's current Show scope, not the last palette selection.
-      setRawFilter(
-        buildPaletteFilterFromSidebarScope(
-          { workspaceHostScope, visibleWorkspaceHostIds, filterRepoIds },
-          filterModel
-        )
-      )
+      setRawFilter(buildPaletteFilterFromSidebarScope(appState, filterModel))
       listRef.current?.scrollTo(0, 0)
     }
     if (!visible && wasVisibleRef.current) {

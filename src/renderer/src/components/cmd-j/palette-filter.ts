@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { getVisibleWorkspaceHostIdSet } from '../sidebar/visible-worktree-host-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getVisibleWorkspaceHostIdSet } from '../sidebar/visible-worktree-host-scope'
 import {
   resolveRepoFilterHostId,
   resolveWorktreeFilterHostId,
@@ -120,16 +120,11 @@ export function reconcilePaletteFilter(
   return { hostIds, projectKeys }
 }
 
-export type SidebarScopeForPaletteFilter = Parameters<typeof getVisibleWorkspaceHostIdSet>[0] & {
+type SidebarScopeForPaletteFilter = Parameters<typeof getVisibleWorkspaceHostIdSet>[0] & {
   filterRepoIds: readonly string[]
 }
 
-/**
- * Seeds the palette's host/project selection from the sidebar's "Show" scope so
- * Cmd+J opens on the same slice the user is looking at. One-way: the user can
- * clear or change it per open, and the sidebar never reads it back. A field
- * that would select every option is left empty — that is not a filter, just chips.
- */
+/** Omits fields that select every available option because they do not narrow results. */
 export function buildPaletteFilterFromSidebarScope(
   scope: SidebarScopeForPaletteFilter,
   model: PaletteFilterModel
