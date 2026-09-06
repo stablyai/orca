@@ -6,6 +6,7 @@ import {
   resolveTerminalWheelDirection
 } from './pane-terminal-tui-wheel-reports'
 import type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
+import { safeTerminalScrollCall } from './terminal-scroll-buffer-snapshot'
 
 export {
   TERMINAL_TUI_MOUSE_WHEEL_MULTIPLIER,
@@ -21,7 +22,11 @@ const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
-type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
+type TerminalWheelTarget = Pick<
+  Terminal,
+  'attachCustomWheelEventHandler' | 'element' | 'rows' | 'scrollLines'
+> & {
+  buffer: { active: Pick<Terminal['buffer']['active'], 'type'> }
   modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
 }
 
@@ -103,6 +108,7 @@ function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number |
   return rect.height / terminal.rows
 }
 
+/** Returns whether a mouse-reporting wheel event should use Orca's multiplier. */
 export function shouldMultiplyTerminalMouseWheel(
   event: WheelEvent,
   terminalElement: HTMLElement | null | undefined
@@ -183,16 +189,32 @@ function queueTerminalTuiWheelReports(
   })
 }
 
+/** Routes wheel input to scrollback or mouse-reporting TUIs based on the active buffer. */
 export function attachTerminalMouseWheelMultiplier(
   terminal: TerminalWheelTarget,
   options: TerminalMouseWheelMultiplierOptions = {}
 ): void {
   const replayState = createTerminalTuiMouseWheelReplayState()
+  const scrollbackDistance = createTerminalTuiMouseWheelDistanceState()
   terminal.attachCustomWheelEventHandler((event) => {
-    if (
-      terminal.modes.mouseTrackingMode === 'none' ||
-      !shouldMultiplyTerminalMouseWheel(event, terminal.element)
-    ) {
+    if (terminal.modes.mouseTrackingMode === 'none') {
+      if (terminal.buffer.active.type === 'alternate' || event.deltaY === 0 || event.shiftKey) {
+        return true
+      }
+
+      const lineCount = resolveTerminalTuiMouseWheelReportCount(event, 1, scrollbackDistance, {
+        cellHeight: resolveTerminalWheelCellHeight(terminal),
+        rows: terminal.rows
+      })
+      if (lineCount > 0) {
+        safeTerminalScrollCall(
+          terminal.scrollLines.bind(terminal, resolveTerminalWheelDirection(event) * lineCount)
+        )
+      }
+      return false
+    }
+
+    if (!shouldMultiplyTerminalMouseWheel(event, terminal.element)) {
       return true
     }
 

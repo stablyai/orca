@@ -56,6 +56,7 @@ class TestWheelEvent extends Event {
   }
 }
 
+/** Creates the minimal terminal element state needed by wheel-routing tests. */
 function terminalElement(mouseReporting = true): HTMLElement {
   return {
     classList: {
@@ -64,6 +65,7 @@ function terminalElement(mouseReporting = true): HTMLElement {
   } as HTMLElement
 }
 
+/** Creates a wheel-event fixture with a vertical pixel delta by default. */
 function wheelEvent(
   init: Partial<WheelEventInit> & { wheelDelta?: number; wheelDeltaY?: number } = {}
 ): WheelEvent {
@@ -72,6 +74,57 @@ function wheelEvent(
     deltaMode: DOM_DELTA_PIXEL,
     ...init
   } as WheelEvent
+}
+
+/** Simulates xterm scrolling after its render dimensions have been disposed. */
+function throwDisposedRenderDimensions(): never {
+  throw new TypeError("Cannot read properties of undefined (reading 'dimensions')")
+}
+
+/** Verifies that normal-buffer wheel input scrolls terminal history directly. */
+function verifyNormalBufferWheelScroll(): void {
+  const handlers: ((event: WheelEvent) => boolean)[] = []
+  const scrollLines = vi.fn()
+  /** Captures the normal-buffer wheel handler for direct invocation. */
+  function captureNormalBufferWheelHandler(handler: (event: WheelEvent) => boolean): void {
+    handlers.push(handler)
+  }
+  const terminal = {
+    attachCustomWheelEventHandler: captureNormalBufferWheelHandler,
+    buffer: { active: { type: 'normal' as const } },
+    element: terminalElement(false),
+    modes: { mouseTrackingMode: 'none' as const },
+    rows: 24,
+    scrollLines
+  }
+  attachTerminalMouseWheelMultiplier(terminal)
+
+  expect(handlers[0]?.(wheelEvent({ deltaY: -16, deltaMode: DOM_DELTA_PIXEL }))).toBe(false)
+  expect(scrollLines).toHaveBeenCalledWith(-1)
+
+  scrollLines.mockImplementation(throwDisposedRenderDimensions)
+  expect(handlers[0]?.(wheelEvent({ deltaY: -16, deltaMode: DOM_DELTA_PIXEL }))).toBe(false)
+  expect(scrollLines).toHaveBeenCalledTimes(2)
+}
+
+/** Verifies that alternate-buffer wheel input remains available to xterm's fallback. */
+function verifyAlternateBufferWheelFallback(): void {
+  const handlers: ((event: WheelEvent) => boolean)[] = []
+  /** Captures the alternate-buffer wheel handler for direct invocation. */
+  function captureAlternateBufferWheelHandler(handler: (event: WheelEvent) => boolean): void {
+    handlers.push(handler)
+  }
+  const terminal = {
+    attachCustomWheelEventHandler: captureAlternateBufferWheelHandler,
+    buffer: { active: { type: 'alternate' as const } },
+    element: terminalElement(false),
+    modes: { mouseTrackingMode: 'none' as const },
+    rows: 24,
+    scrollLines: vi.fn()
+  }
+  attachTerminalMouseWheelMultiplier(terminal)
+
+  expect(handlers[0]?.(wheelEvent())).toBe(true)
 }
 
 describe('terminal mouse wheel multiplier', () => {
@@ -392,9 +445,11 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       { getTuiMouseWheelMultiplier: () => 1 }
     )
@@ -419,42 +474,15 @@ describe('terminal mouse wheel multiplier', () => {
     expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
   })
 
-  it('does not replay with a stale active mouse-reporting class', async () => {
-    vi.stubGlobal('WheelEvent', TestWheelEvent)
-    const handlers: ((event: WheelEvent) => boolean)[] = []
-    const target = Object.assign(new EventTarget(), {
-      classList: {
-        contains: (className: string) => className === 'enable-mouse-events'
-      }
-    }) as unknown as EventTarget & HTMLElement
-    const dispatched: WheelEvent[] = []
-    target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
-    const terminal = {
-      attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
-        handlers.push(handler)
-      },
-      element: target,
-      modes: { mouseTrackingMode: 'none' as const },
-      rows: 24
-    }
-    attachTerminalMouseWheelMultiplier(terminal)
+  it(
+    'blocks wheel-to-arrow synthesis for normal buffers without mouse reporting',
+    verifyNormalBufferWheelScroll
+  )
 
-    const event = new TestWheelEvent('wheel', {
-      bubbles: true,
-      cancelable: true,
-      deltaMode: DOM_DELTA_PIXEL,
-      deltaY: 12
-    }) as WheelEvent
-    Object.defineProperty(event, 'wheelDeltaY', {
-      configurable: true,
-      value: -120
-    })
-
-    expect(handlers[0]?.(event)).toBe(true)
-    await Promise.resolve()
-
-    expect(dispatched).toHaveLength(0)
-  })
+  it(
+    'preserves wheel-to-arrow fallback for alternate buffers without mouse reporting',
+    verifyAlternateBufferWheelFallback
+  )
 
   it('discards pending replay when mouse reporting turns off before drain', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
@@ -470,9 +498,11 @@ describe('terminal mouse wheel multiplier', () => {
       attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
         handlers.push(handler)
       },
+      buffer: { active: { type: 'alternate' as const } },
       element: target,
       modes: { mouseTrackingMode: 'any' as 'any' | 'none' },
-      rows: 24
+      rows: 24,
+      scrollLines: vi.fn()
     }
     attachTerminalMouseWheelMultiplier(terminal)
 
@@ -509,9 +539,11 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       { getTuiMouseWheelMultiplier: () => 1 }
     )
@@ -562,9 +594,11 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       { getTuiMouseWheelMultiplier: () => 1 }
     )
@@ -597,9 +631,11 @@ describe('terminal mouse wheel multiplier', () => {
         attachCustomWheelEventHandler: (handler) => {
           handlers.push(handler)
         },
+        buffer: { active: { type: 'alternate' } },
         element: target,
         modes: { mouseTrackingMode: 'any' },
-        rows: 24
+        rows: 24,
+        scrollLines: vi.fn()
       },
       {
         getTuiMouseWheelMultiplier: () => 3
