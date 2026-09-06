@@ -91,6 +91,7 @@ export default function PaletteFilterMenu({
     if (model.repositories.length > 1) {
       entries.push({
         field: 'repository',
+        // "Projects" is the user-facing term for repository-granular choices; see filter.emptySubtitle.
         heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
         options: model.repositories,
         selected: filter.repoIds
