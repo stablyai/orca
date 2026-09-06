@@ -278,6 +278,58 @@ describe('prepared worktree creation with real Git', () => {
     )
   })
 
+  it.each(['before reset', 'after reset'])(
+    'finalizes refreshed content when the base moves %s',
+    async (when) => {
+      const { repoPath, root } = await createRepo()
+      const preparedPath = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY, 'fetch-overlap')
+      const finalPath = join(root, 'final-overlap')
+      await mkdir(join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY), { recursive: true })
+      const original = git(repoPath, ['rev-parse', 'HEAD'])
+      await writeFile(join(repoPath, 'version.txt'), 'refreshed\n')
+      git(repoPath, ['commit', '-am', 'remote update'])
+      const refreshed = git(repoPath, ['rev-parse', 'HEAD'])
+      git(repoPath, ['update-ref', 'refs/remotes/origin/main', original])
+      const exec = gitRunner.gitExecFileAsync
+      let moved = false
+      const spy = vi
+        .spyOn(gitRunner, 'gitExecFileAsync')
+        .mockImplementation(async (args, options) => {
+          if (!moved && args.includes('reset') && when === 'before reset') {
+            git(repoPath, ['update-ref', 'refs/remotes/origin/main', refreshed])
+            moved = true
+          }
+          const result = await exec(args, options)
+          if (!moved && args.includes('reset') && when === 'after reset') {
+            git(repoPath, ['update-ref', 'refs/remotes/origin/main', refreshed])
+            moved = true
+          }
+          return result
+        })
+      try {
+        await prepareWorktreeCreateCheckout(
+          repoPath,
+          preparedPath,
+          'refs/remotes/origin/main',
+          createWorktreePreparationLockReason('fetch-overlap')
+        )
+        expect(moved).toBe(true)
+        await finalizePreparedWorktree(
+          repoPath,
+          preparedPath,
+          finalPath,
+          'feature/overlap',
+          'refs/remotes/origin/main'
+        )
+        expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(refreshed)
+        expect(await readFile(join(finalPath, 'version.txt'), 'utf8')).toBe('refreshed\n')
+        expect(git(finalPath, ['status', '--porcelain'])).toBe('')
+      } finally {
+        spy.mockRestore()
+      }
+    }
+  )
+
   it('hides the preparation, retargets an advanced base, and attaches the final branch', async () => {
     const { repoPath, root } = await createRepo()
     const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
