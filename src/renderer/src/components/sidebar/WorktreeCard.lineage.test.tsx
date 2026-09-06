@@ -12,7 +12,9 @@ const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = []
-const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 15_000
+// Why: WorktreeCard's import graph is heavy; under full-suite parallelism the
+// dynamic import alone can exceed 15s, so budget it like the global hookTimeout.
+const WORKTREE_CARD_IMPORT_TIMEOUT_MS = 60_000
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
