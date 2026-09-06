@@ -7417,7 +7417,10 @@
           "9ee215caf6": ".mcp.json",
           "1f3665e35a": "MCP config created",
           "82436439eb": "Add MCP config",
-          "0a5c1ead54": "Create empty config"
+          "0a5c1ead54": "Create empty config",
+          "parallelDisclosure": "When an agent uses these tools, search objectives, queries, and fetched URLs are sent to Parallel. No API key is required.",
+          "confirmParallel": "Confirm Parallel Search",
+          "addParallel": "Add Parallel Search"
         },
         "MobileEmulatorAgentControlRow": {
           "1861982430": "Failed to load CLI status.",
