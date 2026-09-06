@@ -3,7 +3,7 @@ import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
+import { buildInjectRejectionMessage } from '../../../../shared/orchestration-dispatch-refusal-contract'
 import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration RPC methods', () => {

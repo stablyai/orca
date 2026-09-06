@@ -27,18 +27,20 @@ it('retries a failed icon after a same-origin reload completes', () => {
   expect(view.container.querySelector('img')).not.toBeNull()
 })
 
-it('keeps a working image mounted throughout a reload', () => {
+it('shows a loading spinner throughout a reload', () => {
   const view = render(icon())
-  const image = view.container.querySelector('img')
   view.rerender(icon(true))
-  expect(view.container.querySelector('img')).toBe(image)
+  expect(view.container.querySelector('img')).toBeNull()
+  expect(view.container.firstElementChild?.getAttribute('class')).toContain(
+    'motion-safe:animate-spin'
+  )
   view.rerender(icon(false))
-  expect(view.container.querySelector('img')).toBe(image)
+  expect(view.container.querySelector('img')?.getAttribute('src')).toBe(faviconUrl)
 })
 
-it('retries an image that failed during initial loading when loading finishes', () => {
+it('shows the favicon when initial loading finishes', () => {
   const view = render(icon(true))
-  fireEvent.error(view.container.querySelector('img')!)
+  expect(view.container.querySelector('img')).toBeNull()
   view.rerender(icon(false))
   expect(view.container.querySelector('img')).not.toBeNull()
 })

@@ -1,5 +1,5 @@
 import type { App, BrowserWindow } from 'electron'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { focusExistingMainWindow } from './focus-existing-window'
 
 type FakeWindowOptions = {
@@ -78,6 +78,12 @@ function makeTimer(): {
   }
 }
 
+// These cases exercise foreground behavior against Electron mocks.
+beforeEach(() => {
+  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
+  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+})
 afterEach(() => vi.unstubAllEnvs())
 
 describe('focusExistingMainWindow', () => {

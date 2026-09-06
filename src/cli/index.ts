@@ -15,7 +15,7 @@ import {
   resolveHostFlagEnvironmentId
 } from './execution-host-flag'
 import { listSshTargets } from './host-selector-alternatives'
-import { reportCliError } from './format'
+import { reportCliError } from './cli-error'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
