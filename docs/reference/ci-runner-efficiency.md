@@ -21,8 +21,9 @@ billing minutes or queue time. This small sample is not a historical average.
   default Debian/RPM compression is xz. PR artifacts are inspected on the same
   runner, so their download size offers no benefit. Keep all AppImage, Debian,
   RPM, payload, launcher, and shutdown checks. Release compression is unchanged.
-  Compression savings need a hosted run; do not equate the full packaging step
-  with removable compression time.
+  Hosted validation in [33999422341](https://github.com/stablyai/orca/actions/runs/33999422341)
+  reduced the package-build step to 2m13s and the full Linux job to 6m17s, with
+  all existing checks passing. This is a small observational sample.
 - Cancel superseded Mobile Checks and Skill update round-trip PR runs. The
   skill matrix has 13 jobs. Preserve non-cancelling main/merge-group skill runs,
   with separate concurrency groups per event.
@@ -35,6 +36,21 @@ native caches, one shared E2E build, PR cancellation, incremental TypeScript
 caching, and changed-spec E2E routing. Increasing shards would increase setup
 work and simultaneous runner demand. Do not adjust the count without comparing
 critical-path time and aggregate job time on the same commit.
+
+## Follow-up savings
+
+- Move the hourly main/release freshness lookup to a five-minute Ubuntu
+  preflight without a checkout. In unchanged run
+  [33986205749](https://github.com/stablyai/orca/actions/runs/33986205749),
+  Blacksmith macOS was occupied for 40 seconds, including a 30-second checkout,
+  before skipping. The new job-level gate avoids that Mac allocation. Actual
+  builds gain an Ubuntu scheduling hop; pin the Mac checkout and downstream
+  Windows identity to the SHA that the preflight checked.
+- Avoid global `npm install -g node-gyp` for validated Linux Node-runtime cache
+  hits. Use the existing native-module load/provenance check before skipping;
+  misses, broken addons, and Electron jobs still install the rebuild toolchain.
+  The action file participates in cache keys, so this rollout creates fresh
+  native caches once. No measured warm-cache seconds are claimed yet.
 
 ## Runner recommendations
 
@@ -65,6 +81,24 @@ See [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product
    is relative to repository activity (hardware speeds differ).
    See [pricing](https://ubicloud.com/docs/about/pricing) and
    [setup](https://ubicloud.com/docs/github-actions-integration/quickstart).
+
+### A bounded Ubicloud candidate
+
+The Linux leg of `performance-contracts.yml` took 48 seconds in
+[33994756657](https://github.com/stablyai/orca/actions/runs/33994756657).
+Its daily schedule and 20-minute timeout make it a small candidate: 31 ordinary
+scheduled attempts permit at most 620 job-runtime minutes, before runner
+startup/cleanup billing. Actual timings on Ubicloud's 2-vCPU hardware still need
+measurement; the GitHub timing is only a sizing reference.
+
+If enabled later, route only the first attempt of the scheduled Linux job to
+Ubicloud; keep PRs, manual dispatches, reruns, and macOS/Windows on GitHub. This
+avoids spending the allowance on unpredictable PR volume. Check other account
+usage and available credit before enabling; a workflow timeout is not an
+account-wide billing cap. On September 5, the organization's GitHub App
+installation list contained Blacksmith but no Ubicloud installation, so this
+follow-up leaves runner selection on GitHub rather than queueing work against
+an unprovisioned label.
 
 ## Machines that also run coding agents
 
