@@ -456,7 +456,10 @@ describe('LocalPtyProvider', () => {
           cols: 80,
           rows: 24,
           cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
-          env: { ORCA_HERMES_STARTUP_QUERY: 'line one\nline two' }
+          env: {
+            ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
+            ORCA_AUTOMATION_COMMAND: 'echo first\necho second'
+          }
         })
       } finally {
         if (savedCodexHome === undefined) {
@@ -478,6 +481,7 @@ describe('LocalPtyProvider', () => {
         expect.arrayContaining([
           'ORCA_TERMINAL_HANDLE/u',
           'ORCA_HERMES_STARTUP_QUERY',
+          'ORCA_AUTOMATION_COMMAND',
           POWERLEVEL10K_WIZARD_DISABLE_ENV
         ])
       )

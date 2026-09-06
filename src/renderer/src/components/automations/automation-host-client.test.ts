@@ -7,10 +7,12 @@ import {
   runAutomationNowForTarget,
   updateAutomationForTarget
 } from './automation-host-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { AUTOMATION_SHELL_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
+  callRuntimeRpc: vi.fn(),
+  assertRuntimeEnvironmentCapability: vi.fn()
 }))
 
 const mockApi = {
@@ -128,6 +130,38 @@ describe('automation host client', () => {
       { id: automation.id },
       { timeoutMs: 15_000 }
     )
+  })
+
+  it('checks host support before saving a blank-terminal automation', async () => {
+    const automation = makeAutomation({ agentId: null })
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automation })
+
+    await createAutomationForTarget(automation)
+
+    expect(assertRuntimeEnvironmentCapability).toHaveBeenCalledWith(
+      'gpu',
+      AUTOMATION_SHELL_RUNTIME_CAPABILITY,
+      expect.stringContaining('newer Orca server')
+    )
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      expect.anything(),
+      'automation.create',
+      expect.objectContaining({ agentId: null }),
+      expect.anything()
+    )
+  })
+
+  it('does not send a blank-terminal update to an older host or fall back to local creation', async () => {
+    vi.mocked(assertRuntimeEnvironmentCapability).mockRejectedValueOnce(
+      new Error('Update the host')
+    )
+
+    await expect(updateAutomationForTarget(makeAutomation(), { agentId: null })).rejects.toThrow(
+      'Update the host'
+    )
+
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.automations.update).not.toHaveBeenCalled()
   })
 
   it('updates and manually runs SSH-host automations through the remote server that listed them', async () => {

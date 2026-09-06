@@ -496,7 +496,7 @@ export function useAutomationDispatchEvents(): void {
             checkCurrentStatus()
           }
           const dispatchStartedAt = Date.now()
-          if (automation.reuseSession) {
+          if (automation.reuseSession && automation.agentId !== null) {
             const reusableSession = findReusableAutomationSession({
               automationId: automation.id,
               agentId: automation.agentId,
@@ -594,7 +594,11 @@ export function useAutomationDispatchEvents(): void {
               latestAssistantMessage =
                 payload.lastAssistantMessage?.trim() || latestAssistantMessage
               // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
-              if (payload.state !== 'done' || payload.sessionBoundary === true) {
+              if (
+                automation.agentId === null ||
+                payload.state !== 'done' ||
+                payload.sessionBoundary === true
+              ) {
                 return
               }
               handleAgentDone()
@@ -620,7 +624,9 @@ export function useAutomationDispatchEvents(): void {
             releaseTerminalOwnership()
           }
           const launchedTabId = result.tabId
-          observeAgentStatus(result.paneKey, dispatchStartedAt)
+          if (automation.agentId !== null) {
+            observeAgentStatus(result.paneKey, dispatchStartedAt)
+          }
           try {
             await markDispatchResult({
               runId: run.id,

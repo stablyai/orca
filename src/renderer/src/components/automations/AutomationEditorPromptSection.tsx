@@ -18,6 +18,13 @@ export function AutomationEditorPromptSection({
   onDismiss
 }: AutomationEditorPromptSectionProps): React.JSX.Element {
   const titleRef = React.useRef<HTMLTextAreaElement>(null)
+  const isShellCommand = draft.agentId === null
+  const promptLabel = isShellCommand
+    ? translate(
+        'auto.components.automations.AutomationEditorPromptSection.shellCommand',
+        'Shell command'
+      )
+    : translate('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')
   const namePlaceholder = translate(
     'auto.components.automations.AutomationEditorDialogHeader.1d9826933e',
     'Weekday repo audit'
@@ -74,30 +81,43 @@ export function AutomationEditorPromptSection({
         </Tooltip>
       </div>
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {translate('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
+        {promptLabel}
       </div>
       <AutomationEditorPromptEditor
         value={draft.prompt}
-        placeholder={translate(
-          'auto.components.automations.AutomationEditorDialog.6d778190b7',
-          'Run the weekly dependency audit and summarize risky changes.'
-        )}
-        ariaLabel={translate(
-          'auto.components.automations.AutomationEditorDialog.058c23cb3f',
-          'Prompt'
-        )}
+        placeholder={
+          isShellCommand
+            ? translate(
+                'auto.components.automations.AutomationEditorPromptSection.shellCommandPlaceholder',
+                'echo "Hello from Orca"'
+              )
+            : translate(
+                'auto.components.automations.AutomationEditorDialog.6d778190b7',
+                'Run the weekly dependency audit and summarize risky changes.'
+              )
+        }
+        ariaLabel={promptLabel}
         onChange={(prompt) => onDraftChange((current) => ({ ...current, prompt }))}
         onDismiss={onDismiss}
       />
       <p className="mt-2 text-xs text-muted-foreground">
-        {translate(
-          'auto.components.automations.AutomationEditorDialog.827b25a81e',
-          'Supports skills, file paths, and built-in commands like'
-        )}{' '}
-        <code className="rounded bg-muted px-1 font-mono text-[11px]">
-          {translate('auto.components.automations.AutomationEditorDialog.a4ac8fcc62', '/goal')}
-        </code>
-        .
+        {isShellCommand ? (
+          translate(
+            'auto.components.automations.AutomationEditorPromptSection.shellCommandHint',
+            'Runs a shell command on the selected host without an AI agent.'
+          )
+        ) : (
+          <>
+            {translate(
+              'auto.components.automations.AutomationEditorDialog.827b25a81e',
+              'Supports skills, file paths, and built-in commands like'
+            )}{' '}
+            <code className="rounded bg-muted px-1 font-mono text-[11px]">
+              {translate('auto.components.automations.AutomationEditorDialog.a4ac8fcc62', '/goal')}
+            </code>
+            .
+          </>
+        )}
       </p>
     </div>
   )

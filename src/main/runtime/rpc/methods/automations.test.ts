@@ -3,6 +3,7 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { AUTOMATION_METHODS } from './automations'
+import { AUTOMATION_SHELL_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -97,6 +98,59 @@ describe('automation RPC methods', () => {
     expect(runtime.deleteAutomation).toHaveBeenCalledWith('auto-1')
     expect(runtime.runAutomationNow).toHaveBeenCalledWith('auto-1')
     expect(runtime.listAutomationRuns).toHaveBeenCalledWith('auto-1')
+  })
+
+  it('preserves an explicit blank terminal when creating and updating an automation', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', agentId: null }),
+      updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', agentId: null })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    const created = await dispatcher.dispatch(
+      makeRequest('automation.create', {
+        name: 'Shell check',
+        prompt: 'echo ready',
+        agentId: null,
+        repo: 'repo-1',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    )
+    const updated = await dispatcher.dispatch(
+      makeRequest('automation.update', { id: 'auto-1', updates: { agentId: null } })
+    )
+
+    expect(created).toMatchObject({ ok: true })
+    expect(updated).toMatchObject({ ok: true })
+    expect(runtime.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: null })
+    )
+    expect(runtime.updateAutomation).toHaveBeenCalledWith('auto-1', { agentId: null })
+  })
+
+  it('does not publish nullable agent IDs to paired clients that predate shell automations', () => {
+    const automations = [
+      { id: 'agent', agentId: 'codex' },
+      { id: 'shell', agentId: null }
+    ]
+    const runtime = {
+      listAutomations: () => automations,
+      showAutomation: () => automations[1]
+    } as unknown as OrcaRuntimeService
+    const context = { runtime, clientKind: 'runtime' as const, clientCapabilities: [] }
+    const list = AUTOMATION_METHODS.find((method) => method.name === 'automation.list')!
+    const show = AUTOMATION_METHODS.find((method) => method.name === 'automation.show')!
+
+    expect(list.handler(undefined, context)).toEqual({ automations: [automations[0]] })
+    expect(() => show.handler({ id: 'shell' }, context)).toThrow('newer Orca client')
+    expect(
+      list.handler(undefined, {
+        ...context,
+        clientCapabilities: [AUTOMATION_SHELL_RUNTIME_CAPABILITY]
+      })
+    ).toEqual({ automations })
   })
 
   it('rejects unknown providers and invalid schedules', async () => {

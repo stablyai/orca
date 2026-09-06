@@ -182,7 +182,7 @@ export function formatAutomationList(result: { automations: Automation[] }): str
   return result.automations
     .map((automation) => {
       const status = automation.enabled ? 'enabled' : 'disabled'
-      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
+      return `${automation.id}  ${automation.name}  ${automation.agentId ?? 'blank'}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
     })
     .join('\n\n')
 }
@@ -203,7 +203,7 @@ export function formatAutomationShow(result: { automation: Automation }): string
   return [
     `id: ${automation.id}`,
     `name: ${automation.name}`,
-    `provider: ${automation.agentId}`,
+    `provider: ${automation.agentId ?? 'blank'}`,
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,

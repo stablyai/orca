@@ -85,6 +85,80 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     })
   })
 
+  it('creates blank-terminal commands on the owning runtime without an agent session', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({ agent: null, worktreeId: 'wt-1', prompt: 'echo ready' })
+
+    expect(mockSpawn).not.toHaveBeenCalled()
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'terminal.create',
+        params: expect.objectContaining({
+          command: 'exec "$SHELL" -c "$ORCA_AUTOMATION_COMMAND"',
+          env: expect.objectContaining({ ORCA_AUTOMATION_COMMAND: 'echo ready' }),
+          presentation: 'background'
+        })
+      })
+    )
+    expect(mockRuntimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.createAgentSession' })
+    )
+    expect(mockMarkTrusted).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])(
+    'requires confirmed remote process exit before completion (satisfied=%s)',
+    async (satisfied) => {
+      useRemoteAgentBackgroundRuntime(state)
+      const onExit = vi.fn()
+      mockRuntimeEnvironmentCall.mockImplementation(async ({ method }: { method: string }) => ({
+        ok: true,
+        result:
+          method === 'terminal.wait'
+            ? { wait: { satisfied, exitCode: 0 } }
+            : { terminal: { handle: 'terminal-1', worktreeId: 'wt-1', title: null } }
+      }))
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+      await launchAgentBackgroundSession({
+        agent: null,
+        worktreeId: 'wt-1',
+        prompt: 'echo ready',
+        onExit
+      })
+      await vi.waitFor(() =>
+        expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.wait' })
+        )
+      )
+
+      if (satisfied) {
+        await vi.waitFor(() => expect(onExit).toHaveBeenCalledOnce())
+      } else {
+        expect(onExit).not.toHaveBeenCalled()
+      }
+    }
+  )
+
+  it('routes blank-terminal commands to SSH without agent metadata', async () => {
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({ agent: null, worktreeId: 'wt-1', prompt: 'echo ready' })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'ssh-1',
+        command: 'exec "$SHELL" -c "$ORCA_AUTOMATION_COMMAND"',
+        env: expect.objectContaining({ ORCA_AUTOMATION_COMMAND: 'echo ready' })
+      })
+    )
+    expect(mockSpawn.mock.calls[0]?.[0].launchAgent).toBeUndefined()
+  })
+
   it('closes a runtime terminal when its worktree disappears before creation resolves', async () => {
     useRemoteAgentBackgroundRuntime(state)
     let resolveCreate!: (result: {

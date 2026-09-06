@@ -7,7 +7,8 @@ import {
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { defineMethod, type RpcMethod } from '../core'
+import { AUTOMATION_SHELL_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { defineMethod, InvalidArgumentError, type RpcContext, type RpcMethod } from '../core'
 import {
   OptionalBoolean,
   OptionalPlainString,
@@ -103,7 +104,7 @@ const AutomationCreate = z.object({
   name: requiredString('Missing automation name'),
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,
-  agentId: TuiAgent,
+  agentId: TuiAgent.nullable(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -123,7 +124,7 @@ const AutomationUpdateFields = z.object({
   name: OptionalString,
   prompt: OptionalString,
   precheck: AutomationPrecheck,
-  agentId: TuiAgent.optional(),
+  agentId: TuiAgent.nullable().optional(),
   runContext: WorkspaceRunContext,
   sourceContext: TaskSourceContext,
   repo: OptionalString,
@@ -145,30 +146,63 @@ const AutomationUpdate = z.object({
   updates: AutomationUpdateFields
 })
 
+function supportsShellAutomations(context: RpcContext): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AUTOMATION_SHELL_RUNTIME_CAPABILITY) === true
+  )
+}
+
+function assertShellAutomationSupport(context: RpcContext): void {
+  if (!supportsShellAutomations(context)) {
+    throw new InvalidArgumentError('Blank-terminal automations require a newer Orca client.')
+  }
+}
+
 export const AUTOMATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'automation.list',
     params: null,
-    handler: (_params, { runtime }) => ({ automations: runtime.listAutomations() })
+    handler: (_params, context) => ({
+      automations: context.runtime
+        .listAutomations()
+        .filter((automation) => automation.agentId !== null || supportsShellAutomations(context))
+    })
   }),
   defineMethod({
     name: 'automation.show',
     params: AutomationId,
-    handler: (params, { runtime }) => ({ automation: runtime.showAutomation(params.id) })
+    handler: (params, context) => {
+      const automation = context.runtime.showAutomation(params.id)
+      if (automation.agentId === null) {
+        assertShellAutomationSupport(context)
+      }
+      return { automation }
+    }
   }),
   defineMethod({
     name: 'automation.create',
     params: AutomationCreate,
-    handler: async (params, { runtime }) => ({
-      automation: await runtime.createAutomation(params)
-    })
+    handler: async (params, context) => {
+      if (params.agentId === null) {
+        assertShellAutomationSupport(context)
+      }
+      return { automation: await context.runtime.createAutomation(params) }
+    }
   }),
   defineMethod({
     name: 'automation.update',
     params: AutomationUpdate,
-    handler: async (params, { runtime }) => ({
-      automation: await runtime.updateAutomation(params.id, params.updates)
-    })
+    handler: async (params, context) => {
+      if (
+        !supportsShellAutomations(context) &&
+        (params.updates.agentId === null ||
+          context.runtime.showAutomation(params.id).agentId === null)
+      ) {
+        assertShellAutomationSupport(context)
+      }
+      return { automation: await context.runtime.updateAutomation(params.id, params.updates) }
+    }
   }),
   defineMethod({
     name: 'automation.delete',

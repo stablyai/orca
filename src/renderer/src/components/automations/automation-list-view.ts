@@ -27,7 +27,7 @@ export type AutomationListViewItem =
       enabled: boolean
       lastRunAt: number | null
       lastRun: AutomationLastRunSnapshot
-      agentId: TuiAgent
+      agentId: TuiAgent | null
       automation: Automation
     }
   | {

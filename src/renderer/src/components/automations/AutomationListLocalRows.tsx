@@ -1,5 +1,5 @@
 import React from 'react'
-import { MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pause, Pencil, Play, Terminal, Trash2 } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -210,7 +210,11 @@ export function AutomationListLocalRows({
                       className="flex items-center justify-center text-muted-foreground"
                       aria-label={agentTooltipLabel}
                     >
-                      <AgentIcon agent={automation.agentId} size={16} />
+                      {automation.agentId === null ? (
+                        <Terminal className="size-4" />
+                      ) : (
+                        <AgentIcon agent={automation.agentId} size={16} />
+                      )}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="top" sideOffset={4}>

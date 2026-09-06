@@ -86,6 +86,44 @@ describe('Store', () => {
     expect(persisted.automations[0].baseBranch).toBeNull()
   })
 
+  it('round-trips a blank-terminal automation and clears agent-only session reuse', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Shell check',
+      prompt: 'echo ready',
+      agentId: null,
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      reuseSession: true,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 1
+    })
+
+    expect(automation).toMatchObject({ agentId: null, reuseSession: false })
+    expect(
+      store.updateAutomation(automation.id, { agentId: 'claude', reuseSession: true })
+    ).toMatchObject({ agentId: 'claude', reuseSession: true })
+    expect(store.updateAutomation(automation.id, { agentId: null })).toMatchObject({
+      agentId: null,
+      reuseSession: false
+    })
+    expect(store.updateAutomation(automation.id, { agentId: undefined }).agentId).toBeNull()
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.listAutomations()).toEqual([
+      expect.objectContaining({
+        id: automation.id,
+        agentId: null,
+        prompt: 'echo ready',
+        reuseSession: false
+      })
+    ])
+  })
+
   it('persists session reuse only for existing-workspace automations', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

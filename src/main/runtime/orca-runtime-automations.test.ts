@@ -102,6 +102,35 @@ describe('OrcaRuntimeService automation methods', () => {
     expect(automation.id).toBe('auto-1')
   })
 
+  it('launches a blank-terminal command on the resolved workspace host without an agent', async () => {
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const scope = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
+    }
+    vi.spyOn(scope, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      id: 'folder:remote',
+      path: '/srv/folder',
+      connectionId: 'ssh-1',
+      repo: null
+    })
+    const createTerminal = vi
+      .spyOn(runtime, 'createTerminal')
+      .mockResolvedValue({ handle: 'term-shell' } as never)
+
+    await runtime.launchAgentTerminal('id:folder:remote', {
+      agent: null,
+      prompt: 'echo ready',
+      title: 'Shell check'
+    })
+
+    expect(createTerminal).toHaveBeenCalledWith('id:folder:remote', {
+      command: 'exec "$SHELL" -c "$ORCA_AUTOMATION_COMMAND"',
+      env: { ORCA_AUTOMATION_COMMAND: 'echo ready' },
+      startupCommandDelivery: 'shell-ready',
+      title: 'Shell check'
+    })
+  })
+
   it('updates and deletes existing automations through the shared store', async () => {
     const store = makeStore([existingAutomation])
     const runtime = new OrcaRuntimeService(store as never)

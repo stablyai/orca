@@ -107,18 +107,26 @@ function getOptionalDayFlag(flags: Map<string, string | boolean>): number | unde
   return day
 }
 
-function getProviderFlag(flags: Map<string, string | boolean>): TuiAgent {
+function getProviderFlag(flags: Map<string, string | boolean>): TuiAgent | null {
   const provider = getRequiredStringFlag(flags, 'provider')
+  if (provider === 'blank') {
+    return null
+  }
   if (!isTuiAgent(provider)) {
     throw new RuntimeClientError('invalid_argument', `Unknown provider: ${provider}`)
   }
   return provider
 }
 
-function getOptionalProviderFlag(flags: Map<string, string | boolean>): TuiAgent | undefined {
+function getOptionalProviderFlag(
+  flags: Map<string, string | boolean>
+): TuiAgent | null | undefined {
   const provider = getOptionalStringFlag(flags, 'provider')
   if (provider === undefined) {
     return undefined
+  }
+  if (provider === 'blank') {
+    return null
   }
   if (!isTuiAgent(provider)) {
     throw new RuntimeClientError('invalid_argument', `Unknown provider: ${provider}`)

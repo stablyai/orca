@@ -396,6 +396,21 @@ describe('PtyHandler', () => {
       expect(spawnEnv.WSLENV?.split(':')).toContain('HISTFILE')
     })
 
+    it('imports a shell automation command into the WSL guest', async () => {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        env: { ORCA_AUTOMATION_COMMAND: 'echo first\necho second', WSLENV: 'KEEP/u' }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+      expect(spawnEnv.ORCA_AUTOMATION_COMMAND).toBe('echo first\necho second')
+      expect(spawnEnv.WSLENV?.split(':')).toEqual(
+        expect.arrayContaining(['KEEP/u', 'ORCA_AUTOMATION_COMMAND'])
+      )
+    })
+
     // The injected file lives on the relay host, so the existing host-side
     // unlink is the deletion counterpart — no distro-scoped root is involved.
     it('deletes the injected file through the ordinary relay history deletion', async () => {

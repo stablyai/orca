@@ -2747,11 +2747,11 @@ void app.whenReady().then(async () => {
     headlessDispatcher: isServeMode
       ? async ({ automation, run, target }) => {
           const terminalSnapshotLimit = 2_000
-          let terminalHandle: string
+          let terminalHandle = ''
           let terminalSessionId: string | null = null
           let terminalPaneKey: string | null = null
           let terminalPtyId: string | null = null
-          let workspaceId: string
+          let workspaceId = automation.workspaceId ?? ''
           let workspaceDisplayName: string | null = null
 
           if (automation.workspaceMode === 'new_per_run') {
@@ -2768,24 +2768,22 @@ void app.whenReady().then(async () => {
             terminalPtyId = created.startupTerminal?.ptyId ?? null
             workspaceId = created.worktree.id
             workspaceDisplayName = created.worktree.displayName ?? null
-            if (!terminalHandle) {
+            if (automation.agentId !== null && !terminalHandle) {
               throw new Error(
                 created.warning ||
                   'Automation workspace was created, but no agent terminal started.'
               )
             }
-          } else {
-            if (!automation.workspaceId) {
+          }
+          if (automation.workspaceMode === 'existing' || automation.agentId === null) {
+            if (!workspaceId) {
               throw new Error('The target workspace is no longer available.')
             }
-            const terminal = await runtimeService.launchAgentTerminal(
-              `id:${automation.workspaceId}`,
-              {
-                agent: automation.agentId,
-                prompt: automation.prompt,
-                title: run.title
-              }
-            )
+            const terminal = await runtimeService.launchAgentTerminal(`id:${workspaceId}`, {
+              agent: automation.agentId,
+              prompt: automation.prompt,
+              title: run.title
+            })
             terminalHandle = terminal.handle
             terminalSessionId = terminal.tabId ?? null
             terminalPaneKey = terminal.paneKey ?? null
@@ -2797,14 +2795,14 @@ void app.whenReady().then(async () => {
 
           const completion = (async () => {
             const wait = await runtimeService.waitForTerminal(terminalHandle, {
-              condition: 'tui-idle'
+              condition: automation.agentId === null ? 'exit' : 'tui-idle'
             })
             const read = await runtimeService.readTerminal(terminalHandle, {
               limit: terminalSnapshotLimit
             })
             const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
             snapshotBuffer.append(read.tail.join('\n'))
-            if (wait.satisfied) {
+            if (wait.satisfied && (automation.agentId !== null || wait.exitCode === 0)) {
               return {
                 status: 'completed' as const,
                 outputSnapshot: snapshotBuffer.snapshot(),
@@ -2814,9 +2812,14 @@ void app.whenReady().then(async () => {
             return {
               status: 'dispatch_failed' as const,
               outputSnapshot: snapshotBuffer.snapshot(),
-              error: wait.blockedReason
-                ? `Automation agent is blocked: ${wait.blockedReason}.`
-                : 'Automation agent did not report completion.'
+              error:
+                automation.agentId === null
+                  ? wait.exitCode !== null
+                    ? `Automation process exited with code ${wait.exitCode}.`
+                    : 'Automation process did not report completion.'
+                  : wait.blockedReason
+                    ? `Automation agent is blocked: ${wait.blockedReason}.`
+                    : 'Automation agent did not report completion.'
             }
           })()
 

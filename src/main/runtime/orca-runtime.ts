@@ -545,8 +545,10 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentResumeStartupPlan,
-  buildAgentStartupPlan
+  buildAgentStartupPlan,
+  resolveStartupShell
 } from '../../shared/tui-agent-startup'
+import { buildAutomationShellStartup } from '../../shared/automation-shell-startup'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
   isAgentForegroundWrapperProcess,
@@ -28601,8 +28603,21 @@ export class OrcaRuntimeService {
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: { agent: TuiAgent | null; prompt: string; title?: string }
   ): Promise<RuntimeTerminalCreate> {
+    if (opts.agent === null) {
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+      const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+      const shell = resolveLocalWindowsAgentStartupShell({
+        platform,
+        isRemote: Boolean(workspace.connectionId),
+        terminalWindowsShell: this.store?.getSettings().terminalWindowsShell
+      })
+      return await this.createTerminal(worktreeSelector, {
+        ...buildAutomationShellStartup(opts.prompt, resolveStartupShell(platform, shell)),
+        title: opts.title
+      })
+    }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo) {

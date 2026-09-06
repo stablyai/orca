@@ -1,9 +1,10 @@
 import React from 'react'
-import { Pencil, Pause, Play, Trash2 } from 'lucide-react'
+import { Pencil, Pause, Play, Terminal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/lib/agent-catalog'
+import { getAgentLabel } from './automation-draft-model'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
@@ -125,8 +126,14 @@ export function AutomationDetail({
       : usageSummary.unavailableRuns > 0
         ? 'Unavailable'
         : 'No runs'
-  const agentLabel =
-    getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+  const agentLabel = getAgentLabel(automation.agentId)
+  const promptLabel =
+    automation.agentId === null
+      ? translate(
+          'auto.components.automations.AutomationEditorPromptSection.shellCommand',
+          'Shell command'
+        )
+      : translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
@@ -273,7 +280,11 @@ export function AutomationDetail({
             {translate('auto.components.automations.AutomationDetail.2df8970cd5', 'Agent')}
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
-            <AgentIcon agent={automation.agentId} size={16} />
+            {automation.agentId === null ? (
+              <Terminal className="size-4" />
+            ) : (
+              <AgentIcon agent={automation.agentId} size={16} />
+            )}
             <span className="truncate">{agentLabel}</span>
           </div>
         </div>
@@ -302,13 +313,11 @@ export function AutomationDetail({
       </div>
 
       <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">
-          {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
-        </div>
+        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">{promptLabel}</div>
         <div className="px-3 py-3">
           <div className="min-w-0">
             <div className="text-[11px] font-medium uppercase text-muted-foreground">
-              {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
+              {promptLabel}
             </div>
             <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
               {automation.prompt}

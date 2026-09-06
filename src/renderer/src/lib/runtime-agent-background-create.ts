@@ -17,18 +17,36 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   worktreeId: string
   tabId: string
   leafId: string
-  agent: TuiAgent
+  agent: TuiAgent | null
   prompt?: string
   sessionOptions?: Record<string, SessionOptionValue>
   legacy: {
     command: string
     env: Record<string, string>
     startupCommandDelivery?: StartupCommandDelivery
-    launchConfig: SleepingAgentLaunchConfig
-    launchToken: string
+    launchConfig?: SleepingAgentLaunchConfig
+    launchToken?: string
     title?: string
   }
 }): Promise<{ terminal: RuntimeTerminalCreate }> {
+  if (args.agent === null) {
+    return await callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
+      { kind: 'environment', environmentId: args.environmentId },
+      'terminal.create',
+      {
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
+        command: args.legacy.command,
+        env: args.legacy.env,
+        startupCommandDelivery: args.legacy.startupCommandDelivery,
+        ...(args.legacy.title ? { title: args.legacy.title } : {}),
+        tabId: args.tabId,
+        leafId: args.leafId,
+        presentation: 'background'
+      },
+      { timeoutMs: 15_000 }
+    )
+  }
+  const agent = args.agent
   const operation = createAgentSessionCreateOperation()
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
   return await runRemoteAgentSessionLaunch({
@@ -41,7 +59,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           withAgentSessionCreateOperationId(
             {
               worktree: toRuntimeWorktreeSelector(args.worktreeId),
-              agent: args.agent,
+              agent,
               ...(args.prompt
                 ? { prompt: args.prompt, promptDelivery: 'auto-submit' as const }
                 : {}),
@@ -68,7 +86,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
           env: args.legacy.env,
           launchConfig: args.legacy.launchConfig,
           launchToken: args.legacy.launchToken,
-          launchAgent: args.agent,
+          launchAgent: agent,
           ...(args.legacy.title ? { title: args.legacy.title } : {}),
           tabId: args.tabId,
           leafId: args.leafId,

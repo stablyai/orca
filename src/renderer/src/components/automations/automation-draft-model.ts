@@ -1,4 +1,5 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
+import { translate } from '@/i18n/i18n'
 import type { AutomationPrecheck } from '../../../../shared/automations-types'
 import { buildAutomationCronSchedule } from '../../../../shared/automation-schedules'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -47,6 +48,8 @@ export function buildHermesCronSchedule(draft: AutomationDraft): string {
   })
 }
 
-export function getAgentLabel(agentId: string): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
+export function getAgentLabel(agentId: string | null): string {
+  return agentId === null
+    ? translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
+    : (getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId)
 }

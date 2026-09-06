@@ -160,11 +160,12 @@ export default function AutomationsPage(): React.JSX.Element {
   const worktreeMap = useWorktreeMap()
   const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
   const defaultAgent =
-    settings?.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
-      ? settings.defaultTuiAgent
-      : (enabledAgents[0] ?? AGENTS[0])
+    settings?.defaultTuiAgent === 'blank'
+      ? null
+      : settings?.defaultTuiAgent &&
+          isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
+        ? settings.defaultTuiAgent
+        : (enabledAgents[0] ?? AGENTS[0])
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
@@ -926,6 +927,8 @@ export default function AutomationsPage(): React.JSX.Element {
         return false
       }
       return hasAutomationRunCompletionEvidence({
+        agentId:
+          automations.find((automation) => automation.id === run.automationId)?.agentId ?? null,
         run,
         dispatchedAt,
         agentStatusByPaneKey,
@@ -960,7 +963,7 @@ export default function AutomationsPage(): React.JSX.Element {
           inFlight.delete(run.id)
         }
       })
-  }, [agentStatusByPaneKey, retainedAgentsByPaneKey, refresh, runs])
+  }, [agentStatusByPaneKey, automations, retainedAgentsByPaneKey, refresh, runs])
 
   useEffect(() => {
     if (!draft.projectId) {
@@ -1270,6 +1273,7 @@ export default function AutomationsPage(): React.JSX.Element {
     if (
       editingAutomationId === null &&
       !isHermesSave &&
+      draft.agentId !== null &&
       !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
     ) {
       toast.error(

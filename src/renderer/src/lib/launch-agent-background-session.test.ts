@@ -166,6 +166,38 @@ describe('launchAgentBackgroundSession', () => {
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
   })
 
+  it('runs a blank-terminal automation without agent launch metadata or trust checks', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    const onExit = vi.fn()
+    const result = await launchAgentBackgroundSession({
+      agent: null,
+      worktreeId: 'wt-1',
+      prompt: 'printf "ready\\n"',
+      title: 'Shell check',
+      onExit
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'exec "$SHELL" -c "$ORCA_AUTOMATION_COMMAND"',
+        env: expect.objectContaining({ ORCA_AUTOMATION_COMMAND: 'printf "ready\\n"' }),
+        worktreeId: 'wt-1',
+        connectionId: null
+      })
+    )
+    const spawn = mockSpawn.mock.calls[0]?.[0]
+    expect(spawn.launchAgent).toBeUndefined()
+    expect(spawn.launchConfig).toBeUndefined()
+    expect(spawn.launchToken).toBeUndefined()
+    expect(spawn.env.ORCA_AGENT_LAUNCH_TOKEN).toBeUndefined()
+    expect(mockRegisterAgentLaunchConfig).not.toHaveBeenCalled()
+    expect(mockMarkTrusted).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ ptyId: 'pty-1', startupPlan: null })
+
+    mockSubscribeToPtyExit.mock.calls[0]?.[1](7)
+    expect(onExit).toHaveBeenCalledWith('pty-1', 7)
+  })
+
   it('does not create or mount the tab while the explicit PTY spawn is unresolved', async () => {
     let resolveSpawn!: (result: { id: string }) => void
     mockSpawn.mockReturnValueOnce(

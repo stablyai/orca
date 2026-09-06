@@ -15081,7 +15081,10 @@
           "fc089e5fde": "Grace"
         },
         "AutomationEditorPromptSection": {
-          "a7c3e91b04": "Edit name"
+          "a7c3e91b04": "Edit name",
+          "shellCommand": "Shell command",
+          "shellCommandPlaceholder": "echo \"Hello from Orca\"",
+          "shellCommandHint": "Runs a shell command on the selected host without an AI agent."
         },
         "AutomationPrecheckFields": {
           "d2a2ac89ac": "10 min",

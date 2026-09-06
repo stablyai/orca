@@ -13,29 +13,29 @@ type RegisterArgs = Parameters<Store['registerAgentLaunchConfig']>
 /** Reserves env-stable tab and pane identities before spawning the PTY. */
 export function reserveAgentBackgroundSessionIdentity(args: {
   store: Store
-  agentType: AgentType
+  agentType: AgentType | null
   worktreeId: string
-  launchConfig: RegisterArgs[1]
+  launchConfig: RegisterArgs[1] | undefined
   env: Record<string, string> | undefined
 }): {
   reservedTabId: string
   leafId: string
   paneKey: PaneKey
-  launchToken: string
-  launchRegistration: NonNullable<RegisterArgs[2]>
+  launchToken: string | undefined
+  launchRegistration: RegisterArgs[2]
   paneEnv: Record<string, string>
 } {
   const reservedTabId = createBrowserUuid()
   const leafId = createBrowserUuid()
   const paneKey = makePaneKey(reservedTabId, leafId)
-  const launchToken = createBrowserUuid()
-  const launchRegistration = {
-    agentType: args.agentType,
-    launchToken,
-    tabId: reservedTabId,
-    leafId
+  const launchToken = args.agentType !== null ? createBrowserUuid() : undefined
+  const launchRegistration =
+    args.agentType !== null && launchToken
+      ? { agentType: args.agentType, launchToken, tabId: reservedTabId, leafId }
+      : undefined
+  if (args.launchConfig && launchRegistration) {
+    args.store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
   }
-  args.store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
   return {
     reservedTabId,
     leafId,
@@ -47,7 +47,7 @@ export function reserveAgentBackgroundSessionIdentity(args: {
       ORCA_PANE_KEY: paneKey,
       ORCA_TAB_ID: reservedTabId,
       ORCA_WORKTREE_ID: args.worktreeId,
-      ORCA_AGENT_LAUNCH_TOKEN: launchToken
+      ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
     }
   }
 }
@@ -59,8 +59,8 @@ export async function adoptAgentBackgroundSessionTab(args: {
   reservedTabId: string
   ptyId: string
   paneKey: PaneKey
-  launchConfig: RegisterArgs[1]
-  launchRegistration: NonNullable<RegisterArgs[2]>
+  launchConfig: RegisterArgs[1] | undefined
+  launchRegistration: RegisterArgs[2]
   runtimeTarget: RuntimeClientTarget
   runtimeTerminalHandle: string | null
   onRetire: () => void
@@ -101,7 +101,9 @@ export async function adoptAgentBackgroundSessionTab(args: {
     recordInteraction: false
   })
   const paneKey = args.paneKey
-  store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+  if (args.launchConfig && launchRegistration) {
+    store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+  }
   const terminalOwnership = bindAutomationTerminal(
     tab,
     paneKey,

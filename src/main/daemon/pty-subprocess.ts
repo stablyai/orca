@@ -79,6 +79,7 @@ import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { AUTOMATION_SHELL_COMMAND_ENV } from '../../shared/automation-shell-startup'
 import type { TuiAgent } from '../../shared/tui-agent'
 import {
   expandWindowsEnvironmentVariables,
@@ -827,6 +828,9 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
       if (env.CLAUDE_CONFIG_DIR) {
         // Why: non-default env vars need WSLENV import to cross Windows wsl.exe into the Linux side.
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
+      }
+      if (env[AUTOMATION_SHELL_COMMAND_ENV] !== undefined) {
+        addWslEnvKeys(env, [AUTOMATION_SHELL_COMMAND_ENV])
       }
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         // Why: wsl.exe drops custom Windows env vars unless named in WSLENV.
