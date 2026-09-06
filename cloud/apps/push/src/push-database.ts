@@ -116,7 +116,9 @@ class PostgresTransaction implements PushDatabase {
 
 function retryablePostgresTransactionError(error: unknown): boolean {
   const code = String((error as { code?: unknown }).code)
-  return code === '40P01' || code === '40001' || code === '55P03'
+  // 57014 is the pool statement_timeout firing. It aborts the transaction the
+  // same way a lock timeout does, so it takes the bounded retry path too.
+  return code === '40P01' || code === '40001' || code === '55P03' || code === '57014'
 }
 
 async function waitForPostgresRetry(): Promise<void> {
@@ -187,6 +189,33 @@ async function applySchema(database: PushDatabase): Promise<void> {
   for (const statement of pushSchemaStatements()) await database.query(statement)
 }
 
+// Why: DDL is not a request. A CREATE INDEX on a grown table can legitimately
+// outlive the request statement_timeout, and inheriting it would fail every
+// startup at the same statement instead of finishing once. One connection of
+// its own, closed before the serving pool opens, keeps the untimed session off
+// the request path entirely.
+async function applySchemaOnUntimedPool(
+  databaseUrl: string,
+  applicationName: string | undefined
+): Promise<void> {
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 1,
+    application_name: applicationName ? `${applicationName}/schema` : undefined,
+    connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
+    statement_timeout: 0,
+    lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
+    idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
+  })
+  absorbPostgresIdleClientErrors(pool)
+  const database = new PostgresDatabase(pool)
+  try {
+    await applySchema(database)
+  } finally {
+    await database.close().catch(() => undefined)
+  }
+}
+
 export function absorbPostgresIdleClientErrors(pool: Pick<pg.Pool, 'on'>): void {
   pool.on('error', () => {
     // node-postgres removes failed idle clients itself; an unhandled 'error'
@@ -203,6 +232,7 @@ export async function openPushDatabase(input: {
 }): Promise<PushDatabase> {
   let database: PushDatabase
   if (input.databaseUrl) {
+    await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
     const pool = new pg.Pool({
       connectionString: input.databaseUrl,
       max: input.poolMax ?? 10,
@@ -220,6 +250,7 @@ export async function openPushDatabase(input: {
     sqlite.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;')
     database = new SqliteDatabase(sqlite)
   }
+  if (database.dialect === 'postgres') return database
   try {
     await applySchema(database)
     return database

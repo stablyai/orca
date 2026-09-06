@@ -174,7 +174,9 @@ The run, in order:
    and a multi-minute build inside the lease would block every relay deploy and rehome for its
    duration.
 2. Takes the production Cloud SQL rollout lease and holds it from here to the end. The gateway
-   applies its schema while the new revision starts, so the revision **is** the schema step;
+   applies its schema while the new revision starts, so the revision **is** the schema step
+   (on a one-connection pool with no statement timeout, closed before the serving pool opens,
+   exactly as the relay does since #18722);
    there is no separate migration command to wrap. The lease therefore covers exactly the
    connection-budget window: deploy, probe, shift.
 3. Records the currently serving revision as the rollback target, and requires it to still hold
