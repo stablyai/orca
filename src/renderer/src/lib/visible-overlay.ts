@@ -7,6 +7,8 @@ type VisibleOverlayOptions = {
   ignoreMatches?: string
   /** A terminal hosted inside an overlay may still take focus within that overlay. */
   ignoreContaining?: Element
+  /** An overlay animating out no longer outranks focus that was queued before it closed. */
+  ignoreDismissed?: boolean
 }
 
 /**
@@ -33,8 +35,10 @@ export function hasVisibleOverlay(options?: VisibleOverlayOptions): boolean {
       return false
     }
     // Why: overlays stay mounted and painted through their exit animation, so a
-    // dismissed one would otherwise keep owning focus and Escape for ~300ms.
-    if (element.getAttribute('data-state') === 'closed') {
+    // dismissed one would otherwise keep owning a queued focus for ~300ms. Escape
+    // callers opt out: they run before the attribute flips, so it only ever hides
+    // a still-open overlay from them.
+    if (options?.ignoreDismissed && element.getAttribute('data-state') === 'closed') {
       return false
     }
     const style = window.getComputedStyle(element)

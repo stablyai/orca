@@ -8,7 +8,8 @@ export function focusPanePreservingOverlays(
     typeof document !== 'undefined' &&
     hasVisibleOverlay({
       ignoreMatches: '[role="listbox"][data-worktree-sidebar]',
-      ignoreContaining: pane.container
+      ignoreContaining: pane.container,
+      ignoreDismissed: true
     })
   ) {
     return
