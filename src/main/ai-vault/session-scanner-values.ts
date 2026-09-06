@@ -51,6 +51,14 @@ export function extractModel(value: unknown): string | null {
   )
 }
 
+export function sessionRootDirs(
+  hostRootDir: string,
+  wslHomeDirs: readonly string[],
+  segments: readonly string[]
+): string[] {
+  return [hostRootDir, ...wslHomeDirs.map((homeDir) => join(homeDir, ...segments))]
+}
+
 export {
   extractContentText,
   extractMessageText,

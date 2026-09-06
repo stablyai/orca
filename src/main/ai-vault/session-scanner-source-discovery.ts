@@ -3,12 +3,16 @@ import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types
 import { discoverFiles } from './session-scanner-discovery'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
+import { hermesDiscoveries } from './session-scanner-hermes-sources'
 import { AI_VAULT_AGENT_SOURCES, type AiVaultAgentSource } from './session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from './session-scanner-roots'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
 export { DEFAULT_CODEX_HOME_DIR } from './session-scanner-agent-sources'
 
+/**
+ * Main discovery entry point that scans all supported AI agent session sources.
+ */
 export async function discoverAiVaultSessionSources(args: {
   options: AiVaultScanOptions
   limitPerAgent: number
@@ -18,13 +22,14 @@ export async function discoverAiVaultSessionSources(args: {
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
 
   return Promise.all([
-    // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
-    // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)
-    // and the SQLite scanner (1.17.x); dedup by sessionId happens inside.
+    // Why: OpenCode 1.17.x and Hermes 0.19+ migrated sessions to SQLite DBs.
+    // discoverOpenCodeSessions and hermesDiscoveries run both file scanner and
+    // SQLite scanner with deduplication by sessionId inside.
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
+    ...hermesDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...Object.entries(AI_VAULT_AGENT_SOURCES).flatMap(([agent, source]) =>
-      source
+      source && agent !== 'hermes'
         ? agentDiscoveries(
             agent as AiVaultAgent,
             source,
