@@ -57,12 +57,13 @@ export const TERMINAL_TAP_DISPATCH_JS = `
     var onHandle = target === handleStart || target === handleEnd;
     var inOverlay = targetInside(target, selectionOverlay);
     var inSurface = targetInside(target, surface);
+    var inBlankContainer = target === document.getElementById('terminal-container');
     // Why: clear any stale tap candidate up front; only a fresh single-finger
     // surface touch (below) re-arms it, so handle drags / pinches / dismiss
     // taps never resolve as a link tap on touchend.
     tapCandidate = null;
 
-    if (e.touches.length === 2) {
+    if (e.touches.length >= 2) {
       // pinch latch
       if (selMode === 'select') {
         notify({ type: 'mobile-clip-cancel-by-pinch' });
@@ -89,7 +90,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
       return;
     }
 
-    if (inSurface && selMode === 'select') {
+    if ((inSurface || inBlankContainer) && selMode === 'select') {
       // Why: tap-to-dismiss matches native iOS/Android — touching outside the
       // selection clears it. We cancel immediately and latch to 'surface' so
       // the same gesture still drives scroll/pan without a second touch.
@@ -99,11 +100,11 @@ export const TERMINAL_TAP_DISPATCH_JS = `
       return;
     }
 
-    if (inSurface) {
+    if (inSurface || inBlankContainer) {
       dispatch.mode = 'surface';
       dispatch.touchId = t.identifier;
-      tapCandidate = { x: t.clientX, y: t.clientY, t: Date.now(), identifier: t.identifier };
-      armLongPress(t);
+      tapCandidate = { x: t.clientX, y: t.clientY, t: Date.now(), identifier: t.identifier, blank: inBlankContainer };
+      if (inSurface) armLongPress(t);
     }
   }, { capture: true, passive: false });
 
@@ -163,7 +164,12 @@ export const TERMINAL_TAP_DISPATCH_JS = `
         selMode !== 'select' &&
         Date.now() - tapCandidate.t <= TAP_MAX_MS
       ) {
-        notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true);
+        if (tapCandidate.blank) {
+          // Blank space has no terminal cell, link, or mouse target.
+          if (Date.now() - tapCandidate.t < LONG_PRESS_MS) notify({ type: 'terminal-tap' });
+        } else {
+          notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true);
+        }
       }
       clearLongPress();
       tapCandidate = null;
