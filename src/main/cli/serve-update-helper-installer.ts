@@ -42,6 +42,18 @@ if [[ $(id -u) -ne 0 ]]; then
   exit 1
 fi
 
+# The helper treats jq and flock as hard dependencies; without jq the helper.json
+# below would be written malformed and the reader would silently disable the
+# feature. Refuse to publish a half-working install.
+if ! command -v jq >/dev/null 2>&1; then
+  echo "orca-serve-update-helper install requires jq (the helper cannot write verdicts without it)" >&2
+  exit 1
+fi
+if ! command -v flock >/dev/null 2>&1; then
+  echo "orca-serve-update-helper install requires flock (the helper cannot serialize updates without it)" >&2
+  exit 1
+fi
+
 # Root-owned helper, outside the service-user-writable spool dir.
 mkdir -p /usr/lib/orca
 cat > ${q(SERVE_UPDATE_HELPER_INSTALL_PATH)} <<'ORCA_HELPER_EOF'
