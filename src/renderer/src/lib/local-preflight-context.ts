@@ -6,7 +6,11 @@ import {
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
 } from '../../../shared/project-execution-runtime'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
@@ -18,6 +22,7 @@ import {
 } from './windows-terminal-capabilities'
 import {
   getProjectRuntimePreflightContext,
+  getSshHostPreflightContext,
   getWslPreflightContext,
   type LocalPreflightContext
 } from './local-preflight-context-cache'
@@ -157,6 +162,10 @@ export function getLocalPreflightContext(
   if (state.settings?.activeRuntimeEnvironmentId?.trim()) {
     return { runtimeContextKey: getProviderRuntimeContextKey(state.settings) }
   }
+  const sshHost = getActiveSshExecutionHost(state)
+  if (sshHost) {
+    return getSshHostPreflightContext(sshHost.connectionId, sshHost.hostLabel)
+  }
   const projectRuntime = getLocalProjectExecutionRuntimeContext(
     state,
     undefined,
@@ -258,6 +267,31 @@ function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext
   return {
     wslAvailable: capabilities.wslAvailable,
     availableWslDistros: capabilities.wslDistros
+  }
+}
+
+// Why: preflight probes the machine that actually runs gh/glab for the active
+// repo. An SSH repo runs them on its host, so name that host for the remote
+// probe; the label mirrors the sidebar fallback chain (live label, last known
+// label for a removed target, then the raw target id).
+function getActiveSshExecutionHost(
+  state: AppState
+): { connectionId: string; hostLabel: string } | null {
+  const repo = getLocalRuntimeRepoForWorktree(state, getLocalWorktree(state))
+  if (!repo) {
+    return null
+  }
+  const executionHost = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (executionHost?.kind !== 'ssh') {
+    return null
+  }
+  const connectionId = executionHost.targetId
+  return {
+    connectionId,
+    hostLabel:
+      state.sshTargetLabels?.get(connectionId) ??
+      state.removedSshTargetLabels?.get(connectionId) ??
+      connectionId
   }
 }
 

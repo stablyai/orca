@@ -69,6 +69,14 @@ export type PreflightStatus = {
     baseUrl: string | null
     tokenConfigured: boolean
   }
+  // Why: only present when the SSH execution host answers the forge CLI probe.
+  // A missing value means unavailable, never unauthenticated.
+  hostForge?: {
+    connectionId: string
+    hostLabel: string
+    gh?: { installed: boolean; authenticated: boolean }
+    glab?: { installed: boolean; authenticated: boolean }
+  }
 }
 
 export { detectRemoteWindowsTerminalCapabilities }
@@ -104,9 +112,15 @@ let preflightRunCounter = 0
 let preflightCacheEpoch = 0
 
 const LOCAL_PREFLIGHT_CACHE_KEY = 'local'
+// Why: keep a wedged remote host from delaying local integration status.
+const REMOTE_FORGE_PROBE_TIMEOUT_MS = 8000
 
-function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
-  return wslTarget ? `wsl:${wslTarget.distro ?? ''}` : LOCAL_PREFLIGHT_CACHE_KEY
+function preflightCacheKey(
+  wslTarget: WslPreflightTarget | null,
+  sshConnectionId?: string
+): string {
+  const runtimeKey = wslTarget ? `wsl:${wslTarget.distro ?? ''}` : LOCAL_PREFLIGHT_CACHE_KEY
+  return sshConnectionId ? `${runtimeKey}:ssh:${sshConnectionId}` : runtimeKey
 }
 
 /** @internal - tests need a clean preflight cache between cases. */
@@ -251,6 +265,26 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   return uniqueAgentIds(result.agents)
 }
 
+export async function detectRemoteForgeClis(args: {
+  connectionId: string
+}): Promise<Record<string, { installed: boolean; authenticated: boolean }> | null> {
+  const mux = getActiveMultiplexer(args.connectionId)
+  if (!mux || mux.isDisposed()) {
+    return null
+  }
+  try {
+    const result = (await mux.request(
+      'preflight.detectForgeClis',
+      { clis: ['gh', 'glab'] },
+      { timeoutMs: REMOTE_FORGE_PROBE_TIMEOUT_MS }
+    )) as { results?: Record<string, { installed: boolean; authenticated: boolean }> } | null
+    return result?.results ?? null
+  } catch {
+    // Old relays do not implement this optional RPC; unknown must not read false.
+    return null
+  }
+}
+
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
   try {
     await (wslTarget
@@ -291,9 +325,11 @@ export async function runPreflightCheck(
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
   const wslTarget = getPreflightWslTarget(context)
-  const cacheKey = preflightCacheKey(wslTarget)
+  const sshHost = context?.sshHost
+  const cacheable = !sshHost
+  const cacheKey = preflightCacheKey(wslTarget, sshHost?.connectionId)
 
-  if (!force) {
+  if (!force && cacheable) {
     if (wslTarget) {
       const entry = cachedByWslDistro.get(cacheKey)
       if (entry && entry.expiresAt > Date.now()) {
@@ -320,7 +356,7 @@ export async function runPreflightCheck(
     // return what we probed, but do not let it become the cached answer.
     const isCurrent =
       latestPreflightRun.get(cacheKey) === runId && epochAtStart === preflightCacheEpoch
-    if (isCurrent) {
+    if (isCurrent && cacheable) {
       if (wslTarget) {
         cachedByWslDistro.set(cacheKey, {
           result,
@@ -359,10 +395,12 @@ async function executePreflightCheck(
     _resetKnownHostsCache()
   }
 
-  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+  const sshHost = context?.sshHost
+  const [gitProbe, ghProbe, glabProbe, hostForgeResults] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
-    detectCommandRuntime('glab', context)
+    detectCommandRuntime('glab', context),
+    sshHost ? detectRemoteForgeClis({ connectionId: sshHost.connectionId }) : Promise.resolve(null)
   ])
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
@@ -373,13 +411,22 @@ async function executePreflightCheck(
     getGiteaAuthStatus()
   ])
 
-  const result = {
+  const result: PreflightStatus = {
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
     bitbucket,
     azureDevOps,
     gitea
+  }
+
+  if (sshHost && (hostForgeResults?.gh || hostForgeResults?.glab)) {
+    result.hostForge = {
+      connectionId: sshHost.connectionId,
+      hostLabel: sshHost.hostLabel,
+      gh: hostForgeResults.gh,
+      glab: hostForgeResults.glab
+    }
   }
 
   return result

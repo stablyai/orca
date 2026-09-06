@@ -53,6 +53,23 @@ function makeState(args: {
   } as AppState
 }
 
+function makeSshState(args: {
+  connectionId: string
+  labels?: Record<string, string>
+  removedLabels?: Record<string, string>
+}): AppState {
+  return {
+    ...makeState({
+      repoPath: '/home/alice/repo',
+      repo: { connectionId: args.connectionId, executionHostId: `ssh:${args.connectionId}` }
+    }),
+    ...(args.labels ? { sshTargetLabels: new Map(Object.entries(args.labels)) } : {}),
+    ...(args.removedLabels
+      ? { removedSshTargetLabels: new Map(Object.entries(args.removedLabels)) }
+      : {})
+  } as AppState
+}
+
 describe('local preflight context', () => {
   it('extracts WSL distro names from supported UNC forms', () => {
     expect(getWslDistroFromPath(String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`)).toBe('Ubuntu')
@@ -107,6 +124,69 @@ describe('local preflight context', () => {
     expect(getLocalPreflightContext(state)).toBeUndefined()
     expect(getLocalPreflightContext(state)).toBeUndefined()
     expect(localPreflightContextKey(getLocalPreflightContext(state))).toBe('host')
+  })
+
+  it('derives the SSH execution host for an active remote repo', () => {
+    const state = makeSshState({ connectionId: 'builder', labels: { builder: 'Build Box' } })
+
+    const context = getLocalPreflightContext(state, 'darwin')
+
+    expect(context).toEqual({ sshHost: { connectionId: 'builder', hostLabel: 'Build Box' } })
+    expect(localPreflightContextKey(context)).toBe('ssh:["builder","Build Box"]')
+    expect(getLocalPreflightContext(state, 'darwin')).toBe(context)
+  })
+
+  it('falls back to the SSH target id when no label has hydrated yet', () => {
+    const context = getLocalPreflightContext(makeSshState({ connectionId: 'builder' }), 'darwin')
+
+    expect(context).toEqual({ sshHost: { connectionId: 'builder', hostLabel: 'builder' } })
+  })
+
+  it('uses the last known label for a removed SSH target', () => {
+    const context = getLocalPreflightContext(
+      makeSshState({ connectionId: 'builder', removedLabels: { builder: 'Old Build Box' } }),
+      'darwin'
+    )
+
+    expect(context).toEqual({ sshHost: { connectionId: 'builder', hostLabel: 'Old Build Box' } })
+  })
+
+  it('keys two SSH execution hosts apart so a host switch invalidates the card', () => {
+    const first = getLocalPreflightContext(
+      makeSshState({ connectionId: 'builder', labels: { builder: 'Build Box' } }),
+      'darwin'
+    )
+    const second = getLocalPreflightContext(
+      makeSshState({ connectionId: 'staging', labels: { staging: 'Build Box' } }),
+      'darwin'
+    )
+
+    expect(first).not.toBe(second)
+    expect(localPreflightContextKey(first)).not.toBe(localPreflightContextKey(second))
+  })
+
+  it('keys a renamed SSH target apart so the rename invalidates the card', () => {
+    const beforeRename = getLocalPreflightContext(
+      makeSshState({ connectionId: 'builder', labels: { builder: 'Build Box' } }),
+      'darwin'
+    )
+    const afterRename = getLocalPreflightContext(
+      makeSshState({ connectionId: 'builder', labels: { builder: 'Renamed Box' } }),
+      'darwin'
+    )
+
+    expect(afterRename).not.toBe(beforeRename)
+    expect(localPreflightContextKey(afterRename)).not.toBe(localPreflightContextKey(beforeRename))
+  })
+
+  it('omits the SSH host for local and WSL repos', () => {
+    expect(getLocalPreflightContext(makeState({ repoPath: '/Users/alice/repo' }))).toBeUndefined()
+    expect(
+      getLocalPreflightContext(
+        makeState({ repoPath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo` }),
+        'darwin'
+      )
+    ).toEqual({ wslDistro: 'Ubuntu' })
   })
 
   it('keys preflight by active runtime before local WSL or host context', () => {
@@ -595,7 +675,9 @@ describe('local preflight context', () => {
 
     expect(getLocalProjectExecutionRuntimeContext(state, undefined, 'win32')).toBeUndefined()
     expect(getLocalRepoProjectExecutionRuntimeContext(state, 'repo-1', 'win32')).toBeUndefined()
-    expect(getLocalPreflightContext(state, 'win32')).toBeUndefined()
+    expect(getLocalPreflightContext(state, 'win32')).toEqual({
+      sshHost: { connectionId: 'builder', hostLabel: 'builder' }
+    })
   })
 
   it('uses the requested worktree repo owner before resolving a local project runtime', () => {

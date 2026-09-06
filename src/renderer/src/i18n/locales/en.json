@@ -10603,7 +10603,8 @@
                   "statusConnected": "Connected",
                   "statusUnavailable": "Unavailable",
                   "statusNotInstalled": "Not installed",
-                  "statusNotAuthenticated": "Not authenticated"
+                  "statusNotAuthenticated": "Not authenticated",
+                  "hostForgeHint": "{{value0}} is installed and authenticated on {{value1}} — these features currently run locally."
                 }
               }
             }

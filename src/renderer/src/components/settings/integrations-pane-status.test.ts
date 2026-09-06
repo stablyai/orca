@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PreflightStatus } from '../../../../preload/api-types'
 import {
+  deriveHostForgeHint,
   getPreflightIntegrationStatuses,
   giteaStatusFromPreflight,
   tokenApiStatusFromPreflight
@@ -95,5 +96,38 @@ describe('getPreflightIntegrationStatuses', () => {
       bitbucketStatus: 'connected',
       giteaStatus: 'checking'
     })
+  })
+})
+
+describe('deriveHostForgeHint', () => {
+  const hostForge = {
+    connectionId: 'ssh-1',
+    hostLabel: 'work-box',
+    glab: { installed: true, authenticated: true }
+  }
+
+  it('hints when local is not-installed but the host has an authed CLI', () => {
+    expect(deriveHostForgeHint('glab', 'not-installed', hostForge)).toEqual({
+      hostLabel: 'work-box'
+    })
+  })
+
+  it('hints when local is not-authenticated but the host is authed', () => {
+    expect(deriveHostForgeHint('glab', 'not-authenticated', hostForge)).toEqual({
+      hostLabel: 'work-box'
+    })
+  })
+
+  it('stays quiet when local is already connected', () => {
+    expect(deriveHostForgeHint('glab', 'connected', hostForge)).toBeNull()
+  })
+
+  it('stays quiet when the host CLI is not authenticated', () => {
+    const unauthed = { ...hostForge, glab: { installed: true, authenticated: false } }
+    expect(deriveHostForgeHint('glab', 'not-installed', unauthed)).toBeNull()
+  })
+
+  it('stays quiet without hostForge data', () => {
+    expect(deriveHostForgeHint('glab', 'not-installed', undefined)).toBeNull()
   })
 })
