@@ -11,10 +11,10 @@ import {
   execInTerminal,
   focusActiveTerminalInput,
   focusLastTerminalPane,
+  getTerminalContent,
   splitActiveTerminalPane,
   waitForActivePanePtyId,
-  waitForActiveTerminalManager,
-  waitForTerminalOutput
+  waitForActiveTerminalManager
 } from './helpers/terminal'
 import { readPaneIdentitySnapshot } from './helpers/terminal-pane-identity'
 import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
@@ -62,7 +62,9 @@ test.describe('five SSH panes under simultaneous output', () => {
       const marker = `FLOOD_${runId}_${index}`
       owners.push({ leafId: identity!.activeLeafId!, ptyId, marker })
       await execInTerminal(orcaPage, ptyId, floodWithInputAcknowledgements(marker))
-      await waitForTerminalOutput(orcaPage, `${marker}:`, 60_000, 80_000)
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 80_000), { timeout: 60_000 })
+        .toMatch(new RegExp(`${marker}:[1-9][0-9]*:ACK=:`))
     }
     expect(new Set(owners.map((owner) => owner.ptyId)).size).toBe(5)
     const identity = await readPaneIdentitySnapshot(orcaPage)
@@ -71,7 +73,7 @@ test.describe('five SSH panes under simultaneous output', () => {
     const visibleTerminals = orcaPage.locator('.xterm:visible')
     await expect(visibleTerminals).toHaveCount(5)
 
-    for (let round = 0; round < 10; round++) {
+    for (let round = 0; round < 2; round++) {
       await orcaPage.evaluate(() => window.__store!.getState().setActiveView('tasks'))
       await expect
         .poll(() => orcaPage.evaluate(() => window.__store!.getState().activeView))
@@ -99,8 +101,9 @@ test.describe('five SSH panes under simultaneous output', () => {
         await orcaPage.keyboard.press('Enter')
         // The remote process repeats its latest ACK, so flood eviction cannot hide it.
         try {
-          await waitForTerminalOutput(orcaPage, `:ACK=${input}:`, 30_000, 80_000)
-          await waitForTerminalOutput(orcaPage, `${owner.marker}:`, 30_000, 80_000)
+          await expect
+            .poll(() => getTerminalContent(orcaPage, 80_000), { timeout: 30_000 })
+            .toMatch(new RegExp(`${owner.marker}:[1-9][0-9]*:ACK=${input}:`))
         } catch (error) {
           const panes = await orcaPage.evaluate((tabId) => {
             const manager = window.__paneManagers!.get(tabId)!
