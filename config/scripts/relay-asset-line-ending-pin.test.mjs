@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
+import { RELAY_ARTIFACTS } from '../../src/shared/relay-artifacts.ts'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -16,7 +17,6 @@ import { describe, expect, it } from 'vitest'
  * mac runner and 11547 (= 11229 + 318 lines) from the Windows one.
  */
 const projectDir = resolve(import.meta.dirname, '../..')
-const ASSET_DIRECTORY = 'config/relay-assets'
 
 function git(args) {
   return execFileSync('git', args, { cwd: projectDir, encoding: 'utf8' })
@@ -32,13 +32,26 @@ function eolAttributes(paths) {
   return found
 }
 
-function relayAssets() {
-  return git(['ls-files', '-z', '--', ASSET_DIRECTORY]).split('\0').filter(Boolean)
+/**
+ * Keyed off the manifest, not a directory: build-relay refuses to emit an
+ * artifact absent from RELAY_ARTIFACTS, so relocating an asset cannot slip
+ * past this the way a path glob would. esbuild bundles have no tracked
+ * source and contribute no hits, so they need no classifying.
+ */
+function trackedManifestSources() {
+  const paths = new Set()
+  for (const { filename } of RELAY_ARTIFACTS) {
+    const hits = git(['ls-files', '-z', '--', `*/${filename}`]).split('\0').filter(Boolean)
+    for (const path of hits) {
+      paths.add(path)
+    }
+  }
+  return [...paths]
 }
 
 describe('config/relay-assets line-ending pin', () => {
-  it('pins every relay asset to LF', () => {
-    const assets = relayAssets()
+  it('pins every tracked relay artifact source to LF', () => {
+    const assets = trackedManifestSources()
     expect(assets.length).toBeGreaterThan(0)
 
     const attributes = eolAttributes(assets)
