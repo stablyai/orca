@@ -52,9 +52,9 @@ describe('config/relay-assets line-ending pin', () => {
     ).toEqual([])
   })
 
-  // Why: the committed blobs are already LF, so the assertion above passes even
-  // with no pin at all. These fix the pattern itself -- broad enough to cover a
-  // file added tomorrow, narrow enough not to claim neighbours.
+  // Why: the assertion above only sees files that exist today. These fix the
+  // pattern itself -- broad enough to cover a file added tomorrow, narrow enough
+  // not to claim neighbours.
   it.each([
     ['config/relay-assets/example.cjs', 'lf'],
     ['config/relay-assets/nested/deeper/example.cjs', 'lf'],
