@@ -44,7 +44,21 @@ export function cleanupTestRepository(testRepoDir: string): void {
       rmSync(worktreeDir, { recursive: true, force: true })
     }
   }
-  rmSync(root, { recursive: true, force: true })
+  try {
+    rmSync(root, { recursive: true, force: true })
+  } catch (error) {
+    console.error('TEARDOWN_ROOT', { root, cwd: process.cwd(), pid: process.pid })
+    if (process.env.ORCA_E2E_HANDLE_EXE) {
+      try {
+        console.error(execFileSync(process.env.ORCA_E2E_HANDLE_EXE,
+          ['-accepteula', '-nobanner', 'orca-e2e-repo-'],
+          { encoding: 'utf8', windowsHide: true, timeout: 15000 }))
+      } catch (diagnosticError) {
+        console.error('HANDLE_DIAGNOSTIC_ERROR', String(diagnosticError))
+      }
+    }
+    throw error
+  }
 }
 
 export default function globalTeardown(): void {

@@ -48,6 +48,15 @@ jobs:
       - name: Build Electron app for Windows E2E
         run: pnpm exec electron-vite build --mode e2e
 
+      - name: Prepare immediate handle diagnostic
+        shell: pwsh
+        run: |
+          $handleZip = Join-Path $env:RUNNER_TEMP 'Handle.zip'
+          $handleDir = Join-Path $env:RUNNER_TEMP 'orca-handle-diagnostic'
+          Invoke-WebRequest 'https://download.sysinternals.com/files/Handle.zip' -OutFile $handleZip
+          Expand-Archive $handleZip -DestinationPath $handleDir
+          "ORCA_E2E_HANDLE_EXE=$(Join-Path $handleDir 'handle64.exe')" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Run Windows terminal restart regressions
         env:
           SKIP_BUILD: '1'
@@ -59,16 +68,6 @@ jobs:
           tests/e2e/golden-tab-bar-agent-launch.spec.ts
           --repeat-each=3
           --workers=1
-
-      - name: Inspect remaining temporary repo handles
-        if: failure()
-        shell: pwsh
-        run: |
-          $handleZip = Join-Path $env:RUNNER_TEMP 'Handle.zip'
-          $handleDir = Join-Path $env:RUNNER_TEMP 'orca-handle-diagnostic'
-          Invoke-WebRequest 'https://download.sysinternals.com/files/Handle.zip' -OutFile $handleZip
-          Expand-Archive $handleZip -DestinationPath $handleDir
-          & (Join-Path $handleDir 'handle64.exe') -accepteula -nobanner orca-e2e-repo-
 
       - name: Upload Playwright traces
         if: failure()
