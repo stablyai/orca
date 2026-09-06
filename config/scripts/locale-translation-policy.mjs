@@ -4,6 +4,7 @@ import {
   overlapsCanonicalRendering
 } from './locale-generic-ui-terms.mjs'
 import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
+import { isHumanReviewedZhKey } from './locale-human-reviewed-zh-exemptions.mjs'
 import { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mjs'
 import { isStyleValue } from './locale-style-values.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
@@ -397,6 +398,10 @@ function applyPhraseFixes(enValue, localeValue, locale, key = '') {
 }
 
 export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
+  if (locale === 'zh' && isHumanReviewedZhKey(key)) {
+    return localeValue
+  }
+
   const keyOverride = LOCALE_KEY_OVERRIDES[key]?.[locale]
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.
