@@ -480,6 +480,9 @@ test('paired client keeps revealed remote terminals interactive', async ({
       ).toEqual({ scenario: result.name, ptyGrid: result.paneGrid })
     }
   } finally {
+    const frameTrace = await client.page.evaluate(() => (window as any).__pairedTabFrameTrace).catch(() => null)
+    console.info(`[paired-tab-frame-trace] ${JSON.stringify(frameTrace)}`)
+    await testInfo.attach('paired-tab-frame-trace', { body: JSON.stringify(frameTrace), contentType: 'application/json' })
     if (previousParkDelay === undefined) {
       delete process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
     } else {
