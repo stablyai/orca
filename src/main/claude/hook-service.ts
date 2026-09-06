@@ -16,6 +16,7 @@ import {
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+import { getRepositoryManagedHookConfigStatus } from '../agent-hooks/repository-managed-hook-config'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
@@ -200,6 +201,10 @@ export class ClaudeHookService {
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath(this.options.settings)
     const scriptPath = getManagedScriptPath(this.options.settings)
+    const protectedStatus = getRepositoryManagedHookConfigStatus(configPath, this.options)
+    if (protectedStatus) {
+      return protectedStatus
+    }
     const config = readHooksJson(configPath)
     if (!config) {
       return {
