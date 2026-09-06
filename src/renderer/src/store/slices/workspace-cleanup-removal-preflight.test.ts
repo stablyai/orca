@@ -258,10 +258,7 @@ describe('workspace cleanup removal and protection', () => {
               })
           ),
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: false
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }
@@ -291,10 +288,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: false
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }
@@ -333,10 +327,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: false
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }
@@ -368,10 +359,7 @@ describe('workspace cleanup removal and protection', () => {
         workspaceCleanup: {
           scan,
           dismiss: vi.fn().mockResolvedValue(undefined),
-          clearDismissals: vi.fn().mockResolvedValue(undefined),
-          hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-            hasKillableProcesses: true
-          })
+          clearDismissals: vi.fn().mockResolvedValue(undefined)
         }
       }
     }

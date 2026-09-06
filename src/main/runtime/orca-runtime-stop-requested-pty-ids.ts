@@ -57,7 +57,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     resolveOwner: (handle) => this.resolveNativeChatLaunchDraftOwner(handle),
     listMobileSnapshots: () => this.mobileSessionTabsByWorktree,
     setMobileSnapshot: (worktreeId, snapshot) =>
-      this.mobileSessionTabsByWorktree.set(worktreeId, snapshot),
+      this.storeMobileSessionSnapshot(worktreeId, snapshot),
     scheduleMobileSnapshot: (worktreeId) => this.scheduleMobileSessionTabsChanged(worktreeId),
     notifyResolved: (tabId, resolution, event) => {
       this.notifier?.nativeChatLaunchDraftResolved?.(tabId, resolution)
@@ -136,7 +136,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     listResolved: () => this.listResolvedWorktrees(),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     selectRepos: (selector) => this.selectReposBySelector(selector),
-    scanRepo: (repo) => this.listRepoWorktreesForResolution(repo)
+    scanRepo: (repo) => this.listRepoWorktreesForResolution(repo),
+    listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
   protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({

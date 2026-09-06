@@ -40,7 +40,6 @@ export function publishCodexTurnLifecycle(input: {
             text: 'Codex is working…',
             turnLifecycle: { turnId: input.turnId, state: input.state }
           },
-          [],
           { lifecycle: true }
         )
       : (input.sink.appendItem(
@@ -50,7 +49,6 @@ export function publishCodexTurnLifecycle(input: {
             text: 'Codex is working…',
             turnLifecycle: { turnId: input.turnId, state: input.state }
           },
-          [],
           { lifecycle: true }
         ),
         ADMITTED)

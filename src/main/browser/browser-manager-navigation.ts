@@ -1,5 +1,4 @@
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
-import { cleanElectronUserAgent } from './browser-session-ua'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
@@ -12,10 +11,10 @@ import { BrowserManagerVisibility } from './browser-manager-visibility'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
   // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
-  // not the request header, so the header-level Firefox switch in setupClientHintsOverride
+  // not the request header, so the header-level Firefox switch in setupGoogleAuthUserAgentOverride
   // must be matched here per navigation or the two layers disagree — itself a bot tell.
   // Restores the session's base identity off the auth hosts. Native-UA profiles opt out
-  // of the whole clean-UA path, so they keep their untouched identity everywhere.
+  // of the Firefox switch, so they keep their untouched identity everywhere.
   protected applyGoogleAuthUserAgent(
     guest: Electron.WebContents,
     url: string,
@@ -24,8 +23,8 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     const browserPageId = this.tabIdByWebContentsId.get(guest.id)
     // Why: popup child windows get these policies but are never in tabIdByWebContentsId, so a direct
     // lookup misses the native-UA opt-out and would hand a native profile's popup the Firefox UA.
-    // That is worse than doing nothing: native sessions skip setupClientHintsOverride entirely, so
-    // the popup would send the raw Electron UA on the wire while navigator.userAgent claims Firefox.
+    // That is worse than doing nothing: native sessions never install the header-level Firefox
+    // switch, so the popup would send the Electron UA on the wire while navigator.userAgent claims Firefox.
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
     // Session state is authoritative before renderer registration and after a native profile imports a source UA.
     const mode =
@@ -56,15 +55,14 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       // navigation (ERR_ABORTED) and replay the original request, which a POST-started OAuth chain
       // cannot survive — the sign-in lands on a blank tab. CDP retargets navigator.userAgent without
       // touching the navigation, and it outranks the WebContents UA from then on, so a guest that
-      // switches to it stays on it. The wire UA never depended on this write: setupClientHintsOverride
-      // rewrites User-Agent per request for auth-host URLs on its own.
+      // switches to it stays on it. The wire UA never depended on this write:
+      // setupGoogleAuthUserAgentOverride rewrites User-Agent per request for auth-host URLs on its own.
       if (options.duringRedirect === true || overrideState !== undefined) {
         if (this.canOverrideUserAgentOverCdp(guest)) {
           authOverrideIssuedOverCdp = true
           // Why: go through the viewport builder rather than writing nextUa raw, so both CDP writers
-          // resolve one identity for this URL — Firefox on auth hosts, the profile's clean base off
-          // them, any mobile preset preserved. Writing the session UA directly would put the
-          // unlaundered Electron token back on the wire.
+          // resolve one identity for this URL — Firefox on auth hosts, the session's base identity
+          // off them, any mobile preset preserved.
           void this.applyAuthUserAgentOverrideOverCdp(
             guest,
             (browserPageId ? this.viewportUaOverrideMobileByTabId.get(browserPageId) : undefined) ??
@@ -188,7 +186,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
 
   // Why: Emulation.setUserAgentOverride is set once and stands across every later navigation,
   // outranking setUserAgent for navigator.userAgent. A viewport preset applied before reaching an
-  // auth host would otherwise pin navigator.userAgent to the Chrome-shaped preset UA while the
+  // auth host would otherwise pin navigator.userAgent to the session's preset UA while the
   // request header says Firefox — the two-layer disagreement this scope exists to remove.
   protected reapplyViewportUserAgentOverride(
     guest: Electron.WebContents,
@@ -222,7 +220,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         // Why: the session UA is the profile's stable base identity. guest.getUserAgent() is not:
         // applyGoogleAuthUserAgent leaves it pinned to the Firefox auth UA once a guest switches to
         // the CDP override, so reading it back here would republish that identity on ordinary hosts.
-        baseUserAgent: cleanElectronUserAgent(baseUserAgent ?? guest.session.getUserAgent())
+        baseUserAgent: baseUserAgent ?? guest.session.getUserAgent()
       })
     )
   }

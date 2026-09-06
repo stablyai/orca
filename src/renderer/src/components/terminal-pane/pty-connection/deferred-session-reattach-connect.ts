@@ -1,6 +1,5 @@
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
-import { recordPtyConnectDiagnostic } from './pty-connect-limits'
-import { isSshSessionExpiredError } from './ssh-session-connect'
+import { isSshSessionGoneError, recordPtyConnectDiagnostic } from './pty-connect-limits'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { toProcessExitStartup } from './process-exit-startup'
 import { recoverUnverifiableDirectSshReattach } from './direct-ssh-reattach-recovery'
@@ -28,7 +27,7 @@ export function startDeferredSessionReattach(
   const coldRestoreStartup = session.buildColdRestoreAgentResumeStartup()
   const outputCallbacks = session.captureTransportOutputCallbacks(
     (message) => {
-      if (isSshSessionExpiredError(message)) {
+      if (isSshSessionGoneError(message)) {
         expiredReattachError = true
         return
       }
@@ -165,7 +164,7 @@ export function startDeferredSessionReattach(
         ptyId: deferredReattachSessionId,
         reason: message
       })
-      if (session.connectionId && isSshSessionExpiredError(err)) {
+      if (session.connectionId && isSshSessionGoneError(err)) {
         session.clearExitedPanePtyLayoutBinding(deferredReattachSessionId)
         session.deps.clearTabPtyId(session.deps.tabId, deferredReattachSessionId)
         session.startFreshColdRestoreAgentResume(coldRestoreStartup, {

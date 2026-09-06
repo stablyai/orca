@@ -11,6 +11,8 @@ import {
 } from './codex-structured-session-adapter'
 import { handleCodexSessionExit } from './codex-structured-session-close'
 import type { CodexSession } from './codex-structured-session-state'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 
 const THREAD = 'thread-1'
 
@@ -58,6 +60,16 @@ function adapterFixture() {
     onEvent: (event) => events.push(event)
   })
   return { adapter, connections, events }
+}
+
+function claudeAdapterStub(): StructuredAgentSessionAdapter {
+  return {
+    acquire: vi.fn(async () => ({ process: { pid: 1 } }) as never),
+    dispatch: vi.fn(),
+    cancelTurn: vi.fn(),
+    answerPrompt: vi.fn(),
+    setOption: vi.fn()
+  }
 }
 
 describe('Codex structured session close lifecycle', () => {
@@ -162,6 +174,29 @@ describe('Codex structured session close lifecycle', () => {
     await expect(adapter.forceCloseSession?.('session-1')).resolves.toBe(true)
     expect(events.filter((event) => event.type === 'ended')).toMatchObject([
       { cause: 'unexpected-exit', reason: 'sink failed', fence: 7 }
+    ])
+  })
+
+  it('routes Codex sink-failure recovery through force-close and preserves unexpected-exit settlement', async () => {
+    const { adapter, connections, events } = adapterFixture()
+    const router = new StructuredAgentSessionAdapterRouter(
+      { claude: claudeAdapterStub(), codex: adapter },
+      async () => {}
+    )
+    await router.acquire({ identity: identity('session-1'), fence: 7, spawnToken: 'spawn-1' })
+    const current = connections[0]
+    if (!current) {
+      throw new Error('missing connection')
+    }
+    current.connection.close = async () => {
+      current.handlers.onExit?.(new Error('journal sink failed'))
+      return true
+    }
+
+    const forceCloseSession = router.forceCloseSession
+    await expect(forceCloseSession('session-1')).resolves.toBe(true)
+    expect(events.filter((event) => event.type === 'ended')).toMatchObject([
+      { cause: 'unexpected-exit', reason: 'journal sink failed', fence: 7 }
     ])
   })
 })

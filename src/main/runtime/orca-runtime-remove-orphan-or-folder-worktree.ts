@@ -6,6 +6,7 @@ import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getRuntimeFolderWorkspaceRootId } from './runtime-folder-workspace'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
 
 export async function removeOrphanOrFolderWorktree({
   runtime,
@@ -90,23 +91,24 @@ export async function removeOrphanOrFolderWorktree({
   if (removalTarget.id === getRuntimeFolderWorkspaceRootId(repo)) {
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
-  const folderConnectionId = repo.connectionId?.trim() || null
+  // Resolved, not raw: a folder repo naming its owner only as `executionHostId: 'ssh:*'` used to
+  // tear down its PTYs and history on the client. A `runtime:` host answers null — its nested
+  // target is addressable only inside that environment, never from this client's SSH table.
+  const folderHost = parseExecutionHostId(removalHostId)
+  const folderConnectionId = folderHost?.kind === 'ssh' ? folderHost.targetId : null
   const folderSshPtyProvider = folderConnectionId
     ? runtime.getSshProviderFn?.(folderConnectionId)
     : undefined
-  const folderPtyProvider = folderSshPtyProvider ?? runtime.getLocalProvider()
-  if (folderPtyProvider) {
-    await killAllProcessesForWorktree(removalTarget.id, {
+  await teardownFolderWorkspacePtys(
+    {
       runtime,
-      resolvedWorktreeId: removalTarget.id,
-      ...(folderConnectionId ? { resolvedConnectionId: folderConnectionId } : {}),
-      localProvider: folderPtyProvider,
-      onPtyStopped: runtime.onPtyStopped ?? undefined,
-      ...(folderConnectionId
-        ? { includeProviderInventory: Boolean(folderSshPtyProvider), includeLocalRegistry: false }
-        : {})
-    }).catch((err) => console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err))
-  }
+      getSshProvider: runtime.getSshProviderFn,
+      getLocalProvider: () => runtime.getLocalProvider(),
+      onPtyStopped: runtime.onPtyStopped
+    },
+    removalTarget.id,
+    folderConnectionId
+  )
   await deleteRemoteWorktreeHistory(folderSshPtyProvider, removalTarget.id)
   runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
   runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)

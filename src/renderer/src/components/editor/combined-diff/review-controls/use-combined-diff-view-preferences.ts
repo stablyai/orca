@@ -11,6 +11,7 @@ export type CombinedDiffViewPreferences = {
   setFileTreeCollapsed: (collapsed: boolean) => void
   setSideBySide: React.Dispatch<React.SetStateAction<boolean>>
   sideBySide: boolean
+  toggleDiffShowWhitespace: () => void
   toggleDiffWordWrap: () => void
   toggleSideBySide: () => void
 }
@@ -18,6 +19,7 @@ export type CombinedDiffViewPreferences = {
 export function useCombinedDiffViewPreferences({
   combinedDiffFileTreeVisibleByDefault,
   diffDefaultView,
+  diffShowWhitespace,
   diffWordWrap,
   registry,
   setSections,
@@ -25,10 +27,11 @@ export function useCombinedDiffViewPreferences({
 }: {
   combinedDiffFileTreeVisibleByDefault: boolean | undefined
   diffDefaultView: string | undefined
+  diffShowWhitespace: boolean | undefined
   diffWordWrap: boolean | undefined
   registry: CombinedDiffSectionLoadRegistry
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
-  updateSettings: (patch: { diffWordWrap: boolean }) => unknown
+  updateSettings: (patch: { diffShowWhitespace?: boolean; diffWordWrap?: boolean }) => unknown
 }): CombinedDiffViewPreferences {
   const { loadSchedulerRef, loadedIndicesRef, sectionsRef } = registry
   const [sideBySide, setSideBySide] = useState(
@@ -89,12 +92,17 @@ export function useCombinedDiffViewPreferences({
     void updateSettings({ diffWordWrap: diffWordWrap !== true })
   }, [diffWordWrap, updateSettings])
 
+  const toggleDiffShowWhitespace = useCallback(() => {
+    void updateSettings({ diffShowWhitespace: diffShowWhitespace !== true })
+  }, [diffShowWhitespace, updateSettings])
+
   return {
     fileTreeCollapsed,
     setAllSectionsCollapsed,
     setFileTreeCollapsed,
     setSideBySide,
     sideBySide,
+    toggleDiffShowWhitespace,
     toggleDiffWordWrap,
     toggleSideBySide
   }

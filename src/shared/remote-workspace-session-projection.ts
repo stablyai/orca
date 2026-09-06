@@ -59,10 +59,25 @@ export function exportRemoteWorkspaceSession(
     if (!worktreePath) {
       continue
     }
-    tabsByWorktreePath[worktreePath] = tabs.map((tab) => {
+    // Why union rather than assignment: `worktreePathFromId` drops the repoId, so two local keys
+    // for one host path — duplicate repo rows for the same remote checkout, which is the normal
+    // state while a host catalog reconciles — collapse onto one entry here. Assignment let
+    // whichever key came last win outright, and an empty twin published an empty tab list for a
+    // workspace the user had panes open in (#15484). This projection is uploaded as a wholesale
+    // replace-session, so a clobbered entry deletes those tabs from the host snapshot. The host has
+    // one workspace at that path, so the union deduped by tab id is the only lossless answer. Same
+    // collision the `Math.max` below folds for `lastVisitedAtByWorktreePath`.
+    const merged = tabsByWorktreePath[worktreePath] ?? []
+    const alreadyProjected = new Set(merged.map((tab) => tab.id))
+    for (const tab of tabs) {
+      if (alreadyProjected.has(tab.id)) {
+        continue
+      }
+      alreadyProjected.add(tab.id)
       terminalTabIds.add(tab.id)
-      return tabToRemote(tab, worktreePath)
-    })
+      merged.push(tabToRemote(tab, worktreePath))
+    }
+    tabsByWorktreePath[worktreePath] = merged
   }
 
   const activeWorktreePath =
@@ -80,7 +95,11 @@ export function exportRemoteWorkspaceSession(
     }
     const worktreePath = worktreePathFromId(worktreeId)
     if (worktreePath) {
-      activeTabIdByWorktreePath[worktreePath] = tabId && terminalTabIds.has(tabId) ? tabId : null
+      // Same path collision as the tab lists above: a colliding key's null must not erase the
+      // active tab the other key named.
+      const resolved = tabId && terminalTabIds.has(tabId) ? tabId : null
+      activeTabIdByWorktreePath[worktreePath] =
+        resolved ?? activeTabIdByWorktreePath[worktreePath] ?? null
     }
   }
 

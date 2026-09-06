@@ -1,3 +1,4 @@
+import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
 import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { Repo } from '../../shared/repo-types'
 import { getPRForBranch } from '../github/client'
@@ -87,7 +88,7 @@ export function getLocalGitHubPrForBranch(
 }
 
 export async function getSelectedHostedReviewForBranch(
-  repo: Pick<Repo, 'path' | 'connectionId'>,
+  repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>,
   branchName: string,
   args: SelectedReviewBranchInput,
   executionOptions: HostedReviewExecutionOptions = {}
@@ -98,7 +99,7 @@ export async function getSelectedHostedReviewForBranch(
   }
   const review = await getHostedReviewForBranch({
     repoPath: repo.path,
-    connectionId: repo.connectionId ?? null,
+    executionHostId: getRepoHostedReviewExecutionHostId(repo),
     branch: branchName,
     ...executionOptions,
     ...getSelectedReviewLookupHints(args)

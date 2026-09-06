@@ -1,5 +1,7 @@
 import { beginMacUpdateDownload, deferMacQuitUntilInstallerReady } from '../updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
+import { isExternallyManagedLinuxInstall } from '../linux-update-package-type'
+import { LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE } from '../linux-package-downloaded-status'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
 
@@ -10,20 +12,9 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
       this.pendingQuitAndInstallTimer ||
-      this.quitAndInstallInProgress ||
-      // Why: the quit timer is already cleared while the pre-install digest re-proof streams, so without this a second click would schedule a parallel install of the same package.
-      this.linuxPackageRevalidationInFlight
+      this.quitAndInstallInProgress
     ) {
       return
-    }
-
-    const retriedRecovery = this.getActiveLinuxPackageRecovery()
-    if (retriedRecovery) {
-      recordUpdaterLifecycle('linux_package_recovery_requested', {
-        action: 'retry-automatic',
-        packageType: retriedRecovery.packageType,
-        version: retriedRecovery.version
-      })
     }
 
     if (this.deferHeadlessServeInstall('install', this.getPendingInstallVersion())) {
@@ -64,6 +55,25 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     const version =
       this.currentStatus.state === 'available' ? this.currentStatus.version : this.availableVersion
     if (!version) {
+      return
+    }
+    // Why: main owns this verdict, not the card — an older renderer or a direct IPC call must not be
+    // able to spend a package download that this host could never install.
+    if (isExternallyManagedLinuxInstall()) {
+      recordUpdaterLifecycle('linux_package_externally_managed_download_blocked', {
+        version
+      })
+      // Why: a pinned jump resolves to 'release' on Linux (no dev-channel artifact is built for it),
+      // so refusing without unwinding would strand isPinnedBuildActive and silently kill every
+      // background check for the rest of the process. A no-op on the ordinary release path.
+      this.clearAvailableUpdateContext()
+      this.restoreReleaseUpdateSource()
+      this.sendStatus({
+        state: 'error',
+        message: LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE,
+        version,
+        retryable: false
+      })
       return
     }
     if (this.deferHeadlessServeInstall('download', version)) {

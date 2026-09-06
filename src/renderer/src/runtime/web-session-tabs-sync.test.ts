@@ -169,6 +169,40 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(shouldApplyWebSessionTabsSnapshot(sameEpochOlder, ENV)).toBe(false)
   })
 
+  it('keeps base and headless-merge publications in one freshness lineage', () => {
+    const renderer = makeSnapshot([], {
+      publicationEpoch: 'renderer:epoch-1',
+      snapshotVersion: 14,
+      activeTabType: null
+    })
+    const merged = makeSnapshot([], {
+      publicationEpoch: 'renderer:epoch-1:headless-merge:abc123',
+      snapshotVersion: 8,
+      activeTabType: null
+    })
+    const refreshedRenderer = makeSnapshot([], {
+      publicationEpoch: 'renderer:epoch-1',
+      snapshotVersion: 15,
+      activeTabType: null
+    })
+
+    expect(shouldApplyWebSessionTabsSnapshot(renderer, ENV)).toBe(true)
+    expect(shouldApplyWebSessionTabsSnapshot(merged, ENV)).toBe(true)
+    // listAll can return the renderer base after a host-side headless merge;
+    // the newer base revision must still be allowed to refresh the mirror.
+    expect(shouldApplyWebSessionTabsSnapshot(refreshedRenderer, ENV)).toBe(true)
+    expect(
+      shouldApplyWebSessionTabsSnapshot(
+        makeSnapshot([], {
+          publicationEpoch: 'renderer:epoch-1',
+          snapshotVersion: 7,
+          activeTabType: null
+        }),
+        ENV
+      )
+    ).toBe(false)
+  })
+
   it('rejects a delayed frame from an epoch superseded by a later restart', () => {
     const beforeRestart = makeSnapshot([], {
       publicationEpoch: 'epoch-before-restart',

@@ -111,7 +111,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
     try {
       const target = resolveTargetBuild(channel, tag)
       if (compareVersions(target.version, app.getVersion()) === 0) {
-        this.sendStatus({ state: 'not-available', userInitiated: true })
+        this.sendSettledCheckStatus({ state: 'not-available', userInitiated: true })
         return
       }
       this.closeLocalBuildFeed()
@@ -140,7 +140,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
       this.userInitiatedCheck = false
       this.clearAvailableUpdateContext()
       this.restoreReleaseUpdateSource()
-      this.sendStatus({
+      this.sendSettledCheckStatus({
         state: 'error',
         message: String((error as Error)?.message ?? error),
         userInitiated: true

@@ -10,6 +10,7 @@ import {
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
 import type { NativeFileDropPayload } from '../../shared/native-file-drop'
+import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import { subscribeNativeFileDrop } from '../preload-runtime-support'
 import type { PreloadApi } from '../api-types'
@@ -93,6 +94,8 @@ export const uiClipboardAndWindowControlsApi = {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
   }): Promise<string | null> => ipcRenderer.invoke('clipboard:saveImageAsTempFile', args),
+  readClipboardImageThumbnail: (): Promise<ClipboardImageThumbnail | null> =>
+    ipcRenderer.invoke('clipboard:readImageThumbnail'),
   writeClipboardText: (text: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:writeText', text),
   writeTerminalClipboardText: (text: string): Promise<void> =>

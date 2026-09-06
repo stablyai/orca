@@ -15,12 +15,7 @@ export function createUiSettingsActions(set: UISliceSet, get: UISliceGet): Parti
     },
     closeSettingsPage: () =>
       set((state) => {
-        const previousView =
-          state.previousViewBeforeSettings === 'activity' &&
-          state.settings?.experimentalActivity !== true
-            ? 'terminal'
-            : state.previousViewBeforeSettings
-        return { activeView: previousView }
+        return { activeView: state.previousViewBeforeSettings }
       }),
     settingsNavigationTarget: null,
     openSettingsTarget: (target) => {

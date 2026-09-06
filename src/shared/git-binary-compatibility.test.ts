@@ -8,6 +8,7 @@ import {
   isUnsupportedMergeTreeMergeBaseError,
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
+import { isBranchCheckedOutInWorktreeError } from './git-branch-delete-refusal'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
 import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
 import {
@@ -15,6 +16,7 @@ import {
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
 import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
+import { parseGitRemoteFetchUrls } from './git-remote-url-index'
 import { GIT_HISTORY_COMMIT_FORMAT, parseGitHistoryLog } from './git-history-log-parser'
 import {
   githubPullRequestHeadLocalRef,
@@ -109,6 +111,33 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
+  it('quietly distinguishes present and absent branch refs', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['branch', 'quiet-probe-present', head])
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-present'])
+    ).resolves.toMatchObject({ stdout: `${head}\n`, stderr: '' })
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-absent'])
+    ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+  })
+
+  it('distinguishes an absent branch from a ref pointing at a missing object', async () => {
+    const missingObject = 'a'.repeat(40)
+    const refPath = join(repoPath, '.git', 'refs', 'heads', 'quiet-probe-dangling')
+    await writeFile(refPath, `${missingObject}\n`)
+    try {
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling'])
+      ).resolves.toMatchObject({ stdout: `${missingObject}\n`, stderr: '' })
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling^{commit}'])
+      ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+    } finally {
+      await rm(refPath)
+    }
+  })
+
   it('recognizes worktree-list and rev-parse compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['worktree', 'list', '--porcelain', '-z'],
@@ -137,6 +166,29 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await expect(
       runGit(['rev-parse', '--show-toplevel', '--git-common-dir'])
     ).resolves.toBeDefined()
+  })
+
+  // Why pin this: worktree removal decides whether to prune and retry `branch -d` by
+  // matching Git's refusal text, and the wording moved inside the supported range
+  // (<=2.40 "Cannot delete branch 'x' checked out at", >=2.43 "cannot delete branch 'x'
+  // used by worktree at"). It is also the only evidence that the refusal is a stderr
+  // message on every supported Git rather than something a caller could read off stdout.
+  it('refuses to delete a branch another worktree holds, on stderr, in a recognized wording', async () => {
+    await runGit(['worktree', 'add', '-b', 'compat-held', 'held-wt'])
+    try {
+      const refusal = await runGit(['branch', '-d', '--', 'compat-held']).then(
+        () => null,
+        (error: unknown) => error
+      )
+      expect(refusal).not.toBeNull()
+      expect(isBranchCheckedOutInWorktreeError(refusal)).toBe(true)
+      const streams = refusal as { stdout?: string; stderr?: string }
+      expect(streams.stderr ?? '').toMatch(/delete branch .*compat-held/i)
+      expect(streams.stdout ?? '').toBe('')
+    } finally {
+      await runGit(['worktree', 'remove', '--force', 'held-wt'])
+      await runGit(['branch', '-D', 'compat-held'])
+    }
   })
 
   it('deregisters a worktree whose directory was renamed away', async () => {
@@ -212,6 +264,41 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     // commits each side carries.
     const unrelated = (await runGit(['commit-tree', tree, '-m', 'unrelated root'])).stdout.trim()
     await expect(runGit(['merge-base', '--end-of-options', head, unrelated])).rejects.toBeDefined()
+  })
+
+  // Why pin this: Orca answers "which remote has this URL" from one `git remote -v`
+  // instead of one `git remote get-url` per remote. That is only equivalent if both
+  // commands report the same URL — the insteadOf-expanded first `remote.<name>.url`,
+  // which a raw config read does not produce — on every supported Git.
+  it('reports the same fetch URL from remote -v as from remote get-url', async () => {
+    await runGit(['config', 'url.git@example.invalid:.insteadOf', 'https://example.invalid/'])
+    await runGit(['remote', 'add', 'compat-single', 'https://example.invalid/a/repo.git'])
+    await runGit(['remote', 'add', 'compat-multi', 'https://example.invalid/b/repo.git'])
+    await runGit([
+      'config',
+      '--add',
+      'remote.compat-multi.url',
+      'https://example.invalid/b2/repo.git'
+    ])
+    await runGit([
+      'config',
+      'remote.compat-multi.pushurl',
+      'https://push.example.invalid/b/repo.git'
+    ])
+    try {
+      const fetchUrls = parseGitRemoteFetchUrls((await runGit(['remote', '-v'])).stdout)
+      for (const name of ['compat-single', 'compat-multi']) {
+        const getUrl = (await runGit(['remote', 'get-url', name])).stdout.trim()
+        expect(fetchUrls.get(name)).toBe(getUrl)
+      }
+      expect(fetchUrls.get('compat-single')).toBe('git@example.invalid:a/repo.git')
+      // A `pushurl` must not displace the fetch URL the scan compares against.
+      expect(fetchUrls.get('compat-multi')).toBe('git@example.invalid:b/repo.git')
+    } finally {
+      await runGit(['remote', 'remove', 'compat-single'])
+      await runGit(['remote', 'remove', 'compat-multi'])
+      await runGit(['config', '--unset-all', 'url.git@example.invalid:.insteadOf'])
+    }
   })
 
   it('recognizes ref and merge-tree compatibility boundaries', async () => {

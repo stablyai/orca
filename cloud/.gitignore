@@ -1,0 +1,24 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.local/
+.env
+.env.local
+.env.local.generated
+*.log
+
+# Terraform/OpenTofu local state and plans must stay out of git.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Local dev signing key + SQLite live under data/ — never commit (contains a
+# private key and dev PII). Prod supplies the key via ORCA_CLOUD_SIGNING_KEY_PEM.
+data/

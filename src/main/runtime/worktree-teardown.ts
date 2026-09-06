@@ -99,7 +99,7 @@ export async function killAllProcessesForWorktree(
   const stopAttempts = new Map<string, Promise<boolean>>()
   const stopPty = (
     ptyId: string,
-    stop: () => boolean | Promise<boolean>
+    stop: () => Promise<boolean>
   ): Promise<{ stopped: boolean; owner: boolean }> => {
     const previous = stopAttempts.get(ptyId) ?? Promise.resolve(false)
     const current = previous

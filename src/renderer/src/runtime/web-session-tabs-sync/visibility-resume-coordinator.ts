@@ -280,6 +280,7 @@ export class VisibilityResumeCoordinator {
     visibilityGeneration: number,
     inventoryReceivedFrame: number,
     snapshots: readonly RuntimeMobileSessionTabsResult[],
+    hostAuthoritative: boolean,
     runtimeId?: string
   ): VisibilityResumeMissing[] {
     return recordVisibilityResumeInventoryReceipt({
@@ -289,6 +290,7 @@ export class VisibilityResumeCoordinator {
       visibilityGeneration,
       inventoryReceivedFrame,
       snapshots,
+      hostAuthoritative,
       runtimeId
     })
   }

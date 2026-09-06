@@ -5,7 +5,7 @@ import {
   buildRemirroredClosedTabMarkerLiftPatch,
   buildRetractedMirroredTabSweepPatch
 } from './agent-status-primitives'
-import { isWebSessionTabsWorktreeRemovalFrame } from './tracking'
+import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 
 type FinalPatchContext = ReturnType<typeof applyActiveStateUpdates>
 

@@ -130,17 +130,19 @@ export async function handoffStructuredSessionToNative(
     throw error
   }
   context.releaseOwner(sessionId)
-  await deps.transport?.revealNativeSession?.({
-    workspaceId: record.location.workspaceId,
-    sessionId,
-    agent: record.provider,
-    ...(owner?.adoptedTerminal ? { adoptedTerminal: true } : {})
-  })
+  // Why status lands before the reveal: the native owner is already proven here, and a
+  // reveal that rejects must not leave the session released but never marked native.
   context.setStatus(sessionId, {
     owner: 'native',
     direction: null,
     phase: 'idle',
     stage: record.lease.handoffStage,
     operationId: record.lease.handoffOperationId
+  })
+  await deps.transport?.revealNativeSession?.({
+    workspaceId: record.location.workspaceId,
+    sessionId,
+    agent: record.provider,
+    ...(owner?.adoptedTerminal ? { adoptedTerminal: true } : {})
   })
 }

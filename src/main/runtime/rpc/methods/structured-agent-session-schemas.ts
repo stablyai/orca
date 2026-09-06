@@ -98,7 +98,7 @@ export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['claude', 'codex'])
   })
   .strict()
 
@@ -107,7 +107,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['claude', 'codex'])
   })
   .strict()
 
@@ -149,8 +149,16 @@ export const SendParams = z
   .strict()
 
 export const CancelParams = z
-  .object({ envelope: MutationEnvelope, turnId: Identifier('Invalid turn id') })
+  .object({
+    envelope: MutationEnvelope,
+    turnId: Identifier('Invalid turn id'),
+    scope: z.literal('background-tasks').optional(),
+    taskId: Identifier('Invalid task id').optional()
+  })
   .strict()
+  .refine((value) => value.taskId === undefined || value.scope === 'background-tasks', {
+    message: 'A task id requires background-task scope'
+  })
 
 export const RespondParams = z
   .object({
@@ -167,6 +175,15 @@ export const SetOptionParams = z
     envelope: MutationEnvelope,
     key: Identifier('Invalid option key'),
     value: z.string().max(MAX_OPTION_LABEL)
+  })
+  .strict()
+
+export const HandoffParams = z
+  .object({
+    envelope: MutationEnvelope,
+    direction: z.enum(['to-tui', 'to-native']),
+    mode: z.enum(['now', 'after-turn', 'stop-turn']),
+    action: z.enum(['start', 'cancel-queued', 'retry', 'recover']).optional()
   })
   .strict()
 

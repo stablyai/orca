@@ -10,7 +10,7 @@ vi.mock('child_process', () => ({
 
 const getAllProcessesMock = vi.fn()
 
-import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
+import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot-reader'
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import {
   confirmShellForegroundProcess,

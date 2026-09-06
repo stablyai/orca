@@ -36,6 +36,7 @@ function makeCommands(overrides: Partial<RuntimeGitTarget> = {}): RuntimeGitDiff
         head: 'a'.repeat(40)
       }
     },
+    executionHostId: 'local',
     localGitOptions: { wslDistro: 'Ubuntu' },
     ...overrides
   } as RuntimeGitTarget
@@ -71,7 +72,7 @@ describe('RuntimeGitDiffCommands branch-compare admission', () => {
   it('forwards background admission to the SSH execution host', async () => {
     const getBranchCompare = vi.fn().mockResolvedValue({ summary: {}, entries: [] })
     mocks.getSshGitProvider.mockReturnValue({ getBranchCompare })
-    const commands = makeCommands({ connectionId: 'conn-1' })
+    const commands = makeCommands({ executionHostId: 'ssh:conn-1' })
 
     await commands.getRuntimeGitBranchCompare('id:wt-1', 'origin/main', 'background')
 
