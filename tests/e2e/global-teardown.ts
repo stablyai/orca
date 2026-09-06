@@ -8,6 +8,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync, realpathSync, rmSync } from 'node:fs'
 import { TEST_REPO_PATH_FILE } from './global-setup'
+import { readWindowsProcessTableFresh } from '../../src/main/windows/windows-process-table'
 
 export function linkedWorktreePaths(testRepoDir: string): string[] {
   const root = realpathSync.native(testRepoDir)
@@ -61,14 +62,23 @@ export function cleanupTestRepository(testRepoDir: string): void {
   }
 }
 
-export default function globalTeardown(): void {
+export default async function globalTeardown(): Promise<void> {
   if (!existsSync(TEST_REPO_PATH_FILE)) {
     return
   }
 
   const testRepoDir = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
   if (testRepoDir && existsSync(testRepoDir)) {
-    cleanupTestRepository(testRepoDir)
+    try {
+      cleanupTestRepository(testRepoDir)
+    } catch (error) {
+      const rows = await readWindowsProcessTableFresh()
+      const selected = rows.filter((row) => /^(?:sh|bash|node)\.exe$/i.test(row.name))
+      const parents = new Set(selected.map((row) => row.ppid))
+      console.error('TEARDOWN_PROCESS_ROWS', JSON.stringify(rows.filter((row) =>
+        selected.includes(row) || parents.has(row.pid))))
+      throw error
+    }
     console.error(`[e2e] Cleaned up test repo at ${testRepoDir}`)
   }
 
