@@ -66,6 +66,7 @@ function attributePortToNormalizedWorkspaces(
   )
   return commandMatch ? toOwner(commandMatch.worktree, 'command') : undefined
 }
+/** Projects a listener into a workspace, container, or external port with a safe process label. */
 export function enrichPort(
   port: RawListeningPort,
   worktrees: readonly NormalizedWorkspacePortProbe[],
