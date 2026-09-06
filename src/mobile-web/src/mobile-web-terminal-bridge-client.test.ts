@@ -61,8 +61,7 @@ it('subscribes by workspace/tab IDs and sends typed terminal ACKs', async () => 
       viewport: { cols: 80, rows: 24 },
       startSequence: 0,
       maxOutstandingBytes: 256 * 1024,
-      inputFloor: 'held',
-      queryReplyAuthority: true
+      queryReplyNegotiated: true
     }
   })
   expect(onEvent).toHaveBeenCalledOnce()

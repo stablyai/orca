@@ -48,6 +48,35 @@ describe('mobile web shell payload tolerance', () => {
     )
   })
 
+  it('collapses an optional discriminated union the page cannot classify', () => {
+    const schema = tolerantMobileWebShellPayload(
+      z
+        .object({
+          keep: z.string(),
+          route: z
+            .discriminatedUnion('kind', [
+              z.object({ kind: z.literal('list') }).strict(),
+              z.object({ kind: z.literal('session'), id: z.string() }).strict()
+            ])
+            .optional()
+        })
+        .strict()
+    )
+
+    expect(schema.safeParse({ keep: 'a', route: { kind: 'futureKind', id: 'x' } })).toEqual({
+      success: true,
+      data: { keep: 'a' }
+    })
+    expect(schema.safeParse({ keep: 'a', route: { kind: 'session', id: 'x' } })).toEqual({
+      success: true,
+      data: { keep: 'a', route: { kind: 'session', id: 'x' } }
+    })
+    expect(schema.safeParse({ keep: 'a' }).success).toBe(true)
+    // A member the page CAN name but whose fields are wrong is a sender bug, not skew.
+    expect(schema.safeParse({ keep: 'a', route: { kind: 'session' } }).success).toBe(false)
+    expect(schema.safeParse({ keep: 'a', route: 'session' }).success).toBe(false)
+  })
+
   it('still rejects a payload whose known fields are wrong, and keeps refinements', () => {
     expect(snapshot.safeParse({ ...SNAPSHOT, snapshotVersion: -1 }).success).toBe(false)
     expect(snapshot.safeParse({ ...SNAPSHOT, truncated: 'no' }).success).toBe(false)

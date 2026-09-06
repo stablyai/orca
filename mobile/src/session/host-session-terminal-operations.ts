@@ -7,8 +7,6 @@ export type HostSessionTerminalStreamEvent =
       type: 'subscribed'
       cols?: number
       rows?: number
-      inputFloor?: 'held' | 'read-only'
-      queryReplyAuthority?: boolean
     }
   | {
       type: 'scrollback'
@@ -40,8 +38,6 @@ export type HostSessionTerminalStreamEvent =
   | {
       type: 'metadata'
       displayMode?: 'auto' | 'desktop' | 'phone'
-      inputFloor?: 'held' | 'read-only'
-      queryReplyAuthority?: boolean
       cwd?: string
     }
   | { type: 'end' | 'error' }

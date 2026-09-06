@@ -9,7 +9,7 @@ describe('MobileWebTerminalRequestScheduler authority lifecycle', () => {
   it('drops host readiness and write authority when the terminal goes invisible', async () => {
     const harness = createHarness()
     harness.scheduler.markBridgeReady()
-    harness.scheduler.markHostReady('held', true)
+    harness.scheduler.markHostReady(true)
 
     await expect(harness.scheduler.sendInputAsync('input', 'YQ==')).resolves.toBe(true)
     expect(harness.operations('input')).toHaveLength(1)
@@ -33,14 +33,14 @@ describe('MobileWebTerminalRequestScheduler authority lifecycle', () => {
     const harness = createHarness((request) =>
       request.operation === 'input' && inFlight.pending() ? inFlight.promise : Promise.resolve(null)
     )
-    harness.scheduler.markHostReady('held', true)
+    harness.scheduler.markHostReady(true)
 
     const first = harness.scheduler.sendInputAsync('input', 'YQ==')
     const queued = harness.scheduler.sendInputAsync('input', 'Yg==')
     await vi.waitFor(() => expect(harness.operations('input')).toHaveLength(1))
 
     // Authority is revoked while the queued write is still parked behind the in-flight one.
-    harness.scheduler.setAuthority('read-only', false)
+    harness.scheduler.setVisible(false)
     inFlight.resolve(null)
 
     await expect(first).resolves.toBe(true)
@@ -48,14 +48,27 @@ describe('MobileWebTerminalRequestScheduler authority lifecycle', () => {
     expect(harness.operations('input')).toHaveLength(1)
   })
 
+  it('sends a query reply only when the shell reported a negotiated reply opcode', async () => {
+    const harness = createHarness()
+    harness.scheduler.markHostReady(false)
+
+    await expect(harness.scheduler.sendInputAsync('queryReply', 'YQ==')).resolves.toBe(false)
+    await expect(harness.scheduler.sendInputAsync('input', 'Yg==')).resolves.toBe(true)
+    harness.scheduler.markHostReady(true)
+    await expect(harness.scheduler.sendInputAsync('queryReply', 'Yw==')).resolves.toBe(true)
+
+    expect(harness.operations('queryReply')).toHaveLength(1)
+    expect(harness.operations('input')).toHaveLength(1)
+  })
+
   it('makes every entry point inert after dispose', async () => {
     const harness = createHarness()
     harness.scheduler.markBridgeReady()
-    harness.scheduler.markHostReady('held', true)
+    harness.scheduler.markHostReady(true)
     harness.scheduler.dispose()
 
     harness.scheduler.markBridgeReady()
-    harness.scheduler.markHostReady('held', true)
+    harness.scheduler.markHostReady(true)
     harness.scheduler.acknowledge(4)
     harness.scheduler.resize({ cols: 80, rows: 24 })
     harness.scheduler.setVisible(true)

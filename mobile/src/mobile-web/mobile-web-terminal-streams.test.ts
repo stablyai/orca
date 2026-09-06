@@ -270,6 +270,41 @@ describe('MobileWebTerminalStreams', () => {
     expect(decodeTerminalStreamText(harness.sentFrames.at(-1)!.payload)).toBe('\x1b[0n')
   })
 
+  it('tells the page a host that never echoed queryReply negotiated no reply opcode', async () => {
+    const harness = createHarness()
+    await harness.streams.start({
+      requestId: 'request-old-host',
+      subscriptionId: SUBSCRIPTION_ID,
+      payload: subscribePayload(),
+      client: harness.client,
+      isRequestActive: () => true
+    })
+    harness.emitMultiplex({ type: 'ready' })
+    const subscribe = harness.sentFrames.at(-1)!
+    const hostStreamId = decodeTerminalStreamJson<Record<string, unknown>>(subscribe.payload)!
+      .streamId as number
+    harness.emitMultiplex({ type: 'subscribed', streamId: hostStreamId })
+    await settle()
+
+    expect(harness.events.at(-1)?.event).toMatchObject({
+      type: 'subscribed',
+      queryReplyNegotiated: false
+    })
+    const framesBefore = harness.sentFrames.length
+    await harness.streams.handle(
+      {
+        operation: 'queryReply',
+        streamId: SUBSCRIPTION_ID,
+        sequence: 0,
+        data: Buffer.from('\x1b[0n').toString('base64')
+      },
+      harness.client
+    )
+
+    // Why: opcode 0 would land the reply as floor-taking shell input on that host.
+    expect(harness.sentFrames).toHaveLength(framesBefore)
+  })
+
   it('drops a page query-reply that is not a reply grammar', async () => {
     const harness = createHarness()
     await harness.streams.start({
@@ -301,35 +336,6 @@ describe('MobileWebTerminalStreams', () => {
     )
 
     expect(harness.sentFrames.length).toBe(framesBefore)
-  })
-
-  it('falls back to legacy input when an older host omits query-reply support', async () => {
-    const harness = createHarness()
-    await harness.streams.start({
-      requestId: 'request-legacy-query',
-      subscriptionId: SUBSCRIPTION_ID,
-      payload: subscribePayload(),
-      client: harness.client,
-      isRequestActive: () => true
-    })
-    harness.emitMultiplex({ type: 'ready' })
-    const subscribe = harness.sentFrames.at(-1)!
-    const hostStreamId = decodeTerminalStreamJson<Record<string, unknown>>(subscribe.payload)!
-      .streamId as number
-    harness.emitMultiplex({ type: 'subscribed', streamId: hostStreamId })
-
-    await harness.streams.handle(
-      {
-        operation: 'queryReply',
-        streamId: SUBSCRIPTION_ID,
-        sequence: 0,
-        data: Buffer.from('\x1b[0n').toString('base64')
-      },
-      harness.client
-    )
-
-    expect(harness.sentFrames.at(-1)?.opcode).toBe(TerminalStreamOpcode.Input)
-    expect(decodeTerminalStreamText(harness.sentFrames.at(-1)!.payload)).toBe('\x1b[0n')
   })
 
   it('keeps shell-owned device input native and returns status without native paths', async () => {
@@ -475,8 +481,7 @@ describe('MobileWebTerminalStreams', () => {
           viewport: { cols: 80, rows: 24 },
           startSequence: 0,
           maxOutstandingBytes: 256 * 1024,
-          inputFloor: 'held',
-          queryReplyAuthority: true
+          queryReplyNegotiated: false
         }
       }
     ])

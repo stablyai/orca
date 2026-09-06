@@ -19,8 +19,7 @@ export class MobileWebTerminalRequestScheduler {
   private bridgeReady = false
   private hostReady = false
   private disposed = false
-  private inputFloor: 'held' | 'read-only' = 'read-only'
-  private queryReplyAuthority = false
+  private queryReplyNegotiated = false
   private inputSequence = 0
   private inputTail = Promise.resolve()
   private pendingAck: number | null = null
@@ -45,20 +44,15 @@ export class MobileWebTerminalRequestScheduler {
     this.drainVisibility()
   }
 
-  markHostReady(inputFloor: 'held' | 'read-only', queryReplyAuthority: boolean): void {
+  markHostReady(queryReplyNegotiated: boolean): void {
     if (this.disposed) {
       return
     }
     this.hostReady = true
     this.resyncPending = false
-    this.setAuthority(inputFloor, queryReplyAuthority)
+    this.queryReplyNegotiated = queryReplyNegotiated
     this.drainResize()
     this.drainAck()
-  }
-
-  setAuthority(inputFloor: 'held' | 'read-only', queryReplyAuthority: boolean): void {
-    this.inputFloor = inputFloor
-    this.queryReplyAuthority = queryReplyAuthority
   }
 
   sendInput(operation: InputOperation, data: string): void {
@@ -131,8 +125,7 @@ export class MobileWebTerminalRequestScheduler {
     }
     if (!visible) {
       this.hostReady = false
-      this.inputFloor = 'read-only'
-      this.queryReplyAuthority = false
+      this.queryReplyNegotiated = false
       this.pendingAck = null
       this.resyncPending = false
     }
@@ -185,10 +178,7 @@ export class MobileWebTerminalRequestScheduler {
   }
 
   private canSendInput(operation: InputOperation): boolean {
-    return (
-      this.hostReady &&
-      (operation === 'queryReply' ? this.queryReplyAuthority : this.inputFloor === 'held')
-    )
+    return this.hostReady && (operation !== 'queryReply' || this.queryReplyNegotiated)
   }
 
   private drainAck(): void {

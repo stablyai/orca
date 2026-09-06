@@ -109,22 +109,14 @@ function applyWebTerminalEffect(
   onEvent: (event: HostSessionTerminalStreamEvent) => void
 ): void {
   if (effect.type === 'ready') {
-    scheduler.markHostReady(effect.inputFloor, effect.queryReplyAuthority)
+    scheduler.markHostReady(effect.queryReplyNegotiated)
     onEvent({
       type: 'subscribed',
       cols: effect.viewport.cols,
-      rows: effect.viewport.rows,
-      inputFloor: effect.inputFloor,
-      queryReplyAuthority: effect.queryReplyAuthority
+      rows: effect.viewport.rows
     })
-  } else if (effect.type === 'authority') {
-    scheduler.setAuthority(effect.inputFloor, effect.queryReplyAuthority)
-    onEvent({
-      type: 'metadata',
-      displayMode: effect.displayMode,
-      inputFloor: effect.inputFloor,
-      queryReplyAuthority: effect.queryReplyAuthority
-    })
+  } else if (effect.type === 'displayMode') {
+    onEvent({ type: 'metadata', displayMode: effect.displayMode })
   } else if (effect.type === 'write') {
     onEvent({
       type: 'data',

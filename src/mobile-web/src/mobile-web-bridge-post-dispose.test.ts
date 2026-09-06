@@ -81,7 +81,7 @@ describe('after dispose', () => {
       terminalDeviceInputRequest: vi.fn()
     } as unknown as MobileWebBridgeClientType
     const scheduler = new MobileWebTerminalRequestScheduler(client, 'T'.repeat(22), onError)
-    scheduler.markHostReady('held', true)
+    scheduler.markHostReady(true)
 
     const inFlight = scheduler.sendInputAsync('input', 'YQ==')
     await vi.waitFor(() => expect(terminalRequest).toHaveBeenCalledTimes(1))

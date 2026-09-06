@@ -161,6 +161,30 @@ describe('mobile web native shell channel', () => {
     expect(posted.at(-1)).toMatchObject({ type: 'cancel', target: 'request' })
   })
 
+  it('opens its default route when a newer shell resumes a route kind it cannot name', () => {
+    const target = window as NativeTestWindow
+    target.OrcaNative = { postMessage: () => {} }
+    const hook = renderHook(() => useMobileWebNativeShell(), {
+      wrapper: MobileWebNativeShellProvider
+    })
+
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            ...initMessage(),
+            resumeRoute: { kind: 'someFutureKind', workspaceId: 'opaque-workspace' }
+          })
+        })
+      )
+    )
+
+    // Why: dropping the init instead would cost the page every grant, not one route.
+    expect(hook.result.current.client).not.toBeNull()
+    expect(hook.result.current.resumeRoute).toEqual({ kind: 'workspaceList' })
+    expect(hook.result.current.navigationRoute).toEqual({ kind: 'workspaceList' })
+  })
+
   it('retires pending work when the shell session or build changes', async () => {
     const posted: MobileWebBridgePageMessage[] = []
     const target = window as NativeTestWindow

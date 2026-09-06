@@ -37,11 +37,7 @@ export function handleMobileWebTerminalMultiplexEvent(args: {
         viewport: record.viewport,
         startSequence: record.sentSequence,
         maxOutstandingBytes: MOBILE_WEB_TERMINAL_MAX_OUTSTANDING_BYTES,
-        // Constants: the host publishes neither over the terminal stream. `isMobileTerminalQueryReplyAuthority`
-        // elects one subscriber but is never sent, and opcode-17 WriteUnavailable reports a single
-        // refused write with no regain signal, so it is not the floor state this field declares.
-        inputFloor: 'held',
-        queryReplyAuthority: true
+        queryReplyNegotiated: record.supportsQueryReply
       })
     }
     return false
