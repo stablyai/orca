@@ -24,18 +24,34 @@ export function mintRelayEndpointCredential(): string {
 }
 
 /**
- * Read a credential the file already holds, or undefined when there is none to adopt.
- *
- * Why adopt rather than always mint: clients older than this daemon still pre-write the file
- * before launching, and their --connect reads it back. Overwriting it would lock them out.
+ * A file this daemon may trust as its credential: owner-only mode and owned by this uid on
+ * POSIX. Anyone who can produce such a file inside our relay dir already runs as us. Windows
+ * relies on the profile dir's inherited ACL plus the icacls tightening below.
  */
-export function readAdoptableRelayEndpointCredential(credentialFile: string): string | undefined {
+function readOwnerOnlyRelayEndpointCredential(credentialFile: string): string | undefined {
   try {
+    if (process.platform !== 'win32') {
+      const stat = statSync(credentialFile)
+      if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.()) {
+        return undefined
+      }
+    }
     const value = readFileSync(credentialFile, 'utf8').trim()
     return isValidRelayEndpointCredential(value) ? value : undefined
   } catch {
     return undefined
   }
+}
+
+/**
+ * Read a credential the file already holds, or undefined when there is none to adopt.
+ *
+ * Why adopt rather than always mint: clients older than this daemon still pre-write the file
+ * before launching, and their --connect reads it back. Overwriting it would lock them out.
+ * A file that fails the owner-only rule is not adopted; it is replaced by a fresh mint.
+ */
+export function readAdoptableRelayEndpointCredential(credentialFile: string): string | undefined {
+  return readOwnerOnlyRelayEndpointCredential(credentialFile)
 }
 
 /** Atomic, owner-only publication: temp file created exclusively, then renamed over the path. */
@@ -69,9 +85,6 @@ export function publishRelayEndpointCredential(
   }
   const adopted = readAdoptableRelayEndpointCredential(credentialFile)
   if (adopted !== undefined) {
-    if (process.platform !== 'win32') {
-      chmodSync(credentialFile, 0o600)
-    }
     return adopted
   }
   const minted = mintRelayEndpointCredential()
@@ -116,24 +129,6 @@ export function readRotatedRelayEndpointCredential(
   if (!credentialFile || presented === undefined || !isValidRelayEndpointCredential(presented)) {
     return undefined
   }
-  let onDisk: string
-  try {
-    onDisk = readFileSync(credentialFile, 'utf8').trim()
-  } catch {
-    return undefined
-  }
-  if (onDisk !== presented) {
-    return undefined
-  }
-  if (process.platform !== 'win32') {
-    try {
-      const stat = statSync(credentialFile)
-      if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.()) {
-        return undefined
-      }
-    } catch {
-      return undefined
-    }
-  }
-  return onDisk
+  const onDisk = readOwnerOnlyRelayEndpointCredential(credentialFile)
+  return onDisk === presented ? onDisk : undefined
 }

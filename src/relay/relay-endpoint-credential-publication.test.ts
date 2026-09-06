@@ -6,6 +6,7 @@ import * as path from 'node:path'
 import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import {
+  readAdoptableRelayEndpointCredential,
   readRotatedRelayEndpointCredential,
   writeRelayEndpointCredentialFile
 } from './relay-endpoint-credential-publication'
@@ -123,6 +124,23 @@ describe.skipIf(process.platform === 'win32')('relay endpoint credential publica
     expect(resp.error).toBeUndefined()
   }, 15_000)
 
+  it('replaces a pre-written credential that is not owner-only instead of adopting it', async () => {
+    freshDir('relay-cred-reject-')
+    const foreign = 'f'.repeat(40)
+    writeFileSync(credentialFile, `${foreign}\n`, { mode: 0o644 })
+    const daemon = startDaemon()
+    await daemon.sentinelReceived
+    const published = readFileSync(credentialFile, 'utf8').trim()
+    expect(published).not.toBe(foreign)
+    expect(published).toMatch(CREDENTIAL_PATTERN)
+    expect(statSync(credentialFile).mode & 0o777).toBe(0o600)
+
+    const bridge = connect()
+    await bridge.sentinelReceived
+    const resp = await bridge.waitForResponse(bridge.send('relay.status'))
+    expect(resp.error).toBeUndefined()
+  }, 15_000)
+
   it('accepts a client presenting a credential rotated on disk with owner-only mode', async () => {
     freshDir('relay-cred-rotate-')
     const daemon = startDaemon()
@@ -189,6 +207,17 @@ describe.skipIf(process.platform === 'win32')('readRotatedRelayEndpointCredentia
     expect(readRotatedRelayEndpointCredential(undefined, value)).toBeUndefined()
     chmodSync(file, 0o640)
     expect(readRotatedRelayEndpointCredential(file, value)).toBeUndefined()
+  })
+
+  it('applies the same owner-only rule at startup adoption', () => {
+    dir = mkdtempSync(path.join(tmpdir(), 'relay-cred-read-'))
+    const file = path.join(dir, 'relay.sock.credential')
+    const value = 'h'.repeat(32)
+    writeFileSync(file, value, { mode: 0o600 })
+    expect(readAdoptableRelayEndpointCredential(file)).toBe(value)
+    chmodSync(file, 0o644)
+    expect(readAdoptableRelayEndpointCredential(file)).toBeUndefined()
+    expect(readAdoptableRelayEndpointCredential(path.join(dir, 'missing'))).toBeUndefined()
   })
 
   it('never adopts a value that cannot authenticate a reconnect client', () => {

@@ -87,6 +87,10 @@ import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import { resolveRelayEndpointBeforeRelaunch } from './ssh-relay-endpoint-takeover'
+import {
+  isRelayEndpointHeldError,
+  isRelayEndpointUnresponsiveError
+} from './ssh-relay-endpoint-incumbent'
 import { sweepSupersededRelayEndpoints } from './ssh-relay-superseded-endpoints'
 import {
   parseShortRelaySocketDir,
@@ -1765,7 +1769,14 @@ async function launchRelay(
       }
     }
   } catch (err) {
-    if (isUnconfirmedSshCommandTermination(err)) {
+    // Why rethrow the verdicts: this catch predates the incumbent probe and was meant for a failed
+    // `test -S`. Swallowing a Held/Unresponsive verdict launches a fresh daemon over a live one —
+    // the exact collision the probe exists to prevent (it lost the bind, but only by luck).
+    if (
+      isUnconfirmedSshCommandTermination(err) ||
+      isRelayEndpointHeldError(err) ||
+      isRelayEndpointUnresponsiveError(err)
+    ) {
       throw err
     }
     signal?.throwIfAborted()
