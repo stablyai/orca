@@ -18035,38 +18035,41 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["ssh"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": [
+        "macos",
+        "linux"
+      ],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The original six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The added five-pane input spec passed in Linux CI run 34033353595, but diagnostic run 34034754815 reproduced real input loss during scrollback replay; application PR #19075 is required before this coverage can land.",
+      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075. The added five-pane input spec passed in Linux CI run 34033353595, but diagnostic run 34034754815 reproduced real input loss during scrollback replay; application PR #19075 is required before this coverage can land.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/18018",
         "https://github.com/stablyai/orca/pull/18546",
-        "https://github.com/stablyai/orca/issues/12547"
+        "https://github.com/stablyai/orca/issues/12547",
+        "https://github.com/stablyai/orca/issues/16764",
+        "https://github.com/stablyai/orca/actions/runs/34037450427",
+        "https://github.com/stablyai/orca/actions/runs/34037669843"
       ],
       "invariant": "Transport loss and frozen-host silence must preserve the remote session; host relay loss may rebind a pane without accumulating reattachable leases. Reconnects must preserve usable terminal content, bounded PTYs/fds/processes, complete large listings, and independently recoverable watcher processes. Electron test shutdown must release inherited pipes after confirmed root exit without closing live-process pipes.",
       "oracle": "Poll a changed connected SSH authority after injected faults, then require terminal output and appropriate PTY identity. Read remote process/fd state, listFiles replies, and rendered explorer rows. Resolve Playwright cleanup only after the root process exits and its inherited pipes close; live-process pipes remain untouched.",
       "commands": [
-        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1"
       ],
       "testFiles": [
-        "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts",
         "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
         "tests/e2e/ssh-docker-half-open-link.spec.ts",
         "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts",
         "tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts",
         "tests/e2e/ssh-docker-resource-accumulation.spec.ts",
         "tests/e2e/ssh-docker-watcher-isolation.spec.ts",
-        "tests/e2e/helpers/electron-process-shutdown.unit.test.ts"
+        "tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
+        "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+        "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts"
       ],
       "assertionRefs": [
-        {
-          "file": "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts",
-          "assertions": [
-            "five distinct SSH PTYs acknowledge actual keyboard input after two rendered hide/reopen cycles while all five producers flood"
-          ]
-        },
         {
           "file": "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
           "assertions": [
@@ -18109,6 +18112,18 @@
             "releases inherited pipes after confirmed exit, including prior exit",
             "retains live-process pipes on shutdown timeout"
           ]
+        },
+        {
+          "file": "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
+          "assertions": [
+            "five flooding SSH panes remain below unchanged 2500ms soft and 5000ms hard freeze budgets during bulk reopen and two double-animation-frame view changes"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts",
+          "assertions": [
+            "five distinct SSH PTYs acknowledge actual keyboard input after two rendered hide/reopen cycles while all five producers flood"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -18129,6 +18144,15 @@
           "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "durationSeconds": 312,
           "summary": "Six specs: ten passed, two existing fixme skipped, clean worker shutdown. Baseline same enabled suite: ten passed but worker teardown timed out (7.3m)."
+        },
+        {
+          "date": "2026-09-06",
+          "runner": "ci",
+          "platform": "linux",
+          "result": "passed",
+          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
+          "durationSeconds": 396,
+          "summary": "Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075."
         }
       ],
       "runtimeBudget": {
@@ -18153,13 +18177,98 @@
         "Collect CI runtime and flake history plus product red/green evidence before blocking."
       ],
       "knownGaps": [
-        "Five-pane simultaneous flood input depends on application PR #19075: replay discarded the first 31 characters of correctly focused keyboard input in run 34034754815. Require validation against the merged fix before landing; the separate #16764 wall-clock performance oracle remains unresolved.",
+        "Five-pane simultaneous flood input depends on application PR #19075: replay discarded the first 31 characters of correctly focused keyboard input in run 34034754815. Require validation against the merged fix before landing; freeze performance coverage was restored separately in #19081, with its isolated headless timer-lag outlier still documented.",
         "The disconnected 48MB flood still loses its relay channel: original post-flood input marker failed in 60s, and waiting for the finite producer completion marker failed in 120s. It remains an explicit #18018 fixme reproduction; frozen-host input is re-enabled after four successful runs.",
-        "Linux and Windows desktop clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not exercised by these Docker specs.",
+        "Linux headed CI covers the bulk-open freeze reproduction; Windows clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not covered by that result.",
         "Some legacy assertions inspect terminal serialization or backing state rather than rendered DOM; no blanket visual coverage claim.",
-        "No p95 CI history or full product mutation proof."
+        "No p95 CI history or full product mutation proof.",
+        "One headless bulk-open probe reached 6478.6ms in run 34035957303; animation-frame scheduling explains the consistent interaction failures, but does not directly explain that isolated timer-lag outlier. Long-term headed CI soak remains outstanding."
       ],
       "demotionRule": "Keep experimental while any recovery reproduction fails or any teardown, identity, resource-count, or rendered oracle flakes; never promote by extending sleeps or retries."
+    },
+    {
+      "id": "terminal.windows-wsl-launch-and-paste",
+      "title": "Real WSL terminal agent launch and paste ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "electron-windows-wsl",
+      "surfaces": ["agent tab launch", "keyboard paste", "terminal runtime retention"],
+      "platforms": ["windows"],
+      "providers": ["wsl1", "wsl2"],
+      "coveredPlatforms": ["windows"],
+      "coveredProviders": ["wsl1"],
+      "coverageNotes": "Real WSL1 coverage: three scenarios each passed three times with no skips or retries; exact JSON report verified. Latest PR routing and installer-checksum follow-ups await CI. WSL2 remains untested.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34030832614"],
+      "invariant": "An agent launched into WSL runs in the guest; keyboard paste reaches exactly one owning PTY and preserves Linux content even after the default shell changes.",
+      "oracle": "Run the existing real WSL launch and two paste cases three times; require nine passes and zero skipped, unexpected, or flaky results in the Playwright JSON report.",
+      "commands": [
+        "gh workflow run windows-wsl-e2e.yml",
+        "pnpm exec playwright test tests/e2e/golden-tab-bar-agent-launch.spec.ts tests/e2e/terminal-windows-shell-paste-ownership.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
+        "node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/wsl-e2e-lane-contract.test.mjs config/scripts/verify-wsl-e2e-participation.test.mjs",
+        "gh run view 34031806291 --log"
+      ],
+      "testFiles": [
+        "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
+        "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
+        "config/scripts/wsl-e2e-lane-contract.test.mjs",
+        "config/scripts/verify-wsl-e2e-participation.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/golden-tab-bar-agent-launch.spec.ts",
+          "assertions": ["requires a distro-only marker from the launched agent"]
+        },
+        {
+          "file": "tests/e2e/terminal-windows-shell-paste-ownership.spec.ts",
+          "assertions": [
+            "requires exact Linux pasted content and exactly one PTY write",
+            "retains WSL paste ownership after changing the default shell"
+          ]
+        },
+        {
+          "file": "config/scripts/verify-wsl-e2e-participation.test.mjs",
+          "assertions": ["rejects skipped, missing, substituted and retried scenarios"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-06",
+          "runner": "ci",
+          "platform": "windows",
+          "result": "passed",
+          "command": "gh run view 34031806291 --log",
+          "durationSeconds": 210,
+          "summary": "Immutable run34031806291 at92fc5152: WSL1 launch3 and paste6 passed after reader-readiness correction; named-scenario verifier accepted actual JSON report with0skips0retries. Command retrieves recorded evidence; workflow_dispatch command above reruns current coverage."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 1800,
+        "scope": "CI job timeout; measured p95 is not established"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Initial permanent-lane diagnostic8passed1failed on missing PTY before changing settings. After requiring guest-reader readiness before mutation, run34031806291 passed9/9. Two earlier setup validations also passed9/9. Long-term CI history remains missing."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Verifier rejects actual8pass1fail CI report and accepts actual9pass report. Unit contracts reject skips, missing or substituted scenarios and retried passes. No full application fault-mutation proof."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "CI-only provisioning and routing; no application runtime changes."
+      },
+      "promotionCriteria": [
+        "Require all nine real WSL executions on the final workflow head.",
+        "Demonstrate missing or skipped WSL execution fails participation.",
+        "Collect repeated CI history before adding this experimental lane to required verification."
+      ],
+      "knownGaps": [
+        "WSL2 is not provisioned.",
+        "No SSH, folder-only workspace, packaged mixed-version, or live-service claim.",
+        "The new PR lane is outside verify until reliability is established."
+      ],
+      "demotionRule": "Keep experimental if provisioning or an execution flakes; never promote by skipping a case, raising timeouts, or retrying until green."
     }
   ]
 }
