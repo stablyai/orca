@@ -98,8 +98,26 @@ test.describe('five SSH panes under simultaneous output', () => {
         await orcaPage.keyboard.type(input)
         await orcaPage.keyboard.press('Enter')
         // The remote process repeats its latest ACK, so flood eviction cannot hide it.
-        await waitForTerminalOutput(orcaPage, `:ACK=${input}:`, 30_000, 80_000)
-        await waitForTerminalOutput(orcaPage, `${owner.marker}:`, 30_000, 80_000)
+        try {
+          await waitForTerminalOutput(orcaPage, `:ACK=${input}:`, 30_000, 80_000)
+          await waitForTerminalOutput(orcaPage, `${owner.marker}:`, 30_000, 80_000)
+        } catch (error) {
+          const panes = await orcaPage.evaluate((tabId) => {
+            const manager = window.__paneManagers!.get(tabId)!
+            return manager.getPanes().map((pane) => ({
+              active: pane === manager.getActivePane(),
+              focused: pane.container.contains(document.activeElement),
+              cols: pane.terminal.cols,
+              rows: pane.terminal.rows,
+              output: pane.serializeAddon.serialize().slice(-80_000)
+            }))
+          }, tabId)
+          await testInfo.attach(`flood-input-${round}-${index}`, {
+            body: JSON.stringify({ input, owner, panes }),
+            contentType: 'application/json'
+          })
+          throw error
+        }
       }
     }
   })
