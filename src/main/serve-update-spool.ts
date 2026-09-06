@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from '
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import {
+  getCensusOkPath,
   getHelperMarkerPath,
   getRequestPath,
   getResultPath,
@@ -50,6 +51,8 @@ export function writeUpdateRequest(
   request: Omit<ServeUpdateRequest, 'schemaVersion' | 'attemptId'>
 ): boolean {
   const attemptId = randomUUID()
+  // A continuation left by an earlier attempt must never authorize this one.
+  clearServeUpdateCensusContinuation()
   const written = writeJsonFile(
     getRequestPath(resolveSpoolDir()),
     { schemaVersion: 2, attemptId, ...request },
@@ -99,6 +102,28 @@ export function clearUpdateResult(): void {
     unlinkSync(getResultPath(resolveSpoolDir()))
   } catch {
     // A missing result file is the converged state.
+  }
+}
+
+/**
+ * Tells the running helper the quit-fence census passed and it may stop the unit.
+ * The helper also aborts on its own when the request file disappears, so clearing
+ * the request on a blocked census is the cancellation path.
+ */
+export function writeServeUpdateCensusContinuation(): boolean {
+  try {
+    writeFileSync(getCensusOkPath(resolveSpoolDir()), String(process.pid), { mode: 0o640 })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function clearServeUpdateCensusContinuation(): void {
+  try {
+    unlinkSync(getCensusOkPath(resolveSpoolDir()))
+  } catch {
+    // A missing continuation file is the converged state.
   }
 }
 
