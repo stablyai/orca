@@ -148,11 +148,11 @@ test('@headful keeps resizing after the divider loses pointer capture', async ({
     }
     element.releasePointerCapture(pointerId)
   })
+  // Pending capture changes are dispatched with the next pointer event.
+  await orcaPage.mouse.move(startX + 260, startY, { steps: 10 })
   await expect
     .poll(() => divider.evaluate((element) => Number(element.dataset.captureLossCount ?? '0')))
     .toBe(1)
-
-  await orcaPage.mouse.move(startX + 260, startY, { steps: 10 })
   await orcaPage.mouse.up()
   await expect.poll(async () => gridsMatch(await readDividerGeometry(orcaPage))).toBe(true)
   const after = await readDividerGeometry(orcaPage)
