@@ -1,3 +1,4 @@
+import { expectSidebarProjectVisible } from './helpers/sidebar-project-visibility'
 import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
@@ -727,38 +728,7 @@ async function runSelectedRuntimeAddJourney(
       ...fixture.nestedRepoPaths.map((repoPath) => path.basename(repoPath))
     ]) {
       // Why: duplicate checkout names are disambiguated with a parent path.
-      try {
-        await expect(
-          client.page
-            .getByRole('listbox', { name: 'Worktrees', exact: true })
-            .getByText(projectName, { exact: false })
-            .first()
-        ).toBeVisible()
-      } catch (error) {
-        const diagnostic = await client.page.evaluate((expectedName) => {
-          const state = window.__store!.getState()
-          const sidebar = document.querySelector('[data-worktree-sidebar]')
-          return {
-            expectedName,
-            viewport: { width: innerWidth, height: innerHeight },
-            sidebarOpen: state.sidebarOpen,
-            activeWorktreeId: state.activeWorktreeId,
-            filterRepoIds: state.filterRepoIds,
-            repos: state.repos.map((repo) => ({ id: repo.id, name: repo.name, path: repo.path })),
-            sidebarText: sidebar?.textContent,
-            listboxes: Array.from(document.querySelectorAll('[role="listbox"]')).map((el) => ({
-              label: el.getAttribute('aria-label'), text: el.textContent,
-              scrollTop: el.scrollTop, clientHeight: el.clientHeight, scrollHeight: el.scrollHeight
-            }))
-          }
-        }, projectName)
-        console.info(`[selected-runtime-sidebar] ${JSON.stringify(diagnostic)}`)
-        await testInfo.attach('selected-runtime-client-sidebar', {
-          body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json'
-        })
-        await client.page.screenshot({ path: testInfo.outputPath('selected-runtime-client-failure.png') })
-        throw error
-      }
+      await expectSidebarProjectVisible(client.page, projectName)
     }
     expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
     // Why: revealing the client must not leak into the HUB's window visibility.
