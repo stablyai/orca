@@ -12,6 +12,8 @@ type XtermTerminalWithUnicodeCore = {
 const ORCA_UNICODE_VERSION = 'orca-11-zwj'
 const UNICODE11_VERSION = '11'
 const ZERO_WIDTH_JOINER = 0x200d
+const VARIATION_SELECTOR_16 = 0xfe0f
+const EMOJI_PRESENTATION_WIDTH = 2
 
 function extractWidth(properties: number): 0 | 1 | 2 {
   return ((properties >> 1) & 3) as 0 | 1 | 2
@@ -40,6 +42,13 @@ class OrcaUnicodeProvider implements IUnicodeVersionProvider {
 
     if (codepoint === ZERO_WIDTH_JOINER && precedingWidth > 0) {
       return createProperties(ZERO_WIDTH_JOINER, precedingWidth, true)
+    }
+
+    if (codepoint === VARIATION_SELECTOR_16 && precedingWidth > 0) {
+      // Why: VS16 requests the emoji presentation of a text-default base, which
+      // other terminals advance two cells for; xterm keeps the base's text width,
+      // so TUIs budgeting two cells lose their column alignment.
+      return createProperties(VARIATION_SELECTOR_16, EMOJI_PRESENTATION_WIDTH, true)
     }
 
     if (precedingKind === ZERO_WIDTH_JOINER && precedingWidth > 0 && this.wcwidth(codepoint) > 0) {
