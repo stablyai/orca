@@ -2,6 +2,8 @@ import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear/links'
 import type { FolderWorkspaceLinkedTask } from '../folder-workspace-types'
 import type { JiraIssue } from '../jira-types'
 import type { LinearIssue } from '../linear/issue-types'
+import type { PlaneWorkItem } from '../plane-types'
+import { isPlaneCloudWorkItemUrl } from '../plane-work-item-url'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -37,6 +39,11 @@ export type JiraWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue'
 }
 
+export type PlaneWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'plane'
+  type: 'issue'
+}
+
 export type WorkspaceSourceItemLike = Omit<WorkspaceSourceLinkedItem, 'provider'> & {
   provider?: WorkspaceSourceProvider
 }
@@ -49,6 +56,7 @@ export type WorkspaceSourceSelectionKind =
   | 'branch'
   | 'linear'
   | 'jira'
+  | 'plane'
 
 export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind
@@ -84,6 +92,11 @@ export function getWorkspaceSourceProvider(item: WorkspaceSourceItemLike): Works
   }
   if (item.linearIdentifier) {
     return 'linear'
+  }
+  // Checked before Jira: a Plane browse path also satisfies the Jira pattern,
+  // so the explicit identifier and the cloud host are the only safe signals.
+  if (item.planeIdentifier || isPlaneCloudWorkItemUrl(item.url)) {
+    return 'plane'
   }
   if (item.jiraIdentifier || isJiraIssueUrl(item.url)) {
     return 'jira'
@@ -157,6 +170,20 @@ export function buildJiraWorkspaceSource(
   }
 }
 
+export function buildPlaneWorkspaceSource(
+  workItem: Pick<PlaneWorkItem, 'key' | 'title' | 'url'>
+): PlaneWorkspaceSource {
+  return {
+    provider: 'plane',
+    type: 'issue',
+    // Why: Plane uses a string identifier; numeric issue metadata must stay empty.
+    number: 0,
+    title: workItem.title,
+    url: workItem.url,
+    planeIdentifier: workItem.key
+  }
+}
+
 export function shouldApplyWorkspaceSourceAutoName(args: {
   currentName: string
   lastAutoName: string
@@ -198,17 +225,19 @@ export function buildWorkspaceSourceSelection(args: {
       ? 'linear'
       : provider === 'jira'
         ? 'jira'
-        : provider === 'gitlab'
-          ? linkedWorkItem.type === 'mr'
-            ? 'gitlab-mr'
-            : 'gitlab-issue'
-          : linkedWorkItem.type === 'pr'
-            ? 'github-pr'
-            : 'github-issue'
+        : provider === 'plane'
+          ? 'plane'
+          : provider === 'gitlab'
+            ? linkedWorkItem.type === 'mr'
+              ? 'gitlab-mr'
+              : 'gitlab-issue'
+            : linkedWorkItem.type === 'pr'
+              ? 'github-pr'
+              : 'github-issue'
   return {
     kind,
     label:
-      provider === 'linear' || provider === 'jira' || linkedWorkItem.number === 0
+      isKeyedTaskProvider(provider) || linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
     url: linkedWorkItem.url
@@ -221,6 +250,11 @@ export function shouldPreserveWorkspaceSourceOnRepoChange(
   if (!item) {
     return false
   }
-  const provider = getWorkspaceSourceProvider(item)
-  return provider === 'linear' || provider === 'jira'
+  return isKeyedTaskProvider(getWorkspaceSourceProvider(item))
+}
+
+// Providers that identify work by a string key rather than a repo-scoped
+// number, so their selection survives a repo change and skips the `#123` label.
+function isKeyedTaskProvider(provider: WorkspaceSourceProvider): boolean {
+  return provider === 'linear' || provider === 'jira' || provider === 'plane'
 }

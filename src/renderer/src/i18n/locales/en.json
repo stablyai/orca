@@ -1153,6 +1153,9 @@
             }
           }
         }
+      },
+      "usePlaneConnection": {
+        "failed": "Unable to check Plane access"
       }
     },
     "components": {
@@ -2256,7 +2259,8 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "plane": "Plane"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -8451,7 +8455,13 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "planeLabel": "Plane",
+          "planeDescription": "Connect Plane Cloud or a self-hosted Plane instance and show it in Tasks.",
+          "connectPlaneTitle": "Connect Plane",
+          "connectPlaneDescription": "Add Plane Cloud or a self-hosted workspace with a personal access token.",
+          "managePlane": "Manage access",
+          "addPlane": "Add Plane access"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -11780,6 +11790,19 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "PlaneIntegrationCard": {
+          "verified": "Connection verified",
+          "connectedDescription": "{{count}} workspace connected",
+          "description": "Browse and start work from Plane Cloud or self-hosted work items.",
+          "connected": "Connected",
+          "notConnected": "Not connected",
+          "add": "Add workspace",
+          "connect": "Connect Plane",
+          "test": "Test",
+          "disconnect": "Disconnect",
+          "help": "Connect with a workspace slug and personal access token. Credentials are stored by the active runtime.",
+          "failed": "Plane request failed"
         }
       },
       "right": {
@@ -16809,6 +16832,45 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "PlaneConnectDialog": {
+        "remoteStorage": "Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+        "localStorage": "Your token is stored locally and encrypted when local runtime storage supports it.",
+        "title": "Connect Plane",
+        "description": "Use a personal access token and workspace slug to browse Plane work items.",
+        "deployment": "Plane deployment",
+        "selfHosted": "Self-hosted",
+        "baseUrl": "Base URL",
+        "workspaceSlug": "Workspace slug",
+        "slugHelp": "The slug is the first path segment in your Plane app URL.",
+        "token": "Personal access token",
+        "tokenHelp": "Create one in Plane → Profile settings → Personal access tokens.",
+        "cancel": "Cancel",
+        "connecting": "Connecting…",
+        "connect": "Connect Plane",
+        "failed": "Connection failed",
+        "cloud": "Plane Cloud",
+        "baseUrlPlaceholder": "https://plane.example.com",
+        "slugPlaceholder": "acme"
+      },
+      "TaskPagePlaneSurface": {
+        "connectTitle": "Connect your Plane workspace",
+        "connectDescription": "Browse and start work from Plane work items directly from here.",
+        "connect": "Connect Plane",
+        "hide": "Hide Plane",
+        "project": "Select project",
+        "shown": "shown",
+        "refresh": "Refresh Plane work items",
+        "empty": "No work items found in this project.",
+        "projectsError": "Unable to load projects",
+        "workItemsError": "Unable to load work items"
+      },
+      "TaskPagePlaneWorkItemList": {
+        "unassigned": "Unassigned",
+        "start": "Start workspace from {{key}}",
+        "startWorkspace": "Start workspace",
+        "open": "Open {{key}} in Plane",
+        "openPlane": "Open in Plane"
       }
     },
     "i18n": {

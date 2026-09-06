@@ -2,6 +2,7 @@ import type { GitLabTaskFilter, GitLabIssueFilter } from '@/components/task-page
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabProjectRef, GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../shared/jira-types'
+import type { PlaneWorkItem } from '../../../shared/plane-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getLinkedWorkItemWorkspaceName, getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
 import {
@@ -61,6 +62,17 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       title: `${issue.key} ${issue.title}`,
       jiraIdentifier: issue.key
     })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+export function getPlaneWorkItemWorkspaceSeed(item: PlaneWorkItem): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'plane',
+      number: item.sequenceId,
+      title: `${item.key} ${item.title}`,
+      planeIdentifier: item.key
+    })?.seedName ?? getLinkedWorkItemSuggestedName(item)
   )
 }
 export function getTaskPageRepoSourceContext(

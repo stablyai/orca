@@ -63,6 +63,12 @@ export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
 export const JIRA_USER_FIELDS_RUNTIME_CAPABILITY = 'jira.user-fields.v1' as const
 export const JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE =
   'Creating Jira issues with user fields requires a newer Orca server. Update the server and try again.'
+// Why: signals the host exposes the Plane task provider over RPC (plane.*).
+// Registered unconditionally for every build, so it is a STATIC capability
+// advertised by getStatus() automatically. Clients must gate Plane calls on it:
+// an older host has no plane.* methods at all, so every call would fail with
+// method_not_found rather than degrade.
+export const PLANE_PROVIDER_RUNTIME_CAPABILITY = 'plane.provider.v1' as const
 // Why: signals the host exposes the Agent Session History scanner over RPC
 // (aiVault.listSessions). Registered unconditionally for every build, so it is a
 // STATIC capability advertised by getStatus() automatically — NOT a runtime
@@ -259,7 +265,8 @@ export const RUNTIME_CAPABILITIES = [
   SKILL_DELETE_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  PLANE_PROVIDER_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})

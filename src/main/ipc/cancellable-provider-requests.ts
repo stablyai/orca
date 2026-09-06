@@ -5,13 +5,14 @@ function normalizeRequestId(value: unknown): string | undefined {
 const CANCEL_TOMBSTONE_TTL_MS = 30_000
 
 /**
- * Tracks one live AbortController per renderer-supplied request id so a superseded Jira call
- * releases its slot in the shared request pool instead of draining it.
+ * Tracks one live AbortController per renderer-supplied request id so a superseded provider call
+ * releases its slot in the shared request pool instead of draining it. Shared by the
+ * integrations whose search endpoints are hit per keystroke.
  *
  * Cancel can race ahead of run() (renderer abort before IPC registers). Tombstones keep that
  * cancel sticky until run starts, so a late registration aborts immediately.
  */
-export class JiraCancellableRequests {
+export class CancellableProviderRequests {
   private readonly controllers = new Map<string, AbortController>()
   private readonly cancelTombstones = new Map<string, number>()
 

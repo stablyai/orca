@@ -80,6 +80,70 @@ describe('getLinkedWorkItemWorkspaceName', () => {
       seedName: 'proj-7-fix-flaky-import'
     })
   })
+
+  it('skips a blank identifier field instead of letting it mask a populated one', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'jira',
+        number: 0,
+        title: 'Fix flaky import',
+        linearIdentifier: '',
+        jiraIdentifier: 'PROJ-7'
+      })
+    ).toEqual({
+      displayName: 'PROJ-7 Fix flaky import',
+      seedName: 'proj-7-fix-flaky-import'
+    })
+  })
+
+  it('prefers the identifier field matching the declared provider', () => {
+    // A partially populated item can carry an identifier left behind by another
+    // provider; the declared provider decides which field names the workspace.
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'plane',
+        number: 0,
+        title: 'Add OAuth login',
+        linearIdentifier: 'ENG-9',
+        planeIdentifier: 'PROJ-123'
+      })
+    ).toEqual({
+      displayName: 'PROJ-123 Add OAuth login',
+      seedName: 'proj-123-add-oauth-login'
+    })
+  })
+
+  it('treats a whitespace-only identifier as absent', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'plane',
+        number: 0,
+        title: 'Add OAuth login',
+        planeIdentifier: '   '
+      })
+    ).toEqual({
+      displayName: 'Add OAuth login',
+      seedName: 'add-oauth-login'
+    })
+  })
+
+  it('carries a plane identifier the same way as linear and jira', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'plane',
+        number: 0,
+        title: 'Add OAuth login',
+        planeIdentifier: 'PROJ-123'
+      })
+    ).toEqual({
+      displayName: 'PROJ-123 Add OAuth login',
+      seedName: 'proj-123-add-oauth-login'
+    })
+  })
 })
 
 describe('getWorkspaceIntentName', () => {
