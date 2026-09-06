@@ -37,7 +37,7 @@ function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
     projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
     connectionId: repo?.connectionId,
     executionHostId: getExecutionHostIdForWorktree(state, worktreeId),
-    worktreePath: worktree?.path,
+    cwd: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell
   })
 }

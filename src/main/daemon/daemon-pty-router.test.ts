@@ -12,7 +12,8 @@ import {
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
-  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+  STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION,
+  FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
 
 type AdapterMock = DaemonPtyAdapter & {
@@ -411,7 +412,7 @@ describe('DaemonPtyRouter', () => {
     expect(current.confirmForegroundProcess).toHaveBeenCalledWith('current-session')
   })
 
-  it('preserves older session owners and routes new sessions to v35', async () => {
+  it('preserves older session owners and routes new sessions to v37', async () => {
     const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
     const legacyV30 = createAdapter(
       'v30',
@@ -428,9 +429,15 @@ describe('DaemonPtyRouter', () => {
     const legacyV32 = createAdapter('v32', ['v32-session'], undefined, 32)
     const legacyV33 = createAdapter('v33', ['v33-session'], undefined, 33)
     const legacyV34 = createAdapter('v34', ['v34-session'], undefined, 34)
+    const legacyV36 = createAdapter(
+      'v36',
+      ['v36-session'],
+      undefined,
+      FORCE_HOST_RUNTIME_DAEMON_PROTOCOL_VERSION - 1
+    )
     const router = new DaemonPtyRouter({
       current,
-      legacy: [legacyV30, legacyV31, legacyV32, legacyV33, legacyV34]
+      legacy: [legacyV30, legacyV31, legacyV32, legacyV33, legacyV34, legacyV36]
     })
 
     await router.discoverLegacySessions()
@@ -440,12 +447,20 @@ describe('DaemonPtyRouter', () => {
     await router.spawn({ sessionId: 'v32-session', cols: 80, rows: 24 })
     await router.spawn({ sessionId: 'v33-session', cols: 80, rows: 24 })
     await router.spawn({ sessionId: 'v34-session', cols: 80, rows: 24 })
+    await router.spawn({
+      sessionId: 'v36-session',
+      cols: 80,
+      rows: 24,
+      attachOnly: true,
+      forceHostRuntime: true
+    })
     const fresh = await router.spawn({ cols: 80, rows: 24 })
     router.write('v30-session', 'old-v30\n')
     router.write('v31-session', 'old-v31\n')
     router.write('v32-session', 'old-v32\n')
     router.write('v33-session', 'old-v33\n')
     router.write('v34-session', 'old-v34\n')
+    router.write('v36-session', 'old-v36\n')
     router.write(fresh.id, 'new\n')
 
     expect(legacyV30.spawn).toHaveBeenCalledWith({ sessionId: 'v30-session', cols: 80, rows: 24 })
@@ -453,12 +468,20 @@ describe('DaemonPtyRouter', () => {
     expect(legacyV32.spawn).toHaveBeenCalledWith({ sessionId: 'v32-session', cols: 80, rows: 24 })
     expect(legacyV33.spawn).toHaveBeenCalledWith({ sessionId: 'v33-session', cols: 80, rows: 24 })
     expect(legacyV34.spawn).toHaveBeenCalledWith({ sessionId: 'v34-session', cols: 80, rows: 24 })
+    expect(legacyV36.spawn).toHaveBeenCalledWith({
+      sessionId: 'v36-session',
+      cols: 80,
+      rows: 24,
+      attachOnly: true,
+      forceHostRuntime: true
+    })
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(legacyV30.write).toHaveBeenCalledWith('v30-session', 'old-v30\n')
     expect(legacyV31.write).toHaveBeenCalledWith('v31-session', 'old-v31\n')
     expect(legacyV32.write).toHaveBeenCalledWith('v32-session', 'old-v32\n')
     expect(legacyV33.write).toHaveBeenCalledWith('v33-session', 'old-v33\n')
     expect(legacyV34.write).toHaveBeenCalledWith('v34-session', 'old-v34\n')
+    expect(legacyV36.write).toHaveBeenCalledWith('v36-session', 'old-v36\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 

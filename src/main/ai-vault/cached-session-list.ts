@@ -15,6 +15,7 @@ import {
   truncateAiVaultListResult,
   type AiVaultSessionDepth
 } from '../../shared/ai-vault-session-depth'
+import { parseAiVaultListResult } from './session-list-result-validation'
 
 // Why: ONE module owns the scan cache so the desktop IPC handler AND the runtime
 // RPC method share a single cache instance — opening the desktop panel and the
@@ -88,18 +89,20 @@ export async function listAiVaultSessions(
       const additionalCodexSessionsDirs = additionalCodexHomes.map((homePath) =>
         join(homePath, 'sessions')
       )
-      const result = await scanAiVaultSessionsInBackground(
-        {
-          limit: args?.limit,
-          unlimited: args?.unlimited,
-          scopePaths: args?.scopePaths,
-          additionalCodexSessionsDirs,
-          wslHomeDirs,
-          // Why: this scan is always host-local; callers addressing this host by a
-          // runtime id get the result restamped at the RPC edge, never rescanned.
-          executionHostId: LOCAL_EXECUTION_HOST_ID
-        },
-        scanSignal
+      const result = parseAiVaultListResult(
+        await scanAiVaultSessionsInBackground(
+          {
+            limit: args?.limit,
+            unlimited: args?.unlimited,
+            scopePaths: args?.scopePaths,
+            additionalCodexSessionsDirs,
+            wslHomeDirs,
+            // Why: this scan is always host-local; callers addressing this host by a
+            // runtime id get the result restamped at the RPC edge, never rescanned.
+            executionHostId: LOCAL_EXECUTION_HOST_ID
+          },
+          scanSignal
+        )
       )
       // A delete (or other invalidation) landed while this scan was running:
       // its result predates the delete, so caching it would resurrect the

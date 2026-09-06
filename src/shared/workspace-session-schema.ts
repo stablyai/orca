@@ -102,6 +102,8 @@ const terminalTabSchema = z.object({
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
+  shellOverride: z.string().min(1).optional().catch(undefined),
+  forceHostRuntime: z.literal(true).optional().catch(undefined),
   startupCwd: z.string().min(1).optional(),
   // Why: persist the launched agent so a restored idle agent tab keeps its
   // provider icon before any hook fires. `.catch(undefined)` keeps a stale or

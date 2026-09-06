@@ -18,6 +18,7 @@ export async function spawnIpcPty(
   const {
     cwd,
     cwdFallback,
+    forceHostRuntime,
     env,
     envToDelete,
     command,
@@ -37,12 +38,13 @@ export async function spawnIpcPty(
     telemetry
   } = transportOptions
   const shouldSendLocalCwdFallback =
-    cwdFallback === 'worktree' && !connectionId && !admittedSessionId
+    cwdFallback === 'worktree' && !forceHostRuntime && !connectionId && !admittedSessionId
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
     cwd,
     ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
+    ...(forceHostRuntime ? { forceHostRuntime: true } : {}),
     env: connectOptions.env ?? env,
     ...((connectOptions.envToDelete ?? envToDelete)
       ? { envToDelete: connectOptions.envToDelete ?? envToDelete }

@@ -18,20 +18,34 @@ export type AgentResumeLaunchTargetArgs = {
   connectionId: string | null | undefined
   /** Pane/workspace execution owner; only a 'local' host is the one `terminalWindowsShell` describes. */
   executionHostId: string | null
-  worktreePath: string | null | undefined
+  cwd: string | null | undefined
   terminalWindowsShell: string | null | undefined
   /** Per-tab Windows shell override, which beats the global setting at spawn time. */
   tabShellOverride?: string | null
+  forceHostRuntime?: boolean
 }
 
 function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.Platform {
+  const executionHost = parseExecutionHostId(args.executionHostId)
+  if (executionHost?.kind === 'ssh') {
+    return 'linux'
+  }
+  const isRemoteRuntime = executionHost?.kind === 'runtime'
+  if (
+    args.forceHostRuntime === true &&
+    !args.connectionId &&
+    !isRemoteRuntime &&
+    !(args.cwd && isWslUncPath(args.cwd))
+  ) {
+    return CLIENT_PLATFORM
+  }
   if (args.projectRuntime?.status === 'repair-required') {
     return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
   }
   if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
     return 'linux'
   }
-  if (args.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
+  if (args.connectionId || (args.cwd && isWslUncPath(args.cwd))) {
     return 'linux'
   }
   return CLIENT_PLATFORM
