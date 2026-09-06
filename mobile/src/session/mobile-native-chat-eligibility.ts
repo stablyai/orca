@@ -1,5 +1,4 @@
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
-import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 import type { MobileWebNativeChatAgentStatus } from '../../../src/shared/mobile-web/native-chat-operation-contract'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
 import {
@@ -36,12 +35,8 @@ export type MobileNativeChatTab = {
 }
 
 export type MobileNativeChatAgentStatusWithProvider = MobileWebNativeChatAgentStatus & {
-  model?: string
-  /** Host flag marking `lastAssistantMessage` as tool output rather than a reply. */
-  lastAssistantMessageIsToolOutput?: boolean
-  // Why: only the native `session.tabs` payload carries this; the hosted bridge's status schema
-  // does not publish it. A monitoring agent is working without holding the foreground.
-  workingMode?: AgentWorkingMode
+  // Why native-only: the hosted page addresses a transcript by the shell's opaque
+  // `nativeChatSessionId`, so the provider session never crosses the bridge.
   providerSession?: {
     id: string
     transcriptPath?: string

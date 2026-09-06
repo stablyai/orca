@@ -33,6 +33,12 @@ export const MobileWebNativeChatAgentStatusSchema = z
     toolInput: OptionalBoundedTextSchema(AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
     interactivePrompt: OptionalBoundedTextSchema(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH),
     lastAssistantMessage: OptionalBoundedTextSchema(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH),
+    /** Marks `lastAssistantMessage` as tool output, so the streaming preview stays suppressed. */
+    lastAssistantMessageIsToolOutput: z.boolean().optional(),
+    // Inlined like `state` above: the page bundle cannot reach `agent-status-types`. Kept equal to
+    // `AGENT_WORKING_MODES` by a test. A closed set, so the tolerant page parse collapses an
+    // unknown future mode to absent — the pre-field reading of a foreground agent.
+    workingMode: z.enum(['monitoring']).optional(),
     interrupted: z.boolean().optional()
   })
   .strict()
@@ -58,7 +64,9 @@ const MobileWebNativeChatToolCallBlockSchema = z
   .object({
     type: z.literal('tool-call'),
     name: z.string().min(1).max(256),
-    input: z.unknown()
+    input: z.unknown(),
+    /** Provider lifecycle. Absent on the transcript lane, where the turn's working flag decides. */
+    state: z.enum(['running', 'completed', 'failed']).optional()
   })
   .strict()
 const MobileWebNativeChatToolResultBlockSchema = z

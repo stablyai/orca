@@ -1,11 +1,5 @@
 import type { MobileWebHostWorkspaceId } from './mobile-web-workspace-authority'
-import {
-  AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
-  AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
-  AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
-  AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
-  AGENT_TYPE_MAX_LENGTH
-} from '../../../src/shared/agent-status-types'
+import { AGENT_TYPE_MAX_LENGTH } from '../../../src/shared/agent-status-types'
 import {
   MobileWebRelativePathSchema,
   MOBILE_WEB_SESSION_TAB_LIMIT,
@@ -14,7 +8,13 @@ import {
   type MobileWebSessionTab
 } from '../../../src/shared/mobile-web/bridge-operation-contract'
 import { mobileWebPageBrowserUrl } from '../../../src/shared/mobile-web/browser-url-privacy'
+import { mobileWebSessionAgentStatus } from './mobile-web-session-agent-status-projection'
 import { tabsWithinMobileWebSessionEventBudget } from './mobile-web-session-snapshot-event-budget'
+import {
+  boundedNullableText,
+  boundedOptionalText,
+  boundedText
+} from './mobile-web-session-value-bounds'
 import type { MobileWebBrowserAuthority } from './mobile-web-browser-authority'
 import type {
   MobileWebHostNativeChatBinding,
@@ -127,7 +127,7 @@ function mobileWebSessionTab(
   }
   if (value.type === 'terminal') {
     const launchAgent = boundedOptionalText(value.launchAgent, AGENT_TYPE_MAX_LENGTH)
-    const agentStatus = mobileWebNativeChatAgentStatus(value.agentStatus)
+    const agentStatus = mobileWebSessionAgentStatus(value.agentStatus)
     const nativeChatBinding = mobileWebNativeChatBinding(value, hostWorkspaceId)
     return {
       ...base,
@@ -189,58 +189,6 @@ function fallbackTitle(type: MobileWebSessionTab['type']): string {
   return type === 'browser' ? 'Browser' : type[0].toUpperCase() + type.slice(1)
 }
 
-function boundedText(value: unknown, maximum: number, fallback: string): string {
-  return typeof value === 'string' && value.length > 0 ? value.slice(0, maximum) : fallback
-}
-
-function boundedNullableText(value: unknown, maximum: number): string | null {
-  return typeof value === 'string' && value.length > 0 && value.length <= maximum ? value : null
-}
-
-function boundedOptionalText(value: unknown, maximum: number): string | undefined {
-  return typeof value === 'string' && value.length > 0 && value.length <= maximum
-    ? value
-    : undefined
-}
-
-function mobileWebNativeChatAgentStatus(
-  value: unknown
-): Extract<MobileWebSessionTab, { type: 'terminal' }>['agentStatus'] {
-  if (!isRecord(value) || !isAgentState(value.state)) {
-    return undefined
-  }
-  const stateStartedAt = safeNonnegativeInteger(value.stateStartedAt)
-  return {
-    state: value.state,
-    ...(stateStartedAt === undefined ? {} : { stateStartedAt }),
-    ...(boundedOptionalText(value.agentType, AGENT_TYPE_MAX_LENGTH)
-      ? { agentType: value.agentType as string }
-      : {}),
-    ...(boundedOptionalText(value.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
-      ? { toolName: value.toolName as string }
-      : {}),
-    ...(boundedOptionalText(value.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
-      ? { toolInput: value.toolInput as string }
-      : {}),
-    ...(boundedOptionalText(value.interactivePrompt, AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
-      ? { interactivePrompt: value.interactivePrompt as string }
-      : {}),
-    ...(boundedOptionalText(value.lastAssistantMessage, AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH)
-      ? { lastAssistantMessage: value.lastAssistantMessage as string }
-      : {}),
-    ...(typeof value.interrupted === 'boolean' ? { interrupted: value.interrupted } : {})
-  }
-}
-
-function safeNonnegativeInteger(value: unknown): number | undefined {
-  return typeof value === 'number' &&
-    Number.isSafeInteger(value) &&
-    value >= 0 &&
-    value <= Number.MAX_SAFE_INTEGER
-    ? value
-    : undefined
-}
-
 function mobileWebNativeChatBinding(
   value: unknown,
   hostWorkspaceId: MobileWebHostWorkspaceId
@@ -276,10 +224,6 @@ function mobileWebNativeChatBinding(
     providerSessionId,
     ...(transcriptPath ? { transcriptPath } : {})
   }
-}
-
-function isAgentState(value: unknown): value is 'working' | 'blocked' | 'waiting' | 'done' {
-  return value === 'working' || value === 'blocked' || value === 'waiting' || value === 'done'
 }
 
 function isTabType(value: unknown): value is (typeof TAB_TYPES)[number] {

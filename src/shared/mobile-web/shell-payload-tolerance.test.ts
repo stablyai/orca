@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { MobileWebNativeChatReadResultSchema } from './native-chat-operation-contract'
 import { MobileWebSessionSnapshotResultSchema } from './session-operation-contract'
 import { tolerantMobileWebShellPayload } from './shell-payload-tolerance'
 
@@ -101,6 +102,46 @@ describe('mobile web shell payload tolerance', () => {
         pair: [{ id: 'c' }],
         later: { id: 'd' }
       }
+    })
+  })
+
+  it('reads a working mode an older page cannot name as a foreground agent', () => {
+    const parsed = snapshot.safeParse({
+      ...SNAPSHOT,
+      tabs: [
+        {
+          ...SNAPSHOT.tabs[0],
+          agentStatus: { state: 'working', workingMode: 'hibernating' }
+        }
+      ]
+    })
+
+    expect(parsed.success).toBe(true)
+    const tab = parsed.data?.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus : undefined).toEqual({ state: 'working' })
+  })
+
+  it('keeps a tool call whose lifecycle state an older page cannot name', () => {
+    const transcript = tolerantMobileWebShellPayload(MobileWebNativeChatReadResultSchema)
+
+    const parsed = transcript.safeParse({
+      messages: [
+        {
+          id: 'm1',
+          role: 'assistant',
+          timestamp: 1,
+          source: 'transcript',
+          blocks: [{ type: 'tool-call', name: 'Bash', input: {}, state: 'queued' }]
+        }
+      ],
+      hasMore: false
+    })
+
+    expect(parsed.success).toBe(true)
+    expect(parsed.data?.messages[0]?.blocks[0]).toEqual({
+      type: 'tool-call',
+      name: 'Bash',
+      input: {}
     })
   })
 
