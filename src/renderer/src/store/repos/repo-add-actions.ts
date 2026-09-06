@@ -26,6 +26,7 @@ import {
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
 import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
+import { assignAddedProjectToTargetGroup } from '@/lib/added-project-group-assignment'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -86,8 +87,11 @@ export function createRepoAddActions(
           }
           // Why: folder mode is a capability downgrade (no worktrees/SCM/PRs/checks), so confirm via dialog rather than silently falling back.
           const { openModal } = get()
+          const addProjectTarget = options?.addProjectTarget ?? get().addProjectTarget
           openModal('confirm-non-git-folder', {
             folderPath: path,
+            // Why: openModal only keeps a target the opener re-declares, so carry it across the handoff.
+            ...(addProjectTarget ? { addProjectTarget } : {}),
             ...(displayName ? { displayName } : {}),
             ...(target.kind === 'environment' ? { runtimeEnvironmentId: target.environmentId } : {})
           })
@@ -133,6 +137,9 @@ export function createRepoAddActions(
           // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
           warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
         }
+        // Why: the project is already added; blocking this return on the group move would make
+        // every caller wait out moveProjectToGroup's remote timeout on a slow host.
+        void assignAddedProjectToTargetGroup(get(), repo, options?.addProjectTarget)
         return repo
       } catch (err) {
         console.error('Failed to add project:', err)

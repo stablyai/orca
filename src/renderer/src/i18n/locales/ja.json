@@ -318,6 +318,13 @@
       }
     },
     "lib": {
+      "added-project-group-assignment": {
+        "groupGone": "このグループは利用できなくなりました",
+        "hostMismatch": "{{group}} は別のホストにあります",
+        "moveFailed": "プロジェクトを {{group}} に追加できませんでした",
+        "stayedUngrouped": "{{project}} は追加されましたが、グループの外に残っています。",
+        "unexpected": "プロジェクトをグループに追加できませんでした"
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -4716,6 +4723,7 @@
           "e97297cb75": "{{value0}} 個の子ワークスペースを非表示",
           "0cd15956d4": "{{value0}} 個の子ワークスペースを非表示",
           "bd37a57ac8": "{{value0}} のワークスペースを作成",
+          "addProjectToGroup": "{{value0}} にプロジェクトを追加",
           "b667b59632": "一部のプロジェクトを Orca から削除できませんでした",
           "f94466bc39": "グループ削除後も、含まれていたプロジェクト{{value2}} {{value1}} 件中 {{value0}} 件が残りました。",
           "groupDeleteFailed": "グループの削除に失敗しました",

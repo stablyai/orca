@@ -321,6 +321,13 @@
       }
     },
     "lib": {
+      "added-project-group-assignment": {
+        "groupGone": "该分组已不可用",
+        "hostMismatch": "{{group}} 位于其他主机",
+        "moveFailed": "无法将项目添加到 {{group}}",
+        "stayedUngrouped": "{{project}} 已添加，但仍在分组之外。",
+        "unexpected": "无法将项目添加到分组"
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -4764,6 +4771,7 @@
           "e97297cb75": "隐藏 {{value0}} 个子工作区",
           "0cd15956d4": "隐藏 {{value0}} 个子工作区",
           "bd37a57ac8": "为 {{value0}} 创建工作区",
+          "addProjectToGroup": "向 {{value0}} 添加项目",
           "b667b59632": "部分项目无法从 Orca 中移除",
           "f94466bc39": "删除分组后，{{value1}} 个包含项目{{value2}}中仍剩 {{value0}} 个。",
           "groupDeleteFailed": "删除分组失败",

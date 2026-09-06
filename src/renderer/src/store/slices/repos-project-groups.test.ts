@@ -849,6 +849,18 @@ describe('project group store routing', () => {
     expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
   })
 
+  // Why: the host normalizes an unknown group to null and still returns the repo, so a
+  // returned row outside the requested group is a failed move, not a success.
+  it('reports a move the host normalized away instead of claiming success', async () => {
+    projectGroupsMoveProject.mockResolvedValue({ ...remoteRepo, projectGroupId: null })
+    const store = createTestStore()
+    store.setState({ repos: [remoteRepo], projectGroups: [projectGroup] })
+
+    await expect(store.getState().moveProjectToGroup(remoteRepo.id, projectGroup.id)).resolves.toBe(
+      false
+    )
+  })
+
   it('propagates specific folder workspace create failures to callers', async () => {
     folderWorkspacesCreate.mockRejectedValue(new Error('folder_workspace_path_missing:/srv/app'))
     const store = createTestStore()

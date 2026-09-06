@@ -32,6 +32,7 @@ export function useAddRepoHostSelection({
   handleConnectAddProjectHost: (hostId: ExecutionHostId) => Promise<void>
 } {
   const settings = useAppStore((s) => s.settings)
+  const addProjectTargetHostId = useAppStore((s) => s.addProjectTarget?.hostId ?? null)
   const setSshConnectionState = useAppStore((s) => s.setSshConnectionState)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -82,11 +83,15 @@ export function useAddRepoHostSelection({
   useEffect(() => {
     if (isOpen && !previousOpenRef.current) {
       const focusedHostId = getSettingsFocusedExecutionHostId(settings)
-      const nextHostId = selectableHostOptions.some(
-        (host) => host.id === focusedHostId && canSelectAddRepoHost(host)
-      )
-        ? focusedHostId
-        : (pairedWebRuntimeHost?.id ?? (isWebClient ? null : LOCAL_EXECUTION_HOST_ID))
+      const isSelectable = (hostId: ExecutionHostId | null): hostId is ExecutionHostId =>
+        selectableHostOptions.some((host) => host.id === hostId && canSelectAddRepoHost(host))
+      // Why: a group header's Add Project names the group's host; seeding from the focused host
+      // would route the add elsewhere and only fail after the project is already added.
+      const nextHostId = isSelectable(addProjectTargetHostId)
+        ? addProjectTargetHostId
+        : isSelectable(focusedHostId)
+          ? focusedHostId
+          : (pairedWebRuntimeHost?.id ?? (isWebClient ? null : LOCAL_EXECUTION_HOST_ID))
       if (nextHostId) {
         setSelectedAddProjectHostId(nextHostId)
       }
@@ -95,7 +100,14 @@ export function useAddRepoHostSelection({
       setHostSelectorOpen(false)
     }
     previousOpenRef.current = isOpen
-  }, [isOpen, isWebClient, pairedWebRuntimeHost?.id, selectableHostOptions, settings])
+  }, [
+    addProjectTargetHostId,
+    isOpen,
+    isWebClient,
+    pairedWebRuntimeHost?.id,
+    selectableHostOptions,
+    settings
+  ])
 
   const handleSelectAddProjectHost = useCallback(
     async (hostId: ExecutionHostId): Promise<void> => {

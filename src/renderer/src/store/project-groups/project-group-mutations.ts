@@ -246,6 +246,15 @@ export function createProjectGroupMutationActions(
             folderWorkspacePathStatuses: {}
           }
         })
+        // Why: the host normalizes an unknown group to null and still returns the repo, so the
+        // store reflects what it persisted but the move itself did not happen.
+        if ((ownedMoved.projectGroupId ?? null) !== groupId) {
+          console.error('Project group move was normalized away by the host:', {
+            projectId,
+            groupId
+          })
+          return false
+        }
         return true
       } catch (err) {
         console.error('Failed to move repo to group:', err)

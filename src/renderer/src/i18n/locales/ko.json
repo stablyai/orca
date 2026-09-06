@@ -321,6 +321,13 @@
       }
     },
     "lib": {
+      "added-project-group-assignment": {
+        "groupGone": "그룹을 더 이상 사용할 수 없습니다",
+        "hostMismatch": "{{group}}은(는) 다른 호스트에 있습니다",
+        "moveFailed": "프로젝트를 {{group}}에 추가하지 못했습니다",
+        "stayedUngrouped": "{{project}}이(가) 추가되었지만 그룹 밖에 남아 있습니다.",
+        "unexpected": "프로젝트를 그룹에 추가하지 못했습니다"
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -4721,6 +4728,7 @@
           "e97297cb75": "{{value0}}개 하위 워크스페이스 숨기기",
           "0cd15956d4": "{{value0}}개 하위 워크스페이스 숨기기",
           "bd37a57ac8": "{{value0}}에 대한 워크스페이스 만들기",
+          "addProjectToGroup": "{{value0}}에 프로젝트 추가",
           "b667b59632": "일부 프로젝트를 Orca에서 제거하지 못했습니다.",
           "f94466bc39": "그룹 삭제 후에도 {{value0}}/{{value1}} 프로젝트{{value2}}가 남아 있습니다.",
           "groupDeleteFailed": "그룹을 삭제하지 못했습니다.",

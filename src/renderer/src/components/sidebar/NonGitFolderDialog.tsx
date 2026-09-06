@@ -55,6 +55,9 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
         )
 
   const handleConfirm = useCallback(() => {
+    // Why: closeModal below drops the Add Project target before either add resolves, so hand it
+    // down the call instead of letting the add read the store.
+    const { addProjectTarget } = useAppStore.getState()
     if (connectionId && folderPath) {
       void (async () => {
         try {
@@ -68,9 +71,11 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           if ('error' in result) {
             throw new Error(result.error)
           }
-          const { repo } = upsertAddedRepoWithProjectHostSetup(result.repo, {
-            sshConnectionId: connectionId
-          })
+          const { repo } = upsertAddedRepoWithProjectHostSetup(
+            result.repo,
+            { sshConnectionId: connectionId },
+            addProjectTarget
+          )
           const state = useAppStore.getState()
           const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           await markOnboardingProjectAdded('addedFolder')
@@ -139,7 +144,8 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
     } else if (folderPath) {
       void addNonGitFolder(folderPath, {
         runtimeEnvironmentId: runtimeEnvironmentId || null,
-        ...(displayName ? { displayName } : {})
+        ...(displayName ? { displayName } : {}),
+        ...(addProjectTarget ? { addProjectTarget } : {})
       })
     }
     closeModal()

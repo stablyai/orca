@@ -7,6 +7,10 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '@/store'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import {
+  assignAddedProjectToTargetGroup,
+  type AddProjectTarget
+} from '@/lib/added-project-group-assignment'
 
 type AddedRepoOwner = {
   runtimeEnvironmentId?: string | null
@@ -32,7 +36,8 @@ function repoWithCapturedOwner(repo: Repo, owner: AddedRepoOwner): Repo {
 
 export function upsertAddedRepoWithProjectHostSetup(
   repo: Repo,
-  owner: AddedRepoOwner = {}
+  owner: AddedRepoOwner = {},
+  addProjectTarget?: AddProjectTarget | null
 ): { alreadyPresent: boolean; repo: Repo } {
   const state = useAppStore.getState()
   const ownedRepo = repoWithCapturedOwner(repo, owner)
@@ -50,5 +55,8 @@ export function upsertAddedRepoWithProjectHostSetup(
     projects: projection.projects,
     projectHostSetups: projection.setups
   })
+
+  // Why: fire-and-forget keeps this helper synchronous for its callers; the assignment never rejects.
+  void assignAddedProjectToTargetGroup(useAppStore.getState(), ownedRepo, addProjectTarget)
   return { alreadyPresent, repo: ownedRepo }
 }
