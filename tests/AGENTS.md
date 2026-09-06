@@ -18,6 +18,5 @@ Rules when adding tests or scripts:
 - Do not reveal windows in explicit background or headless runs. Only an explicitly headful run
   may call `showInactive()`; never call `show()` or `bringToFront()` in automated background checks.
 - Tag a spec `@headful` only when it needs real pixels; it still runs in the background.
-- `ORCA_E2E_FOREGROUND=1` is the only opt-out, for runs whose subject _is_ native focus (IME and
-  other OS-level key injection). Clear `ORCA_BACKGROUND_LAUNCH` for that isolated run and add a
-  comment saying why; an explicit background request takes precedence.
+- Native-focus tests belong on an isolated display or CI. Do not set `ORCA_E2E_FOREGROUND=1`
+  on the user’s desktop; it cannot override explicit background mode.
