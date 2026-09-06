@@ -3987,6 +3987,16 @@
             "contact_note": "The host may still be running; only the Orca connection is unavailable.",
             "last_connected": "Last connected {{value0}}",
             "reconnect_attempt": "Attempt {{value0}}"
+          },
+          "usage": {
+            "pace": {
+              "onPace": "On pace",
+              "deficit": "{{value0}}% in deficit",
+              "reserve": "{{value0}}% in reserve",
+              "lasts": "Lasts until reset",
+              "runsOutNow": "Runs out now",
+              "runsOut": "Runs out in {{value0}}"
+            }
           }
         }
       },
