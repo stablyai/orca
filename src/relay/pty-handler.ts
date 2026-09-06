@@ -2181,8 +2181,11 @@ export class PtyHandler {
       this.interactiveOutputCharsByPty.set(id, 0)
       // Relay PTYs need the local provider's cooked-echo containment (#13137).
       // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
-      if (managed.startupIngress?.answerLiveQueryReply(data)) {
-        return
+      if (managed.startupIngress) {
+        const liveQueryReply = managed.startupIngress.deliverLiveQueryReply(data)
+        if (liveQueryReply !== 'unrecognized') {
+          return
+        }
       }
       managed.pty.write(data)
     }

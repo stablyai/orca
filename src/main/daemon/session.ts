@@ -144,9 +144,11 @@ export class Session {
       return
     }
 
-    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
+    // Daemon PTYs need the local provider's cooked-echo containment (#13137).
     // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
-    if (this.startupIngress.answerLiveQueryReply(data)) {
+    const liveQueryReply = this.startupIngress.deliverLiveQueryReply(data)
+    if (liveQueryReply !== 'unrecognized') {
+      // A failed responder write must not turn its reply into the next process's stdin.
       return
     }
 
