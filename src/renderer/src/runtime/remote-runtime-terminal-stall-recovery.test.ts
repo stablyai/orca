@@ -236,60 +236,55 @@ describe('remote terminal stalled stream recovery', () => {
     stream.close()
   })
 
-  it.each([
-    undefined,
-    TerminalStreamOpcode.Resized,
-    TerminalStreamOpcode.Metadata,
-    'fit-override-changed',
-    'driver-changed',
-    'snapshot'
-  ])(
-    'recovers missing live output despite intervening control opcode %s',
-    async (controlOpcode) => {
-      const { getRemoteRuntimeTerminalMultiplexer } =
-        await import('./remote-runtime-terminal-multiplexer')
-      const onTransportClose = vi.fn()
-      const onData = vi.fn()
-      const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
-        terminal: 'term-stale-live-tail',
-        client: { id: 'mac-viewer', type: 'desktop' },
-        callbacks: { onData, onSnapshot: vi.fn(), onTransportClose }
-      })
-      emitOutput(stream.streamId, 'baseline')
-      sendBinary.mockClear()
-
-      expect(stream.sendInput('echo missing\r')).toBe(true)
-      if (controlOpcode === 'snapshot') {
-        emitSnapshot(stream.streamId, undefined, 'baseline', 8)
-      } else if (typeof controlOpcode === 'string') {
-        callbacks?.onResponse({
-          ok: true,
-          result: { type: controlOpcode, streamId: stream.streamId }
+  // Why: a control frame landing just after Enter is transport activity, not the command's answer.
+  it.each<[string, (streamId: number) => void]>([
+    ['no intervening frame', () => {}],
+    ['a resize acknowledgement', (id) => emitControlFrame(id, TerminalStreamOpcode.Resized)],
+    ['a metadata frame', (id) => emitControlFrame(id, TerminalStreamOpcode.Metadata)],
+    [
+      'a fit-override change',
+      (id) =>
+        emitStreamEvent({
+          type: 'fit-override-changed',
+          streamId: id,
+          mode: 'mobile-fit',
+          cols: 80,
+          rows: 24
         })
-      } else if (controlOpcode !== undefined) {
-        callbacks?.onBinary(
-          encodeTerminalStreamFrame({
-            opcode: controlOpcode,
-            streamId: stream.streamId,
-            seq: 0,
-            payload: encodeTerminalStreamJson({ cols: 80, rows: 24 })
-          })
-        )
-      }
-      await vi.advanceTimersByTimeAsync(REMOTE_TERMINAL_COMMAND_RESPONSE_TIMEOUT_MS)
-      const request = sentFrames(TerminalStreamOpcode.SnapshotRequest)[0]
-      expect(request).toBeDefined()
-      const payload = request
-        ? decodeTerminalStreamJson<{ requestId: number }>(request.payload)
-        : null
-      emitSnapshot(stream.streamId, payload?.requestId ?? 0, 'baselinemissing', 15)
-      await vi.advanceTimersByTimeAsync(0)
+    ],
+    [
+      'a driver change',
+      (id) => emitStreamEvent({ type: 'driver-changed', streamId: id, driver: { kind: 'idle' } })
+    ],
+    ['an unsolicited snapshot', (id) => emitSnapshot(id, undefined, 'baseline', 8)]
+  ])('recovers missing live output despite %s', async (_label, emitIntervening) => {
+    const { getRemoteRuntimeTerminalMultiplexer } =
+      await import('./remote-runtime-terminal-multiplexer')
+    const onTransportClose = vi.fn()
+    const onData = vi.fn()
+    const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
+      terminal: 'term-stale-live-tail',
+      client: { id: 'mac-viewer', type: 'desktop' },
+      callbacks: { onData, onSnapshot: vi.fn(), onTransportClose }
+    })
+    emitOutput(stream.streamId, 'baseline')
+    sendBinary.mockClear()
 
-      expect(onData).toHaveBeenCalledOnce()
-      expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
-      expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
-    }
-  )
+    expect(stream.sendInput('echo missing\r')).toBe(true)
+    emitIntervening(stream.streamId)
+    await vi.advanceTimersByTimeAsync(REMOTE_TERMINAL_COMMAND_RESPONSE_TIMEOUT_MS)
+    const request = sentFrames(TerminalStreamOpcode.SnapshotRequest)[0]
+    expect(request).toBeDefined()
+    const payload = request
+      ? decodeTerminalStreamJson<{ requestId: number }>(request.payload)
+      : null
+    emitSnapshot(stream.streamId, payload?.requestId ?? 0, 'baselinemissing', 15)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(onData).toHaveBeenCalledOnce()
+    expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true })
+    expect(sentUnsubscribeStreamIds()).toEqual([stream.streamId])
+  })
 
   it('establishes a probe baseline before recovering an unsequenced stream', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
@@ -471,6 +466,21 @@ describe('remote terminal stalled stream recovery', () => {
         payload: encodeTerminalStreamText(text)
       })
     )
+  }
+
+  function emitControlFrame(streamId: number, opcode: TerminalStreamOpcode): void {
+    callbacks?.onBinary(
+      encodeTerminalStreamFrame({
+        opcode,
+        streamId,
+        seq: 0,
+        payload: encodeTerminalStreamJson({ cols: 80, rows: 24 })
+      })
+    )
+  }
+
+  function emitStreamEvent(result: Record<string, unknown>): void {
+    callbacks?.onResponse({ ok: true, result })
   }
 
   function emitSnapshot(
