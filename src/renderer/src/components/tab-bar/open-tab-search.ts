@@ -1,6 +1,7 @@
 // Merges the three Cmd+J open-tab engines into one ranked list for the new-tab
 // omnibox. Pure: no store, no React.
 
+import { capPaletteSection } from '../cmd-j/palette-section-render-cap'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import type { PaletteDocumentRank } from '@/lib/palette-match/palette-document'
 import {
@@ -21,6 +22,7 @@ import {
   type SearchableSimulatorTab,
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
+import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   searchWorkspaceTabs,
@@ -170,7 +172,7 @@ function rank<TEngine extends EngineResult>(
   })
 }
 
-export function searchOpenTabCandidates({
+function searchOpenTabCandidates({
   workspaceTabs,
   browserPages,
   simulatorTabs,
@@ -184,7 +186,16 @@ export function searchOpenTabCandidates({
 
   const context = suppliedContext ?? createPaletteSearchContext(Date.now())
   // Why map workspace only: editor relativePath is read from the searchable entry.
-  const workspaceEntriesByTabId = new Map(workspaceTabs.map((entry) => [entry.tab.id, entry]))
+  const workspaceEntriesByIdentity = new Map(
+    workspaceTabs.map((entry) => [
+      encodePaletteIdentity([
+        getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree) ?? LOCAL_EXECUTION_HOST_ID,
+        entry.worktree.id,
+        entry.tab.id
+      ]),
+      entry
+    ])
+  )
 
   return [
     // Why no isCurrentTab filter: Cmd+J lists the tab you are on, and hiding it
@@ -204,7 +215,15 @@ export function searchOpenTabCandidates({
         tabId: result.tabId,
         entityId: result.entityId,
         groupId: result.groupId,
-        relativePath: getEditorRelativePath(workspaceEntriesByTabId.get(result.tabId)),
+        relativePath: getEditorRelativePath(
+          workspaceEntriesByIdentity.get(
+            encodePaletteIdentity([
+              result.executionHostId ?? LOCAL_EXECUTION_HOST_ID,
+              result.worktreeId,
+              result.tabId
+            ])
+          )
+        ),
         occupantAgent: result.occupantAgent
       })
     ),
@@ -262,23 +281,11 @@ export function searchOpenTabCandidates({
     .map((ranked) => ranked.result)
 }
 
-function retainCappedResult(
-  candidates: readonly OpenTabSearchResult[],
-  retainedResultId: string | null | undefined
-): OpenTabSearchResult[] {
-  const top = candidates.slice(0, OPEN_TAB_SEARCH_RESULT_LIMIT)
-  if (!retainedResultId || top.some((result) => result.id === retainedResultId)) {
-    return top
-  }
-  const retained = candidates.find((result) => result.id === retainedResultId)
-  if (!retained || OPEN_TAB_SEARCH_RESULT_LIMIT <= 0) {
-    return top
-  }
-  return [...candidates.slice(0, OPEN_TAB_SEARCH_RESULT_LIMIT - 1), retained].sort(
-    (a, b) => candidates.indexOf(a) - candidates.indexOf(b)
-  )
-}
-
 export function searchOpenTabs(input: OpenTabSearchInput): OpenTabSearchResult[] {
-  return retainCappedResult(searchOpenTabCandidates(input), input.retainedResultId)
+  const capped = capPaletteSection(
+    searchOpenTabCandidates(input),
+    OPEN_TAB_SEARCH_RESULT_LIMIT,
+    (result) => result.id === input.retainedResultId
+  )
+  return [...capped.visible]
 }

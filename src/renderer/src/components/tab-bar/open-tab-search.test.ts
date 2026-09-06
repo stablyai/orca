@@ -564,6 +564,51 @@ describe('searchOpenTabs result fields', () => {
     })
   })
 
+  it('keeps editor paths scoped to their host and worktree when tab ids repeat', () => {
+    const local = makeWorkspaceTab({
+      id: 'same-tab',
+      title: 'Atlas',
+      contentType: 'editor',
+      secondaryText: 'local/atlas.ts'
+    })
+    const remote = makeWorkspaceTab({
+      id: 'same-tab',
+      title: 'Atlas',
+      contentType: 'editor',
+      secondaryText: 'remote/atlas.ts'
+    })
+    remote.worktree = { ...worktree, hostId: 'ssh:remote' }
+    remote.tab = { ...remote.tab, executionHostId: 'ssh:remote' }
+    const sibling = makeWorkspaceTab({
+      id: 'same-tab',
+      title: 'Atlas',
+      contentType: 'editor',
+      secondaryText: 'sibling/atlas.ts'
+    })
+    sibling.worktree = { ...worktree, id: 'wt-2' }
+    sibling.tab = { ...sibling.tab, worktreeId: 'wt-2' }
+
+    expect(search({ query: 'Atlas', workspaceTabs: [local, remote, sibling] })).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          executionHostId: 'local',
+          worktreeId: 'wt-1',
+          relativePath: 'local/atlas.ts'
+        }),
+        expect.objectContaining({
+          executionHostId: 'ssh:remote',
+          worktreeId: 'wt-1',
+          relativePath: 'remote/atlas.ts'
+        }),
+        expect.objectContaining({
+          executionHostId: 'local',
+          worktreeId: 'wt-2',
+          relativePath: 'sibling/atlas.ts'
+        })
+      ])
+    )
+  })
+
   it('copies a confident occupant agent onto workspace results', () => {
     const results = search({
       query: 'grok',

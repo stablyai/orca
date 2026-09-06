@@ -1,40 +1,54 @@
 import { useAppStore } from '@/store'
+import type { Tab } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
 
-/**
- * Bring a browser workspace forward as the surface the reader is in.
- *
- * Why the unified tab and not just the browser state: the pane renders whatever its group's active
- * tab is, so selecting the workspace alone leaves the page live behind a tab that never shows it.
- * Returns false when the workspace has no unified tab yet, which is the caller's cue that there is
- * nothing to bring forward.
- */
-export function activateBrowserWorkspaceTab(params: {
+type BrowserWorkspaceTabTarget = {
   worktreeId: string
   workspaceId: string
   pageId?: string
   executionHostId?: ExecutionHostId
-}): boolean {
+}
+
+export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): Tab | null {
   const state = useAppStore.getState()
   const worktree = params.executionHostId
     ? state.getKnownWorktreeById(params.worktreeId, params.executionHostId)
     : undefined
-  const unifiedTab = (state.unifiedTabsByWorktree[params.worktreeId] ?? []).find(
-    (candidate) =>
-      candidate.contentType === 'browser' &&
-      candidate.entityId === params.workspaceId &&
-      (!worktree || isUnifiedTabOwnedByWorktree(candidate, worktree, new Set()))
+  if (params.executionHostId && !worktree) {
+    return null
+  }
+  // setActiveBrowserTab resolves its backing tab globally by workspace ID.
+  const tabs = Object.values(state.unifiedTabsByWorktree).flat()
+  const browserTabs = tabs.filter(
+    (candidate) => candidate.contentType === 'browser' && candidate.entityId === params.workspaceId
   )
+  const unifiedTab = browserTabs[0]
+  if (
+    browserTabs.some(
+      (tab) =>
+        tab.worktreeId !== params.worktreeId ||
+        (worktree && !isUnifiedTabOwnedByWorktree(tab, worktree, new Set()))
+    ) ||
+    !unifiedTab ||
+    tabs.filter((candidate) => candidate.id === unifiedTab.id).length !== 1
+  ) {
+    return null
+  }
+  return unifiedTab
+}
+
+export function activateBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): boolean {
+  const unifiedTab = getActivatableBrowserWorkspaceTab(params)
   if (!unifiedTab) {
     return false
   }
-  state.activateTab(unifiedTab.id)
+  const state = useAppStore.getState()
+  state.focusGroup(params.worktreeId, unifiedTab.groupId)
+  state.activateTab(unifiedTab.id, { worktreeId: params.worktreeId })
   state.setActiveBrowserTab(params.workspaceId)
   if (params.pageId) {
     state.setActiveBrowserPage(params.workspaceId, params.pageId)
   }
-  // Refocus the host-owned group if stale mirrored state temporarily repeats a UUID.
-  state.focusGroup(params.worktreeId, unifiedTab.groupId)
   return true
 }

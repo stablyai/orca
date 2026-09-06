@@ -57,31 +57,31 @@ function validateTarget(
   if (!group) {
     return 'missing-group'
   }
-  const tab = (state.unifiedTabsByWorktree[result.worktreeId] ?? []).find(
+  const tabs = (state.unifiedTabsByWorktree[result.worktreeId] ?? []).filter(
+    (candidate) => candidate.id === result.tabId
+  )
+  const tab = tabs.find(
     (candidate) =>
-      candidate.id === result.tabId &&
       candidate.entityId === result.entityId &&
       candidate.groupId === result.groupId &&
       candidate.worktreeId === result.worktreeId &&
       candidate.contentType === result.contentType &&
       isUnifiedTabOwnedByWorktree(candidate, worktree, new Set())
   )
-  if (!tab) {
+  if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
-  if (
-    result.contentType !== 'terminal' &&
-    (() => {
-      const files = state.openFiles.filter(
-        (file) => file.id === result.entityId && file.worktreeId === result.worktreeId
-      )
-      return (
-        files.length === 0 ||
-        (files.length > 1 && !files.some((file) => isOpenFileOwnedByWorktree(file, worktree)))
-      )
-    })()
-  ) {
-    return 'missing-file'
+  if (result.contentType !== 'terminal') {
+    const files = state.openFiles.filter((file) => file.id === result.entityId)
+    if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
+      return 'missing-file'
+    }
+    const file = files[0]
+    const hasExplicitHost =
+      file.operationProvenance || file.externalSshTargetId || file.runtimeEnvironmentId
+    if (hasExplicitHost && !isOpenFileOwnedByWorktree(file, worktree)) {
+      return 'missing-file'
+    }
   }
   return null
 }
@@ -112,7 +112,7 @@ export function activateWorkspaceTabPaletteResult(
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, result.worktreeId)
   state.focusGroup(result.worktreeId, result.groupId)
-  state.activateTab(result.tabId)
+  state.activateTab(result.tabId, { worktreeId: result.worktreeId })
 
   if (result.contentType === 'terminal') {
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -129,6 +129,8 @@ export function activateWorkspaceTabPaletteResult(
   }
 
   state.setActiveFile(result.entityId)
+  // setActiveFile may pick an editor tab for the same entity instead of this diff.
+  state.activateTab(result.tabId, { worktreeId: result.worktreeId })
   state.setActiveTabType('editor')
   return { status: 'activated' }
 }

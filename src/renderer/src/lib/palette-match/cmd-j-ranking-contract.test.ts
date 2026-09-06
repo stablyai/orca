@@ -42,6 +42,24 @@ describe('Cmd+J semantic proof contract', () => {
     expect(match?.rank).toMatchObject({ recovery: 0, wordMatch: 0, coverage: 1 })
   })
 
+  it('uses the stronger secondary proof when another token already requires container coverage', () => {
+    const match = matchPaletteTabDocument(
+      buildPaletteTabDocument({
+        id: 'tab',
+        title: 'alphabet',
+        secondaryTexts: ['/alpha'],
+        worktreeName: 'beta',
+        branch: 'main',
+        repoName: 'repo'
+      }),
+      ready('alpha beta')
+    )
+    expect(match?.rank).toMatchObject({ coverage: 2, strength: 0 })
+    expect(match?.titleRanges).toEqual([])
+    expect(match?.secondaryMatches).toEqual([{ index: 0, ranges: [{ start: 1, end: 6 }] }])
+    expect(match?.worktreeRanges).toEqual([{ start: 0, end: 4 }])
+  })
+
   it('restores contained secondary fields and preserves every selected representation', () => {
     const restored = matchTitleAndPath('foobar', 'bar', 'b')
     expect(restored?.secondaryMatches[0]?.ranges).toEqual([{ start: 0, end: 1 }])

@@ -25,13 +25,15 @@ export function activateSimulatorTabPaletteResult({
   if (!worktree) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
-  const tab = (initialState.unifiedTabsByWorktree[worktreeId] ?? []).find(
-    (candidate) =>
-      candidate.id === tabId &&
-      candidate.contentType === 'simulator' &&
-      isUnifiedTabOwnedByWorktree(candidate, worktree, new Set())
+  const tabs = (initialState.unifiedTabsByWorktree[worktreeId] ?? []).filter(
+    (candidate) => candidate.id === tabId
   )
-  if (!tab) {
+  const tab = tabs[0]
+  if (
+    tabs.length !== 1 ||
+    tab.contentType !== 'simulator' ||
+    !isUnifiedTabOwnedByWorktree(tab, worktree, new Set())
+  ) {
     return { status: 'failed', reason: 'missing-tab' }
   }
 
@@ -45,9 +47,8 @@ export function activateSimulatorTabPaletteResult({
   }
 
   const state = useAppStore.getState()
-  state.activateTab(tab.id)
-  // Refocus the host-owned group if stale mirrored state temporarily repeats a UUID.
   state.focusGroup(worktreeId, tab.groupId)
+  state.activateTab(tab.id, { worktreeId })
   state.setActiveTab(tab.id)
   state.setActiveTabType('simulator')
   return { status: 'activated', tabId: tab.id }

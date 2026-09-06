@@ -132,7 +132,7 @@ describe('activateSimulatorTabPaletteResult', () => {
     })
   })
 
-  it('picks the host that owns the row when the worktree id exists on two hosts', () => {
+  it('rejects colliding child ids before mutating either host', () => {
     seedStore({
       worktreesByRepo: {
         'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })],
@@ -149,13 +149,12 @@ describe('activateSimulatorTabPaletteResult', () => {
       }
     })
 
-    expect(
-      activateSimulatorTabPaletteResult({ ...target, executionHostId: 'ssh:host-2' }).status
-    ).toBe('activated')
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
-      executionHostId: 'ssh:host-2'
-    })
-    expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-host-2')
+    const before = useAppStore.getState()
+    expect(activateSimulatorTabPaletteResult({ ...target, executionHostId: 'ssh:host-2' })).toEqual(
+      { status: 'failed', reason: 'missing-tab' }
+    )
+    expect(useAppStore.getState()).toBe(before)
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('reports an unknown worktree without activating', () => {

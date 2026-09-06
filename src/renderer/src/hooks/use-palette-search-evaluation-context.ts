@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useMemo } from 'react'
 import {
   createPaletteSearchContext,
   type PaletteSearchContext
@@ -6,10 +6,9 @@ import {
 
 /** One clock for every source participating in the current search snapshot. */
 export function usePaletteSearchEvaluationContext(snapshot: unknown): PaletteSearchContext {
-  const [context, setContext] = useState(() => createPaletteSearchContext(Date.now()))
-  useEffect(() => {
+  return useMemo(() => {
     void snapshot
-    setContext(createPaletteSearchContext(Date.now()))
+    // oxlint-disable-next-line react/purity -- Each changed snapshot starts one synchronous evaluation clock.
+    return createPaletteSearchContext(Date.now())
   }, [snapshot])
-  return context
 }

@@ -74,24 +74,6 @@ export function summarizeCandidates(
   return [...byMetric.values()]
 }
 
-function mergeCandidateSummaries(
-  visible: readonly TokenCandidate[],
-  evidence: readonly TokenCandidate[],
-  diagnostics?: PaletteMatchDiagnostics
-): TokenCandidate[] {
-  const byMetric = new Map<string, TokenCandidate>()
-  for (const candidate of [...visible, ...evidence]) {
-    if (diagnostics) {
-      diagnostics.selectionCandidateVisits += 1
-    }
-    const key = candidateMetricKey(candidate)
-    if (!byMetric.has(key)) {
-      byMetric.set(key, candidate)
-    }
-  }
-  return [...byMetric.values()]
-}
-
 function assignmentPlacement(
   document: PaletteDocument,
   selected: readonly TokenCandidate[],
@@ -170,9 +152,8 @@ export function collectScopeAssignments(args: {
   diagnostics?: PaletteMatchDiagnostics
 }): RankedAssignment[] {
   const scopeCandidates = args.visibleSummaries.map((visible, index) =>
-    mergeCandidateSummaries(
-      visible,
-      args.evidenceSummaries[index].get(args.evidenceId) ?? [],
+    summarizeCandidates(
+      [...visible, ...(args.evidenceSummaries[index].get(args.evidenceId) ?? [])],
       args.diagnostics
     )
   )

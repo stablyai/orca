@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store'
-import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
+import {
+  activateBrowserWorkspaceTab,
+  getActivatableBrowserWorkspaceTab
+} from '@/lib/browser-workspace-tab-activation'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
 import { activateAndRevealWorktree } from './worktree-activation'
@@ -55,6 +58,11 @@ export function activateBrowserPagePaletteResult({
     : 'webview'
 
   const targetHostId = executionHostId ?? worktree.hostId
+  if (
+    !getActivatableBrowserWorkspaceTab({ worktreeId, workspaceId, executionHostId: targetHostId })
+  ) {
+    return { status: 'failed', reason: 'missing-tab' }
+  }
   const activated = activateAndRevealWorktree(
     worktree.id,
     targetHostId ? { executionHostId: targetHostId } : {}

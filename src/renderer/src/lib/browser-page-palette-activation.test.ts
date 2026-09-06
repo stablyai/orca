@@ -195,7 +195,7 @@ describe('activateBrowserPagePaletteResult', () => {
     })
   })
 
-  it('focuses the owned unified tab when child ids collide across hosts', () => {
+  it('rejects colliding child ids before mutating either host', () => {
     seedStore({
       worktreesByRepo: {
         'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })],
@@ -212,10 +212,28 @@ describe('activateBrowserPagePaletteResult', () => {
       }
     })
 
-    expect(
-      activateBrowserPagePaletteResult({ ...target, executionHostId: 'ssh:host-2' }).status
-    ).toBe('activated')
-    expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-host-2')
+    const before = useAppStore.getState()
+    expect(activateBrowserPagePaletteResult({ ...target, executionHostId: 'ssh:host-2' })).toEqual({
+      status: 'failed',
+      reason: 'missing-tab'
+    })
+    expect(useAppStore.getState()).toBe(before)
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('keeps browser workspaces with distinct unified tabs in multiple groups activatable', () => {
+    seedStore({
+      unifiedTabsByWorktree: {
+        'wt-1': [makeBrowserTab(), makeBrowserTab({ id: 'second-view', groupId: 'group-2' })]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          makeGroup(),
+          makeGroup({ id: 'group-2', activeTabId: 'second-view', tabOrder: ['second-view'] })
+        ]
+      }
+    })
+    expect(activateBrowserPagePaletteResult(target).status).toBe('activated')
   })
 
   it('activates pages in remote folder workspaces', () => {

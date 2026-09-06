@@ -163,7 +163,7 @@ export function useWorktreeJumpPaletteController({
     ...listEntries,
     ...selectionLifecycle,
     ...selectionActions,
-    paletteNowMs: paletteSearchContext.nowMs,
+    paletteNowMs: worktrees.hasQuery ? paletteSearchContext.nowMs : storeState.paletteNowMs,
     emojiInput,
     ...createAction
   }

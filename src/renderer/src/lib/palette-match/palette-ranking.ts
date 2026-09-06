@@ -63,19 +63,6 @@ export function maxValidPaletteActivityTimestamp(
   return maximum
 }
 
-export function comparePaletteActivity(a: PaletteActivityRank, b: PaletteActivityRank): number {
-  if (a.ageBucket !== b.ageBucket) {
-    if (a.ageBucket === null) {
-      return 1
-    }
-    if (b.ageBucket === null) {
-      return -1
-    }
-    return a.ageBucket - b.ageBucket
-  }
-  return b.timestamp - a.timestamp
-}
-
 function compareCodeUnits(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }

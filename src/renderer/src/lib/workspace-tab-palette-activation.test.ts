@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => {
     worktreesByRepo: Record<string, { id: string; repoId: string; path: string }[]>
     groupsByWorktree: Record<string, Record<string, unknown>[]>
     unifiedTabsByWorktree: Record<string, Record<string, unknown>[]>
-    openFiles: { id: string; worktreeId: string }[]
+    openFiles: { id: string; worktreeId: string; externalSshTargetId?: string }[]
     repos: unknown[]
     settings: Record<string, unknown>
     activeGroupIdByWorktree: Record<string, string>
@@ -178,7 +178,9 @@ describe('activateWorkspaceTabPaletteResult', () => {
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
     expect(mocks.store.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
-    expect(mocks.store.activateTab).toHaveBeenCalledWith('unified-terminal-1')
+    expect(mocks.store.activateTab).toHaveBeenCalledWith('unified-terminal-1', {
+      worktreeId: 'wt-1'
+    })
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
@@ -202,7 +204,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { executionHostId })
   })
 
-  it('activates the owned tab when child ids collide across hosts', () => {
+  it('rejects colliding child ids before mutating either host', () => {
     const executionHostId = 'runtime:host-1' as const
     mocks.store.getKnownWorktreeById.mockImplementation((_worktreeId, hostId) =>
       hostId === executionHostId
@@ -220,9 +222,11 @@ describe('activateWorkspaceTabPaletteResult', () => {
     ]
 
     expect(activateWorkspaceTabPaletteResult({ ...makeResult(), executionHostId })).toEqual({
-      status: 'activated'
+      status: 'failed',
+      reason: 'missing-tab'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { executionHostId })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.store.activateTab).not.toHaveBeenCalled()
   })
 
   it('activates tabs in known folder or detected workspaces', () => {
@@ -287,7 +291,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
 
     expect(mocks.store.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
     expect(mocks.store.setActiveFile).toHaveBeenCalledWith('/tmp/wt-1/src/app.ts')
-    expect(mocks.store.activateTab).toHaveBeenLastCalledWith('diff-tab-1')
+    expect(mocks.store.activateTab).toHaveBeenLastCalledWith('diff-tab-1', { worktreeId: 'wt-1' })
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('editor')
     expect(mocks.focusTerminalTabSurface).not.toHaveBeenCalled()
   })
@@ -338,7 +342,7 @@ describe('activateWorkspaceTabPaletteResult', () => {
 
     expect(mocks.store.focusGroup).toHaveBeenCalledWith('wt-1', 'group-2')
     expect(mocks.store.setActiveFile).toHaveBeenCalledWith(entityId)
-    expect(mocks.store.activateTab).toHaveBeenLastCalledWith(tabId)
+    expect(mocks.store.activateTab).toHaveBeenLastCalledWith(tabId, { worktreeId: 'wt-1' })
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('editor')
   })
 
@@ -359,6 +363,18 @@ describe('activateWorkspaceTabPaletteResult', () => {
       reason: 'missing-tab'
     })
     expect(mocks.store.focusGroup).not.toHaveBeenCalled()
+  })
+
+  it('rejects a sole backing file whose explicit owner differs from the target', () => {
+    mocks.store.unifiedTabsByWorktree['wt-1'][0].contentType = 'editor'
+    mocks.store.openFiles = [
+      { id: 'terminal-1', worktreeId: 'wt-1', externalSshTargetId: 'other-host' }
+    ]
+    expect(activateWorkspaceTabPaletteResult(makeResult({ contentType: 'editor' }))).toEqual({
+      status: 'failed',
+      reason: 'missing-file'
+    })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('treats missing editor backing files and worktrees as stale', () => {
