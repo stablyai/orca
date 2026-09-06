@@ -455,6 +455,42 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
   })
 
+  it('preserves classified user input during replay while suppressing synthetic replies', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    let userInput: (() => void) | undefined
+    Object.assign(pane.terminal, {
+      _core: {
+        coreService: {
+          onUserInput: (listener: () => void) => {
+            userInput = listener
+            return { dispose: vi.fn() }
+          }
+        }
+      }
+    })
+    const transport = createMockTransport('ssh:ssh-1@@pty-1')
+    transportFactoryQueue.push(transport)
+    const deps = createDeps()
+    const deferred: (() => void)[] = []
+    Object.assign(deps, {
+      deferPtyInput: (_paneId: number, data: string, forward: (data: string) => void) => {
+        deferred.push(() => forward(data))
+      }
+    })
+    connectPanePty(pane as never, createManager(1, 1) as never, deps as never)
+    await flushAsyncTicks()
+    transport.sendInput.mockClear()
+    deps.replayingPanesRef.current.set(pane.id, 1)
+    userInput?.()
+    sendTerminalInputThroughPane(pane, 'input_under_flood\r')
+    sendTerminalInputThroughPane(pane, '\x1b[?1;2c')
+    for (const forward of deferred) {
+      forward()
+    }
+    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
+  })
+
   it('settles a queued startup only after the pane binds its spawned PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-resume')
