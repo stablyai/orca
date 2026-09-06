@@ -223,7 +223,7 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
 ])
 
 type AppearancePaneSearchOptions = {
-  showWarpImport?: boolean
+  showThemeImports?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
 }
@@ -252,7 +252,7 @@ export function getAppearancePaneSearchEntries(
   options: AppearancePaneSearchOptions = {}
 ): SettingsSearchEntry[] {
   return buildAppearancePaneSearchEntries({
-    showWarpImport: options.showWarpImport ?? true,
+    showThemeImports: options.showThemeImports ?? true,
     showSystemTray: options.showSystemTray,
     showMenuBarIcon: options.showMenuBarIcon
   })

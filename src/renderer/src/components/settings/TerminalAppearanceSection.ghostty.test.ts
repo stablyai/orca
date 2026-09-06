@@ -524,6 +524,29 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
     expect(findTerminalThemeCatalogSection(element)?.props.showThemeImport).toBe(false)
     expect(findWarpThemeImportModal(element)).toBeNull()
+    expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(false)
+    expect(findGhosttyImportModal(element)).toBeNull()
+  })
+
+  it('keeps the Ghostty import out of paired web client search results', () => {
+    vi.stubGlobal('window', {
+      __ORCA_WEB_CLIENT__: true,
+      location: { pathname: '/web-index.html' }
+    })
+    mockSettingsSearchQuery = 'ghostty'
+
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(false)
+    // A query matching nothing visible must not force the typography group open.
+    expect(findComponentByTypeName(element, 'TerminalFontSizeSetting')).toBeNull()
   })
 
   it('passes hook state to GhosttyImportModal', () => {

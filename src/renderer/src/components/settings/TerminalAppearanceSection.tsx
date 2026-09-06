@@ -84,10 +84,14 @@ export function TerminalAppearanceSection({
   const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
   const showWarpThemeImport = !isWebClientLocation()
+  // Why: the web settings API implements neither import, so both controls are
+  // desktop-only. Dropping the search entries too keeps the index honest — a
+  // "ghostty" query must not force a group open around an invisible control.
+  const showGhosttyThemeImport = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
-  const ghosttyImportEntries = getTerminalGhosttyImportSearchEntries()
+  const ghosttyImportEntries = showGhosttyThemeImport ? getTerminalGhosttyImportSearchEntries() : []
   const themeCatalogSearchEntries = [
     ...getTerminalThemeTargetSearchEntries(),
     ...darkThemeSearchEntries,
@@ -123,7 +127,8 @@ export function TerminalAppearanceSection({
     primaryTypographyMatches ||
     typographyMatches ||
     ghosttyImportMatches
-  const showGhosttyImport = !isSearching || forceVisiblePrimary || ghosttyImportMatches
+  const showGhosttyImport =
+    showGhosttyThemeImport && (!isSearching || forceVisiblePrimary || ghosttyImportMatches)
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
 
   const advancedGroups = [
@@ -265,15 +270,17 @@ export function TerminalAppearanceSection({
         />
       ) : null}
 
-      <GhosttyImportModal
-        open={ghostty.open}
-        onOpenChange={ghostty.handleOpenChange}
-        preview={ghostty.preview}
-        loading={ghostty.loading}
-        onApply={ghostty.handleApply}
-        applied={ghostty.applied}
-        applyError={ghostty.applyError}
-      />
+      {showGhosttyThemeImport ? (
+        <GhosttyImportModal
+          open={ghostty.open}
+          onOpenChange={ghostty.handleOpenChange}
+          preview={ghostty.preview}
+          loading={ghostty.loading}
+          onApply={ghostty.handleApply}
+          applied={ghostty.applied}
+          applyError={ghostty.applyError}
+        />
+      ) : null}
       {showWarpThemeImport ? (
         <WarpThemeImportModal
           open={warpThemes.open}

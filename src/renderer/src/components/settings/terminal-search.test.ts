@@ -156,13 +156,18 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
   })
 
-  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
-    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
-    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+  it('omits every theme-import appearance entry when desktop-only controls are hidden', () => {
+    const desktopEntries = getAppearancePaneSearchEntries({ showThemeImports: true })
+    const webEntries = getAppearancePaneSearchEntries({ showThemeImports: false })
 
-    expect(desktopEntries.some((entry) => entry.title === 'Import from Warp')).toBe(true)
-    expect(webEntries.some((entry) => entry.title === 'Import from Warp')).toBe(false)
-    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+    for (const title of ['Import from Warp', 'Import from Ghostty']) {
+      expect(desktopEntries.some((entry) => entry.title === title)).toBe(true)
+      expect(webEntries.some((entry) => entry.title === title)).toBe(false)
+    }
+    // Why: the pane index feeds the settings sidebar, so a web-client `ghostty`
+    // query must not rank a pane whose Ghostty control no longer renders.
+    expect(matchesSettingsSearch('ghostty', desktopEntries)).toBe(true)
+    expect(matchesSettingsSearch('ghostty', webEntries)).toBe(false)
   })
 
   it('includes the system tray appearance entry only when desktop tray controls are shown', () => {
