@@ -73,7 +73,12 @@ export class TerminalTailController {
     this.activeTerminalId = terminalId
     const decoder = this.inputs.createDecoder()
 
-    this.store.update((s) => ({ ...s, terminalTail: { terminalId, lines: [], live: true } }))
+    // Finding #4: loading:true from open() until the first frame decodes (or unavailable fires)
+    // so the screen can render "Loading terminal…" instead of a blank body during that window.
+    this.store.update((s) => ({
+      ...s,
+      terminalTail: { terminalId, lines: [], live: true, loading: true }
+    }))
 
     this.unsubscribe = this.inputs.port.subscribe(
       'terminal.subscribe',
@@ -128,7 +133,16 @@ export class TerminalTailController {
     const live = frame.opcode !== TerminalStreamOpcode.Error
     this.store.update((s) =>
       s.terminalTail.terminalId === terminalId
-        ? { ...s, terminalTail: { terminalId, lines: decoder.lines(), live, unavailable: false } }
+        ? {
+            ...s,
+            terminalTail: {
+              terminalId,
+              lines: decoder.lines(),
+              live,
+              unavailable: false,
+              loading: false
+            }
+          }
         : s
     )
   }
@@ -141,7 +155,10 @@ export class TerminalTailController {
     }
     this.store.update((s) =>
       s.terminalTail.terminalId === terminalId
-        ? { ...s, terminalTail: { terminalId, lines: [], live: false, unavailable: true } }
+        ? {
+            ...s,
+            terminalTail: { terminalId, lines: [], live: false, unavailable: true, loading: false }
+          }
         : s
     )
   }

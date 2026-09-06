@@ -1,5 +1,6 @@
 import type { RpcResponse } from './orca-rpc-wire'
 import type { PendingRequestRegistry } from './orca-request-registry'
+import { decodeAuthenticatedRpcResponse } from './orca-socket-frames'
 
 // Tracks active subscribe() calls by id and, once a stream starts, maps the server's numeric
 // streamId back to its subscription so binary frames can be routed to the right onBinary callback.
@@ -73,6 +74,23 @@ export function routeRpcResponse(
   }
 }
 
+// Decrypts an authenticated text frame and routes it, or reports the decrypt/parse failure —
+// the client's handleTextMessage authenticated branch, extracted so it isn't 6 more lines there.
+export function routeAuthenticatedTextFrame(
+  raw: string,
+  sharedKey: Uint8Array,
+  subscriptions: SubscriptionRegistry,
+  pending: PendingRequestRegistry,
+  onDecryptFailure: () => void
+): void {
+  const response = decodeAuthenticatedRpcResponse(raw, sharedKey)
+  if (response) {
+    routeRpcResponse(response, subscriptions, pending)
+    return
+  }
+  onDecryptFailure()
+}
+
 function routeSubscriptionResponse(
   response: RpcResponse,
   subscription: Subscription,
@@ -93,6 +111,18 @@ function routeSubscriptionResponse(
   if (!subscription.cancelled) {
     subscription.onData(result)
   }
+}
+
+// Mirrors mobile's buildTerminalUnsubscribeParams: echo the original `terminal` id back as
+// `subscriptionId`, since terminal.subscribe acks a numeric streamId, not a subscription id.
+// null for any subscription that isn't a cancellable terminal.subscribe stream.
+export function terminalUnsubscribeParams(
+  subscription: Subscription
+): { subscriptionId: string } | null {
+  const terminal = (subscription.params as { terminal?: unknown } | null)?.terminal
+  return subscription.method === 'terminal.subscribe' && typeof terminal === 'string'
+    ? { subscriptionId: terminal }
+    : null
 }
 
 function isSubscribedResult(value: unknown): value is { type: 'subscribed'; streamId: number } {

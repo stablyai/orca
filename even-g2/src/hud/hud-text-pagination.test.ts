@@ -44,4 +44,31 @@ describe('paginateHudBody', () => {
   it('returns a single empty page for empty input', () => {
     expect(paginateHudBody([])).toEqual([''])
   })
+
+  // Finding #19: a page's real on-glass footprint depends on visual rows, not just explicit
+  // newlines — a long line must be wrapped and counted as multiple rows before pagination.
+  it('wraps wide lines to maxGlyphsPerLine and counts each wrapped row toward the page budget', () => {
+    const wideLine = 'x'.repeat(150) // 3 rows at 50 glyphs/row
+    const pages = paginateHudBody([wideLine, 'short'], { maxGlyphsPerLine: 50, maxLinesPerPage: 3 })
+    expect(pages).toEqual([Array(3).fill('x'.repeat(50)).join('\n'), 'short'])
+  })
+
+  it('never emits an oversized first page: a 1,200-char single-line body paginates to multiple pages when wrapped', () => {
+    const body = 'y'.repeat(1200)
+    const pages = paginateHudBody([body], { maxGlyphsPerLine: 60, maxLinesPerPage: 9 })
+    expect(pages.length).toBeGreaterThan(1)
+    for (const page of pages) {
+      const rows = page.split('\n')
+      expect(rows.length).toBeLessThanOrEqual(9)
+      for (const row of rows) {
+        expect(row.length).toBeLessThanOrEqual(60)
+      }
+    }
+  })
+
+  it('reservedLines shrinks the per-page line budget so caller controls still fit', () => {
+    const lines = ['1', '2', '3', '4', '5']
+    const pages = paginateHudBody(lines, { maxLinesPerPage: 5, reservedLines: 3 })
+    expect(pages).toEqual(['1\n2', '3\n4', '5'])
+  })
 })

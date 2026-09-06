@@ -1,10 +1,11 @@
 // Integrator wiring (Unit 8, spec S4/S10 step 1): races the real EvenHub bridge against a
 // 1500ms timeout. On timeout, falls back to MockGlassesBridge + the canvas preview via a
-// dynamic import (so the prod bundle never carries simulator code) — but only when a
-// dev/plain-browser signal says this isn't a real device (finding #7 of the critical review): a
-// slow-but-present bridge on real hardware is not evidence it's absent, and silently swapping in
-// the simulator there would show a fake HUD on real glasses. On a real device we keep waiting
-// for the real bridge instead, surfacing a recoverable notice in the meantime.
+// dynamic import (so the prod bundle never carries simulator code) — but only on an EXPLICIT
+// simulator opt-in (findings #7 and #17 of the critical review): a slow-but-present bridge on
+// real hardware is not evidence it's absent, and neither is `import.meta.env.DEV` — a real
+// device loading the dev server would otherwise fall into the simulator too. Silently swapping
+// in the simulator there would show a fake HUD on real glasses. Without the opt-in we keep
+// waiting for the real bridge instead, surfacing a recoverable notice in the meantime.
 import type { GlassesBridge } from '../glasses/glasses-bridge'
 import { connectEvenHubBridge } from '../glasses/even-hub-bridge'
 
@@ -34,20 +35,28 @@ async function fallbackToMockBridge(): Promise<GlassesBridge> {
   return bridge
 }
 
-/** True when it's safe to substitute the canvas simulator for a missing/slow bridge: a Vite
- *  dev server build, or an explicit `?sim` opt-in (e.g. testing index.html directly). Never
- *  true in a plain production build with no explicit opt-in. */
+/** True only on an EXPLICIT simulator opt-in: a `?sim`/`#sim` URL param, or a `sim` flag left in
+ *  localStorage by a previous opt-in (finding #17). `import.meta.env.DEV` is NOT sufficient —
+ *  a real device loading the dev server (e.g. during on-glasses testing) must never be treated
+ *  as "safe to fall back to the mock" just because the bundle was built in dev mode. Never true
+ *  in a plain production or dev build with no explicit opt-in. */
 export function isSimulatorFallbackAllowed(): boolean {
-  // Cast rather than declaring vite/client's ambient ImportMeta.env type (this project's
-  // tsconfig `types` is scoped to vitest/globals only) — Vite always injects import.meta.env
-  // at build/dev time regardless of TS's static view of it.
-  const env = (import.meta as unknown as { env?: { DEV?: boolean } }).env
-  if (env?.DEV) {
-    return true
-  }
   if (typeof location !== 'undefined') {
     try {
-      return new URLSearchParams(location.search).has('sim')
+      if (new URLSearchParams(location.search).has('sim')) {
+        return true
+      }
+    } catch {
+      // fall through to hash/localStorage checks
+    }
+    const hash = location.hash ?? ''
+    if (hash === '#sim' || hash.startsWith('#sim&') || hash.startsWith('#sim,')) {
+      return true
+    }
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      return localStorage.getItem('sim') === '1' || localStorage.getItem('sim') === 'true'
     } catch {
       return false
     }

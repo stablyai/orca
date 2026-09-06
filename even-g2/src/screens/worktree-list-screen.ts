@@ -1,4 +1,12 @@
 // Unit 5: worktree list view-model (spec S8) — native list, status glyph prefix per row.
+//
+// MEDIUM #9: this screen deliberately does NOT reorder `dashboard.rows` itself — it renders
+// them in whatever order the array already has. Stability across the 5s poll comes from
+// worktree-dashboard-state.ts's WorktreeDashboardController, which sorts that array with a
+// first-seen tiebreak so a status change alone (the common case) never reshuffles rows and
+// resets the firmware's list selection; only a permission-episode start/end still reorders
+// (intentional — see that controller's `orderRows` doc). Re-sorting independently in here would
+// desync from what hud-navigation-list-select.ts resolves a click's index against.
 import type { HudScreenPage } from '../hud/hud-page-spec'
 import { topFrame, WORKTREE_LIST_PAGE_SIZE } from '../navigation/hud-navigation-frames'
 import type { ScreenFrame } from '../navigation/nav-contract'

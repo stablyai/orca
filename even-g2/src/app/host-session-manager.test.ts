@@ -19,7 +19,7 @@ function initialState(overrides: Partial<HudState> = {}): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     // Dashboard visible (matching WorktreeDashboardController's isVisible predicate) so
     // dashboard.start()'s immediate tick actually polls once feature controllers start.
     nav: {

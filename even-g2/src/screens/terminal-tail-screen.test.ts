@@ -10,15 +10,23 @@ function fixtureState(opts: {
   page?: number
   worktreeId?: string
   dashboardRows?: DashboardRow[]
+  loading?: boolean
+  unavailable?: boolean
 }): HudState {
   return {
     connection: { hostId: 'h1', state: 'connected', compat: null },
     hosts: [],
     dashboard: { rows: opts.dashboardRows ?? [], fetchedAt: 0, stale: false },
     inbox: { entries: [] },
-    terminalTail: { terminalId: opts.terminalId, lines: opts.lines, live: true },
+    terminalTail: {
+      terminalId: opts.terminalId,
+      lines: opts.lines,
+      live: true,
+      loading: opts.loading,
+      unavailable: opts.unavailable
+    },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: {
       stack: [
         {
@@ -46,29 +54,63 @@ describe('terminalTailPageCount', () => {
 })
 
 describe('renderTerminalTailScreen', () => {
-  it('shows empty content while terminalId is still resolving (frame terminalId "" placeholder)', () => {
+  // Finding #4: every non-content state renders an explicit message — never a blank body.
+  it('shows "No active terminal" while the frame terminalId is still the "" placeholder', () => {
     const state = fixtureState({ terminalId: null, lines: [], frameTerminalId: '' })
     const page = renderTerminalTailScreen(state)
     expect(page).toEqual({
       layout: 'text',
-      header: 'term · wt-1 · 1/1',
-      body: '',
-      footer: 'scroll=pages  2tap=back'
+      header: 'term · wt-1',
+      body: 'No active terminal',
+      footer: '2tap=back'
     })
   })
 
-  it('ignores lines from a stale/different terminal subscription', () => {
+  it('shows "Loading terminal…" for a stale/different terminal subscription (not yet caught up to the frame)', () => {
     const state = fixtureState({
       terminalId: 'other-term',
       lines: ['stale line'],
       frameTerminalId: 'term-1'
     })
     const page = renderTerminalTailScreen(state)
-    expect(page.layout).toBe('text')
-    if (page.layout !== 'text') {
-      throw new Error('expected text layout')
-    }
-    expect(page.body).toBe('')
+    expect(page).toEqual({
+      layout: 'text',
+      header: 'term · wt-1',
+      body: 'Loading terminal…',
+      footer: '2tap=back'
+    })
+  })
+
+  it('shows "Loading terminal…" while subscribed but no frame has decoded yet', () => {
+    const state = fixtureState({
+      terminalId: 'term-1',
+      lines: [],
+      frameTerminalId: 'term-1',
+      loading: true
+    })
+    const page = renderTerminalTailScreen(state)
+    expect(page.body).toBe('Loading terminal…')
+  })
+
+  it('shows "Terminal unavailable — check phone" when the host never delivered binary frames', () => {
+    const state = fixtureState({
+      terminalId: 'term-1',
+      lines: [],
+      frameTerminalId: 'term-1',
+      unavailable: true
+    })
+    const page = renderTerminalTailScreen(state)
+    expect(page.body).toBe('Terminal unavailable — check phone')
+  })
+
+  it('shows "No output yet" when resolved but the terminal has produced zero lines', () => {
+    const state = fixtureState({
+      terminalId: 'term-1',
+      lines: [],
+      frameTerminalId: 'term-1'
+    })
+    const page = renderTerminalTailScreen(state)
+    expect(page.body).toBe('No output yet')
   })
 
   it('shows the display name and paginates matching terminal content', () => {
@@ -105,5 +147,61 @@ describe('renderTerminalTailScreen', () => {
     }
     expect(page.header).toBe('term · wt-1 · 1/1')
     expect(page.body).toBe('only line')
+  })
+
+  // Finding #8/#2: default to the latest page and keep following new output while page:0.
+  describe('follow-latest paging', () => {
+    it('defaults to the latest page (not the oldest) when the frame has not scrolled', () => {
+      const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`)
+      const pages = paginateHudBody(lines)
+      const state = fixtureState({
+        terminalId: 'term-1',
+        lines,
+        frameTerminalId: 'term-1',
+        page: 0
+      })
+      const page = renderTerminalTailScreen(state)
+      expect(page.header).toBe(`term · wt-1 · ${pages.length}/${pages.length}`)
+      expect(page.body).toBe(pages.at(-1))
+    })
+
+    it('stays on the latest page as new output arrives while unscrolled (page:0)', () => {
+      const initialLines = Array.from({ length: 5 }, (_, i) => `line ${i}`)
+      const grownLines = [...initialLines, ...Array.from({ length: 10 }, (_, i) => `line ${5 + i}`)]
+      const before = renderTerminalTailScreen(
+        fixtureState({
+          terminalId: 'term-1',
+          lines: initialLines,
+          frameTerminalId: 'term-1',
+          page: 0
+        })
+      )
+      const after = renderTerminalTailScreen(
+        fixtureState({
+          terminalId: 'term-1',
+          lines: grownLines,
+          frameTerminalId: 'term-1',
+          page: 0
+        })
+      )
+      const grownPages = paginateHudBody(grownLines)
+      expect(before.body).toBe(paginateHudBody(initialLines).at(-1))
+      expect(after.body).toBe(grownPages.at(-1))
+      expect(after.body).not.toBe(before.body) // followed the new tail, not pinned to old content
+    })
+
+    it('scrolling back (page > 0) pins a page further into history, not the latest', () => {
+      const lines = Array.from({ length: 20 }, (_, i) => `line ${i}`)
+      const pages = paginateHudBody(lines)
+      const state = fixtureState({
+        terminalId: 'term-1',
+        lines,
+        frameTerminalId: 'term-1',
+        page: 2
+      })
+      const page = renderTerminalTailScreen(state)
+      expect(page.body).toBe(pages[pages.length - 1 - 2])
+      expect(page.body).not.toBe(pages.at(-1))
+    })
   })
 })

@@ -64,7 +64,7 @@ describe('buildHudPage', () => {
     })
   })
 
-  it('truncates header/footer to 200 chars, body to 1000 chars', () => {
+  it('clamps header/footer to a single line (56 chars incl. ellipsis), body to 1000 chars', () => {
     const build = buildHudPage({
       layout: 'text',
       header: 'h'.repeat(300),
@@ -77,9 +77,26 @@ describe('buildHudPage', () => {
     if (header.kind !== 'text' || body.kind !== 'text' || footer.kind !== 'text') {
       throw new Error('expected text containers')
     }
-    expect(header.content).toHaveLength(200)
+    expect(header.content).toHaveLength(56)
+    expect(header.content.endsWith('…')).toBe(true)
     expect(body.content).toHaveLength(1000)
-    expect(footer.content).toHaveLength(200)
+    expect(footer.content).toHaveLength(56)
+  })
+
+  it('collapses newlines in header/footer so they never spill past their single line', () => {
+    const build = buildHudPage({
+      layout: 'text',
+      header: 'title\nsecond line',
+      body: 'x',
+      footer: 'a\nb'
+    })
+    const header = byName(build.containers, 'header')
+    const footer = byName(build.containers, 'footer')
+    if (header.kind !== 'text' || footer.kind !== 'text') {
+      throw new Error('expected text containers')
+    }
+    expect(header.content).toBe('title second line')
+    expect(footer.content).toBe('a b')
   })
 
   it('truncates list items to 20 items of <=64 chars each', () => {

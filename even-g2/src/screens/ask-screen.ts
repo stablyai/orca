@@ -16,48 +16,79 @@ import type { HudState } from '../state/hud-store'
 
 export const DEFAULT_ASK_OPTION_COUNT = 3
 
+const DEFAULT_ASK_FOOTER = 'scroll=choose  click=send  2tap=back'
+
+// Findings #1/#8 (partial, honest — full option-text parsing is v2): the strip is shown as
+// numbered slots without claiming what each one means, since v1 sends raw digits without
+// parsing the agent's actual prompt. When the last resolution/send attempt came back
+// failed/unresolved, the strip is replaced entirely — sending would be guessing which terminal
+// (or whether it even landed), so the UI must say so rather than show cursor-able options that
+// don't actually work right now.
+const OPTIONS_UNAVAILABLE_TEXT = 'Options unavailable — check phone'
+
 export function renderAskScreen(state: HudState): Extract<HudScreenPage, { layout: 'text' }> {
   const frame = topFrame(state.nav) as Extract<ScreenFrame, { screen: 'ask' }>
   const entry = state.inbox.entries.find((e) => e.notificationId === frame.notificationId)
   const title = entry?.title ?? 'Needs input'
-  const strip = buildOptionStrip(frame.selectedOption, DEFAULT_ASK_OPTION_COUNT)
+  const interaction = state.askInteraction
+  const optionsUnavailable =
+    interaction !== null &&
+    interaction.notificationId === frame.notificationId &&
+    (interaction.phase === 'failed' || interaction.phase === 'unresolved')
+  const optionArea = optionsUnavailable
+    ? OPTIONS_UNAVAILABLE_TEXT
+    : buildOptionStrip(frame.selectedOption, DEFAULT_ASK_OPTION_COUNT)
 
   // Reserve a line + its chars for the strip appended below the body, so a full first page
   // never pushes the strip past the 216px text region (only the first body page is ever
   // shown — the rest, if any, is surfaced via the footer's truncation indicator instead of a
   // second scroll axis, since scroll on this screen already moves the option cursor).
-  const bodyPages = entry
-    ? paginateHudBody(entry.body.split('\n'), {
-        maxLinesPerPage: DEFAULT_MAX_LINES_PER_PAGE - 1,
-        maxCharsPerPage: DEFAULT_MAX_CHARS_PER_PAGE - strip.length - 1
-      })
-    : ['']
+  // Finding #1: body is always the notification's own text (the real human summary) — never a
+  // guess at option semantics. A synthesized ask (finding #14 — blocked with no notification
+  // yet) has no entry at all, so say so plainly instead of rendering an empty page.
+  const bodyText = entry?.body ?? 'Waiting on input — no details yet'
+  const bodyPages = paginateHudBody(bodyText.split('\n'), {
+    maxLinesPerPage: DEFAULT_MAX_LINES_PER_PAGE - 1,
+    maxCharsPerPage: DEFAULT_MAX_CHARS_PER_PAGE - optionArea.length - 1
+  })
   const firstBodyPage = bodyPages[0] ?? ''
   const truncated = bodyPages.length > 1
 
   return {
     layout: 'text',
     header: `Orca · ${title}`,
-    body: `${firstBodyPage}\n${strip}`,
-    footer: askFooter(state, entry?.worktreeId, truncated)
+    body: `${firstBodyPage}\n${optionArea}`,
+    footer: askFooter(interaction, frame.notificationId, truncated)
   }
 }
 
-// Optimistic "answered" footer (spec S7): shows right after sendAskAnswer; once the dashboard
-// polls again (fetchedAt advances past sentAt) and the worktree is still `permission`, flips to
-// a "still waiting" nudge instead of silently staying "answered".
-function askFooter(state: HudState, worktreeId: string | undefined, truncated: boolean): string {
+// HIGH #2/#3/#12: the footer now renders HudState.askInteraction's phase directly — set by
+// nav-ports.ts's sendAskAnswer/scheduleConfirmationPoll — instead of only ever an optimistic
+// "answered ✓" derived from a bare sentAt timestamp.
+function askFooter(
+  interaction: HudState['askInteraction'],
+  notificationId: string,
+  truncated: boolean
+): string {
   const truncatedMark = truncated ? '  ⋯more' : ''
-  const answered = state.askAnswered
-  if (!answered || answered.worktreeId !== worktreeId) {
-    return `click=send  2tap=back${truncatedMark}`
+  if (!interaction || interaction.notificationId !== notificationId) {
+    return `${DEFAULT_ASK_FOOTER}${truncatedMark}`
   }
-  const worktree = state.dashboard.rows.find((r) => r.worktreeId === worktreeId)
-  const polledSinceAnswer = state.dashboard.fetchedAt >= answered.sentAt
-  if (polledSinceAnswer && worktree?.status === 'permission') {
-    return 'still waiting — check phone'
+  switch (interaction.phase) {
+    case 'sending':
+      return 'Sending…'
+    case 'checking':
+      return 'Sent — checking…'
+    case 'failed':
+      return 'Not sent — click to retry'
+    case 'unresolved':
+      return 'Delivery unknown — check phone'
+    case 'answered':
+      return 'answered ✓  2tap=back'
+    case 'idle':
+    default:
+      return `${DEFAULT_ASK_FOOTER}${truncatedMark}`
   }
-  return 'answered ✓  2tap=back'
 }
 
 function buildOptionStrip(selectedOption: number, optionCount: number): string {

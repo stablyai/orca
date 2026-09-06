@@ -115,13 +115,17 @@ describe('ask flow integration', () => {
       }
     })
 
-    // CRITICAL finding agent-terminal-resolution.ts:22 / nav-ports.ts:33: the keystroke must go
-    // to the host's authoritative terminal.resolveActive answer (term-wt1-1), never a
-    // most-recent-output guess — the fixture's term-wt1-2 decoy has newer output than term-wt1-1
-    // but is NOT wt-1's active terminal (see mock-orca-fixtures.ts's createFixtureActiveTerminals).
-    const resolved = sentRequests.find((r) => r.method === 'terminal.resolveActive')
-    if (resolved?.params?.worktree !== 'id:wt-1') {
-      throw new Error('terminal.resolveActive was not called for wt-1')
+    // CRITICAL finding #10 (agent-terminal-resolution.ts): the keystroke must go to the
+    // worktree's unique terminal.agentStatus-'waiting' terminal (term-wt1-1), never
+    // terminal.resolveActive (desktop focus, not who asked) and never a most-recent-output
+    // guess — the fixture's term-wt1-2 decoy has newer output than term-wt1-1 but is not the
+    // one flagged as needing input (see mock-terminal-registry.ts's needsInput).
+    const listed = sentRequests.find((r) => r.method === 'terminal.list')
+    if (listed?.params?.worktree !== 'id:wt-1') {
+      throw new Error('terminal.list was not called for wt-1')
+    }
+    if (!sentRequests.some((r) => r.method === 'terminal.agentStatus')) {
+      throw new Error('terminal.agentStatus was never probed')
     }
     const sentToTerminal = sentRequests.find((r) => r.method === 'terminal.send')
     if (sentToTerminal?.params?.terminal !== 'term-wt1-1') {

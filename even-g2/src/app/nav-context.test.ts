@@ -12,7 +12,7 @@ function baseState(overrides: Partial<HudState> = {}): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: {
       stack: [{ screen: 'dashboard', hostId: 'host-a', cursor: 0, page: 0 }],
       exitDialogArmed: false

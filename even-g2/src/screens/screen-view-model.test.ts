@@ -11,7 +11,7 @@ function fixtureState(nav: NavState): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav
   }
 }
@@ -53,24 +53,45 @@ describe('renderScreen', () => {
   })
 
   it('dispatches to the host list screen', () => {
-    const page = renderScreen(
-      fixtureState({ stack: [{ screen: 'hostList', selectedIndex: 0 }], exitDialogArmed: false })
-    )
+    const state = fixtureState({
+      stack: [{ screen: 'hostList', selectedIndex: 0 }],
+      exitDialogArmed: false
+    })
+    // HIGH #3: with 1+ paired hosts, host-list-screen shows a real "N hosts" header (not the
+    // 0-host pairing prompt, which is indistinguishable from pairing-screen's own header).
+    state.hosts = [
+      {
+        id: 'h1',
+        name: 'Dev',
+        endpoint: 'memory://h1',
+        deviceToken: 'token',
+        publicKeyB64: 'key',
+        lastConnected: 0
+      }
+    ]
+    const page = renderScreen(state)
     expect(page.layout).toBe('list')
-    expect(page.header).toBe('Orca · 0 hosts')
+    expect(page.header).toBe('Orca · 1 host')
   })
 
   it('dispatches to the dashboard screen (the top of the stack, not the root)', () => {
-    const page = renderScreen(
-      fixtureState({
-        stack: [
-          { screen: 'hostList', selectedIndex: 0 },
-          { screen: 'dashboard', hostId: 'h1', cursor: 0, page: 0 }
-        ],
-        exitDialogArmed: false
-      })
-    )
-    expect(page.header).toMatch(/^Orca · 0 running/)
+    const state = fixtureState({
+      stack: [
+        { screen: 'hostList', selectedIndex: 0 },
+        { screen: 'dashboard', hostId: 'h1', cursor: 0, page: 0 }
+      ],
+      exitDialogArmed: false
+    })
+    // HIGH #3: dashboard-screen branches on connection + poll freshness — a live, polled
+    // connection with 0 rows must not render as the host-list/pairing screen's header.
+    state.connection = { hostId: 'h1', state: 'connected', compat: null }
+    state.dashboard = { rows: [], fetchedAt: 1, stale: false }
+    const page = renderScreen(state)
+    expect(page.header).toBe('Orca · 0 running · 1/1')
+    expect(page.layout).toBe('text')
+    if (page.layout === 'text') {
+      expect(page.body).toBe('No worktrees')
+    }
   })
 
   it('dispatches to the worktree list screen', () => {
@@ -94,7 +115,7 @@ describe('renderScreen', () => {
         exitDialogArmed: false
       })
     )
-    expect(page.footer).toBe('click=send  2tap=back')
+    expect(page.footer).toBe('scroll=choose  click=send  2tap=back')
   })
 
   it('dispatches to the terminal tail screen', () => {

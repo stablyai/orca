@@ -13,6 +13,7 @@ export class MockTerminalRegistry {
   private readonly buffers = new Map<string, string>()
   private readonly activeTerminals: Map<string, string | null>
   private readonly unwritableTerminals = new Set<string>()
+  private readonly needsInputOverrides = new Map<string, boolean>()
 
   constructor(
     initialScrollback: string,
@@ -40,6 +41,23 @@ export class MockTerminalRegistry {
     } else {
       this.unwritableTerminals.add(terminalId)
     }
+  }
+
+  /** Overrides `terminal.agentStatus`'s `state` for `terminalId` (CRITICAL finding #10:
+   *  agent-terminal-resolution.ts resolves the worktree's unique 'waiting'/'blocked' terminal
+   *  from this, never terminal.resolveActive). Unset means "derive from setActiveTerminal" —
+   *  the fixture's designated active terminal is the one that's waiting by default. */
+  setNeedsInput(terminalId: string, needsInput: boolean): void {
+    this.needsInputOverrides.set(terminalId, needsInput)
+  }
+
+  needsInput(terminalId: string): boolean {
+    const override = this.needsInputOverrides.get(terminalId)
+    if (override !== undefined) {
+      return override
+    }
+    const terminal = createFixtureTerminals().find((t) => t.terminalId === terminalId)
+    return terminal !== undefined && this.resolveActive(terminal.worktreeId) === terminalId
   }
 
   // ---- RPC-facing queries -------------------------------------------------------------------

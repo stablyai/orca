@@ -1,7 +1,7 @@
 // Integration (Unit 8, spec S9): opening a terminal tail resolves the worktree's agent terminal,
 // subscribes over the real transport, and the host's snapshot frames land as paginated text on
 // the glasses canvas; scrolling turns pages.
-import { describe, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { startAppShell } from './app/app-shell'
 import { MockGlassesBridge } from './sim/mock-glasses-bridge'
 import { MockOrcaServer } from './sim/mock-orca-server'
@@ -88,22 +88,46 @@ describe('terminal tail integration', () => {
       server.pushTerminalOutputForTest('term-wt1-1', `line ${i}\n`)
     }
 
+    // Finding #8: `frame.page` is an offset from the LATEST page (0 = latest), and the wearer
+    // stays on the live edge until they scroll — so once this overflows to multiple pages, the
+    // default view must show the newest output (the last page), not page 1 of N.
     await vi.waitFor(() => {
       const page = bridge.pageSnapshot()!
       const header = textContent(page.containers, 1)
-      if (!/term · .* · 1\/[2-9]/.test(header)) {
-        throw new Error('terminal tail has not paginated yet')
+      const match = /term · .* · (\d+)\/(\d+)/.exec(header)
+      if (!match || match[2] === '1' || match[1] !== match[2]) {
+        throw new Error('terminal tail has not paginated to the latest page yet')
       }
     })
 
-    const beforeScroll = textContent(bridge.pageSnapshot()!.containers, 2)
+    const latestHeader = textContent(bridge.pageSnapshot()!.containers, 1)
+    const latestBody = textContent(bridge.pageSnapshot()!.containers, 2)
+    const [, latestIndex, pageCount] = /term · .* · (\d+)\/(\d+)/.exec(latestHeader)!
+    expect(latestBody).toContain('line 19')
+    expect(latestBody).not.toContain('All tests passed.')
+
+    // scrollNext (SCROLL_BOTTOM) moves further into history: the offset from latest increases,
+    // so the displayed page index goes DOWN (finding #8's offset-from-latest semantics).
     bridge.simulateScroll('bottom')
     await vi.waitFor(() => {
       const page = bridge.pageSnapshot()!
       const header = textContent(page.containers, 1)
       const body = textContent(page.containers, 2)
-      if (!header.includes('2/') || body === beforeScroll) {
-        throw new Error('scroll has not turned the page yet')
+      if (!header.includes(`${Number(latestIndex) - 1}/${pageCount}`) || body === latestBody) {
+        throw new Error('scroll has not turned the page back into history yet')
+      }
+    })
+    const historyBody = textContent(bridge.pageSnapshot()!.containers, 2)
+    expect(historyBody).not.toContain('line 19')
+
+    // A click resets the tail back to the latest page (finding #8's "click=latest").
+    bridge.simulateClick()
+    await vi.waitFor(() => {
+      const page = bridge.pageSnapshot()!
+      const header = textContent(page.containers, 1)
+      const body = textContent(page.containers, 2)
+      if (!header.includes(`${pageCount}/${pageCount}`) || !body.includes('line 19')) {
+        throw new Error('click has not reset to the latest page yet')
       }
     })
 

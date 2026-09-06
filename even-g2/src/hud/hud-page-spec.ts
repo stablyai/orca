@@ -7,14 +7,23 @@ export type HudScreenPage =
   | { layout: 'text'; header: string; body: string; footer: string }
   | { layout: 'list'; header: string; items: string[]; footer: string }
 
-const HEADER_MAX_CHARS = 200
-const FOOTER_MAX_CHARS = 200
+// Header/footer occupy a single 36px line each; enforce a conservative one-line budget for the
+// 576px-wide proportional font and collapse newlines so a stray '\n' can't push content out of
+// the region (review finding #19).
+const SINGLE_LINE_MAX_CHARS = 56
 const BODY_MAX_CHARS = 1000
 const LIST_MAX_ITEMS = 20
 const LIST_ITEM_MAX_CHARS = 64
 
 function truncate(value: string, maxChars: number): string {
   return value.length > maxChars ? value.slice(0, maxChars) : value
+}
+
+function singleLine(value: string): string {
+  const collapsed = value.replace(/\s*\n\s*/g, ' ')
+  return collapsed.length > SINGLE_LINE_MAX_CHARS
+    ? `${collapsed.slice(0, SINGLE_LINE_MAX_CHARS - 1)}…`
+    : collapsed
 }
 
 function truncateItems(items: string[]): string[] {
@@ -31,7 +40,7 @@ export function buildHudPage(page: HudScreenPage): HudPageBuild {
     y: 0,
     width: 576,
     height: 36,
-    content: truncate(page.header, HEADER_MAX_CHARS),
+    content: singleLine(page.header),
     isEventCapture: 0
   }
   const footer: HudContainerSpec = {
@@ -42,7 +51,7 @@ export function buildHudPage(page: HudScreenPage): HudPageBuild {
     y: 252,
     width: 576,
     height: 36,
-    content: truncate(page.footer, FOOTER_MAX_CHARS),
+    content: singleLine(page.footer),
     isEventCapture: 0
   }
 

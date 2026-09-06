@@ -40,7 +40,7 @@ function initialHudState(): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     // Neutral placeholder shown for the one tick before hostProfileStore.load() resolves
     // (spec trap: a network await before first paint leaves the glasses blank).
     nav: { stack: [{ screen: 'pairing' }], exitDialogArmed: false }

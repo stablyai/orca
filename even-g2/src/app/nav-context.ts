@@ -6,6 +6,7 @@ import { dashboardPageCount as computeDashboardPageCount } from '../screens/dash
 import { terminalTailPageCount as computeTerminalTailPageCount } from '../screens/terminal-tail-screen'
 import { worktreeListPageCount as computeWorktreeListPageCount } from '../screens/worktree-list-screen'
 import type { NavContext } from '../navigation/nav-contract'
+import { currentAsk } from '../state/notification-inbox-state'
 import type { DashboardRow, HudState } from '../state/hud-store'
 
 function rowsForHost(state: HudState, hostId: string): DashboardRow[] {
@@ -23,24 +24,41 @@ export function buildNavContext(state: HudState): NavContext {
       state.terminalTail.terminalId === terminalId
         ? computeTerminalTailPageCount(state.terminalTail.lines)
         : 1,
-    // Finding #5: an ask notification stays actionable only while its worktree's CURRENT
-    // status is still `permission` — membership in the host's worktree set alone isn't enough,
-    // otherwise an ask the agent already cleared (the next poll shows a different status)
-    // remains re-openable/re-sendable from a stale inbox entry.
+    // Finding #5/#13: delegate to the single `currentAsk` selector (notification-inbox-state.ts)
+    // shared with the header nudge and click routing, scoped to "this is the connected host" —
+    // v1 keeps one host connected at a time, so dashboard/inbox slices are always that host's.
     pendingAskNotificationId: (hostId) => {
-      const rows = rowsForHost(state, hostId)
-      const entry = state.inbox.entries.find((e) => {
-        if (e.kind !== 'ask' || e.worktreeId === undefined) {
-          return false
-        }
-        return rows.find((row) => row.worktreeId === e.worktreeId)?.status === 'permission'
-      })
-      return entry?.notificationId ?? null
+      if (state.connection.hostId !== hostId) {
+        return null
+      }
+      return currentAsk(state)?.notificationId ?? null
     },
     askOptionCount: () => DEFAULT_ASK_OPTION_COUNT,
     hostIdAt: (index) => state.hosts[index]?.id ?? null,
     worktreeIdAt: (hostId, index) => rowsForHost(state, hostId)[index]?.worktreeId ?? null,
-    notificationWorktreeId: (notificationId) =>
-      state.inbox.entries.find((e) => e.notificationId === notificationId)?.worktreeId ?? null
+    notificationWorktreeId: (notificationId) => {
+      const fromInbox = state.inbox.entries.find(
+        (e) => e.notificationId === notificationId
+      )?.worktreeId
+      if (fromInbox !== undefined) {
+        return fromInbox
+      }
+      // Finding #14: currentAsk() can synthesize a notificationId with no backing inbox entry
+      // when a blocked worktree never produced a notification — resolve it the same way.
+      const ask = currentAsk(state)
+      return ask && ask.notificationId === notificationId ? ask.worktreeId : null
+    },
+    // CRITICAL #11: blocks a second sendAskAnswer while one is in flight, and blocks retry
+    // entirely once an attempt left the outcome unknown (never guess a second time).
+    askSendInFlight: (worktreeId) => {
+      const interaction = state.askInteraction
+      return (
+        interaction !== null &&
+        interaction.worktreeId === worktreeId &&
+        (interaction.phase === 'sending' ||
+          interaction.phase === 'checking' ||
+          interaction.phase === 'unresolved')
+      )
+    }
   }
 }

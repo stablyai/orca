@@ -3,6 +3,7 @@ import { GLYPH_NEEDS_INPUT } from '../hud/hud-glyphs'
 import type { HudScreenPage } from '../hud/hud-page-spec'
 import { frameHostId, topFrame } from '../navigation/hud-navigation-frames'
 import type { ScreenFrame } from '../navigation/nav-contract'
+import { currentAsk } from '../state/notification-inbox-state'
 import type { HudState } from '../state/hud-store'
 import { renderAskScreen } from './ask-screen'
 import { renderBlockedCompatScreen } from './blocked-compat-screen'
@@ -33,6 +34,9 @@ function renderForFrame(state: HudState, frame: ScreenFrame): HudScreenPage {
 
 // Integrator wiring (spec S8): a pending ask swaps header line 1 to a click-through nudge on
 // any screen but the ask screen itself — a HUD must not steal the glance, but it must say why.
+// Finding #13: uses the SAME `currentAsk` selector as click routing (nav-context.ts,
+// hud-navigation.ts) — previously this picked the first inbox entry with kind 'ask', a
+// different predicate that could disagree with what a click would actually open.
 function pendingAskNudgeHeader(state: HudState, frame: ScreenFrame): string | null {
   if (frame.screen === 'ask') {
     return null
@@ -41,12 +45,12 @@ function pendingAskNudgeHeader(state: HudState, frame: ScreenFrame): string | nu
   if (hostId === null || state.connection.hostId !== hostId) {
     return null
   }
-  const entry = state.inbox.entries.find((e) => e.kind === 'ask')
-  if (!entry) {
+  const ask = currentAsk(state)
+  if (!ask) {
     return null
   }
-  const worktree = state.dashboard.rows.find((row) => row.worktreeId === entry.worktreeId)
-  const name = worktree?.displayName ?? entry.worktreeId ?? 'worktree'
+  const worktree = state.dashboard.rows.find((row) => row.worktreeId === ask.worktreeId)
+  const name = worktree?.displayName ?? ask.worktreeId
   return `${GLYPH_NEEDS_INPUT} ${name} needs input — click`
 }
 

@@ -92,7 +92,10 @@ export class HostSessionManager {
       port: client,
       isVisible: () => {
         const screen = topFrame(store.getState().nav).screen
-        return screen === 'dashboard' || screen === 'worktreeList'
+        // Finding #12: the ask screen must also count as visible — otherwise dashboard polling
+        // (and therefore the confirmation-poll's `worktree.ps` refreshes) stalls while an ask is
+        // open, and the ask screen can never observe its own worktree leaving `permission`.
+        return screen === 'dashboard' || screen === 'worktreeList' || screen === 'ask'
       },
       isForeground: () => this.deps.isForeground(),
       now: () => Date.now()

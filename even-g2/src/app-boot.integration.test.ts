@@ -55,15 +55,13 @@ describe('app boot integration', () => {
     const header = textContent(page.containers, 1)
     const body = textContent(page.containers, 2)
 
-    // Header counts (spec S8): fixture has 1 working worktree (wt-1) and 0 waiting-on-permission.
-    expect(header).toContain('Orca ·')
-    expect(header).toContain('1 running')
-    expect(header).toContain('0 waiting')
+    // MEDIUM #6: header leads with urgency (needs-input count); fixture has 0 rows waiting on
+    // permission, so it falls back to the running tally + page indicator (1 page, 2 rows).
+    expect(header).toBe('Orca · 1 running · 1/1')
 
-    // Body rows: status glyph + worktree name (spec S5 dashboard-screen).
-    expect(body).toContain('▶')
-    expect(body).toContain('api-refactor')
-    expect(body).toContain('hotfix-login')
+    // Body rows (HIGH #5): one line per worktree — glyph, middle-ellipsized name, status word.
+    expect(body).toContain('▶ api-refactor — running')
+    expect(body).toContain('● hotfix-login — done')
 
     shell.stop()
   })

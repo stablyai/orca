@@ -9,7 +9,7 @@ function fixtureState(): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: { stack: [{ screen: 'pairing' }], exitDialogArmed: false }
   }
 }

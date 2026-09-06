@@ -19,3 +19,21 @@ export class ConnectionStageTimer {
     }
   }
 }
+
+// Finding #18: repeating tick used by the post-auth liveness watchdog. Restart-safe — calling
+// start() again (e.g. on re-authentication) replaces whichever interval preceded it.
+export class RepeatingProbeTimer {
+  private timer: ReturnType<typeof setInterval> | null = null
+
+  start(intervalMs: number, onTick: () => void): void {
+    this.stop()
+    this.timer = setInterval(onTick, intervalMs)
+  }
+
+  stop(): void {
+    if (this.timer !== null) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+  }
+}

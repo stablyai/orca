@@ -23,6 +23,7 @@ import {
 import { MockTerminalRegistry } from './mock-terminal-registry'
 import type { ConnectionState, RpcRequestLike } from './mock-orca-connection-state'
 import {
+  handleTerminalAgentStatus,
   handleTerminalList,
   handleTerminalResolveActive,
   handleTerminalSend,
@@ -272,6 +273,10 @@ export class MockOrcaServer {
 
       case 'terminal.resolveActive':
         handleTerminalResolveActive(this.terminalRpc, socket, state, this.terminals, request)
+        return
+
+      case 'terminal.agentStatus':
+        handleTerminalAgentStatus(this.terminalRpc, socket, state, this.terminals, request)
         return
 
       case 'terminal.send':

@@ -470,6 +470,44 @@ describe('OrcaSocketClient', () => {
     expect(states.at(-1)).toBe('reconnecting')
   })
 
+  it('finding #18: a liveness probe that never answers force-reconnects a silently dead socket', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness('token-1')
+    const states: ConnectionState[] = []
+    new OrcaSocketClient({
+      endpoint: 'ws://test',
+      deviceToken: 'token-1',
+      serverPublicKeyB64: harness.serverPublicKeyB64,
+      socketFactory: harness.socketFactory,
+      livenessIntervalMs: 1000,
+      livenessTimeoutMs: 500,
+      onState: (s) => states.push(s)
+    })
+    await flushMicrotasks()
+    expect(states.at(-1)).toBe('connected')
+
+    // The peer goes silent (network blackhole): the socket never fires onclose/onerror, and
+    // never answers the liveness probe either.
+    harness.servers[0]!.responder = () => 'ignore'
+
+    vi.advanceTimersByTime(1000) // liveness interval elapses -> probe sent
+    await flushMicrotasks()
+    expect(harness.sockets).toHaveLength(1) // no reconnect yet, probe still in flight
+
+    vi.advanceTimersByTime(500) // probe's own deadline elapses with no response
+    await flushMicrotasks()
+
+    expect(harness.sockets[0]!.closed).toBe(true) // dead socket force-closed
+    expect(states.at(-1)).toBe('reconnecting')
+    expect(harness.sockets).toHaveLength(1) // reconnect backoff (1s) hasn't elapsed yet
+
+    vi.advanceTimersByTime(1000) // first backoff delay elapses -> reconnect attempt
+    await flushMicrotasks()
+
+    expect(harness.sockets).toHaveLength(2) // reconnect scheduler brought up a new socket
+    expect(states.at(-1)).toBe('connected')
+  })
+
   it('does not double-send a request created by a connected listener during bootstrap replay', async () => {
     const harness = createHarness('token-1')
     const client = new OrcaSocketClient({

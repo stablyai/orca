@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { HudState, NotificationInboxEntry } from '../state/hud-store'
+import type { AskInteraction, HudState, NotificationInboxEntry } from '../state/hud-store'
 import { DEFAULT_ASK_OPTION_COUNT, renderAskScreen } from './ask-screen'
 
-function fixtureState(entries: NotificationInboxEntry[], selectedOption = 0): HudState {
+function fixtureState(
+  entries: NotificationInboxEntry[],
+  selectedOption = 0,
+  askInteraction: AskInteraction = null
+): HudState {
   return {
     connection: { hostId: 'h1', state: 'connected', compat: null },
     hosts: [],
@@ -10,7 +14,7 @@ function fixtureState(entries: NotificationInboxEntry[], selectedOption = 0): Hu
     inbox: { entries },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction,
     nav: {
       stack: [{ screen: 'ask', hostId: 'h1', notificationId: 'n1', selectedOption }],
       exitDialogArmed: false
@@ -40,7 +44,7 @@ describe('renderAskScreen', () => {
       layout: 'text',
       header: 'Orca · Permission needed',
       body: 'Allow file write?\n> 1    2    3    Enter    Esc',
-      footer: 'click=send  2tap=back'
+      footer: 'scroll=choose  click=send  2tap=back'
     })
   })
 
@@ -53,12 +57,70 @@ describe('renderAskScreen', () => {
     expect(page.body).toBe('Allow file write?\n  1    2    3  > Enter    Esc')
   })
 
-  it('falls back to a generic title when the notification is missing from the inbox', () => {
+  it('falls back to a generic title/body when the notification is missing from the inbox (finding #14: synthesized ask)', () => {
     const page = renderAskScreen(fixtureState([], 0))
     expect(page.layout).toBe('text')
     if (page.layout !== 'text') {
       throw new Error('expected text layout')
     }
     expect(page.header).toBe('Orca · Needs input')
+    expect(page.body).toBe('Waiting on input — no details yet\n> 1    2    3    Enter    Esc')
+  })
+
+  describe('askInteraction footer (findings #2/#3/#12)', () => {
+    it.each([
+      ['sending', 'Sending…'],
+      ['checking', 'Sent — checking…'],
+      ['failed', 'Not sent — click to retry'],
+      ['unresolved', 'Delivery unknown — check phone'],
+      ['answered', 'answered ✓  2tap=back']
+    ] as const)('renders the %s phase', (phase, footer) => {
+      const page = renderAskScreen(
+        fixtureState([entry], 0, { notificationId: 'n1', worktreeId: 'wt-1', phase, updatedAt: 0 })
+      )
+      expect(page.footer).toBe(footer)
+    })
+
+    it('ignores an interaction for a different notification', () => {
+      const page = renderAskScreen(
+        fixtureState([entry], 0, {
+          notificationId: 'other',
+          worktreeId: 'wt-2',
+          phase: 'sending',
+          updatedAt: 0
+        })
+      )
+      expect(page.footer).toBe('scroll=choose  click=send  2tap=back')
+    })
+
+    it('replaces the option strip with "Options unavailable" when failed/unresolved (finding #8)', () => {
+      const failed = renderAskScreen(
+        fixtureState([entry], 0, {
+          notificationId: 'n1',
+          worktreeId: 'wt-1',
+          phase: 'failed',
+          updatedAt: 0
+        })
+      )
+      expect(failed.layout).toBe('text')
+      if (failed.layout !== 'text') {
+        throw new Error('expected text layout')
+      }
+      expect(failed.body).toBe('Allow file write?\nOptions unavailable — check phone')
+
+      const unresolved = renderAskScreen(
+        fixtureState([entry], 0, {
+          notificationId: 'n1',
+          worktreeId: 'wt-1',
+          phase: 'unresolved',
+          updatedAt: 0
+        })
+      )
+      expect(unresolved.layout).toBe('text')
+      if (unresolved.layout !== 'text') {
+        throw new Error('expected text layout')
+      }
+      expect(unresolved.body).toBe('Allow file write?\nOptions unavailable — check phone')
+    })
   })
 })

@@ -10,7 +10,7 @@ function fixtureState(rows: DashboardRow[], page = 0): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: {
       stack: [{ screen: 'worktreeList', hostId: 'h1', selectedIndex: 0, page }],
       exitDialogArmed: false
@@ -49,6 +49,32 @@ describe('renderWorktreeListScreen', () => {
     }
     expect(page.items).toEqual(['▶ api-refactor', '● docs'])
     expect(page.header).toBe('Worktrees · 2 · page 1/1')
+  })
+
+  it('MEDIUM #9: a status change alone does not reorder rows — position tracks array order', () => {
+    const before: DashboardRow[] = [
+      { worktreeId: 'wt-a', displayName: 'alpha', status: 'working' },
+      { worktreeId: 'wt-b', displayName: 'beta', status: 'permission' },
+      { worktreeId: 'wt-c', displayName: 'gamma', status: 'done' }
+    ]
+    const after: DashboardRow[] = [
+      { worktreeId: 'wt-a', displayName: 'alpha', status: 'done' }, // status changed
+      { worktreeId: 'wt-b', displayName: 'beta', status: 'permission' },
+      { worktreeId: 'wt-c', displayName: 'gamma', status: 'done' }
+    ]
+    const namesOf = (page: ReturnType<typeof renderWorktreeListScreen>) =>
+      page.layout === 'list' ? page.items.map((item) => item.split(' ')[1]) : []
+
+    expect(namesOf(renderWorktreeListScreen(fixtureState(before)))).toEqual([
+      'alpha',
+      'beta',
+      'gamma'
+    ])
+    expect(namesOf(renderWorktreeListScreen(fixtureState(after)))).toEqual([
+      'alpha',
+      'beta',
+      'gamma'
+    ])
   })
 
   it('paginates beyond the 20-item hard cap', () => {

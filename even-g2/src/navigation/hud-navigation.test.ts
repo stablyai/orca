@@ -14,6 +14,7 @@ function fixtureCtx(overrides: Partial<NavContext> = {}): NavContext {
     hostIdAt: () => null,
     worktreeIdAt: () => null,
     notificationWorktreeId: () => null,
+    askSendInFlight: () => false,
     ...overrides
   }
 }
@@ -75,6 +76,25 @@ describe('stack push/pop', () => {
       page: 0
     })
     expect(effects).toEqual([{ kind: 'openTerminalTail', worktreeId: 'wt-1' }])
+  })
+
+  it('HIGH #7: a pending ask wins over the worktreeList row tapped, matching the header nudge', () => {
+    const state = stateOf(
+      { screen: 'dashboard', hostId: 'h1', cursor: 0, page: 0 },
+      { screen: 'worktreeList', hostId: 'h1', selectedIndex: 0, page: 0 }
+    )
+    const ctx = fixtureCtx({
+      pendingAskNotificationId: (hostId) => (hostId === 'h1' ? 'n-pending' : null),
+      worktreeIdAt: () => 'wt-should-not-open'
+    })
+    const { state: next, effects } = reduceHudInput(state, { kind: 'listSelect', index: 1 }, ctx)
+    expect(next.stack.at(-1)).toEqual({
+      screen: 'ask',
+      hostId: 'h1',
+      notificationId: 'n-pending',
+      selectedOption: 0
+    })
+    expect(effects).toEqual([])
   })
 
   it('listSelect index -1 with a label resolves to item 0 (SDK quirk), never a stale tracked cursor', () => {
@@ -240,11 +260,13 @@ describe('scroll semantics per layout', () => {
     expect(effects).toEqual([])
   })
 
-  it('page-turns dashboard when it spans multiple pages, cursor untouched', () => {
-    const state = stateOf({ screen: 'dashboard', hostId: 'h1', cursor: 0, page: 0 })
-    const ctx = fixtureCtx({ dashboardPageCount: () => 3 })
+  it('turns the dashboard page when the cursor scrolls across a page boundary', () => {
+    // MEDIUM #7: the dashboard has ONE cursor across every page; scroll moves the cursor, and
+    // `page` is purely derived from it (Math.floor(cursor / DASHBOARD_ROWS_PER_PAGE), 9/page).
+    const state = stateOf({ screen: 'dashboard', hostId: 'h1', cursor: 8, page: 0 })
+    const ctx = fixtureCtx({ worktreeCount: () => 25 })
     const { state: next } = reduceHudInput(state, { kind: 'scrollNext' }, ctx)
-    expect(next.stack.at(-1)).toEqual({ screen: 'dashboard', hostId: 'h1', cursor: 0, page: 1 })
+    expect(next.stack.at(-1)).toEqual({ screen: 'dashboard', hostId: 'h1', cursor: 9, page: 1 })
   })
 
   it('moves a row cursor (not the page) on dashboard when it fits on one page', () => {
@@ -353,6 +375,17 @@ describe('ask cursor + sendAskAnswer', () => {
     expect(next).toBe(state)
     expect(effects).toEqual([])
   })
+
+  it('CRITICAL #11: ignores the click (no sendAskAnswer effect) while a send is already in flight', () => {
+    const state = stateOf({ screen: 'ask', hostId: 'h1', notificationId: 'n1', selectedOption: 0 })
+    const ctx = fixtureCtx({
+      notificationWorktreeId: () => 'wt-1',
+      askSendInFlight: (worktreeId) => worktreeId === 'wt-1'
+    })
+    const { state: next, effects } = reduceHudInput(state, { kind: 'click' }, ctx)
+    expect(next).toBe(state)
+    expect(effects).toEqual([])
+  })
 })
 
 describe('dashboard click', () => {
@@ -374,17 +407,23 @@ describe('dashboard click', () => {
     expect(effects).toEqual([{ kind: 'openTerminalTail', worktreeId: 'wt-2' }])
   })
 
-  it('opens worktreeList instead when the dashboard spans multiple pages', () => {
+  it('always opens the selected worktree, even when the dashboard spans multiple pages', () => {
+    // MEDIUM #7: click never opens a worktreeList page-browser anymore — the dashboard's single
+    // cursor always names a concrete worktree to drill into, regardless of page count.
     const state = stateOf({ screen: 'dashboard', hostId: 'h1', cursor: 0, page: 0 })
-    const ctx = fixtureCtx({ dashboardPageCount: () => 2 })
+    const ctx = fixtureCtx({
+      worktreeCount: () => 25,
+      worktreeIdAt: (hostId, i) => (hostId === 'h1' && i === 0 ? 'wt-0' : null)
+    })
     const { state: next, effects } = reduceHudInput(state, { kind: 'click' }, ctx)
     expect(next.stack.at(-1)).toEqual({
-      screen: 'worktreeList',
+      screen: 'terminalTail',
       hostId: 'h1',
-      selectedIndex: 0,
+      worktreeId: 'wt-0',
+      terminalId: '',
       page: 0
     })
-    expect(effects).toEqual([])
+    expect(effects).toEqual([{ kind: 'openTerminalTail', worktreeId: 'wt-0' }])
   })
 
   it('a pending ask notification takes priority over the drill/list click', () => {
@@ -440,6 +479,7 @@ describe('worktreeList pagination (>20 worktrees)', () => {
     const state = stateOf({ screen: 'worktreeList', hostId: 'h1', selectedIndex: 20, page: 1 })
     const ctx = fixtureCtx({
       worktreeCount: () => 25,
+      worktreeListPageCount: () => 2,
       worktreeIdAt: (hostId, i) => (hostId === 'h1' && i === 21 ? 'wt-21' : null)
     })
     const { state: next, effects } = reduceHudInput(state, { kind: 'listSelect', index: 1 }, ctx)

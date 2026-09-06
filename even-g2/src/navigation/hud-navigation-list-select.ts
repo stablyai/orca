@@ -45,6 +45,13 @@ export function reduceWorktreeListScroll(
 // cursor — after a rebuild or back-navigation it can disagree with what firmware visually
 // selected (always item 0 in this quirk, per the normalizer). Genuinely unusable input
 // (index -1, no label) fails closed rather than guessing.
+//
+// HIGH #16 note for the integrator: true label-text identity matching ("does this click's label
+// actually name the row we're about to open") would need NavContext to expose a row's rendered
+// label at an index — it currently exposes only counts and id-at-index lookups, so that
+// verification isn't possible from in here. What IS fixed below is the concrete, reachable half
+// of #16: a stale stored `page` (left over from before a row-set shrink) silently added a
+// phantom page-size offset to an otherwise-correct, real click.
 function resolveListIndex(rawIndex: number, label: string | undefined): number | null {
   if (rawIndex >= 0) {
     return rawIndex
@@ -85,10 +92,16 @@ export function reduceWorktreeListSelect(
   if (localIndex === null) {
     return unchanged(state)
   }
+  // HIGH #16: normalize the stored page against the CURRENT page count before combining it with
+  // the click's page-local index. A row-set shrink (e.g. 21 -> 20 worktrees collapses page 1
+  // away) otherwise leaves a stale page offset that adds a phantom pageSize to a real, current
+  // click — not a wrong worktree (worktreeIdAt fails closed to null below), but a dead one.
+  const pageCount = ctx.worktreeListPageCount(frame.hostId)
+  const page = clamp(frame.page, 0, Math.max(pageCount - 1, 0))
   // The click reports an index local to the current ≤20-item page; resolve the real row with
-  // the page offset applied (spec: `page * pageSize + localIndex`).
-  const globalIndex = frame.page * WORKTREE_LIST_PAGE_SIZE + localIndex
-  const tracked = replaceTopFrame(state, { ...frame, selectedIndex: globalIndex })
+  // the (normalized) page offset applied (spec: `page * pageSize + localIndex`).
+  const globalIndex = page * WORKTREE_LIST_PAGE_SIZE + localIndex
+  const tracked = replaceTopFrame(state, { ...frame, selectedIndex: globalIndex, page })
   const worktreeId = ctx.worktreeIdAt(frame.hostId, globalIndex)
   if (worktreeId === null) {
     return { state: tracked, effects: NO_EFFECTS }

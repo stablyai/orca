@@ -77,6 +77,61 @@ describe('detectGlassesBridge', () => {
     expect(mount.querySelector('.glasses-bridge-unavailable')).toBeNull()
   })
 
+  it('finding #17: a real device (no ?sim, DEV or not) never selects the mock even after timeout — keeps waiting', async () => {
+    const originalHref = window.location.href
+    window.history.replaceState(null, '', '/?other=1') // no ?sim
+    try {
+      const { connectEvenHubBridge } = await import('../glasses/even-hub-bridge')
+      let resolveReal!: (bridge: GlassesBridge) => void
+      vi.mocked(connectEvenHubBridge).mockReturnValue(
+        new Promise((resolve) => {
+          resolveReal = resolve
+        })
+      )
+      const { detectGlassesBridge } = await importFresh()
+
+      const mount = document.createElement('div')
+      mount.id = 'app'
+      document.body.appendChild(mount)
+
+      vi.useFakeTimers()
+      const promise = detectGlassesBridge() // no override — exercises the real default detector
+      await vi.advanceTimersByTimeAsync(1500)
+      vi.useRealTimers()
+      await Promise.resolve()
+
+      // Still waiting past the timeout, no `?sim` opt-in present — no mock installed.
+      expect(mount.querySelector('.glasses-bridge-unavailable')).not.toBeNull()
+
+      const fakeBridge = {} as GlassesBridge
+      resolveReal(fakeBridge)
+      const bridge = await promise
+      expect(bridge).toBe(fakeBridge)
+    } finally {
+      window.history.replaceState(null, '', originalHref)
+    }
+  })
+
+  it('finding #17: an explicit ?sim opt-in selects the mock on timeout', async () => {
+    const originalHref = window.location.href
+    window.history.replaceState(null, '', '/?sim=1')
+    try {
+      const { connectEvenHubBridge } = await import('../glasses/even-hub-bridge')
+      vi.mocked(connectEvenHubBridge).mockReturnValue(new Promise(() => {})) // never resolves
+      const { detectGlassesBridge } = await importFresh()
+
+      vi.useFakeTimers()
+      const promise = detectGlassesBridge() // no override — exercises the real default detector
+      await vi.advanceTimersByTimeAsync(1500)
+      vi.useRealTimers()
+
+      const bridge = await promise
+      expect(typeof (bridge as unknown as { flushRenders?: unknown }).flushRenders).toBe('function')
+    } finally {
+      window.history.replaceState(null, '', originalHref)
+    }
+  })
+
   it('throws when the real bridge ultimately never appears and fallback is not allowed', async () => {
     const { connectEvenHubBridge } = await import('../glasses/even-hub-bridge')
     // Resolves quickly to null (e.g. connectEvenHubBridge's own rejection, caught upstream), so

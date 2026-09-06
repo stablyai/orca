@@ -48,11 +48,17 @@ function hardWrap(line: string, maxCols: number): string[] {
   return wrapped
 }
 
+// Finding #20: how far completedLines is allowed to grow past maxLines before it gets trimmed
+// back. A small slack avoids re-slicing the array on every single completed line.
+const RETENTION_MARGIN = 32
+
 export class TerminalTailDecoder {
   private readonly maxLines: number
   private readonly maxCols: number
+  // Already ANSI-stripped/tab-expanded/hard-wrapped, bounded to ~maxLines during ingestion
+  // (finding #20) — cleaning happens once per completed line, not on every lines() call.
   private completedLines: string[] = []
-  private currentLine = ''
+  private currentLine = '' // raw, uncleaned: only the in-progress line, cleaned lazily in lines()
   private readonly decoder = new TextDecoder()
 
   constructor(opts: TerminalTailDecoderOptions = {}) {
@@ -86,18 +92,19 @@ export class TerminalTailDecoder {
   lines(): string[] {
     // Why: an empty currentLine after content ending exactly on a newline boundary is not a
     // real trailing blank line — only surface it when it's the sole line seen so far.
+    const cleanedCurrent = expandTabs(stripAnsi(this.currentLine))
+    const currentWrapped =
+      cleanedCurrent.length > 0 || this.completedLines.length === 0
+        ? hardWrap(cleanedCurrent, this.maxCols)
+        : []
     const all =
-      this.currentLine.length > 0 || this.completedLines.length === 0
-        ? [...this.completedLines, this.currentLine]
-        : this.completedLines
-    const wrapped: string[] = []
-    for (const raw of all) {
-      const cleaned = expandTabs(stripAnsi(raw))
-      for (const piece of hardWrap(cleaned, this.maxCols)) {
-        wrapped.push(piece)
-      }
-    }
-    return wrapped.slice(-this.maxLines)
+      currentWrapped.length > 0 ? [...this.completedLines, ...currentWrapped] : this.completedLines
+    return all.slice(-this.maxLines)
+  }
+
+  /** Test/debug hook (finding #20): total retained lines, to assert the ingestion-time bound. */
+  retainedLineCount(): number {
+    return this.completedLines.length + (this.currentLine.length > 0 ? 1 : 0)
   }
 
   private reset(): void {
@@ -109,9 +116,32 @@ export class TerminalTailDecoder {
     const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
     const parts = normalized.split('\n')
     this.currentLine += parts[0] ?? ''
+    this.trimCurrentLineIfHuge()
     for (let i = 1; i < parts.length; i++) {
-      this.completedLines.push(this.currentLine)
+      this.completeLine(this.currentLine)
       this.currentLine = parts[i] ?? ''
+      this.trimCurrentLineIfHuge()
+    }
+  }
+
+  /** Cleans + wraps one finished line and appends it, then trims completedLines back toward
+   *  maxLines (finding #20) — bounds retention during ingestion instead of only at read time. */
+  private completeLine(raw: string): void {
+    const cleaned = expandTabs(stripAnsi(raw))
+    for (const piece of hardWrap(cleaned, this.maxCols)) {
+      this.completedLines.push(piece)
+    }
+    if (this.completedLines.length > this.maxLines + RETENTION_MARGIN) {
+      this.completedLines = this.completedLines.slice(-this.maxLines)
+    }
+  }
+
+  /** Bounds the raw in-progress line's byte growth for a busy terminal that never emits a
+   *  newline (finding #20) — keep only the tail that could still matter for the final view. */
+  private trimCurrentLineIfHuge(): void {
+    const cap = this.maxCols * (this.maxLines + RETENTION_MARGIN)
+    if (this.currentLine.length > cap) {
+      this.currentLine = this.currentLine.slice(-cap)
     }
   }
 }

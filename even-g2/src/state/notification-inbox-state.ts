@@ -1,5 +1,5 @@
 // Unit 4: consumes the notifications.subscribe stream into NotificationInboxSlice (spec S8).
-import type { HudStore, NotificationInboxEntry } from './hud-store'
+import type { HudState, HudStore, NotificationInboxEntry } from './hud-store'
 import type { RpcPort, RpcSuccess } from '../transport/orca-rpc-wire'
 
 const RING_BUFFER_LIMIT = 20
@@ -69,6 +69,66 @@ function pushRingBuffer(
   return next.length > RING_BUFFER_LIMIT ? next.slice(next.length - RING_BUFFER_LIMIT) : next
 }
 
+/** Finding #13: dedupe by notificationId — a redelivery (getMissedSince overlap with a live
+ *  push, or a duplicate retry) replaces the existing entry in place rather than appending a
+ *  second copy, which would otherwise let stale/duplicate entries confuse "the current ask". */
+function upsertEntry(
+  entries: NotificationInboxEntry[],
+  entry: NotificationInboxEntry
+): NotificationInboxEntry[] {
+  const index = entries.findIndex((e) => e.notificationId === entry.notificationId)
+  if (index === -1) {
+    return pushRingBuffer(entries, entry)
+  }
+  const next = [...entries]
+  next[index] = entry
+  return next
+}
+
+/** The most recent (by receivedAt), still-eligible (never `retiredAsk`) entry for a worktree —
+ *  the notification tied to its CURRENT waiting episode, if any has arrived. Shared by
+ *  `currentAsk` and the reclassifier so they can never disagree (finding #13). */
+function latestEligibleEntryForWorktree(
+  entries: NotificationInboxEntry[],
+  worktreeId: string
+): NotificationInboxEntry | null {
+  let latest: NotificationInboxEntry | null = null
+  for (const entry of entries) {
+    if (entry.worktreeId !== worktreeId || entry.retiredAsk) {
+      continue
+    }
+    if (!latest || entry.receivedAt >= latest.receivedAt) {
+      latest = entry
+    }
+  }
+  return latest
+}
+
+const SYNTHETIC_ASK_PREFIX = 'synthetic-ask:'
+
+/**
+ * The one ask the wearer can currently act on — used for BOTH the header's click-through nudge
+ * and click routing (nav-context.ts, hud-navigation.ts, screen-view-model.ts) so they can never
+ * disagree (HIGH finding #13, "two selectors"). Prefers a real notification tied to the
+ * worktree's current permission episode; when no notification has landed yet for a blocked
+ * worktree (HIGH finding #14 — an agent waiting on input with no notification is otherwise
+ * unreachable), synthesizes one straight from dashboard state instead of leaving it stuck.
+ */
+export function currentAsk(state: HudState): { notificationId: string; worktreeId: string } | null {
+  const permissionRows = state.dashboard.rows.filter((r) => r.status === 'permission')
+  if (permissionRows.length === 0) {
+    return null
+  }
+  for (const row of permissionRows) {
+    const entry = latestEligibleEntryForWorktree(state.inbox.entries, row.worktreeId)
+    if (entry) {
+      return { notificationId: entry.notificationId, worktreeId: row.worktreeId }
+    }
+  }
+  const row = permissionRows[0]!
+  return { notificationId: `${SYNTHETIC_ASK_PREFIX}${row.worktreeId}`, worktreeId: row.worktreeId }
+}
+
 /** Consumes notifications.subscribe; maintains a ring buffer of the last 20 entries.
  *
  * Reclassification (HIGH fix): classification happens once, from whatever dashboard snapshot
@@ -123,7 +183,7 @@ export class NotificationInboxController {
     }
     this.noteWatermark(data)
     const entry = this.toEntry(data)
-    this.store.update((s) => ({ ...s, inbox: { entries: pushRingBuffer(s.inbox.entries, entry) } }))
+    this.store.update((s) => ({ ...s, inbox: { entries: upsertEntry(s.inbox.entries, entry) } }))
   }
 
   private handleReady(event: NotificationReadyEvent): void {
@@ -158,7 +218,7 @@ export class NotificationInboxController {
         const entry = this.toEntry(item)
         this.store.update((s) => ({
           ...s,
-          inbox: { entries: pushRingBuffer(s.inbox.entries, entry) }
+          inbox: { entries: upsertEntry(s.inbox.entries, entry) }
         }))
       }
       if (typeof result?.epoch === 'string') {
@@ -179,19 +239,37 @@ export class NotificationInboxController {
     }
   }
 
+  /** Re-derives 'ask' on every dashboard/inbox change so exactly one entry per worktree — the
+   *  one tied to its CURRENT permission episode (see latestEligibleEntryForWorktree) — is 'ask'.
+   *  Any other entry that was 'ask' gets retired (finding #13): either its worktree left
+   *  `permission` entirely, or a newer entry took over as the current episode's notification.
+   *  Retirement is permanent (`retiredAsk`) so a later, unrelated episode on the same worktree
+   *  can't resurrect a historical notification before its own notification arrives. */
   private reclassifyPermissionAsks(): void {
     this.store.update((s) => {
+      const currentEpisodeIds = new Set(
+        s.dashboard.rows
+          .filter((r) => r.status === 'permission')
+          .map((r) => latestEligibleEntryForWorktree(s.inbox.entries, r.worktreeId)?.notificationId)
+          .filter((id): id is string => id !== undefined)
+      )
       let changed = false
       const entries = s.inbox.entries.map((entry) => {
-        if (entry.kind === 'ask' || !entry.worktreeId) {
+        if (!entry.worktreeId) {
           return entry
         }
-        const status = s.dashboard.rows.find((r) => r.worktreeId === entry.worktreeId)?.status
-        if (status !== 'permission') {
+        if (currentEpisodeIds.has(entry.notificationId)) {
+          if (entry.kind === 'ask') {
+            return entry
+          }
+          changed = true
+          return { ...entry, kind: 'ask' as const }
+        }
+        if (entry.kind !== 'ask') {
           return entry
         }
         changed = true
-        return { ...entry, kind: 'ask' as const }
+        return { ...entry, kind: 'info' as const, retiredAsk: true as const }
       })
       return changed ? { ...s, inbox: { entries } } : s
     })

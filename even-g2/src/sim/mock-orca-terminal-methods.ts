@@ -100,6 +100,21 @@ export function handleTerminalResolveActive(
   ctx.respond(socket, state, ctx.success(request.id, { handle }))
 }
 
+/** CRITICAL finding #10: backs terminal.agentStatus, which agent-terminal-resolution.ts's
+ *  resolveWaitingTerminalHandle uses instead of terminal.resolveActive (desktop focus) to find
+ *  the worktree's unique terminal actually needing input. */
+export function handleTerminalAgentStatus(
+  ctx: TerminalRpcContext,
+  socket: MemorySocketLike,
+  state: ConnectionState,
+  registry: MockTerminalRegistry,
+  request: RpcRequestLike
+): void {
+  const terminalId = String(request.params?.terminal ?? '')
+  const agentStatus = { state: registry.needsInput(terminalId) ? 'waiting' : 'working' }
+  ctx.respond(socket, state, ctx.success(request.id, { agentStatus }))
+}
+
 export function handleTerminalSend(
   ctx: TerminalRpcContext,
   socket: MemorySocketLike,

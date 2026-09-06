@@ -81,4 +81,8 @@ export type NavContext = {
   hostIdAt(index: number): string | null
   worktreeIdAt(hostId: string, index: number): string | null
   notificationWorktreeId(notificationId: string): string | null
+  // Added for CRITICAL #11 (click latch): true while a send/confirmation is already in flight
+  // for this worktree's ask, or while the last attempt left the outcome unknown — the reducer
+  // must not emit a second sendAskAnswer effect in either case.
+  askSendInFlight(worktreeId: string): boolean
 }

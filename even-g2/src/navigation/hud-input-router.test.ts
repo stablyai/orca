@@ -12,7 +12,7 @@ function fixtureState(overrides: Partial<HudState> = {}): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: { stack: [{ screen: 'hostList', selectedIndex: 0 }], exitDialogArmed: false },
     ...overrides
   }
@@ -30,6 +30,7 @@ function fixtureCtx(overrides: Partial<NavContext> = {}): NavContext {
     hostIdAt: () => null,
     worktreeIdAt: () => null,
     notificationWorktreeId: () => null,
+    askSendInFlight: () => false,
     ...overrides
   }
 }

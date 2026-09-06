@@ -15,7 +15,7 @@ function fixtureState(): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: { stack: [{ screen: 'pairing' }], exitDialogArmed: false }
   }
 }
@@ -253,6 +253,107 @@ describe('WorktreeDashboardController', () => {
     expect(store.getState().dashboard.rows).toEqual([
       { worktreeId: 'w1', displayName: 'idle', status: 'active', elapsedLabel: undefined }
     ])
+  })
+
+  it('MEDIUM #6: sorts permission (needs-input) rows to the front, keeping others in place', async () => {
+    const store = createHudStore(fixtureState())
+    const port = new FakeRpcPort()
+    port.queue.push(
+      okResponse([
+        { worktreeId: 'wt-1', displayName: 'one', status: 'working' },
+        { worktreeId: 'wt-2', displayName: 'two', status: 'permission' },
+        { worktreeId: 'wt-3', displayName: 'three', status: 'done' }
+      ])
+    )
+    const { timer } = fakeTimer()
+    const controller = new WorktreeDashboardController(store, {
+      port,
+      isVisible: () => true,
+      isForeground: () => true,
+      now: () => 0,
+      timer
+    })
+
+    controller.start()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(store.getState().dashboard.rows.map((r) => r.worktreeId)).toEqual([
+      'wt-2',
+      'wt-1',
+      'wt-3'
+    ])
+  })
+
+  it('MEDIUM #9: a later poll with no permission transition does not reorder rows', async () => {
+    const store = createHudStore(fixtureState())
+    const port = new FakeRpcPort()
+    port.queue.push(
+      okResponse([
+        { worktreeId: 'wt-1', displayName: 'one', status: 'working' },
+        { worktreeId: 'wt-2', displayName: 'two', status: 'done' }
+      ])
+    )
+    const { timer, fire } = fakeTimer()
+    const controller = new WorktreeDashboardController(store, {
+      port,
+      isVisible: () => true,
+      isForeground: () => true,
+      now: () => 0,
+      timer
+    })
+
+    controller.start()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store.getState().dashboard.rows.map((r) => r.worktreeId)).toEqual(['wt-1', 'wt-2'])
+
+    // Statuses flip (working -> done, done -> working) but neither crosses into/out of
+    // `permission` — order must be unaffected, not shuffled by this poll's response order.
+    port.queue.push(
+      okResponse([
+        { worktreeId: 'wt-1', displayName: 'one', status: 'done' },
+        { worktreeId: 'wt-2', displayName: 'two', status: 'working' }
+      ])
+    )
+    fire()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store.getState().dashboard.rows.map((r) => r.worktreeId)).toEqual(['wt-1', 'wt-2'])
+  })
+
+  it('MEDIUM #6: a row entering permission moves to the front on the poll it happens', async () => {
+    const store = createHudStore(fixtureState())
+    const port = new FakeRpcPort()
+    port.queue.push(
+      okResponse([
+        { worktreeId: 'wt-1', displayName: 'one', status: 'working' },
+        { worktreeId: 'wt-2', displayName: 'two', status: 'working' }
+      ])
+    )
+    const { timer, fire } = fakeTimer()
+    const controller = new WorktreeDashboardController(store, {
+      port,
+      isVisible: () => true,
+      isForeground: () => true,
+      now: () => 0,
+      timer
+    })
+
+    controller.start()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    port.queue.push(
+      okResponse([
+        { worktreeId: 'wt-1', displayName: 'one', status: 'working' },
+        { worktreeId: 'wt-2', displayName: 'two', status: 'permission' }
+      ])
+    )
+    fire()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store.getState().dashboard.rows.map((r) => r.worktreeId)).toEqual(['wt-2', 'wt-1'])
   })
 
   it('degrades gracefully: absent status and lastOutputAt', async () => {

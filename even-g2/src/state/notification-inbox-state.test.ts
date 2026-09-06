@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createHudStore, type HudState } from './hud-store'
-import { NotificationInboxController } from './notification-inbox-state'
+import { currentAsk, NotificationInboxController } from './notification-inbox-state'
 import type { RpcPort, RpcResponse } from '../transport/orca-rpc-wire'
 
 function fixtureState(rows: HudState['dashboard']['rows'] = []): HudState {
@@ -11,7 +11,7 @@ function fixtureState(rows: HudState['dashboard']['rows'] = []): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: { stack: [{ screen: 'pairing' }], exitDialogArmed: false }
   }
 }
@@ -340,6 +340,143 @@ describe('NotificationInboxController', () => {
       await Promise.resolve()
 
       expect(store.getState().inbox.entries).toEqual([])
+    })
+  })
+
+  describe('dedupe by notificationId (finding #13)', () => {
+    it('replaces an existing entry instead of appending a duplicate', () => {
+      const store = createHudStore(fixtureState())
+      const port = new FakeRpcPort()
+      new NotificationInboxController(store, { port, now: () => 1 }).start()
+
+      port.onData?.({
+        type: 'notification',
+        source: 'test',
+        title: 'first',
+        body: 'b1',
+        notificationId: 'dup'
+      })
+      port.onData?.({
+        type: 'notification',
+        source: 'test',
+        title: 'redelivered',
+        body: 'b2',
+        notificationId: 'dup'
+      })
+
+      const entries = store.getState().inbox.entries
+      expect(entries).toHaveLength(1)
+      expect(entries[0]).toMatchObject({ notificationId: 'dup', title: 'redelivered', body: 'b2' })
+    })
+  })
+
+  describe('currentAsk (findings #13/#14)', () => {
+    it('returns null when no worktree is in permission', () => {
+      const state = fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'working' }])
+      expect(currentAsk(state)).toBeNull()
+    })
+
+    it('returns the entry tied to the worktree currently in permission', () => {
+      const state: HudState = {
+        ...fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'permission' }]),
+        inbox: {
+          entries: [
+            {
+              notificationId: 'n1',
+              title: 't',
+              body: 'b',
+              worktreeId: 'w1',
+              receivedAt: 1,
+              kind: 'ask'
+            }
+          ]
+        }
+      }
+      expect(currentAsk(state)).toEqual({ notificationId: 'n1', worktreeId: 'w1' })
+    })
+
+    it('finding #13: ignores a historical (retired) entry, not the current episode', () => {
+      const state: HudState = {
+        ...fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'permission' }]),
+        inbox: {
+          entries: [
+            {
+              notificationId: 'old',
+              title: 'old episode',
+              body: 'b',
+              worktreeId: 'w1',
+              receivedAt: 1,
+              kind: 'info',
+              retiredAsk: true
+            }
+          ]
+        }
+      }
+      // No live entry for the current episode — falls through to synthesis rather than
+      // resurrecting the retired one.
+      expect(currentAsk(state)).toEqual({ notificationId: 'synthetic-ask:w1', worktreeId: 'w1' })
+    })
+
+    it('finding #14: synthesizes an ask for a blocked worktree with no notification at all', () => {
+      const state = fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'permission' }])
+      expect(currentAsk(state)).toEqual({ notificationId: 'synthetic-ask:w1', worktreeId: 'w1' })
+    })
+  })
+
+  describe('reclassification retires a superseded ask (finding #13)', () => {
+    it('retires the ask once its worktree leaves permission, permanently (never resurrects it)', () => {
+      const store = createHudStore(
+        fixtureState([{ worktreeId: 'w1', displayName: 'w1', status: 'permission' }])
+      )
+      const port = new FakeRpcPort()
+      new NotificationInboxController(store, { port, now: () => 1 }).start()
+      port.onData?.({
+        type: 'notification',
+        source: 'terminal-bell',
+        title: 'Needs input',
+        body: 'Approve?',
+        worktreeId: 'w1',
+        notificationId: 'n1'
+      })
+      expect(store.getState().inbox.entries[0]?.kind).toBe('ask')
+
+      // The agent gets answered; the worktree leaves permission with no fresh notification.
+      store.update((s) => ({
+        ...s,
+        dashboard: {
+          rows: [{ worktreeId: 'w1', displayName: 'w1', status: 'working' }],
+          fetchedAt: 2,
+          stale: false
+        }
+      }))
+      expect(store.getState().inbox.entries[0]).toMatchObject({ kind: 'info', retiredAsk: true })
+
+      // A later, unrelated permission episode on the SAME worktree must not resurrect the old
+      // notification as the "current" ask (finding #13) — currentAsk should synthesize instead.
+      store.update((s) => ({
+        ...s,
+        dashboard: {
+          rows: [{ worktreeId: 'w1', displayName: 'w1', status: 'permission' }],
+          fetchedAt: 3,
+          stale: false
+        }
+      }))
+      expect(store.getState().inbox.entries[0]).toMatchObject({ kind: 'info', retiredAsk: true })
+      expect(currentAsk(store.getState())).toEqual({
+        notificationId: 'synthetic-ask:w1',
+        worktreeId: 'w1'
+      })
+
+      // Once the new episode's own notification arrives, it — not the retired one — becomes ask.
+      port.onData?.({
+        type: 'notification',
+        source: 'terminal-bell',
+        title: 'Needs input again',
+        body: 'Approve again?',
+        worktreeId: 'w1',
+        notificationId: 'n2'
+      })
+      expect(currentAsk(store.getState())).toEqual({ notificationId: 'n2', worktreeId: 'w1' })
     })
   })
 })

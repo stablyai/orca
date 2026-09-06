@@ -116,4 +116,16 @@ describe('TerminalTailDecoder', () => {
     const decoder = new TerminalTailDecoder()
     expect(decoder.lines()).toEqual([''])
   })
+
+  // Finding #20: a busy terminal must not grow WebView memory unbounded — retention is capped
+  // during ingestion (as frames arrive), not only when lines() is finally read.
+  it('bounds retained lines during ingestion, not just at read time', () => {
+    const decoder = new TerminalTailDecoder({ maxLines: 3 })
+    for (let i = 0; i < 1000; i++) {
+      decoder.pushFrame(frame(TerminalStreamOpcode.Output, `line-${i}\n`))
+      // Never allowed to grow past maxLines + the small retention margin at any point.
+      expect(decoder.retainedLineCount()).toBeLessThan(40)
+    }
+    expect(decoder.lines()).toEqual(['line-997', 'line-998', 'line-999'])
+  })
 })

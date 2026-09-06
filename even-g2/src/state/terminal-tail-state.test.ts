@@ -15,7 +15,7 @@ function fixtureState(): HudState {
     inbox: { entries: [] },
     terminalTail: { terminalId: null, lines: [], live: false },
     device: null,
-    askAnswered: null,
+    askInteraction: null,
     nav: { stack: [{ screen: 'pairing' }], exitDialogArmed: false }
   }
 }
@@ -104,7 +104,12 @@ describe('TerminalTailController', () => {
         capabilities: { terminalBinaryStream: 1 }
       }
     })
-    expect(store.getState().terminalTail).toEqual({ terminalId: 'term-1', lines: [], live: true })
+    expect(store.getState().terminalTail).toEqual({
+      terminalId: 'term-1',
+      lines: [],
+      live: true,
+      loading: true
+    })
   })
 
   it('maps decoded binary frames through the decoder into terminalTail.lines', () => {
@@ -121,8 +126,21 @@ describe('TerminalTailController', () => {
       terminalId: 'term-1',
       lines: ['line-1'],
       live: true,
-      unavailable: false
+      unavailable: false,
+      loading: false
     })
+  })
+
+  it('clears loading:true once the first frame decodes (finding #4)', () => {
+    const store = createHudStore(fixtureState())
+    const port = new FakeRpcPort()
+    const { timer } = fakeTailTimer()
+    const { decoder } = fakeDecoder()
+    new TerminalTailController(store, { port, createDecoder: () => decoder, timer }).open('term-1')
+
+    expect(store.getState().terminalTail.loading).toBe(true)
+    port.onBinary?.(frameBytes(TerminalStreamOpcode.Output))
+    expect(store.getState().terminalTail.loading).toBe(false)
   })
 
   it('marks live:false on an Error opcode frame', () => {
@@ -224,8 +242,24 @@ describe('TerminalTailController', () => {
         terminalId: 'term-1',
         lines: [],
         live: false,
-        unavailable: true
+        unavailable: true,
+        loading: false
       })
+    })
+
+    it('clears loading:true when the unavailable timeout fires with no frame (finding #4)', () => {
+      const store = createHudStore(fixtureState())
+      const port = new FakeRpcPort()
+      const { timer, fire } = fakeTailTimer()
+      new TerminalTailController(store, {
+        port,
+        createDecoder: () => fakeDecoder().decoder,
+        timer
+      }).open('term-1')
+
+      expect(store.getState().terminalTail.loading).toBe(true)
+      fire()
+      expect(store.getState().terminalTail.loading).toBe(false)
     })
 
     it('marks the tail unavailable immediately on a JSON fallback `data` event (non-binary host)', () => {
@@ -244,7 +278,8 @@ describe('TerminalTailController', () => {
         terminalId: 'term-1',
         lines: [],
         live: false,
-        unavailable: true
+        unavailable: true,
+        loading: false
       })
     })
 

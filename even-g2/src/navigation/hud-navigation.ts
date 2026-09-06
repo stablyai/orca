@@ -126,8 +126,9 @@ function reduceAskScroll(
   return { state: replaceTopFrame(state, { ...frame, selectedOption: next }), effects: NO_EFFECTS }
 }
 
-// --- click: a pending ask takes priority on any text screen (the header's own pulse says
-// "click"); otherwise ask sends the highlighted answer and dashboard drills into a worktree. ---
+// --- click: a pending ask takes priority on any screen — text or native list (finding #7's
+// worktreeList fix shares this via reduceListSelect below) — the header's own pulse says
+// "click"; otherwise ask sends the highlighted answer and dashboard drills into a worktree. ---
 function reduceClick(state: NavState, ctx: NavContext): ReducedNav {
   const frame = topFrame(state)
 
@@ -135,10 +136,7 @@ function reduceClick(state: NavState, ctx: NavContext): ReducedNav {
     const hostId = frameHostId(frame)
     const notificationId = hostId === null ? null : ctx.pendingAskNotificationId(hostId)
     if (hostId !== null && notificationId !== null) {
-      return {
-        state: pushFrame(state, { screen: 'ask', hostId, notificationId, selectedOption: 0 }),
-        effects: NO_EFFECTS
-      }
+      return pushAskFrame(state, hostId, notificationId)
     }
   }
 
@@ -148,12 +146,29 @@ function reduceClick(state: NavState, ctx: NavContext): ReducedNav {
   if (frame.screen === 'dashboard') {
     return reduceDashboardClick(state, ctx, frame)
   }
+  // terminalTail: `page` is an offset-from-latest (0 = live edge); a click jumps back to latest
+  // (finding #8's "click=latest"). No-op when already following the live edge.
+  if (frame.screen === 'terminalTail' && frame.page !== 0) {
+    return { state: replaceTopFrame(state, { ...frame, page: 0 }), effects: NO_EFFECTS }
+  }
   return unchanged(state)
+}
+
+function pushAskFrame(state: NavState, hostId: string, notificationId: string): ReducedNav {
+  return {
+    state: pushFrame(state, { screen: 'ask', hostId, notificationId, selectedOption: 0 }),
+    effects: NO_EFFECTS
+  }
 }
 
 function reduceAskClick(state: NavState, ctx: NavContext, frame: AskFrame): ReducedNav {
   const worktreeId = ctx.notificationWorktreeId(frame.notificationId)
   if (worktreeId === null) {
+    return unchanged(state)
+  }
+  // CRITICAL #11: ignore the click rather than emit a second sendAskAnswer while one is already
+  // in flight, or while the last attempt's outcome is still unknown.
+  if (ctx.askSendInFlight(worktreeId)) {
     return unchanged(state)
   }
   const option = resolveAskQuickAction(
@@ -175,6 +190,13 @@ function reduceListSelect(
     return reduceHostListSelect(state, ctx, frame, rawIndex, label)
   }
   if (frame.screen === 'worktreeList') {
+    // HIGH #7: a pending ask must win over the row the wearer happened to tap, same as the
+    // dashboard's plain-click priority above — otherwise the header's "needs input — click"
+    // nudge is a lie on this screen (the tap opens whatever worktree row was under the finger).
+    const notificationId = ctx.pendingAskNotificationId(frame.hostId)
+    if (notificationId !== null) {
+      return pushAskFrame(state, frame.hostId, notificationId)
+    }
     return reduceWorktreeListSelect(state, ctx, frame, rawIndex, label)
   }
   return unchanged(state)
