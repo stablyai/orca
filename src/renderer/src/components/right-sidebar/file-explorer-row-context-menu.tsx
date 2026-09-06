@@ -113,6 +113,7 @@ export function FileExplorerRowContextMenu({
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
+  const renameShortcutLabel = useShortcutLabel('fileExplorer.rename')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
     node,
@@ -296,11 +297,9 @@ export function FileExplorerRowContextMenu({
       <ContextMenuItem onSelect={() => onStartRename(node)}>
         <Pencil />
         {translate('auto.components.right.sidebar.FileExplorerRow.fc747429bf', 'Rename')}
-        <ContextMenuShortcut>
-          {isMac
-            ? '↩'
-            : translate('auto.components.right.sidebar.FileExplorerRow.a06551beee', 'Enter')}
-        </ContextMenuShortcut>
+        {renameShortcutLabel !== 'Unassigned' ? (
+          <ContextMenuShortcut>{renameShortcutLabel}</ContextMenuShortcut>
+        ) : null}
       </ContextMenuItem>
       <ContextMenuItem variant="destructive" onSelect={onRequestDelete}>
         <Trash2 />
