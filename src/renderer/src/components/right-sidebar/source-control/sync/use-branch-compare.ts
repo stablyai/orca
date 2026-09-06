@@ -14,7 +14,7 @@ export const BRANCH_REFRESH_INTERVAL_MS = 30_000
 const BRANCH_REFRESH_IDLE_MULTIPLIER = 1
 const BRANCH_REFRESH_MAX_INTERVAL_MS = 5 * 60_000
 
-type BranchCompareRefreshKind = 'immediate' | 'interval' | 'recovery'
+type BranchCompareRefreshKind = 'immediate' | 'interval'
 
 export function useSourceControlBranchCompare({
   activeRepoSettings,
@@ -43,7 +43,9 @@ export function useSourceControlBranchCompare({
   const branchCompareInFlightRef = useRef(false)
   const branchCompareRerunRef = useRef<BranchCompareRefreshKind | null>(null)
   const branchCompareRunPromiseRef = useRef<Promise<void> | null>(null)
+  const branchCompareRecoveryPendingRef = useRef(false)
   const refreshBranchCompareRef = useRef<() => Promise<void>>(async () => {})
+  const recoverBranchCompareRef = useRef<() => Promise<void>>(async () => {})
   const startBranchCompareRef = useRef<(kind: BranchCompareRefreshKind) => Promise<void>>(
     async () => {}
   )
@@ -133,20 +135,6 @@ export function useSourceControlBranchCompare({
 
   const startBranchCompare = useCallback(
     async (kind: BranchCompareRefreshKind) => {
-      if (kind === 'recovery') {
-        const summary =
-          useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId ?? '']
-        // Why: reuse an in-flight result if it recovered the visible data before this rerun; a failed summary must still be retried.
-        if (
-          summary &&
-          summary.status !== 'loading' &&
-          summary.status !== 'error' &&
-          summary.baseRef === compareBaseRef
-        ) {
-          scheduleBranchComparePoll()
-          return
-        }
-      }
       if (kind !== 'interval') {
         clearBranchComparePollTimer()
       }
@@ -185,10 +173,12 @@ export function useSourceControlBranchCompare({
           branchCompareInFlightRef.current = false
           const rerunKind = branchCompareRerunRef.current
           branchCompareRerunRef.current = null
+          const recoveryPending = branchCompareRecoveryPendingRef.current
+          branchCompareRecoveryPendingRef.current = false
           if (rerunKind === 'immediate') {
             await refreshBranchCompareRef.current()
-          } else if (rerunKind === 'recovery') {
-            await startBranchCompareRef.current('recovery')
+          } else if (recoveryPending) {
+            await recoverBranchCompareRef.current()
           } else if (rerunKind === 'interval') {
             scheduleBranchComparePoll()
           }
@@ -201,23 +191,36 @@ export function useSourceControlBranchCompare({
         }
       })
     },
-    [
-      activeWorktreeId,
-      compareBaseRef,
-      clearBranchComparePollTimer,
-      runBranchCompare,
-      scheduleBranchComparePoll
-    ]
+    [clearBranchComparePollTimer, runBranchCompare, scheduleBranchComparePoll]
   )
   const refreshBranchCompare = useCallback(
     () => startBranchCompare('immediate'),
     [startBranchCompare]
   )
+  const recoverBranchCompare = useCallback((): Promise<void> => {
+    const summary = useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId ?? '']
+    // Why: an in-flight result may recover visible data; loading, missing, changed-base, and failed results retry immediately.
+    if (
+      summary &&
+      summary.status !== 'loading' &&
+      summary.status !== 'error' &&
+      summary.baseRef === compareBaseRef
+    ) {
+      scheduleBranchComparePoll()
+      return Promise.resolve()
+    }
+    if (branchCompareInFlightRef.current) {
+      branchCompareRecoveryPendingRef.current = true
+      return branchCompareRunPromiseRef.current ?? Promise.resolve()
+    }
+    return refreshBranchCompareRef.current()
+  }, [activeWorktreeId, compareBaseRef, scheduleBranchComparePoll])
   // Why: publish in an effect, not the render body — a discarded render must not install its callback. Declared first so the effects below see the fresh one.
   useEffect(() => {
     refreshBranchCompareRef.current = refreshBranchCompare
+    recoverBranchCompareRef.current = recoverBranchCompare
     startBranchCompareRef.current = startBranchCompare
-  }, [refreshBranchCompare, startBranchCompare])
+  }, [recoverBranchCompare, refreshBranchCompare, startBranchCompare])
 
   useBranchCompareRefreshTriggers({
     activeWorktreeId,
@@ -238,7 +241,7 @@ export function useSourceControlBranchCompare({
     branchComparePollEnabledRef.current = true
     const stopInterval = installWindowVisibilityInterval({
       run: () => void startBranchCompareRef.current('interval'),
-      runOnVisible: () => void startBranchCompareRef.current('recovery'),
+      runOnVisible: () => void recoverBranchCompareRef.current(),
       jitterOnVisible: true,
       intervalMs: BRANCH_REFRESH_INTERVAL_MS
     })
