@@ -129,15 +129,28 @@ describe('a revealed chat survives the frames the reveal provokes', () => {
   })
 
   it('reopens after the host pruned and rebuilt its entry for the worktree', () => {
-    // A rebuilt host entry restarts its own counter, so the republished frame can carry a version
-    // below the cursor the renderer recorded. Fencing on that alone discards a live publication.
+    // Closing the last chat prunes the host's entry, which emits a retraction. Recording that
+    // retired the renderer's epoch for good. The rebuild publishes under a fresh epoch at v1 —
+    // what `publishStructuredAgentSessionTab` mints when it finds no existing entry.
     let state = apply(baseState(), chatFrame(RENDERER_EPOCH, 120))
     state = apply(state, emptyFrame(RENDERER_EPOCH, 121))
 
     state = apply(state, { ...emptyFrame('removed:abc', 0), removed: true } as never)
-    state = apply(state, chatFrame(RENDERER_EPOCH, 9))
+    state = apply(state, chatFrame('structured:mf3k1', 1))
 
     expect(chatTabIds(state)).toEqual([SESSION_TAB])
+  })
+
+  it('does not let a frame from before the retraction strand a row', () => {
+    // The retraction keeps its cursor precisely so a `session.tabs.list` response issued before
+    // the close cannot land afterwards and leave a chat on screen that nothing republishes.
+    let state = apply(baseState(), chatFrame(RENDERER_EPOCH, 120))
+    state = apply(state, emptyFrame(RENDERER_EPOCH, 121))
+    state = apply(state, { ...emptyFrame('removed:abc', 0), removed: true } as never)
+
+    state = apply(state, chatFrame(RENDERER_EPOCH, 119)) // in flight since before the close
+
+    expect(chatTabIds(state)).toEqual([])
   })
 
   it('still prunes the mirrored rows when the host retracts the worktree', () => {

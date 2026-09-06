@@ -105,15 +105,15 @@ export function applyLocalStructuredSessionTabSnapshots<
     )
     next = patch === next ? next : ({ ...next, ...patch } as State)
     if (snapshot.removed === true) {
-      // A retraction still had to be applied above — the mirrored rows must go — but it is not a
-      // publication to fence later frames against. The renderer publishes under one epoch string
-      // for its whole lifetime, so recording a retraction retires that epoch permanently, and
-      // every republication afterwards is dropped until a reload mints a new one. That is what
-      // left a revealed chat invisible: closing the last chat prunes the host's entry, the
-      // retraction retired the renderer's epoch, and the tab the reveal published was discarded.
-      // The mainstream session-tabs path clears its tracking here for exactly this reason.
-      localStructuredSessionVersionByWorktree.delete(snapshot.worktree)
-      localStructuredSessionEpochHistoryByWorktree.delete(snapshot.worktree)
+      // A retraction was applied above — the mirrored rows must go — but it is not a publication
+      // to fence later frames against. Recording it would retire the renderer's own epoch, which
+      // is one string for the whole process lifetime, and every republication afterwards would be
+      // dropped until a reload minted a new one. That is what left a revealed chat invisible.
+      //
+      // Only the recording is skipped: the cursor and the epoch history stay. The host mints a
+      // fresh epoch when it rebuilds a pruned entry, so a republication is never gated by the
+      // retained cursor — while dropping it would leave an in-flight frame from before the close
+      // free to re-apply and strand a row for a worktree the host no longer publishes.
       continue
     }
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
