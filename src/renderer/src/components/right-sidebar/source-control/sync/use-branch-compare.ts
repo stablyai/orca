@@ -6,13 +6,8 @@ import { useAppStore } from '@/store'
 import { createLoadingBranchCompareSummary } from '@/store/slices/editor/git/branch-compare-state'
 import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
 import { shouldClearBranchCompareForMissingBase } from './base-ref-resolution'
-import {
-  shouldRefreshBranchCompareForRemoteStatus,
-  shouldRefreshBranchCompareForStatusHead,
-  type BranchCompareRemoteStatusSnapshot,
-  type BranchCompareStatusHeadSnapshot
-} from './compare-summary'
 import { slowTaskRequiredIdleMs } from '../../coalesced-poll-runner'
+import { useBranchCompareRefreshTriggers } from './use-branch-compare-refresh-triggers'
 
 // Why: 30s poll — slow runs idle for their own duration; explicit commit/remote/manual/base-ref refreshes still run immediately.
 export const BRANCH_REFRESH_INTERVAL_MS = 30_000
@@ -56,8 +51,6 @@ export function useSourceControlBranchCompare({
   const branchComparePollEnabledRef = useRef(false)
   const branchCompareLastRunEndedAtRef = useRef(-Infinity)
   const branchCompareLastRunDurationRef = useRef(0)
-  const branchCompareStatusHeadRef = useRef<BranchCompareStatusHeadSnapshot | null>(null)
-  const branchCompareRemoteStatusRef = useRef<BranchCompareRemoteStatusSnapshot | null>(null)
 
   const runBranchCompare = useCallback(
     async (kind: BranchCompareRefreshKind) => {
@@ -143,8 +136,13 @@ export function useSourceControlBranchCompare({
       if (kind === 'recovery') {
         const summary =
           useAppStore.getState().gitBranchCompareSummaryByWorktree[activeWorktreeId ?? '']
-        // Why: reuse an in-flight result if it recovered the visible data before this rerun.
-        if (summary && summary.status !== 'loading' && summary.baseRef === compareBaseRef) {
+        // Why: reuse an in-flight result if it recovered the visible data before this rerun; a failed summary must still be retried.
+        if (
+          summary &&
+          summary.status !== 'loading' &&
+          summary.status !== 'error' &&
+          summary.baseRef === compareBaseRef
+        ) {
           scheduleBranchComparePoll()
           return
         }
@@ -221,60 +219,16 @@ export function useSourceControlBranchCompare({
     startBranchCompareRef.current = startBranchCompare
   }, [refreshBranchCompare, startBranchCompare])
 
-  useEffect(() => {
-    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
-      branchCompareStatusHeadRef.current = null
-      return
-    }
-    const current = {
-      baseRef: compareBaseRef,
-      statusHead: activeGitStatusHead,
-      worktreeId: activeWorktreeId
-    }
-    const previous = branchCompareStatusHeadRef.current
-    branchCompareStatusHeadRef.current = current
-    if (shouldRefreshBranchCompareForStatusHead(previous, current)) {
-      void refreshBranchCompareRef.current()
-    }
-  }, [
+  useBranchCompareRefreshTriggers({
+    activeWorktreeId,
+    worktreePath,
+    compareBaseRef,
+    isFolder,
+    isBranchVisible,
     activeGitStatusHead,
-    activeWorktreeId,
-    compareBaseRef,
-    isBranchVisible,
-    isFolder,
-    worktreePath
-  ])
-
-  useEffect(() => {
-    if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
-      branchCompareRemoteStatusRef.current = null
-      return
-    }
-    // Why: pushing a branch can move its remote base and ahead count without changing local HEAD, which the HEAD-change effect alone misses.
-    const current = {
-      ahead: remoteStatus?.ahead ?? null,
-      baseRef: compareBaseRef,
-      behind: remoteStatus?.behind ?? null,
-      hasUpstream: remoteStatus?.hasUpstream ?? null,
-      upstreamName: remoteStatus?.upstreamName ?? null,
-      worktreeId: activeWorktreeId
-    }
-    const previous = branchCompareRemoteStatusRef.current
-    branchCompareRemoteStatusRef.current = current
-    if (shouldRefreshBranchCompareForRemoteStatus(previous, current)) {
-      void refreshBranchCompareRef.current()
-    }
-  }, [
-    activeWorktreeId,
-    compareBaseRef,
-    isBranchVisible,
-    isFolder,
-    remoteStatus?.ahead,
-    remoteStatus?.behind,
-    remoteStatus?.hasUpstream,
-    remoteStatus?.upstreamName,
-    worktreePath
-  ])
+    remoteStatus,
+    refreshBranchCompareRef
+  })
 
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {

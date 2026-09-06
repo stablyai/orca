@@ -372,7 +372,7 @@ describe('useSourceControlBranchCompare scheduler', () => {
 })
 
 describe('branch comparison visibility recovery', () => {
-  it.each(['loading', 'missing', 'base-change'])(
+  it.each(['loading', 'missing', 'base-change', 'error'])(
     'bypasses slow polling backoff for %s data',
     async (reason) => {
       vi.useFakeTimers()
@@ -389,7 +389,10 @@ describe('branch comparison visibility recovery', () => {
         reason === 'missing'
           ? {}
           : {
-              A: { baseRef: 'origin/main', status: reason === 'loading' ? 'loading' : 'ready' }
+              A: {
+                baseRef: 'origin/main',
+                status: reason === 'loading' ? 'loading' : reason === 'error' ? 'error' : 'ready'
+              }
             }
       await act(async () => {
         root.render(
