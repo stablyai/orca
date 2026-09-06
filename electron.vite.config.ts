@@ -253,6 +253,13 @@ export const electronViteConfig: UserConfig = {
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           ),
+          'agent-mcp/chrome-devtools-bridge': resolve(
+            'src/main/agent-mcp/chrome-devtools-bridge.ts'
+          ),
+          'agent-mcp/chrome-devtools-session': resolve(
+            'src/main/agent-mcp/chrome-devtools-session.ts'
+          ),
+          'agent-mcp/chrome-devtools-setup': resolve('src/main/agent-mcp/chrome-devtools-setup.ts'),
           'codex/managed-home-shell-preflight': resolve(
             'src/main/codex/managed-home-shell-preflight.ts'
           ),

@@ -2,6 +2,7 @@
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
   "include": [
     "../src/cli/**/*",
+    "../src/main/agent-mcp/**/*.ts",
     "../src/shared/**/*",
     "../src/main/agent-state-file-reader.ts",
     "../src/main/agent-hooks/hook-stdin-contract.ts",
