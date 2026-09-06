@@ -198,7 +198,8 @@ export async function readWorktreeList(
   const execOptions = {
     cwd: repoPath,
     ...options,
-    timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
+    timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS,
+    allowExplicitBareRepositoryRetry: true
   }
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },

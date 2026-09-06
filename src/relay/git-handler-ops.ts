@@ -6,6 +6,7 @@
  * remain decoupled from the GitHandler class.
  */
 import * as path from 'node:path'
+import type { ExplicitBareRepositoryReadState } from '../shared/git-bare-repository-command'
 import { bufferToBlob, parseBranchDiff } from './git-handler-utils'
 import { buildDiffResult } from './git-diff-result'
 import { isGitBufferOverflowError } from './git-buffer-overflow'
@@ -22,6 +23,8 @@ export type GitExec = (
     signal?: AbortSignal
     stdin?: string
     timeout?: number
+    allowExplicitBareRepositoryRetry?: boolean
+    explicitBareRepositoryReadState?: ExplicitBareRepositoryReadState
   }
 ) => Promise<{ stdout: string; stderr: string }>
 

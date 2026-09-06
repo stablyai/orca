@@ -54,7 +54,8 @@ export async function readGitBlobAtIndexPath(
   try {
     const { stdout } = await gitExecFileAsyncBuffer(['show', `:${gitPath}`], {
       ...gitReadOptionsForWorktree(worktreePath, options),
-      maxBuffer: MAX_GIT_SHOW_BYTES
+      maxBuffer: MAX_GIT_SHOW_BYTES,
+      allowExplicitBareRepositoryRetry: true
     })
 
     return { ...bufferToBlob(stdout, filePath), exists: true }
@@ -79,7 +80,8 @@ export async function readGitBlobAtOidPath(
       ['show', '--end-of-options', `${oid}:${gitPath}`],
       {
         ...gitReadOptionsForWorktree(worktreePath, options),
-        maxBuffer: MAX_GIT_SHOW_BYTES
+        maxBuffer: MAX_GIT_SHOW_BYTES,
+        allowExplicitBareRepositoryRetry: true
       }
     )
 

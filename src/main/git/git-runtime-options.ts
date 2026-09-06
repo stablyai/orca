@@ -1,4 +1,8 @@
 import type { GitAdmissionTier } from './command-runner/git-exec-options'
+import {
+  createExplicitBareRepositoryReadState,
+  type ExplicitBareRepositoryReadState
+} from '../../shared/git-bare-repository-command'
 
 export type GitRuntimeOptions = {
   wslDistro?: string
@@ -6,15 +10,40 @@ export type GitRuntimeOptions = {
   admissionTier?: GitAdmissionTier
 }
 
+const compareReadStateKey = Symbol('compareReadState')
+
+export type GitCompareOptions = GitRuntimeOptions & {
+  [compareReadStateKey]: ExplicitBareRepositoryReadState
+}
+
+export function createGitCompareOptions(options: GitRuntimeOptions): GitCompareOptions {
+  return { ...options, [compareReadStateKey]: createExplicitBareRepositoryReadState() }
+}
+
 export function gitOptionsForWorktree(
   cwd: string,
   options: GitRuntimeOptions = {}
-): { cwd: string; wslDistro?: string; signal?: AbortSignal; admissionTier?: GitAdmissionTier } {
+): {
+  cwd: string
+  wslDistro?: string
+  signal?: AbortSignal
+  admissionTier?: GitAdmissionTier
+  allowExplicitBareRepositoryRetry?: true
+  explicitBareRepositoryReadState?: ExplicitBareRepositoryReadState
+} {
+  const readState =
+    compareReadStateKey in options ? (options as GitCompareOptions)[compareReadStateKey] : undefined
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.signal ? { signal: options.signal } : {}),
-    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
+    ...(options.admissionTier ? { admissionTier: options.admissionTier } : {}),
+    ...(readState
+      ? {
+          allowExplicitBareRepositoryRetry: true as const,
+          explicitBareRepositoryReadState: readState
+        }
+      : {})
   }
 }
 

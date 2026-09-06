@@ -33,6 +33,7 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
         options.oldPath ?? null
       ]),
       () => {
+        const gitBuffer = this.createCompareGitBuffer()
         if (
           headOid &&
           isFullGitObjectId(baseRef) &&
@@ -41,7 +42,7 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
           options.filePath.length > 0
         ) {
           return branchDiffEntryAtPinnedOids(
-            this.gitBuffer.bind(this),
+            gitBuffer,
             worktreePath,
             baseRef,
             headOid,
@@ -49,13 +50,7 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
             options.oldPath
           )
         }
-        return branchDiffEntries(
-          this.git.bind(this),
-          this.gitBuffer.bind(this),
-          worktreePath,
-          baseRef,
-          options
-        )
+        return branchDiffEntries(this.git.bind(this), gitBuffer, worktreePath, baseRef, options)
       }
     )
     return this.maybeStreamResponse(result, params, context)
@@ -78,7 +73,7 @@ export class GitHandlerObjectDiffOperations extends GitHandlerOperationContext {
         args.filePath,
         args.oldPath ?? null
       ]),
-      () => commitDiffEntry(this.gitBuffer.bind(this), worktreePath, args)
+      () => commitDiffEntry(this.createCompareGitBuffer(), worktreePath, args)
     )
     return this.maybeStreamResponse(result, params, context)
   }

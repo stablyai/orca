@@ -125,7 +125,8 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
       'worktree-list-z',
       async () => {
         const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
-          signal: context?.signal
+          signal: context?.signal,
+          allowExplicitBareRepositoryRetry: true
         })
         return this.normalizeMainWorktreePath(
           repoPath,
@@ -137,7 +138,8 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         // Why no catch (#14004): swallowing to `[]` would report an unreadable catalog as an authoritative
         // empty one, and callers use that to authorize missing-worktree teardown. Let the failure propagate.
         const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
-          signal: context?.signal
+          signal: context?.signal,
+          allowExplicitBareRepositoryRetry: true
         })
         const normalized = await this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
         // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).

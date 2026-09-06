@@ -9,6 +9,7 @@ import * as fs from 'node:fs/promises'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
+import { runGitFixture } from '../shared/git-process-test-fixture'
 import { GitHandler } from './git-handler'
 import { RelayContext } from './context'
 import {
@@ -36,10 +37,11 @@ const PATHSPEC_MUTATION_CASES = [
   }
 ] as const
 
-function createPathspecCollisionChanges(dir: string): void {
+async function createPathspecCollisionChanges(dir: string): Promise<void> {
   gitInit(dir)
   writeFileSync(path.join(dir, PATHSPEC_SELECTED_FILE), 'selected')
   writeFileSync(path.join(dir, PATHSPEC_MATCHING_FILE), 'matching')
+  await runGitFixture(dir, ['add', '-f', '--', PATHSPEC_SELECTED_FILE, PATHSPEC_MATCHING_FILE])
   gitCommit(dir, 'initial')
   writeFileSync(path.join(dir, PATHSPEC_SELECTED_FILE), 'selected modified')
   writeFileSync(path.join(dir, PATHSPEC_MATCHING_FILE), 'matching modified')
@@ -107,7 +109,7 @@ describe('GitHandler — commit & staging', () => {
     it.each(PATHSPEC_MUTATION_CASES)(
       'treats $mode stage paths with Git glob characters as literals',
       async ({ stageMethod, selection }) => {
-        createPathspecCollisionChanges(tmpDir)
+        await createPathspecCollisionChanges(tmpDir)
 
         await dispatcher.callRequest(stageMethod, { worktreePath: tmpDir, ...selection })
 
@@ -122,7 +124,7 @@ describe('GitHandler — commit & staging', () => {
     it.each(PATHSPEC_MUTATION_CASES)(
       'treats $mode unstage paths with Git glob characters as literals',
       async ({ unstageMethod, selection }) => {
-        createPathspecCollisionChanges(tmpDir)
+        await createPathspecCollisionChanges(tmpDir)
         execFileSync('git', ['add', '.'], { cwd: tmpDir, stdio: 'pipe' })
 
         await dispatcher.callRequest(unstageMethod, { worktreePath: tmpDir, ...selection })

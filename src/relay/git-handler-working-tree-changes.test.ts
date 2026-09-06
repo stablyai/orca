@@ -8,6 +8,7 @@ import * as path from 'node:path'
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
+import { runGitFixture } from '../shared/git-process-test-fixture'
 import type { GitHandler } from './git-handler'
 import { gitInit, gitCommit, type MockDispatcher } from './git-handler-test-setup'
 import {
@@ -272,6 +273,7 @@ describe('GitHandler', () => {
       gitInit(tmpDir)
       writeFileSync(path.join(tmpDir, '[k]eep.log'), 'selected')
       writeFileSync(path.join(tmpDir, 'keep.log'), 'keep')
+      await runGitFixture(tmpDir, ['add', '-f', '--', '[k]eep.log', 'keep.log'])
       gitCommit(tmpDir, 'track log fixtures')
       writeFileSync(path.join(tmpDir, '[k]eep.log'), 'selected modified')
       writeFileSync(path.join(tmpDir, 'keep.log'), 'keep modified')

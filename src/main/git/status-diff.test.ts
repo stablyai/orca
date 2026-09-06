@@ -100,11 +100,15 @@ describe('getDiff', () => {
 
     const result = await getDiff('/repo', 'src/file.ts', false)
 
-    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(['show', ':src/file.ts'], {
-      cwd: '/repo',
-      maxBuffer: 10 * 1024 * 1024,
-      preferWslDirectGit: true
-    })
+    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
+      ['show', ':src/file.ts'],
+      expect.objectContaining({
+        cwd: '/repo',
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
+    )
     expect(readFileMock).toHaveBeenCalledWith(path.join('/repo', 'src/file.ts'))
     expect(result).toEqual({
       kind: 'text',
@@ -121,11 +125,15 @@ describe('getDiff', () => {
 
     await getDiff('/repo', 'src\\file.ts', false)
 
-    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(['show', ':src/file.ts'], {
-      cwd: '/repo',
-      maxBuffer: 10 * 1024 * 1024,
-      preferWslDirectGit: true
-    })
+    expect(gitExecFileAsyncBufferMock).toHaveBeenCalledWith(
+      ['show', ':src/file.ts'],
+      expect.objectContaining({
+        cwd: '/repo',
+        maxBuffer: 10 * 1024 * 1024,
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
+    )
   })
 
   it('falls back to HEAD for unstaged diffs when the file is not in the index', async () => {
@@ -139,11 +147,17 @@ describe('getDiff', () => {
     expect(gitExecFileAsyncBufferMock).toHaveBeenNthCalledWith(
       2,
       ['show', '--end-of-options', 'HEAD:src/file.ts'],
-      {
+      expect.objectContaining({
         cwd: '/repo',
         maxBuffer: 10 * 1024 * 1024,
-        preferWslDirectGit: true
-      }
+        preferWslDirectGit: true,
+        allowExplicitBareRepositoryRetry: true
+      })
+    )
+    const firstReadOptions = gitExecFileAsyncBufferMock.mock.calls[0]?.[1]
+    const secondReadOptions = gitExecFileAsyncBufferMock.mock.calls[1]?.[1]
+    expect(firstReadOptions.explicitBareRepositoryReadState).toBe(
+      secondReadOptions.explicitBareRepositoryReadState
     )
     expect(result.originalContent).toBe('head-content\n')
     expect(result.modifiedContent).toBe('working-tree-content')
