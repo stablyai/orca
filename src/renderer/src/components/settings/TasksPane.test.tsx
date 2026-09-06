@@ -65,7 +65,8 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
-  }
+  },
+  SentrySetupSteps: () => <div data-testid="sentry-setup">Sentry setup</div>
 }))
 
 vi.mock('@/store', () => ({
@@ -137,7 +138,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      sentry: { connected: false, checking: false, visible: false }
     }
   })
 
