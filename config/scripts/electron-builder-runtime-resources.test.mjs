@@ -71,6 +71,53 @@ describe('packaged runtime resources', () => {
     }
   })
 
+  it('verifies bare imports that rolldown hoisted into a shared main chunk', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-chunk-imports-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      // The entry points themselves carry no specifier; only the shared chunk does.
+      const sources = new Map([
+        ['out/main/index.js', ''],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', ''],
+        ['out/main/chunks/managed-agent-hook-controls-CWf8D-KR.js', 'require(`jsonc-parser`)']
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(/jsonc-parser/)
+
+      await mkdir(join(resourcesDir, 'node_modules', 'jsonc-parser'), { recursive: true })
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores member calls onto Orca methods that are themselves named require', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-member-require-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      // electron-sidecar-tab-registry and browser-execution-host-grant-registry both
+      // expose require(key); a literal key must never read as a packaged specifier.
+      const sources = new Map([
+        ['out/main/index.js', 'registry.require("public-a");grants.require(`host-key`)'],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', 'state.import("android-sdk")']
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
   it('normalizes host-specific asar entry separators', () => {
     expect(findAsarEntry(['\\out\\main\\index.js'], 'out/main/index.js')).toBe(
       '\\out\\main\\index.js'
