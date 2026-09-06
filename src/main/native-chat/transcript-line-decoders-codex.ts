@@ -48,10 +48,9 @@ function codexUnwrappedResponseItem(
     return codexResponseItem(record, id, timestamp)
   }
   const role = record.role === 'assistant' ? 'assistant' : record.role === 'user' ? 'user' : null
-  const blocks = codexTurnItemBlocks(record.content)
-  if (role === 'user' && isSkillContext(blocks)) {
-    return null
-  }
+  const decodedBlocks = codexTurnItemBlocks(record.content)
+  const blocks =
+    role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
   return role && blocks.length > 0 ? { id, role, blocks, timestamp, source: 'transcript' } : null
 }
 
@@ -66,10 +65,9 @@ function codexResponseItem(
     if (!role) {
       return null
     }
-    const blocks = claudeContentBlocks(payload.content)
-    if (role === 'user' && isSkillContext(blocks)) {
-      return null
-    }
+    const decodedBlocks = claudeContentBlocks(payload.content)
+    const blocks =
+      role === 'user' ? decodedBlocks.filter((block) => !isSkillContext(block)) : decodedBlocks
     if (blocks.length === 0) {
       return null
     }
@@ -115,11 +113,8 @@ function codexResponseItem(
 }
 
 // Explicit skill expansions are model context, not the user's recorded prompt.
-function isSkillContext(blocks: NativeChatBlock[]): boolean {
-  return blocks.some(
-    (block) =>
-      block.type === 'text' && block.text.trimStart().slice(0, 7).toLowerCase() === '<skill>'
-  )
+function isSkillContext(block: NativeChatBlock): boolean {
+  return block.type === 'text' && block.text.trimStart().slice(0, 7).toLowerCase() === '<skill>'
 }
 
 function codexEventMessage(
