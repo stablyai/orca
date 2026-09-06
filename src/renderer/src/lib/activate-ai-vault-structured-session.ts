@@ -14,6 +14,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -144,9 +145,11 @@ export async function revealStructuredSession(target: {
         STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
         STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
       )
-    } catch {
-      // We could not reach the host to ask. That is not evidence about the chat or the host's age.
-      return 'unreachable'
+    } catch (error) {
+      // A version block is the host's age, stated outright; anything else means we never got to
+      // ask, which is not evidence about the chat or the host. `remote-agent-session-launch`
+      // splits the same probe's failures the same way.
+      return isRuntimeCompatBlockError(error) ? 'host-cannot-open' : 'unreachable'
     }
     if (!supported) {
       return 'host-cannot-open'

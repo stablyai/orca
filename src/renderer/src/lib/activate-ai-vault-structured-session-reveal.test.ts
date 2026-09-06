@@ -30,6 +30,7 @@ vi.mock('./worktree-runtime-owner', () => ({
 
 import { revealStructuredSession } from './activate-ai-vault-structured-session'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 
 const target = { worktreeId: 'workspace-1', sessionId: 'session-1' }
 
@@ -94,13 +95,35 @@ describe('revealStructuredSession', () => {
     expect(mocks.call).not.toHaveBeenCalled()
   })
 
-  it('reports the chat gone only when the host itself refused', async () => {
+  it('reports the chat gone only for the refusal that means the record is absent', async () => {
     mocks.call.mockResolvedValue({
       ok: false,
       refusal: { code: 'agent_session_identity_required' }
     })
 
     await expect(revealStructuredSession(target)).resolves.toBe('gone')
+  })
+
+  it('does not call a host-side refusal a missing chat', async () => {
+    // The host answers this when it holds the record but no adapter of its own can open it.
+    // Saying "gone" there tells someone their work is lost while it sits on disk.
+    mocks.call.mockResolvedValue({
+      ok: false,
+      refusal: { code: 'structured_agent_session_unsupported' }
+    })
+
+    await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
+  })
+
+  it('reads a version block as a host too old, not as a lost connection', async () => {
+    mocks.environmentIdFor.mockReturnValue('env-1')
+    const blocked = Object.assign(new Error('Update the Orca server'), {
+      code: RUNTIME_COMPAT_BLOCK_CODE
+    })
+    mocks.supports.mockRejectedValue(blocked)
+
+    await expect(revealStructuredSession(target)).resolves.toBe('host-cannot-open')
+    expect(mocks.call).not.toHaveBeenCalled()
   })
 
   it('reports unreachable when the call fails rather than answers', async () => {
