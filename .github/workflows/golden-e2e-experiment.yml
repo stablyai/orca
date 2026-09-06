@@ -19,10 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: macos-15
-            platform: mac
           # Match the release gate: Windows runs a focused golden subset.
           - os: windows-2022
             platform: windows
