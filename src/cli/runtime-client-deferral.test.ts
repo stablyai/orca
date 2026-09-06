@@ -92,7 +92,7 @@ describe('RuntimeClient module-graph deferral', () => {
     'flags.ts',
     'dispatch.ts',
     'format.ts',
-    'cli-error-format.ts',
+    'cli-error.ts',
     'selectors.ts',
     'execution-host-flag.ts'
   ])('%s imports error classes from ./runtime/types, not the barrel', (file) => {
@@ -103,7 +103,7 @@ describe('RuntimeClient module-graph deferral', () => {
     for (const line of valueImports) {
       expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
     }
-    // Why: format.ts re-exports its error formatters; the guarded import lives in cli-error-format.ts.
+    // Why: format.ts re-exports its error formatters; the guarded import lives in cli-error.ts.
     if (file !== 'format.ts') {
       expect(source).toContain("} from './runtime/types'")
     }
@@ -114,6 +114,7 @@ describe('RuntimeClient module-graph deferral', () => {
     expect(source).toContain("import type { RuntimeClient } from './runtime-client'")
     expect(source).not.toMatch(/^import \{[^}]*RuntimeClient[^}]*\} from '\.\/runtime-client'/m)
     expect(source).toContain("await import('./runtime-client.js')")
+    expect(source).toContain("import { reportCliError } from './cli-error'")
   })
 
   it('constructs no client for --help', async () => {

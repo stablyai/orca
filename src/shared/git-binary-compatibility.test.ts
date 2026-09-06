@@ -204,6 +204,16 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
   })
 
+  it('removes locked prepared worktrees without a separate unlock', async () => {
+    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-discard', 'HEAD'])
+    await runGit(['-C', 'compat-discard', 'reset', '--hard', 'HEAD'])
+    await runGit(['worktree', 'lock', '--reason', 'owned preparation', 'compat-discard'])
+    await runGit(['worktree', 'remove', '--force', '--force', 'compat-discard'])
+    expect((await runGit(['worktree', 'list', '--porcelain'])).stdout).not.toContain(
+      'compat-discard'
+    )
+  })
+
   it('supports prepared worktree creation and finalization', async () => {
     await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-prepared', 'HEAD'])
     await runGit(['-C', 'compat-prepared', 'reset', '--hard', 'HEAD'])

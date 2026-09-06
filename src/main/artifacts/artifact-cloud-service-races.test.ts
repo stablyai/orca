@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -50,7 +50,14 @@ async function setup(): Promise<ArtifactCloudService> {
   return new ArtifactCloudService(path, () => true)
 }
 
+beforeEach(() => {
+  // Keep fixed response expirations independent of the runner's wall clock.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime('2026-08-07T00:00:00.000Z')
+})
+
 afterEach(async () => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   await Promise.all(
     createdPaths.splice(0).map((path) => rm(path, { recursive: true, force: true }))

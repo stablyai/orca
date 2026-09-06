@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { activateAndRevealFolderWorkspace, activateAndRevealWorktree } from './worktree-activation'
+import {
+  activateAndRevealFolderWorkspace,
+  activateAndRevealWorkspace,
+  activateAndRevealWorktree
+} from './worktree-activation'
 import * as activationGate from './worktree-agent-activation-gate'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -251,6 +255,25 @@ describe('activating a folder workspace whose last terminal was closed', () => {
       expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(
         providesInitialSurface ? 0 : 1
       )
+    }
+  )
+
+  it.each(['local', SSH_HOST_ID] as const)(
+    'opens a notification on %s without revealing the folder',
+    (executionHostId) => {
+      seedEmptiedFolderWorkspaceOnTwoHosts()
+      useAppStore.setState({ sidebarBody: 'agents' })
+
+      const result = activateAndRevealWorkspace(FOLDER_KEY, {
+        executionHostId,
+        revealInSidebar: false,
+        clearSidebarFilters: false
+      })
+
+      expect(result).not.toBe(false)
+      expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
+      expect(useAppStore.getState().sidebarBody).toBe('agents')
+      expect(useAppStore.getState().revealWorktreeInSidebar).not.toHaveBeenCalled()
     }
   )
 

@@ -21,8 +21,9 @@ billing minutes or queue time. This small sample is not a historical average.
   default Debian/RPM compression is xz. PR artifacts are inspected on the same
   runner, so their download size offers no benefit. Keep all AppImage, Debian,
   RPM, payload, launcher, and shutdown checks. Release compression is unchanged.
-  Compression savings need a hosted run; do not equate the full packaging step
-  with removable compression time.
+  Hosted validation in [33999422341](https://github.com/stablyai/orca/actions/runs/33999422341)
+  reduced the package-build step to 2m13s and the full Linux job to 6m17s, with
+  all existing checks passing. This is a small observational sample.
 - Cancel superseded Mobile Checks and Skill update round-trip PR runs. The
   skill matrix has 13 jobs. Preserve non-cancelling main/merge-group skill runs,
   with separate concurrency groups per event.
@@ -35,6 +36,21 @@ native caches, one shared E2E build, PR cancellation, incremental TypeScript
 caching, and changed-spec E2E routing. Increasing shards would increase setup
 work and simultaneous runner demand. Do not adjust the count without comparing
 critical-path time and aggregate job time on the same commit.
+
+## Follow-up savings
+
+- Move the hourly main/release freshness lookup to a five-minute Ubuntu
+  preflight without a checkout. In unchanged run
+  [33986205749](https://github.com/stablyai/orca/actions/runs/33986205749),
+  Blacksmith macOS was occupied for 40 seconds, including a 30-second checkout,
+  before skipping. The new job-level gate avoids that Mac allocation. Actual
+  builds gain an Ubuntu scheduling hop; pin the Mac checkout and downstream
+  Windows identity to the SHA that the preflight checked.
+- Avoid global `npm install -g node-gyp` for validated Linux Node-runtime cache
+  hits. Use the existing native-module load/provenance check before skipping;
+  misses, broken addons, and Electron jobs still install the rebuild toolchain.
+  The action file participates in cache keys, so this rollout creates fresh
+  native caches once. No measured warm-cache seconds are claimed yet.
 
 ## Runner recommendations
 
@@ -65,6 +81,24 @@ See [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product
    is relative to repository activity (hardware speeds differ).
    See [pricing](https://ubicloud.com/docs/about/pricing) and
    [setup](https://ubicloud.com/docs/github-actions-integration/quickstart).
+
+### A bounded Ubicloud candidate
+
+The Linux leg of `performance-contracts.yml` took 48 seconds in
+[33994756657](https://github.com/stablyai/orca/actions/runs/33994756657).
+Its daily schedule and 20-minute timeout make it a small candidate: 31 ordinary
+scheduled attempts permit at most 620 job-runtime minutes, before runner
+startup/cleanup billing. Actual timings on Ubicloud's 2-vCPU hardware still need
+measurement; the GitHub timing is only a sizing reference.
+
+If enabled later, route only the first attempt of the scheduled Linux job to
+Ubicloud; keep PRs, manual dispatches, reruns, and macOS/Windows on GitHub. This
+avoids spending the allowance on unpredictable PR volume. Check other account
+usage and available credit before enabling; a workflow timeout is not an
+account-wide billing cap. On September 5, the organization's GitHub App
+installation list contained Blacksmith but no Ubicloud installation, so this
+follow-up leaves runner selection on GitHub rather than queueing work against
+an unprovisioned label.
 
 ## Machines that also run coding agents
 
@@ -97,3 +131,69 @@ environments currently exist. An environment-gated design adds a GitHub
 approval after each SignPath approval and changes the current automatic inner
 signing timeout fallback; those are explicit release-policy decisions, so this
 PR leaves production signing behavior unchanged.
+
+## Second audit and hosted trials
+
+- Cloud Verify ran 100 times in a sampled 39-hour window (84 PR and 16 push
+  runs). Move its four Ubuntu 22.04 jobs from Blacksmith to standard hosted
+  Ubuntu 22.04, preserving Postgres, secret scanning, build, tests, and Terraform
+  validation. Baseline [34001538145](https://github.com/stablyai/orca/actions/runs/34001538145)
+  used 64/72/26/19 seconds for security/test/build/Terraform respectively.
+  This conserves the shared provider allowance; hosted latency must be checked.
+- Keep full tag history for the 13-job skill round-trip matrix, but fetch blobs
+  lazily. Only two historical SKILL.md files are materialized. Baseline
+  [33999994876](https://github.com/stablyai/orca/actions/runs/33999994876)
+  spent 42–84 seconds per checkout, about 14 aggregate runner minutes. A hosted
+  trial must verify historical blob fetches on all three operating systems.
+- Use the existing Electron/native dependency cache for native IME CI. Keep
+  both deterministic boundary and real IBus tests. Add pnpm store caching to
+  terminal perf and release golden/evidence lanes; retain their raw installs
+  because manually selected older refs may not contain the shared action.
+- Disable ZIP recompression only for already-compressed NSIS installers sent
+  to SignPath. Installer contents, release compression, and signing stay intact.
+- Advance existing placement and startup deadlines with scoped fake timers in
+  three renderer test files. All 34 tests pass in 62 ms of local test execution,
+  versus 65.182 seconds in the sampled hosted baseline. Imports and transforms
+  still dominate invocation time; this is not a claim of equal PR wall savings.
+
+Eight unit shards already have balanced 260–296-second sample durations.
+Reducing shards or removing test isolation lacks evidence of a net gain. Real
+subprocess tests intentionally cover lifecycle behavior and retain real clocks.
+The 14-way E2E split retains headroom after earlier 12-way timeouts. Lowering
+coverage or schedule frequency is outside this efficiency pass. Cache complexity
+for a seven-second docs install is unlikely to pay back. Release build reuse
+across modes risks differing telemetry identities and native platform artifacts.
+
+Terminal Perf's baseline [33955846492](https://github.com/stablyai/orca/actions/runs/33955846492)
+failed waiting 30 seconds for workspaceSessionReady in its shared-page fixture,
+before measuring terminal performance. Compare hosted trials against that known
+failure rather than attributing it to dependency cache changes.
+
+Hosted trials for the second audit:
+
+- [Cloud Verify 34002295216](https://github.com/stablyai/orca/actions/runs/34002295216)
+  passed all four jobs on standard hosted Ubuntu: security 57s, test 102s, build
+  35s, Terraform 19s. The test lane is 30s slower than the Blacksmith sample;
+  retain this modest latency tradeoff to conserve shared allowance.
+- [Skill matrix 34002295221](https://github.com/stablyai/orca/actions/runs/34002295221)
+  passed all 13 legs, including historical blob materialization. Checkout took
+  18–20s on Linux, 39–45s on macOS, and 49–58s on Windows, versus the earlier
+  42–84s range across platforms. These are observational samples.
+- [Native IME 34002299594](https://github.com/stablyai/orca/actions/runs/34002299594)
+  passed both deterministic and real IBus checks. Shared dependency setup took
+  29s, versus 35s for the old install/toolchain steps in the sampled baseline.
+- Native-IME-only source/spec changes no longer allocate the reusable E2E
+  build, cache, and consumer jobs just to filter out the native spec. The
+  separate native workflow still runs; SSH-only and mixed spec lists still
+  allocate the reusable workflow. Routing contracts exercise these cases.
+- [Hourly 34001816449](https://github.com/stablyai/orca/actions/runs/34001816449)
+  exercised the new five-second preflight and successfully published macOS.
+  The Windows follow-up failed in its unchanged input-vetting fetch because
+  remote refs differ only by case on its case-insensitive filesystem. The
+  requested SHA was correct; this does not validate an unchanged-main skip yet.
+
+Moving the daily Mac freshness check has lower expected value than hourly:
+only one potential idle allocation per day, and active development usually
+requires that build. Defer another release-graph change until skip frequency
+justifies it. The substantive remaining release occupancy opportunity is the
+separately documented asynchronous signing policy decision.

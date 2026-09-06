@@ -14,6 +14,38 @@ const NATIVE_IME_HARNESS =
 
 export const PR_E2E_SOURCE_ROUTES = [
   {
+    id: 'ssh.localhost-agent-hooks',
+    specs: ['tests/e2e/ssh-localhost.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/(?:relay\/(?:agent-hook|relay-agent-hook-runtime|plugin-overlay)|main\/(?:agent-hooks\/|ssh\/ssh-relay-session\.ts$)|shared\/agent-hook)/.test(
+        file
+      )
+  },
+  {
+    id: 'browser-network.ssh-docker-route',
+    specs: ['tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'],
+    matches: (file) =>
+      file === 'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts' ||
+      /^tests\/e2e\/helpers\/docker-ssh-relay-(?:image|target)\.ts$/.test(file) ||
+      (isProductSource(file) &&
+        /^src\/main\/(?:browser\/(?:ssh-browser-network-execution-route|browser-network-deferred-socket|browser-network-execution-route|system-ssh-socks-client-socket)|ssh\/system-ssh-dynamic-forward-process)\.ts$/.test(
+          file
+        ))
+  },
+  {
+    id: 'terminal.windows-wsl-launch-and-paste',
+    specs: [
+      'tests/e2e/golden-tab-bar-agent-launch.spec.ts',
+      'tests/e2e/terminal-windows-shell-paste-ownership.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^(?:config\/scripts\/verify-wsl-e2e-participation\.mjs$|src\/main\/(?:wsl[/-]|pty\/.*wsl|providers\/wsl)|src\/shared\/(?:wsl-|windows-terminal-shell)|src\/renderer\/src\/.*(?:terminal-paste|pty-paste)|tests\/e2e\/(?:golden-tab-bar-agent-launch\.spec|terminal-windows-shell-paste-ownership\.spec|helpers\/(?:wsl-golden-stub-agent|golden-stub-agent))|\.github\/(?:actions\/setup-wsl-test-runtime\/|workflows\/windows-wsl-e2e\.yml))/.test(
+        file
+      )
+  },
+  {
     id: 'ephemeral-vm-runtime.rollback-readable-sidecar',
     specs: ['tests/e2e/ephemeral-vm-provisioned-root.spec.ts'],
     matches: (file) =>
@@ -217,6 +249,23 @@ export function hasNativeImeSourceChange(changedPaths) {
   ).some((route) => changedPaths.some(route.matches))
 }
 
+export function shouldRunReusablePrE2e(changedPaths) {
+  // Native IME has its own workflow; SSH still runs inside the reusable workflow.
+  return (
+    hasSshSourceChange(changedPaths) ||
+    selectPrE2eSpecs(changedPaths).some(
+      (spec) => spec !== 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+    )
+  )
+}
+
+export function hasWslSourceChange(changedPaths) {
+  const route = PR_E2E_SOURCE_ROUTES.find(
+    (candidate) => candidate.id === 'terminal.windows-wsl-launch-and-paste'
+  )
+  return changedPaths.some(route.matches)
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let input = ''
   process.stdin.setEncoding('utf8')
@@ -226,6 +275,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const changedPaths = input.split(/\r?\n/).filter(Boolean)
   if (process.argv.includes('--ssh-source')) {
     process.stdout.write(`${hasSshSourceChange(changedPaths)}\n`)
+  } else if (process.argv.includes('--reusable-workflow')) {
+    process.stdout.write(`${shouldRunReusablePrE2e(changedPaths)}\n`)
+  } else if (process.argv.includes('--wsl-source')) {
+    process.stdout.write(`${hasWslSourceChange(changedPaths)}\n`)
   } else if (process.argv.includes('--native-ime-source')) {
     process.stdout.write(`${hasNativeImeSourceChange(changedPaths)}\n`)
   } else {

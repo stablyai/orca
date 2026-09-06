@@ -64,7 +64,11 @@ export interface RelayRuntimeObserver {
   }): void
   recordControlClose?(code: number): void
   recordSpliceClose?(trigger: string): void
+  recordClientAcceptAbandoned?(stage: RelayClientAcceptStage, elapsedMs: number): void
 }
+
+// Which serialized accept step the phone had already hung up behind.
+export type RelayClientAcceptStage = 'assignment' | 'credential' | 'activity'
 
 type RelayMetricDeltas = {
   forwardedBytes: number
@@ -87,6 +91,8 @@ type RelayMetricDeltas = {
   unavailableRegions: Record<string, number>
   controlClosesByCode: Record<string, number>
   spliceClosesByTrigger: Record<string, number>
+  clientAcceptsAbandonedByStage: Record<string, number>
+  clientAcceptAbandonedMsMax: number
   controlRenewalLatenciesMs: number[]
   controlRenewalsByOutcome: Record<string, number>
   controlActivityRecoveries: number
@@ -116,6 +122,8 @@ const emptyDeltas = (): RelayMetricDeltas => ({
   unavailableRegions: {},
   controlClosesByCode: {},
   spliceClosesByTrigger: {},
+  clientAcceptsAbandonedByStage: {},
+  clientAcceptAbandonedMsMax: 0,
   controlRenewalLatenciesMs: [],
   controlRenewalsByOutcome: {},
   controlActivityRecoveries: 0,
@@ -228,6 +236,14 @@ export class RelayObservability implements RelayRuntimeObserver {
       (this.deltas.spliceClosesByTrigger[trigger] ?? 0) + 1
   }
 
+  recordClientAcceptAbandoned(stage: RelayClientAcceptStage, elapsedMs: number): void {
+    increment(this.deltas.clientAcceptsAbandonedByStage, stage)
+    this.deltas.clientAcceptAbandonedMsMax = Math.max(
+      this.deltas.clientAcceptAbandonedMsMax,
+      elapsedMs
+    )
+  }
+
   start(readCounts: () => RelayProcessCounts, intervalMs = 30_000): void {
     if (this.timer) return
     this.eventLoop.enable()
@@ -289,6 +305,8 @@ export class RelayObservability implements RelayRuntimeObserver {
       unavailableRegionsDelta: deltas.unavailableRegions,
       controlClosesByCodeDelta: deltas.controlClosesByCode,
       spliceClosesByTriggerDelta: deltas.spliceClosesByTrigger,
+      clientAcceptsAbandonedByStageDelta: deltas.clientAcceptsAbandonedByStage,
+      clientAcceptAbandonedMsMax: Number(deltas.clientAcceptAbandonedMsMax.toFixed(3)),
       sqlQueriesDelta: deltas.sqlQueries,
       sqlFailuresDelta: deltas.sqlFailures,
       sqlLatencyMsMax: Number(deltas.sqlLatencyMsMax.toFixed(3)),

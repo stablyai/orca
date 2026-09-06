@@ -2,6 +2,8 @@ import type { CliStatusResult } from '../shared/runtime-types'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcSuccess } from './runtime-client'
 
+export { formatCliError, reportCliError, type CliErrorContext } from './cli-error'
+
 export {
   formatBrowserProfileList,
   formatScreenshot,
@@ -60,7 +62,6 @@ export {
   formatWorktreePs,
   formatWorktreeShow
 } from './workspace-format'
-export { formatCliError, reportCliError, type CliErrorContext } from './cli-error-format'
 
 export function printResult<TResult>(
   response: RuntimeRpcSuccess<TResult>,

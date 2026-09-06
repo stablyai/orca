@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
@@ -27,7 +28,6 @@ describe('ensure-native-runtime', () => {
       const logPath = join(projectDir, 'native-runtime.log')
       const markerPath = join(projectDir, 'rebuilt.marker')
       const binDir = join(projectDir, 'bin')
-      copyFileSync(sourceScriptPath, scriptPath)
       writeFakeNativeModules(projectDir)
       writeNodePtyPatchFile(projectDir)
       writeFakePnpm(binDir)
@@ -67,7 +67,6 @@ describe('ensure-native-runtime', () => {
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
-        copyFileSync(sourceScriptPath, scriptPath)
         writeFakeNativeModules(projectDir, { windowsRegistryRequiresMarker: true })
         writeNodePtyPatchFile(projectDir)
         writeFakePnpm(binDir)
@@ -102,7 +101,6 @@ describe('ensure-native-runtime', () => {
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
-        copyFileSync(sourceScriptPath, scriptPath)
         writeLoadableNativeModules(projectDir)
         writeNodePtyPatchFile(projectDir)
         writeFakePnpm(binDir)
@@ -137,7 +135,6 @@ describe('ensure-native-runtime', () => {
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
-        copyFileSync(sourceScriptPath, scriptPath)
         writeLoadableNativeModules(projectDir)
         writeNodePtyPatchFile(projectDir)
         writePatchedNodePtyBuildArtifacts(projectDir)
@@ -171,7 +168,6 @@ describe('ensure-native-runtime', () => {
         const logPath = join(projectDir, 'native-runtime.log')
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
-        copyFileSync(sourceScriptPath, scriptPath)
         writeLoadableNativeModules(projectDir, { nativeDir: '../build/Release/' })
         writeNodePtyPatchFile(projectDir)
         writePatchedNodePtyBuildArtifacts(projectDir)
@@ -198,7 +194,9 @@ describe('ensure-native-runtime', () => {
 
 function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-native-runtime-'))
-  mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
+  // Walked, not listed: the script imports windows-process-tree-gyp-rebuild.mjs, and a fixture
+  // missing it fails every case with a module-resolution error instead of the defect under test.
+  copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
   copyFileSync(
     sourceNodePtyJobOwnershipPath,
     join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')
