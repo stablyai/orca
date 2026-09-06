@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
+import { scanSourceTree, stripComments } from '../../shared/source-scan/source-tree-scan'
 import { powerShellCommand } from './ssh-remote-powershell'
 
 function decodePayload(command: string): string {
@@ -43,29 +43,6 @@ describe('powerShellCommand', () => {
 
 const MAIN_DIR = join(import.meta.dirname, '..')
 
-function typeScriptSourcesUnder(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name)
-    if (entry.isDirectory()) {
-      typeScriptSourcesUnder(path, out)
-    } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
-      out.push(path)
-    }
-  }
-  return out
-}
-
-// Whole-line `//` and block comments only, so string contents are never eaten.
-//
-// Both strips are anchored to the start of a line. An unanchored block strip would pair an
-// opening `/*` appearing inside a string (a glob such as 'src/*.ts') with any later comment
-// close — a JSDoc terminator, say — and delete everything between them, hiding a real
-// violation that sits in the gap. Verified: the unanchored form misses an injected
-// `Import-Module` sitting after a glob string.
-function withoutComments(source: string): string {
-  return source.replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, '').replace(/^[ \t]*\/\/.*$/gm, '')
-}
-
 // Why: execution policy gates loading script FILES and nothing else, so dropping
 // `-ExecutionPolicy Bypass` is a no-op exactly while no remote payload loads one. That
 // invariant is what makes the switch safe to omit, and it was previously guarded by nothing:
@@ -80,6 +57,11 @@ function withoutComments(source: string): string {
 // Limit: this is a source-text scan, so a script file reached only through a variable
 // (`& $scriptPath`) never appears in source and no pattern here can catch it — this narrows
 // the hole rather than sealing it. The invariant note on `powerShellCommand` covers the rest.
+//
+// Matched against `stripComments`, the shared quote-tracking stripper, so a construct named in
+// prose is not counted as code. A line-anchored regex pair cannot do this job: it either eats
+// live code by pairing a `/*` inside a glob string with a later comment close, or — anchoring
+// to avoid that — skips every trailing comment. Quote state is the only fix.
 const POLICY_GATED_CONSTRUCTS = [
   {
     label: 'a PowerShell script file (.ps1/.psm1)',
@@ -130,13 +112,17 @@ const POLICY_GATED_CONSTRUCTS = [
 ] as const
 
 describe('remote PowerShell payload invariant', () => {
-  const importers = typeScriptSourcesUnder(MAIN_DIR).filter((path) =>
-    readFileSync(path, 'utf8').includes('ssh-remote-powershell')
+  // `scanSourceTree` is the shared walk: it skips node_modules/dist/out/build/.git,
+  // dot-directories and `__fixtures__`, and excludes tests by the shared `isTestFile` (which
+  // also covers `.spec.ts`, `__tests__/` and `-test-harness.ts`). A hand-rolled walk that got
+  // any of those wrong would move the floor below, which is this guard's own goalpost.
+  const importers = scanSourceTree(MAIN_DIR).filter((file) =>
+    file.source.includes('ssh-remote-powershell')
   )
 
   it('finds the modules that build remote payloads', () => {
     // Guards the scan itself: a resolution change that emptied this list would make every
-    // assertion below vacuously pass. 14 importers today.
+    // assertion below vacuously pass. 15 importers today, re-derived against the shared walk.
     expect(importers.length).toBeGreaterThan(10)
   })
 
@@ -145,8 +131,8 @@ describe('remote PowerShell payload invariant', () => {
     pattern
   }) => {
     const offenders = importers
-      .filter((path) => pattern.test(withoutComments(readFileSync(path, 'utf8'))))
-      .map((path) => relative(MAIN_DIR, path))
+      .filter((file) => pattern.test(stripComments(file.source)))
+      .map((file) => file.relativePath)
 
     expect(
       offenders,
