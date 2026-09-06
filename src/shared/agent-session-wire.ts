@@ -68,6 +68,11 @@ export type AgentSessionBackgroundTaskState = {
   supportsTaskStop?: boolean
 }
 
+export type AgentSessionTurnActivity = {
+  turnId: string
+  text: string
+}
+
 /** Backward paging is the client's normal read; 40 matches the page size the
  *  mobile list renders without a visible fill-in. */
 export const AGENT_SESSION_HISTORY_DEFAULT_LIMIT = 40
@@ -145,6 +150,8 @@ export type AgentSessionSubscribeEvent =
       fence: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Latest provider-authored turn activity; optional for mixed-version hosts. */
+      activity?: AgentSessionTurnActivity | null
     }
   | {
       type: 'batch'
@@ -154,6 +161,8 @@ export type AgentSessionSubscribeEvent =
       fence?: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Additive ephemeral state; it never creates or advances journal rows. */
+      activity?: AgentSessionTurnActivity | null
     }
   | {
       type: 'reset'
@@ -163,6 +172,7 @@ export type AgentSessionSubscribeEvent =
       fence: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      activity?: AgentSessionTurnActivity | null
     }
   | { type: 'end' }
 

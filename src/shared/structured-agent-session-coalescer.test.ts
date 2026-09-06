@@ -4,7 +4,8 @@ import { createStructuredAgentSessionEventCoalescer } from './structured-agent-s
 
 function batch(
   sequence: number,
-  backgroundTasks?: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>['backgroundTasks']
+  backgroundTasks?: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>['backgroundTasks'],
+  activity?: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>['activity']
 ): Extract<AgentSessionSubscribeEvent, { type: 'batch' }> {
   return {
     type: 'batch',
@@ -15,7 +16,8 @@ function batch(
       removedItemIds: [],
       submissions: []
     },
-    ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
+    ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+    ...(activity !== undefined ? { activity } : {})
   }
 }
 
@@ -52,5 +54,18 @@ describe('structured agent session event coalescer', () => {
 
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({ backgroundTasks: null })
+  })
+
+  it('keeps only the latest ephemeral activity value', () => {
+    const events: AgentSessionSubscribeEvent[] = []
+    const coalescer = createStructuredAgentSessionEventCoalescer((event) => events.push(event))
+
+    coalescer.push(batch(1, undefined, { turnId: 'turn-1', text: 'Thinking' }))
+    coalescer.push(batch(1, undefined, { turnId: 'turn-1', text: 'Checking the result' }))
+    coalescer.push(batch(1, undefined, null))
+    coalescer.flush()
+
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({ activity: null })
   })
 })

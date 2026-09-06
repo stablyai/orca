@@ -142,8 +142,8 @@ export function useStructuredAgentSession(args: {
   // rather than leaving the last write unconfirmed for the life of the session.
   const turnId = activeStructuredAgentSessionTurnId(state.items)
   const turnActivity = useMemo(
-    () => selectStructuredAgentTurnActivity(state.items, turnId),
-    [state.items, turnId]
+    () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
+    [state.activity, state.items, turnId]
   )
   const isMonitoringBackgroundTasks =
     turnId === null && state.backgroundTasks?.state === 'monitoring'
