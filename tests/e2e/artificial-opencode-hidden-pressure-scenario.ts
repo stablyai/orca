@@ -9,6 +9,7 @@ import {
 } from './artificial-opencode-hidden-pressure-script'
 import {
   ensureTerminalVisible,
+  getActiveTabId,
   getActiveWorktreeId,
   getAllWorktreeIds,
   switchToWorktree,
@@ -16,11 +17,11 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import {
-  getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import { readActiveScreen } from './helpers/alt-screen-frame'
 
 type HiddenPressurePane = {
   ptyId: string
@@ -267,9 +268,12 @@ async function measureHiddenOutputRestoreLatency(
 ): Promise<number> {
   const restoreStart = performance.now()
   await switchToWorktree(orcaPage, worktreeId)
+  const tabId = (await getActiveTabId(orcaPage)) ?? ''
   await expect
-    .poll(() => getTerminalContent(orcaPage, 20_000), {
+    .poll(async () => (await readActiveScreen(orcaPage, tabId))?.rows.join('\n') ?? '', {
       timeout: 20_000,
+      // One-second backoff can dominate the measured restore latency.
+      intervals: [50],
       message: 'Hidden PTY output was not restored from main buffer on return'
     })
     .toContain(`OPENCODE_PRESSURE_DONE_${runId}_`)
