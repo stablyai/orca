@@ -206,7 +206,7 @@ test.describe('SSH transport drop recovery', () => {
       await execInTerminal(
         orcaPage,
         ptyId,
-        `yes "$(printf 'ORCA_%s' FLOOD_LINE)" | head -c 48000000; printf 'FLOO%s\\n' DED`
+        `yes "$(printf 'ORCA_%s' FLOOD_LINE)" | head -c 48000000; printf done > /tmp/orca-flood-producer-complete; printf 'FLOO%s\\n' DED`
       )
       await waitForTerminalOutput(orcaPage, 'ORCA_FLOOD_LINE', 30_000, 20_000)
       await recoverDockerSshRelayAfterFault(orcaPage, remote.targetId, () => {
@@ -223,7 +223,21 @@ test.describe('SSH transport drop recovery', () => {
       ).toBeLessThan(200_000)
 
       // Wait for the finite producer to finish before sending a shell command behind it.
-      await waitForTerminalOutput(orcaPage, 'FLOODED', 120_000, 20_000)
+      try {
+        await waitForTerminalOutput(orcaPage, 'FLOODED', 120_000, 20_000)
+      } finally {
+        const producer = execDockerSshRelayTargetCommand(target!, 'if test -f /tmp/orca-flood-producer-complete; then cat /tmp/orca-flood-producer-complete; else echo producer-marker-absent; fi; ps -eo pid,ppid,stat,wchan:24,args').slice(-16000)
+        const panes = await orcaPage.evaluate(() => Array.from(window.__paneManagers?.entries() ?? []).map(([tabId, manager]) => ({
+          tabId,
+          panes: manager.getPanes().map(pane => ({
+            ptyId: pane.container?.dataset?.ptyId,
+            recoveryState: pane.container?.dataset?.ptyRecoveryState,
+            tail: pane.serializeAddon?.serialize()?.slice(-3000),
+            cols: pane.terminal?.cols, rows: pane.terminal?.rows
+          }))
+        })))
+        console.info('[flood-producer-diagnostic] ' + JSON.stringify({ producer, panes, originalPtyId: ptyId }))
+      }
 
       // And the session must still be usable, not merely alive.
       const markerSuffix = Date.now()
