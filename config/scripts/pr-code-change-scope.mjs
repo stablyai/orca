@@ -219,6 +219,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
   'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
+  'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',
   'src/main/windows-live-tree-kill.win32.test.ts',
