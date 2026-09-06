@@ -104,11 +104,37 @@ jobs:
               --clobber \
               android/app/build/outputs/apk/release/*.apk
           else
+            # Why: release tags live on side branches, so GitHub's automatic
+            # previous-tag detection reaches back several releases; that body
+            # already exceeds the 125000-character API limit and grows each
+            # release. Pin the comparison base and cap the size.
+            notes_file="$RUNNER_TEMP/android-release-notes.md"
+            previous_tag="$(
+              gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
+                | grep '^mobile-android-v' | grep -v "^$tag$" | sort -V | tail -1 || true
+            )"
+
+            if [ -n "$previous_tag" ]; then
+              gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -X POST \
+                -f tag_name="$tag" \
+                -f target_commitish="$GITHUB_SHA" \
+                -f previous_tag_name="$previous_tag" \
+                --jq .body > "$notes_file" || true
+            fi
+            if [ ! -s "$notes_file" ]; then
+              printf 'Orca Mobile Android %s\n' "$tag" > "$notes_file"
+            fi
+            if [ "$(wc -c < "$notes_file")" -gt 120000 ]; then
+              head -c 120000 "$notes_file" > "$notes_file.trimmed"
+              printf '\n\n_Notes truncated; see the full changelog._\n' >> "$notes_file.trimmed"
+              mv "$notes_file.trimmed" "$notes_file"
+            fi
+
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --title "Orca Mobile Android $tag" \
               --prerelease \
               --latest=false \
-              --generate-notes \
+              --notes-file "$notes_file" \
               android/app/build/outputs/apk/release/*.apk
           fi
