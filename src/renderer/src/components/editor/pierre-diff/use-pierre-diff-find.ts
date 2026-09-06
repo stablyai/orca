@@ -2,7 +2,18 @@ import { useCallback, useRef, useState } from 'react'
 import type { EditorFocusOptions } from '@pierre/diffs/edit'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { editorShortcutMatches } from '../editor-shortcuts'
-import { getDeepActiveElement } from './pierre-diff-active-element'
+
+/**
+ * Pierre renders into a shadow root, so `document.activeElement` stops at the
+ * host. Walk shadow roots to reach the element that actually holds focus.
+ */
+function getDeepActiveElement(): Element | null {
+  let active = document.activeElement
+  while (active?.shadowRoot?.activeElement) {
+    active = active.shadowRoot.activeElement
+  }
+  return active
+}
 
 // Why: Pierre only ships its search panel with edit mode, and it has no
 // programmatic command dispatch — replay the shortcut its own listener expects.

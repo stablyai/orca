@@ -137,7 +137,13 @@ export default function DiffViewer({
   const onSaveRef = useRef(onSave)
   onSaveRef.current = onSave
   const modifiedContentRef = useRef(modifiedContent)
-  modifiedContentRef.current = modifiedContent
+  // Why: reseed only when the prop actually changes. Pierre owns the live
+  // document and `onContentChange` only catches up after a state round-trip, so
+  // assigning every render lets an unrelated re-render mid-edit reset what
+  // Cmd+S writes back to disk.
+  useEffect(() => {
+    modifiedContentRef.current = modifiedContent
+  }, [modifiedContent])
 
   useEffect(() => {
     const container = scrollContainerRef.current
