@@ -148,6 +148,21 @@ function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | nu
   env[key] = value
 }
 
+/**
+ * The PATH Orca inherited from its launcher, before any seeding or hydration.
+ *
+ * Why exposed: an interactive login shell derives its PATH from the value it
+ * inherits, and rc files routinely guard their prepends on "already present".
+ * Hand one Orca's seeded PATH and those prepends become no-ops, leaving the
+ * user's tool directories wherever Orca happened to put them -- behind
+ * /usr/bin once macOS path_helper reorders (stablyai/orca#17446).
+ */
+export function getLaunchPath(): { key: string; value: string } | null {
+  const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
+  const value = launchPathOverride?.value ?? LAUNCH_PATH
+  return value === null ? null : { key, value }
+}
+
 function shellProbeEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, [PROBE_MARKER_ENV_VAR]: '1' }
   const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
