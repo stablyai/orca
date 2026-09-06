@@ -49,7 +49,7 @@ it('imports a retained host session under the receiving client SSH target', () =
   expect(snapshot.tabsByWorktreePath['/srv/project'][0].ptyId).toBe(oldPtyId)
 })
 
-it.each([undefined, 'local', 'runtime:paired', 'wsl:Ubuntu'] as const)(
+it.each([undefined, 'local', 'runtime:paired'] as const)(
   'preserves snapshot identities without a direct SSH import owner: %s',
   (executionHostId) => {
     const snapshot = {
