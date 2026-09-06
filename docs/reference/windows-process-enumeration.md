@@ -56,25 +56,25 @@ it moved the PEB traffic not at all. Replacing the PEB walk with the kernel
 query is what took `PROCESS_VM_READ` and `ReadProcessMemory` out of the addon
 altogether; the two changes compose, and neither substitutes for the other.
 
-So be precise about what these two flag sets buy now. A detailed scan is one
-`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` per process and no memory
-access at all. What the split buys on top of that is the handle itself: an
-identity scan opens nothing.
+Both scans use limited-query handles for creation times. A detailed scan also
+opens a separate limited-query handle for the command line. Neither scan reads
+another process's address space.
 
 So the module exposes two snapshots, and the row types differ so a cheap caller
 cannot read what its flag set did not pay for:
 
-| reader                                     | row type                     | flags                       | per-process handles |
-| ------------------------------------------ | ---------------------------- | --------------------------- | ------------------- |
-| `readWindowsProcessIdentityTable[Fresh]()` | `WindowsProcessIdentityRow`  | `None \| CreationTime`      | none                |
-| `readWindowsProcessTable[Fresh]()`         | `WindowsProcessRow`          | `+ CommandLine`             | one `OpenProcess`   |
+| reader                                     | row type                    | flags                  | per-process handles       |
+| ------------------------------------------ | --------------------------- | ---------------------- | ------------------------- |
+| `readWindowsProcessIdentityTable[Fresh]()` | `WindowsProcessIdentityRow` | `None \| CreationTime` | one limited-query handle  |
+| `readWindowsProcessTable[Fresh]()`         | `WindowsProcessRow`         | `+ CommandLine`        | two limited-query handles |
 
 `Memory` is requested by neither. Nothing reads a working set off this table —
 `windows-process-resource-collector.ts` runs its own sweep because it needs
 commit and CPU counters in the same pass, and the addon stores `WorkingSetSize`
 into a `DWORD` so anything above 4 GB wraps anyway.
 
-Measured on Windows 11 with 492 processes (p50 / p95):
+Historical measurements on Windows 11 with 492 processes, before creation-time
+support (p50 / p95; the current flag sets have not been benchmarked):
 
 |                                  | p50     | p95     |
 | -------------------------------- | ------- | ------- |
@@ -103,7 +103,7 @@ only under concurrency.
 
 Nothing else in this module prevents that. Each snapshot cache single-flights
 only within itself (`inFlight` is a closure per reader), and the wedge set
-latches only *after* a read misses its 3 s deadline, so through the healthy
+latches only _after_ a read misses its 3 s deadline, so through the healthy
 ~12 ms of a scan neither excludes the other. Overlap is the normal state rather
 than an edge case: other panes keep polling detailed at 750 ms while a teardown
 takes identity snapshots, and `codex-structured-turn-processes.ts` issues fresh
@@ -166,15 +166,15 @@ through `toIdentityRow`, so an identity row carries no command line on any host.
 
 ### Which callers need which
 
-| caller                                        | reads              | flag set |
-| --------------------------------------------- | ------------------ | -------- |
-| `windows-agent-foreground-process.ts`         | `command` (agent recognition) | detailed |
-| `local-workspace-platform-port-scanner.ts`    | `command` (port attribution)  | detailed |
-| `codex-structured-turn-processes.ts`          | `command` (turn-process identity) | detailed |
-| `structured-tui-process-identity.ts`          | `command` (child match)       | detailed |
-| `windows-pty-root-identity.ts`                | `pid` / `ppid` only           | identity |
-| `agent-session-process-identity-probe.ts`     | `creationTimeMs` only         | identity |
-| `relay/windows-port-scan.ts`                  | `name` (port owner label)     | detailed |
+| caller                                     | reads                             | flag set |
+| ------------------------------------------ | --------------------------------- | -------- |
+| `windows-agent-foreground-process.ts`      | `command` (agent recognition)     | detailed |
+| `local-workspace-platform-port-scanner.ts` | `command` (port attribution)      | detailed |
+| `codex-structured-turn-processes.ts`       | `command` (turn-process identity) | detailed |
+| `structured-tui-process-identity.ts`       | `command` (child match)           | detailed |
+| `windows-pty-root-identity.ts`             | `pid` / `ppid` only               | identity |
+| `agent-session-process-identity-probe.ts`  | `creationTimeMs` only             | identity |
+| `relay/windows-port-scan.ts`               | `name` (port owner label)         | detailed |
 
 `windows-port-scan.ts` is the one mismatch in the table: it reads only `pid` and
 `name`, which the identity set answers, but it calls the detailed reader. On a
@@ -186,23 +186,22 @@ ports without one.
 
 The per-pane foreground tracker is the hot one (750 ms / 2 s cadence) and it
 genuinely needs the command line, so the repeating per-process `OpenProcess` is
-not something the split removes. What the split removes is that handle from
-teardown identity and from the owner probe, which now open nothing.
+not something the split removes. The split removes the command-line query from
+teardown identity and the owner probe; their creation-time query remains.
 
-### `creationTimeMs` does not exist on any shipped build
+### Native creation-time identity
 
-Nothing in the repo supplies a `CreationTime` flag. The package enum is
-`None`/`Memory`/`CommandLine`, `process_worker.cc` emits no `creationTimeMs`,
-the vendored patch adds none, and `adaptAddon`'s `PROCESS_DATA_FLAG` lacks the
-bit. So `creationTimeMs` is always `undefined` in production and
-`isWindowsProcessStartTimeAvailable()` is always `false` — a latent product gap
-that predates the split and needs its own owner.
+The package patch defines `CreationTime = 4` and emits a positive Unix
+`creationTimeMs` from `GetProcessTimes`. Both the package wrapper and relay's
+bare-addon adapter request it. New native builds export `supportsCreationTime`;
+the adapter leaves the capability unavailable on older addons without that marker. Identity reads use flag 4, and detailed reads
+use flags 6. Failed or invalid timestamps stay absent; the facade never
+fabricates identity from zero or a non-finite value.
 
-Two consequences. `IDENTITY_PROJECTION.flags` evaluates to `0` today, so the
-identity reader really does open zero handles. And
-`agent-session-process-identity-probe.ts` early-returns on
-`isWindowsProcessStartTimeAvailable()` rather than scanning the whole table to
-produce `null`. Do not build anything on Windows start time working.
+The creation-time query needs `PROCESS_QUERY_LIMITED_INFORMATION`, without
+`PROCESS_VM_READ`. It adds one handle per process to the historical counts
+above. An older package without the flag keeps its existing optional-capability
+behavior; build-time probes ensure new artifacts provide the capability.
 
 Those CIM numbers are from a 1050-process host. The scan scales with process
 count: on a 1486-process Windows SSH host it measured **1.36 s** and produced
@@ -615,3 +614,39 @@ instead of passing every case vacuously. That guard is what caught this.
 `requiresPatchedNodePtySourceBuild()` in `ensure-native-runtime.mjs` now covers
 win32 as well, and `pnpm rebuild node-pty` sets `npm_config_build_from_source`
 so the patched source build actually replaces the upstream prebuild.
+
+## Building from pnpm paths on Windows
+
+The Node runtime preparation, Electron rebuild and relay addon build share
+`config/scripts/windows-process-tree-gyp-rebuild.mjs`. Each rebuild copies the
+installed patched source and its resolved node-addon-api headers to a unique
+directory under the operating system's temporary directory. MSBuild runs there:
+pnpm's physical package directory can make FileTracker's generated `.tlog`
+paths exceed legacy `MAX_PATH`, even after compilation has succeeded.
+
+No fixed drive, user directory, drive mapping or machine-wide long-path setting
+is required. The temporary path is checked against a 239-character intermediate
+path budget before compilation; an unusually deep temporary root produces an
+explicit error. Standard Node/Electron build prerequisites, including Python
+and the requested MSVC architecture tools, are still required.
+
+Build-setting repairs affect only the temporary copy. Missing creation-time
+patch hunks fail the build. A successful build must produce the requested PE
+architecture; a matching host architecture also loads it in a fresh Node or
+Electron process and checks its own positive `creationTimeMs`. Runtime
+preparation performs the same capability check so an older, loadable N-API
+binary cannot silently bypass rebuilding. Cross-compiled arm64 output receives
+a PE check, not an arm64 runtime claim.
+
+Only validated output replaces the destination binary. Compiler/probe failures
+preserve the previous artifact, and relay builds publish directly to their
+existing architecture-specific artifact paths. The installed pnpm source is
+never rewritten by the staging step.
+
+The Windows PR packaging job runs
+`windows-process-tree-long-path.win32.test.mjs` with
+`ORCA_WINDOWS_PROCESS_TREE_BUILD_TEST=1`. It invokes all three default entrypoints
+from an isolated long-path fixture, compiles x64 and arm64 relay binaries, and
+checks native identity under Node and Electron. Ordinary unit runs skip this
+compiler-dependent test. The job's later unpacked-app packaging remains a
+separate validation boundary from installer/signing or real SSH deployment.

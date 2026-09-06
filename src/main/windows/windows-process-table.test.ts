@@ -174,6 +174,22 @@ describe('windows process table', () => {
     ])
   })
 
+  it.each([readWindowsProcessTableFresh, readWindowsProcessIdentityTableFresh])(
+    'omits invalid native creation times in either projection',
+    async (read) => {
+      getAllProcesses.mockImplementation((cb: (rows: unknown) => void) =>
+        cb([
+          { pid: process.pid, ppid: 0, name: 'self.exe' },
+          { pid: 101, ppid: 4, name: 'zero.exe', creationTimeMs: 0 },
+          { pid: 102, ppid: 4, name: 'nan.exe', creationTimeMs: Number.NaN },
+          { pid: 103, ppid: 4, name: 'negative.exe', creationTimeMs: -1 },
+          { pid: 104, ppid: 4, name: 'infinite.exe', creationTimeMs: Number.POSITIVE_INFINITY }
+        ])
+      )
+      expect((await read()).every((row) => row.creationTimeMs === undefined)).toBe(true)
+    }
+  )
+
   it('asks for the command line but never for memory', async () => {
     // Memory costs a second OpenProcess(PROCESS_VM_READ) per process and no
     // caller reads a working set off this table.
@@ -654,8 +670,12 @@ describe('resolving the native reader', () => {
     }
   })
 
-  function addonReturning(rows: unknown): { getProcessList: ReturnType<typeof vi.fn> } {
+  function addonReturning(
+    rows: unknown,
+    supportsCreationTime = true
+  ): { supportsCreationTime?: boolean; getProcessList: ReturnType<typeof vi.fn> } {
     return {
+      ...(supportsCreationTime ? { supportsCreationTime: true } : {}),
       getProcessList: vi.fn((cb: (r: unknown) => void) => cb(rows))
     }
   }
@@ -695,7 +715,23 @@ describe('resolving the native reader', () => {
     expect(isWindowsProcessTableAvailable()).toBe(true)
   })
 
-  it('asks the addon for the command line, as the package path does', async () => {
+  it('keeps creation time unavailable for older clean relay addons', async () => {
+    const addon = addonReturning(
+      NATIVE.map(({ creationTimeMs: _creationTimeMs, ...row }) => row),
+      false
+    )
+    __setWindowsProcessTreeRequireForTests((specifier: string) => {
+      if (specifier === ADDON_SPECIFIER) {
+        return addon
+      }
+      throw new Error('MODULE_NOT_FOUND')
+    })
+    expect(isWindowsProcessStartTimeAvailable()).toBe(false)
+    await readWindowsProcessIdentityTableFresh()
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 0)
+  })
+
+  it('asks the addon for command line and creation time, never memory', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -704,13 +740,11 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessTableFresh()
-    // CommandLine alone: a bare snapshot would silently drop the command line
-    // every agent-recognition caller matches on first, and Memory would add a
-    // second per-process handle nothing reads.
-    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 2)
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 6)
+    expect(isWindowsProcessStartTimeAvailable()).toBe(true)
   })
 
-  it('asks the addon for nothing per-process on the identity path', async () => {
+  it('asks the addon only for creation time on the identity path', async () => {
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
@@ -719,9 +753,7 @@ describe('resolving the native reader', () => {
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessIdentityTableFresh()
-    // The relay addon exposes no CreationTime bit, so this is a bare Toolhelp32
-    // walk: zero OpenProcess calls.
-    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 0)
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 4)
   })
 
   it('reaches the CIM scan when neither the package nor the addon is present', async () => {

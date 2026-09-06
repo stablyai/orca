@@ -22,4 +22,20 @@ describe('Windows process-tree patch contract', () => {
       .find((document) => document.patchedDependencies)
     expect(lockfile.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(patchHash)
   })
+
+  it('carries creation time through the native reader and package API', () => {
+    const patch = readFileSync(
+      join(projectDir, 'config/patches/@vscode__windows-process-tree@0.8.0.patch'),
+      'utf8'
+    )
+    expect(patch).toContain('CREATIONTIME = 4')
+    expect(patch).toContain('exports.Set("supportsCreationTime", Napi::Boolean::New(env, true))')
+    expect(patch).toContain('PROCESS_QUERY_LIMITED_INFORMATION')
+    expect(patch).toContain('GetProcessTimes(hProcess, &creationTime')
+    expect(patch).toContain('116444736000000000ULL')
+    expect(patch).toContain('object.Set("creationTimeMs"')
+    expect(patch).toContain('pinfo.creationTimeMs > 0')
+    expect(patch).toContain('ProcessDataFlag["CreationTime"] = 4')
+    expect(patch).toContain('creationTimeMs?: number;')
+  })
 })

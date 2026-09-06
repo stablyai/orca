@@ -6,11 +6,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
 import {
-  ensureWindowsProcessTreeCommandLinePatch,
+  rebuildWindowsProcessTreeForNode,
   inspectWindowsProcessTreeAddon,
-  stageWindowsProcessTreeNodeAddonApiHeaders,
   windowsProcessTreeAddonPath
 } from './windows-process-tree-gyp-rebuild.mjs'
+import { assertWindowsProcessTreeIdentity } from './windows-process-tree-capability.cjs'
 
 const require = createRequire(import.meta.url)
 const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
@@ -28,7 +28,7 @@ const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
-  const failures = collectNativeModuleFailures()
+  const failures = await collectNativeModuleFailures()
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(`${failure.moduleName}: ${failure.message}`)
@@ -39,7 +39,7 @@ if (process.argv.includes(CHILD_CHECK_FLAG)) {
 }
 
 if (runtime === 'node') {
-  ensureNodeRuntime()
+  await ensureNodeRuntime()
 } else if (runtime === 'electron') {
   ensureElectronRuntime()
 } else {
@@ -61,7 +61,7 @@ function readRuntimeArg() {
   return null
 }
 
-function ensureNodeRuntime() {
+async function ensureNodeRuntime() {
   const initial = runNodeCheck()
   const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
   if (initial.ok && !patchedNodePtyRebuildReason) {
@@ -78,7 +78,7 @@ function ensureNodeRuntime() {
       'node-pty',
       ...failedModules.filter((moduleName) => moduleName !== 'node-pty')
     ]
-    rebuildNodeRuntimeModules(rebuildModules)
+    await rebuildNodeRuntimeModules(rebuildModules)
     verifyNodeRuntimeAfterRebuild()
     return
   }
@@ -88,7 +88,7 @@ function ensureNodeRuntime() {
     `[native-runtime] ${formatRuntimeLabel('node')} cannot load native modules; rebuilding ${failedModules.join(', ')} for Node.`
   )
   printCheckError(initial)
-  rebuildNodeRuntimeModules(failedModules)
+  await rebuildNodeRuntimeModules(failedModules)
   verifyNodeRuntimeAfterRebuild()
 }
 
@@ -195,7 +195,10 @@ function resolveInstalledElectronExecutable() {
       ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
       : resolve(electronPackageDir, 'dist', platformPath)
     if (!existsSync(electronPath)) {
-      return { ok: false, error: new Error(`Electron executable is missing at ${electronPath}.`) }
+      return {
+        ok: false,
+        error: new Error(`Electron executable is missing at ${electronPath}.`)
+      }
     }
     return { ok: true, path: electronPath }
   } catch (error) {
@@ -245,11 +248,11 @@ function parseCheckFailures(stderr) {
   return failures
 }
 
-function collectNativeModuleFailures() {
+async function collectNativeModuleFailures() {
   const failures = []
   for (const moduleName of NATIVE_MODULES) {
     try {
-      loadNativeModule(moduleName)
+      await loadNativeModule(moduleName)
     } catch (cause) {
       failures.push({ moduleName, message: formatError(cause), cause })
     }
@@ -257,20 +260,20 @@ function collectNativeModuleFailures() {
   return failures
 }
 
-function loadNativeModule(moduleName) {
+async function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
     // A bare require loads the .node addon on win32, so it catches an ABI
     // mismatch on its own. What it cannot catch is *which* addon loaded: the
     // published tarball ships a prebuilt built from unpatched source that is
     // node-addon-api, so it requires cleanly and then reads every process's
     // command line out of its address space. Check the binary, not the load.
-    require(moduleName)
     if (inspectWindowsProcessTreeAddon(windowsProcessTreeAddonPath()) === 'unpatched') {
       throw new Error(
         'the loaded addon still calls ReadProcessMemory, so it was not built from the patched ' +
           'source. Rebuild it (pnpm run rebuild:electron) rather than using the published prebuild.'
       )
     }
+    await assertWindowsProcessTreeIdentity(require(moduleName))
     return
   }
   if (moduleName === 'windows-native-registry') {
@@ -378,19 +381,18 @@ function getWindowsBuildNumber() {
   return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
 }
 
-function rebuildNodeRuntimeModules(moduleNames) {
+async function rebuildNodeRuntimeModules(moduleNames) {
   for (const moduleName of moduleNames) {
     const moduleDir = dirname(require.resolve(`${moduleName}/package.json`))
-    if (moduleName === '@vscode/windows-process-tree') {
-      // Why before node-gyp: this module is rebuilt precisely because the
-      // binary was the unpatched one, and pnpm materializes it unpatched often
-      // enough that compiling the source as-is would just rebuild the same
-      // reader and fail the verify pass.
-      ensureWindowsProcessTreeCommandLinePatch(moduleDir)
-      stageWindowsProcessTreeNodeAddonApiHeaders(moduleDir)
-    }
     console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
-    runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+    if (moduleName === '@vscode/windows-process-tree') {
+      await rebuildWindowsProcessTreeForNode({
+        packageDir: moduleDir,
+        projectDir
+      })
+    } else {
+      runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+    }
     if (moduleName === 'node-pty' && process.platform === 'win32') {
       runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
     }
@@ -402,7 +404,10 @@ function runPnpm(args, { cwd = projectDir } = {}) {
   const command = 'pnpm'
   const env =
     process.platform === 'linux' && args.includes('node-gyp')
-      ? { ...process.env, CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim() }
+      ? {
+          ...process.env,
+          CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim()
+        }
       : process.env
   const result = spawnSync(command, args, {
     cwd,

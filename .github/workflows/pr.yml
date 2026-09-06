@@ -834,7 +834,17 @@ jobs:
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
             node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/scripts/windows-process-tree-gyp-rebuild.mjs', 'config/scripts/windows-process-tree-capability.cjs', 'src/shared/child-process/**', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+
+      - name: Install Electron binary for native build regression
+        run: node config/scripts/install-electron-package-binary.mjs
+
+      - name: Rebuild process-tree from long pnpm paths
+        env:
+          ORCA_WINDOWS_PROCESS_TREE_BUILD_TEST: '1'
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1
+          config/scripts/windows-process-tree-long-path.win32.test.mjs
 
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
@@ -842,6 +852,13 @@ jobs:
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/rebuild-native-deps.test.mjs
+          config/scripts/rebuild-native-deps-node-pty.test.mjs
+          config/scripts/ensure-native-runtime.test.mjs
+          config/scripts/windows-process-tree-gyp-rebuild.test.mjs
+          config/scripts/windows-process-tree-capability.test.mjs
+          config/scripts/windows-process-tree-gyp-path.test.mjs
+          config/scripts/windows-process-tree-patch-contract.test.mjs
+          src/main/windows/windows-process-table.test.ts
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
           src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
           src/main/browser/browser-route-tcp-egress.electron.test.ts
@@ -900,7 +917,7 @@ jobs:
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
             node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/scripts/windows-process-tree-gyp-rebuild.mjs', 'config/scripts/windows-process-tree-capability.cjs', 'src/shared/child-process/**', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron

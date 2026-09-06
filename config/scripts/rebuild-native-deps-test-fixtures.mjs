@@ -10,6 +10,11 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  copyWindowsProcessTreeBuildScripts,
+  writeWindowsProcessTreeSource,
+  writeWindowsProcessTreeBinary
+} from './windows-process-tree-build-fixtures.mjs'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./rebuild-native-deps.mjs', import.meta.url))
@@ -98,6 +103,8 @@ export function mkTempProject() {
     sourceWindowsProcessTreeGypRebuildPath,
     join(projectDir, 'config', 'scripts', 'windows-process-tree-gyp-rebuild.mjs')
   )
+  copyWindowsProcessTreeBuildScripts(projectDir)
+  writeWindowsProcessTreeSource(join(projectDir, 'node_modules/@vscode/windows-process-tree'))
   return projectDir
 }
 
@@ -199,59 +206,41 @@ export function writeFakeElectronExtractor(projectDir, { createExecutable }) {
   writeFileSync(
     join(projectDir, 'fake-extractor.cjs'),
     `
-const { mkdirSync, writeFileSync } = require('node:fs')
+const { mkdirSync, writeFileSync, copyFileSync } = require('node:fs')
 const { join } = require('node:path')
 const extractDir = process.argv[3]
 mkdirSync(join(extractDir, 'locales'), { recursive: true })
 if (${JSON.stringify(createExecutable)}) {
-  writeFileSync(join(extractDir, 'electron'), '')
-  writeFileSync(join(extractDir, 'electron.exe'), '')
+  copyFileSync(process.execPath, join(extractDir, 'electron'))
+  copyFileSync(process.execPath, join(extractDir, 'electron.exe'))
   writeFileSync(join(extractDir, 'version'), 'v41.5.0')
 }
 `
   )
 }
 
-/** Bytes that stand in for a compiled addon's import table. */
-const FAKE_ADDON_BYTES = {
-  clean: 'MZ\0ntdll.dll\0NtQueryInformationProcess\0',
-  unpatched: 'MZ\0KERNEL32.dll\0ReadProcessMemory\0'
-}
-
-/**
- * A rebuild that produces nothing leaves no addon to inspect, and the script now
- * asserts the binary it just built is a patched one. Emit a stand-in so the
- * fixture models a rebuild that actually succeeded. `addon` picks which kind,
- * because "produced the upstream reader" and "produced nothing" are both real
- * outcomes that assertion has to tell apart.
- */
 export function writeFakeElectronRebuild(projectDir, { logPathEnv = null, addon = 'clean' } = {}) {
   const rebuildDir = join(projectDir, 'node_modules', '@electron', 'rebuild')
   mkdirSync(rebuildDir, { recursive: true })
   writeFileSync(join(rebuildDir, 'package.json'), JSON.stringify({ type: 'module' }))
-  const emitAddon =
-    addon === 'none'
-      ? ''
-      : `
-  const packageDir = join('node_modules', '@vscode', 'windows-process-tree')
-  if (existsSync(join(packageDir, 'package.json'))) {
-    mkdirSync(join(packageDir, 'build', 'Release'), { recursive: true })
-    writeFileSync(
-      join(packageDir, 'build', 'Release', 'windows_process_tree.node'),
-      ${JSON.stringify(FAKE_ADDON_BYTES[addon])}
-    )
-  }`
-  const emitImports =
-    addon === 'none'
-      ? ''
-      : "import { existsSync, mkdirSync, writeFileSync } from 'node:fs'\nimport { join } from 'node:path'\n"
   writeFileSync(
     join(rebuildDir, 'index.js'),
-    logPathEnv
-      ? `
-import { appendFileSync } from 'node:fs'
-${emitImports}
-export async function rebuild(options) {${emitAddon}
+    `
+import { appendFileSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+export async function rebuild(options) {
+  if (options.buildPath !== process.cwd() && ${JSON.stringify(addon)} !== 'none') {
+    const binary = Buffer.alloc(128)
+    binary.write('MZ')
+    binary.writeUInt32LE(64, 0x3c)
+    binary.write('PE\\0\\0', 64)
+    binary.writeUInt16LE(options.arch === 'arm64' ? 0xaa64 : 0x8664, 68)
+    mkdirSync(join(options.buildPath, 'build/Release'), { recursive: true })
+    writeFileSync(join(options.buildPath, 'build/Release/windows_process_tree.node'), ${JSON.stringify(addon)} === 'unpatched' ? Buffer.concat([binary, Buffer.from('ReadProcessMemory')]) : binary)
+    if (!readFileSync(join(options.buildPath, 'src/process_commandline.cc'), 'utf8').includes('kProcessCommandLineInformation')) throw new Error('command-line source not patched in stage')
+    if (readFileSync(join(options.buildPath, 'deps/node-addon-api/napi.h'), 'utf8') !== '// napi.h\\n') throw new Error('headers not staged')
+  }
   const logPath = process.env[${JSON.stringify(logPathEnv)}]
   if (!logPath) {
     return
@@ -259,6 +248,9 @@ export async function rebuild(options) {${emitAddon}
   appendFileSync(
     logPath,
     JSON.stringify({
+      buildPath: options.buildPath,
+      projectRootPath: options.projectRootPath,
+      buildFromSource: options.buildFromSource,
       arch: options.arch,
       electronVersion: options.electronVersion,
       force: options.force,
@@ -267,10 +259,6 @@ export async function rebuild(options) {${emitAddon}
       platform: options.platform
     }) + '\\n'
   )
-}
-`
-      : `${emitImports}
-export async function rebuild() {${emitAddon}
 }
 `
   )
@@ -367,9 +355,9 @@ export function writeFakeWindowsRegistry(projectDir) {
 }
 
 export function writeFakeWindowsProcessTree(projectDir) {
-  const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
-  mkdirSync(processTreeDir, { recursive: true })
-  writeFileSync(join(processTreeDir, 'index.js'), 'module.exports = {}\n')
+  const packageDir = join(projectDir, 'node_modules/@vscode/windows-process-tree')
+  writeWindowsProcessTreeSource(packageDir)
+  writeWindowsProcessTreeBinary(packageDir, process.arch)
 }
 
 export function writeFakeWindowsProcessTreeWithNodeAddonApi(
@@ -377,10 +365,10 @@ export function writeFakeWindowsProcessTreeWithNodeAddonApi(
   { commandLinePatchApplied = true } = {}
 ) {
   const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
+  writeWindowsProcessTreeSource(processTreeDir)
   const nodeAddonApiDir = join(processTreeDir, 'node_modules', 'node-addon-api')
   mkdirSync(nodeAddonApiDir, { recursive: true })
-  writeFileSync(join(processTreeDir, 'package.json'), '{"dependencies":{"node-addon-api":"*"}}\n')
-  writeFileSync(join(processTreeDir, 'index.js'), 'module.exports = {}\n')
+
   mkdirSync(join(processTreeDir, 'src'), { recursive: true })
   writeFileSync(
     join(processTreeDir, 'src', 'process_commandline.cc'),

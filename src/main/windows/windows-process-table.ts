@@ -100,6 +100,7 @@ let requireNative: NativeRequire = requireFromMain
  * binding straight to the addon drops a duplicate rather than losing a guard.
  */
 type WindowsProcessTreeAddon = {
+  supportsCreationTime?: boolean
   getProcessList: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
@@ -159,7 +160,10 @@ let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 /** Present the bare addon through the same shape as the npm package. */
 function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
-    ProcessDataFlag: PROCESS_DATA_FLAG,
+    ProcessDataFlag: {
+      ...PROCESS_DATA_FLAG,
+      ...(addon.supportsCreationTime === true ? { CreationTime: 4 } : {})
+    },
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -306,13 +310,17 @@ function toIdentityRow(row: {
     pid: row.pid,
     ppid: row.ppid,
     name: row.name,
-    ...(typeof row.creationTimeMs === 'number' ? { creationTimeMs: row.creationTimeMs } : {})
+    ...(typeof row.creationTimeMs === 'number' &&
+    Number.isFinite(row.creationTimeMs) &&
+    row.creationTimeMs > 0
+      ? { creationTimeMs: row.creationTimeMs }
+      : {})
   }
 }
 
 /**
- * Toolhelp32 and nothing else: no `OpenProcess` per process, so this read has
- * none of the shape an EDR scores as walking another process's memory.
+ * Identity uses Toolhelp32 plus limited-query creation times; it never reads
+ * command lines or another process's memory.
  */
 const IDENTITY_PROJECTION: ProcessRowProjection<WindowsProcessIdentityRow> = {
   flags: (native) => native.ProcessDataFlag.None | (native.ProcessDataFlag.CreationTime ?? 0),

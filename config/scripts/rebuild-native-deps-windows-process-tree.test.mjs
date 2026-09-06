@@ -1,3 +1,4 @@
+import { once } from 'node:events'
 import { spawn } from 'node:child_process'
 import { appendFileSync, copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -52,7 +53,7 @@ async function stageLoadedStaleAddon(projectDir) {
   const holder = spawn(
     process.execPath,
     ['-e', 'require(process.argv[1]); process.send("held"); setInterval(() => {}, 1000)', stale],
-    { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] }
+    { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true }
   )
   await new Promise((resolve, reject) => {
     holder.once('message', resolve)
@@ -61,10 +62,7 @@ async function stageLoadedStaleAddon(projectDir) {
   return holder
 }
 
-// Why an end-to-end run: the defect was purely one of placement. The guard threw
-// a real EPERM, and the classifier that turns that into "close running Orca"
-// already existed -- the throw simply happened before the try that reaches it.
-// Only the whole script exercises that.
+// Publishing over a loaded stale addon must reach the existing Windows lock classifier.
 describe.runIf(process.platform === 'win32')('rebuild-native-deps stale addon under lock', () => {
   it.skipIf(!repoAddonPath())(
     'reports a locked stale addon as a Windows file lock instead of an EPERM stack',
@@ -95,7 +93,11 @@ describe.runIf(process.platform === 'win32')('rebuild-native-deps stale addon un
         // Non-strict postinstall soft-exits on a lock; the next dev/start re-checks.
         expect(result.status, result.stderr).toBe(0)
       } finally {
-        holder?.kill()
+        if (holder && holder.exitCode === null) {
+          const exited = once(holder, 'exit')
+          holder.kill()
+          await exited
+        }
         removeTreeSync(projectDir)
       }
     }
