@@ -59,7 +59,8 @@ describe('headless serve update PR gate', () => {
   })
 
   it('keeps helper output contract in sync with the spool schema', () => {
-    for (const token of ['"phase":"accepted"', '"phase":"ok"', '"phase":"rejected"']) {
+    // jq -nc emits compact JSON even though the generator embeds the filter with spaces.
+    for (const token of ['phase: "accepted"', 'phase: "ok"', 'phase: "rejected"']) {
       expect(helperScriptSource).toContain(token)
     }
     expect(installerSource).toContain('helperVersion')

@@ -446,10 +446,15 @@ describe('Subprocess: Relay entry point', () => {
         return () => text
       })
       try {
+        // The harness rejects sentinelReceived on any pre-sentinel exit; a
+        // rejected race branch means the starter lost the socket bind.
         const outcomes = await Promise.all(
           starters.map((starter) =>
             Promise.race([
-              starter.sentinelReceived.then(() => 'ready'),
+              starter.sentinelReceived.then(
+                () => 'ready',
+                () => 'exit:1'
+              ),
               starter.waitForExit(8000).then((code) => `exit:${code}`)
             ])
           )
