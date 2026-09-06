@@ -44,7 +44,11 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       this.queueOutputAcknowledgement(stream, frame.payload.byteLength)
       return
     }
-    stream.watchdog.recordInbound()
+    // Control frames prove transport activity, not delivery of command output.
+    stream.watchdog.recordInbound(
+      frame.opcode === TerminalStreamOpcode.Output ||
+        frame.opcode === TerminalStreamOpcode.OutputSpan
+    )
     if (frame.opcode === TerminalStreamOpcode.WriteUnavailable) {
       stream.callbacks.onWriteUnavailable?.()
       return

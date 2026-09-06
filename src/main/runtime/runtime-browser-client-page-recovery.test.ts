@@ -43,6 +43,25 @@ describe('runtime browser client page recovery', () => {
     expect(notifyWorkspace).toHaveBeenCalledOnce()
   })
 
+  it('does not apply an attach inventory to a replacement placed after capture', async () => {
+    const { authority, commands, notifyWorkspace, pages, placements } = harness()
+    const pagePlacementsAtAttach = new Map([['page-a', oldPlacement]])
+    pages.replaceClientPagePlacement('page-a', oldPlacement, newPlacement)
+    placements.set('page-a', newPlacement)
+    await recoverUnavailableRuntimeBrowserClientPages({
+      lease: lease([]),
+      authority,
+      pages,
+      notifyWorkspace,
+      pagePlacementsAtAttach
+    })
+    expect(authority.getPlacement('page-a')).toEqual(newPlacement)
+    expect(pages.getPage('page-a')?.placement).toEqual(newPlacement)
+    expect(authority.createClientPage).not.toHaveBeenCalled()
+    expect(commands).toEqual([])
+    expect(notifyWorkspace).not.toHaveBeenCalled()
+  })
+
   it('retains an exact active generation without commands or metadata churn', async () => {
     const { authority, commands, notifyWorkspace, pages } = harness()
 

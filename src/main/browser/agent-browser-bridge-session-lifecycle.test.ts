@@ -1,18 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
-  vi.hoisted(() => ({
-    execFileMock: vi.fn(),
-    webContentsFromIdMock: vi.fn(),
-    existsSyncMock: vi.fn(() => false),
-    readFileSyncMock: vi.fn(() => Buffer.from('')),
-    stdinWrites: [] as string[]
-  }))
+const {
+  execFileMock,
+  webContentsFromIdMock,
+  existsSyncMock,
+  readFileSyncMock,
+  lstatSyncMock,
+  stdinWrites
+} = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  webContentsFromIdMock: vi.fn(),
+  existsSyncMock: vi.fn(() => false),
+  readFileSyncMock: vi.fn(() => Buffer.from('')),
+  lstatSyncMock: vi.fn(),
+  stdinWrites: [] as string[]
+}))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
+  lstatSync: lstatSyncMock,
   accessSync: vi.fn(),
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
@@ -85,7 +93,32 @@ describe('AgentBrowserBridge', () => {
     bridge.setActiveTab(100)
   })
 
+  it('snapshots a fresh owned session without launching a helper just to close it', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    Object.assign(bridge, {
+      ownsAgentBrowserSocketDirectory: true,
+      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
+    })
+    lstatSyncMock.mockImplementation(() => {
+      throw Object.assign(new Error('No socket'), { code: 'ENOENT' })
+    })
+    webContentsFromIdMock.mockReturnValue(mockWebContents(100))
+    succeedWith({ snapshot: 'ready' })
+
+    try {
+      expect(await bridge.snapshot()).toMatchObject({ snapshot: 'ready' })
+      expect(closeCallCount()).toBe(0)
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
   it('fails closed when stale agent-browser session ownership cannot be reset', async () => {
+    Object.assign(bridge, {
+      ownsAgentBrowserSocketDirectory: true,
+      agentBrowserEnv: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-test' }
+    })
+    lstatSyncMock.mockReturnValue({})
     vi.useFakeTimers()
     try {
       const closeKill = vi.fn()

@@ -23,7 +23,10 @@ const SURFACE_PROVIDING_CALLERS = [
 ]
 
 // The activation seam itself: declares the option and forwards it into the tombstone gate.
-const SEAM_FILES = ['src/renderer/src/lib/worktree-activation.ts']
+const SEAM_FILES = [
+  'src/renderer/src/lib/worktree-activation.ts',
+  'src/renderer/src/lib/worktree-initial-terminal-seeding.ts'
+]
 
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

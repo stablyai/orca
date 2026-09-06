@@ -1,5 +1,10 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getWorktreeIdFromHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import {
+  getExecutionHostIdFromWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import { addPersistedSessionWorktreeOwners } from '../restoring-sessions/session-worktree-ownership'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from '../../orca-profiles/profile-project-session-field-disposition'
@@ -8,12 +13,41 @@ import { ownerKeyWorktreeIds } from '../../orca-profiles/profile-project-worktre
 /**
  * Repo ids that still own persisted rows but no longer appear in `state.repos`.
  *
- * Why nothing else finds them: every other sweeper is gated on the repo still being registered, so
- * deregistering a project stranded the rows it owned permanently — including a paired client's
- * mirror of a remote host's session partition, which no local repo removal can reach (#17776).
+ * Remote catalog absence is not removal evidence: paired repos are never locally registered.
  */
 export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
   const liveRepoIds = new Set(state.repos.map((repo) => repo.id))
+  const retainRemoteOwner = (ownerKey: string | null | undefined): void => {
+    if (!ownerKey) {
+      return
+    }
+    for (const worktreeId of ownerKeyWorktreeIds(ownerKey)) {
+      const repoId = splitWorktreeId(worktreeId)?.repoId
+      if (repoId) {
+        liveRepoIds.add(repoId)
+      }
+    }
+  }
+  for (const [hostId, session] of Object.entries(state.workspaceSessionsByHostId ?? {})) {
+    if (session && parseExecutionHostId(hostId)?.kind === 'runtime') {
+      addPersistedSessionWorktreeOwners(
+        { workspaceSession: session },
+        { owners: new Set(), addOwner: retainRemoteOwner }
+      )
+    }
+  }
+  for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
+    if (parseExecutionHostId(meta.hostId)?.kind === 'runtime') {
+      retainRemoteOwner(worktreeId)
+    }
+  }
+  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
+    if (
+      parseExecutionHostId(getExecutionHostIdFromWorktreeHostIdentity(alias))?.kind === 'runtime'
+    ) {
+      retainRemoteOwner(getWorktreeIdFromHostIdentity(alias))
+    }
+  }
   const orphanRepoIds = new Set<string>()
   // Only a full `<repoId>::<path>` locator seeds the set. A bare key -- a folder workspace id, a
   // repo-keyed topology revision, a test-shaped locator -- cannot be told apart from a repo id, and

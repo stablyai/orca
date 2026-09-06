@@ -14,6 +14,7 @@ import {
 
 export class StructuredAgentSessionEventRecovery {
   private readonly sinkFailures = new Set<string>()
+  private readonly pendingSinkRecoveries = new Set<Promise<void>>()
 
   constructor(
     private readonly context: {
@@ -35,7 +36,7 @@ export class StructuredAgentSessionEventRecovery {
       return
     }
     this.sinkFailures.add(sessionId)
-    void this.context
+    const recovery = this.context
       .serialize(sessionId, async () => {
         const session = this.context.sessions.get(sessionId)
         const stop =
@@ -61,6 +62,18 @@ export class StructuredAgentSessionEventRecovery {
       .then((event) => (event ? this.handle(event) : undefined))
       .catch((recoveryError) => this.context.onBarrierError(sessionId, recoveryError))
       .finally(() => this.sinkFailures.delete(sessionId))
+      .then(() => undefined)
+    this.pendingSinkRecoveries.add(recovery)
+    void recovery.then(
+      () => this.pendingSinkRecoveries.delete(recovery),
+      () => this.pendingSinkRecoveries.delete(recovery)
+    )
+  }
+
+  async drainSinkRecoveries(): Promise<void> {
+    while (this.pendingSinkRecoveries.size > 0) {
+      await Promise.allSettled(this.pendingSinkRecoveries)
+    }
   }
 
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {

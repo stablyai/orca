@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { randomUUID } from 'node:crypto'
+import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -102,6 +103,8 @@ export class OrcaRuntimeWithRuntimeId {
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    // Renderer snapshots do not carry the host's durable close acknowledgements.
+    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const snapshotVersion = existing
       ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
       : snapshot.snapshotVersion

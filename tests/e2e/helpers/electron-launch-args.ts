@@ -11,6 +11,16 @@ export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): s
     // Crash tests must not block later launches on AppKit's saved-window recovery dialog.
     return [...keychainArgs, appPath, '-ApplePersistenceIgnoreState', 'YES']
   }
+  if (headful && process.platform === 'linux' && process.env.CI) {
+    // Hosted runners have no GPU; SwiftShader keeps WebGL assertions from silently skipping.
+    return [
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--disable-gpu-sandbox',
+      appPath
+    ]
+  }
   if (headful || process.platform !== 'linux') {
     return [...keychainArgs, appPath]
   }
