@@ -36,6 +36,7 @@ function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneIntern
     hasComplexScriptOutput: false,
     webglAddon: null,
     ligaturesAddon: null,
+    imageAddon: null,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
     pendingWebglRefreshRafId: null,

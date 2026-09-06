@@ -6,6 +6,7 @@ import type { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { WebLinksAddon } from '@xterm/addon-web-links'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
@@ -113,6 +114,9 @@ export type ManagedPane = {
   fitAddon: FitAddon
   searchAddon: SearchAddon
   serializeAddon: SerializeAddon
+  // Why optional: DA1 withholds the sixel bit unless ImageAddon attached.
+  // Absent on older test fixtures and means "no graphics handler".
+  hasImageSupport?: boolean
 }
 
 export type PaneRenderingDiagnostics = {
@@ -166,6 +170,9 @@ export type ManagedPaneInternal = {
   // so the addon instance only exists while the feature is active. A null
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
+  // Why nullable: image addon is loaded in openTerminal; null means not
+  // attached yet or construct/load failed (text-only pane, no sixel DA1).
+  imageAddon: ImageAddon | null
   fitResizeObserver: ResizeObserver | null
   // Why: fit-element pixel size at the last successful fit; the reveal fit compares
   // against it to tell a real hidden-time resize from a transient cell-metric wobble.

@@ -53,6 +53,7 @@ function createPane(
     webLinksAddon: { dispose: vi.fn() } as never,
     webglAddon: { dispose: vi.fn() } as never,
     ligaturesAddon: null,
+    imageAddon: null,
     compositionHandler: null,
     pendingSplitScrollState: null,
     pendingSplitScrollBufferDisposable: null,

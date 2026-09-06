@@ -13,9 +13,9 @@ import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import {
-  CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
-  installTerminalCapabilityReplyHandlers
+  installTerminalCapabilityReplyHandlers,
+  resolveDa1Response
 } from '../terminal-capability-replies'
 
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
@@ -192,7 +192,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     // (#7329), so send immediately.
     sendInput: session.sendDesktopQueryReplyImmediate,
     isReplaying: () => isPaneReplaying(session.deps.replayingPanesRef, session.pane.id),
-    ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
+    da1Response: resolveDa1Response({
+      hasImageSupport: session.pane.hasImageSupport === true,
+      isNativeWindowsConpty: session.isNativeWindowsConpty === true
+    })
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(
     session.pane.terminal,
