@@ -75,6 +75,13 @@ type WindowsProcessTreeModule = {
     CommandLine: number
     CreationTime?: number
   }
+  /**
+   * Flag bits the COMPILED addon reports, straight from `addon.cc`. Absent on a
+   * build that predates the patch — which is not the same question as the enum
+   * above, because pnpm patches the source tree and leaves the tarball's
+   * prebuilt `.node` in place.
+   */
+  supportedProcessDataFlags?: number
   getAllProcesses: (
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags?: number
@@ -109,6 +116,7 @@ type WindowsProcessTreeAddon = {
     callback: (processes: NativeProcessInfo[] | undefined) => void,
     flags: number
   ) => void
+  supportedProcessDataFlags?: number
 }
 
 /**
@@ -116,10 +124,8 @@ type WindowsProcessTreeAddon = {
  * is listed for completeness and is deliberately never set — see the projections
  * below.
  *
- * Why `CreationTime` can be named here rather than probed: the bare addon is a
- * content-hashed relay artifact, so it ships in the same immutable relay
- * directory as the bundle reading it and can never be an older build than the
- * code asking for the bit.
+ * Naming `CreationTime` here only decides what we ASK for; whether the binary
+ * answers is `supportedProcessDataFlags`, which the addon reports itself.
  */
 const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 } as const
 
@@ -170,6 +176,7 @@ let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
   return {
     ProcessDataFlag: PROCESS_DATA_FLAG,
+    supportedProcessDataFlags: addon.supportedProcessDataFlags,
     getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
   }
 }
@@ -502,13 +509,23 @@ export function isWindowsProcessTableAvailable(): boolean {
 
 /**
  * PID-reuse-safe ownership needs the native creation-time field, not merely a
- * process list. An install whose pnpm patch never applied exposes the table
- * without that field; keep structured ownership unavailable on those hosts
- * instead of fabricating proof from a PID.
+ * process list.
+ *
+ * Why the binary's own answer and not the enum: pnpm patches the package's
+ * source tree but leaves the tarball's prebuilt `.node` at the same
+ * `build/Release/` path, so a host can hold a patched `lib/index.js` — enum and
+ * all — over a binary that ignores flag 4. CI produced exactly that: the enum
+ * said available, and every row came back without `creationTimeMs`. Answering
+ * true there is worse than answering false: the descendant snapshot then
+ * returns null forever and the exit proof latches `unverifiable`, while
+ * structured chat believes it has a reaper.
  */
 export function isWindowsProcessStartTimeAvailable(): boolean {
   const native = moduleLoader()
-  return native !== null && typeof native.ProcessDataFlag.CreationTime === 'number'
+  return (
+    native !== null &&
+    ((native.supportedProcessDataFlags ?? 0) & PROCESS_DATA_FLAG.CreationTime) !== 0
+  )
 }
 
 function resetSnapshotReaders(): void {

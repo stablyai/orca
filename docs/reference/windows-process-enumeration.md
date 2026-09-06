@@ -368,6 +368,24 @@ on any other OS keeps using the scan.
    to Unix ms; a process that denies the handle is emitted with the field
    absent, never zero, because callers must be able to tell "cannot identify"
    from a timestamp.
+5. **`supportedProcessDataFlags`.** `addon.cc` exports the flag bits the
+   compiled binary understands, and `lib/index.js` re-exports it.
+
+   Why a fifth hunk and not just the enum: unlike `node-pty`, this package
+   publishes a prebuilt `.node` at the same `build/Release/` path node-gyp
+   writes to. pnpm patches the source tree and leaves that prebuilt alone, so a
+   host can hold a patched `lib/index.js` — `ProcessDataFlag.CreationTime` and
+   all — over a binary that ignores flag 4. CI produced exactly that: the gate
+   read available and every row came back without `creationTimeMs`. Neither a
+   load check nor a path check can see the difference, so the binary has to say
+   so itself.
+
+   Two readers depend on it. `isWindowsProcessStartTimeAvailable()` returns
+   false unless this bit is set, because claiming otherwise leaves
+   `captureWindowsDescendantSnapshot` returning null forever while structured
+   chat believes it has a reaper. And `windows-process-tree-creation-time.cjs`
+   asserts it during install, which is what forces a from-source rebuild —
+   the same role `node-pty-job-ownership.cjs` plays for node-pty's job exports.
 
 The typings claim `commandLine` is truncated at 512 characters. Measured, it is
 not: the longest observed on a real host was 26,059.

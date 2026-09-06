@@ -140,6 +140,8 @@ const NATIVE_RUNTIME_PREFIXES = [
   'config/scripts/ensure-native-runtime',
   'config/scripts/rebuild-native-deps',
   'config/scripts/node-pty-job-ownership',
+  'config/scripts/windows-process-tree-creation-time',
+  'config/scripts/windows-process-tree-gyp-rebuild',
   'config/scripts/electron-builder-native-rebuild',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree'

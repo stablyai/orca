@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e773638bf4 100644
+index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..0bb2af7923b6e6f1f0da40cae8067304cd1fea14 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -3,7 +3,6 @@
@@ -10,7 +10,8 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e7
        ],
        "conditions": [
          ['OS=="win"', {
-@@ -15,12 +14,11 @@
+@@ -14,13 +13,12 @@
+             "src/process_worker.cc",
              "src/process_commandline.cc"
            ],
 -          "include_dirs": [],
@@ -23,6 +24,7 @@ index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..33774e7ae296f0de39dd94156673c9e7
            "msvs_settings": {
              "VCCLCompilerTool": {
 +              "ExceptionHandling": 1,
+<<<<<<< HEAD
                "AdditionalOptions": [
                  "/guard:cf",
                  "/sdl",
@@ -194,6 +196,128 @@ index 3eea92077c4d1d433119361d5c432881859131e9..738775f6fcdfb676054386fe34c03803
 +  // kernel keeps, not the address space -- and acquiring it is what EDR scores.
 +  hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
 +
+=======
+               "AdditionalOptions": [
+                 "/guard:cf",
+                 "/sdl",
+diff --git a/lib/index.js b/lib/index.js
+index 9747a7402600cd252859144d32580ed45c8c93f7..8b1f467f2c18289f75419d30a43d6fa3a516c4cc 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -7,11 +7,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.getAllProcesses = exports.getProcessTree = exports.getProcessCpuUsage = exports.getProcessList = exports.filterProcessList = exports.buildProcessTree = exports.ProcessDataFlag = void 0;
+ const util_1 = require("util");
+ const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;
+ var ProcessDataFlag;
+ (function (ProcessDataFlag) {
+     ProcessDataFlag[ProcessDataFlag["None"] = 0] = "None";
+     ProcessDataFlag[ProcessDataFlag["Memory"] = 1] = "Memory";
+     ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";
++    ProcessDataFlag[ProcessDataFlag["CreationTime"] = 4] = "CreationTime";
+ })(ProcessDataFlag = exports.ProcessDataFlag || (exports.ProcessDataFlag = {}));
+ // requestInProgress is used for any function that uses CreateToolhelp32Snapshot, as multiple calls
+ // to this cannot be done at the same time.
+@@ -66,11 +68,12 @@ function buildProcessTree(rootPid, processList, maxDepth = MAX_FILTER_DEPTH) {
+     // • the properties are inlined/splatted
+     // • the 'ppid' field is omitted
+     // • the depth of the tree is limited by `maxDepth`
+-    const buildNode = ({ info: { pid, name, memory, commandLine }, children }, depth) => ({
++    const buildNode = ({ info: { pid, name, memory, commandLine, creationTimeMs }, children }, depth) => ({
+         pid,
+         name,
+         memory,
+         commandLine,
++        creationTimeMs,
+         children: depth > 0 ? children.map(c => buildNode(c, depth - 1)) : [],
+     });
+     return buildNode(root, maxDepth);
+diff --git a/lib/index.ts b/lib/index.ts
+index f9aa005d9ced9e42885b8a976de5eb5bd61899ee..270967c1d1192b37cb6b095457bf52b213f88e8d 100644
+--- a/lib/index.ts
++++ b/lib/index.ts
+@@ -6,12 +6,15 @@
+ import { promisify } from 'util';
+ 
+ const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;
++/** The flag bits this compiled addon reports; undefined off win32. */
++export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;
+ import { IProcessInfo, IProcessTreeNode, IProcessCpuInfo } from '@vscode/windows-process-tree';
+ 
+ export enum ProcessDataFlag {
+   None = 0,
+   Memory = 1,
+-  CommandLine = 2
++  CommandLine = 2,
++  CreationTime = 4
+ }
+ 
+ type RequestCallback = (processList: IProcessInfo[]) => void;
+@@ -81,11 +84,12 @@ export function buildProcessTree(rootPid: number, processList: Iterable<IProcess
+   // • the properties are inlined/splatted
+   // • the 'ppid' field is omitted
+   // • the depth of the tree is limited by `maxDepth`
+-  const buildNode = ({ info: { pid, name, memory, commandLine }, children }: IProcessInfoNode, depth: number): IProcessTreeNode => ({
++  const buildNode = ({ info: { pid, name, memory, commandLine, creationTimeMs }, children }: IProcessInfoNode, depth: number): IProcessTreeNode => ({
+     pid,
+     name,
+     memory,
+     commandLine,
++    creationTimeMs,
+     children: depth > 0 ? children.map(c => buildNode(c, depth - 1)) : [],
+   });
+ 
+diff --git a/src/addon.cc b/src/addon.cc
+index 9214aff281251e797a70ecb9f6e0b52932a0503f..722edd42ddb4740296bfc47582a181bd6d00c464 100644
+--- a/src/addon.cc
++++ b/src/addon.cc
+@@ -53,6 +53,10 @@ void GetProcessCpuUsage(const Napi::CallbackInfo& args) {
+ Napi::Object Init(Napi::Env env, Napi::Object exports) {
+   exports.Set("getProcessList", Napi::Function::New(env, GetProcessList));
+   exports.Set("getProcessCpuUsage", Napi::Function::New(env, GetProcessCpuUsage));
++  // Lets a caller prove THIS BINARY understands CREATIONTIME. The JS enum is
++  // patched source and says nothing about what the .node was compiled from.
++  exports.Set("supportedProcessDataFlags",
++              Napi::Number::New(env, MEMORY | COMMANDLINE | CREATIONTIME));
+   return exports;
+ }
+ 
+diff --git a/src/process.cc b/src/process.cc
+index 3eea92077c4d1d433119361d5c432881859131e9..c69442e2917b8474dbabaa1aa5b2c5ce746a56e7 100644
+--- a/src/process.cc
++++ b/src/process.cc
+@@ -21,7 +21,7 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+   if (Process32First(snapshot_handle, &process_entry)) {
+     do {
+       if (process_entry.th32ProcessID != 0) {
+-        ProcessInfo pinfo;
++        ProcessInfo pinfo{};
+         pinfo.pid = process_entry.th32ProcessID;
+         pinfo.ppid = process_entry.th32ParentProcessID;
+ 
+@@ -33,17 +33,43 @@ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info,
+           GetProcessCommandLine(pinfo);
+         }
+ 
++        if (CREATIONTIME & process_data_flags) {
++          GetProcessCreationTime(pinfo);
++        }
++
+         strcpy(pinfo.name, process_entry.szExeFile);
+         process_info.push_back(std::move(pinfo));
+         process_count++;
+       }
+-    } while (process_count < 1024 && Process32Next(snapshot_handle, &process_entry));
++    } while (Process32Next(snapshot_handle, &process_entry));
+   }
+ 
+   CloseHandle(snapshot_handle);
+   return process_count;
+ }
+ 
++void GetProcessCreationTime(ProcessInfo& process_info) {
++  HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_info.pid);
+>>>>>>> 41a13099e8 (fix(windows): make the compiled addon prove its own CreationTime support)
 +  if (hProcess == NULL) {
 +    return;
 +  }
@@ -205,6 +329,7 @@ index 3eea92077c4d1d433119361d5c432881859131e9..738775f6fcdfb676054386fe34c03803
 +  CloseHandle(hProcess);
 +}
 +
+<<<<<<< HEAD
 +// Per documentation, it is not recommended to add or subtract values from the FILETIME
 +// structure, or to cast it to ULARGE_INTEGER as this can cause alignment faults on 64-bit Windows.
 +// Copy the high and low part to a ULARGE_INTEGER and peform arithmetic on that instead.
@@ -243,11 +368,56 @@ index 3eea92077c4d1d433119361d5c432881859131e9..738775f6fcdfb676054386fe34c03803
 +      ULONGLONG endSysTime = GetTotalTime(&sysKernelTime, &sysUserTime);
 +
 +      cpu_info.cpu = 100.0 * (endProcTime - cpu_info.initialProcRunTime) / (endSysTime - cpu_info.initialSystemTime);
+=======
+ void GetProcessMemoryUsage(ProcessInfo& process_info) {
+   DWORD pid = process_info.pid;
+   HANDLE hProcess;
+diff --git a/src/process.h b/src/process.h
+index 82f8e4bcfa742551e5d874a7632736a7611d7aa7..087bf4ca81768918922a1e26836c70d7aec349ec 100644
+--- a/src/process.h
++++ b/src/process.h
+@@ -22,18 +22,22 @@ struct ProcessInfo {
+   DWORD ppid;
+   DWORD memory; // Reported in bytes
+   std::string commandLine;
++  ULONGLONG creationTimeMs;
+ };
+ 
+ enum ProcessDataFlags {
+   NONE = 0,
+   MEMORY = 1,
+-  COMMANDLINE = 2
++  COMMANDLINE = 2,
++  CREATIONTIME = 4
+ };
+ 
+ uint32_t GetRawProcessList(std::vector<ProcessInfo>& process_info, DWORD flags);
+ 
+ void GetProcessMemoryUsage(ProcessInfo& process_info);
+ 
++void GetProcessCreationTime(ProcessInfo& process_info);
++
+ void GetCpuUsage(Cpu& cpu_info, bool first_run);
+ 
+ #endif  // SRC_PROCESS_H_
+diff --git a/src/process_worker.cc b/src/process_worker.cc
+index c9e3457a759c1acaa2644231a4917d45aed951f8..89f3339d5dc3b454397941c958b95965afed5788 100644
+--- a/src/process_worker.cc
++++ b/src/process_worker.cc
+@@ -43,6 +43,11 @@ void GetProcessesWorker::OnOK() {
+           Napi::String::New(env, pinfo.commandLine));
+     }
+ 
++    if ((CREATIONTIME & process_data_flags_) && pinfo.creationTimeMs != 0) {
++      object.Set("creationTimeMs",
++                 Napi::Number::New(env, static_cast<double>(pinfo.creationTimeMs)));
+>>>>>>> 41a13099e8 (fix(windows): make the compiled addon prove its own CreationTime support)
 +    }
 +  } else {
 +    cpu_info.cpu = std::numeric_limits<double>::quiet_NaN();
 +  }
 +
+<<<<<<< HEAD
 +  CloseHandle(hProcess);
  }
 \ No newline at end of file
@@ -448,3 +618,49 @@ index ea822b120e8038a4803e34647042f08f4aaf5ca1..25907c0bf542bed6c72b1b462b19bcf3
 +  return StoreCommandLineUtf8(process_info, command_line->Buffer,
 +                              command_line->Length / sizeof(wchar_t));
 +}
+=======
+     result.Set(i, object);
+   }
+ 
+diff --git a/typings/windows-process-tree.d.ts b/typings/windows-process-tree.d.ts
+index 08bdac2fdc5ead6f0fcfb5ee5a021e2298c7d523..2c515242d78f9d8b8e63271d86f59d1024d71604 100644
+--- a/typings/windows-process-tree.d.ts
++++ b/typings/windows-process-tree.d.ts
+@@ -7,9 +7,17 @@ declare module '@vscode/windows-process-tree' {
+   export enum ProcessDataFlag {
+     None = 0,
+     Memory = 1,
+-    CommandLine = 2
++    CommandLine = 2,
++    CreationTime = 4
+   }
+ 
++  /**
++   * The flag bits the compiled addon actually understands, or undefined off
++   * win32. `ProcessDataFlag` above is source; this is what the binary reports,
++   * so it is the only way to tell a patched build from a stale prebuilt.
++   */
++  export const supportedProcessDataFlags: number | undefined;
++
+   export interface IProcessInfo {
+     pid: number;
+     ppid: number;
+@@ -24,6 +32,9 @@ declare module '@vscode/windows-process-tree' {
+      * The string returned is at most 512 chars, strings exceeding this length are truncated.
+      */
+     commandLine?: string;
++
++    /** Process creation time in Unix milliseconds. */
++    creationTimeMs?: number;
+   }
+ 
+   export interface IProcessCpuInfo extends IProcessInfo {
+@@ -35,6 +46,7 @@ declare module '@vscode/windows-process-tree' {
+     name: string;
+     memory?: number;
+     commandLine?: string;
++    creationTimeMs?: number;
+     children: IProcessTreeNode[];
+   }
+ 
+>>>>>>> 41a13099e8 (fix(windows): make the compiled addon prove its own CreationTime support)

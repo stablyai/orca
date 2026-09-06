@@ -98,18 +98,31 @@ function assertPatchApplied() {
         'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
     )
   }
+  // Every string the repair below can write, so a repaired tree cannot be
+  // declared patched while one of the pieces is silently missing.
   const requiredCreationTimeSources = [
     ['src/process.h', 'CREATIONTIME = 4'],
     ['src/process.h', 'ULONGLONG creationTimeMs'],
     ['src/process.cc', 'GetProcessCreationTime(pinfo)'],
     ['src/process.cc', 'GetProcessTimes(hProcess, &creationTime'],
     ['src/process_worker.cc', 'object.Set("creationTimeMs"'],
+    ['src/addon.cc', 'exports.Set("supportedProcessDataFlags"'],
     ['lib/index.js', '["CreationTime"] = 4'],
+    ['lib/index.js', 'exports.supportedProcessDataFlags'],
+    ['lib/index.js', 'creationTimeMs,'],
     ['lib/index.ts', 'CreationTime = 4'],
-    ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number']
+    ['lib/index.ts', 'export const supportedProcessDataFlags'],
+    ['lib/index.ts', 'creationTimeMs,'],
+    ['typings/windows-process-tree.d.ts', 'creationTimeMs?: number'],
+    // A regex because IProcessInfo declares the same field: only the tree node
+    // is followed by `children`, and that is the one buildNode fills.
+    ['typings/windows-process-tree.d.ts', /creationTimeMs\?: number;\r?\n\s*children:/],
+    ['typings/windows-process-tree.d.ts', 'export const supportedProcessDataFlags']
   ]
   for (const [relativePath, expected] of requiredCreationTimeSources) {
-    if (!readFileSync(join(PACKAGE_DIR, relativePath), 'utf8').includes(expected)) {
+    const source = readFileSync(join(PACKAGE_DIR, relativePath), 'utf8')
+    const present = typeof expected === 'string' ? source.includes(expected) : expected.test(source)
+    if (!present) {
       throw new Error(
         `${relativePath} does not contain the process creation-time patch (${expected}). ` +
           'Run pnpm install before building the relay addon.'
@@ -213,18 +226,51 @@ function repairCreationTimeSources() {
     )
   })
 
+  rewrite('src/addon.cc', (source, eol) => {
+    if (source.includes('exports.Set("supportedProcessDataFlags"')) {
+      return source
+    }
+    return source.replace(
+      /(  exports\.Set\("getProcessCpuUsage", Napi::Function::New\(env, GetProcessCpuUsage\)\);\r?\n)/,
+      `$1  exports.Set("supportedProcessDataFlags",${eol}` +
+        `              Napi::Number::New(env, MEMORY | COMMANDLINE | CREATIONTIME));${eol}`
+    )
+  })
+
+  // Each piece is guarded on its own: an early-out on the enum alone would let a
+  // tree with the enum but no buildNode splat pass as repaired.
+  const NATIVE_CONST =
+    "const native = process.platform === 'win32' ? require('../build/Release/windows_process_tree.node') : undefined;"
   for (const relativePath of ['lib/index.ts', 'lib/index.js']) {
+    const isTs = relativePath.endsWith('.ts')
     rewrite(relativePath, (source, eol) => {
-      if (source.includes('CreationTime')) {
-        return source
+      let next = source
+      if (!next.includes('CreationTime')) {
+        next = isTs
+          ? next.replace('  CommandLine = 2', `  CommandLine = 2,${eol}  CreationTime = 4`)
+          : next.replace(
+              '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";',
+              '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";' +
+                `${eol}    ProcessDataFlag[ProcessDataFlag["CreationTime"] = 4] = "CreationTime";`
+            )
       }
-      return relativePath.endsWith('.ts')
-        ? source.replace('  CommandLine = 2', `  CommandLine = 2,${eol}  CreationTime = 4`)
-        : source.replace(
-            '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";',
-            '    ProcessDataFlag[ProcessDataFlag["CommandLine"] = 2] = "CommandLine";' +
-              `${eol}    ProcessDataFlag[ProcessDataFlag["CreationTime"] = 4] = "CreationTime";`
-          )
+      if (!next.includes('supportedProcessDataFlags')) {
+        const reExport = isTs
+          ? `/** The flag bits this compiled addon reports; undefined off win32. */${eol}` +
+            'export const supportedProcessDataFlags: number | undefined = native?.supportedProcessDataFlags;'
+          : 'exports.supportedProcessDataFlags = native === undefined ? undefined : native.supportedProcessDataFlags;'
+        next = next.replace(NATIVE_CONST, `${NATIVE_CONST}${eol}${reExport}`)
+      }
+      // buildNode drops any field it does not name, so the destructure and the
+      // splat have to move together.
+      next = next.replace(/(memory, commandLine)( \}, children \})/, '$1, creationTimeMs$2')
+      if (!/\bcreationTimeMs,/.test(next)) {
+        next = next.replace(
+          /(\r?\n)(\s*)commandLine,(\r?\n\s*children:)/,
+          `$1$2commandLine,$1$2creationTimeMs,$3`
+        )
+      }
+      return next
     })
   }
 
@@ -232,6 +278,13 @@ function repairCreationTimeSources() {
     let next = source
     if (!next.includes('CreationTime = 4')) {
       next = next.replace('    CommandLine = 2', `    CommandLine = 2,${eol}    CreationTime = 4`)
+    }
+    if (!next.includes('supportedProcessDataFlags')) {
+      next = next.replace(
+        /(    CreationTime = 4\r?\n  \}\r?\n)/,
+        `$1${eol}  /** The flag bits the compiled addon reports; undefined off win32. */${eol}` +
+          `  export const supportedProcessDataFlags: number | undefined;${eol}`
+      )
     }
     if (!next.includes('creationTimeMs?: number')) {
       next = next.replace(
@@ -241,6 +294,11 @@ function repairCreationTimeSources() {
           `    creationTimeMs?: number;${eol}`
       )
     }
+    // IProcessTreeNode is the second declaration; only it is followed by children.
+    next = next.replace(
+      /(    commandLine\?: string;\r?\n)(    children:)/,
+      `$1    creationTimeMs?: number;${eol}$2`
+    )
     return next
   })
   return repaired
