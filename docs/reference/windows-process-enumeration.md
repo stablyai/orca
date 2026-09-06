@@ -575,6 +575,20 @@ running, so typing `exit` in a pane reaped a `start /b` server that used to
 survive. The job exists to make an _explicit_ teardown exact, not to redefine
 what a clean exit means.
 
+Git Bash needs one additional restriction. The Cygwin runtime — and the MSYS2
+fork of it that Git for Windows ships — reads `JOB_OBJECT_LIMIT_BREAKAWAY_OK`
+off its own job and then adds `CREATE_BREAKAWAY_FROM_JOB` to **every** child it
+spawns when that flag is set (`spawn.cc`, there since 2011), so offering
+breakaway hands the whole tree its escape. The per-PTY job therefore omits
+`BREAKAWAY_OK` whenever `msys-2.0.dll` or `cygwin1.dll` sits on the shell's DLL
+search path — beside the executable, or under `usr/bin` for Git's `bin`
+launcher. Native shells keep explicit breakaway. Denying it costs Cygwin
+nothing, because it *pre-checks* the limit rather than retrying, so no spawn
+fails; but a *native* program that passes `CREATE_BREAKAWAY_FROM_JOB` itself
+inside such a pane now gets `ERROR_ACCESS_DENIED`. `nohup` and `disown` are
+unaffected — they are Cygwin signal/session concepts, unrelated to job
+membership. The daemon's host job is unchanged.
+
 Reaping a dead daemon's shells (#9195, #10415) is therefore a **second, nested
 job**, not this one. The terminal daemon assigns itself to a kill-on-close job
 at startup (`assignHostProcessToKillOnCloseJob`); children inherit membership,

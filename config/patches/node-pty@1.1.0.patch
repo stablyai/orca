@@ -603,7 +603,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
  }
  #endif
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c97209248e 100644
+index 7b286d3d644c26141df516929703aa6e129df4b2..4b06d18576c807c3d1181a7bd714140c6678cf86 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,6 +18,7 @@
@@ -614,7 +614,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
  #include <vector>
  #include <Windows.h>
  #include <strsafe.h>
-@@ -44,12 +45,39 @@ struct pty_baton {
+@@ -44,12 +45,40 @@ struct pty_baton {
    HANDLE hOut;
    HPCON hpc;
  
@@ -630,6 +630,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
 +  // refused to create or assign one (an outer job without breakaway rights),
 +  // in which case callers fall back to their pre-job behaviour.
 +  HANDLE hJob = nullptr;
++  bool allowJobBreakaway = true;
 +
 +  // Orca: teardown needs BOTH the shell's death and an explicit kill() before
 +  // the baton can be freed, so each side records that it has run. Whichever
@@ -655,7 +656,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
  static volatile LONG ptyCounter;
  
  static pty_baton* get_pty_baton(int id) {
-@@ -102,8 +130,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
+@@ -102,8 +131,31 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pty_baton* baton) {
      // Get process exit code.
      GetExitCodeProcess(baton->hShell, (LPDWORD)(&exit_event->exit_code));
      // Clean up handles
@@ -689,7 +690,36 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
  
      auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
      switch (status) {
-@@ -409,6 +460,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -242,6 +294,20 @@
+   return HRESULT_FROM_WIN32(GetLastError());
+ }
+ 
++// Cygwin and MSYS request breakaway for every child whenever the job allows it,
++// so their shells need one that does not. The runtime DLL on the exe's search
++// path is the signal; Git for Windows ships bash.exe in bin\ beside usr\bin\.
++static bool usesCygwinRuntime(const std::wstring& shellpath) {
++  const size_t separator = shellpath.find_last_of(L"\\/");
++  if (separator == std::wstring::npos) return false;
++  const std::wstring directory = shellpath.substr(0, separator + 1);
++  for (const wchar_t* dll : {L"msys-2.0.dll", L"cygwin1.dll"}) {
++    if (path_util::file_exists(directory + dll) ||
++        path_util::file_exists(directory + L"..\\usr\\bin\\" + dll)) return true;
++  }
++  return false;
++}
++
+ static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
+   Napi::Env env(info.Env());
+   Napi::HandleScope scope(env);
+@@ -303,6 +369,7 @@
+     marshal.Set("pty", Napi::Number::New(env, ptyId));
+     ptyHandles.emplace_back(
+         std::make_unique<pty_baton>(ptyId, hIn, hOut, hpc));
++    ptyHandles.back()->allowJobBreakaway = !usesCygwinRuntime(shellpath);
+   } else {
+     throw Napi::Error::New(env, "Cannot launch conpty");
+   }
+@@ -409,6 +476,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -705,7 +735,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +476,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -416,7 +492,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -717,7 +747,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +489,47 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -426,8 +505,48 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -735,13 +765,14 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
 +  // EXPLICIT teardown exact, not to redefine what a clean exit means.
 +  HANDLE hJob = CreateJobObjectW(nullptr, nullptr);
 +  if (hJob != nullptr) {
-+    // Why BREAKAWAY_OK and not a bare job: with no limits set, a child asking
-+    // for CREATE_BREAKAWAY_FROM_JOB is refused with ERROR_ACCESS_DENIED.
-+    // Installers, msiexec and some updater and service-control paths spawn that
-+    // way deliberately, so a bare job breaks them ONLY inside an Orca terminal.
-+    // With this flag a child has to ask, so ordinary descendants stay owned.
++    // Native shells retain explicit breakaway for installers and updaters.
++    // Cygwin/MSYS shells take it automatically for ordinary children whenever
++    // this flag is present, so they get strict per-PTY membership instead.
++    // Explicit breakaway requests inside such a pane are consequently denied;
++    // ordinary backgrounding and clean shell exit remain supported.
 +    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobLimits{};
-+    jobLimits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK;
++    jobLimits.BasicLimitInformation.LimitFlags =
++        handle->allowJobBreakaway ? JOB_OBJECT_LIMIT_BREAKAWAY_OK : 0;
 +    if (!SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, &jobLimits, sizeof(jobLimits)) ||
 +        !AssignProcessToJobObject(hJob, piClient.hProcess)) {
 +      // Why tolerate failure: an outer job without JOB_OBJECT_LIMIT_BREAKAWAY_OK
@@ -767,7 +798,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -440,6 +542,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -440,6 +559,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
  
    // Update handle
    handle->hShell = piClient.hProcess;
@@ -776,11 +807,16 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -544,29 +648,215 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,27 +665,213 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
 -  const pty_baton* handle = get_pty_baton(id);
+-
+-  if (handle != nullptr) {
+-    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
+-    bool fLoadedDll = hLibrary != nullptr;
+-    if (fLoadedDll)
 +  // Orca: resolve the DLL BEFORE touching any baton state, for the same reason
 +  // PtyConnect does it before creating anything. LoadConptyDll throws when
 +  // conpty.dll is missing, and a throw after consoleClosed was set would strand
@@ -794,18 +830,7 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
 +      (HMODULE)hLibrary,
 +      useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
 +  }
- 
--  if (handle != nullptr) {
--    HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
--    bool fLoadedDll = hLibrary != nullptr;
--    if (fLoadedDll)
--    {
--      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
--        (HMODULE)hLibrary,
--        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
--      if (pfnClosePseudoConsole)
--      {
--        pfnClosePseudoConsole(handle->hpc);
++
 +  // Orca: the baton now outlives the shell, so this runs on a self-exited pty
 +  // too -- that is the whole point. Take what we need under the lock: the
 +  // watcher thread nulls hShell the moment the shell dies, and TerminateProcess
@@ -841,18 +866,26 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
 +        const bool removed = remove_pty_baton(id);
 +        assert(removed);
 +        (void)removed;
-       }
++      }
 +      // Else the shell is still running and the watcher frees the baton.
-     }
--    if (useConptyDll) {
--      TerminateProcess(handle->hShell, 1);
++    }
 +  }
 +
 +  // Why outside the lock: ClosePseudoConsole blocks until the conout side has
 +  // drained, and the watcher must be able to take the lock while it does.
 +  if (owed) {
 +    if (pfnClosePseudoConsole)
-+    {
+     {
+-      PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress(
+-        (HMODULE)hLibrary,
+-        useConptyDll ? "ConptyClosePseudoConsole" : "ClosePseudoConsole");
+-      if (pfnClosePseudoConsole)
+-      {
+-        pfnClosePseudoConsole(handle->hpc);
+-      }
+-    }
+-    if (useConptyDll) {
+-      TerminateProcess(handle->hShell, 1);
 +      pfnClosePseudoConsole(hpc);
 +    }
 +    if (hShellDup != nullptr) {
@@ -862,8 +895,8 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
    }
  
    return env.Undefined();
- }
- 
++}
++
 +/**
 + * Orca: confirm a baton really is the pty the caller means.
 + *
@@ -1001,12 +1034,10 @@ index 7b286d3d644c26141df516929703aa6e129df4b2..4aed260dd68e6a171dcfd349e9a7c5c9
 +  }
 +  hHostJob = job;
 +  return Napi::Boolean::New(env, true);
-+}
-+
+ }
+ 
  /**
- * Init
- */
-@@ -577,6 +867,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +884,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
