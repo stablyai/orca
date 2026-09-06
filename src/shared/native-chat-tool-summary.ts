@@ -5,8 +5,24 @@ const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
 const MAX_PREVIEW_DEPTH = 2
 const MAX_TOOL_RUN_SUMMARY_PARTS = 3
-const PRIMARY_ARG_KEYS = ['command', 'cmd', 'query', 'pattern', 'url', 'description'] as const
-const BRIEF_ARG_KEYS = ['command', 'cmd', 'query', 'pattern'] as const
+// Search term before command: a classified search row carries both, and the
+// term is what identifies it. No other tool input supplies the two together.
+// `directory` is a scan root or a listed folder — it labels a row but is
+// deliberately absent from the file-target keys below, because a folder reaches
+// mobile as a tappable open-file link that can only fail.
+const PRIMARY_ARG_KEYS = [
+  'query',
+  'pattern',
+  'directory',
+  'command',
+  'cmd',
+  'url',
+  'description'
+] as const
+const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd'] as const
+// Only the keys that hold a shell command, so a search term or a listed folder
+// cannot stand in for one.
+const COMMAND_ARG_KEYS = ['command', 'cmd'] as const
 export const MAX_TOOL_DETAIL_LENGTH = 4000
 
 export type ToolInputDisplay = {
@@ -165,6 +181,18 @@ export function briefToolArg(input: unknown): string {
     }
   }
   return summarizeToolInput(normalized).slice(0, 28)
+}
+
+/** The shell command a call carries in its input, or null when it carries none.
+ *  Codex keeps the raw command on a classified `read`/`search`/`list` row, so
+ *  this is what tells one apart from a Claude tool of the same lowercased word. */
+export function toolInputCommand(input: unknown): string | null {
+  const normalized = normalizeToolInput(input)
+  return isToolInputRecord(normalized) ? firstPrimaryToolArg(normalized, COMMAND_ARG_KEYS) : null
+}
+
+function isToolInputRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 /** Codex delivers tool arguments as a JSON string. Parse those into the object

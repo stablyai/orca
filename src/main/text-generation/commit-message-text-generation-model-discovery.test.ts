@@ -325,7 +325,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       await vi.advanceTimersByTimeAsync(60_000)
 
       await assertion
-      expectChildTerminated(child)
+      await expectChildTerminated(child)
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
       expect(child.listenerCount('error')).toBe(0)
@@ -352,7 +352,7 @@ describe('discoverCommitMessageModelsLocal', () => {
         success: false,
         error: 'Codex model discovery timed out after 60s.'
       })
-      expectChildTerminated(firstChild)
+      await expectChildTerminated(firstChild)
       expect(spawnMock).toHaveBeenCalledTimes(1)
 
       firstChild.emit('close', null)
@@ -413,7 +413,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       success: false,
       error: 'Cursor returned too much model data.'
     })
-    expectChildTerminated(child)
+    await expectChildTerminated(child)
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)

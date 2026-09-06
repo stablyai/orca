@@ -4,7 +4,18 @@ import { pathToFileURL } from 'node:url'
 const SERVICE_ACCOUNT_EMAIL =
   /^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9-]+\.iam\.gserviceaccount\.com$/
 
-function parseArguments(argv) {
+const REHOME_CONFIG =
+  /^  printf 'ORCA_RELAY_REHOME_(?:DIRECTOR_SERVICE_ACCOUNT|AUDIENCE)=%s\\n' '[^'\n]+'$/
+
+// Only cells listed as regional rehome sources get rehome trust lines in their startup script.
+function rehomeProtocol({ regionalRehomeProtocol }) {
+  if (![0, 1, '0', '1'].includes(regionalRehomeProtocol)) {
+    throw new Error('same-cap Terraform plan has an invalid regional rehome protocol')
+  }
+  return Number(regionalRehomeProtocol)
+}
+
+export function parseCapacityPlanArguments(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 2) {
     const key = argv[index]
@@ -31,8 +42,12 @@ function parseArguments(argv) {
     values.mode === 'same-cap-cell' &&
     (!values['rollback-image'] ||
       !values['rehome-director-service-account'] ||
-      !values['rehome-audience'])
+      !values['rehome-audience'] ||
+      !['0', '1'].includes(values['regional-rehome-protocol']))
   ) throw new Error('same-cap validation requires rollback image and rehome trust config')
+  if (values.mode !== 'same-cap-cell' && values['regional-rehome-protocol'] !== undefined) {
+    throw new Error('--regional-rehome-protocol applies only to same-cap-cell validation')
+  }
   if (values.mode === 'same-cap-image' && !values['rollback-image']) {
     throw new Error('same-cap image validation requires a rollback image')
   }
@@ -51,7 +66,8 @@ function parseArguments(argv) {
     capacityServiceAccount: values['capacity-service-account'],
     rollbackImage: values['rollback-image'],
     rehomeDirectorServiceAccount: values['rehome-director-service-account'],
-    rehomeAudience: values['rehome-audience']
+    rehomeAudience: values['rehome-audience'],
+    regionalRehomeProtocol: values['regional-rehome-protocol']
   }
 }
 
@@ -175,15 +191,13 @@ function normalizedStartupScript(
     /^  printf 'ORCA_RELAY_CELL_CONNECTION_(?:HARD_CAP|UNOBSERVED_BOUND)=%s\\n' '[0-9]+'$/
   const capacityIdentity =
     /^  printf 'ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT=%s\\n' '[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z0-9-]+\.iam\.gserviceaccount\.com'$/
-  const rehomeConfig =
-    /^  printf 'ORCA_RELAY_REHOME_(?:DIRECTOR_SERVICE_ACCOUNT|AUDIENCE)=%s\\n' '[^'\n]+'$/
   return script
     .split('\n')
     .filter(
       (line) =>
         (preserveCapacity || !capacityAssignment.test(line)) &&
         (!stripCapacityIdentity || !capacityIdentity.test(line)) &&
-        (!stripRehomeConfig || !rehomeConfig.test(line))
+        (!stripRehomeConfig || !REHOME_CONFIG.test(line))
     )
     .join('\n')
     .replaceAll(image, '<relay-image>')
@@ -213,7 +227,8 @@ function requireDesiredStartupScript(script, config) {
       `  printf 'ORCA_RELAY_CAPACITY_SERVICE_ACCOUNT=%s\\n' '${config.capacityServiceAccount}'`
     ])
   }
-  if (config.mode === 'same-cap-cell') {
+  const rehomeTrusted = config.mode === 'same-cap-cell' && rehomeProtocol(config) === 1
+  if (rehomeTrusted) {
     expected.push(
       [
         /^  printf 'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT=%s\\n' '[^'\n]+'$/,
@@ -225,9 +240,15 @@ function requireDesiredStartupScript(script, config) {
       ]
     )
   }
+  // A protocol-0 cell is not a rehome source, so gaining any rehome trust line is real drift.
+  const unexpectedRehome =
+    config.mode === 'same-cap-cell' &&
+    !rehomeTrusted &&
+    lines.some((line) => REHOME_CONFIG.test(line))
   if (
     typeof script !== 'string' ||
     relayImage(script) !== config.image ||
+    unexpectedRehome ||
     expected.some(([pattern, line]) => !hasExactSingleAssignment(lines, pattern, line))
   ) {
     throw new Error('cell plan does not contain the reviewed image and capacity')
@@ -450,6 +471,9 @@ export function validateCapacityPlan(plan, config) {
   ) {
     throw new Error('capacity Terraform plan has an invalid service account')
   }
+  if (config.mode === 'same-cap-cell') {
+    rehomeProtocol(config)
+  }
   if (
     config.mode === 'same-cap-cell' &&
     (!SERVICE_ACCOUNT_EMAIL.test(config.rehomeDirectorServiceAccount ?? '') ||
@@ -504,7 +528,7 @@ export function validateCapacityPlan(plan, config) {
 }
 
 export function main(argv = process.argv.slice(2)) {
-  const config = parseArguments(argv)
+  const config = parseCapacityPlanArguments(argv)
   const plan = JSON.parse(readFileSync(0, 'utf8'))
   process.stdout.write(`${JSON.stringify({ event: 'relay_capacity_plan_verified', ...validateCapacityPlan(plan, config) })}\n`)
 }

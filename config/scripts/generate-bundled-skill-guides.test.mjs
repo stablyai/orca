@@ -25,6 +25,15 @@ const projectDir = path.resolve(import.meta.dirname, '..', '..')
 const temporaryDirectories = []
 const execFileAsync = promisify(execFile)
 const GUIDE_REFERENCES = {
+  orchestration: [
+    'coordinator-loop.md',
+    'legacy-contract-migration.md',
+    'low-level-topology.md',
+    'messaging-and-gates.md',
+    'placement-and-remote.md',
+    'recovery-and-cleanup.md',
+    'worker-contract.md'
+  ],
   'orca-cli': ['automations.md', 'browser.md', 'publishing.md'],
   'orca-per-workspace-env': [
     'docker-ssh.md',
@@ -243,7 +252,23 @@ describe('bundled skill guide generator', () => {
       const references = GUIDE_REFERENCES[guide.name]
       if (!references) {
         expect(guide.fullMarkdown).toBe(source)
+        expect(guide.references).toEqual([])
         continue
+      }
+      // Why: the per-reference selector serves these verbatim, so an entry that
+      // drifts from the file on disk ships a stale reference to every agent.
+      expect(guide.references.map((reference) => reference.name)).toEqual(
+        references.map((reference) => reference.replace(/\.md$/u, ''))
+      )
+      for (const reference of guide.references) {
+        expect(reference.markdown).toBe(
+          normalizeMarkdown(
+            await readFile(
+              path.join(projectDir, 'skill-guides', guide.name, 'references', `${reference.name}.md`),
+              'utf8'
+            )
+          )
+        )
       }
       expect(guide.fullMarkdown).not.toBe(guide.markdown)
       expect(guide.fullMarkdown.length).toBeGreaterThan(guide.markdown.length)

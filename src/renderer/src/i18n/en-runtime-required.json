@@ -576,12 +576,16 @@
           },
           "ProjectPicker": {
             "43a88ae574": "BOARD_LAYOUT",
+            "ab1a2c357d": "Roadmap (unsupported)",
             "b787682111": "Browse all",
             "ba0ab9a117": "Browse all (loading…)",
             "cafb908f34": "TABLE_LAYOUT"
           },
           "ProjectRow": {
             "c3b81ddea2": "DRAFT_ISSUE"
+          },
+          "ProjectViewWrapper": {
+            "1bf8c01c8b": "Switch to a Table view to work with this project in Orca."
           }
         }
       },
@@ -3665,18 +3669,29 @@
         }
       },
       "status": {
-        "working": "Working…"
+        "responding": "Agent is responding",
+        "thinking": "Thinking",
+        "toggleDetails": "Toggle turn details",
+        "workedFor": "Worked for {{value0}}",
+        "working": "Working…",
+        "workingFor": "Working for {{value0}}"
       },
       "toggle": {
         "showChat": "Show chat view",
         "showTerminal": "Show terminal"
       },
       "tool": {
+        "countN": "{{value0}} tool calls",
+        "countOne": "1 tool call",
         "ranCommandManyToolsSummary": "Ran {{commandCount}} command and used {{toolCount}} tools",
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
         "running": "Running…",
+        "runningCommand": "Running command",
+        "runningNamed": "Running {{toolName}}",
+        "runningNamedPreview": "Running {{toolName}} {{preview}}",
+        "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool"
       }

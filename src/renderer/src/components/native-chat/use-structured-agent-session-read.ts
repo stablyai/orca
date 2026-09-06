@@ -20,13 +20,6 @@ function useReadOwnerSnapshot(
   return { owner, snapshot }
 }
 
-export function useStructuredAgentSessionReadObservation(args: {
-  sessionId: string
-  target: RuntimeClientTarget
-}): StructuredAgentSessionReadSnapshot {
-  return useReadOwnerSnapshot(args.sessionId, args.target).snapshot
-}
-
 export function useStructuredAgentSessionRead(args: {
   sessionId: string
   target: RuntimeClientTarget

@@ -137,6 +137,29 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain('/usr/local/bin')
   })
 
+  // Why derived, not a second literal: system-cli-install-dirs.ts documents its
+  // order as matching this seed's system block, and hardcoding the order in the
+  // fallback's own test lets a reorder here break that parity while both stay green.
+  it('seeds the system block in the order the install-dir fallback expects', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+    const { getSystemCliInstallDirectories } = await import('../../shared/system-cli-install-dirs')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    const offsets = getSystemCliInstallDirectories('linux', '/home/tester').map((directory) =>
+      segments.indexOf(directory)
+    )
+    expect(offsets.every((offset) => offset >= 0)).toBe(true)
+    expect([...offsets].sort((a, b) => a - b)).toEqual(offsets)
+  })
+
   // Why this ordering is load-bearing (#18234): a seed exists so a GUI-launched
   // Electron can *find* a tool, not to re-rank tools the user already has.
   // `~/.local/bin` is user-writable and can hold a wrapper for any system tool.

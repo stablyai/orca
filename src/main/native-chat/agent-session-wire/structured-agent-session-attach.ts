@@ -5,7 +5,6 @@
 // the record store's compare-and-swap, which also owns the idempotency row, so
 // a retried attach replays instead of reserving a second owner.
 
-import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentSessionJournalIdentity,
   AgentSessionProviderHandle
@@ -52,9 +51,11 @@ export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
-  agent: AgentType
+  agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
+  /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
+  options?: Readonly<Record<string, string>>
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
 }
@@ -71,7 +72,10 @@ export type AgentSessionAttachAuthority = {
 
 /** The fields that define WHICH session this call would attach to. Deliberately
  *  excludes the spawn token and the probe: those differ between a first attempt
- *  and its retry, and a retry must replay rather than conflict. */
+ *  and its retry, and a retry must replay rather than conflict. `options` is
+ *  excluded for the same reason — it is the session's initial state, not its
+ *  identity, and the host re-resolves it from settings the user may have changed
+ *  between an unknown-outcome attempt and its retry. */
 export function attachFingerprintFields(params: AgentSessionAttachParams): Record<string, unknown> {
   return {
     location: params.location,
@@ -192,6 +196,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.options ? { options: params.options } : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     runtimeKind: params.runtimeKind,

@@ -52,6 +52,12 @@ export const ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY =
   'orchestration.worker-stop-verdict.v1' as const
 export const ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY =
   'orchestration.worker-launch-preferences.v1' as const
+export const ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY =
+  'orchestration.federation-structured-read.v1' as const
+export const ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY =
+  'orchestration.federation-fleet-snapshot.v1' as const
+export const ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY =
+  'orchestration.federation-release-archive.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
 export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
@@ -95,6 +101,8 @@ export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+// Why: without this, prompt request IDs and waitSubmitMs are stripped and a retry would resend raw input.
+export const TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY = 'terminal.prompt-delivery.v1' as const
 // Why: paired clients may unmount xterm only when the host can return a
 // bounded, sequenced scrollback snapshot for lossless reveal.
 export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parking.v1' as const
@@ -121,15 +129,27 @@ export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
-// Why: structured sessions are journal-backed, not PTY-backed, so a client that
-// cannot read them must not see them at all — it would render an agent tab it
-// can neither display nor drive. The host also refuses every agentSession.*
-// method from a connection that does not advertise this.
+// Why: structured sessions are journal-backed, not PTY-backed, so an incapable client must not
+// receive their journal or drive their lifecycle. Mobile may receive a metadata-only placeholder;
+// the host still refuses agentSession.* methods and destructive tab mutations without capability.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
+// journal and lifecycle surfaces independently from Codex support.
+export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
+  'agent-session.structured.claude.v1' as const
 // Why: paired structured clients explicitly hold every visible session surface, allowing the host
 // to stop provider children after the last surface closes without tying lifetime to a transport.
 export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
   'agent-session.structured.hold.v1' as const
+// Why: a client holding only a session id — an Agent Session History row — asks the host to
+// republish that chat's tab. An older host has no such method, and a client must learn that during
+// negotiation rather than by calling and reading a refusal it cannot distinguish from a real one.
+export const STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY =
+  'agent-session.structured.reveal.v1' as const
+// Why: agentSession.subscribeStatus is additive to a surface that already shipped, so a host
+// advertising agent-session.structured.v1 may still answer it with method_not_found. Clients must
+// probe before subscribing or they reconnect forever and never show any status at all.
+export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
 // Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
@@ -190,6 +210,9 @@ export const RUNTIME_CAPABILITIES = [
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
@@ -214,6 +237,7 @@ export const RUNTIME_CAPABILITIES = [
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
@@ -226,6 +250,8 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,

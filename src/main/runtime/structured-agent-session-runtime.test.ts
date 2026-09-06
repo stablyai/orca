@@ -13,7 +13,9 @@ import type {
 } from '../../shared/agent-session-record'
 import {
   createStructuredAgentSessionOwnerProbe,
-  createStructuredAgentSessionOwnerProbes,
+  createStructuredAgentSessionOwnerProbes
+} from './structured-agent-session-owner-probe'
+import {
   ensureStructuredAgentSessionHost,
   hasPersistedStructuredAgentSessionStore,
   stopStructuredAgentSessionRuntime
@@ -226,6 +228,7 @@ describe('structured agent-session runtime install', () => {
         hostId: HOST_ID,
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => stateDirectory!,
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveEnvironment: async () => ({}),
         reapOrphanChildren,
         onError
@@ -252,6 +255,7 @@ describe('structured agent-session runtime install', () => {
         hostId: HOST_ID,
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => stateDirectory!,
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveEnvironment: async () => ({}),
         reapOrphanChildren: async () => {
           throw failure
@@ -301,7 +305,8 @@ describe('a teardown that fails is retried by the next stop', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async () => directory!,
       resolveEnvironment: async () => ({}),
-      reapOrphanChildren: async () => []
+      reapOrphanChildren: async () => [],
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true })
     })
 
     const journalDir = join(directory, 'stubborn-journal')

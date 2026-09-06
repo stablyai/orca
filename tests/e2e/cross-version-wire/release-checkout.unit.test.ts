@@ -263,11 +263,23 @@ afterEach(() => {
 describe('release checkout materialization', () => {
   it('single-flights concurrent consumers of one release identity', async () => {
     const cacheRoot = temporaryCacheRoot()
+    let publications = 0
+    const options = {
+      cacheRoot,
+      testHooks: {
+        populateStaging: async (context: CheckoutStagingContext) => {
+          publications++
+          await populateMinimalStaging(context)
+        }
+      }
+    }
     const checkouts = await Promise.all([
-      materializeReleaseCheckout('v1.4.190', { cacheRoot }),
-      materializeReleaseCheckout('v1.4.190', { cacheRoot }),
-      materializeReleaseCheckout('v1.4.190', { cacheRoot })
+      materializeReleaseCheckout('v1.4.190', options),
+      materializeReleaseCheckout('v1.4.190', options),
+      materializeReleaseCheckout('v1.4.190', options)
     ])
+
+    expect(publications).toBe(1)
 
     expect(new Set(checkouts.map(({ root }) => root))).toHaveLength(1)
     expect(relative(cacheRoot, checkouts[0]!.root)).not.toMatch(/^\.\./)
@@ -291,18 +303,29 @@ describe('release checkout materialization', () => {
     )
 
     const cacheRoot = temporaryCacheRoot()
-    const first = await materializeReleaseCheckout(firstRef, { cacheRoot })
+    const options = { cacheRoot, testHooks: { populateStaging: populateMinimalStaging } }
+    const first = await materializeReleaseCheckout(firstRef, options)
     const dependency = join(first.root, 'delayed-dependency.mjs')
     const entry = join(first.root, 'delayed-entry.mjs')
+    const importStarted = join(cacheRoot, 'import-started')
+    const continueImport = join(cacheRoot, 'continue-import')
     writeFileSync(dependency, "export const loaded = 'first-release'\n")
     writeFileSync(
       entry,
-      'await new Promise((resolve) => setTimeout(resolve, 100))\n' +
+      "import { existsSync, writeFileSync } from 'node:fs'\n" +
+        `writeFileSync(${JSON.stringify(importStarted)}, '')\n` +
+        `while (!existsSync(${JSON.stringify(continueImport)})) await new Promise((resolve) => setTimeout(resolve, 10))\n` +
         "export const loaded = (await import('./delayed-dependency.mjs')).loaded\n"
     )
 
     const loading = importReleaseCheckoutModule(first, '/delayed-entry.mjs')
-    const second = await materializeReleaseCheckout(secondRef, { cacheRoot })
+    let second: ReleaseCheckout
+    try {
+      await waitForFile(importStarted, 5_000)
+      second = await materializeReleaseCheckout(secondRef, options)
+    } finally {
+      writeFileSync(continueImport, '')
+    }
 
     await expect(loading).resolves.toMatchObject({ loaded: 'first-release' })
     expect(first.root).not.toBe(second.root)
@@ -311,7 +334,10 @@ describe('release checkout materialization', () => {
   it('causally single-flights a rival process before publishing an in-use checkout', async () => {
     const cacheRoot = temporaryCacheRoot()
     const scratch = temporaryCacheRoot()
-    const published = await materializeReleaseCheckout('v1.4.190', { cacheRoot })
+    const published = await materializeReleaseCheckout('v1.4.190', {
+      cacheRoot,
+      testHooks: { populateStaging: populateMinimalStaging }
+    })
 
     await expect(runContentionPhase(published, scratch, 'locked', false)).resolves.toBe(true)
     // In the same causally acknowledged interleaving, a no-lock materializer

@@ -3,10 +3,12 @@ import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 
 // ── Messages ──
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
+const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
 
 export type MessageInsert = {
   id?: string
@@ -67,14 +69,20 @@ export function insertMessages(this: OrchestrationDb, messages: MessageInsert[])
   }
 }
 
+export function commitWorkerDoneMessageMutation<T>(this: OrchestrationDb, mutation: () => T): T {
+  return runLifecycleWriteTransaction(this.db, WORKER_DONE_MESSAGE_SAVEPOINT, mutation)
+}
+
 export type MessageInsertMethods = {
   insertMessage: typeof insertMessage
   insertMessages: typeof insertMessages
+  commitWorkerDoneMessageMutation: typeof commitWorkerDoneMessageMutation
 }
 
 export function attachMessageInsert(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     insertMessage,
-    insertMessages
+    insertMessages,
+    commitWorkerDoneMessageMutation
   })
 }

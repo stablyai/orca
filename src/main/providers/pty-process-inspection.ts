@@ -23,6 +23,9 @@ type CompletionSensitivePtyProvider = IPtyProvider & {
 export type PtyProcessInspectionOptions = {
   expectedIncarnationId?: PtyIncarnationId
   scanChildProcesses?: boolean
+  /** A self-correcting cadence poll that reads only the process name: licenses a host to answer
+   *  from a cheap capture and OMIT evidence. Never set by a caller that consumes evidence. */
+  steadyState?: boolean
 }
 
 export async function inspectPtyProviderProcess(

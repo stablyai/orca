@@ -35,7 +35,8 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.federationAttachStart',
   'orchestration.federationAck',
   'orchestration.federationImport',
-  'orchestration.federationStop'
+  'orchestration.federationStop',
+  'orchestration.federationRelease'
 ])
 
 const RETIRED_ORCHESTRATION_METHODS = new Set(['orchestration.run', 'orchestration.runStop'])
@@ -58,6 +59,26 @@ export function isOrchestrationMutation(method: string, params: unknown): boolea
     return !hasTrueProperty(params, 'dryRun')
   }
   return ORCHESTRATION_MUTATION_METHODS.has(method)
+}
+
+export function isTerminalPromptMutation(method: string, params: unknown): boolean {
+  if (method !== 'terminal.send' || !params || typeof params !== 'object') {
+    return false
+  }
+  const value = params as Record<string, unknown>
+  const client = value.client as Record<string, unknown> | undefined
+  return (
+    value.agentPrompt === true &&
+    typeof value.text === 'string' &&
+    value.text.length > 0 &&
+    value.enter === true &&
+    value.interrupt !== true &&
+    client?.type === 'desktop'
+  )
+}
+
+export function isDurableMutation(method: string, params: unknown): boolean {
+  return isOrchestrationMutation(method, params) || isTerminalPromptMutation(method, params)
 }
 
 export function orchestrationSkillRecoveryData(): {

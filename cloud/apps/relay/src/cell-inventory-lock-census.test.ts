@@ -18,7 +18,9 @@ type CensusEntry = { method: string; mode: CensusMode; reach: Reachability }
 // assignment-store.ts, in source order. A new site fails this test until it is
 // classified here, which is the point.
 const CENSUS: CensusEntry[] = [
-  { method: 'assignStickyOnce', mode: 'caller', reach: 'both' },
+  // assignStickyOnce is gone from this list: its retry now locks only the row
+  // the host is pinned to (lockCellRows), which is what a sticky refresh
+  // touches. Placement below is the one genuinely fleet-wide decision left.
   { method: 'assignOnce', mode: 'caller', reach: 'both' },
   { method: 'assignOnce', mode: 'caller', reach: 'both' },
   { method: 'assignOnce', mode: 'nowait', reach: 'both' },
@@ -49,8 +51,9 @@ const CENSUS: CensusEntry[] = [
   { method: 'abortExpiredEvacuations', mode: 'nowait', reach: 'sweep' },
   { method: 'releaseExpiredActivityLeases', mode: 'nowait', reach: 'sweep' },
   { method: 'releaseExpiredActivity', mode: 'nowait', reach: 'sweep' },
-  { method: 'reconcileReservationAccounting', mode: 'pool-default', reach: 'both' },
-  { method: 'leastLoadedCell', mode: 'pool-default', reach: 'both' }
+  // reconcileReservationAccounting and leastLoadedCell are gone too: the first
+  // repairs exactly two cells' counters and now holds only those rows, and the
+  // second selects from the inventory its single caller has already locked.
 ]
 
 // Every inline `FROM relay_cells ... FOR UPDATE` outside the named lock helpers,

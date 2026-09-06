@@ -1,13 +1,9 @@
 import { useMemo, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
-import type {
-  AgentStatusOrchestrationContext,
-  AgentType
-} from '../../../../shared/agent-status-types'
+import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { Button } from '@/components/ui/button'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -21,24 +17,30 @@ import { useNativeChatFileLinkContext } from './use-native-chat-file-link-contex
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { translate } from '@/i18n/i18n'
 import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
-import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
+import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
+import type { NativeChatStructuredViewProps } from './native-chat-view-types'
+import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+
+type StoppingBackgroundTasks = {
+  sessionId: string
+  taskIds: ReadonlySet<string>
+  all: boolean
+}
+
+const NO_STOPPING_TASKS: ReadonlySet<string> = new Set()
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
 }
 
-export function NativeChatStructuredSession(props: {
-  tabId: string
-  sessionId: string
-  target: RuntimeClientTarget
-  agent: AgentType
-  isVisible: boolean
-  allowFileUriLinks: boolean
-  orchestrationDispatchStatus?: AgentStatusOrchestrationContext['dispatchStatus']
-}): React.JSX.Element {
+export function NativeChatStructuredSession(
+  props: Omit<NativeChatStructuredViewProps, 'mode'>
+): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
   const [composerError, setComposerError] = useState<string | null>(null)
+  const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
+    useState<StoppingBackgroundTasks | null>(null)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -49,7 +51,14 @@ export function NativeChatStructuredSession(props: {
   )
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
-  useNativeChatPasteBridge({ rootRef, composerRef })
+  const paneCommands = useStructuredNativeChatPaneCommands({
+    tabId: props.tabId,
+    groupId: props.groupId,
+    isVisible: props.isVisible,
+    rootRef,
+    composerRef,
+    terminalPaneActions: props.contextMenuActions
+  })
   const session = useMemo<NativeChatLiveSession>(
     () => ({
       messages: controller.messages,
@@ -82,9 +91,26 @@ export function NativeChatStructuredSession(props: {
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
-  const fileLinkClick = useNativeChatFileLinkClick(props.allowFileUriLinks ? fileLinkContext : null)
+  const fileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
+  const activeStoppingBackgroundTasks =
+    stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
+  const questions =
+    questionBody?.questions ??
+    (questionBody
+      ? [
+          {
+            id: questionBody.freeTextQuestionId ?? 'q1',
+            question: questionBody.question,
+            options: questionBody.options,
+            multiSelect: false,
+            ...(questionBody.freeTextQuestionId
+              ? { freeTextQuestionId: questionBody.freeTextQuestionId }
+              : {})
+          }
+        ]
+      : [])
   const retryableOutboxEntry =
     controller.outbox.find((entry) => entry.state === 'unconfirmed') ??
     controller.outbox.find(
@@ -127,6 +153,15 @@ export function NativeChatStructuredSession(props: {
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
       tabIndex={-1}
+      onPointerDownCapture={(event) => {
+        if (event.button === 2) {
+          paneCommands.onSelectionCapture()
+        }
+      }}
+      onMouseUpCapture={paneCommands.onSelectionCapture}
+      onKeyUpCapture={paneCommands.onSelectionCapture}
+      onKeyDownCapture={paneCommands.onKeyDownCapture}
+      onContextMenuCapture={paneCommands.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
       <NativeChatOrchestrationPausedNotice dispatchStatus={props.orchestrationDispatchStatus} />
@@ -144,10 +179,11 @@ export function NativeChatStructuredSession(props: {
             expandSignal={false}
             fontScale={fontScale.scale}
             workingStartedAt={null}
-            showTurnStatus={props.agent === 'codex'}
+            showTurnStatus
+            turnActivity={controller.turnActivity}
             onLinkClick={fileLinkClick}
             allowFileUriLinks={fileLinkClick !== undefined}
-            runtimeContext={props.agent === 'codex' ? imageRuntimeContext : undefined}
+            runtimeContext={imageRuntimeContext}
           />
         )}
       </div>
@@ -166,17 +202,39 @@ export function NativeChatStructuredSession(props: {
       ) : null}
       {prompt && questionBody ? (
         <NativeChatQuestionCard
+          key={`${prompt.itemId}:${prompt.revision}`}
           prompt={{
-            questions: [
-              {
-                question: questionBody.question,
-                multiSelect: false,
-                options: questionBody.options.map((option) => ({ label: option.label }))
-              }
-            ]
+            questions: questions.map((question) => ({
+              question: question.question,
+              ...(question.header ? { header: question.header } : {}),
+              multiSelect: question.multiSelect,
+              options: question.options.map((option) => ({
+                label: option.label,
+                ...(option.description ? { description: option.description } : {})
+              }))
+            }))
           }}
-          allowOther={Boolean(questionBody.freeTextQuestionId)}
+          allowOther={questions.map((question) => Boolean(question.freeTextQuestionId))}
           onAnswer={(answers) => {
+            if (questionBody.questions) {
+              const grouped = questions.map((question, questionIndex) => {
+                const answer = answers[questionIndex]
+                const other = answer?.other?.trim()
+                const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
+                  const optionId = question.options[optionIndex]?.id
+                  return optionId ? [optionId] : []
+                })
+                return {
+                  questionId: question.id,
+                  optionIds: question.multiSelect || !other ? optionIds : [],
+                  ...(other ? { other } : {})
+                }
+              })
+              if (grouped.every((answer) => answer.optionIds.length > 0 || answer.other)) {
+                void controller.respond(prompt, encodeAgentSessionQuestionAnswers(grouped))
+              }
+              return
+            }
             const index = answers[0]?.indices[0]
             const other = answers[0]?.other?.trim()
             const optionId =
@@ -228,6 +286,45 @@ export function NativeChatStructuredSession(props: {
           {controller.error ?? composerError}
         </p>
       ) : null}
+      {controller.isMonitoringBackgroundTasks ? (
+        <NativeChatBackgroundTasksStatus
+          tasks={controller.backgroundTasks}
+          supportsTaskStop={controller.supportsBackgroundTaskStop}
+          stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
+          stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
+          onStop={(taskId) => {
+            const targetSessionId = props.sessionId
+            setStoppingBackgroundTasks((current) => {
+              const taskIds = new Set(
+                current?.sessionId === targetSessionId ? current.taskIds : NO_STOPPING_TASKS
+              )
+              if (taskId) {
+                taskIds.add(taskId)
+              }
+              return {
+                sessionId: targetSessionId,
+                taskIds,
+                all: taskId ? current?.sessionId === targetSessionId && current.all : true
+              }
+            })
+            void controller.stopBackgroundTask(taskId).finally(() => {
+              setStoppingBackgroundTasks((current) => {
+                if (current?.sessionId !== targetSessionId) {
+                  return current
+                }
+                const taskIds = new Set(current.taskIds)
+                if (taskId) {
+                  taskIds.delete(taskId)
+                }
+                const all = taskId ? current.all : false
+                return taskIds.size === 0 && !all
+                  ? null
+                  : { sessionId: targetSessionId, taskIds, all }
+              })
+            })
+          }}
+        />
+      ) : null}
       {prompt ? null : (
         <NativeChatComposer
           ref={composerRef}
@@ -245,6 +342,7 @@ export function NativeChatStructuredSession(props: {
           structuredTransport={structuredTransport}
         />
       )}
+      {paneCommands.menu}
     </div>
   )
 }

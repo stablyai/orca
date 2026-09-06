@@ -49,16 +49,16 @@ export async function callAgentSession<TResult>(
   return response.result as TResult
 }
 
+/** React Native has no guaranteed `crypto.randomUUID`; the fallback keeps the same
+ *  32-hex entropy shape the durable id and fingerprint helpers validate. */
+export function structuredSessionRandomUuid(): string {
+  return typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
+}
+
 export function structuredSessionOperationId(): string {
-  const randomUuid =
-    typeof globalThis.crypto?.randomUUID === 'function'
-      ? () => globalThis.crypto.randomUUID()
-      : () => {
-          return Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(
-            ''
-          )
-        }
-  return createStructuredAgentSessionOperationId(randomUuid)
+  return createStructuredAgentSessionOperationId(structuredSessionRandomUuid)
 }
 
 /**

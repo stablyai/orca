@@ -52,6 +52,58 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.status).toBe('completed')
   })
 
+  it('completes an exact-authority worker_done after an uncertain worker start', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
+    const paneKey = `tab_worker:${LEAF_A}`
+    const capability = db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey,
+      processIncarnation: 'worker:1',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    db.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
+    expect(
+      db.verifyDispatchCapability({
+        dispatchId: started.dispatch.id,
+        capability,
+        paneKey,
+        processIncarnation: 'worker:1'
+      })
+    ).toEqual({ valid: true })
+
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done after reconnect',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: started.dispatch.id,
+        outcome: 'succeeded'
+      }),
+      senderPaneKey: paneKey
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toEqual({
+      action: 'completed',
+      taskId: task.id,
+      dispatchId: started.dispatch.id
+    })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(started.dispatch.id)?.status).toBe('completed')
+    expect(db.getWorkerDispatch(started.dispatch.id)?.state).toBe('succeeded')
+  })
+
   it('fails both the dispatch and task from an authenticated failed worker report', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
@@ -83,6 +135,27 @@ describe('lifecycle reconciliation', () => {
       outcome: 'failed',
       messageId: message.id
     })
+  })
+
+  it('keeps worker report settlement nested in its caller transaction', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    db.db.exec('BEGIN IMMEDIATE')
+
+    expect(
+      db.settleWorkerReport({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'succeeded',
+        result: 'done'
+      })
+    ).toMatchObject({ action: 'settled', duplicate: false })
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    db.db.exec('ROLLBACK')
+
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
   })
 
   it('replays an identical terminal outcome without mutating settled state', () => {

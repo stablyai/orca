@@ -4,6 +4,7 @@ import type { AutomationPrecheck, AutomationPrecheckResult } from '../../shared/
 import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../shared/automation-precheck'
 import { getSshConnectionManager } from '../ipc/ssh'
 import { shellEscape } from '../ssh/ssh-connection-utils'
+import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 
 type AutomationPrecheckExecutionTarget =
   | {
@@ -73,7 +74,10 @@ function failedPrecheckResult(
   })
 }
 
-function killLocalPrecheckProcessTree(child: ChildProcess): ReturnType<typeof setTimeout> | null {
+/** Exported for the refusal-fallback test; the timeout path is otherwise unreachable. */
+export function killLocalPrecheckProcessTree(
+  child: ChildProcess
+): ReturnType<typeof setTimeout> | null {
   const pid = child.pid
   if (!pid) {
     child.kill()
@@ -81,6 +85,18 @@ function killLocalPrecheckProcessTree(child: ChildProcess): ReturnType<typeof se
   }
 
   if (process.platform === 'win32') {
+    if (
+      !admitSelfInitiatedTreeKill({
+        pid,
+        site: 'automation-precheck-timeout',
+        scope: 'win-taskkill-tree'
+      })
+    ) {
+      // Refusal blocks the tree walk, not the termination: killing the root by
+      // handle cannot reach a recycled pid, and a timed-out precheck must stop.
+      child.kill()
+      return null
+    }
     try {
       // Why: shell prechecks can launch child processes; taskkill walks the
       // Windows process tree so timeout means the command is actually stopped.

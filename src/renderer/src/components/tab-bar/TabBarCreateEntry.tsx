@@ -33,7 +33,10 @@ import {
   getTabEntryOmniboxPlaceholder
 } from './tab-create-entry-copy'
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
-import { useStructuredCodexLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { useStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { translate } from '@/i18n/i18n'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 
@@ -60,7 +63,14 @@ function TabBarCreateEntrySession({
   const [error, setError] = useState<string | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
-  const structuredCodexLaunchStatus = useStructuredCodexLaunchStatus(worktreeId)
+  // One hook per structured provider: the launch registry is keyed by agent, and hooks cannot run
+  // inside the option render loop.
+  const structuredLaunchStatusByAgent = {
+    claude: useStructuredAgentLaunchStatus(worktreeId, 'claude'),
+    codex: useStructuredAgentLaunchStatus(worktreeId, 'codex')
+  }
+  const isStructuredLaunchPending = (agent: TuiAgent): boolean =>
+    isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -228,7 +238,7 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      if (selectedOption.option.agent === 'codex' && structuredCodexLaunchStatus === 'pending') {
+      if (isStructuredLaunchPending(selectedOption.option.agent)) {
         return
       }
       onLaunchAgent?.(selectedOption.option.agent)
@@ -380,24 +390,22 @@ function TabBarCreateEntrySession({
                 option={option}
                 selected={index === activeSelectedIndex}
                 labelOverride={
-                  option.kind === 'agent' &&
-                  option.option.agent === 'codex' &&
-                  structuredCodexLaunchStatus === 'pending'
-                    ? 'Starting Codex chat…'
+                  option.kind === 'agent' && isStructuredLaunchPending(option.option.agent)
+                    ? translate(
+                        'components.native-chat.structuredSessionLaunchPending',
+                        'Starting {{value0}} chat…',
+                        { value0: option.option.label }
+                      )
                     : undefined
                 }
                 disabled={
                   disabled ||
                   pending ||
-                  (option.kind === 'agent' &&
-                    option.option.agent === 'codex' &&
-                    structuredCodexLaunchStatus === 'pending')
+                  (option.kind === 'agent' && isStructuredLaunchPending(option.option.agent))
                 }
                 loading={
                   (pending && index === activeSelectedIndex) ||
-                  (option.kind === 'agent' &&
-                    option.option.agent === 'codex' &&
-                    structuredCodexLaunchStatus === 'pending')
+                  (option.kind === 'agent' && isStructuredLaunchPending(option.option.agent))
                 }
                 onClick={() => {
                   setSelectionGuidance(null)

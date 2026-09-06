@@ -272,7 +272,6 @@ describe('relay native-deps cache on the deploy path', () => {
       '', // rm probe stderr
       NPTY_CLOEXEC_PATCHED,
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 

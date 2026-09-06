@@ -1,4 +1,3 @@
-import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { BrowserGrabSessionController } from './browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
 import {
@@ -103,7 +102,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     error: string | null
   ): void
   protected abstract getDownloadReceivedBytes(item: Electron.DownloadItem): number
-  protected abstract openLinkInOrcaTab(browserTabId: string, rawUrl: string): boolean
+  protected abstract openLinkInOrcaTab(
+    browserTabId: string,
+    rawUrl: string,
+    activate?: boolean
+  ): boolean
 
   protected settingsResolver:
     | (() => {
@@ -144,7 +147,6 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly policyAttachedGuestIds = new Set<number>()
   protected readonly offscreenGuestIds = new Set<number>()
   protected readonly policyCleanupByGuestId = new Map<number, () => void>()
-  protected readonly clickedLinkFrameNameByGuestId = new Map<number, string>()
   protected readonly loadErrorsByGuestId = new Map<number, BrowserLoadError>()
   // Why: did-start-navigation hides the overlay optimistically; stash the cleared error so did-fail-load(-3) can restore an aborted nav.
   protected readonly clearedLoadErrorsByGuestId = new Map<number, BrowserLoadError>()
@@ -190,56 +192,19 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     this.settingsResolver = resolver
   }
 
-  // Why: addScriptToEvaluateOnNewDocument (CDP) is the only reliable pre-page-script hook per nav; executeJavaScript ran on the old page context.
-  protected injectAntiDetection(guest: Electron.WebContents): () => void {
-    let disposed = false
-    let reattachTimer: ReturnType<typeof setTimeout> | null = null
-
-    const attach = (): void => {
-      if (disposed || guest.isDestroyed()) {
-        return
-      }
-      try {
-        if (!guest.debugger.isAttached()) {
-          guest.debugger.attach('1.3')
-        }
-        void guest.debugger
-          .sendCommand('Page.enable', {})
-          .then(() =>
-            guest.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
-              source: ANTI_DETECTION_SCRIPT
-            })
-          )
-          .catch(() => {})
-      } catch {
-        /* best-effort — debugger may be unavailable */
-      }
-    }
-
-    // Why: proxy/bridge stop detaches the debugger and drops injections; re-attach (500ms delay to avoid racing a mid-restart) to keep overrides.
+  // Why: a debugger detach clears every CDP override Chromium holds, including the Google auth-host
+  // UA override, so the confirmed-override record must be dropped or the next auth navigation
+  // believes the identity is still installed and skips the write.
+  protected trackDebuggerDetachForAuthUserAgent(guest: Electron.WebContents): () => void {
     const onDetach = (): void => {
       this.authUserAgentOverrideStateByGuestId.delete(guest.id)
-      if (!disposed && !guest.isDestroyed() && reattachTimer === null) {
-        reattachTimer = setTimeout(() => {
-          reattachTimer = null
-          attach()
-        }, 500)
-      }
     }
-
     try {
-      attach()
       guest.debugger.on('detach', onDetach)
     } catch {
-      /* best-effort */
+      /* debugger may be unavailable */
     }
-
     return () => {
-      disposed = true
-      if (reattachTimer !== null) {
-        clearTimeout(reattachTimer)
-        reattachTimer = null
-      }
       try {
         guest.debugger.off('detach', onDetach)
       } catch {

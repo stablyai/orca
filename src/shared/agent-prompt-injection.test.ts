@@ -5,6 +5,7 @@ import {
   buildAgentPromptPasteBytes,
   buildAgentPromptSubmitBytes,
   getAgentPromptSubmitDelayMs,
+  getMaxTerminalPasteBytesForIngestMs,
   getTerminalPasteIngestMs,
   iterateAgentPromptPasteChunks,
   sanitizeAgentPromptText
@@ -79,6 +80,12 @@ describe('agent prompt injection bytes', () => {
     expect(getTerminalPasteIngestMs('win32', 320_000)).toBeGreaterThan(
       getTerminalPasteIngestMs('darwin', 320_000)
     )
+  })
+
+  it('inverts the host ingest budget without crossing it', () => {
+    const bytes = getMaxTerminalPasteBytesForIngestMs('win32', 20_000)
+    expect(getTerminalPasteIngestMs('win32', bytes)).toBe(20_000)
+    expect(getTerminalPasteIngestMs('win32', bytes + 1)).toBe(20_001)
   })
 
   it('sanitizes embedded escape bytes before framing', () => {

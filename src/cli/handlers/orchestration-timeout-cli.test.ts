@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+const originalExitCode = process.exitCode
+const originalCliCommand = process.env.ORCA_CLI_COMMAND
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
@@ -21,6 +23,17 @@ describe('orchestration timeout flag validation', () => {
     callMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
+    process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    process.exitCode = originalExitCode
+    if (originalCliCommand === undefined) {
+      delete process.env.ORCA_CLI_COMMAND
+    } else {
+      process.env.ORCA_CLI_COMMAND = originalCliCommand
+    }
+    vi.restoreAllMocks()
   })
 
   const invokeCheck = (flags: Map<string, string | boolean>) =>
@@ -37,6 +50,14 @@ describe('orchestration timeout flag validation', () => {
       client: { call: callMock },
       cwd: '/tmp/repo',
       json: true
+    } as never)
+
+  const invokePlainAsk = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration ask']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
     } as never)
 
   it.each(invalidTimeoutValues)('rejects invalid check --timeout-ms: %s', async (_label, value) => {
@@ -219,6 +240,37 @@ describe('orchestration timeout flag validation', () => {
       },
       { timeoutMs: 605_000, orchestrationCapability: undefined }
     )
+  })
+
+  it('prints the pending message ID and exact capability-bound resume command on timeout', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.ORCA_CLI_COMMAND = 'orca-dev'
+    callMock.mockResolvedValue({
+      result: {
+        answer: null,
+        messageId: 'msg_question',
+        threadId: 'thread_question',
+        timedOut: true,
+        timeoutMs: 30_000
+      }
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await invokePlainAsk(
+      new Map<string, string | boolean>([
+        ['question', 'Proceed?'],
+        ['dispatch-capability', 'dcap_secret'],
+        ['timeout-ms', '30000']
+      ])
+    )
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      'ask timeout after 30000ms; question is still pending (messageId: msg_question). ' +
+        'Resume waiting; do not ask again:\n' +
+        'orca-dev orchestration ask --from term_worker --dispatch-capability dcap_secret ' +
+        '--resume msg_question --timeout-ms 30000'
+    )
+    expect(process.exitCode).toBe(1)
   })
 
   it('rejects ambiguous ask create/resume input before RPC', async () => {

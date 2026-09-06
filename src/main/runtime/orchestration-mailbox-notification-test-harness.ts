@@ -1,3 +1,4 @@
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -81,7 +82,10 @@ export type MailboxCheckOptions = {
   signal?: AbortSignal
 }
 
-export function createRuntime(db: OrchestrationDb): MailboxNotificationHarness {
+export function createRuntime(
+  db: OrchestrationDb,
+  options: { connectionId?: string; isWsl?: boolean } = {}
+): MailboxNotificationHarness {
   const runtime = new OrcaRuntimeService(null, undefined, {
     attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
       paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
@@ -92,15 +96,22 @@ export function createRuntime(db: OrchestrationDb): MailboxNotificationHarness {
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,
+    writeWithSettlement: settledWriteStub(write),
     kill: vi.fn(),
     getForegroundProcess: async () => null
   })
-  runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
-    tabId: TAB_ID,
-    leafId: LEAF_ID,
-    incarnationId: 'mailbox-incarnation',
-    agentLaunchAuthority: { launchToken: LAUNCH_TOKEN, launchAgent: 'codex' }
-  })
+  runtime.registerPty(
+    PTY_ID,
+    WORKTREE_ID,
+    options.connectionId ?? null,
+    {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: 'mailbox-incarnation',
+      agentLaunchAuthority: { launchToken: LAUNCH_TOKEN, launchAgent: 'codex' }
+    },
+    options.isWsl
+  )
   runtime.registerPreAllocatedHandleForPty(PTY_ID, TERMINAL_HANDLE)
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
@@ -184,15 +195,17 @@ export function registerSecondPane(
 
 export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void> {
   await runtime.listTerminals()
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
-  runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
-  await Promise.resolve()
+  const working = runtime.acceptPtyDataBounded(PTY_ID, '\x1b]0;Codex working\x07', 1)
+  const done = runtime.acceptPtyDataBounded(PTY_ID, '\x1b]0;Codex done\x07', 2)
+  await Promise.all([working.completion, done.completion])
 }
 
 export function pointerCount(write: ReturnType<typeof vi.fn>): number {
-  return write.mock.calls.filter(([, payload]) =>
-    String(payload).includes('orca orchestration check')
-  ).length
+  return write.mock.calls.filter(([, payload]) => isMailboxPointer(payload)).length
+}
+
+export function isMailboxPointer(payload: unknown): boolean {
+  return String(payload).includes(' orchestration check')
 }
 
 export async function checkBoundMailbox(
