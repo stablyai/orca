@@ -1,4 +1,6 @@
 import os from 'node:os'
+import { createSeededTestRepo } from './helpers/seeded-test-repo'
+import { cleanupTestRepository } from './global-teardown'
 
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -151,9 +153,12 @@ test.describe('Localhost SSH', () => {
 
   test('routes a terminal and agent-hook status over localhost SSH', async ({
     orcaPage,
-    testRepoPath
+    registerPostElectronShutdownCleanup
   }) => {
     test.slow()
+    // The relay persists workspace sessions by path across fresh client profiles.
+    const testRepoPath = createSeededTestRepo({ publishPath: false })
+    registerPostElectronShutdownCleanup(async () => cleanupTestRepository(testRepoPath))
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
 
