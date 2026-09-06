@@ -91,13 +91,11 @@ export class CodexJournalGenericFrames {
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(
           { provider: 'orca', clientMessageId: `provider-frame:codex:${this.fallbackSequence}` },
-          translated.body,
-          translated.blobs
+          translated.body
         )
       : (this.deps.sink.appendItem(
           { provider: 'orca', clientMessageId: `provider-frame:codex:${this.fallbackSequence}` },
-          translated.body,
-          translated.blobs
+          translated.body
         ),
         CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
@@ -136,13 +134,11 @@ export class CodexJournalGenericFrames {
               kind: 'status',
               text
             },
-            [],
             { coalescingKey: `provider-frame-suppressed:codex:${bucket}` }
           )
         : (this.deps.sink.appendItem(
             { provider: 'orca', clientMessageId: `provider-frame-suppressed:codex:${bucket}` },
             { kind: 'status', text },
-            [],
             { coalescingKey: `provider-frame-suppressed:codex:${bucket}` }
           ),
           CODEX_JOURNAL_ADMITTED)

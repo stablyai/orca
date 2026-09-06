@@ -213,12 +213,18 @@ const LINUX_PACKAGE_TESTS = [
 const WINDOWS_PACKAGE_TESTS = [
   ...LINUX_PACKAGE_TESTS,
   'config/scripts/rebuild-native-deps.test.mjs',
+  'config/scripts/rebuild-native-deps-windows-process-tree.test.mjs',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
   'src/shared/child-process/windows-command-line.win32.test.ts',
+  'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
+  'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',
+  'src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',
+  'src/main/windows/windows-process-tree-command-line-patch.test.ts',
+  'src/main/windows-live-tree-kill.win32.test.ts',
   'src/main/wsl/wsl-runner.test.ts',
   'src/main/wsl/wsl-guest-environment.test.ts',
   'src/main/wsl/wsl-invocation-boundary.test.ts',
@@ -226,13 +232,18 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/wsl/wsl-w1-w3-contract.test.ts',
   'src/shared/source-scan/source-tree-scan.test.ts',
   'src/main/cli/wsl-cli-powershell-boundary.test.ts',
+  'src/main/computer/desktop-script-runtime-host.win32.test.ts',
   'src/main/cursor/hook-service.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
+  'src/main/startup/windows-install-dir-acl-repair.win32.test.ts',
   'src/main/runtime/repo-worktree-admin-fingerprint.test.ts',
   'src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-file-fsync-flags.test.ts',
+  'src/shared/secure-path-windows-acl.win32.test.ts',
+  'src/main/runtime/unreadable-secret-store-preservation.win32.test.ts',
   'src/main/ipc/pty-codex-account-attribution.test.ts',
-  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts'
+  'src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts',
+  'src/relay/windows-port-scan.win32.test.ts'
 ]
 
 const DESKTOP_IRRELEVANT_PREFIXES = [
@@ -263,6 +274,14 @@ export function shouldRunPrChecks(changedFiles) {
   return changedFiles.some((file) => !isDocsOnlyPath(file) && !isDesktopIrrelevantPath(file))
 }
 
+export function needsMobileDependencies(changedFiles) {
+  // Why: static analysis lints CHANGED files, mobile ones included, and its
+  // type-aware pass resolves types from mobile/node_modules. Mobile is a
+  // separate pnpm project, so without this the root-only install leaves every
+  // mobile type an `error` type and the gate reports phantom findings.
+  return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
+}
+
 export function classifyPrJobs(changedFiles) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
@@ -276,6 +295,7 @@ export function classifyPrJobs(changedFiles) {
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
+    mobile_dependencies: shouldRun && needsMobileDependencies(changedFiles),
     ...jobs
   }
 }

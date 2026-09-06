@@ -34,22 +34,28 @@ describePostgres('PostgreSQL schema concurrency', () => {
   })
 
   it('opens five directors when one new table is absent', async () => {
-    const initial = await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
-    await initial.query(`DROP TABLE relay_cell_legacy_fence_adoptions`)
-    await initial.close()
+    // Which catalog step the race loser fails on depends on scheduling, so run several rounds and
+    // keep the loser's SQLSTATE in the failure instead of a bare boolean.
+    for (let round = 0; round < 10; round += 1) {
+      const initial = await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
+      await initial.query(`DROP TABLE relay_cell_legacy_fence_adoptions`)
+      await initial.close()
 
-    const results = await Promise.allSettled(
-      Array.from({ length: 5 }, async (): Promise<RelayDatabase> =>
-        await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
+      const results = await Promise.allSettled(
+        Array.from({ length: 5 }, async (): Promise<RelayDatabase> =>
+          await openRelayDatabase({ databaseUrl: scopedUrl, dataDir: '' })
+        )
       )
-    )
-    const databases = results.flatMap((result) =>
-      result.status === 'fulfilled' ? [result.value] : []
-    )
-    try {
-      expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
-    } finally {
+      const databases = results.flatMap((result) =>
+        result.status === 'fulfilled' ? [result.value] : []
+      )
       await Promise.all(databases.map(async (database) => await database.close()))
+      const rejections = results.flatMap((result) =>
+        result.status === 'rejected'
+          ? [{ round, code: (result.reason as { code?: unknown }).code, message: String(result.reason) }]
+          : []
+      )
+      expect(rejections).toEqual([])
     }
-  })
+  }, 60_000)
 })

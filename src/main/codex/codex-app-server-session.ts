@@ -2,6 +2,7 @@ import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'n
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { admitProcessTreeKill } from '../../shared/child-process/process-tree-kill-gate'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -74,6 +75,18 @@ export function killCodexAppServerProcessTree(
   const platform = options.platform ?? process.platform
   const spawnImpl = options.spawnImpl ?? spawn
   if (platform === 'win32' && child.pid) {
+    if (
+      !admitProcessTreeKill({
+        pid: child.pid,
+        site: 'codex-app-server-session-deadline',
+        scope: 'win-taskkill-tree'
+      })
+    ) {
+      // Refusal blocks the tree walk, not the termination: the root kill is
+      // handle-addressed, so it cannot reach the recycled pid we refused.
+      child.kill('SIGKILL')
+      return
+    }
     try {
       // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
       // leaves the app-server child alive after a timeout or failed shutdown.

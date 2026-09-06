@@ -1,5 +1,6 @@
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
+import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../../shared/terminal-exit-cause'
 import type { Store } from '../../../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -11,7 +12,7 @@ import {
   TerminalSessionOwnerUnverifiedError
 } from '../../../daemon/daemon-errors'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
-import { isPtyAlreadyGoneError } from '../provider/liveness'
+import { isHostReportedPtyAbsenceError, isObservedPtyExitEvidence } from '../provider/liveness'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 
 export type StablePaneOwner = {
@@ -239,7 +240,7 @@ export async function attachStablePaneOwner(
     if (isDaemonEndpointGoneError(error)) {
       throw new TerminalHostGoneError()
     }
-    if (!isPtyAlreadyGoneError(error)) {
+    if (!isHostReportedPtyAbsenceError(error)) {
       throw error
     }
     const ownerBeforeRetire = args.resolveOwner?.()
@@ -252,7 +253,17 @@ export async function attachStablePaneOwner(
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
-    runtime?.onPtyExit(owner.ptyId, 0, owner.incarnationId)
+    // `pty.attach` answers absent both for a pid the relay probed and found gone and for an id its
+    // session map never had — every id minted before a relay restart, checked against nothing. Only
+    // the marked half observed the process, so only it may certify a death; the rest publishes the
+    // stop sentinel its sibling handlePtyReattachFailure publishes, which every reader resolves to
+    // `stop_unverified` (docs/reference/ssh-execution-boundary.md).
+    runtime?.onPtyExit(
+      owner.ptyId,
+      UNVERIFIED_PROCESS_EXIT_CODE,
+      owner.incarnationId,
+      isObservedPtyExitEvidence(error) ? { hostExitConfirmed: true } : {}
+    )
     clearProviderPtyState(owner.ptyId)
     ptyOwnership.delete(owner.ptyId)
     if (

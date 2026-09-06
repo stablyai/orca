@@ -44,6 +44,12 @@ describePostgres('PostgreSQL assignment connection headroom', () => {
         `DELETE FROM relay_assignments
          WHERE user_id LIKE 'connection-headroom-postgres-%'`
       )
+      // A snapshot left by an aborted run rejects the replayed watermark
+      // with stale_connection_snapshot.
+      await database.query(
+        `DELETE FROM relay_cell_connection_snapshots WHERE cell_id = ?`,
+        [cell.id]
+      )
       await database.query(
         `DELETE FROM relay_cell_connection_runtime WHERE cell_id = ?`,
         [cell.id]

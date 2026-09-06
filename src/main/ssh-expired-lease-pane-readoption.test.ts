@@ -7,6 +7,7 @@ import { resolvePersistedStablePaneOwner } from './ipc/pty/pane/stable-owner'
 import { adoptStablePane } from './ipc/pty/pane/adopt-stable'
 import { sshProviders } from './ipc/pty/provider/registry'
 import type { IPtyProvider } from './providers/types'
+import { SSH_SESSION_EXPIRED_ERROR, SshPtyAbsentFromRelayError } from './providers/ssh-pty-errors'
 import { testState, createStore, makeTerminalTab } from './persistence-test-harness'
 import { TEST_LEAF_1 } from './persistence-session-fixtures'
 
@@ -141,11 +142,13 @@ describe('recovery through createTerminal reattaches before it respawns', () => 
     expect(adopted?.owner).toMatchObject({ ptyId: APP_PTY_ID, hasPersistedBinding: true })
   })
 
+  // The typed refusal is what the SSH reattach path raises; the raw `PTY "…" not found` wire text
+  // never reaches a pane untyped, and an untyped one no longer authorises abandoning the binding.
   it('falls through to a fresh spawn once the host answers that the PTY is absent', async () => {
     const store = storeWithBoundRemotePane()
     store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'expired')
     const spawn = vi.fn(async () => {
-      throw new Error('PTY "remote-pty" not found')
+      throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: remote-pty`)
     })
     sshProviders.set(TARGET, { spawn } as unknown as IPtyProvider)
 

@@ -82,17 +82,24 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     worktreeId: string,
     tabs: WorkspaceSessionState['tabsByWorktree'][string]
   ): boolean {
+    // Why resolved lazily and reused: the per-tab question is the same lease sweep with a
+    // different tabId, so asking it once per worktree answers every tab. Kept lazy so a
+    // worktree whose first tab already owns a serve/SSH pty never sweeps at all.
+    let recoverableTabIds: ReadonlySet<string> | undefined
     return tabs.some((tab) => {
       if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
         return true
       }
       const leafPtyIds = session.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId
-      return (
-        (leafPtyIds &&
-          Object.values(leafPtyIds).some((ptyId) => this.isServeOrSshOwnedPtyId(ptyId))) ||
-        // Why: expiry keeps pane coordinates so paired viewers can request a fresh shell.
-        this.getRecentExpiredSshLease(worktreeId, tab.id, undefined) !== null
-      )
+      if (
+        leafPtyIds &&
+        Object.values(leafPtyIds).some((ptyId) => this.isServeOrSshOwnedPtyId(ptyId))
+      ) {
+        return true
+      }
+      // Why: expiry keeps pane coordinates so paired viewers can request a fresh shell.
+      recoverableTabIds ??= this.collectRecentExpiredSshLeaseTabIds(worktreeId)
+      return recoverableTabIds.has(tab.id)
     })
   }
 
@@ -128,6 +135,54 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     )
   }
 
+  /**
+   * Why eligibility belongs in the selection, not after it: a pane accumulates leases as it
+   * re-leases under new relay ids, so `(worktreeId, tabId, leafId)` names several. A superseded or
+   * relay-id-recycled predecessor is `expired` for a reason that already names its successor, and
+   * the unqualified callers use this answer to decide a pane is still recoverable — reporting one
+   * would offer paired viewers a recovery `recoverTerminalPane` then refuses. Picking the first
+   * ELIGIBLE orphan also keeps a predecessor from shadowing the successor that is genuinely
+   * reattachable.
+   */
+  private isRecentExpiredSshLeaseForWorktree(
+    lease: ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number],
+    worktreeId: string,
+    now: number
+  ): boolean {
+    return (
+      lease.state === 'expired' &&
+      lease.worktreeId === worktreeId &&
+      sshRemotePtyLeaseAllowsReattach(lease) &&
+      lease.updatedAt <= now &&
+      now - lease.updatedAt <= SSH_PANE_RECOVERY_GRACE_MS
+    )
+  }
+
+  /**
+   * Leaf is the pane's identity; the frozen tabId is only trustworthy while nothing else can say
+   * where the leaf actually lives.
+   */
+  private resolveExpiredSshLeaseTabId(
+    lease: ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number]
+  ): string {
+    const currentTabId = lease.leafId
+      ? this.findCurrentTerminalTabIdForLeaf(lease.targetId, lease.leafId)
+      : undefined
+    return currentTabId ?? lease.tabId
+  }
+
+  /** The tabs a recent eligible expired lease still names, resolved in one sweep of the leases. */
+  protected collectRecentExpiredSshLeaseTabIds(worktreeId: string): ReadonlySet<string> {
+    const now = Date.now()
+    const tabIds = new Set<string>()
+    for (const lease of this.store?.getSshRemotePtyLeases?.() ?? []) {
+      if (this.isRecentExpiredSshLeaseForWorktree(lease, worktreeId, now)) {
+        tabIds.add(this.resolveExpiredSshLeaseTabId(lease))
+      }
+    }
+    return tabIds
+  }
+
   protected getRecentExpiredSshLease(
     worktreeId: string,
     tabId: string,
@@ -137,34 +192,17 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     const now = Date.now()
     return (
       this.store?.getSshRemotePtyLeases?.().find((lease) => {
-        if (lease.state !== 'expired' || lease.worktreeId !== worktreeId) {
+        if (!this.isRecentExpiredSshLeaseForWorktree(lease, worktreeId, now)) {
           return false
         }
-        // Why eligibility belongs in the selection, not after it: a pane accumulates leases as it
-        // re-leases under new relay ids, so `(worktreeId, tabId, leafId)` names several. A
-        // superseded or relay-id-recycled predecessor is `expired` for a reason that already names
-        // its successor, and the unqualified callers use this answer to decide a pane is still
-        // recoverable — reporting one would offer paired viewers a recovery `recoverTerminalPane`
-        // then refuses. Picking the first ELIGIBLE orphan also keeps a predecessor from shadowing
-        // the successor that is genuinely reattachable.
-        if (!sshRemotePtyLeaseAllowsReattach(lease)) {
-          return false
-        }
-        // Leaf is the pane's identity; the frozen tabId is only trustworthy while nothing else can
-        // say where the leaf actually lives.
-        const currentTabId = lease.leafId
-          ? this.findCurrentTerminalTabIdForLeaf(lease.targetId, lease.leafId)
-          : undefined
         return (
-          (currentTabId ?? lease.tabId) === tabId &&
+          this.resolveExpiredSshLeaseTabId(lease) === tabId &&
           // Leases store RELAY form (`toStoredPtyId` -> `toRelaySshPtyId`); the runtime hands us
           // the APP form (`ssh:<target>@@pty-3`). A raw `===` therefore never held for an SSH
           // pane, which is what kept this reader's only ptyId-qualified caller inert.
           (ptyId === undefined ||
             lease.ptyId === toComparableRelaySshPtyId(lease.targetId, ptyId)) &&
-          (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId) &&
-          lease.updatedAt <= now &&
-          now - lease.updatedAt <= SSH_PANE_RECOVERY_GRACE_MS
+          (leafId === undefined || lease.leafId === undefined || lease.leafId === leafId)
         )
       }) ?? null
     )

@@ -54,7 +54,29 @@ export type WorktreeExecutionHostResolution<T extends ExecutionHostOwnerRow> =
       /** Display metadata only. The decisions are `hostId` / `connectionId`. */
       owner: T | null
     }
-  | { kind: 'unresolved'; reason: 'ambiguous' | 'unknown' }
+  /**
+   * Three reasons, not two, and deliberately not collapsed. `unknown` (nothing carries the id) is a
+   * verdict the launch path may legitimately dispose of as a plain local folder; `malformed` (the
+   * row named a host that cannot be parsed) must fail closed. A vocabulary that cannot express the
+   * difference guarantees it is lost at the first caller that switches on it — the same shape as
+   * #18006, where one word had to stand for two liveness situations.
+   */
+  | { kind: 'unresolved'; reason: 'ambiguous' | 'unknown' | 'malformed' }
+
+/**
+ * The owner row's host, or `null` when the row names one that cannot be parsed.
+ *
+ * Module-private and deliberately not a second exported reading of a repo row: only this resolution
+ * needs the distinction, because only this resolution is routing. `getRepoExecutionHostId` stays the
+ * answer everywhere else — its fall-through to `local` is harmless for the grouping, label and index
+ * callers that make up nearly all of its ~340 call sites, and is wrong only when the value decides
+ * where work runs.
+ */
+function resolveOwnerRowHostId(row: ExecutionHostOwnerRow): ExecutionHostId | null {
+  return row.executionHostId?.trim()
+    ? normalizeExecutionHostId(row.executionHostId)
+    : getRepoExecutionHostId(row)
+}
 
 export function resolveWorktreeExecutionHost<T extends ExecutionHostOwnerRow>(
   lookup: ExecutionHostOwnerLookup<T>,
@@ -80,30 +102,53 @@ export function resolveWorktreeExecutionHost<T extends ExecutionHostOwnerRow>(
   if (match.kind !== 'resolved') {
     return { kind: 'unresolved', reason: match.kind === 'ambiguous' ? 'ambiguous' : 'unknown' }
   }
+  const hostId = resolveOwnerRowHostId(match.owner)
+  if (!hostId) {
+    return { kind: 'unresolved', reason: 'malformed' }
+  }
   return {
     kind: 'resolved',
-    hostId: getRepoExecutionHostId(match.owner),
+    hostId,
     connectionId: getRepoSshConnectionId(match.owner),
     owner: match.owner
   }
 }
 
-/** Array-backed lookup for callers holding the whole repo list (main's store). */
+const EMPTY_ROWS: readonly never[] = []
+
+/**
+ * Array-backed lookup for callers holding the whole repo list (main's store). Grouped once at
+ * construction — a lookup is hit once per worktree key per target, so a per-call `filter` was an
+ * O(repos) rescan each time. Rows keep repo-list order, which `byId` depends on for `rows[0]`.
+ */
 export function createRepoRowExecutionHostLookup<T extends ExecutionHostOwnerRow>(
   repos: readonly T[]
 ): ExecutionHostOwnerLookup<T> {
-  const rowsFor = (repoId: string): T[] => repos.filter((repo) => repo.id === repoId)
+  const rowsById = new Map<string, T[]>()
+  for (const repo of repos) {
+    const rows = rowsById.get(repo.id)
+    if (rows) {
+      rows.push(repo)
+    } else {
+      rowsById.set(repo.id, [repo])
+    }
+  }
+  const rowsFor = (repoId: string): readonly T[] => rowsById.get(repoId) ?? EMPTY_ROWS
   return {
     byId: (repoId) => {
       const rows = rowsFor(repoId)
-      if (rows.length === 0) {
+      const owner = rows[0]
+      if (!owner) {
         return { kind: 'missing' }
       }
-      const hostIds = new Set(rows.map((repo) => getRepoExecutionHostId(repo)))
-      const owner = rows[0]
-      return hostIds.size > 1 || !owner ? { kind: 'ambiguous' } : { kind: 'resolved', owner }
+      const ownerHostId = resolveOwnerRowHostId(owner)
+      return rows.some((repo) => resolveOwnerRowHostId(repo) !== ownerHostId)
+        ? { kind: 'ambiguous' }
+        : { kind: 'resolved', owner }
     },
+    // A row naming an unparseable host matches no host, which is what stops a worktree on a real
+    // host from adopting it.
     byHost: (repoId, hostId) =>
-      rowsFor(repoId).find((repo) => getRepoExecutionHostId(repo) === hostId) ?? null
+      rowsFor(repoId).find((repo) => resolveOwnerRowHostId(repo) === hostId) ?? null
   }
 }

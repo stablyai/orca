@@ -7,17 +7,34 @@ import type {
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
+import type * as WorktreeExecutionHostResolution from '../../shared/worktree-execution-host-resolution'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 const {
   getActiveMultiplexerMock,
   getSshConnectionStoreMock,
-  registerRemoteWorkspaceNotificationHandlerMock
+  registerRemoteWorkspaceNotificationHandlerMock,
+  resolveWorktreeExecutionHostCalls
 } = vi.hoisted(() => ({
   getActiveMultiplexerMock: vi.fn(),
   getSshConnectionStoreMock: vi.fn(),
-  registerRemoteWorkspaceNotificationHandlerMock: vi.fn(() => vi.fn())
+  registerRemoteWorkspaceNotificationHandlerMock: vi.fn(() => vi.fn()),
+  resolveWorktreeExecutionHostCalls: { count: 0 }
 }))
+
+// Counts ownership resolutions without changing any of them.
+vi.mock('../../shared/worktree-execution-host-resolution', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof WorktreeExecutionHostResolution
+  return {
+    ...actual,
+    resolveWorktreeExecutionHost: (
+      ...args: Parameters<typeof actual.resolveWorktreeExecutionHost>
+    ) => {
+      resolveWorktreeExecutionHostCalls.count += 1
+      return actual.resolveWorktreeExecutionHost(...args)
+    }
+  }
+})
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -154,9 +171,10 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   const getRepoMock = vi.fn<Store['getRepo']>()
   const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
   // Ownership resolution reads the catalog, not one id-keyed row, so the fake has to project one.
+  const getReposMock = vi.fn(() => [getRepoMock('repo-target-1')].filter(Boolean))
   const store = {
     getRepo: getRepoMock,
-    getRepos: () => [getRepoMock('repo-target-1')].filter(Boolean),
+    getRepos: getReposMock,
     getWorkspaceSession: getWorkspaceSessionMock
   } as unknown as Store
 
@@ -176,6 +194,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       getTarget: (targetId: string) => targets.find((target) => target.id === targetId)
     })
     getRepoMock.mockReset()
+    getReposMock.mockClear()
     getWorkspaceSessionMock.mockReset()
     getWorkspaceSessionMock.mockReturnValue(baseSession)
     getRepoMock.mockImplementation((repoId: string) =>
@@ -250,6 +269,79 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     }
     return observed as RemoteWorkspaceObservedSnapshot
   }
+
+  it('reads the repo catalog once per publish, not once per worktree', async () => {
+    // `store.getRepos()` re-hydrates every repo row. The export asks "is this worktree mine?" once
+    // per worktree, so reading the catalog inside that callback multiplied hydration by the
+    // worktree count — 413 on the session that surfaced this.
+    const worktrees = Object.fromEntries(
+      Array.from({ length: 12 }, (_, index) => [`repo-target-1::/remote/repo-${index}`, []])
+    )
+    getWorkspaceSessionMock.mockReturnValue({
+      ...baseSession,
+      tabsByWorktree: worktrees
+    } as WorkspaceSessionState)
+    const observed = await observeTarget('target-1')
+    getReposMock.mockClear()
+
+    await callSetForConnectedTargets({
+      hydratedTargetIds: ['target-1'],
+      expectedRevisionsByTargetId: { 'target-1': observed.revision },
+      expectedHostObservationTokensByTargetId: {
+        'target-1': observed.hostObservationToken
+      }
+    })
+
+    expect(getReposMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('resolves each worktree ownership once for the whole publish, not once per target', async () => {
+    // Ownership is a function of the repo catalog alone; only the final `=== targetId` differs, so
+    // exporting to N targets used to repeat the identical resolution N times per worktree key.
+    const worktrees = Object.fromEntries(
+      Array.from({ length: 6 }, (_, index) => [`repo-target-1::/remote/repo-${index}`, []])
+    )
+    getWorkspaceSessionMock.mockReturnValue({
+      ...baseSession,
+      tabsByWorktree: worktrees
+    } as WorkspaceSessionState)
+    const observed = await Promise.all(targets.map((target) => observeTarget(target.id)))
+    getReposMock.mockClear()
+    resolveWorktreeExecutionHostCalls.count = 0
+
+    await callSetForConnectedTargets({
+      hydratedTargetIds: targets.map((target) => target.id),
+      expectedRevisionsByTargetId: Object.fromEntries(
+        targets.map((target, index) => [target.id, observed[index].revision])
+      ),
+      expectedHostObservationTokensByTargetId: Object.fromEntries(
+        targets.map((target, index) => [target.id, observed[index].hostObservationToken])
+      )
+    })
+
+    expect(getReposMock).toHaveBeenCalledTimes(1)
+    // 6 worktree keys resolved once each, regardless of how many targets are published to.
+    expect(resolveWorktreeExecutionHostCalls.count).toBe(6)
+  })
+
+  it('skips the session and repo-catalog reads when no hydrated target is connected', async () => {
+    // A hydrated but disconnected target leaves nothing to project onto, so hoisting the catalog
+    // read must not make the idle path pay for a full repo hydration it never used before.
+    getActiveMultiplexerMock.mockReturnValue(undefined)
+    getReposMock.mockClear()
+    getWorkspaceSessionMock.mockClear()
+
+    await expect(
+      callSetForConnectedTargets({
+        hydratedTargetIds: ['target-1'],
+        expectedRevisionsByTargetId: { 'target-1': 7 },
+        expectedHostObservationTokensByTargetId: { 'target-1': 'token' }
+      })
+    ).resolves.toEqual([])
+
+    expect(getReposMock).not.toHaveBeenCalled()
+    expect(getWorkspaceSessionMock).not.toHaveBeenCalled()
+  })
 
   it('does not write without an explicit non-empty hydrated target set', async () => {
     await expect(callSetForConnectedTargets({ session: baseSession })).resolves.toEqual([])

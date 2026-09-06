@@ -1,23 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  startStructuredCodexLaunch: vi.fn(),
+  startStructuredAgentLaunch: vi.fn(),
   activateStructuredAgentSessionById: vi.fn()
 }))
 
 vi.mock('@/lib/structured-agent-session-launch', () => ({
-  startStructuredCodexLaunch: mocks.startStructuredCodexLaunch
+  startStructuredAgentLaunch: mocks.startStructuredAgentLaunch
 }))
 
 vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
   activateStructuredAgentSessionById: mocks.activateStructuredAgentSessionById
 }))
 
-vi.mock('@/lib/launch-structured-codex-session', () => ({
+vi.mock('@/lib/launch-structured-agent-session', () => ({
   StructuredAgentSessionCreateRefusalError: class extends Error {}
 }))
 
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { settleFullCreationStructuredLaunch } from './full-creation-structured-launch'
 
 describe('settleFullCreationStructuredLaunch', () => {
@@ -26,7 +26,7 @@ describe('settleFullCreationStructuredLaunch', () => {
   it('runs the legacy terminal fallback after a definitive refusal', async () => {
     const fallbackActivation = { primaryTabId: 'fallback-tab' }
     const onDefinitiveRefusal = vi.fn().mockResolvedValue(fallbackActivation)
-    mocks.startStructuredCodexLaunch.mockReturnValue({
+    mocks.startStructuredAgentLaunch.mockReturnValue({
       launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported')),
       isVisibilityUnknown: () => false,
       claimDefinitiveRefusalFallback: (fallback: () => Promise<unknown>) =>
@@ -54,7 +54,7 @@ describe('settleFullCreationStructuredLaunch', () => {
 
   it('reports an unknown outcome without starting a fallback terminal', async () => {
     const onDefinitiveRefusal = vi.fn()
-    mocks.startStructuredCodexLaunch.mockReturnValue({
+    mocks.startStructuredAgentLaunch.mockReturnValue({
       launchResult: Promise.reject(new Error('connection lost')),
       isVisibilityUnknown: () => true,
       claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))

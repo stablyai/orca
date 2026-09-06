@@ -9,7 +9,7 @@ import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { browserManager } from '../browser/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/browser-client-page-automation-runtime'
 import { BrowserClientPageCommandError } from '../browser/browser-client-page-command-failure'
-import { startPreGoneProcessMetricsSampling } from '../crash-reporting/process-gone-diagnostics'
+import { startPreGoneCrashSampling } from '../crash-reporting/process-gone-diagnostics'
 import { recordProcessGoneCrash } from './main-window-lifecycle-flags'
 import { handleGpuChildCrash } from './gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallback-decision'
@@ -32,7 +32,11 @@ import {
 import { initializeMainProcessAutomations } from './main-process-automations'
 import { initializeMainProcessPlugins } from './main-process-plugins'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from '../worktree-trash'
+import { runAfterFirstWindowShown } from './first-window-deferral'
 import { logStartupMilestone } from './startup-diagnostics'
+
+// Headless serve never opens a window, so the sweep still has to run off a timer there.
+const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
 
 export async function initializeReadyRuntimeServices(): Promise<void> {
   const store = state.store
@@ -74,12 +78,16 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   state.emulatorBridge = new EmulatorBridge()
   runtime.setEmulatorBridge(state.emulatorBridge)
   // Why: worktree deletion renames the checkout aside and deletes it in the background, so a quit or
-  // crash mid-delete can leave the moved directory on disk.
-  void sweepStaleWorktreeTrash(
-    collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
-  ).catch((error) => {
-    console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
-  })
+  // crash mid-delete can leave the moved directory on disk. Why deferred: the sweep's recursive
+  // readdir/rm runs on the same libuv threadpool the window's first paint and worktree-catalog
+  // hydration are reading disk on, and nothing on the startup path consumes its result.
+  runAfterFirstWindowShown(() => {
+    void sweepStaleWorktreeTrash(
+      collectWorktreeTrashSweepRoots(store.getRepos(), store.getSettings())
+    ).catch((error) => {
+      console.warn('[worktrees] Failed to sweep leftover worktree directories:', error)
+    })
+  }, WORKTREE_TRASH_SWEEP_FALLBACK_MS)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   // Why (#16441): the real-home grant runs a codex app-server session. It stays
   // ordered before managed-hook reconciliation — an incapable host must re-arm
@@ -122,9 +130,10 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
         console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
       )
   }
-  // Why: process-gone metrics only see survivors; retain a recent whole-app
-  // snapshot for comparison in crash reports.
-  startPreGoneProcessMetricsSampling()
+  // Why: process-gone metrics only see survivors, and the gone-time host memory
+  // read lands after the corpse released its pages; both need a live pre-gone
+  // sample to compare against in crash reports.
+  startPreGoneCrashSampling()
   app.on('child-process-gone', (_event, details) => {
     recordProcessGoneCrash('child', details.type, details.reason, details.exitCode ?? null, {
       name: details.name,

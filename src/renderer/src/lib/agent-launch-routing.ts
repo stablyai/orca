@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -92,13 +93,16 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     input.initialSessionOptions && Object.keys(input.initialSessionOptions).length > 0
   )
   const structuredSupported =
-    input.agent === 'codex' &&
+    isAgentSessionHandleProvider(input.agent) &&
     input.promptDelivery !== 'draft' &&
     input.workspaceKind !== 'floating' &&
     input.requiresTuiLaunchCustomization !== true &&
     !hasInitialSessionOptions &&
     input.executionHostId === 'local' &&
-    input.platform !== 'win32' &&
+    // Codex's Windows refusal is deliberate and settled elsewhere, so it stays a client-side
+    // answer. Claude's is measured by the executing host at create time (agentSession.createSupport)
+    // because only that host knows whether it can read a provider child's start time.
+    (input.agent !== 'codex' || input.platform !== 'win32') &&
     !runtimeRefused &&
     input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
 

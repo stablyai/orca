@@ -32,6 +32,10 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
+import {
+  annotateOmittedHostScope,
+  type WithAnnotatedHostScope
+} from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getBrowserWorktreeSelector,
@@ -90,12 +94,16 @@ const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }
 
 export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'terminal list': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
-      worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      // Why: agent JSON calls dominate; topology stays available through an explicit opt-in.
-      includeVisualLayouts: !json || flags.has('include-visual-layouts')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeTerminalListResult>>(
+      'terminal.list',
+      {
+        worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+        // Why: agent JSON calls dominate; topology stays available through an explicit opt-in.
+        includeVisualLayouts: !json || flags.has('include-visual-layouts')
+      }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {

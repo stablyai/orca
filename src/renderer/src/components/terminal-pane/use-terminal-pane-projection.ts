@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import type { CSSProperties } from 'react'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -23,10 +23,13 @@ import { resolvePaneAgentSessionId } from './pane-agent-session-id'
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
     applyNativeChatLeafRoute,
+    canToggleChatForLeaf,
     chatLeafId,
     chatPaneDispatchStatus,
     contextMenu,
     contextMenuLeafId,
+    effectiveChatViewMode,
+    getContextMenuLeafId,
     getNativeChatLeafIds,
     getTabWideAgentHintLeafId,
     isActive,
@@ -34,6 +37,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     isChatViewMode,
     isVisible,
     managerRef,
+    toggleNativeChatForLeaf,
     paneTitles,
     paneTransportsRef,
     resolveTitleAgentForLeaf,
@@ -177,6 +181,17 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(contextMenuLeafId)
   )
+  // Each switcher gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
+  const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
+  const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
+  const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
+  const handleContextMenuToggleNativeChat = useCallback(() => {
+    const leafId = getContextMenuLeafId()
+    if (!leafId) {
+      return
+    }
+    toggleNativeChatForLeaf(leafId)
+  }, [getContextMenuLeafId, toggleNativeChatForLeaf])
   return {
     effectiveAppearance,
     terminalBackground,
@@ -204,7 +219,11 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     activePaneIsChatLeaf,
     resolveAgentForLeaf,
     activePaneCanContinueInNewSession,
-    contextMenuCanContinueInNewSession
+    contextMenuCanContinueInNewSession,
+    activePaneCanToggleChat,
+    contextMenuCanToggleChat,
+    contextMenuIsChatView,
+    handleContextMenuToggleNativeChat
   }
 }
 

@@ -576,12 +576,16 @@
           },
           "ProjectPicker": {
             "43a88ae574": "BOARD_LAYOUT",
+            "ab1a2c357d": "Roadmap (unsupported)",
             "b787682111": "Browse all",
             "ba0ab9a117": "Browse all (loading…)",
             "cafb908f34": "TABLE_LAYOUT"
           },
           "ProjectRow": {
             "c3b81ddea2": "DRAFT_ISSUE"
+          },
+          "ProjectViewWrapper": {
+            "1bf8c01c8b": "Switch to a Table view to work with this project in Orca."
           }
         }
       },
@@ -3678,18 +3682,29 @@
         }
       },
       "status": {
-        "working": "Working…"
+        "responding": "Agent is responding",
+        "thinking": "Thinking",
+        "toggleDetails": "Toggle turn details",
+        "workedFor": "Worked for {{value0}}",
+        "working": "Working…",
+        "workingFor": "Working for {{value0}}"
       },
       "toggle": {
         "showChat": "Show chat view",
         "showTerminal": "Show terminal"
       },
       "tool": {
+        "countN": "{{value0}} tool calls",
+        "countOne": "1 tool call",
         "ranCommandManyToolsSummary": "Ran {{commandCount}} command and used {{toolCount}} tools",
         "ranCommandOneToolSummary": "Ran {{commandCount}} command and used {{toolCount}} tool",
         "ranCommandsManyToolsSummary": "Ran {{commandCount}} commands and used {{toolCount}} tools",
         "ranCommandsOneToolSummary": "Ran {{commandCount}} commands and used {{toolCount}} tool",
         "running": "Running…",
+        "runningCommand": "Running command",
+        "runningNamed": "Running {{toolName}}",
+        "runningNamedPreview": "Running {{toolName}} {{preview}}",
+        "runningPreview": "Running {{preview}}",
         "usedManySummary": "Used {{toolCount}} tools",
         "usedOneSummary": "Used 1 tool"
       }
@@ -3728,6 +3743,16 @@
           "readyManyOne": "{{value0}} workspaces found, with 1 cleanup suggestion.",
           "readyOneMany": "1 workspace found, with {{value0}} cleanup suggestions.",
           "readyOneOne": "1 workspace found, with 1 cleanup suggestion."
+        }
+      }
+    },
+    "onboarding": {
+      "integrations": {
+        "capabilities": {
+          "browseIssues": "Browse GitHub issues and pull requests in the Tasks view without leaving Orca",
+          "managePullRequests": "Read, comment on, and merge pull requests without leaving Orca",
+          "reviewStatus": "See issue state, review status, and CI checks on every worktree",
+          "startWorkspaceFromIssue": "Start a workspace from any GitHub issue or pull request, prefilled with its title and context"
         }
       }
     }

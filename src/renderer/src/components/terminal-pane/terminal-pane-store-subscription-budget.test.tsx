@@ -4,8 +4,8 @@
  * synchronously on every publication, so the per-pane subscription count is a
  * direct multiplier on agent-status burn (docs/reference/renderer-agent-status-performance.md).
  *
- * On `main` one mounted pane opened 48 listeners; 31 of them selected values that
- * can never change — 27 store actions and 4 duplicate reads of one unified tab.
+ * On `main` one mounted pane opened 49 listeners; 32 of them selected values that
+ * can never change — 28 store actions and 4 duplicate reads of one unified tab.
  */
 import { act, createRef, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -27,7 +27,7 @@ import {
  */
 const TERMINAL_PANE_LISTENER_BUDGET = 17
 /** What the same mount cost before the stable-action and unified-tab folds. */
-const PRE_FOLD_LISTENERS_PER_PANE = 48
+const PRE_FOLD_LISTENERS_PER_PANE = 49
 
 const originalState = useAppStore.getState()
 
@@ -103,7 +103,7 @@ describe('TerminalPane store subscription budget', () => {
 
     expect(perPane).toBe(TERMINAL_PANE_LISTENER_BUDGET)
     expect(perPane).toBeLessThan(PRE_FOLD_LISTENERS_PER_PANE)
-    // 27 stable actions plus four duplicate unified-tab reads.
+    // 28 stable actions plus four duplicate unified-tab reads.
     expect(PRE_FOLD_LISTENERS_PER_PANE - perPane).toBe(TERMINAL_PANE_STORE_ACTION_KEYS.length + 4)
 
     unmount()

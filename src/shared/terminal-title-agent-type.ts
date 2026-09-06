@@ -10,6 +10,7 @@ import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
 } from './pi-compatible-synthetic-title'
+import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import type { TuiAgent } from './tui-agent'
 
@@ -217,10 +218,10 @@ function computeAgentLabel(title: string): string | null {
   return null
 }
 
-// Maps getAgentLabel()'s product labels to TuiAgent ids — the fallback for
-// agents whose foreground PROCESS name isn't self-identifying (Claude Code runs
-// as `node`, but its "✳ Claude Code" title resolves here). Agents whose process
-// name already matches (codex, etc.) never reach this path.
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const getAgentLabel: (title: string) => string | null =
+  memoizeTitleClassification(computeAgentLabel)
+
 const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
@@ -239,10 +240,6 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Pi: 'pi',
   OMP: 'omp'
 }
-
-/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
-export const getAgentLabel: (title: string) => string | null =
-  memoizeTitleClassification(computeAgentLabel)
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {
   return (
@@ -266,7 +263,13 @@ function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null):
 
 export function resolveTerminalTitleAgentType(title: string): TuiAgent | null {
   const label = getAgentLabel(title)
-  return label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
+  const parsed = label ? (TITLE_LABEL_TO_AGENT[label] ?? null) : null
+  return resolveCanonicalPaneAgentIdentity({
+    title,
+    // Preserve this public title-parser adapter's historical answer; pane identity
+    // consumers pass raw titles to the canonical resolver and enforce its fence.
+    uncoveredFallback: { agent: parsed, titleOnly: false }
+  }).agent
 }
 
 /**
@@ -283,6 +286,6 @@ function computeExplicitTerminalTitleAgentType(title: string): TuiAgent | null {
   return titleAgent
 }
 
-/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+/** Pure in `title` — memoized so repeated selector reads skip the canonical/title parse. */
 export const resolveExplicitTerminalTitleAgentType: (title: string) => TuiAgent | null =
   memoizeTitleClassification(computeExplicitTerminalTitleAgentType)

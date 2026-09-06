@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
+import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
   abandonStructuredAgentSessionLaunchIntent,
-  createStructuredCodexSessionLaunchIntent,
+  createStructuredAgentSessionLaunchIntent,
   StructuredAgentSessionCreateRefusalError
-} from '@/lib/launch-structured-codex-session'
+} from '@/lib/launch-structured-agent-session'
 import {
   discardStructuredAgentSessionLaunchOutbox,
   enqueueStructuredAgentSessionLaunchPrompt
@@ -14,7 +16,7 @@ import {
   launchAndReconcile,
   reconcileUnknownLaunch,
   StructuredAgentSessionLaunchCancelledError,
-  type StructuredCodexLaunchReceipt,
+  type StructuredAgentLaunchReceipt,
   type StructuredLaunchRecoveryState
 } from '@/lib/structured-agent-session-launch-recovery'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
@@ -26,13 +28,13 @@ import {
   settleStructuredLaunchCallersWithFallback,
   settleStructuredLaunchCallersWithoutFallback,
   structuredLaunchCallersHavePendingWork,
-  type StructuredCodexLaunchOptions,
+  type StructuredAgentLaunchOptions,
   type StructuredLaunchCaller,
   type StructuredLaunchCallerGroup,
   type StructuredRefusalFallback
 } from '@/lib/structured-agent-session-launch-callers'
 
-export type { StructuredCodexLaunchOptions, StructuredCodexLaunchReceipt }
+export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 
 type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
@@ -44,16 +46,20 @@ type StructuredLaunchStateResult = {
   caller: StructuredLaunchCaller
 }
 
-export type StructuredCodexLaunchResult = {
+export type StructuredAgentLaunchResult = {
   sessionId: string
-  launchResult: Promise<StructuredCodexLaunchReceipt>
+  launchResult: Promise<StructuredAgentLaunchReceipt>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   isVisibilityUnknown: () => boolean
   releaseCallerAfterUnknownOutcome: () => boolean
   claimDefinitiveRefusalFallback: (fallback: StructuredRefusalFallback) => Promise<boolean>
 }
 
-export type StructuredCodexLaunchStatus = 'idle' | 'pending' | 'unknown'
+export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
+
+function structuredAgentLabel(agent: AgentSessionHandleProvider): string {
+  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
+}
 
 const pendingStructuredLaunchesByIdentity = new Map<string, StructuredLaunchState>()
 const structuredLaunchListeners = new Set<() => void>()
@@ -64,29 +70,37 @@ function notifyStructuredLaunchListeners(): void {
   }
 }
 
-export function subscribeStructuredCodexLaunchStatus(listener: () => void): () => void {
+export function subscribeStructuredAgentLaunchStatus(listener: () => void): () => void {
   structuredLaunchListeners.add(listener)
   return () => structuredLaunchListeners.delete(listener)
 }
 
-export function getStructuredCodexLaunchStatus(worktreeId: string): StructuredCodexLaunchStatus {
-  const state = pendingStructuredLaunchesByIdentity.get(worktreeId)
+export function getStructuredAgentLaunchStatus(
+  worktreeId: string,
+  agent: AgentSessionHandleProvider
+): StructuredAgentLaunchStatus {
+  const state = pendingStructuredLaunchesByIdentity.get(launchIdentity(worktreeId, agent))
   if (!state) {
     return 'idle'
   }
   return state.visibilityUnknown ? 'unknown' : 'pending'
 }
 
-export function useStructuredCodexLaunchStatus(worktreeId: string): StructuredCodexLaunchStatus {
+export function useStructuredAgentLaunchStatus(
+  worktreeId: string,
+  agent: AgentSessionHandleProvider
+): StructuredAgentLaunchStatus {
   return useSyncExternalStore(
-    subscribeStructuredCodexLaunchStatus,
-    () => getStructuredCodexLaunchStatus(worktreeId),
+    subscribeStructuredAgentLaunchStatus,
+    () => getStructuredAgentLaunchStatus(worktreeId, agent),
     () => 'idle'
   )
 }
 
-function launchIdentity(worktreeId: string): string {
-  return worktreeId
+// Why keyed by agent too: one worktree can hold a Claude and a Codex launch at once, and a shared
+// key would hand the second caller the first agent's intent.
+function launchIdentity(worktreeId: string, agent: AgentSessionHandleProvider): string {
+  return `${agent}:${worktreeId}`
 }
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
@@ -114,7 +128,7 @@ function settleDefinitiveRefusalFallback(state: StructuredLaunchState): void {
 
 function trackLaunchSettlement(
   state: StructuredLaunchState,
-  promise: Promise<StructuredCodexLaunchReceipt>
+  promise: Promise<StructuredAgentLaunchReceipt>
 ): void {
   void promise.then(
     () => {
@@ -146,27 +160,54 @@ function trackLaunchFailureToast(state: StructuredLaunchState): void {
     if (error instanceof StructuredAgentSessionLaunchCancelledError) {
       return
     }
+    const agentLabel = structuredAgentLabel(state.intent.agent)
     if (
       error instanceof StructuredAgentSessionCreateRefusalError &&
       (await state.callers.refusalSettlement.promise.catch(() => false))
     ) {
+      // Why: the callback proves the fallback was attempted, not that its terminal became visible.
+      toast.message(
+        translate(
+          'components.native-chat.structuredSessionFellBackToTerminal',
+          "Structured chat isn't available"
+        ),
+        {
+          description: translate(
+            'components.native-chat.structuredSessionFellBackToTerminalDescription',
+            'Orca tried to open a {{value0}} terminal instead.',
+            { value0: agentLabel }
+          )
+        }
+      )
       return
     }
+    // Why: the raw error carries errnos and absolute paths; it belongs in the log, not the toast.
+    console.warn('[native-chat] structured launch failed', error)
     toast.error(
       translate(
         'components.native-chat.structuredSessionLaunchFailed',
-        'Could not open Codex chat'
+        'Could not open {{value0}} chat',
+        {
+          value0: agentLabel
+        }
       ),
-      { description: error instanceof Error ? error.message : String(error) }
+      {
+        description: translate(
+          'components.native-chat.structuredSessionLaunchFailedDescription',
+          'Orca could not open a structured {{value0}} chat. See the logs for details.',
+          { value0: agentLabel }
+        )
+      }
     )
   })
 }
 
-function structuredCodexLaunchState(
+function structuredAgentLaunchState(
   worktreeId: string,
-  options: StructuredCodexLaunchOptions
+  agent: AgentSessionHandleProvider,
+  options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
-  const identity = launchIdentity(worktreeId)
+  const identity = launchIdentity(worktreeId, agent)
   const existing = pendingStructuredLaunchesByIdentity.get(identity)
   if (existing) {
     if (existing.visibilityUnknown) {
@@ -192,7 +233,7 @@ function structuredCodexLaunchState(
     }
   }
 
-  const intent = createStructuredCodexSessionLaunchIntent(worktreeId)
+  const intent = createStructuredAgentSessionLaunchIntent(worktreeId, agent)
   const text = options.prompt?.trim() ?? ''
   const stagedPrompt = text
     ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)
@@ -212,7 +253,7 @@ function structuredCodexLaunchState(
     text && !stagedPrompt
       ? Promise.reject(
           new StructuredAgentSessionCreateRefusalError(
-            'Could not durably stage the Codex launch prompt.'
+            `Could not durably stage the ${structuredAgentLabel(agent)} launch prompt.`
           )
         )
       : launchAndReconcile(state)
@@ -232,7 +273,7 @@ function structuredCodexLaunchState(
   }
 }
 
-export function cancelStructuredCodexLaunch(worktreeId: string, sessionId: string): boolean {
+export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: string): boolean {
   const state = [...pendingStructuredLaunchesByIdentity.values()].find(
     (candidate) =>
       candidate.intent.worktreeId === worktreeId && candidate.intent.sessionId === sessionId
@@ -249,11 +290,12 @@ export function cancelStructuredCodexLaunch(worktreeId: string, sessionId: strin
   return true
 }
 
-export function startStructuredCodexLaunch(
+export function startStructuredAgentLaunch(
   worktreeId: string,
-  options: StructuredCodexLaunchOptions = {}
-): StructuredCodexLaunchResult {
-  const { state, caller } = structuredCodexLaunchState(worktreeId, options)
+  agent: AgentSessionHandleProvider,
+  options: StructuredAgentLaunchOptions = {}
+): StructuredAgentLaunchResult {
+  const { state, caller } = structuredAgentLaunchState(worktreeId, agent, options)
   return {
     sessionId: state.intent.sessionId,
     launchResult: state.promise,

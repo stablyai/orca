@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { requireSameEvidenceCode } from './relay-evidence-code-provenance.mjs'
 
 export const SAME_CAP_CELLS = [
   'production-gce-c7', 'production-gce-c8', 'production-gce-c9', 'production-gce-c10',
@@ -85,10 +86,10 @@ export function canaryAuthority(input) {
   }
 }
 
-export function verifyCanaryAuthority(authority, expected) {
+export function verifyCanaryAuthority(authority, expected, repositoryRoot) {
   if (
     authority?.v !== 1 ||
-    authority.commitSha !== expected.commitSha ||
+    !/^[0-9a-f]{40}$/.test(authority.commitSha ?? '') ||
     authority.runId !== expected.runId ||
     authority.targetDigest !== expected.targetDigest ||
     authority.rollbackDigest !== expected.rollbackDigest ||
@@ -96,6 +97,14 @@ export function verifyCanaryAuthority(authority, expected) {
     authority.rehomeGeneration !== Number(expected.rehomeGeneration) ||
     !SAME_CAP_CELLS.includes(authority.cellId)
   ) throw new Error('canary authority does not match this batch')
+  // The batch dispatch resolves main after the canary sealed, so bind to the same code, not the
+  // same SHA; every field above still pins this batch to that exact canary.
+  requireSameEvidenceCode({
+    sealedSha: authority.commitSha,
+    currentSha: expected.commitSha,
+    label: 'relay same-cap canary authority',
+    repositoryRoot
+  })
   return authority
 }
 

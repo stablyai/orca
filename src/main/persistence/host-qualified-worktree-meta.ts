@@ -1,4 +1,5 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 
 /**
@@ -50,6 +51,26 @@ export function readWorktreeMetaForHost(
   executionHostId: ExecutionHostId
 ): WorktreeMeta | undefined {
   return store.getWorktreeMetaForHost?.(worktreeId, executionHostId)
+}
+
+/**
+ * The same two reads keyed off a repo row, so the resolve-then-read pair lives in one place. Four
+ * call sites had open-coded it identically, which is the shape that lets one copy drift from the
+ * rest (F7/F8).
+ */
+export function readAllWorktreeMetaForRepo(
+  store: Pick<HostQualifiedWorktreeMetaStore, 'getAllWorktreeMeta' | 'getAllWorktreeMetaForHost'>,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
+): Record<string, WorktreeMeta> {
+  return readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo))
+}
+
+export function readWorktreeMetaForRepo(
+  store: Pick<HostQualifiedWorktreeMetaStore, 'getWorktreeMetaForHost'>,
+  worktreeId: string,
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
+): WorktreeMeta | undefined {
+  return readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo))
 }
 
 export function writeWorktreeMetaForHost(

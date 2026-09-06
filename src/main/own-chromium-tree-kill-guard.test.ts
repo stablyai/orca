@@ -13,7 +13,12 @@ import {
 import { readOrcaChromiumProcessPids } from './orca-chromium-process-pids'
 import { classifyWindowsTreeKillTarget } from './windows-pty-root-identity'
 import { terminateWindowsProcessTree } from './windows-process-tree-kill'
-import { admitSelfInitiatedTreeKill } from './own-chromium-tree-kill-guard'
+import {
+  admitSelfInitiatedTreeKill,
+  installMainProcessTreeKillGate
+} from './own-chromium-tree-kill-guard'
+import { killCodexAppServerProcessTree } from './codex/codex-app-server-session'
+import { setProcessTreeKillGate } from '../shared/child-process/process-tree-kill-gate'
 import { resetSelfInitiatedTreeKillLogForTest } from './crash-reporting/self-initiated-tree-kill-log'
 import {
   clearCrashBreadcrumbsForTest,
@@ -57,6 +62,7 @@ beforeEach(() => {
   setActiveSink({ push: () => {}, flush: () => {}, close: () => {} })
   clearCrashBreadcrumbsForTest()
   resetSelfInitiatedTreeKillLogForTest()
+  installMainProcessTreeKillGate()
 })
 
 afterEach(() => {
@@ -66,6 +72,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   _resetTracerForTests()
   clearCrashBreadcrumbsForTest()
+  setProcessTreeKillGate(null)
 })
 
 describe('refusing to tree-kill our own Chromium processes', () => {
@@ -141,6 +148,72 @@ describe('refusing to tree-kill our own Chromium processes', () => {
       expect.anything(),
       expect.any(Function)
     )
+  })
+
+  it('refuses the codex app-server deadline kill against one of our own pids', () => {
+    const spawnImpl = vi.fn(() => ({ on: vi.fn(), unref: vi.fn() }))
+    const child = { pid: RENDERER_PID, kill: vi.fn() }
+
+    killCodexAppServerProcessTree(child as never, {
+      platform: 'win32',
+      spawnImpl: spawnImpl as never
+    })
+
+    // The deadline timer fires on `child.pid` alone; a reaped-then-recycled pid
+    // is the stale-pid mechanism this gate exists to stop.
+    expect(spawnImpl).not.toHaveBeenCalled()
+    expect(getCrashBreadcrumbSnapshot()).toEqual([
+      expect.objectContaining({ name: 'self_tree_kill_refused_own_chromium' })
+    ])
+  })
+
+  it('still lets the codex app-server deadline kill reach a foreign pid', () => {
+    const killer = { on: vi.fn(), unref: vi.fn() }
+    const spawnImpl = vi.fn(() => killer)
+
+    killCodexAppServerProcessTree({ pid: 7777, kill: vi.fn() } as never, {
+      platform: 'win32',
+      spawnImpl: spawnImpl as never
+    })
+
+    expect(spawnImpl).toHaveBeenCalledWith('taskkill', ['/pid', '7777', '/t', '/f'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+  })
+
+  /**
+   * Fail-open is the deliberate choice — see `orca-chromium-process-pids.ts` for
+   * why refusing everything is worse — so the crumb is the only thing that keeps
+   * an unreadable metrics table distinguishable from a host that has no Chromium.
+   */
+  it('leaves proof, and still admits the kill, when the Chromium metrics cannot be read', () => {
+    appMetricsMock.mockImplementation(() => {
+      throw new Error('getAppMetrics unavailable')
+    })
+
+    expect([...readOrcaChromiumProcessPids()]).toEqual([])
+    // Coalesced: the gate reads this set on every kill, so a broken table must
+    // not evict the ring it shares with the refusal crumb.
+    expect([...readOrcaChromiumProcessPids()]).toEqual([])
+    expect(
+      admitSelfInitiatedTreeKill({
+        pid: RENDERER_PID,
+        site: 'pty-descendant-sweep',
+        scope: 'win-taskkill-tree'
+      })
+    ).toBe(true)
+
+    expect(
+      getCrashBreadcrumbSnapshot().filter(
+        (breadcrumb) => breadcrumb.name === 'own_chromium_pids_unreadable'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        name: 'own_chromium_pids_unreadable',
+        data: expect.objectContaining({ cause: 'getAppMetrics unavailable' })
+      })
+    ])
   })
 
   it('refuses an own-Chromium pid at the gate the account teardowns share', () => {

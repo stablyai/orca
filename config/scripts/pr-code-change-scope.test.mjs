@@ -316,6 +316,24 @@ describe('per-job path classification', () => {
     }
   })
 
+  // Why: static analysis lints changed mobile files with a type-aware pass, and
+  // mobile is a separate pnpm project. Without its node_modules every mobile type
+  // resolves to an `error` type and the changed-code gate fails on phantom
+  // findings, which is exactly how a react-test-renderer union broke a PR.
+  it('installs mobile dependencies exactly when mobile files change', () => {
+    expect(classifyPrJobs([]).mobile_dependencies).toBe(true)
+    expect(classifyPrJobs(['README.md']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['src/main/index.ts']).mobile_dependencies).toBe(false)
+    expect(
+      classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
+    ).toBe(true)
+    // Why false: a mobile-only diff skips every desktop job, so the install step's own
+    // job never runs and claiming the install is needed contradicts should_run.
+    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
+    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(false)
+  })
+
   it('keeps unit-test-only diffs out of packaging', () => {
     expectClassification(['src/main/git/git-status.test.ts'], {
       git_compatibility: true
@@ -354,6 +372,20 @@ describe('PR Checks skip wiring', () => {
     }
   })
 
+  it('gives static analysis the mobile types its type-aware pass resolves', () => {
+    expect(prWorkflow.jobs.code_paths.outputs.mobile_dependencies).toBe(
+      '${{ steps.filter.outputs.mobile_dependencies }}'
+    )
+    const steps = prWorkflow.jobs.static_analysis.steps
+    const install = steps.findIndex((step) => step.name === 'Install mobile dependencies')
+    const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
+    expect(install).toBeGreaterThan(-1)
+    expect(install).toBeLessThan(gate)
+    expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
+    expect(steps[install]['working-directory']).toBe('mobile')
+    expect(steps[install].run).toContain('--frozen-lockfile')
+  })
+
   it('keeps the cheap root-directory guard on docs-only PRs', () => {
     expect(prWorkflow.jobs.root_directory_guard.if).toBeUndefined()
     expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
@@ -382,10 +414,11 @@ describe('PR Checks skip wiring', () => {
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
-    expect(prWorkflow.jobs['e2e-paths'].needs).toEqual(['code_paths'])
-    expect(prWorkflow.jobs['e2e-paths'].if).toBe(
-      "github.event.pull_request.draft != true && needs.code_paths.outputs.should_run == 'true'"
+    const filter = prWorkflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')
+    expect(filter.if).toBe(
+      "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
+    expect(prWorkflow.jobs['e2e-paths']).toBeUndefined()
   })
 
   it('lets verify pass skipped jobs the classifier turned off', () => {

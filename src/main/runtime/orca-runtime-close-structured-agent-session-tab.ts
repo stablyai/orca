@@ -21,8 +21,10 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     tab: RuntimeMobileSessionAgentTab
   ): Promise<void> {
     const host = getStructuredAgentSessionHost()
-    if (typeof host?.setSessionTabVisibility === 'function') {
-      await host.setSessionTabVisibility(tab.sessionId, false)
+    if (host) {
+      if (typeof host.setSessionTabVisibility === 'function') {
+        await host.setSessionTabVisibility(tab.sessionId, false)
+      }
     }
     const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
@@ -41,6 +43,10 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     }
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+    // Retire durable visibility and the runtime snapshot before stopping the provider.
+    if (typeof host?.close === 'function') {
+      await host.close(tab.sessionId)
+    }
   }
 
   // Why: a refused echoed close means the echoing client already pruned its

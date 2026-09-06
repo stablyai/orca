@@ -15,7 +15,7 @@ import {
   resolveHostFlagEnvironmentId
 } from './execution-host-flag'
 import { listSshTargets } from './host-selector-alternatives'
-import { reportCliError } from './format'
+import { reportCliError } from './cli-error'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
@@ -31,6 +31,10 @@ function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
     commandPath[0] === 'account' ||
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
+    // Why: `host list` answers "what can this machine target, and with what flag". Half of that
+    // answer (paired servers) is read from this machine's own pairing store and cannot be routed,
+    // so routing the other half produced one listing describing two machines at once.
+    commandPath[0] === 'host' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
     commandPath[0] === 'vm' ||

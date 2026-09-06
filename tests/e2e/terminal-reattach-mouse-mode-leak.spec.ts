@@ -35,6 +35,7 @@ import {
   discoverActivePtyId,
   execInTerminal,
   waitForActiveTerminalManager,
+  waitForActivePanePtyId,
   waitForPaneCount,
   waitForTerminalOutput
 } from './helpers/terminal'
@@ -146,6 +147,10 @@ test.describe('reattach mouse-mode leak', () => {
       await ensureTerminalVisible(secondLaunch.page)
       await waitForActiveTerminalManager(secondLaunch.page, 30_000)
       await waitForPaneCount(secondLaunch.page, 1, 30_000)
+      // Live output is released only after reattach replay has finished.
+      const reattachedPtyId = await waitForActivePanePtyId(secondLaunch.page)
+      await execInTerminal(secondLaunch.page, reattachedPtyId, 'echo ORCA_REATTACHED_$((21+21))')
+      await waitForTerminalOutput(secondLaunch.page, 'ORCA_REATTACHED_42', 15_000)
 
       // The reattach replay re-arms mouse via rehydrate, then the reset must
       // clear it. Poll until it settles to 'none' (times out if the reset
@@ -247,10 +252,7 @@ test.describe('reattach mouse-mode leak', () => {
           return {
             afterReattach,
             classAfterArm,
-            armedReports,
-            // Whether the reattached pane dynamically bound xterm mouse reporting
-            // at all — class and listener attach together, so either signal proves it.
-            armedMouseReporting: classAfterArm || armedReports > 0
+            armedReports
           }
         } finally {
           disposable.dispose()
@@ -261,16 +263,6 @@ test.describe('reattach mouse-mode leak', () => {
       expect(probe.afterReattach.mode).toBe('none')
       expect(probe.afterReattach.hasEnableMouseClass).toBe(false)
       expect(probe.afterReattach.reports).toBe(0)
-      // Why: the positive control needs the reattached pane to dynamically bind
-      // xterm's browser MouseService. Some headless CI renderers never do on a warm
-      // reattach — the core mouseTrackingMode still flips but no DOM class/listener
-      // attaches — so arming is impossible and the probe can't run. Skip there,
-      // matching the pane-manager/shell guards above; the reset invariant stays
-      // covered by repro-7329 + pty-connection unit tests and this suite on macOS.
-      test.skip(
-        !probe.armedMouseReporting,
-        'Reattached pane does not dynamically bind xterm mouse reporting in this environment'
-      )
       // Positive control proves the motion probe genuinely detects reports.
       expect(probe.classAfterArm).toBe(true)
       expect(probe.armedReports).toBeGreaterThan(0)

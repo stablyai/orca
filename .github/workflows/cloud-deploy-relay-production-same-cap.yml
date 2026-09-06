@@ -87,13 +87,18 @@ jobs:
   gate:
     if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') }}
     runs-on: blacksmith-2vcpu-ubuntu-2204
-    timeout-minutes: 10
+    # Headroom for the full-history checkout the canary provenance check needs.
+    timeout-minutes: 15
     environment: production
     outputs:
       cells: ${{ steps.wave.outputs.cells }}
       job-mode: ${{ steps.wave.outputs.job-mode }}
     steps:
+      # Full history: the canary authority a batch verifies is sealed at an ancestor commit, and
+      # the provenance check fails closed on a commit a shallow clone left out.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with: { node-version: 24 }

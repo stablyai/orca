@@ -5,7 +5,12 @@ import {
   REGIONAL_REHOME_QUARANTINE_MS,
   REGIONAL_REHOME_REDRAIN_SEND_LIMIT
 } from './assignment-store.js'
-import { openInMemoryRelayDatabase, type RelayDatabase, type SqlRow } from './database.js'
+import {
+  openInMemoryRelayDatabase,
+  type RelayDatabase,
+  type RelayLockOptions,
+  type SqlRow
+} from './database.js'
 import {
   REGIONAL_REHOME_SQL_FAILURES_LIMIT,
   REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT
@@ -553,6 +558,341 @@ describe('regional rehome assignment state', () => {
         [identity.userId, identity.relayHostId]
       )
     ).toEqual([{ cell_id: target.id, assignment_epoch: 2 }])
+    await context.database.close()
+  })
+
+  it('skips a rehome dispatch tick on a contended cell inventory', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    await activatePreferredSource(context, identity)
+    probe.reset()
+    probe.failNoWait = true
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+
+    let attempt: unknown
+    try {
+      attempt = await context.store.claimRegionalRehome()
+    } finally {
+      busy.restore()
+    }
+
+    expect(attempt).toBeNull()
+    expect(probe.locks).not.toEqual([])
+    expect(probe.locks.every((options) => options?.failIfUnavailable === true)).toBe(true)
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'claim-regional-rehome',
+        skipped: 1
+      }
+    ])
+
+    probe.failNoWait = false
+    expect(await context.store.claimRegionalRehome()).toMatchObject({
+      sourceCellId: source.id,
+      targetCellId: target.id
+    })
+    await context.database.close()
+  })
+
+  // Why: the redrain lane reaches the inventory through the fleet-safety read
+  // rather than through candidate selection, so it needs its own coverage.
+  // Why: one contended candidate must cost its own tick, not the whole page. The
+  // sweeps are explicitly per-candidate isolated for exactly this reason.
+  it('completes the candidates behind a contended one', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    const identities = [
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' }
+    ]
+    for (const identity of identities) {
+      // Dispatch is rate limited, so each claim needs its own interval.
+      context.advance(60_000)
+      await freshHeartbeats(context)
+      const sourceControl = await activatePreferredSource(context, identity)
+      const attempt = await context.store.claimRegionalRehome()
+      await context.store.recordRegionalRehomeDrainReceipt(attempt!.attemptId, 'accepted')
+      await context.store.activateControl(identity, {
+        cellId: target.id,
+        assignmentEpoch: 2,
+        generation: 1
+      })
+      await context.store.markMigrationTargetRegistered(identity, {
+        cellId: target.id,
+        assignmentEpoch: 2
+      })
+      await context.store.releaseActivity(identity, sourceControl)
+    }
+    probe.reset()
+    probe.failNoWaitTimes = 1
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+
+    let completed: number
+    try {
+      completed = await context.store.completeReadyRegionalRehomes()
+    } finally {
+      busy.restore()
+    }
+
+    expect(completed).toBe(1)
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'complete-ready-regional-rehomes',
+        skipped: 1
+      }
+    ])
+    await context.database.close()
+  })
+
+  // Why: with `continue` replaced by `break` a single contended candidate drops
+  // the rest of the page. Two in a row prove the sweep resumes, not just that it
+  // survived one, and that the summary counts both.
+  it('completes a candidate behind two contended ones', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    const identities = [
+      { userId: 'user-1', relayHostId: 'abcdefghijklmnop' },
+      { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' },
+      { userId: 'user-3', relayHostId: 'aaaabbbbccccdddd' }
+    ]
+    for (const identity of identities) {
+      // Dispatch is rate limited, so each claim needs its own interval.
+      context.advance(60_000)
+      await freshHeartbeats(context)
+      const sourceControl = await activatePreferredSource(context, identity)
+      const attempt = await context.store.claimRegionalRehome()
+      await context.store.recordRegionalRehomeDrainReceipt(attempt!.attemptId, 'accepted')
+      await context.store.activateControl(identity, {
+        cellId: target.id,
+        assignmentEpoch: 2,
+        generation: 1
+      })
+      await context.store.markMigrationTargetRegistered(identity, {
+        cellId: target.id,
+        assignmentEpoch: 2
+      })
+      await context.store.releaseActivity(identity, sourceControl)
+    }
+    probe.reset()
+    probe.failNoWaitTimes = 2
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+
+    let completed: number
+    try {
+      completed = await context.store.completeReadyRegionalRehomes()
+    } finally {
+      busy.restore()
+    }
+
+    expect(completed).toBe(1)
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'complete-ready-regional-rehomes',
+        skipped: 2
+      }
+    ])
+    await context.database.close()
+  })
+
+  // Why: only inventory contention is ordinary. Every other failure must keep its
+  // existing propagation and its dispatch-failure accounting.
+  it('propagates a claim failure that is not inventory contention', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    await activatePreferredSource(context, { userId: 'user-1', relayHostId: 'abcdefghijklmnop' })
+    probe.reset()
+    probe.failWith = new Error('relay_capacity_exhausted')
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+
+    try {
+      await expect(context.store.claimRegionalRehome()).rejects.toThrow(
+        'relay_capacity_exhausted'
+      )
+    } finally {
+      busy.restore()
+    }
+
+    expect(busy.entries).toEqual([])
+    await context.database.close()
+  })
+
+  // Why: the transaction dies at the first contended candidate, so every
+  // candidate behind it is abandoned too. Reporting one would understate the tick.
+  it('reports every candidate the contended tick abandoned', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    await activatePreferredSource(context, { userId: 'user-1', relayHostId: 'abcdefghijklmnop' })
+    await activatePreferredSource(context, { userId: 'user-2', relayHostId: 'ponmlkjihgfedcba' })
+    await activatePreferredSource(context, { userId: 'user-3', relayHostId: 'aaaabbbbccccdddd' })
+    probe.reset()
+    probe.failNoWait = true
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+
+    try {
+      expect(await context.store.claimRegionalRehome()).toBeNull()
+    } finally {
+      busy.restore()
+    }
+
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'claim-regional-rehome',
+        skipped: 3
+      }
+    ])
+    await context.database.close()
+  })
+
+  it('skips a redrain tick on a contended cell inventory', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    await activatePreferredSource(context, identity)
+    const attempt = await context.store.claimRegionalRehome()
+    await context.store.recordRegionalRehomeDrainReceipt(attempt!.attemptId, 'accepted')
+    await context.store.activateControl(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2,
+      generation: 1
+    })
+    await context.store.markMigrationTargetRegistered(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2
+    })
+    context.advance(60 * 60_000 + 1)
+    await freshHeartbeats(context)
+    probe.reset()
+    probe.failNoWait = true
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+
+    let redrain: unknown
+    try {
+      redrain = await context.store.claimRegionalRehome()
+    } finally {
+      busy.restore()
+    }
+
+    expect(redrain).toBeNull()
+    expect(probe.locks).not.toEqual([])
+    expect(probe.locks.every((options) => options?.failIfUnavailable === true)).toBe(true)
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'claim-regional-rehome',
+        skipped: 1
+      }
+    ])
+
+    probe.failNoWait = false
+    expect(await context.store.claimRegionalRehome()).toMatchObject({
+      attemptId: attempt!.attemptId,
+      sendAttempts: 2
+    })
+    await context.database.close()
+  })
+
+  it('skips a completion tick on a contended cell inventory without quarantining it', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    const sourceControl = await activatePreferredSource(context, identity)
+    const attempt = await context.store.claimRegionalRehome()
+    await context.store.recordRegionalRehomeDrainReceipt(attempt!.attemptId, 'accepted')
+    await context.store.activateControl(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2,
+      generation: 1
+    })
+    await context.store.markMigrationTargetRegistered(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2
+    })
+    await context.store.releaseActivity(identity, sourceControl)
+    probe.reset()
+    probe.failNoWait = true
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+    const failures = collectCandidateFailureWarnings()
+
+    let completed: number
+    try {
+      completed = await context.store.completeReadyRegionalRehomes()
+    } finally {
+      failures.restore()
+      busy.restore()
+    }
+
+    expect(completed).toBe(0)
+    expect(probe.locks).not.toEqual([])
+    expect(probe.locks.every((options) => options?.failIfUnavailable === true)).toBe(true)
+    expect(failures.entries).toEqual([])
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'complete-ready-regional-rehomes',
+        skipped: 1
+      }
+    ])
+
+    probe.failNoWait = false
+    expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
+    await context.database.close()
+  })
+
+  // Why: a contended inventory is another director settling the same row, not a
+  // poisoned candidate. Quarantining on it would exclude a healthy attempt from
+  // the sweep's LIMIT pages for 15 minutes.
+  it('skips an abort tick on a contended cell inventory without quarantining it', async () => {
+    const probe = new CellInventoryLockProbe()
+    const context = await setup({ wrap: (database) => probe.wrap(database) })
+    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
+    const sourceControl = await activatePreferredSource(context, identity)
+    const attempt = await context.store.claimRegionalRehome()
+    await context.store.recordRegionalRehomeDrainReceipt(attempt!.attemptId, 'accepted')
+    const targetControl = await context.store.activateControl(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2,
+      generation: 1
+    })
+    await context.store.markMigrationTargetRegistered(identity, {
+      cellId: target.id,
+      assignmentEpoch: 2
+    })
+    await context.store.releaseActivity(identity, sourceControl)
+    await context.store.releaseActivity(identity, targetControl)
+    context.advance(24 * 60 * 60_000)
+    await heartbeat(context.store, source, sourceIncarnation, 1, 2)
+    probe.reset()
+    probe.failNoWait = true
+    const busy = collectEventWarnings('orca_relay_sweep_cell_inventory_busy')
+    const failures = collectCandidateFailureWarnings()
+
+    let aborted: number
+    try {
+      aborted = await context.store.abortExpiredRegionalRehomes()
+    } finally {
+      failures.restore()
+      busy.restore()
+    }
+
+    expect(aborted).toBe(0)
+    expect(probe.locks).not.toEqual([])
+    expect(probe.locks.every((options) => options?.failIfUnavailable === true)).toBe(true)
+    expect(failures.entries).toEqual([])
+    expect(busy.entries).toEqual([
+      {
+        event: 'orca_relay_sweep_cell_inventory_busy',
+        sweep: 'abort-expired-regional-rehomes',
+        skipped: 1
+      }
+    ])
+
+    probe.failNoWait = false
+    expect(await context.store.abortExpiredRegionalRehomes()).toBe(1)
     await context.database.close()
   })
 
@@ -1208,10 +1548,12 @@ function collectDisableWarnings() {
   }
 }
 
-async function setup(options: { sourceProtocol?: number } = {}) {
+async function setup(
+  options: { sourceProtocol?: number; wrap?: (database: RelayDatabase) => RelayDatabase } = {}
+) {
   let clock = 1_000_000
   const database = await openInMemoryRelayDatabase()
-  const store = new RelayAssignmentStore(database, () => clock, {
+  const store = new RelayAssignmentStore(options.wrap?.(database) ?? database, () => clock, {
     requireLiveCells: true,
     heartbeatTtlMs: 45_000
   })
@@ -1396,4 +1738,44 @@ async function heartbeat(
       databasePoolWaitMsMax: 0
     }
   })
+}
+
+class CellInventoryLockProbe {
+  readonly locks: (RelayLockOptions | undefined)[] = []
+  failNoWait = false
+  // Contends the first N candidates only, so the sweep must carry on past them.
+  failNoWaitTimes = 0
+  failWith: Error | null = null
+
+  reset(): void {
+    this.locks.length = 0
+  }
+
+  wrap(database: RelayDatabase): RelayDatabase {
+    const probe = this
+    const decorate = (delegate: RelayDatabase): RelayDatabase => ({
+      query: async (sql, params) => await delegate.query(sql, params),
+      queryLocked: async (sql, params, options) => {
+        if (sql.trim() === 'SELECT * FROM relay_cells ORDER BY cell_id ASC') {
+          probe.locks.push(options)
+          if (probe.failWith) throw probe.failWith
+          if (options?.failIfUnavailable && probe.failNoWaitTimes > 0) {
+            probe.failNoWaitTimes--
+            throw new Error('database_lock_unavailable')
+          }
+          if (probe.failNoWait && options?.failIfUnavailable) {
+            throw new Error('database_lock_unavailable')
+          }
+        }
+        return await delegate.queryLocked(sql, params, options)
+      },
+      transaction: async (operation, options) =>
+        await delegate.transaction(
+          async (transaction) => await operation(decorate(transaction)),
+          options
+        ),
+      close: async () => undefined
+    })
+    return decorate(database)
+  }
 }

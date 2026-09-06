@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 
@@ -14,6 +15,55 @@ const holdUnconfirmedSend = vi.fn()
 // and transcript state; defaults keep the send-seam tests unchanged.
 const viewMode = { isTabChatView: (_tabId: string) => true }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
+const structuredSendWithOutcome = vi.fn()
+const structuredCancel = vi.fn()
+const structuredRespondPermission = vi.fn(async () => true)
+const structuredRespondQuestion = vi.fn(async () => true)
+const structuredSetOption = vi.fn(async () => true)
+const structuredInvokeOption = vi.fn(async () => true)
+const structuredOptionSnapshot: SessionOptionDescriptor[] = [
+  {
+    id: 'model',
+    label: 'Model',
+    category: 'model',
+    kind: {
+      type: 'select',
+      currentValue: 'gpt-fast',
+      choices: [{ value: 'gpt-fast', label: 'GPT Fast' }]
+    },
+    valueSource: 'reported',
+    settable: true
+  }
+]
+const structuredOptionSurface = {
+  getSnapshot: () => structuredOptionSnapshot,
+  setOption: async () => ({ snapshot: structuredOptionSnapshot }),
+  invokeAction: async () => ({ snapshot: structuredOptionSnapshot }),
+  subscribe: () => () => {}
+}
+const structuredPermission = {
+  title: 'Allow Bash?',
+  detail: 'rm -rf build',
+  options: [
+    { label: 'Allow once', send: 'allow-once' },
+    { label: 'Deny', send: 'deny' }
+  ]
+}
+const structuredQuestion = {
+  question: 'Pick destination',
+  options: ['Choice A', 'Choice B'],
+  allowOther: true,
+  optionTokens: ['choice-a', 'choice-b']
+}
+const structuredSessionState = {
+  messages: [] as unknown[],
+  status: 'ready',
+  transcriptLoading: false,
+  error: undefined,
+  hasMore: false,
+  loadingEarlier: false,
+  loadEarlier: vi.fn()
+}
 const draftsArgs: Record<string, unknown>[] = []
 const promptsState = {
   permission: null as unknown,
@@ -32,6 +82,24 @@ vi.mock('./use-mobile-session-view-mode', () => ({
 }))
 vi.mock('./use-mobile-native-chat-session', () => ({
   useMobileNativeChatSession: () => sessionState
+}))
+vi.mock('./use-mobile-structured-agent-session', () => ({
+  useMobileStructuredAgentSession: () => ({
+    session: structuredSessionState,
+    isWorking: false,
+    turnId: null,
+    sendWithOutcome: structuredSendWithOutcome,
+    cancel: structuredCancel,
+    permission: structuredPermission,
+    question: structuredQuestion,
+    optionSnapshot: structuredOptionSnapshot,
+    optionSurface: structuredOptionSurface,
+    pendingOptionId: 'model',
+    respondPermission: structuredRespondPermission,
+    respondQuestion: structuredRespondQuestion,
+    setStructuredOption: structuredSetOption,
+    invokeStructuredOption: structuredInvokeOption
+  })
 }))
 vi.mock('./use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: (args: Record<string, unknown>) => {
@@ -110,18 +178,28 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   // itself is mocked above).
   const clientStub = { sendRequest: vi.fn() }
 
-  function Harness({ connState = 'connected' }: { connState?: ConnectionState }): null {
+  function Harness({
+    connState = 'connected',
+    tab = null,
+    activeHandle = 'term-1',
+    inputLeaseReady = true
+  }: {
+    connState?: ConnectionState
+    tab?: unknown
+    activeHandle?: string | null
+    inputLeaseReady?: boolean
+  }): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState,
       hostId: 'h',
       worktreeId: 'w',
-      activeSessionTab: null,
-      activeSessionTabId: 'tab-1',
-      activeHandleRef: { current: 'term-1' },
+      activeSessionTab: tab as never,
+      activeSessionTabId: (tab as { id?: string } | null)?.id ?? 'tab-1',
+      activeHandleRef: { current: activeHandle },
       deviceTokenRef: { current: null },
       nativeChatTranscriptIsLocalReadable: true,
-      nativeChatInputLeaseReady: true,
+      nativeChatInputLeaseReady: inputLeaseReady,
       onSendError,
       onSendResolved
     })
@@ -138,6 +216,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     resetMobileNativeChatStaleInputForTests()
     captureSendOrigin.mockReturnValue(ORIGIN)
+    structuredSendWithOutcome.mockResolvedValue('accepted')
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -231,6 +310,80 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     // Optimistic clear happens at send time, never a restore on success.
     expect(clearDraftForSend).toHaveBeenCalledWith(ORIGIN, 'look')
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
+  })
+
+  it('routes structured agent-session sends away from terminal/nativeChat transports', async () => {
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          tab: {
+            type: 'agent-session',
+            id: 'agent-tab-1',
+            title: 'Codex Chat',
+            sessionId: 'session-structured',
+            agent: 'codex',
+            isActive: true
+          },
+          activeHandle: null,
+          inputLeaseReady: false
+        })
+      )
+    })
+
+    let accepted = false
+    await act(async () => {
+      accepted = await controller!.handleNativeChatSend('look')
+    })
+
+    expect(accepted).toBe(true)
+    expect(structuredSendWithOutcome).toHaveBeenCalledWith('look')
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+    expect(clientStub.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('exposes structured prompt cards and session options on structured tabs', async () => {
+    await act(async () => {
+      renderer?.update(
+        createElement(Harness, {
+          tab: {
+            type: 'agent-session',
+            id: 'agent-tab-1',
+            title: 'Codex Chat',
+            sessionId: 'session-structured',
+            agent: 'codex',
+            isActive: true
+          },
+          activeHandle: null,
+          inputLeaseReady: false
+        })
+      )
+    })
+
+    expect(controller!.nativeChatPermission).toEqual(structuredPermission)
+    expect(controller!.nativeChatQuestion).toEqual(structuredQuestion)
+    expect(controller!.nativeChatSessionOptions).not.toBeNull()
+    expect(controller!.nativeChatSessionOptions?.controller.snapshot).toEqual(
+      structuredOptionSnapshot
+    )
+
+    await act(async () => {
+      expect(await controller!.handleNativeChatRespondPermission('allow-once')).toBe(true)
+    })
+    expect(structuredRespondPermission).toHaveBeenCalledWith('allow-once')
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+
+    await act(async () => {
+      expect(await controller!.handleNativeChatQuestionAnswer('choice-a')).toBe(true)
+    })
+    expect(structuredRespondQuestion).toHaveBeenCalledWith('choice-a')
+    expect(clientStub.sendRequest).not.toHaveBeenCalled()
+
+    await act(async () => {
+      expect(
+        await controller!.nativeChatSessionOptions!.controller.setOption('model', 'gpt-fast')
+      ).toBe(true)
+    })
+    expect(structuredSetOption).toHaveBeenCalledWith('model', 'gpt-fast')
   })
 
   it('pre-clears separately for a text-only send but never for an image send', async () => {

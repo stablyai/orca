@@ -83,12 +83,30 @@ export function getMixedHostContextLabels<T>(
     sources?: HostContextLabelSources
   }
 ): Map<string, string> | undefined {
-  const labelsByIdentity = new Map<string, string>()
-  const hostIds = new Set<ExecutionHostId>()
+  // Why two passes: on a single-host install the map is built for every item and then discarded.
+  // Deciding first costs one getHostId per item and skips the label work entirely.
+  let firstHostId: ExecutionHostId | undefined
+  let isMixed = false
   for (const item of items) {
     const hostId = args.getHostId(item)
-    hostIds.add(hostId)
-    labelsByIdentity.set(args.getIdentity(item), getHostContextLabel(hostId, args.sources))
+    if (firstHostId === undefined) {
+      firstHostId = hostId
+      continue
+    }
+    if (hostId !== firstHostId) {
+      isMixed = true
+      break
+    }
   }
-  return hostIds.size > 1 ? labelsByIdentity : undefined
+  if (!isMixed) {
+    return undefined
+  }
+  const labelsByIdentity = new Map<string, string>()
+  for (const item of items) {
+    labelsByIdentity.set(
+      args.getIdentity(item),
+      getHostContextLabel(args.getHostId(item), args.sources)
+    )
+  }
+  return labelsByIdentity
 }

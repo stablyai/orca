@@ -55,9 +55,11 @@ jobs:
 
       - name: Validate the exact staging proof request
         shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
-          test "${{ inputs.confirmation }}" = PROVE_ASIA_STAGING
+          test "${CONFIRMATION}" = PROVE_ASIA_STAGING
           [[ "${IMAGE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
           [[ "${INITIAL_SELECTOR_GENERATION}" =~ ^[1-9][0-9]*$ ]]
           [[ "${PROMOTE_ATTEMPT_ID}" =~ ^[A-Za-z0-9_-]{8,128}$ ]]
