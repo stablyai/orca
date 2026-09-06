@@ -1,3 +1,5 @@
+import { captureOpenCodeSession } from './session-search-opencode-content'
+import { withoutSessionSearchCapture } from './session-search-capture'
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from '../../shared/ai-vault-types'
 import {
   addPreviewMessage,
@@ -297,6 +299,7 @@ function readSession(args: {
 
   const previewSql = buildPreviewQuery(db)
   if (previewSql) {
+    captureOpenCodeSession(db, sessionId)
     // Why: SQL already dropped anything older than the newest-N window, so the
     // accumulator never shifts and cannot detect the truncation itself. Ask for
     // one extra row so an exactly-full window is not mistaken for a trimmed one.
@@ -320,13 +323,15 @@ function readSession(args: {
       if (!text) {
         continue
       }
-      addPreviewMessage(accumulator, {
-        role: mapPreviewRole(previewRow.role),
-        text,
-        timestamp: previewRow.time_created,
-        // Preview window is newest-N; first-prompt is loaded separately below.
-        seedFirstUserPrompt: false
-      })
+      withoutSessionSearchCapture(() =>
+        addPreviewMessage(accumulator, {
+          role: mapPreviewRole(previewRow.role),
+          text,
+          timestamp: previewRow.time_created,
+          // Preview window is newest-N; first-prompt is loaded separately below.
+          seedFirstUserPrompt: false
+        })
+      )
       if (previewRow.role === 'user' && !accumulator.title) {
         accumulator.title =
           normalizeTitleText(previewRow.summary_title ?? '') ||

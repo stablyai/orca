@@ -1,3 +1,5 @@
+import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { aiVaultSearchHistoryCutoffMs } from '../../shared/ai-vault-search-settings'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type SyncDatabase from '../sqlite/sync-database'
 import type {
@@ -38,6 +40,9 @@ export class SessionSearchStore implements SessionSearchIndexSink {
   private readonly query: SessionSearchQuery
   private backfill: SessionSearchBackfillState = 'idle'
   private closed = false
+  private historyDays: number | null = null
+  private providerCounts: { agent: AiVaultAgent; sessions: number; messages: number }[] | null =
+    null
   private warmed: Promise<void> | null = null
   private lastIndexedAt: string | null = null
   private applyFailures = 0
@@ -47,7 +52,10 @@ export class SessionSearchStore implements SessionSearchIndexSink {
   constructor(
     path: string,
     private readonly onError: (error: unknown) => void = (error) =>
-      console.warn('[ai-vault-search] index write failed:', error)
+      console.warn(
+        '[ai-vault-search] index write failed:',
+        error instanceof Error ? error.name : 'IndexError'
+      )
   ) {
     this.db = openSessionSearchDatabase(path)
     this.writer = new SessionSearchIndexWriter(this.db)
@@ -63,7 +71,36 @@ export class SessionSearchStore implements SessionSearchIndexSink {
     }
   }
 
+  setHistoryDays(days: number | null): void {
+    this.historyDays = days
+    for (const [path, candidate] of this.stale) {
+      if (!this.acceptsCandidate(candidate)) {
+        this.stale.delete(path)
+      }
+    }
+  }
+
+  acceptsCandidate(candidate: SessionFileCandidate): boolean {
+    const cutoff = aiVaultSearchHistoryCutoffMs(this.historyDays)
+    return !this.closed && (cutoff === null || candidate.file.mtimeMs >= cutoff)
+  }
+
+  updateMetadata(candidate: SessionFileCandidate, session: AiVaultSession): void {
+    if (!this.acceptsCandidate(candidate)) {
+      return
+    }
+    try {
+      this.writer.updateMetadata(candidate.file.path, session)
+    } catch (error) {
+      this.onError(error)
+    }
+  }
+
   apply(update: SessionSearchIndexUpdate): void {
+    if (!this.acceptsCandidate(update.candidate)) {
+      return
+    }
+    this.providerCounts = null
     try {
       this.writer.apply(update)
       // Why: list scans queue every file the backfill has not reached yet; once
@@ -77,7 +114,9 @@ export class SessionSearchStore implements SessionSearchIndexSink {
   }
 
   markStale(candidate: SessionFileCandidate): void {
-    this.stale.set(candidate.file.path, candidate)
+    if (this.acceptsCandidate(candidate)) {
+      this.stale.set(candidate.file.path, candidate)
+    }
   }
 
   /** Hands the stale set to the backfill lane and clears it. */
@@ -92,6 +131,8 @@ export class SessionSearchStore implements SessionSearchIndexSink {
   }
 
   removeFile(path: string): void {
+    this.providerCounts = null
+    this.stale.delete(path)
     try {
       this.writer.removeFile(path)
     } catch (error) {
@@ -184,7 +225,7 @@ export class SessionSearchStore implements SessionSearchIndexSink {
 
   search(args: AiVaultSearchArgs): AiVaultSearchResult {
     const startedAt = performance.now()
-    const execution = this.query.execute(args)
+    const execution = this.query.execute(args, aiVaultSearchHistoryCutoffMs(this.historyDays))
     const durationMs = performance.now() - startedAt
     this.logQuery(args.query, execution.route, execution.hits.length, durationMs)
     return {
@@ -197,13 +238,13 @@ export class SessionSearchStore implements SessionSearchIndexSink {
   }
 
   coverage(): AiVaultSearchCoverage {
-    const providers = this.db
+    const providers = (this.providerCounts ??= this.db
       .prepare(
         `SELECT s.agent AS agent, COUNT(DISTINCT s.id) AS sessions, COUNT(m.id) AS messages
          FROM sessions s LEFT JOIN messages m ON m.session_row_id = s.id
          GROUP BY s.agent ORDER BY s.agent`
       )
-      .all() as { agent: AiVaultAgent; sessions: number; messages: number }[]
+      .all() as { agent: AiVaultAgent; sessions: number; messages: number }[])
     const indexed = new Map(providers.map((row) => [row.agent, row]))
     const agents = [...new Set([...indexed.keys(), ...this.discovery.keys()])].sort()
     const byProvider: AiVaultSearchProviderCoverage[] = agents.map((agent) => {

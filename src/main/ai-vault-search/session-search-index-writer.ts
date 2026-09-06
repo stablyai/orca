@@ -1,3 +1,6 @@
+import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { redactSessionSearchText } from './session-search-redaction'
+import { sessionSearchPathKey } from './session-search-path-key'
 import type SyncDatabase from '../sqlite/sync-database'
 import type {
   SessionSearchFileIdentity,
@@ -109,6 +112,19 @@ export class SessionSearchIndexWriter {
     }
   }
 
+  updateMetadata(path: string, session: AiVaultSession): void {
+    this.db
+      .prepare(`UPDATE sessions SET title = ?, cwd = ?, cwd_key = ?, branch = ?
+      WHERE id = (SELECT session_row_id FROM files WHERE path = ?)`)
+      .run(
+        redactSessionSearchText(session.title),
+        session.cwd,
+        session.cwd ? sessionSearchPathKey(session.cwd, session.filePath) : null,
+        session.branch,
+        path
+      )
+  }
+
   /** Paths of indexed files last modified before the cutoff, oldest first. */
   filesOlderThan(cutoffMs: number): string[] {
     return (
@@ -170,8 +186,9 @@ export class SessionSearchIndexWriter {
       session.sessionId,
       session.filePath,
       session.codexHome,
-      session.title,
+      redactSessionSearchText(session.title),
       session.cwd,
+      session.cwd ? sessionSearchPathKey(session.cwd, session.filePath) : null,
       session.branch,
       session.createdAt,
       session.updatedAt,
@@ -184,7 +201,7 @@ export class SessionSearchIndexWriter {
       this.db
         .prepare(
           `UPDATE sessions SET agent = ?, session_id = ?, file_path = ?, codex_home = ?, title = ?,
-             cwd = ?, branch = ?, created_at = ?, updated_at = ?, message_count = ?, resume_command = ?,
+             cwd = ?, cwd_key = ?, branch = ?, created_at = ?, updated_at = ?, message_count = ?, resume_command = ?,
              content_hash = ?, content_hash_count = ?
            WHERE id = ?`
         )
@@ -193,9 +210,9 @@ export class SessionSearchIndexWriter {
     }
     const result = this.db
       .prepare(
-        `INSERT INTO sessions(agent, session_id, file_path, codex_home, title, cwd, branch,
+        `INSERT INTO sessions(agent, session_id, file_path, codex_home, title, cwd, cwd_key, branch,
            created_at, updated_at, message_count, resume_command, content_hash, content_hash_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(...values)
     return Number(result.lastInsertRowid)

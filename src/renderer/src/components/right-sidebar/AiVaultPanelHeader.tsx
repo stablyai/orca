@@ -220,6 +220,22 @@ export function AiVaultPanelHeader({
         <AiVaultSearchTitlesOnlyNotice onReopen={consent.reopen} />
       ) : null}
 
+      {consent.enabled && search.localOnly ? (
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          {translate(
+            'auto.components.right.sidebar.AiVaultPanel.localSearchOnly',
+            'Conversation search covers this computer only. Remote hosts use title search.'
+          )}
+        </p>
+      ) : null}
+      {consent.enabled && search.updating ? (
+        <p role="status" className="mt-1.5 text-[11px] text-muted-foreground">
+          {translate(
+            'auto.components.right.sidebar.AiVaultPanel.searchUpdating',
+            'Updating search results…'
+          )}
+        </p>
+      ) : null}
       {consent.enabled ? (
         <AiVaultSearchStatus
           coverage={search.coverage}

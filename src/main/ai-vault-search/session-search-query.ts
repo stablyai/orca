@@ -92,13 +92,19 @@ export class SessionSearchQuery {
     this.typoRepair = new SessionSearchTypoRepair(db)
   }
 
-  execute(args: AiVaultSearchArgs): SessionSearchExecution {
+  execute(args: AiVaultSearchArgs, cutoffMs: number | null = null): SessionSearchExecution {
     const split = splitAiVaultSearchQuery(args.query)
     const retrieval: Retrieval = {
       args,
       tier: args.tier ?? 'full',
       filter: sessionRowFilter(args, split),
       text: split.text
+    }
+    if (cutoffMs !== null) {
+      retrieval.filter.conditions.push(
+        'id IN (SELECT session_row_id FROM files WHERE mtime_ms >= ?)'
+      )
+      retrieval.filter.values.push(String(cutoffMs))
     }
     const plan = planSessionSearchQuery(retrieval.text)
     if (plan.terms.length === 0) {
@@ -107,7 +113,7 @@ export class SessionSearchQuery {
       const hits = hasAiVaultSearchQueryOperators(split) ? this.recent(retrieval) : []
       return { hits, route: 'or' }
     }
-    const exact = this.retrieveLiteral(plan, retrieval.tier)
+    const exact = this.retrieveLiteral(plan, retrieval)
     if (exact) {
       return { hits: this.rollUp(exact.rows, retrieval, plan), route: exact.route }
     }
@@ -115,9 +121,9 @@ export class SessionSearchQuery {
     // to a common word would otherwise be masked by the common word's hits.
     const repaired = this.repair(plan)
     const effective = repaired ?? plan
-    const literal = repaired ? this.retrieveLiteral(repaired, retrieval.tier) : null
+    const literal = repaired ? this.retrieveLiteral(repaired, retrieval) : null
     const result = literal ?? {
-      rows: this.match(orExpression(effective.terms), retrieval.tier),
+      rows: this.match(orExpression(effective.terms), retrieval),
       route: 'or' as const
     }
     return {
@@ -154,13 +160,13 @@ export class SessionSearchQuery {
       }
       return term
     })
-    return changed ? planSessionSearchQuery(body.join(' ')) : null
+    return changed ? { ...planSessionSearchQuery(body.join(' ')), literal: plan.literal } : null
   }
 
   /** Phrase, then AND, for literal-looking queries; null when neither matches. */
   private retrieveLiteral(
     plan: SessionSearchQueryPlan,
-    tier: 'full' | 'conversation'
+    retrieval: Retrieval
   ): { rows: MessageRow[]; route: 'phrase' | 'and' } | null {
     if (!plan.literal || plan.body.length === 0) {
       return null
@@ -168,34 +174,36 @@ export class SessionSearchQuery {
     // A one-token literal (`resolveTerminalPath`, `src/a/b.ts`) is its own
     // phrase: the tokenizer keeps it whole, so the exact token is the cheap,
     // precise first try before the identifier pieces fan out over OR.
-    const phrase = this.match(phraseExpression(plan.body), tier)
+    const phrase = this.match(phraseExpression(plan.body), retrieval)
     if (phrase.length > 0) {
       return { rows: phrase, route: 'phrase' }
     }
     if (plan.body.length < 2) {
       return null
     }
-    const and = this.match(andExpression(plan.body), tier)
+    const and = this.match(andExpression(plan.body), retrieval)
     return and.length > 0 ? { rows: and, route: 'and' } : null
   }
 
-  private match(expression: string, tier: 'full' | 'conversation'): MessageRow[] {
+  private match(expression: string, retrieval: Retrieval): MessageRow[] {
+    const { tier, filter, args } = retrieval
+    const eligible = filter.conditions.length
+      ? ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
+      : ''
     const table = tier === 'full' ? 'messages_fts' : 'conversation_fts'
     const weights = tier === 'full' ? FULL_WEIGHTS : CONVERSATION_WEIGHTS
-    try {
-      // Why: FTS5 aux functions (bm25, snippet) take the table name, never an alias.
-      return this.db
-        .prepare(
-          `SELECT ${table}.rowid AS rowid, -bm25(${table}, ${weights}) AS score,
-             m.session_row_id, m.role, m.ts
-           FROM ${table} JOIN messages m ON m.id = ${table}.rowid
-           WHERE ${table} MATCH ? ORDER BY score DESC LIMIT ${MESSAGE_CANDIDATE_LIMIT}`
-        )
-        .all(expression) as MessageRow[]
-    } catch {
-      // A term the tokenizer rejects outright (e.g. only punctuation) is a miss, not a fault.
-      return []
-    }
+    const matched = `SELECT ${table}.rowid AS rowid, -bm25(${table}, ${weights}) AS score,
+      m.session_row_id, m.role, m.ts, s.updated_at
+      FROM ${table} JOIN messages m ON m.id = ${table}.rowid
+      JOIN sessions s ON s.id = m.session_row_id WHERE ${table} MATCH ?${eligible}`
+    // Collapse messages before newest ordering so one long session cannot occupy the whole page.
+    const sql =
+      args.sort === 'newest'
+        ? `WITH matched AS MATERIALIZED (${matched})
+         SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched
+         GROUP BY session_row_id ORDER BY updated_at DESC, score DESC LIMIT ${MESSAGE_CANDIDATE_LIMIT}`
+        : `${matched} ORDER BY score DESC LIMIT ${MESSAGE_CANDIDATE_LIMIT}`
+    return this.db.prepare(sql).all(expression, ...filter.values) as MessageRow[]
   }
 
   private rollUp(

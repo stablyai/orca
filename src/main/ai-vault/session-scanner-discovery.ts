@@ -9,6 +9,7 @@ import { errorMessage } from './session-scanner-values'
 
 export async function discoverFiles(args: {
   rootDir: string
+  signal?: AbortSignal
   limit: number
   agent: AiVaultAgent
   issues: AiVaultScanIssue[]
@@ -21,6 +22,7 @@ export async function discoverFiles(args: {
   try {
     paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
       extensions: new Set(args.extensions),
+      signal: args.signal,
       filePredicate: args.filePredicate,
       directoryPredicate: args.directoryPredicate
     })
@@ -40,11 +42,13 @@ export async function discoverFiles(args: {
   }
   const files: FileWithMtime[] = []
   for (const path of paths) {
+    args.signal?.throwIfAborted()
     try {
       const fileStat = await wslGatedStat(path, 'scan')
       const dependencyStat = await optionalContentDependencyStat(
         await args.contentDependencyPath?.(path)
       )
+      args.signal?.throwIfAborted()
       const mtimeMs = Math.max(fileStat.mtimeMs, dependencyStat?.mtimeMs ?? 0)
       files.push({
         path,
@@ -56,6 +60,7 @@ export async function discoverFiles(args: {
         nlink: fileStat.nlink
       })
     } catch (err) {
+      args.signal?.throwIfAborted()
       recordSessionScanIssue(args.issues, {
         agent: args.agent,
         path,

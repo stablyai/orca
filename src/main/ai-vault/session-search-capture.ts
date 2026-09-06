@@ -37,6 +37,8 @@ export type SessionSearchIndexedFile = {
 }
 
 export type SessionSearchIndexSink = {
+  acceptsCandidate?(candidate: SessionFileCandidate): boolean
+  updateMetadata?(candidate: SessionFileCandidate, session: AiVaultSession): void
   /**
    * What the index holds for this file, or null when it is not indexed or its
    * identity changed. In `required` mode the parse cache may only reuse an

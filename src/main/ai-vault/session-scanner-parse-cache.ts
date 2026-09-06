@@ -1,3 +1,4 @@
+import { inSessionParseFileLane } from './session-parse-file-lane'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -118,9 +119,20 @@ export async function parseAgentSessionFileCached(
   platform: NodeJS.Platform,
   stats?: SessionParseStats
 ): Promise<AiVaultSession | null> {
+  return inSessionParseFileLane(candidate.file.path, () =>
+    parseCachedInLane(candidate, platform, stats)
+  )
+}
+
+async function parseCachedInLane(
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform,
+  stats?: SessionParseStats
+): Promise<AiVaultSession | null> {
   const { file } = candidate
   const entry = getSessionParseCacheEntry(file.path)
-  const sink = getSessionSearchIndexSink()
+  const registeredSink = getSessionSearchIndexSink()
+  const sink = registeredSink?.acceptsCandidate?.(candidate) === false ? null : registeredSink
   const indexed = sink ? sink.indexedFile(file.path, fileIdentity(file)) : null
   const indexCurrent =
     sink === null ||
@@ -171,6 +183,7 @@ export async function parseAgentSessionFileCached(
     // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
     if (entry.session && candidate.agent === 'codex') {
       entry.session = await refreshCachedCodexMetadata(candidate, entry.session)
+      sink?.updateMetadata?.(candidate, entry.session)
     }
     storeSessionParseCacheEntry(file.path, entry)
     return entry.session

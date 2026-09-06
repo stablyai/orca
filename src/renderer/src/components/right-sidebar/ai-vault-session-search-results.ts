@@ -1,3 +1,4 @@
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -7,8 +8,6 @@ import type {
 } from '../../../../shared/ai-vault-search-types'
 import { AI_VAULT_SEARCH_QUERY_MAX_LENGTH } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { Worktree } from '../../../../shared/worktree/types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
@@ -17,10 +16,7 @@ import {
 import { isAiVaultSearchDisabled } from '../../../../shared/ai-vault-search-coverage'
 import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 import { aiVaultSearchHitSessions } from './ai-vault-search-hit-sessions'
-import {
-  resolveAiVaultSearchScopePaths,
-  splitAiVaultSearchQuery
-} from './ai-vault-session-search-query-split'
+
 import { useAiVaultSearchCoveragePoll } from './ai-vault-search-coverage-poll'
 import { useAiVaultSessionSearchRequest } from './ai-vault-session-search-request'
 
@@ -30,6 +26,7 @@ const AI_VAULT_SEARCH_PANEL_LIMIT = 50
 export type AiVaultSessionSearchView = {
   /** True once the text half of the query is non-empty; the plain list is hidden. */
   active: boolean
+  localOnly: boolean
   loading: boolean
   /** Results are on screen but a newer query is still resolving. */
   updating: boolean
@@ -57,39 +54,44 @@ export function useAiVaultSessionSearchResults(input: {
   scopePaths: readonly string[]
   executionHostScope: ExecutionHostScope
   sessions: readonly AiVaultSession[]
-  worktrees: readonly Pick<Worktree, 'path' | 'repoId'>[]
-  repos: readonly Pick<Repo, 'id' | 'displayName' | 'path'>[]
 }): AiVaultSessionSearchView {
   const [newestFirst, setNewestFirst] = useState(false)
   const [flushSignal, setFlushSignal] = useState(0)
   const flush = useCallback(() => setFlushSignal((value) => value + 1), [])
-  const { agents, enabled, executionHostScope, query, repos, scopePaths, sessions, worktrees } =
-    input
+  const { agents, enabled, executionHostScope, query, scopePaths, sessions } = input
+
+  const localOnly = !isWebClientLocation()
+  const supportedHost =
+    !localOnly ||
+    executionHostScope === LOCAL_EXECUTION_HOST_ID ||
+    executionHostScope === ALL_EXECUTION_HOSTS_SCOPE
 
   const args = useMemo((): AiVaultSearchArgs | null => {
-    const split = splitAiVaultSearchQuery(query)
-    if (!enabled || !split.text) {
+    if (!enabled || !supportedHost || agents.length === 0 || !query.trim()) {
       return null
     }
-    const operatorPaths = resolveAiVaultSearchScopePaths(split, { worktrees, repos })
-    const searchPaths = operatorPaths.length > 0 ? operatorPaths : scopePaths
     return {
-      query: split.text.slice(0, AI_VAULT_SEARCH_QUERY_MAX_LENGTH),
+      query: query.slice(0, AI_VAULT_SEARCH_QUERY_MAX_LENGTH),
       limit: AI_VAULT_SEARCH_PANEL_LIMIT,
       agents: [...agents],
-      ...(searchPaths.length > 0 ? { scopePaths: [...searchPaths] } : {}),
+      ...(scopePaths.length > 0 ? { scopePaths: [...scopePaths] } : {}),
       sort: newestFirst ? 'newest' : 'relevance'
     }
-  }, [agents, enabled, newestFirst, query, repos, scopePaths, worktrees])
+  }, [agents, enabled, newestFirst, query, scopePaths, supportedHost])
 
   const { error, loading, result, updating } = useAiVaultSessionSearchRequest(args, flushSignal)
   // With an empty box no search runs, so the panel reads coverage directly to
   // report what is already searchable while the backfill is still going.
-  const polledCoverage = useAiVaultSearchCoveragePoll(enabled)
+  const polledCoverage = useAiVaultSearchCoveragePoll(
+    enabled && supportedHost,
+    result?.coverage ?? null
+  )
   // Desktop search always reads this machine's index; a paired web client's
   // reads its runtime host, which is the scope it is pinned to.
   const executionHostId =
-    executionHostScope === ALL_EXECUTION_HOSTS_SCOPE ? LOCAL_EXECUTION_HOST_ID : executionHostScope
+    localOnly || executionHostScope === ALL_EXECUTION_HOSTS_SCOPE
+      ? LOCAL_EXECUTION_HOST_ID
+      : executionHostScope
 
   const hitSessions = useMemo(
     () => aiVaultSearchHitSessions(result?.hits ?? [], sessions, executionHostId),
@@ -116,15 +118,11 @@ export function useAiVaultSessionSearchResults(input: {
   return useMemo(
     () => ({
       active: args !== null,
+      localOnly,
       loading,
       updating,
       error,
-      // Why: the poll keeps going after a retained result, so it is the fresher
-      // read once it says the backfill is done.
-      coverage:
-        polledCoverage?.backfill === 'complete'
-          ? polledCoverage
-          : (result?.coverage ?? polledCoverage),
+      coverage: polledCoverage ?? result?.coverage ?? null,
       repairedTerms: result?.repairedTerms ?? [],
       disabled: isAiVaultSearchDisabled(result?.coverage),
       flush,
@@ -142,6 +140,7 @@ export function useAiVaultSessionSearchResults(input: {
       groups,
       hitSessions,
       loading,
+      localOnly,
       newestFirst,
       polledCoverage,
       result,

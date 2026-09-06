@@ -52,12 +52,12 @@ export function AiVaultSearchEvidenceLine({
         {aiVaultSearchSnippetSegments(evidence.snippet).map((segment, index) =>
           segment.matched ? (
             // Same match treatment the code-search results in this sidebar use.
-            <span
+            <mark
               className="rounded-sm bg-amber-500/30 text-foreground"
               key={`${index}:${segment.text}`}
             >
               {segment.text}
-            </span>
+            </mark>
           ) : (
             <span key={`${index}:${segment.text}`}>{segment.text}</span>
           )

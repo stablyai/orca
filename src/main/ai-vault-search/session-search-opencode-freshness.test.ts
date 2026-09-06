@@ -136,6 +136,30 @@ async function refreshRecent(dbPath: string): Promise<SessionParseStats> {
 }
 
 describe('OpenCode SQLite session freshness', () => {
+  it('indexes older turns beyond the bounded preview window', async () => {
+    const dbPath = await createOpenCodeDb()
+    const db = new Database(dbPath)
+    for (let i = 0; i < 105; i += 1) {
+      insertOpenCodeMessage(db, {
+        id: `later_${i}`,
+        sessionId: SESSION_ID,
+        role: 'assistant',
+        timeCreated: CREATED_MS + 2000 + i
+      })
+      insertOpenCodePart(db, {
+        id: `part_${i}`,
+        messageId: `later_${i}`,
+        sessionId: SESSION_ID,
+        timeCreated: CREATED_MS + 2000 + i,
+        text: `newer response ${i}`
+      })
+    }
+    db.close()
+    await refreshRecent(dbPath)
+    expect(store.search({ query: 'vacuum quota' }).hits).toHaveLength(1)
+    expect(store.coverage().messagesIndexed).toBe(106)
+  })
+
   it('re-indexes a session that gained a message since the last parse', async () => {
     const dbPath = await createOpenCodeDb()
 

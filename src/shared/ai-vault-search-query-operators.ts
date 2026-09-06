@@ -1,28 +1,43 @@
-import { parseVaultQuery } from './ai-vault-session-filters'
-
-// Mirrors the operator arm of the panel tokenizer so the same spellings the
-// client-side filter accepts are the ones stripped from the index query text.
-const QUERY_OPERATOR_PATTERN = /(?:repo|path):(?:"[^"]*"|'[^']*'|\S*)/gi
+const QUERY_OPERATOR_PATTERN = /"[^"]*"|'[^']*'|(^|\s)(repo|path):(?:"([^"]*)"|'([^']*)'|(\S*))/gi
 
 export type AiVaultSearchQuerySplit = {
-  /** Free text sent to the index; operator terms removed. */
   text: string
   repoTerms: readonly string[]
   pathTerms: readonly string[]
 }
 
-/**
- * Splits `repo:` / `path:` operators out of a search query. Lives in /shared so
- * the renderer, the index query path, and any raw RPC caller all read one
- * spelling of the operators instead of each growing its own parser.
- */
+/** Preserve path spelling and remove only complete operator tokens. */
 export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit {
-  const parsed = parseVaultQuery(query)
-  return {
-    text: query.replaceAll(QUERY_OPERATOR_PATTERN, ' ').replace(/\s+/g, ' ').trim(),
-    repoTerms: parsed.repoTerms,
-    pathTerms: parsed.pathTerms
-  }
+  const repoTerms: string[] = []
+  const pathTerms: string[] = []
+  const text = query
+    .replaceAll(
+      QUERY_OPERATOR_PATTERN,
+      (
+        _match,
+        space: string,
+        operator: string | undefined,
+        doubleQuoted: string | undefined,
+        singleQuoted: string | undefined,
+        bare: string | undefined
+      ) => {
+        if (!operator) {
+          return _match
+        }
+        const value = doubleQuoted ?? singleQuoted ?? bare ?? ''
+        if (value) {
+          if (operator.toLowerCase() === 'repo') {
+            repoTerms.push(value.toLowerCase())
+          } else {
+            pathTerms.push(value)
+          }
+        }
+        return space
+      }
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+  return { text, repoTerms, pathTerms }
 }
 
 export function hasAiVaultSearchQueryOperators(split: AiVaultSearchQuerySplit): boolean {

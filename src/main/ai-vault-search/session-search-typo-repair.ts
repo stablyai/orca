@@ -35,10 +35,14 @@ function similarity(a: string, b: string): number {
 }
 
 export class SessionSearchTypoRepair {
+  private readonly exactMatch: ReturnType<SyncDatabase['prepare']>
   private readonly documentFrequency: ReturnType<SyncDatabase['prepare']>
   private readonly candidatesByPrefix: ReturnType<SyncDatabase['prepare']>
 
   constructor(db: SyncDatabase) {
+    this.exactMatch = db.prepare(
+      'SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? LIMIT 1'
+    )
     this.documentFrequency = db.prepare('SELECT doc FROM messages_vocab WHERE term = ?')
     // fts5vocab is ordered by term, so a prefix range plus a length band is a
     // bounded scan; the most frequent terms are kept when the band overflows.
@@ -51,7 +55,11 @@ export class SessionSearchTypoRepair {
 
   hasPostings(term: string): boolean {
     const row = this.documentFrequency.get(term.toLowerCase()) as VocabRow | undefined
-    return row !== undefined && row.doc > 0
+    // unicode61 also folds Latin diacritics; raw vocabulary spelling alone can miss an exact hit.
+    return (
+      (row !== undefined && row.doc > 0) ||
+      this.exactMatch.get(`"${term.replaceAll('"', '""')}"`) !== undefined
+    )
   }
 
   /** Returns the closest indexed term, or null when `term` exists or nothing is close enough. */

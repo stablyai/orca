@@ -1,3 +1,5 @@
+import { recordSearchDiscovered } from './session-search-discovered-counts'
+import { withCursorChatMetaScan } from '../ai-vault/session-scanner-cursor-chat-meta'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type {
@@ -9,7 +11,6 @@ import { DISABLED_AI_VAULT_SEARCH_COVERAGE as DISABLED_COVERAGE } from '../../sh
 import {
   aiVaultSearchHistoryCutoffMs,
   narrowsAiVaultSearchHistory,
-  widensAiVaultSearchHistory,
   type AiVaultSearchSettings
 } from '../../shared/ai-vault-search-settings'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
@@ -20,12 +21,8 @@ import {
   parseAgentSessionFileCached
 } from '../ai-vault/session-scanner-parse-cache'
 import { discoverAiVaultSessionSources } from '../ai-vault/session-scanner-source-discovery'
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
-import type {
-  AiVaultScanOptions,
-  SessionFileCandidate,
-  SessionFileDiscovery
-} from '../ai-vault/session-scanner-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanOptions, SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import {
   registerSessionSearchIndexSink,
   withSessionSearchIndexRequired
@@ -139,11 +136,11 @@ export class SessionSearchService {
     const wasEnabled = this.policy.enabled
     const previousDays = this.policy.historyDays
     this.policy = { enabled: next.enabled, historyDays: next.historyDays }
+    this.store?.setHistoryDays(next.historyDays)
     if (options.clearIndex || (wasEnabled && !next.enabled)) {
       await this.stop()
-    } else if (wasEnabled && widensAiVaultSearchHistory(previousDays, next.historyDays)) {
-      // Why: a finished backfill is memoized; a wider window has files it
-      // skipped, so it has to enumerate again (rows already indexed are reused).
+    } else if (wasEnabled && previousDays !== next.historyDays) {
+      // Replace the memoized pass so both narrowing and widening use the new policy.
       await this.stop({ keepStore: true })
     }
     if (options.clearIndex) {
@@ -177,7 +174,10 @@ export class SessionSearchService {
       this.backfillController = controller
       const run = this.runBackfill(roots, controller.signal)
         .catch((error) => {
-          console.warn('[ai-vault-search] backfill stopped:', error)
+          console.warn(
+            '[ai-vault-search] backfill stopped:',
+            error instanceof Error ? error.name : 'ScanError'
+          )
           // Why: a failed pass must not be memoized as done; the next search
           // gets to try again instead of reporting an incomplete index forever.
           if (this.backfillRun === run) {
@@ -208,6 +208,7 @@ export class SessionSearchService {
   private open(): SessionSearchStore {
     mkdirSync(dirname(this.databasePath), { recursive: true })
     this.store = new SessionSearchStore(this.databasePath)
+    this.store.setHistoryDays(this.policy.historyDays)
     registerSessionSearchIndexSink(this.store)
     return this.store
   }
@@ -259,7 +260,7 @@ export class SessionSearchService {
       return
     }
     try {
-      await this.parseAll(stale, signal)
+      await this.parseAll(this.withinHistory(stale), signal)
     } catch (error) {
       // Why: a cancelled search (the renderer retires them per keystroke) must
       // not lose the queue; whatever did not get parsed goes back for next time.
@@ -270,7 +271,7 @@ export class SessionSearchService {
     }
   }
 
-  /** The retention bound is enforced on enumeration; already-indexed rows survive until a clear. */
+  /** Avoid reading files the sink will reject under the current retention policy. */
   private withinHistory(candidates: SessionFileCandidate[]): SessionFileCandidate[] {
     const cutoff = aiVaultSearchHistoryCutoffMs(this.policy.historyDays)
     return cutoff === null
@@ -285,6 +286,10 @@ export class SessionSearchService {
     }
     store.setBackfillState('running')
     try {
+      const cutoff = aiVaultSearchHistoryCutoffMs(this.policy.historyDays)
+      if (cutoff !== null) {
+        await store.purgeOlderThan(cutoff)
+      }
       await ensureSessionParseCacheLoaded()
       const issues: AiVaultScanIssue[] = []
       const options: AiVaultScanOptions = { ...roots, signal }
@@ -294,32 +299,12 @@ export class SessionSearchService {
         issues
       })
       const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
-      this.recordDiscovered(discoveries, issues)
+      recordSearchDiscovered(store, discoveries, issues)
       await this.parseAll(this.withinHistory(candidates), signal, { yieldToSearches: signal })
       store.setBackfillState('complete')
     } catch (error) {
       this.store?.setBackfillState('idle')
       throw error
-    }
-  }
-
-  /** Discovered-vs-indexed is the only way a provider that indexes nothing stays visible. */
-  private recordDiscovered(
-    discoveries: readonly SessionFileDiscovery[],
-    issues: readonly AiVaultScanIssue[]
-  ): void {
-    const files = new Map<AiVaultAgent, number>()
-    for (const discovery of discoveries) {
-      files.set(discovery.agent, (files.get(discovery.agent) ?? 0) + discovery.files.length)
-    }
-    const failures = new Map<AiVaultAgent, number>()
-    for (const issue of issues) {
-      if (issue.kind !== 'notice') {
-        failures.set(issue.agent, (failures.get(issue.agent) ?? 0) + 1)
-      }
-    }
-    for (const agent of new Set([...files.keys(), ...failures.keys()])) {
-      this.store?.setDiscovered(agent, files.get(agent) ?? 0, failures.get(agent) ?? 0)
     }
   }
 
@@ -330,28 +315,34 @@ export class SessionSearchService {
   ): Promise<void> {
     const stats = createSessionParseStats()
     let sinceYield = 0
-    await withSessionSearchIndexRequired(async () => {
-      for (const candidate of candidates) {
-        throwIfAiVaultScanCancelled(signal)
-        // A concurrent disable closed the store; stop rather than parse into nothing.
-        if (!this.store) {
-          return
+    await withCursorChatMetaScan(() =>
+      withSessionSearchIndexRequired(async () => {
+        for (const candidate of candidates) {
+          throwIfAiVaultScanCancelled(signal)
+          // A concurrent disable closed the store; stop rather than parse into nothing.
+          if (!this.store) {
+            return
+          }
+          try {
+            await parseAgentSessionFileCached(candidate, process.platform, stats)
+          } catch (error) {
+            this.store?.recordParseFailure(candidate.agent)
+            console.warn(
+              '[ai-vault-search] backfill skipped',
+              candidate.agent,
+              error instanceof Error ? error.name : 'ParseError'
+            )
+          }
+          if (options.yieldToSearches && this.searchesInFlight > 0) {
+            await this.waitForIdleSearches(options.yieldToSearches)
+          }
+          sinceYield += 1
+          if (sinceYield >= BACKFILL_YIELD_EVERY_FILES) {
+            sinceYield = 0
+            await pauseBackfill(signal)
+          }
         }
-        try {
-          await parseAgentSessionFileCached(candidate, process.platform, stats)
-        } catch (error) {
-          this.store?.recordParseFailure(candidate.agent)
-          console.warn('[ai-vault-search] backfill skipped', candidate.file.path, error)
-        }
-        if (options.yieldToSearches && this.searchesInFlight > 0) {
-          await this.waitForIdleSearches(options.yieldToSearches)
-        }
-        sinceYield += 1
-        if (sinceYield >= BACKFILL_YIELD_EVERY_FILES) {
-          sinceYield = 0
-          await pauseBackfill(signal)
-        }
-      }
-    })
+      })
+    )
   }
 }

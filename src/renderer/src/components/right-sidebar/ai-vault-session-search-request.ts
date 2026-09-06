@@ -19,6 +19,7 @@ export type AiVaultSearchRequestState = {
 }
 
 type SettledSearch = {
+  full: boolean
   key: string
   result: AiVaultSearchResult | null
   error: string | null
@@ -58,13 +59,14 @@ export function useAiVaultSessionSearchRequest(
       .searchSessions({ ...requestArgs, ...overrides })
       .then((result) => {
         if (sequenceRef.current === sequence) {
-          setSettled({ key, result, error: null })
+          setSettled({ key, result, error: null, full: overrides.tier === 'full' })
         }
       })
       .catch((error: unknown) => {
         if (sequenceRef.current === sequence) {
           setSettled({
             key,
+            full: true,
             result: null,
             error: error instanceof Error ? error.message : String(error)
           })
@@ -117,7 +119,7 @@ export function useAiVaultSessionSearchRequest(
   return {
     result: current?.result ?? previous,
     loading: argsKey !== '' && current === null && previous === null,
-    updating: argsKey !== '' && current === null,
+    updating: argsKey !== '' && !current?.full,
     error: current?.error ?? null
   }
 }

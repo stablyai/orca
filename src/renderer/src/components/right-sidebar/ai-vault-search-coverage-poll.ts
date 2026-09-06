@@ -11,18 +11,23 @@ export const AI_VAULT_SEARCH_COVERAGE_POLL_MS = 4_000
  * Safe to call repeatedly: reading coverage is observational and never starts a
  * backfill, so polling cannot turn indexing on behind the user's back.
  */
-export function useAiVaultSearchCoveragePoll(enabled: boolean): AiVaultSearchCoverage | null {
-  const [coverage, setCoverage] = useState<AiVaultSearchCoverage | null>(null)
+export function useAiVaultSearchCoveragePoll(
+  enabled: boolean,
+  latest: AiVaultSearchCoverage | null = null
+): AiVaultSearchCoverage | null {
+  const [snapshot, setSnapshot] = useState<{
+    source: AiVaultSearchCoverage | null
+    value: AiVaultSearchCoverage
+  } | null>(null)
 
   useEffect(() => {
     if (!enabled) {
-      setCoverage(null)
+      setSnapshot(null)
       return
     }
     let stopped = false
     let generation = 0
-    // One interval, cleared unconditionally on unmount; the reads it drives stop
-    // once the backfill is complete because there is nothing left to watch.
+    // A completed index can restart after Clear or a retention change in Settings.
     const interval = setInterval(() => {
       read()
     }, AI_VAULT_SEARCH_COVERAGE_POLL_MS)
@@ -36,10 +41,7 @@ export function useAiVaultSearchCoveragePoll(enabled: boolean): AiVaultSearchCov
           if (stopped || issued !== generation) {
             return
           }
-          setCoverage(next)
-          if (next.backfill !== 'running') {
-            clearInterval(interval)
-          }
+          setSnapshot({ source: latest, value: next })
         })
         .catch(() => undefined)
     }
@@ -48,7 +50,7 @@ export function useAiVaultSearchCoveragePoll(enabled: boolean): AiVaultSearchCov
       stopped = true
       clearInterval(interval)
     }
-  }, [enabled])
+  }, [enabled, latest])
 
-  return coverage
+  return enabled ? (snapshot?.source === latest ? snapshot.value : latest) : null
 }

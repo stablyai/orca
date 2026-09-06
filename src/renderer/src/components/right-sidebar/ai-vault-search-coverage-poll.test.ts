@@ -47,7 +47,7 @@ describe('useAiVaultSearchCoveragePoll', () => {
     expect(result.current).toBeNull()
   })
 
-  it('reads coverage once and stops when the backfill is already complete', async () => {
+  it('keeps observing a completed index so a later clear can report rebuilding', async () => {
     const { result } = renderHook(() => useAiVaultSearchCoveragePoll(true), { wrapper })
     await act(async () => {})
 
@@ -56,7 +56,7 @@ describe('useAiVaultSearchCoveragePoll', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(AI_VAULT_SEARCH_COVERAGE_POLL_MS * 3)
     })
-    expect(searchCoverage).toHaveBeenCalledTimes(callsAfterFirstRead)
+    expect(searchCoverage).toHaveBeenCalledTimes(callsAfterFirstRead + 3)
   })
 
   it('ignores a slow running answer that lands after a newer complete one', async () => {

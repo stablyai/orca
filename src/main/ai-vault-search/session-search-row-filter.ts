@@ -1,3 +1,4 @@
+import { sessionSearchPathKey } from './session-search-path-key'
 import type { AiVaultSearchArgs } from '../../shared/ai-vault-search-types'
 import type { AiVaultSearchQuerySplit } from '../../shared/ai-vault-search-query-operators'
 import { isRuntimePathAbsolute } from '../../shared/cross-platform-path'
@@ -8,9 +9,8 @@ export type SessionRowFilter = {
   values: string[]
 }
 
-// Separator-normalized cwd with trailing slashes dropped, so one folder reads
-// the same whether the transcript recorded a Windows or POSIX spelling.
-const CWD = `rtrim(replace(cwd, '\\', '/'), '/')`
+// Stored identity preserves execution-host case and WSL distro semantics.
+const CWD = 'cwd_key'
 // Why: SQLite has no basename(). `rtrim(p, <p minus its separators>)` peels the
 // last segment off, leaving the parent prefix to delete out of p.
 const CWD_BASENAME = `replace(${CWD}, rtrim(${CWD}, replace(${CWD}, '/', '')), '')`
@@ -30,13 +30,12 @@ export function sessionRowFilter(
   }
   if (args.scopePaths && args.scopePaths.length > 0) {
     filter.conditions.push(
-      `(${args.scopePaths.map(() => `(${CWD} = ? OR ${CWD} LIKE ? ESCAPE '\\')`).join(' OR ')})`
+      `(${args.scopePaths.map(() => `(${CWD} = ? OR substr(${CWD}, 1, length(?)) = ?)`).join(' OR ')})`
     )
     for (const scope of args.scopePaths) {
-      // Same spelling as CWD so a Windows scope matches a POSIX-recorded cwd,
-      // and escaped so `%`/`_` in a folder name cannot widen the match.
-      const normalized = scope.replaceAll('\\', '/').replace(/\/+$/, '')
-      filter.values.push(normalized, `${escapeLike(normalized)}/%`)
+      // Literal prefixes keep `%` and `_` in folder names from widening scope.
+      const normalized = sessionSearchPathKey(scope)
+      filter.values.push(normalized, `${normalized}/`, `${normalized}/`)
     }
   }
   // Operators narrow, never widen: each one is its own ANDed condition on top
@@ -59,8 +58,9 @@ function addPathTerm(filter: SessionRowFilter, term: string): void {
     return
   }
   if (isRuntimePathAbsolute(term)) {
-    filter.conditions.push(`(lower(${CWD}) = ? OR lower(${CWD}) LIKE ? ESCAPE '\\')`)
-    filter.values.push(normalized, `${escapeLike(normalized)}/%`)
+    const key = sessionSearchPathKey(term)
+    filter.conditions.push(`(${CWD} = ? OR substr(${CWD}, 1, length(?)) = ?)`)
+    filter.values.push(key, `${key}/`, `${key}/`)
     return
   }
   filter.conditions.push(`lower(${CWD}) LIKE ? ESCAPE '\\'`)

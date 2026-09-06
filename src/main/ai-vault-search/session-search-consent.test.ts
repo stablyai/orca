@@ -1,3 +1,7 @@
+// Host load is covered by pacing tests; lifecycle tests must not wait on the developer's CPU.
+vi.mock('./session-search-backfill-pacing', () => ({
+  pauseBackfill: () => new Promise<void>((resolve) => setImmediate(resolve))
+}))
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -317,6 +321,28 @@ describe('SessionSearchService consent gate', () => {
     const result = await service.search({ query: 'vacuum', refresh: false }, roots)
     expect(result.hits.map((hit) => hit.sessionId)).toEqual(['recent-session'])
     expect(service.coverage().sessionsIndexed).toBe(1)
+  })
+
+  it('replaces an in-flight wider backfill when retention narrows', async () => {
+    const { roots, databasePath } = await scanRoots()
+    await writeClaudeTranscript(roots, 'recent-session', 'needle', 1)
+    await writeClaudeTranscript(roots, 'ancient-session', 'needle', 120)
+    const service = makeService(databasePath, { enabled: true, historyDays: null })
+    let release!: () => void
+    holdNextParseCacheLoad = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const original = service.ensureBackfill(roots)
+    const configure = service.configure({ enabled: true, historyDays: 30 }, roots)
+    release()
+    await Promise.all([original, configure])
+    await service.ensureBackfill(roots)
+    expect(service.coverage().sessionsIndexed).toBe(1)
+    expect(
+      (await service.search({ query: 'needle', refresh: false }, roots)).hits.map(
+        (hit) => hit.sessionId
+      )
+    ).toEqual(['recent-session'])
   })
 
   it('skips transcripts older than the history bound', async () => {

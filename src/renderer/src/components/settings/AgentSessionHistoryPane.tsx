@@ -58,6 +58,7 @@ export function AgentSessionHistoryPane({
   const [indexBytes, setIndexBytes] = useState<number | null>(null)
   const [confirmingClear, setConfirmingClear] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
 
   const refreshIndexSize = useCallback(async (): Promise<void> => {
@@ -69,6 +70,11 @@ export function AgentSessionHistoryPane({
 
   useEffect(() => {
     void refreshIndexSize()
+    if (!policy.enabled) {
+      return
+    }
+    const timer = setInterval(() => void refreshIndexSize(), 4000)
+    return () => clearInterval(timer)
   }, [policy.enabled, refreshIndexSize])
 
   const apply = (next: AiVaultSearchSettings): void => {
@@ -77,13 +83,25 @@ export function AgentSessionHistoryPane({
 
   const confirmClear = async (): Promise<void> => {
     setClearing(true)
+    setClearError(null)
     try {
       await window.api.aiVault.clearSearchIndex()
       await refreshIndexSize()
+      if (mountedRef.current) {
+        setConfirmingClear(false)
+      }
+    } catch {
+      if (mountedRef.current) {
+        setClearError(
+          translate(
+            'auto.components.settings.AgentSessionHistoryPane.clearError',
+            'Could not clear the index. Please try again.'
+          )
+        )
+      }
     } finally {
       if (mountedRef.current) {
         setClearing(false)
-        setConfirmingClear(false)
       }
     }
   }
@@ -205,6 +223,11 @@ export function AgentSessionHistoryPane({
                   )}
             </DialogDescription>
           </DialogHeader>
+          {clearError ? (
+            <p role="alert" className="text-xs text-destructive">
+              {clearError}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmingClear(false)} disabled={clearing}>
               {translate('auto.components.settings.AgentSessionHistoryPane.cancel', 'Cancel')}

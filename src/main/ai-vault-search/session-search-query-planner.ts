@@ -1,7 +1,7 @@
 import { identifierShadowTerms } from './session-search-identifier-split'
 
 // Tokens exactly as the unicode61 tokenizer with `_ . - / +` tokenchars emits them.
-const INDEX_TOKEN = /[A-Za-z0-9_./+-]+/g
+const INDEX_TOKEN = /[\p{L}\p{N}\p{M}\p{Co}_./+-]+/gu
 const STOP_WORDS = new Set(
   (
     'a an and are as at be but by for from how i if in into is it its of on or that the this to ' +
@@ -36,7 +36,7 @@ function indexTokens(query: string): string[] {
   const out: string[] = []
   for (const match of query.matchAll(INDEX_TOKEN)) {
     const token = match[0]
-    if (token.length > 1 && /[A-Za-z0-9]/.test(token)) {
+    if (/[\p{L}\p{N}\p{Co}]/u.test(token)) {
       out.push(token)
       if (out.length >= MAX_BODY_TERMS) {
         break
@@ -48,7 +48,9 @@ function indexTokens(query: string): string[] {
 
 export function planSessionSearchQuery(query: string): SessionSearchQueryPlan {
   const raw = indexTokens(query)
-  let body = raw.filter((token) => !STOP_WORDS.has(token.toLowerCase()))
+  let body = isLiteralQuery(query)
+    ? raw
+    : raw.filter((token) => !STOP_WORDS.has(token.toLowerCase()))
   if (body.length < 2) {
     body = raw
   }
@@ -74,7 +76,7 @@ export function quoteFtsTerm(term: string): string {
 }
 
 export function phraseExpression(terms: readonly string[]): string {
-  return terms.map(quoteFtsTerm).join(' ')
+  return quoteFtsTerm(terms.join(' '))
 }
 
 export function andExpression(terms: readonly string[]): string {

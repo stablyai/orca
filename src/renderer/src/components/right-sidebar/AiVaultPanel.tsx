@@ -316,9 +316,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     // 'All' must not be narrowed; the scoped views restrict the index the same way they restrict the scan.
     scopePaths: scope === 'all' ? [] : scope === 'workspace' ? activeWorktreePaths : scopePaths,
     executionHostScope,
-    sessions,
-    worktrees: allWorktrees,
-    repos
+    sessions
   })
 
   return (

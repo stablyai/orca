@@ -28,7 +28,9 @@ export function aiVaultSearchHitSessions(
 ): AiVaultSearchHitSessions {
   const listedByIdentity = new Map<string, AiVaultSession>()
   for (const session of listedSessions) {
-    listedByIdentity.set(hitIdentity(session), session)
+    if ((session.executionHostId ?? 'local') === executionHostId) {
+      listedByIdentity.set(hitIdentity(session), session)
+    }
   }
   const sessions: AiVaultSession[] = []
   const evidenceBySessionId = new Map<string, AiVaultSearchEvidence>()

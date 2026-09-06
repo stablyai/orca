@@ -53,6 +53,7 @@ function agentDiscoveries(
   const discover = (rootDir: string): Promise<SessionFileDiscovery> =>
     discoverFiles({
       rootDir,
+      signal: options.signal,
       limit,
       agent,
       issues,

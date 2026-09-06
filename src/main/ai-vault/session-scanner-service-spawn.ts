@@ -1,3 +1,4 @@
+import { removeSessionSearchDatabase } from '../ai-vault-search/session-search-schema'
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import type { AiVaultListResult, AiVaultSubagentListResult } from '../../shared/ai-vault-types'
@@ -115,6 +116,9 @@ export function configureAiVaultSearchInService(
   request: AiVaultServiceSearchConfigureRequest,
   signal?: AbortSignal
 ): Promise<AiVaultSearchCoverage> | null {
+  if (!sharedClient && request.clearIndex) {
+    removeSessionSearchDatabase(request.init.databasePath)
+  }
   return (
     sharedClient?.request({ type: 'request', operation: 'searchConfigure', request }, signal) ??
     null

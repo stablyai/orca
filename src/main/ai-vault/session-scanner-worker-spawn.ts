@@ -1,3 +1,4 @@
+import { removeSessionSearchDatabase } from '../ai-vault-search/session-search-schema'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
@@ -76,6 +77,9 @@ export function readAiVaultSearchCoverageInWorker(
 export function configureAiVaultSearchInWorker(
   request: AiVaultServiceSearchConfigureRequest
 ): Promise<AiVaultSearchCoverage> | null {
+  if (!sharedClient && request.clearIndex) {
+    removeSessionSearchDatabase(request.init.databasePath)
+  }
   return sharedClient?.searchConfigure(request) ?? null
 }
 
