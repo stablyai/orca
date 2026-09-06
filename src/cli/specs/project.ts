@@ -35,7 +35,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'path', 'kind', 'display-name'],
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
-      '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -51,7 +51,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
-      '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],
     examples: [
@@ -79,7 +79,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Creates setup metadata without registering a repo compatibility record.',
-      '--host runtime:<environment-id> targets that paired Orca server; use the id from `orca environment list`, not the environment name.',
+      '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'Use setup-existing-folder when Orca should import and manage an actual checkout path now.'
     ],
     examples: [

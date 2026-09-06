@@ -154,10 +154,13 @@ async function enrichLegacySshTargetStates(
 // target ids are machine-generated (`ssh-<timestamp>-<random>`), the label a caller actually
 // knows never matches one, so this fires on the common spelling rather than a rare typo.
 // Resolving the label and naming the alternative is what makes the failure recoverable.
+// `flagSpelling` names the flag the way the caller typed it, so a bare `--host trader-local`
+// is not echoed back as `--host ssh:trader-local` — a spelling they did not use.
 export async function resolveSshHostTargetId(
   client: RuntimeClient,
   targetId: string,
-  environments: readonly EnvironmentSummary[]
+  environments: readonly EnvironmentSummary[],
+  flagSpelling = `--host ssh:${targetId}`
 ): Promise<string> {
   const targets = await listSshTargets(client)
   const matched = findSshTargetByName(targets, targetId)
@@ -169,7 +172,7 @@ export async function resolveSshHostTargetId(
   if (ambiguous.length > 0) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Ambiguous SSH target in --host ssh:${targetId}: ${ambiguous.length} targets share that label. Use the target id.`,
+      `Ambiguous SSH target in ${flagSpelling}: ${ambiguous.length} targets share that label. Use the target id.`,
       {
         knownSshTargets: ambiguous,
         nextSteps: ambiguous.map((target) => `Use --host ssh:${target.id} for ${target.label}.`)
@@ -178,7 +181,7 @@ export async function resolveSshHostTargetId(
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target named or with id ${targetId}.`,
+    `Unknown SSH target in ${flagSpelling}: this Orca host has no SSH target named or with id ${targetId}.`,
     {
       knownSshTargets: targets,
       knownEnvironments: environments,

@@ -23,9 +23,11 @@ import {
   assertEnvironmentSelectorResolvable,
   hostFilterMatchesHostId,
   parseHostFlag,
-  resolveHostFlagEnvironmentId
+  resolveHostFlagEnvironmentId,
+  resolveHostFlagTarget
 } from './execution-host-flag'
 import { parseExecutionHostId } from '../shared/execution-host'
+import type { RuntimeClient } from './runtime-client'
 
 const listSshTargetsMock = vi.fn(async () => [] as { id: string; label: string }[])
 const NO_SELECTION = {
@@ -51,7 +53,9 @@ describe('parseHostFlag', () => {
     expect(() => parseHostFlag(flags({ host: true }))).toThrow('Missing value for --host')
   })
 
-  it.each(['runtime:', 'ssh:', 'nonsense'])('rejects the unparseable host id %s', (value) => {
+  // A value that claims a kind but does not parse is malformed, not a name someone could have
+  // meant — only an unprefixed value can be a host alias.
+  it.each(['runtime:', 'ssh:', 'ssh:a|b', '   '])('rejects the unparseable host id %s', (value) => {
     expect(() => parseHostFlag(flags({ host: value }))).toThrow(`Invalid --host value: ${value}`)
   })
 
@@ -62,6 +66,19 @@ describe('parseHostFlag', () => {
       kind: 'runtime',
       id: 'runtime:env-1',
       environmentId: 'env-1'
+    })
+  })
+
+  // Why: `orca host list` prints the alias, so the alias is what gets typed. Rejecting it sent
+  // people hunting for a machine-generated id the listing showed in a different column.
+  it('carries an unprefixed host name through as an alias', () => {
+    expect(parseHostFlag(flags({ host: 'trader-local' }))).toEqual({
+      kind: 'alias',
+      alias: 'trader-local'
+    })
+    expect(parseHostFlag(flags({ host: '  trader-local  ' }))).toEqual({
+      kind: 'alias',
+      alias: 'trader-local'
     })
   })
 })
@@ -171,6 +188,83 @@ describe('resolveHostFlagEnvironmentId', () => {
         environmentSelector: { value: 'gpu', label: '--environment' }
       })
     ).resolves.toBe('env-1')
+  })
+})
+
+// Why: the reported failure. `orca host list` shows `trader-local`, so `--host trader-local` is
+// what gets typed, and only the machine-generated `ssh:ssh-1783599077486-fyasux` was accepted.
+describe('unprefixed --host aliases', () => {
+  function clientWithTargets(targets: { id: string; label: string }[]): RuntimeClient {
+    return {
+      call: vi.fn(async () => ({ result: { targets } }))
+    } as unknown as RuntimeClient
+  }
+
+  it('routes an alias that names a paired server to that environment', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
+    listSshTargetsMock.mockResolvedValue([])
+
+    await expect(resolveHostFlagEnvironmentId(flags({ host: 'gpu' }), NO_SELECTION)).resolves.toBe(
+      'env-1'
+    )
+  })
+
+  // The SSH axis lives on the connected runtime, so a miss here is not yet a failure.
+  it('leaves an alias that names no paired server to the SSH axis', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'trader-local' }), NO_SELECTION)
+    ).resolves.toBe(null)
+  })
+
+  it('resolves an alias to the SSH target that carries that label', async () => {
+    listEnvironmentsMock.mockReturnValue([])
+    const client = clientWithTargets([{ id: 'ssh-1783599077486-fyasux', label: 'trader-local' }])
+
+    await expect(resolveHostFlagTarget(flags({ host: 'trader-local' }), client)).resolves.toEqual({
+      kind: 'ssh',
+      id: 'ssh:ssh-1783599077486-fyasux',
+      targetId: 'ssh-1783599077486-fyasux'
+    })
+  })
+
+  it('names the alias the caller typed rather than an ssh: spelling they did not use', async () => {
+    listEnvironmentsMock.mockReturnValue([])
+
+    await expect(
+      resolveHostFlagTarget(flags({ host: 'trader-local' }), clientWithTargets([]))
+    ).rejects.toThrow('Unknown SSH target in --host trader-local')
+  })
+
+  // Why: a paired server and an SSH target are different machines. Picking either would run the
+  // command somewhere the caller never named.
+  it('refuses an alias that names a machine on both axes', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
+    listSshTargetsMock.mockResolvedValue([{ id: 'ssh-1-a', label: 'awin' }])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'awin' }), NO_SELECTION)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      data: {
+        nextSteps: expect.arrayContaining([
+          expect.stringContaining('--host runtime:env-1'),
+          expect.stringContaining('--host ssh:ssh-1-a')
+        ])
+      }
+    })
+  })
+
+  it('refuses an alias two paired servers answer to', async () => {
+    listEnvironmentsMock.mockReturnValue([
+      environment('env-1', 'awin'),
+      environment('env-2', 'awin')
+    ])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'awin' }), NO_SELECTION)
+    ).rejects.toThrow('Ambiguous Orca server in --host awin')
   })
 })
 

@@ -44,6 +44,26 @@ import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
+function buildSetup(overrides: {
+  id: string
+  hostId: string
+  repoId: string
+  projectId?: string
+  path?: string
+  displayName?: string
+}) {
+  return {
+    projectId: 'github:stablyai/orca',
+    path: '/tmp/orca',
+    displayName: 'Orca',
+    setupState: 'ready',
+    setupMethod: 'legacy-repo',
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides
+  }
+}
+
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
     callMock,
@@ -208,6 +228,150 @@ describe('orca cli worktree awareness', () => {
       2,
       'worktree.create',
       expect.objectContaining({ repo: 'id:repo-gpu' })
+    )
+  })
+
+  // Why: the reported failure. `orca project list` shows the display name, so that is what gets
+  // typed; matching the provider-scoped projectId alone reported "not set up" for a project that
+  // was sitting right there, and blamed the missing --host for it.
+  it('resolves --project by display name and infers the only host it is set up on', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({
+            id: 'setup-local',
+            hostId: 'local',
+            repoId: 'repo-local',
+            projectId: 'github:stablyai/scalp-it',
+            path: '/tmp/scalp-it',
+            displayName: 'scalp-it'
+          })
+        ]
+      }),
+      okFixture('req_projects', {
+        projects: [{ id: 'github:stablyai/scalp-it', displayName: 'scalp-it' }]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/scalp-it/feature', 'feature', 'abc', 'repo-local'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--project', 'scalp-it', '--name', 'feature', '--no-parent', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
+    expect(callMock).toHaveBeenNthCalledWith(2, 'project.list')
+    expect(callMock).toHaveBeenNthCalledWith(
+      3,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:repo-local' })
+    )
+  })
+
+  // Why: one host is not a choice. Two are, and picking one would create the worktree on a
+  // machine the caller never named.
+  it('asks which host only when the project is set up on more than one', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({
+            id: 'setup-local',
+            hostId: 'local',
+            repoId: 'repo-local',
+            path: '/tmp/orca'
+          }),
+          buildSetup({
+            id: 'setup-gpu',
+            hostId: 'runtime:gpu',
+            repoId: 'repo-gpu',
+            path: '/srv/orca'
+          })
+        ]
+      })
+    )
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project',
+        'github:stablyai/orca',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('it is set up on 2 hosts')
+    expect(printed).toContain('--host local')
+    expect(printed).toContain('--host runtime:gpu')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  // Why: `orca host list` prints `trader-local`, so that is what gets typed. Only the generated
+  // `ssh:ssh-<timestamp>-<random>` spelling used to be accepted.
+  it('accepts the host alias that `orca host list` prints', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_ssh_targets', {
+        targets: [{ id: 'ssh-1783599077486-fyasux', label: 'trader-local' }]
+      }),
+      okFixture('req_project_setups', {
+        setups: [
+          buildSetup({ id: 'setup-local', hostId: 'local', repoId: 'repo-local' }),
+          buildSetup({
+            id: 'setup-trader',
+            hostId: 'ssh:ssh-1783599077486-fyasux',
+            repoId: 'repo-trader',
+            path: '/home/trader/orca'
+          })
+        ]
+      }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/home/trader/orca/feature', 'feature', 'abc', 'repo-trader'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'trader-local',
+        '--name',
+        'feature',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'ssh.listTargetSummaries')
+    expect(callMock).toHaveBeenNthCalledWith(
+      3,
+      'worktree.create',
+      expect.objectContaining({ repo: 'id:repo-trader' })
     )
   })
 

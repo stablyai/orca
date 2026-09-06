@@ -9,7 +9,9 @@ import {
   ambiguousEnvironments,
   crossKindNextSteps,
   findEnvironmentByName,
+  findSshTargetByName,
   resolveSshHostTargetId,
+  type EnvironmentSummary,
   type SshTargetSummary
 } from './host-selector-alternatives'
 import type { RuntimeClient } from './runtime-client'
@@ -25,9 +27,13 @@ export type HostFlagRoutingSelection = {
   environmentSelector: { value: string; label: string } | null
 }
 
-export function parseHostFlag(
-  flags: Map<string, string | boolean>
-): ParsedExecutionHost | undefined {
+// Why: `orca host list` prints the alias a caller actually knows (`trader-local`), so that is what
+// they type — but which machine it names needs the host listings, which only the async resolvers
+// below can read. Carry the alias unresolved rather than rejecting the obvious spelling.
+export type HostFlagAlias = { kind: 'alias'; alias: string }
+export type HostFlagSelection = ParsedExecutionHost | HostFlagAlias
+
+export function parseHostFlag(flags: Map<string, string | boolean>): HostFlagSelection | undefined {
   if (!flags.has('host')) {
     return undefined
   }
@@ -36,13 +42,19 @@ export function parseHostFlag(
     throw new RuntimeClientError('invalid_argument', 'Missing value for --host')
   }
   const parsed = parseExecutionHostId(raw)
-  if (!parsed) {
+  if (parsed) {
+    return parsed
+  }
+  const alias = raw.trim()
+  // A value that claims a kind but does not parse is malformed, not an alias: `ssh:` names no
+  // target, and a `|` would rebind the id downstream. Only an unprefixed name can be a label.
+  if (!alias || alias.startsWith('ssh:') || alias.startsWith('runtime:')) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Invalid --host value: ${raw}. Expected local, ssh:<target-id>, or runtime:<environment-id>.`
+      `Invalid --host value: ${raw}. Expected local, ssh:<target-id>, runtime:<environment-id>, or a host name from \`orca host list\`.`
     )
   }
-  return parsed
+  return { kind: 'alias', alias }
 }
 
 // Why: `runtime:<environment-id>` ids are minted by this machine's pairing store, so they
@@ -54,7 +66,7 @@ export async function resolveHostFlagEnvironmentId(
   selection: HostFlagRoutingSelection
 ): Promise<string | null> {
   const host = parseHostFlag(flags)
-  if (host?.kind !== 'runtime') {
+  if (host?.kind !== 'runtime' && host?.kind !== 'alias') {
     return null
   }
   const [{ listEnvironments, resolveEnvironment }, { getDefaultUserDataPath }] = await Promise.all([
@@ -62,39 +74,48 @@ export async function resolveHostFlagEnvironmentId(
     import('./runtime-client.js')
   ])
   const userDataPath = getDefaultUserDataPath()
-  const known = listEnvironments(userDataPath)
+  const environments = listEnvironments(userDataPath).map((candidate) => ({
+    id: candidate.id,
+    name: candidate.name
+  }))
+  const wanted = host.kind === 'runtime' ? host.environmentId : host.alias
+  const flagSpelling = host.kind === 'runtime' ? `--host ${host.id}` : `--host ${host.alias}`
   // Why: --environment has always taken a name or an id, and the name is what people and agents
   // actually know. Requiring the raw uuid here made the obvious spelling fail; accept either and
   // canonicalize to the id so stored host ids still compare correctly downstream.
-  const environment = findEnvironmentByName(
-    known.map((candidate) => ({ id: candidate.id, name: candidate.name })),
-    host.environmentId
-  )
+  const environment = findEnvironmentByName(environments, wanted)
   if (!environment) {
+    assertEnvironmentNameUnambiguous(environments, wanted, flagSpelling)
+    // A bare alias has a second axis left to try: SSH targets live on the connected runtime, so
+    // resolveHostFlagTarget answers for them once a client exists. Missing here is not a failure.
+    if (host.kind === 'alias') {
+      return null
+    }
     // Why: `runtime:<id>` is a host id that also appears in stored rows, so it resolves by id
     // only — unlike --environment, which also accepts a name. Say so, and hand back the ids an
     // agent can retry with instead of making it scrape the sentence.
-    const environments = known.map((candidate) => ({ id: candidate.id, name: candidate.name }))
-    assertEnvironmentNameUnambiguous(environments, host.environmentId, `--host ${host.id}`)
     const sshTargets = await selection.listSshTargets()
     throw new RuntimeClientError(
       'invalid_argument',
-      `Unknown Orca server in --host ${host.id}: no paired Orca server is named or has id ${host.environmentId}.`,
+      `Unknown Orca server in ${flagSpelling}: no paired Orca server is named or has id ${wanted}.`,
       {
         knownEnvironments: environments,
         knownSshTargets: sshTargets,
         nextSteps: [
-          ...crossKindNextSteps(host.environmentId, { environments, sshTargets }, 'environment'),
+          ...crossKindNextSteps(wanted, { environments, sshTargets }, 'environment'),
           'Run `orca environment list` to see paired Orca servers.',
           'Use --host local to target this machine.'
         ]
       }
     )
   }
+  if (host.kind === 'alias') {
+    await assertAliasNamesOneHost(host.alias, environment, selection)
+  }
   if (selection.pairingCode) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `--host ${host.id} already selects a paired Orca server; use either --host runtime:<id> or --pairing-code, not both.`
+      `${flagSpelling} already selects a paired Orca server; use either --host runtime:<id> or --pairing-code, not both.`
     )
   }
   if (selection.environmentSelector) {
@@ -102,11 +123,38 @@ export async function resolveHostFlagEnvironmentId(
     if (selected.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `--host ${host.id} and ${selection.environmentSelector.label} ${selection.environmentSelector.value} name different Orca servers.`
+        `${flagSpelling} and ${selection.environmentSelector.label} ${selection.environmentSelector.value} name different Orca servers.`
       )
     }
   }
   return environment.id
+}
+
+// Why: a paired server and an SSH target are different machines, and one alias can name both.
+// Picking either would send the command to a machine the caller did not choose — the failure the
+// prefixed spellings exist to prevent — so hand back both flags and let them say which.
+async function assertAliasNamesOneHost(
+  alias: string,
+  environment: EnvironmentSummary,
+  selection: HostFlagRoutingSelection
+): Promise<void> {
+  const sshTargets = await selection.listSshTargets()
+  const sshTarget = findSshTargetByName(sshTargets, alias)
+  if (!sshTarget) {
+    return
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Ambiguous --host ${alias}: it names both a paired Orca server and an SSH target on this machine.`,
+    {
+      knownEnvironments: [environment],
+      knownSshTargets: [sshTarget],
+      nextSteps: [
+        `Use --host runtime:${environment.id} for the paired Orca server named ${environment.name}.`,
+        `Use --host ssh:${sshTarget.id} for the SSH target labeled ${sshTarget.label}.`
+      ]
+    }
+  )
 }
 
 // Why: a runtime stamps its own setups `local` when they were made on the box and
@@ -132,7 +180,7 @@ export async function resolveHostFlagTarget(
   client: RuntimeClient
 ): Promise<ParsedExecutionHost | undefined> {
   const host = parseHostFlag(flags)
-  if (host?.kind !== 'ssh') {
+  if (host?.kind !== 'ssh' && host?.kind !== 'alias') {
     return host
   }
   const [{ listEnvironments }, { getDefaultUserDataPath }] = await Promise.all([
@@ -143,8 +191,13 @@ export async function resolveHostFlagTarget(
     id: candidate.id,
     name: candidate.name
   }))
-  const targetId = await resolveSshHostTargetId(client, host.targetId, environments)
-  return parseExecutionHostId(toSshExecutionHostId(targetId)) ?? host
+  // A bare alias reaches here only after resolveHostFlagEnvironmentId found no paired server by
+  // that name, so SSH is the one axis left and an unknown name is a real failure.
+  const wanted = host.kind === 'ssh' ? host.targetId : host.alias
+  const flagSpelling = host.kind === 'ssh' ? `--host ${host.id}` : `--host ${host.alias}`
+  const targetId = await resolveSshHostTargetId(client, wanted, environments, flagSpelling)
+  const sshHostId = toSshExecutionHostId(targetId)
+  return parseExecutionHostId(sshHostId) ?? { kind: 'ssh', id: sshHostId, targetId }
 }
 
 // Why: the store refuses an ambiguous environment name rather than guessing which server was
