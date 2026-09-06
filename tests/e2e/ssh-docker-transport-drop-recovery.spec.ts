@@ -163,8 +163,7 @@ test.describe('SSH transport drop recovery', () => {
     }
   })
 
-  // #18018: local authority-aware recovery still loses the flooded pane's relay channel.
-  test.fixme('stays bounded when a disconnected shell floods its pty', async ({
+  test('stays bounded when a disconnected shell floods its pty', async ({
     orcaPage
   }, testInfo) => {
     test.slow()
