@@ -154,6 +154,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerRead',
     params: WorkerReadParams,
+    /** Read a worker's output via the handle inspectWorkerTerminal proved live, or the archived tail once the terminal is releasing, released, or conceded release_unknown. */
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const federated = db.getFederatedDispatch(params.dispatch)
@@ -226,10 +227,13 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
         )
       }
+      // Read via the handle inspectWorkerTerminal proved live: the durable one, or a handle
+      // re-minted from the recorded incarnation after the durable handle went stale.
+      const liveHandle = observation.terminalHandle ?? terminalHandle
       const output = await readExactWorkerOutput({
         runtime,
         dispatchId: params.dispatch,
-        terminalHandle,
+        terminalHandle: liveHandle,
         workerState: worker?.state ?? 'unsupervised',
         terminalStatus:
           observation.status === 'exited'

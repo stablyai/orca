@@ -16,6 +16,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerStop',
     params: WorkerDispatchParams,
+    /** Stop a worker by closing exactly the live handle; a kill the host never confirms marks the dispatch stop_unknown, never a false success. */
     handler: async (params, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
       const federated = db.getFederatedDispatch(params.dispatch)
@@ -149,8 +150,12 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           'none'
         )
       }
+      // inspectWorkerTerminal re-minted a live handle from the recorded incarnation when the
+      // durable handle went stale; close that live handle. Closing the stale durable handle would
+      // throw terminal_handle_stale (swallowed into markWorkerStopUnknown) and leak the live PTY.
+      const liveHandle = observation.terminalHandle ?? handle
       try {
-        const close = await runtime.closeTerminal(handle)
+        const close = await runtime.closeTerminal(liveHandle)
         if (!close.ptyKilled) {
           // The tab is retired, but the agent process was never confirmed stopped —
           // settling here is the false success this receipt exists to prevent.

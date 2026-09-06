@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
 const PTY_ID = 'ssh:target@@relay-pty'
 const WORKTREE_ID = 'repo::/worktree'
 const TAB_ID = 'tab-terminal'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
+/** A runtime whose pty controller captures every write for assertion. */
 function makeRuntime(): { runtime: OrcaRuntimeService; writes: string[] } {
   const writes: string[] = []
   const runtime = new OrcaRuntimeService(null)
@@ -20,6 +22,7 @@ function makeRuntime(): { runtime: OrcaRuntimeService; writes: string[] } {
   return { runtime, writes }
 }
 
+/** Attach a window and publish a one-tab, one-leaf terminal graph. */
 function syncGraph(runtime: OrcaRuntimeService): void {
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, {
@@ -44,6 +47,7 @@ function syncGraph(runtime: OrcaRuntimeService): void {
   })
 }
 
+/** (Re)register the fixture pty leaf under the given incarnation id. */
 function register(runtime: OrcaRuntimeService, incarnationId: string): void {
   runtime.registerPty(PTY_ID, WORKTREE_ID, 'target', {
     tabId: TAB_ID,
@@ -179,5 +183,137 @@ describe('runtime terminal handle incarnation fencing', () => {
       handle: replacementHandle,
       status: 'running'
     })
+  })
+})
+
+describe('resolveTerminalHandleByProcessIncarnation direct fencing', () => {
+  const LOCAL_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
+  // PTY_ID ('ssh:target@@relay-pty') derives connectionId 'target' via parseAppSshPtyId, so its
+  // host scope is ssh:target rather than local.
+  const SSH_TARGET_SCOPE = JSON.stringify({ kind: 'ssh', targetId: 'target' })
+
+  /** Register a pty leaf directly, optionally under a connection and incarnation. */
+  function seedPty(
+    runtime: OrcaRuntimeService,
+    ptyId: string,
+    incarnationId: string | null,
+    connectionId: string | null = null
+  ): void {
+    runtime.registerPty(ptyId, WORKTREE_ID, connectionId, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      ...(incarnationId ? { incarnationId } : {})
+    })
+  }
+
+  /** Call the private resolveTerminalHandleByProcessIncarnation on the runtime. */
+  function resolve(
+    runtime: OrcaRuntimeService,
+    processIncarnation: string,
+    serializedHostScope: string | null
+  ): string | null {
+    return (
+      runtime as unknown as {
+        resolveTerminalHandleByProcessIncarnation(
+          processIncarnation: string,
+          serializedHostScope: string | null
+        ): string | null
+      }
+    ).resolveTerminalHandleByProcessIncarnation(processIncarnation, serializedHostScope)
+  }
+
+  it('mints a live handle for a pty whose exact incarnation and host scope match', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    const handle = resolve(runtime, `${PTY_ID}:incarnation-1`, SSH_TARGET_SCOPE)
+    expect(handle).toMatch(/^term_/)
+    // Re-minting the same live pty is idempotent.
+    expect(resolve(runtime, `${PTY_ID}:incarnation-1`, SSH_TARGET_SCOPE)).toBe(handle)
+  })
+
+  it('returns null when the recorded incarnationId no longer matches the live pty', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    expect(resolve(runtime, `${PTY_ID}:incarnation-2`, LOCAL_SCOPE)).toBeNull()
+  })
+
+  it('returns null when the live pty has no incarnationId (legacy runtimeId:ptyId:gen never reaps)', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, null)
+    // A modern-shaped probe cannot match a pty that carries no incarnationId...
+    expect(resolve(runtime, `${PTY_ID}:incarnation-1`, LOCAL_SCOPE)).toBeNull()
+    // ...and the legacy `${runtimeId}:${ptyId}:${ptyGeneration}` shape stays fail-closed rather
+    // than reap on a ptyGeneration guess.
+    expect(resolve(runtime, `runtime_test:${PTY_ID}:0`, LOCAL_SCOPE)).toBeNull()
+  })
+
+  it('returns null when the host scope does not match', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    expect(
+      resolve(runtime, `${PTY_ID}:incarnation-1`, JSON.stringify({ kind: 'ssh', targetId: 'nope' }))
+    ).toBeNull()
+  })
+
+  it('returns null when no host scope is supplied (fails closed)', () => {
+    const { runtime } = makeRuntime()
+    seedPty(runtime, PTY_ID, 'incarnation-1')
+    expect(resolve(runtime, `${PTY_ID}:incarnation-1`, null)).toBeNull()
+  })
+
+  it('resolves a colon-bearing SSH/relay incarnationId that lastIndexOf would mis-split', () => {
+    const { runtime } = makeRuntime()
+    // PTY_ID already carries ':' and '@@'; the incarnationId itself also carries colons.
+    seedPty(runtime, PTY_ID, 'relay:conn-3:incarnation-9', 'target')
+    const handle = resolve(
+      runtime,
+      `${PTY_ID}:relay:conn-3:incarnation-9`,
+      JSON.stringify({ kind: 'ssh', targetId: 'target' })
+    )
+    expect(handle).toMatch(/^term_/)
+  })
+
+  it('resolves a Windows repo::C:\\path@@1 ptyId', () => {
+    const { runtime } = makeRuntime()
+    const windowsPtyId = 'repo::C:\\path@@1'
+    seedPty(runtime, windowsPtyId, 'incarnation-win')
+    const handle = resolve(runtime, `${windowsPtyId}:incarnation-win`, LOCAL_SCOPE)
+    expect(handle).toMatch(/^term_/)
+  })
+
+  it('keeps scanning past a colon-ambiguous decoy in another host scope to the genuine match', () => {
+    const { runtime } = makeRuntime()
+    // One process-incarnation string, two colon-ambiguous pty ids that both satisfy the exact
+    // matcher: 'relay' + 'conn:incarnation-1' AND 'relay:conn' + 'incarnation-1' both stringify to
+    // 'relay:conn:incarnation-1'. The decoy is registered FIRST and lives in a different host scope
+    // (ssh:decoy); the genuine pty is local and registered later.
+    const processIncarnation = 'relay:conn:incarnation-1'
+    const DECOY_TAB_ID = 'tab-decoy'
+    const DECOY_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+    const GENUINE_TAB_ID = 'tab-genuine'
+    const GENUINE_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+    runtime.registerPty('relay', WORKTREE_ID, 'decoy', {
+      tabId: DECOY_TAB_ID,
+      leafId: DECOY_LEAF_ID,
+      incarnationId: 'conn:incarnation-1'
+    })
+    runtime.registerPty('relay:conn', WORKTREE_ID, null, {
+      tabId: GENUINE_TAB_ID,
+      leafId: GENUINE_LEAF_ID,
+      incarnationId: 'incarnation-1'
+    })
+
+    // Before the fix, the earlier decoy's host-scope mismatch returned null and suppressed the
+    // genuine same-scope pty entirely. `continue` lets the scan reach it.
+    const handle = resolve(runtime, processIncarnation, LOCAL_SCOPE)
+    expect(handle).toMatch(/^term_/)
+    // getTerminalProcessIncarnation cannot separate the two (both stringify to
+    // 'relay:conn:incarnation-1'), so pin the remint to the GENUINE pane. The paneKey is the only
+    // terminal-specific observable that distinguishes the genuine leaf from the same-incarnation
+    // decoy; this fails if the resolver ever mints the decoy's handle instead of the genuine pty's.
+    const genuinePaneKey = makePaneKey(GENUINE_TAB_ID, GENUINE_LEAF_ID)
+    const decoyPaneKey = makePaneKey(DECOY_TAB_ID, DECOY_LEAF_ID)
+    expect(runtime.getTerminalPaneKey(handle!)).toBe(genuinePaneKey)
+    expect(runtime.getTerminalPaneKey(handle!)).not.toBe(decoyPaneKey)
   })
 })
