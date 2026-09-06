@@ -18,7 +18,10 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult
 } from '../../../../shared/agent-session-wire'
-import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
+import {
+  attachFingerprintFields,
+  type AgentSessionAttachParams
+} from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -52,14 +55,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
-    fields: {
-      location: resolved.location,
-      provider: resolved.provider,
-      agent: resolved.agent,
-      accountHome: resolved.accountHome,
-      runtimeKind: resolved.runtimeKind,
-      expectedRuntimeFence: null
-    }
+    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
   })
   const host = await args.ensureHost()
   const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved

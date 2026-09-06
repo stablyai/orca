@@ -64,8 +64,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
     workspaceKind: input.workspaceKind,
     projectRuntime: input.projectRuntime,
     isDraftPrompt: input.promptDelivery === 'draft',
-    requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization,
-    initialSessionOptions: input.initialSessionOptions
+    requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization
   }).supported
     ? 'structured-native-chat'
     : 'legacy-native-chat'

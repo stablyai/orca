@@ -86,7 +86,6 @@ const BLOCKER_REASON: Record<
   'draft-prompt': 'structured_unsupported_on_host',
   'floating-workspace': 'structured_unsupported_on_host',
   'tui-launch-customization': 'tui_launch_customization',
-  'initial-session-options': 'structured_unsupported_on_host',
   'remote-execution-host': 'remote_execution_host',
   'codex-on-windows': 'codex_on_windows',
   'project-runtime': 'wsl_execution_runtime',

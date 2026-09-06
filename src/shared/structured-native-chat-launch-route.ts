@@ -25,7 +25,6 @@ export type StructuredNativeChatBlocker =
   | 'draft-prompt'
   | 'floating-workspace'
   | 'tui-launch-customization'
-  | 'initial-session-options'
   | 'remote-execution-host'
   | 'codex-on-windows'
   | 'project-runtime'
@@ -45,7 +44,6 @@ export type StructuredNativeChatSupportInput = {
   /** A draft stays terminal-backed: the composer, not a turn, owns unsent text. */
   isDraftPrompt?: boolean
   requiresTuiLaunchCustomization?: boolean
-  initialSessionOptions?: Readonly<Record<string, unknown>>
 }
 
 /** The user's default for a new agent tab: native chat rather than the raw TUI. */
@@ -80,9 +78,6 @@ export function resolveStructuredNativeChatSupport(
   }
   if (input.requiresTuiLaunchCustomization === true) {
     return { supported: false, blocker: 'tui-launch-customization' }
-  }
-  if (input.initialSessionOptions && Object.keys(input.initialSessionOptions).length > 0) {
-    return { supported: false, blocker: 'initial-session-options' }
   }
   if (input.executionHostId !== 'local') {
     return { supported: false, blocker: 'remote-execution-host' }

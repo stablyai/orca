@@ -63,7 +63,6 @@ describe('per-launch structured feasibility', () => {
     ['a draft prompt', { isDraftPrompt: true }, 'draft-prompt'],
     ['a floating workspace', { workspaceKind: 'floating' }, 'floating-workspace'],
     ['a custom TUI launch', { requiresTuiLaunchCustomization: true }, 'tui-launch-customization'],
-    ['session options', { initialSessionOptions: { model: 'x' } }, 'initial-session-options'],
     ['an SSH host', { executionHostId: 'ssh:host-a' }, 'remote-execution-host'],
     ['Codex on Windows', { agent: 'codex', platform: 'win32' }, 'codex-on-windows'],
     ['a missing capability', { hostCapabilities: [] }, 'runtime-capability']
