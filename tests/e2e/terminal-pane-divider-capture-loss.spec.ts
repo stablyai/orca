@@ -95,7 +95,8 @@ function gridsMatch(geometry: DividerGeometry): boolean {
   )
 }
 
-test('@headful keeps resizing after the divider loses pointer capture', async ({
+for (const repetition of [1, 2, 3, 4, 5]) {
+test(`@headful keeps resizing after the divider loses pointer capture ${repetition}`, async ({
   orcaPage,
   testRepoPath
 }, testInfo) => {
@@ -166,3 +167,5 @@ test('@headful keeps resizing after the divider loses pointer capture', async ({
   expect(after.first.flex).not.toBe(before.first.flex)
   expect(after.second.flex).not.toBe(before.second.flex)
 })
+
+}
