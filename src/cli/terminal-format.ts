@@ -28,7 +28,7 @@ export function formatTerminalList(
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.tabTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
@@ -98,6 +98,7 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
   return [
     `handle: ${terminal.handle}`,
     `title: ${terminal.title ?? '(untitled)'}`,
+    `tabTitle: ${terminal.tabTitle ?? '(unset)'}`,
     `worktree: ${terminal.worktreePath}`,
     `branch: ${terminal.branch}`,
     `leaf: ${terminal.leafId}`,
@@ -231,7 +232,8 @@ export function formatTerminalRename(result: { rename: RuntimeTerminalRename }):
 }
 
 export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }): string {
-  const titleNote = result.terminal.title ? ` (title: "${result.terminal.title}")` : ''
+  const title = result.terminal.tabTitle ?? result.terminal.title
+  const titleNote = title ? ` (title: "${title}")` : ''
   const surfaceNote = result.terminal.surface ? ` [${result.terminal.surface}]` : ''
   const warningNote = result.terminal.warning ? `\nwarning: ${result.terminal.warning}` : ''
   return `Created terminal ${result.terminal.handle}${titleNote}${surfaceNote}${warningNote}`

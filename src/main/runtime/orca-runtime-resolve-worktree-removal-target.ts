@@ -119,13 +119,12 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       pty.pty.title = title
-      // Why: a manual rename must outrank later agent OSC title updates (which
-      // win by timestamp), so stamp it as the freshest title.
-      pty.pty.titleUpdatedAt = Date.now()
+      pty.pty.tabTitle = title
+      pty.pty.titleUpdatedAt = this.nextTitleObservationSequence()
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
       // Why: without a renderer the rename only lived on the live pty and was
       // lost on restart. Persist customTitle so a headless rebuild keeps it.
-      if (!this.notifier?.renameTerminal && pty.pty.tabId) {
+      if (pty.pty.tabId) {
         this.persistHeadlessTerminalTitle(pty.pty.worktreeId, pty.pty.tabId, title)
       }
       for (const leaf of this.leaves.values()) {
@@ -138,6 +137,15 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
+    const trackedPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+    if (trackedPty) {
+      trackedPty.tabTitle = title
+    }
+    this.persistHeadlessTerminalTitle(leaf.worktreeId, leaf.tabId, title)
+    const tab = this.tabs.get(leaf.tabId)
+    if (tab) {
+      tab.title = title
+    }
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
   }

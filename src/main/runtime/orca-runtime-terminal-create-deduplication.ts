@@ -112,6 +112,7 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       ptyId: session.id,
       worktreeId,
       title: session.title || null,
+      tabTitle: this.resolveTerminalTabTitle(worktreeId, pty.tabId, pty.tabTitle),
       surface: 'background'
     }
   }

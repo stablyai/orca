@@ -75,6 +75,7 @@ export async function createDesktopTerminal(
     tabId: reply.tabId,
     worktreeId: worktreeId ?? '',
     title: reply.title,
+    tabTitle: launchOpts.title ?? null,
     ...runtime.getPtyExecutionHostMetadata(runtime.handles.get(handle)?.ptyId ?? null),
     surface: 'visible'
   }
