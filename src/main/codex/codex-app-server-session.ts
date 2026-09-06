@@ -2,6 +2,7 @@ import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'n
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
 import { admitProcessTreeKill } from '../../shared/child-process/process-tree-kill-gate'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
@@ -66,7 +67,6 @@ export type CodexAppServerRpc = {
 
 const JSON_RPC_METHOD_NOT_FOUND = -32601
 const STDERR_TAIL_MAX_BYTES = 8192
-const STDOUT_LINE_MAX_BYTES = 1024 * 1024
 
 export function killCodexAppServerProcessTree(
   child: Pick<ChildProcess, 'pid' | 'kill'>,
@@ -208,36 +208,24 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
   })
 
-  let stdoutBuffer = ''
-  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
-    stdoutBuffer += chunk
-    if (Buffer.byteLength(stdoutBuffer) > STDOUT_LINE_MAX_BYTES) {
-      // Why: Windows process-tree termination is asynchronous; stop buffered
-      // chunks from spawning another taskkill for the same oversized response.
-      child.stdout.destroy()
-      killCodexAppServerProcessTree(child)
-      failPending(new Error('codex app-server emitted an oversized JSONL response'))
-      return
-    }
-    let newlineIndex
-    while ((newlineIndex = stdoutBuffer.indexOf('\n')) !== -1) {
-      const line = stdoutBuffer.slice(0, newlineIndex).trim()
-      stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1)
-      if (!line) {
-        continue
+  createCodexAppServerRecordReader({
+    stdout: child.stdout,
+    onRecord: (parsed) => {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return
       }
-      let message: JsonRpcResponse
-      try {
-        message = JSON.parse(line) as JsonRpcResponse
-      } catch {
-        continue
+      const message = parsed as JsonRpcResponse
+      if (typeof message.id !== 'number') {
+        return
       }
-      if (typeof message.id === 'number' && pending.has(message.id)) {
-        const waiter = pending.get(message.id)!
+      const waiter = pending.get(message.id)
+      if (waiter) {
         pending.delete(message.id)
         waiter.resolve(message)
       }
-    }
+    },
+    onRejected: () => undefined,
+    onFatal: failPending
   })
 
   function failPending(error: Error): void {

@@ -22,12 +22,11 @@ when an older CLI rejects the flag. A nested worker must respect
 ## Launch preferences
 
 For a fresh Claude, Codex, or Cursor terminal, `--model` accepts an opaque
-provider model ID. Pick the cheapest model that fits the Task (`sonnet` for
-routine work); an omitted model inherits the launcher's default, often the most
-expensive. Add `--effort` only when that model supports it:
+provider model ID. Pass it only when the user named a model; otherwise omit it
+so the worker inherits the user's configured agent default. Add `--effort` only
+when that model supports it:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --worktree current --agent claude --model sonnet --json
 ORCA orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
 ```
 
