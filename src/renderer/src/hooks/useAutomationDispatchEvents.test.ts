@@ -114,7 +114,7 @@ async function registerAndDispatch(automation = makeAutomation()): Promise<void>
   })
   const { useAutomationDispatchEvents: registerAutomationDispatchEvents } =
     await import('./useAutomationDispatchEvents')
-  registerAutomationDispatchEvents()
+  registerAutomationDispatchEvents(true)
   const handler = mockOnDispatchRequested.mock.calls[0]?.[0]
   if (!handler) {
     throw new Error('dispatch handler was not registered')
