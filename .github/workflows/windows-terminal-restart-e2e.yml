@@ -45,12 +45,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Diagnose MSYS automatic breakaway without native breakaway flags
+      - name: Diagnose strict PTY job with host breakaway retained
         shell: pwsh
         run: |
           $sourcePath = Join-Path (Get-Location) 'node_modules/node-pty/src/win/conpty.cc'
           $sourceText = [System.IO.File]::ReadAllText($sourcePath)
-          $sourceText = $sourceText.Replace('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK', 'JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE')
           $sourceText = $sourceText.Replace('jobLimits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK;', 'jobLimits.BasicLimitInformation.LimitFlags = 0;')
           [System.IO.File]::WriteAllText($sourcePath, $sourceText)
           node config/scripts/rebuild-native-deps.mjs --force
