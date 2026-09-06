@@ -70,12 +70,15 @@ export function createFolderWorkspaceMutationActions(
         if (
           target.kind === 'environment' &&
           (args.linkedTask?.provider === 'jira' ||
+            args.linkedTask?.provider === 'kaneo' ||
             args.linkedTaskSourceContext?.provider === 'jira')
         ) {
           await assertRuntimeEnvironmentCapability(
             target.environmentId,
             WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-            'Update the remote runtime to link Jira'
+            args.linkedTask?.provider === 'kaneo'
+              ? 'Update the remote runtime to link Kaneo tasks'
+              : 'Update the remote runtime to link Jira'
           )
         }
         if (target.kind === 'environment' && args.linkedTask?.provider === 'kaneo') {
@@ -133,16 +136,19 @@ export function createFolderWorkspaceMutationActions(
       const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
       const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
       const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
-      // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
+      // Why: same gate as folderWorkspace.create — an older paired runtime would drop the link silently.
       if (
         target.kind === 'environment' &&
         (updates.linkedTask?.provider === 'jira' ||
+          updates.linkedTask?.provider === 'kaneo' ||
           updates.linkedTaskSourceContext?.provider === 'jira')
       ) {
         await assertRuntimeEnvironmentCapability(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
+          updates.linkedTask?.provider === 'kaneo'
+            ? 'Update the remote runtime to link Kaneo tasks'
+            : 'Update the remote runtime to link Jira'
         )
       }
       if (target.kind === 'environment' && updates.linkedTask?.provider === 'kaneo') {
