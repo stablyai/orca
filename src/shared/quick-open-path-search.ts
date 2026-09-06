@@ -5,6 +5,7 @@ export const QUICK_OPEN_RESULT_LIMIT = 50
 export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
 export const QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS = 256
 export const QUICK_OPEN_SEARCH_VERSION = 1
+const QUICK_OPEN_QUERY_MAX_TERMS = 32
 
 export type QuickOpenIndexedFile = {
   path: string
@@ -47,28 +48,36 @@ export function isQuickOpenRemoteQueryTooLarge(query: string): boolean {
   return query.length > QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS || isQuickOpenQueryTooLarge(query)
 }
 
+export function isQuickOpenQueryTermLimitExceeded(query: string): boolean {
+  return getNormalizedQuickOpenQueryTerms(query).length > QUICK_OPEN_QUERY_MAX_TERMS
+}
+
 export function rankQuickOpenFiles(
   query: string,
   files: readonly QuickOpenIndexedFile[],
   limit = QUICK_OPEN_RESULT_LIMIT
 ): QuickOpenSearchResult[] {
-  if (limit <= 0 || isQuickOpenQueryTooLarge(query)) {
+  if (limit <= 0) {
+    return []
+  }
+  const queryTerms = prepareQuickOpenQueryTerms(query)
+  if (queryTerms === null) {
     return []
   }
 
-  const normalizedQuery = normalizeQuickOpenQuery(query)
   const results: QuickOpenRankedResult[] = []
   for (const file of files) {
-    const score = normalizedQuery ? fuzzyMatchIndexedFile(normalizedQuery, file) : 0
-    if (score !== -1) {
-      retainTopResult(results, { path: file.path, score, inputIndex: file.inputIndex }, limit)
+    const score = scoreIndexedFile(queryTerms, file)
+    if (score === null) {
+      continue
     }
+    retainTopResult(results, { path: file.path, score, inputIndex: file.inputIndex }, limit)
   }
   return finalizeResults(results)
 }
 
 export class QuickOpenPathRanker {
-  private readonly normalizedQuery: string | null
+  private readonly queryTerms: string[] | null
   private readonly retained: QuickOpenRankedResult[] = []
   private inputIndex = 0
   private matchCount = 0
@@ -77,17 +86,16 @@ export class QuickOpenPathRanker {
     query: string,
     private readonly limit: number
   ) {
-    this.normalizedQuery =
-      limit <= 0 || isQuickOpenQueryTooLarge(query) ? null : normalizeQuickOpenQuery(query)
+    this.queryTerms = limit <= 0 ? null : prepareQuickOpenQueryTerms(query)
   }
 
   consider(path: string): void {
-    const file = prepareQuickOpenFile(path, this.inputIndex++)
-    if (this.normalizedQuery === null) {
+    if (this.queryTerms === null) {
       return
     }
-    const score = this.normalizedQuery ? fuzzyMatchIndexedFile(this.normalizedQuery, file) : 0
-    if (score === -1) {
+    const file = prepareQuickOpenFile(path, this.inputIndex++)
+    const score = scoreIndexedFile(this.queryTerms, file)
+    if (score === null) {
       return
     }
     this.matchCount++
@@ -106,8 +114,54 @@ export class QuickOpenPathRanker {
   }
 }
 
-function normalizeQuickOpenQuery(query: string): string {
-  return query.trim().replace(/\\/g, '/').toLowerCase()
+function prepareQuickOpenQueryTerms(
+  query: string,
+  maxBytes = QUICK_OPEN_QUERY_MAX_BYTES
+): string[] | null {
+  if (isQuickOpenQueryTooLarge(query, maxBytes)) {
+    return null
+  }
+  const queryTerms = getNormalizedQuickOpenQueryTerms(query)
+  return queryTerms.length > QUICK_OPEN_QUERY_MAX_TERMS ? null : queryTerms
+}
+
+function getNormalizedQuickOpenQueryTerms(query: string): string[] {
+  // Why: Quick Open presents slash-normalized paths even on Windows; users
+  // still naturally type backslashes in path queries.
+  const normalizedQuery = query.trim().replace(/\\/g, '/').toLowerCase()
+  if (!normalizedQuery) {
+    return []
+  }
+  return [...new Set(normalizedQuery.split(/\s+/))].sort((a, b) => b.length - a.length)
+}
+
+function scoreIndexedFile(
+  queryTerms: readonly string[],
+  file: QuickOpenIndexedFile
+): number | null {
+  if (queryTerms.length === 0) {
+    return 0
+  }
+  const score = fuzzyMatchIndexedFileTerms(queryTerms, file)
+  if (score === null || (queryTerms.length === 1 && score === -1)) {
+    return null
+  }
+  return score
+}
+
+function fuzzyMatchIndexedFileTerms(
+  queryTerms: readonly string[],
+  file: QuickOpenIndexedFile
+): number | null {
+  let totalScore = 0
+  for (const queryTerm of queryTerms) {
+    const score = fuzzyMatchIndexedFile(queryTerm, file)
+    if (score === null) {
+      return null
+    }
+    totalScore += score
+  }
+  return totalScore
 }
 
 function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexedFile {
@@ -121,7 +175,7 @@ function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexe
   }
 }
 
-function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): number {
+function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): number | null {
   let qi = 0
   let score = 0
   let lastMatchIdx = -1
@@ -145,7 +199,7 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
   }
 
   if (qi < query.length) {
-    return -1
+    return null
   }
   if (file.lowerFilename.includes(query)) {
     score -= 100
