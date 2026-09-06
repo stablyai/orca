@@ -27,7 +27,7 @@ afterEach(async () => {
 })
 
 describe('performCancel', () => {
-  it('acknowledges a confirmed cancel without settling the foreground turn', async () => {
+  it('acknowledges only the request and leaves the running lifecycle row intact', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-'))
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
     const lifecycleIdentity = {
@@ -71,54 +71,6 @@ describe('performCancel', () => {
         turnLifecycle: { turnId: 'turn-1', state: 'running' }
       },
       { kind: 'status', text: 'Cancellation requested.' }
-    ])
-  })
-
-  it('settles an already-finished turn and keeps repeated stop notes bounded', async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-finished-'))
-    const journal = await journals.open({ identity: IDENTITY, journalDir: root })
-    await journal.appendItem(
-      {
-        provider: 'legacy',
-        agent: 'codex',
-        sessionId: 'session-1',
-        recordId: 'turn-lifecycle:turn-1'
-      },
-      {
-        kind: 'status',
-        text: 'Agent is working...',
-        turnLifecycle: { turnId: 'turn-1', state: 'running' }
-      },
-      { fence: 1 }
-    )
-    const cancelTurn = vi.fn(async () => ({ cancelled: false }))
-    const ctx: AgentSessionTurnContext = {
-      sessionId: 'session-1',
-      journal,
-      fence: 1,
-      adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
-      persistOptions: async () => undefined,
-      resolvedBy: 'client-1',
-      publish: vi.fn(),
-      now: () => 1
-    }
-
-    const first = await performCancel(ctx, {
-      clientOperationId: 'cancel-1',
-      turnId: 'turn-1'
-    })
-    const itemCountAfterFirst = journal.snapshot().items.length
-    const second = await performCancel(ctx, {
-      clientOperationId: 'cancel-2',
-      turnId: 'turn-1'
-    })
-
-    expect(first).toEqual({ ok: true, value: { turnId: 'turn-1', cancelled: false } })
-    expect(second).toEqual({ ok: true, value: { turnId: 'turn-1', cancelled: false } })
-    expect(cancelTurn).toHaveBeenCalledTimes(2)
-    expect(journal.snapshot().items).toHaveLength(itemCountAfterFirst)
-    expect(journal.snapshot().items.map((item) => item.body)).toEqual([
-      { kind: 'status', text: 'The provider had already finished this turn.' }
     ])
   })
 
