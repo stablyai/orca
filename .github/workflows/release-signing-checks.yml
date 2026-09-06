@@ -6,6 +6,7 @@ on:
       - '.github/workflows/release-cut.yml'
       - 'config/windows-signing/**'
       - 'cloud/apps/release-signing/**'
+      - 'cloud/infra/release-signing/**'
       - 'cloud/pnpm-lock.yaml'
   workflow_dispatch:
 permissions:
@@ -26,7 +27,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: pnpm/setup@v2
         with:
-          version: '10.24.0'
+          package-json-file: cloud/package.json
           install: false
       - uses: actions/setup-node@v6
         with:
@@ -37,3 +38,14 @@ jobs:
       - run: pnpm --dir cloud --filter @orca-cloud/release-signing typecheck
       - run: pnpm --dir cloud --filter @orca-cloud/release-signing test
       - run: node --test config/windows-signing/configure-environments.test.mjs
+  infrastructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+      - run: terraform -chdir=cloud/infra/release-signing fmt -check
+      - run: terraform -chdir=cloud/infra/release-signing init -backend=false -input=false
+      - run: terraform -chdir=cloud/infra/release-signing validate
