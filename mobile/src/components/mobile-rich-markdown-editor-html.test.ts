@@ -221,7 +221,7 @@ describe('mobile rich markdown editor HTML', () => {
     expect(nativeHtml).toContain("default-src 'none'")
     expect(nativeHtml).toContain("connect-src 'none'")
     expect(hostedHtml).toContain("default-src 'none'")
-    expect(hostedHtml).toContain('img-src data:')
+    expect(hostedHtml).toContain('img-src data: https:')
     expect(hostedHtml).toContain("frame-src 'none'")
     expect(MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_CSP_HASH).toBe(scriptHash)
     expect(hostedHtml).toContain(`script-src ${scriptHash}`)
@@ -256,6 +256,27 @@ describe('mobile rich markdown editor HTML', () => {
     expect(html).not.toMatch(/(?:href|src)="data:image\/svg/i)
     expect(html).toContain('<a href="https://example.com/path">safe</a>')
     expect(html).toContain('<img src="data:image/png;base64,iVBORw0KGgo=" alt="raster" />')
+  })
+
+  it('renders https images the frame policy admits and leaves plaintext http blocked', () => {
+    const html = runtimeMarkdownToHtml(
+      [
+        '![remote](https://example.com/image.png)',
+        '![plaintext](http://example.com/image.png)'
+      ].join('\n\n'),
+      false
+    )
+    const policy =
+      buildMobileRichMarkdownEditorHtml().match(
+        /Content-Security-Policy" content="([^"]+)"/
+      )?.[1] ?? ''
+    const imgSrc = policy.match(/img-src ([^;]+)/)?.[1] ?? ''
+
+    expect(html).toContain('<img src="https://example.com/image.png" alt="remote" />')
+    expect(html).toContain('<img src="http://example.com/image.png" alt="plaintext" />')
+    expect(imgSrc.split(' ')).toEqual(['data:', 'https:'])
+    expect(policy).not.toContain("connect-src 'self'")
+    expect(policy).toContain("frame-src 'none'")
   })
 
   it('escapes injected markdown without reopening script tags', () => {
