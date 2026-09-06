@@ -636,13 +636,8 @@ describe('PR E2E gate contract', () => {
       .filter((spec) => nativeGateExpression.test(readFileSync(join(projectDir, spec), 'utf8')))
     expect(nativeGatedSpecs.length).toBeGreaterThan(0)
 
-    // Why exempt: the digit repro needs a nested gnome-shell, which no hosted runner provides
-    // (headless mutter never answers RemoteDesktop.CreateSession); the macOS spec needs a real
-    // macOS input source, and no macOS runner exists on any PR or scheduled lane.
-    const unreachableSpecs = new Set([
-      'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts',
-      'tests/e2e/terminal-macos-2set-korean-native.spec.ts'
-    ])
+    // The macOS spec needs a native input source; PR and scheduled IME lanes use Linux.
+    const unreachableSpecs = new Set(['tests/e2e/terminal-macos-2set-korean-native.spec.ts'])
     const unclaimed = nativeGatedSpecs.filter(
       (spec) => !unreachableSpecs.has(spec) && !nativeImeRunner.includes(spec)
     )
