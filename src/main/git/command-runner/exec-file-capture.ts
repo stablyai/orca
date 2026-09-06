@@ -25,7 +25,11 @@ export async function execFileCaptureToTermination(
   options: ExecFileCaptureOptions,
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
-  const result = await runProcess({
+  // Why measured here: runProcess spawns inside its promise executor, which runs
+  // synchronously, so this brackets exactly the main-thread block execFileCapture
+  // reports for its own spawns.
+  const spawnStartedAt = performance.now()
+  const pending = runProcess({
     program: command,
     args,
     cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
@@ -37,10 +41,17 @@ export async function execFileCaptureToTermination(
     onChildTerminated: options.onChildTerminated,
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
+  recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
+  const result = await pending
   const stdout = options.encoding === 'buffer' ? Buffer.from(result.stdout) : result.stdout
   const cleanStderr = termination?.stripControlOutput(result.stderr) ?? result.stderr
   const stderr = options.encoding === 'buffer' ? Buffer.from(cleanStderr) : cleanStderr
-  if (result.code === 0 && !result.timedOut && !options.signal?.aborted) {
+  if (
+    result.code === 0 &&
+    !result.timedOut &&
+    !result.outputTruncated &&
+    !options.signal?.aborted
+  ) {
     return { stdout, stderr }
   }
   const error = result.timedOut
@@ -48,7 +59,12 @@ export async function execFileCaptureToTermination(
     : new Error(
         options.signal?.aborted
           ? 'The operation was aborted.'
-          : cleanStderr.trim() || `${command} exited with ${result.code}.`
+          : result.outputTruncated
+            ? // Why fail instead of returning the clipped text: callers parse this
+              // as JSON or JSONL, where a clipped answer reads as a shorter valid
+              // one. execFile's own maxBuffer overrun errored for the same reason.
+              `${command} produced more than ${options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER} bytes of output.`
+            : cleanStderr.trim() || `${command} exited with ${result.code}.`
       )
   if (options.signal?.aborted) {
     error.name = 'AbortError'

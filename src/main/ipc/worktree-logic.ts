@@ -4,8 +4,14 @@ import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
+import {
+  replaceKnownEmojiWithShortcodes,
+  setEmojiShortcodeDatasetLoader
+} from '../../shared/emoji-shortcode-catalog'
+import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
 import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
+
+setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'> & {
   /** Distro to mirror the workspace root into when the repo itself sits on a
@@ -97,12 +103,13 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: WorktreePathSettings
+  settings: WorktreePathSettings,
+  workspaceRoot?: string
 ): string {
   return computeWorktreePathFromWorkspaceRoot(
     sanitizedName,
     repoPath,
-    computeWorkspaceRoot(repoPath, settings),
+    workspaceRoot ?? computeWorkspaceRoot(repoPath, settings),
     settings.nestWorkspaces
   )
 }
@@ -124,7 +131,7 @@ function computeWorktreePathFromWorkspaceRoot(
 }
 
 /** Async twin of computeWorktreePath. Same result; resolves the WSL home without blocking the main
- *  thread, so callers off the create path never freeze the app on a stopped distro. */
+ *  thread, so callers never freeze the app on a stopped distro. */
 export async function computeWorktreePathAsync(
   sanitizedName: string,
   repoPath: string,
@@ -141,7 +148,7 @@ export async function computeWorktreePathAsync(
 /** Async twin of computeWorkspaceRoot. Same result; the WSL home probe spawns `wsl.exe`, so
  *  background preparation uses this variant rather than blocking the Electron main thread for up
  *  to the probe timeout. The sync twin below still serves callers that cannot await (allowed-roots
- *  resolution, the create click, CLI create, watch targets, worktree trash). */
+ *  resolution, CLI create, watch targets, worktree trash). */
 export async function computeWorkspaceRootAsync(
   repoPath: string,
   settings: { workspaceDir: string; wslMirrorDistro?: string }

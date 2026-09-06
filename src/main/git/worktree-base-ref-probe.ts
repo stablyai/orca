@@ -43,6 +43,21 @@ export async function hasWorktreeBaseCommitRef(
 }
 
 /**
+ * The qualified ref a worktree base names in this repo, or the base unchanged when nothing
+ * matches. Callers that key on a base must compare this, not the raw string, or `main` and
+ * `refs/heads/main` look like different bases.
+ */
+export function resolveLocalWorktreeBaseRef(
+  repoPath: string,
+  baseRef: string,
+  options: GitExecOptions = {}
+): Promise<string> {
+  return resolveWorktreeAddBaseRef(baseRef, (qualifiedRef) =>
+    hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+  )
+}
+
+/**
  * Whether a worktree base — a qualified ref, a short branch or remote name, or a
  * full commit id — already resolves in this repo's own object/ref store.
  *

@@ -389,7 +389,9 @@ addon can produce is unusable for the sizes Orca now sees: `process.cc` stores
 neither flag set asks for it. That is the second reason
 `windows-process-resource-collector.ts` still runs its own
 `Get-CimInstance` sweep — it needs `PageFileUsage` (commit) and the CPU-time
-counters in the same pass. Migrating it to the native table would cost both.
+counters in the same pass. Migrating it to the native table would cost both, and
+it is why this module no longer sets the `Memory` flag at all: the field had no
+reader, and asking for it opened a handle per process on every snapshot.
 
 Start time is a proxy for identity, not identity. The durable answer for the
 process trees Orca itself spawns is an inherited handle: a job object names the

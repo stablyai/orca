@@ -657,19 +657,23 @@ describe('sortWorktreesSmart — palette caller regression', () => {
       [blocked.id]: [makeTab({ id: 'tab-blocked', worktreeId: blocked.id })],
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })]
     }
+    // Why live clock: sortWorktreesSmart reads Date.now(), so fixed-epoch stamps would be
+    // stale and land both worktrees in the same decayed class — the class layer this test
+    // exists to pin would never run.
+    const liveNow = Date.now()
     const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
       [paneKey('tab-blocked', '1')]: makeEntry({
         paneKey: paneKey('tab-blocked', '1'),
         state: 'blocked',
-        stateStartedAt: NOW - 60_000,
-        updatedAt: NOW - 1_000
+        stateStartedAt: liveNow - 60_000,
+        updatedAt: liveNow - 1_000
       }),
       [paneKey('tab-working', '1')]: makeEntry({
         paneKey: paneKey('tab-working', '1'),
         state: 'working',
         // newer than the blocked one — would win on recency alone
-        stateStartedAt: NOW - 1_000,
-        updatedAt: NOW - 500
+        stateStartedAt: liveNow - 1_000,
+        updatedAt: liveNow - 500
       })
     }
     const sorted = sortWorktreesSmart(

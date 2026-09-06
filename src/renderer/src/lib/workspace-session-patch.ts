@@ -77,6 +77,8 @@ export function buildWorkspaceSessionPatch(
       'tabsByWorktree',
       'ptyIdsByTabId',
       'lastKnownRelayPtyIdByTabId',
+      'pendingReconnectPtyIdByTabId',
+      'deferredSshSessionIdsByTabId',
       'repos',
       'worktreesByRepo'
     ] as const)

@@ -215,7 +215,7 @@ describe('NativeChatMessageList assistant messages', () => {
     )
 
     const user = screen.getByText('Run the checks')
-    const status = screen.getByText('Working for 0 seconds')
+    const status = screen.getByText('Working for 0s')
     const assistant = screen.getByText('I am checking now.')
     expect(user.compareDocumentPosition(status)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(status.compareDocumentPosition(assistant)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
@@ -252,7 +252,7 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    expect(screen.getByText('Working for 3 seconds')).toBeInTheDocument()
+    expect(screen.getByText('Working for 3s')).toBeInTheDocument()
   })
 
   it('keeps the completed duration below the user message', () => {
@@ -298,7 +298,7 @@ describe('NativeChatMessageList assistant messages', () => {
     )
 
     const user = screen.getByText('Complete this task')
-    const status = screen.getByText('Worked for 3 seconds')
+    const status = screen.getByText('Worked for 3s')
     const assistant = screen.getByText('Task complete.')
     expect(user.compareDocumentPosition(status)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
     expect(status.compareDocumentPosition(assistant)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
@@ -326,7 +326,7 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    expect(screen.getByText('Worked for 3 seconds')).toBeInTheDocument()
+    expect(screen.getByText('Worked for 3s')).toBeInTheDocument()
     expect(screen.getByText('Thinking')).toBeInTheDocument()
   })
 

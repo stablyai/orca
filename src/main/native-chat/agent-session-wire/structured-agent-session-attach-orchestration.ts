@@ -17,7 +17,11 @@ import {
   pinnedAgentSessionLaunchEnv
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
+import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
+import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 export function attachStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
@@ -38,14 +42,20 @@ export function attachStructuredAgentSession(
       return refuseAgentSessionMutation(unreconciled)
     }
     await context.runtimeState.resolveRecovery(sessionId)
-    if (context.retryPendingSettlement) {
-      const settled = await context.retryPendingSettlement(sessionId, params)
-      if (!settled) {
-        return refuseAgentSessionMutation({
-          code: 'agent_session_ownership_unknown',
-          message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
-        })
-      }
+    // Retries a durable provider-exit journal settlement before a new owner is reserved. Answers
+    // settled when the record has none pending, so every attach can ask unconditionally.
+    const settled = await retryPendingStructuredAgentSessionSettlement({
+      deps: context.deps,
+      sessions: context.sessions,
+      sessionId,
+      params,
+      now: () => context.now()
+    })
+    if (!settled) {
+      return refuseAgentSessionMutation({
+        code: 'agent_session_ownership_unknown',
+        message: 'The provider-exit terminal journal settlement is still pending; retry attach.'
+      })
     }
     const eventSink = context.runtimeState.eventSinkFor(sessionId)
     const attached = await performAttach({
@@ -71,7 +81,10 @@ export function attachStructuredAgentSession(
       callerKey,
       params,
       now: () => context.now(),
-      onAttachFailed: () => {
+      // Site 9: this closes the PRIOR map entry it drops, never the provisional
+      // journal — it has no reference to that one. `onAttached` owns that.
+      onAttachFailed: async () => {
+        await context.sessions.get(sessionId)?.journal.close()
         context.sessions.delete(sessionId)
         eventSink.close()
         context.runtimeState.discardEventSink(sessionId)
@@ -80,14 +93,27 @@ export function attachStructuredAgentSession(
         const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
         const previous = context.sessions.get(sessionId)
         const previousFence = previous?.fence
-        eventSink.bind({
-          journal: attached.journal,
-          fence,
-          publish: () => context.subscribers.publish(sessionId, attached.journal)
-        })
-        const barrier = await eventSink.drained()
-        if (!barrier.ok) {
-          throw barrier.error
+        // Site 8: the provisional journal has no owner until the map takes it,
+        // and the barrier below throws by design.
+        try {
+          await bindAndDrain(eventSink, attached.journal, fence, () =>
+            context.subscribers.publish(sessionId, attached.journal)
+          )
+        } catch (error) {
+          await agentSessionJournalCloseRetries.closeOrRetain(attached.journal)
+          throw error
+        }
+        // Site 10: a `set` over a live entry would orphan its handle — and a
+        // close that REJECTED did not release it. The replacement is therefore
+        // ABORTED rather than completed over a handle nothing can reach again:
+        // `previous` stays indexed, so teardown still owns it and can retry.
+        if (previous && previous.journal !== attached.journal) {
+          try {
+            await previous.journal.close()
+          } catch (error) {
+            await agentSessionJournalCloseRetries.closeOrRetain(attached.journal)
+            throw error
+          }
         }
         context.sessions.set(sessionId, {
           journal: attached.journal,
@@ -114,4 +140,19 @@ export function attachStructuredAgentSession(
     return attached
   })
   return context.tasks.trackAttach(attaching)
+}
+
+/** Binds the sink to the journal and waits for the barrier the host publishes
+ *  behind. It throws by design when a sink barrier fails. */
+async function bindAndDrain(
+  eventSink: DeferredStructuredAgentSessionEventSink,
+  journal: AgentSessionJournal,
+  fence: number,
+  publish: () => void
+): Promise<void> {
+  eventSink.bind({ journal, fence, publish })
+  const barrier = await eventSink.drained()
+  if (!barrier.ok) {
+    throw barrier.error
+  }
 }

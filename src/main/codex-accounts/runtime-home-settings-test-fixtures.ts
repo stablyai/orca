@@ -130,6 +130,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     ...overrides,
     diffWordWrap: overrides.diffWordWrap ?? false,
+    diffShowWhitespace: overrides.diffShowWhitespace ?? false,
     localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? { kind: 'windows-host' },
     leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
     appFontFamily,

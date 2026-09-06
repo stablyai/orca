@@ -1,5 +1,5 @@
 import type React from 'react'
-import { PanelLeftOpen, Sparkles, WrapText } from 'lucide-react'
+import { PanelLeftOpen, Space, Sparkles, WrapText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,6 +16,7 @@ export function CombinedDiffToolbar({
   commitCompare,
   diffCommentCount,
   diffCommentsForWorktree,
+  diffShowWhitespace,
   diffWordWrap,
   file,
   fileTreeCollapsed,
@@ -31,6 +32,7 @@ export function CombinedDiffToolbar({
   sectionCount,
   setAllSectionsCollapsed,
   sideBySide,
+  toggleDiffShowWhitespace,
   toggleDiffWordWrap,
   toggleSideBySide
 }: {
@@ -40,6 +42,7 @@ export function CombinedDiffToolbar({
   commitCompare: NonNullable<OpenFile['commitCompare']> | null
   diffCommentCount: number
   diffCommentsForWorktree: DiffComment[]
+  diffShowWhitespace: boolean | undefined
   diffWordWrap: boolean | undefined
   file: OpenFile
   fileTreeCollapsed: boolean
@@ -55,6 +58,7 @@ export function CombinedDiffToolbar({
   sectionCount: number
   setAllSectionsCollapsed: (collapsed: boolean) => void
   sideBySide: boolean
+  toggleDiffShowWhitespace: () => void
   toggleDiffWordWrap: () => void
   toggleSideBySide: () => void
 }): React.JSX.Element {
@@ -186,6 +190,18 @@ export function CombinedDiffToolbar({
           {diffWordWrap === true
             ? translate('auto.components.editor.CombinedDiffViewer.a4420ca1f7', 'Wrap On')
             : translate('auto.components.editor.CombinedDiffViewer.dde325ddfe', 'Wrap Off')}
+        </button>
+        <button
+          className={`inline-flex h-6 items-center gap-1 rounded border border-border px-2 text-xs transition-colors hover:text-foreground ${
+            diffShowWhitespace === true ? 'bg-accent text-foreground' : 'text-muted-foreground'
+          }`}
+          onClick={toggleDiffShowWhitespace}
+          aria-pressed={diffShowWhitespace === true}
+        >
+          <Space className="size-3.5" />
+          {diffShowWhitespace === true
+            ? translate('auto.components.editor.CombinedDiffViewer.2e91bc89d1', 'Whitespace On')
+            : translate('auto.components.editor.CombinedDiffViewer.2bf19c54ad', 'Whitespace Off')}
         </button>
       </div>
     </div>

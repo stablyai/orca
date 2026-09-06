@@ -1,4 +1,7 @@
 import { specPaths, type CommandSpec } from './command-spec'
+import { levenshtein } from '../shared/edit-distance'
+
+export { levenshtein } from '../shared/edit-distance'
 
 // Why: rank the live registry so typo recovery cannot drift from accepted paths.
 
@@ -46,30 +49,6 @@ export type CommandErrorData = {
   nextSteps: string[]
 }
 
-export function levenshtein(a: string, b: string): number {
-  const m = a.length
-  const n = b.length
-  if (m === 0) {
-    return n
-  }
-  if (n === 0) {
-    return m
-  }
-  let prev = Array.from({ length: n + 1 }, (_, index) => index)
-  let curr = Array.from({ length: n + 1 }, () => 0)
-  for (let i = 1; i <= m; i += 1) {
-    curr[0] = i
-    for (let j = 1; j <= n; j += 1) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1
-      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
-    }
-    const swap = prev
-    prev = curr
-    curr = swap
-  }
-  return prev[n]
-}
-
 // Why: one bounded near-match ranking keeps command and flag recovery consistent.
 function rankByDistance(scored: { label: string; distance: number }[]): string[] {
   return scored
@@ -88,6 +67,9 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
+    if (spec.hidden) {
+      continue
+    }
     if (spec.destructive && !allowDestructive) {
       continue
     }

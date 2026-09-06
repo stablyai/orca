@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot'
+import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot-reader'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 
 /**
@@ -61,7 +61,6 @@ type NativeProcessInfo = {
 type WindowsProcessTreeModule = {
   ProcessDataFlag: {
     None: number
-    Memory: number
     CommandLine: number
     CreationTime?: number
   }
@@ -96,7 +95,11 @@ type WindowsProcessTreeAddon = {
   ) => void
 }
 
-/** Mirrors the package's enum; the addon takes the raw bit field. */
+/**
+ * Mirrors the package's enum; the addon takes the raw bit field. `Memory` (1)
+ * is listed for completeness and is deliberately never set — see the projections
+ * below.
+ */
 const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2 } as const
 
 /** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */

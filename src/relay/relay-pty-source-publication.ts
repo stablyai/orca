@@ -65,20 +65,24 @@ export class RelayPtySourcePublication {
     context: RequestContext | undefined,
     recovery?: PtySourceRecoveryRequest
   ): false | 'opened' | 'rotated' | 'existing' | PtySourceRecoveryResult {
+    let current = this.deliveries.get(id)
+    // A superseded request can find the delivery its own replacement opened: releasing that fence
+    // resumes a send the replacement is still rotating, and cancelling it blanks the pane that owns
+    // it. So every bail-out below acts only on a record this caller still owns.
+    const owned = current?.clientId === context?.clientId ? current : undefined
     if (!context?.onResponseSettled) {
-      this.sender.releaseRotationFence(this.deliveries.get(id))
+      this.sender.releaseRotationFence(owned)
       return false
     }
     const mode = this.session.deliveryMode(context.clientId)
-    let current = this.deliveries.get(id)
     if (mode === 'unadmitted' || mode === 'subscriber') {
-      this.sender.releaseRotationFence(current)
+      this.sender.releaseRotationFence(owned)
       return false
     }
     if (mode === 'legacy-owner') {
-      if (current) {
-        this.session.cancelDelivery(current.identity, 'source-credit-disabled')
-        this.sender.wakeSendWaiters(current)
+      if (owned) {
+        this.session.cancelDelivery(owned.identity, 'source-credit-disabled')
+        this.sender.wakeSendWaiters(owned)
         this.deliveries.delete(id)
         this.onCapacity(id)
       }
@@ -88,7 +92,7 @@ export class RelayPtySourcePublication {
       current?.clientId === context.clientId &&
       !current.restoreRequired &&
       current.sourceExitState !== 'pending' &&
-      this.deliveryClosedUnderRecord(current)
+      ptySourceDeliveryClosed(this.session, current.identity)
     ) {
       // Why: a canceled delivery can never resume as 'existing'; retire it so re-attach opens fresh.
       this.sender.wakeSendWaiters(current)
@@ -219,7 +223,7 @@ export class RelayPtySourcePublication {
     }
     if (!output.sourceAccepted && !appendPtySourceOutput(this.session, record, output)) {
       this.counters.appendDenied++
-      if (this.deliveryClosedUnderRecord(record)) {
+      if (ptySourceDeliveryClosed(this.session, record.identity)) {
         this.sender.wakeSendWaiters(record)
         this.deliveries.delete(id)
         // Why: deferred — publish() can run inside flushPendingOutput's captured-queue drain,
@@ -273,10 +277,6 @@ export class RelayPtySourcePublication {
   dispose = (): void => {
     this.legacyExits.clear()
     this.sender.dispose()
-  }
-
-  private deliveryClosedUnderRecord(record: RelayPtySourceDeliveryRecord): boolean {
-    return ptySourceDeliveryClosed(this.session, record.identity)
   }
 
   private registerActivationSettlement(

@@ -1,9 +1,16 @@
 import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
+import {
+  disposeParsedDirtyRows,
+  readParsedDirtyRowSpan,
+  resetParsedDirtyRows,
+  type ParsedDirtyRowSpan
+} from './terminal-parsed-dirty-rows'
 import { runGuardedWriteCompletionStep } from './xterm-write-callback-guard'
 
 export type ForegroundTerminalOutputTarget = {
   buffer?: {
     active?: {
+      type?: string
       cursorY?: number
       baseY?: number
       viewportY?: number
@@ -32,6 +39,8 @@ const pendingViewportSettleRefreshByTerminal = new WeakMap<
 >()
 
 type ViewportSnapshot = {
+  type: string | null
+  cursorY: number | null
   baseY: number | null
   viewportY: number | null
 }
@@ -39,7 +48,8 @@ type ViewportSnapshot = {
 function refreshVisibleRows(
   terminal: ForegroundTerminalOutputTarget,
   synchronously: boolean,
-  shouldReleaseRenderPause?: () => boolean
+  shouldReleaseRenderPause?: () => boolean,
+  span?: ParsedDirtyRowSpan | null
 ): void {
   if (typeof terminal.rows !== 'number' || terminal.rows < 1) {
     return
@@ -51,10 +61,14 @@ function refreshVisibleRows(
     if (shouldReleaseRenderPause?.() === true && forceRepaintThroughRenderPause(terminal)) {
       return
     }
-    const start = 0
-    const end = Math.max(0, terminal.rows - 1)
+    const lastRow = Math.max(0, terminal.rows - 1)
+    // Why not always the whole grid: xterm's render debouncer unions ranges, so a
+    // 0..rows-1 repair request turns every frame into a full-viewport cell walk.
+    // `span` is the parse's own dirty rows; `null` keeps the whole-grid repaint.
+    const start = span ? Math.min(Math.max(span.start, 0), lastRow) : 0
+    const end = span ? Math.min(Math.max(span.end, start), lastRow) : lastRow
     // Why: DOM-rendered Windows ConPTY rewrites need an immediate repair, while
-    // WebGL can merge this full-grid request into xterm's already-queued frame.
+    // WebGL can merge this request into xterm's already-queued frame.
     if (synchronously && typeof terminal._core?.refresh === 'function') {
       terminal._core.refresh(start, end, true)
       return
@@ -70,25 +84,57 @@ function refreshVisibleRows(
 }
 
 function captureViewportSnapshot(terminal: ForegroundTerminalOutputTarget): ViewportSnapshot {
+  const active = terminal.buffer?.active
   return {
-    baseY: typeof terminal.buffer?.active?.baseY === 'number' ? terminal.buffer.active.baseY : null,
-    viewportY:
-      typeof terminal.buffer?.active?.viewportY === 'number'
-        ? terminal.buffer.active.viewportY
-        : null
+    type: typeof active?.type === 'string' ? active.type : null,
+    cursorY: typeof active?.cursorY === 'number' ? active.cursorY : null,
+    baseY: typeof active?.baseY === 'number' ? active.baseY : null,
+    viewportY: typeof active?.viewportY === 'number' ? active.viewportY : null
   }
 }
 
 function viewportChangedDuringWrite(
-  terminal: ForegroundTerminalOutputTarget,
-  beforeWrite: ViewportSnapshot
+  beforeWrite: ViewportSnapshot,
+  afterWrite: ViewportSnapshot
 ): boolean {
-  const afterWrite = captureViewportSnapshot(terminal)
   return (
     afterWrite.baseY !== null &&
     afterWrite.viewportY !== null &&
     (afterWrite.baseY !== beforeWrite.baseY || afterWrite.viewportY !== beforeWrite.viewportY)
   )
+}
+
+/**
+ * The rows this write's repair must cover: the parse's own dirty span widened by
+ * the cursor rows on both sides of the write.
+ *
+ * Why the cursor rows: xterm's WebGL model drops its cursor whenever an update
+ * pass excludes the cursor row, so a repair that skips it would blank the caret.
+ * Returns `null` — repaint everything — whenever the span is unknown, the
+ * viewport scrolled (dirty rows were recorded against the pre-scroll origin), or
+ * the write flipped between the normal and alternate buffer.
+ */
+function repairRowSpan(
+  terminal: ForegroundTerminalOutputTarget,
+  beforeWrite: ViewportSnapshot,
+  afterWrite: ViewportSnapshot
+): ParsedDirtyRowSpan | null {
+  if (beforeWrite.type !== afterWrite.type || viewportChangedDuringWrite(beforeWrite, afterWrite)) {
+    return null
+  }
+  const parsed = readParsedDirtyRowSpan(terminal)
+  if (!parsed) {
+    return null
+  }
+  let { start, end } = parsed
+  for (const cursorY of [beforeWrite.cursorY, afterWrite.cursorY]) {
+    if (cursorY === null) {
+      return null
+    }
+    start = Math.min(start, cursorY)
+    end = Math.max(end, cursorY)
+  }
+  return { start, end }
 }
 
 function cancelScheduledViewportSettleRefresh(terminal: ForegroundTerminalOutputTarget): void {
@@ -133,17 +179,19 @@ function settleForegroundRender(
   beforeWriteViewport: ViewportSnapshot,
   options: ForegroundTerminalWriteOptions
 ): void {
+  const afterWriteViewport = captureViewportSnapshot(terminal)
   refreshVisibleRows(
     terminal,
     options.shouldRefreshViewportSynchronously?.() ?? true,
-    options.shouldReleaseRenderPause
+    options.shouldReleaseRenderPause,
+    repairRowSpan(terminal, beforeWriteViewport, afterWriteViewport)
   )
   // Why: when output advances the viewport, Chromium can paint the freshly
   // scrolled top row one frame later than xterm finishes parsing. Repaint once
   // more after the scroll settles so the user doesn't need to jiggle the window.
   if (
     options.followupViewportRefresh ||
-    viewportChangedDuringWrite(terminal, beforeWriteViewport)
+    viewportChangedDuringWrite(beforeWriteViewport, afterWriteViewport)
   ) {
     scheduleViewportSettleRefresh(
       terminal,
@@ -161,6 +209,11 @@ export function writeForegroundTerminalChunk(
   const beforeWriteViewport = options.forceViewportRefresh
     ? captureViewportSnapshot(terminal)
     : null
+  if (beforeWriteViewport) {
+    // Why here and not in the callback: the span must cover only this write's
+    // parse, and xterm fires its dirty-row request between the two.
+    resetParsedDirtyRows(terminal)
+  }
   // Why guarded steps: this callback runs inside xterm's WriteBuffer loop,
   // where an escaping throw permanently wedges the terminal (see
   // xterm-write-callback-guard.ts). Guard settle and onParsed separately so a
@@ -190,4 +243,5 @@ export function writeForegroundTerminalChunk(
 
 export function discardForegroundRenderSettle(terminal: ForegroundTerminalOutputTarget): void {
   cancelScheduledViewportSettleRefresh(terminal)
+  disposeParsedDirtyRows(terminal)
 }

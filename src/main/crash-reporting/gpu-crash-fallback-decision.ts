@@ -50,6 +50,8 @@ export class GpuCrashFallbackTracker {
     crashesInWindow: number
   } {
     if (this.engaged || !Number.isFinite(msSinceLaunch) || msSinceLaunch < 0) {
+      // Crashes landing while engaged (e.g. during a verdict wait before `disengage`) are
+      // not recorded, so a reported crashesInWindow can understate the actual burst.
       return { shouldEngageFallback: false, crashesInWindow: this.recentCrashes.length }
     }
     // Why: out-of-order arrivals would corrupt the sorted window, and a clock
@@ -71,6 +73,17 @@ export class GpuCrashFallbackTracker {
 
   hasEngaged(): boolean {
     return this.engaged
+  }
+
+  /**
+   * Re-arm after an engagement the caller decided not to act on. `recordGpuCrash`
+   * latches `engaged` and reports the threshold crossing exactly once, so a caller
+   * that discards that one report would otherwise silence safe graphics for the
+   * rest of the process — including a later burst it would have acted on.
+   * Leaves the crash window intact; only the one-shot latch is released.
+   */
+  disengage(): void {
+    this.engaged = false
   }
 
   /** Crash times currently inside the window. Exposed to assert the pruning invariant. */

@@ -5,7 +5,6 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { repoIsRemote } from '../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import {
@@ -54,7 +53,7 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
     // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
     // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-    const isRemote = workspace.repo ? repoIsRemote(workspace.repo) : repoIsRemote(workspace)
+    const isRemote = Boolean(workspace.connectionId)
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,

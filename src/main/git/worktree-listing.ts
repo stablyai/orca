@@ -19,7 +19,8 @@ import {
   normalizeLocalBranchRef
 } from './worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
-import { detectSparseCheckout, resolveGitCommonDir } from './worktree-sparse-state'
+import { detectSparseCheckoutCached } from './worktree-sparse-checkout-cache'
+import { resolveGitCommonDir } from './worktree-sparse-state'
 import { resolveGitDir } from './source-control/resolve-git-dir'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
@@ -34,17 +35,7 @@ export async function listWorktreeGraph(
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
   } catch (err) {
-    if (getErrorCode(err) === 'ENOENT') {
-      try {
-        await stat(repoPath)
-      } catch (statErr) {
-        if (getErrorCode(statErr) === 'ENOENT') {
-          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
-          return []
-        }
-      }
-    }
-    if (isNotGitRepositoryError(err)) {
+    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
     console.warn(`[git/worktree] listWorktreeGraph failed for ${repoPath}:`, err)
@@ -61,25 +52,33 @@ export async function listWorktreesUnshared(
     const visibleWorktrees = options.includeCreatePreparations
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-    return annotateSparseCheckoutStatus(visibleWorktrees)
+    return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
   } catch (err) {
-    if (getErrorCode(err) === 'ENOENT') {
-      try {
-        await stat(repoPath)
-      } catch (statErr) {
-        if (getErrorCode(statErr) === 'ENOENT') {
-          console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
-          return []
-        }
-      }
-    }
-    if (isNotGitRepositoryError(err)) {
+    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []
     }
     // Why: don't swallow git-compat/repo-state failures — else they resurface as opaque "created but not found in listing" errors.
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
+}
+
+/**
+ * The two failures where an empty listing is the repo's true answer, not a broken scan: the repo
+ * path is gone, or it is not a Git repo. Every other failure means the scan could not read Git.
+ */
+async function isTrueEmptyWorktreeListing(repoPath: string, err: unknown): Promise<boolean> {
+  if (getErrorCode(err) === 'ENOENT') {
+    try {
+      await stat(repoPath)
+    } catch (statErr) {
+      if (getErrorCode(statErr) === 'ENOENT') {
+        console.warn(`[git/worktree] repo path missing; skipping worktree list: ${repoPath}`)
+        return true
+      }
+    }
+  }
+  return isNotGitRepositoryError(err)
 }
 
 export async function listWorktreesStrict(
@@ -93,11 +92,35 @@ export async function listWorktreesStrict(
   const visibleWorktrees = options.includeCreatePreparations
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-  return annotateSparseCheckoutStatus(visibleWorktrees)
+  return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
-async function annotateSparseCheckoutStatus(
-  worktrees: GitWorktreeInfo[]
+/**
+ * Strict except for the two true empties above.
+ *
+ * Why: a Git or host failure (dead WSL distro, hung mount) softened to `[]` reaches the detected
+ * listing as an *authoritative* empty scan, which then permanently prunes the repo's worktrees and
+ * the agent tabs attached to them. Rejecting keeps that listing non-authoritative, while a deleted
+ * repo still reports empty so real removals prune.
+ */
+export async function listWorktreesStrictAllowingTrueEmpty(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  try {
+    return await listWorktreesStrict(repoPath, options)
+  } catch (err) {
+    if (await isTrueEmptyWorktreeListing(repoPath, err)) {
+      return []
+    }
+    throw err
+  }
+}
+
+export async function annotateSparseCheckoutStatus(
+  repoPath: string,
+  worktrees: GitWorktreeInfo[],
+  options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   const annotated = [...worktrees]
   let nextIndex = 0
@@ -110,7 +133,7 @@ async function annotateSparseCheckoutStatus(
       if (!worktree || worktree.isBare || worktree.isSparse) {
         continue
       }
-      const isSparse = await detectSparseCheckout(worktree.path)
+      const isSparse = await detectSparseCheckoutCached(repoPath, worktree.path, options)
       if (isSparse) {
         annotated[index] = { ...worktree, isSparse }
       }
@@ -253,15 +276,19 @@ export async function describeCreatedWorktree(
       return undefined
     }
   }
-  const [described] = await annotateSparseCheckoutStatus([
-    {
-      path: translateWorktreePath(created.topLevel, repoPath, options),
-      head,
-      branch: expectedRef,
-      isBare: false,
-      // `git worktree add` only ever produces a linked worktree.
-      isMainWorktree: false
-    }
-  ])
+  const [described] = await annotateSparseCheckoutStatus(
+    repoPath,
+    [
+      {
+        path: translateWorktreePath(created.topLevel, repoPath, options),
+        head,
+        branch: expectedRef,
+        isBare: false,
+        // `git worktree add` only ever produces a linked worktree.
+        isMainWorktree: false
+      }
+    ],
+    options
+  )
   return described
 }

@@ -1,0 +1,120 @@
+name: Cloud Verify
+
+on:
+  pull_request:
+    paths:
+      - cloud/**
+      - .github/workflows/cloud-*.yml
+      - .github/actions/cloud-sql-rollout-lease/**
+  push:
+    branches: [main]
+    paths:
+      - cloud/**
+      - .github/workflows/cloud-*.yml
+      - .github/actions/cloud-sql-rollout-lease/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  security:
+    name: Secret scan
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan Cloud history with Gitleaks
+        run: >-
+          docker run --rm
+          --volume "${GITHUB_WORKSPACE}:/repo:ro"
+          zricethezav/gitleaks@sha256:cdbb7c955abce02001a9f6c9f602fb195b7fadc1e812065883f695d1eeaba854
+          git /repo --config /repo/cloud/.gitleaks.toml
+          --log-opts="--all -- cloud :(glob).github/workflows/cloud-*.yml .github/actions/cloud-sql-rollout-lease"
+
+      - name: Scan the single-commit Cloud snapshot with TruffleHog
+        run: >-
+          docker run --rm
+          --volume "${GITHUB_WORKSPACE}:/repo:ro"
+          trufflesecurity/trufflehog@sha256:5dc064868ba7933601b5cbaea6954954d524ddd5dc6222a9667acea70068bf7d
+          filesystem /repo --no-verification --fail
+          --include-paths=/repo/cloud/.trufflehog-include-paths.txt
+          --exclude-paths=/repo/cloud/.trufflehog-exclude-paths.txt
+
+  # Compiles the workspace. No Postgres service: nothing here reaches a
+  # database, and the service container costs ~13s of startup.
+  build:
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+
+  # Runs in parallel with build. `pnpm test` compiles the one workspace
+  # package it needs through the relay pretest hook, so it does not depend on
+  # `pnpm build` having run.
+  test:
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: orca_relay_test
+          POSTGRES_PASSWORD: relay_test
+          POSTGRES_USER: relay_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U relay_test -d orca_relay_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ORCA_RELAY_TEST_POSTGRES_URL: postgres://relay_test:relay_test@127.0.0.1:5432/orca_relay_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+
+  # Fork pull requests reach this job, so it never configures a backend, never plans, and never
+  # holds a credential. Only the relay root ships here; foundation and apps stay private.
+  terraform:
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+
+      - run: terraform -chdir=infra/terraform fmt -check -recursive
+      - run: terraform -chdir=infra/terraform init -backend=false -input=false
+      - run: terraform -chdir=infra/terraform validate

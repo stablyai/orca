@@ -54,6 +54,10 @@ import {
 } from './remove-worktree-test-harness'
 
 import { removeWorktree, WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from './worktree'
+import {
+  __getSparseCheckoutStateCacheSizeForTests,
+  detectSparseCheckoutCached
+} from './worktree-sparse-checkout-cache'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
@@ -648,5 +652,45 @@ branch refs/heads/main
       ])
     )
     expect(calls).not.toContain('git worktree prune')
+  })
+})
+
+describe('removeWorktree sparse-checkout cache invalidation', () => {
+  beforeEach(() => {
+    resetWorktreeGitMocks({
+      gitExecFileAsyncMock,
+      gitExecFileSyncMock,
+      translateWslOutputPathsMock,
+      statMock,
+      readFileMock,
+      resolveGitDirMock
+    })
+  })
+
+  it('drops the removed worktree path so a re-created worktree at the same path is re-detected', async () => {
+    await detectSparseCheckoutCached('/repo', '/repo-feature')
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(1)
+
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+`
+      }
+    })
+
+    await removeWorktree('/repo', '/repo-feature', false, { deleteBranch: false })
+
+    // Why not assert size 0: the pre-removal `listWorktrees` lookup inside `performRemoveWorktree`
+    // re-annotates every row it saw (including the untouched main worktree), caching a fresh entry
+    // for `/repo`. Only the removed path's own entry must be gone, proven by a fresh stat call below.
+    const statCallsBefore = statMock.mock.calls.length
+    expect(await detectSparseCheckoutCached('/repo', '/repo-feature')).toBe(false)
+    expect(statMock.mock.calls.length).toBeGreaterThan(statCallsBefore)
   })
 })

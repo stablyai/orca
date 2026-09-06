@@ -10,7 +10,8 @@ export function useComposerDropListener(
   useEffect(() => {
     applyDropRef.current = applyDrop
   }, [applyDrop])
-  const instanceIdRef = useRef(Symbol('composer'))
+  const instanceIdRef = useRef<symbol>(undefined!)
+  instanceIdRef.current ??= Symbol('composer')
 
   useEffect(() => {
     const instanceId = instanceIdRef.current

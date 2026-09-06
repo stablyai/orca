@@ -74,7 +74,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
         useFileExplorerWatch({
           worktreePath: visiblePath,
           activeWorktreeId: 'wt-1',
-          dirCache: { '/repo': { children: [], loading: false } },
+          dirCache: { '/repo': { children: [] } },
           setDirCache: vi.fn(),
           expanded: new Set(),
           setSelectedPath: vi.fn(),

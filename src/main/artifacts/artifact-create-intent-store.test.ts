@@ -274,9 +274,12 @@ describe('artifact create intent store', () => {
     ).toThrow(/unsupported format/)
   })
 
-  it('persists a 5 MiB escaped artifact within the recovery limit', async () => {
+  it('persists an escaped artifact within the recovery limit', async () => {
     const userDataPath = await createUserDataPath()
-    const nearLimitBody = { ...body, content: '"'.repeat(ARTIFACT_MAX_CONTENT_BYTES) }
+    const nearLimitBody = {
+      ...body,
+      content: '"'.repeat(Math.floor(ARTIFACT_MAX_CONTENT_BYTES / 2))
+    }
     expect(
       artifactWriteRequestByteLength({ sourceKey: '/repo/report.html', ...nearLimitBody })
     ).toBeLessThanOrEqual(ARTIFACT_MAX_REQUEST_BYTES)
@@ -307,7 +310,7 @@ describe('artifact create intent store', () => {
         'key-a',
         { ...body, content: 'x'.repeat(ARTIFACT_MAX_CONTENT_BYTES + 1) }
       )
-    ).toThrow(/5 MiB limit/)
+    ).toThrow(/10 MiB limit/)
   })
 
   it('rejects a recovery body whose escaped request exceeds the transport budget', async () => {
