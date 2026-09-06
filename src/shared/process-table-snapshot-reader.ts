@@ -6,7 +6,9 @@ import {
   PS_ARGS,
   PS_MAX_BUFFER_BYTES,
   ProcessTableCaptureError,
+  SHELL_FOREGROUND_PS_ARGS,
   parseProcessTableRows,
+  parseShellForegroundRows,
   parseStrictProcessTableRows,
   type ProcessTableRow
 } from './process-table-snapshot'
@@ -278,12 +280,10 @@ const processTableReader = createProcessTableSnapshotReader<ProcessTableCapture>
   now: () => Date.now()
 })
 
-// macOS terminal-name resolution dominates capture time; shell proof needs only job control and argv.
+// Its own reader, not a column-set flag on the shared one: terminal-name resolution dominates
+// macOS capture time, and a shell proof must not queue behind a full capture it cannot use.
 const shellForegroundReader = createProcessTableSnapshotReader<ProcessTableRow[]>({
-  runPs: async () =>
-    parseProcessTableRows(
-      await captureProcessTable(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,command='])
-    ),
+  runPs: async () => parseShellForegroundRows(await captureProcessTable(SHELL_FOREGROUND_PS_ARGS)),
   now: () => Date.now()
 })
 

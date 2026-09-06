@@ -8,6 +8,7 @@ import {
   getProcessTableSnapshot,
   resetProcessTableSnapshotForTests
 } from './process-table-snapshot-reader'
+import { parseShellForegroundRows } from './process-table-snapshot'
 
 type Callback = (error: Error | null, result: { stdout: string; stderr: string }) => void
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -59,6 +60,13 @@ it('requires a new capture after an earlier shell proof has started', async () =
   await vi.waitFor(() => expect(callbacks).toHaveLength(2))
   callbacks[1]!(null, { stdout: shell.replace('Ss+', 'Ss'), stderr: '' })
   expect((await second)[0]?.stat).toBe('Ss')
+})
+
+// With no `tty=` column to absorb them, the shared parser read `python`/`3` as tty/start.
+it('keeps an argv whose second token is numeric', () => {
+  expect(parseShellForegroundRows('101 100 101 101 S+ /usr/bin/python 3 app.py')).toEqual([
+    { pid: 101, ppid: 100, pgid: 101, tpgid: 101, stat: 'S+', command: '/usr/bin/python 3 app.py' }
+  ])
 })
 
 it('rejects an unreadable shell capture', async () => {
