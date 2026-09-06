@@ -56,9 +56,11 @@ jobs:
         # grep and worker flags positional filters instead of CLI options.
         run: >-
           pnpm run test:e2e
-          tests/e2e/daemon-generation-reconnect-safety.spec.ts
-          tests/e2e/grok-hook-session-cleanup.spec.ts
-          tests/e2e/runtime-file-browser-windows-drives.spec.ts
+          tests/e2e/terminal-windows-conpty-keyboard-reset.spec.ts
+          tests/e2e/terminal-windows-path-expansion.spec.ts
+          tests/e2e/terminal-windows-shell-paste-ownership.spec.ts
+          tests/e2e/terminal-windows-codex-multiline-paste.spec.ts
+          tests/e2e/windows-terminal-env-icons.spec.ts
           --workers=1
 
       - name: Upload Playwright traces
