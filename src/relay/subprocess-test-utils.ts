@@ -14,6 +14,7 @@ export type RelayProcess = {
   proc: ChildProcess
   responses: (JsonRpcResponse | JsonRpcNotification)[]
   sentinelReceived: Promise<void>
+  stderrTail: () => string
   send: (method: string, params?: Record<string, unknown>) => number
   sendNotification: (method: string, params?: Record<string, unknown>) => void
   waitForResponse: (id: number, timeoutMs?: number) => Promise<JsonRpcResponse>
@@ -37,11 +38,25 @@ export function spawnRelay(
   let sentinelResolved = false
   let stdoutBuffer = Buffer.alloc(0)
   let sentinelResolve: () => void
+  let sentinelReject: (reason: Error) => void
   let decoderActive = false
 
-  const sentinelReceived = new Promise<void>((resolve) => {
+  // Why: relayLogLine writes boot failures to stderr, which would otherwise be drained silently.
+  const stderrTail: string[] = []
+  const recordStderr = (chunk: Buffer): void => {
+    stderrTail.push(chunk.toString('utf-8'))
+    while (stderrTail.reduce((sum, line) => sum + line.length, 0) > 8000) {
+      stderrTail.shift()
+    }
+  }
+
+  const sentinelReceived = new Promise<void>((resolve, reject) => {
     sentinelResolve = resolve
+    sentinelReject = reject
   })
+  // Why: keep a pre-sentinel exit observable for awaiters without an unhandled rejection
+  // when the test has already failed elsewhere.
+  sentinelReceived.catch(() => {})
 
   const decoder = new FrameDecoder((frame) => {
     if (frame.type !== MessageType.Regular) {
@@ -74,8 +89,18 @@ export function spawnRelay(
     }
   })
 
-  proc.stderr!.on('data', () => {
-    /* drain */
+  proc.stderr!.on('data', recordStderr)
+
+  // Why: a child that exits before the sentinel must fail the await instead of hanging the test.
+  proc.once('exit', () => {
+    if (!sentinelResolved) {
+      sentinelResolved = true
+      sentinelReject(
+        new Error(
+          `Relay exited (code=${proc.exitCode}, signal=${proc.signalCode}) before the READY sentinel.\nstderr:\n${stderrTail.join('')}`
+        )
+      )
+    }
   })
 
   const send = (method: string, params?: Record<string, unknown>): number => {
@@ -165,6 +190,7 @@ export function spawnRelay(
     proc,
     responses,
     sentinelReceived,
+    stderrTail: () => stderrTail.join(''),
     send,
     sendNotification,
     waitForResponse,
