@@ -128,6 +128,9 @@ export function AndroidEmulatorToolbarControls({
     clearPowerTimer()
     suppressPowerClickRef.current = true
   }
+  const handlePowerPointerLeave = (): void => {
+    clearPowerTimer()
+  }
   const handlePowerClick = (): void => {
     if (suppressPowerClickRef.current) {
       suppressPowerClickRef.current = false
@@ -144,6 +147,7 @@ export function AndroidEmulatorToolbarControls({
       onPointerDown={handlePowerPointerDown}
       onPointerUp={handlePowerPointerUp}
       onPointerCancel={handlePowerPointerCancel}
+      onPointerLeave={handlePowerPointerLeave}
     >
       <Power className="size-3.5" />
     </ControlButton>
@@ -156,6 +160,7 @@ export function AndroidEmulatorToolbarControls({
       onPointerDown={handlePowerPointerDown}
       onPointerUp={handlePowerPointerUp}
       onPointerCancel={handlePowerPointerCancel}
+      onPointerLeave={handlePowerPointerLeave}
     >
       <Power className="size-3.5" />
     </MenuItem>
@@ -235,7 +240,7 @@ export function AndroidEmulatorToolbarControls({
 
   return (
     <div className="contents">
-      <div className="hidden items-center gap-1 [@container(min-width:960px)]:flex">
+      <div className="hidden shrink-0 items-center gap-1 [@container(min-width:960px)]:flex">
         {power}
         {volumeUp}
         {volumeDown}
@@ -255,7 +260,7 @@ export function AndroidEmulatorToolbarControls({
           />
         ) : null}
       </div>
-      <div className="flex min-w-0 flex-1 items-center gap-1 [@container(min-width:960px)]:hidden">
+      <div className="flex w-fit shrink-0 items-center gap-1 [@container(min-width:960px)]:hidden">
         {back}
         {home}
         {overview}

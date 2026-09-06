@@ -33,7 +33,7 @@ export function resolveEmulatorZoomState(
   if (previous === undefined) {
     return state
   }
-  if (previous < metrics.fitScale) {
+  if (state.mode !== 'fit' && previous < metrics.fitScale && metrics.fitScale < currentScale) {
     return { mode: 'fit' }
   }
   return { mode: 'fixed', scale: previous }
@@ -61,7 +61,7 @@ export function resolveEmulatorZoomAvailability(
   const previous = EMULATOR_ZOOM_LEVELS.toReversed().find((level) => level < effectiveScale)
   return {
     in: next !== undefined,
-    out: previous !== undefined,
+    out: previous !== undefined && !(state.mode === 'fit' && previous < metrics.fitScale),
     actual: state.mode !== 'fixed' || state.scale !== 1,
     fit: state.mode !== 'fit',
     'fit-display': state.mode !== 'fit-display'

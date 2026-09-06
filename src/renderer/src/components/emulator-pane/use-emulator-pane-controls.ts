@@ -107,14 +107,19 @@ export function useEmulatorPaneControls({
   )
 
   const sendRotate = useCallback(
-    async (direction: 'left' | 'right' = 'left'): Promise<void> => {
+    async (direction?: 'left' | 'right'): Promise<void> => {
       if (displayCommandPendingRef.current) {
         return
       }
       const epoch = orientationEpochRef.current
       const currentIndex = ROTATION_SEQUENCE.indexOf(rotationRef.current)
-      const offset = direction === 'left' ? 1 : ROTATION_SEQUENCE.length - 1
-      const next = ROTATION_SEQUENCE[(currentIndex + offset) % ROTATION_SEQUENCE.length]
+      let next: Rotation
+      if (direction === undefined) {
+        next = rotationRef.current === 'portrait' ? 'landscape_left' : 'portrait'
+      } else {
+        const offset = direction === 'left' ? 1 : ROTATION_SEQUENCE.length - 1
+        next = ROTATION_SEQUENCE[(currentIndex + offset) % ROTATION_SEQUENCE.length]
+      }
       await sendDisplayCommand(
         async () => {
           await callRuntimeRpc({ kind: 'local' }, 'emulator.rotate', {

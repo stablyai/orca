@@ -21,6 +21,7 @@ type ControlButtonProps = {
   onPointerDown?: () => void
   onPointerUp?: () => void
   onPointerCancel?: () => void
+  onPointerLeave?: () => void
   children: React.ReactNode
 }
 
@@ -31,6 +32,7 @@ export function ControlButton({
   onPointerDown,
   onPointerUp,
   onPointerCancel,
+  onPointerLeave,
   children
 }: ControlButtonProps) {
   return (
@@ -47,6 +49,7 @@ export function ControlButton({
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
+          onPointerLeave={onPointerLeave}
         >
           {children}
         </Button>
@@ -224,6 +227,7 @@ export function MenuItem({
   onPointerDown,
   onPointerUp,
   onPointerCancel,
+  onPointerLeave,
   children
 }: {
   label: string
@@ -232,6 +236,7 @@ export function MenuItem({
   onPointerDown?: () => void
   onPointerUp?: () => void
   onPointerCancel?: () => void
+  onPointerLeave?: () => void
   children: React.ReactNode
 }) {
   return (
@@ -241,6 +246,7 @@ export function MenuItem({
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
+      onPointerLeave={onPointerLeave}
     >
       {children}
       {text}

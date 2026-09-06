@@ -105,6 +105,22 @@ describe('AndroidEmulatorToolbarControls', () => {
     expect(onButton).toHaveBeenLastCalledWith('power')
   })
 
+  it('cancels a Power long press when the pointer leaves before the timeout', () => {
+    const { onButton } = renderControls()
+    const power = screen.getAllByRole('button', { name: 'Power' })[0]
+
+    fireEvent.pointerDown(power, { pointerId: 1 })
+    fireEvent.pointerLeave(power, { pointerId: 1 })
+    vi.advanceTimersByTime(POWER_LONG_PRESS_MS)
+
+    expect(onButton).not.toHaveBeenCalled()
+
+    fireEvent.click(power)
+
+    expect(onButton).toHaveBeenCalledTimes(1)
+    expect(onButton).toHaveBeenLastCalledWith('power')
+  })
+
   it('gates Wear and foldable controls by capabilities', () => {
     renderControls({
       capabilities: {

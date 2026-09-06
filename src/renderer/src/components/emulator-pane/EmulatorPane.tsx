@@ -98,9 +98,10 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         onAttach={() => void attach(selectedUdid ?? undefined)}
         onShutdown={() => void shutdown(selectedUdid ?? undefined)}
         onHome={() => void sendButton('home')}
-        onRotate={() => void sendRotate('left')}
+        onRotate={() => void sendRotate()}
         backend={session?.info?.backend ?? selectedDevice?.backend}
         androidControls={{
+          capabilities: selectedDevice?.controlCapabilities,
           displayCommandPending,
           screenshotAvailable,
           savingScreenshot,

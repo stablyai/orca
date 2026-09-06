@@ -20,9 +20,13 @@ export function useCenterAnchoredEmulatorScroll(
     }
 
     const centerX =
-      previous.width > 0 ? (node.scrollLeft + viewportSize.width / 2) / previous.width : 0.5
+      previous.width <= viewportSize.width
+        ? 0.5
+        : (node.scrollLeft + viewportSize.width / 2) / previous.width
     const centerY =
-      previous.height > 0 ? (node.scrollTop + viewportSize.height / 2) / previous.height : 0.5
+      previous.height <= viewportSize.height
+        ? 0.5
+        : (node.scrollTop + viewportSize.height / 2) / previous.height
     node.scrollLeft = clamp(
       centerX * contentSize.width - viewportSize.width / 2,
       0,
