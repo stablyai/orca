@@ -151,7 +151,8 @@ jobs:
           # so resolving the object is not proof a branch or tag of this repo
           # reaches it. Bare + tree:0 keeps this to the commit graph.
           scratch="$RUNNER_TEMP/vet-requested-ref"
-          git init -q --bare "$scratch"
+          # Reftable preserves case-distinct refs on Windows filesystems.
+          git init -q --bare --ref-format=reftable "$scratch"
           git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
           if ! git -C "$scratch" rev-parse --verify --quiet "$REQUESTED_SHA^{commit}" >/dev/null; then
             echo "::error::Commit $REQUESTED_SHA is not in stablyai/orca."
