@@ -36,7 +36,7 @@ import { installPtyInputRecovery } from './pty-input-recovery'
 import { installPtyInputForward } from './pty-input-forward'
 import { installPtyResizeGeometry } from './pty-resize-geometry'
 import { installSessionReconcileDispose } from './session-reconcile-dispose'
-import { resolveTerminalTabId } from './terminal-tab-id'
+import { findTerminalTabForPane } from './terminal-tab-id'
 
 /**
  * Establishes a binding between a terminal pane and its corresponding PTY stream,
@@ -50,43 +50,8 @@ export function connectPanePty(
   const session = { pane, manager, deps } as ConnectPanePtySession
   session.shouldRefreshForegroundSynchronously = (): boolean =>
     !session.manager.hasWebglRenderer(session.pane.id)
-  const state = useAppStore.getState()
-  const unifiedTab = state.getTab?.(deps.tabId)
-  const initialOwnerWorktreeId =
-    state.getTerminalTabOwnerWorktreeId?.(deps.tabId) ??
-    (unifiedTab?.contentType === 'terminal'
-      ? state.getTerminalTabOwnerWorktreeId?.(unifiedTab.entityId)
-      : null)
-  const terminalTabId = resolveTerminalTabId(
-    {
-      getTab: state.getTab,
-      hasTerminalTab: (candidateId) =>
-        Boolean(
-          state.tabsByWorktree[deps.worktreeId]?.some(
-            (candidate) => candidate.id === candidateId
-          ) ||
-          (initialOwnerWorktreeId
-            ? state.tabsByWorktree[initialOwnerWorktreeId]?.some(
-                (candidate) => candidate.id === candidateId
-              )
-            : false)
-        )
-    },
-    deps.tabId
-  )
-  const ownerWorktreeId =
-    state.getTerminalTabOwnerWorktreeId?.(terminalTabId) ?? initialOwnerWorktreeId
-  const terminalTab =
-    state.tabsByWorktree[deps.worktreeId]?.find((candidate) => candidate.id === terminalTabId) ??
-    (ownerWorktreeId
-      ? state.tabsByWorktree[ownerWorktreeId]?.find((candidate) => candidate.id === terminalTabId)
-      : undefined) ??
-    // Why: folder/worktree migrations can leave the pane's render key stale for one commit.
-    Object.values(state.tabsByWorktree)
-      .find((tabs) => tabs.some((candidate) => candidate.id === terminalTabId))
-      ?.find((candidate) => candidate.id === terminalTabId)
-  const tab = terminalTab ?? (unifiedTab && 'generation' in unifiedTab ? unifiedTab : null)
-  session.tabGeneration = tab?.generation ?? 0
+  session.tabGeneration =
+    findTerminalTabForPane(useAppStore.getState(), deps.worktreeId, deps.tabId)?.generation ?? 0
   // Why: recovery ownership belongs to this xterm instance. A request that
   // settles after remount must not remount its already-replaced successor.
   session.terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(session.deps.tabId)

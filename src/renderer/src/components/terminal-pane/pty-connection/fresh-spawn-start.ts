@@ -14,7 +14,7 @@ import type {
 } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { resolveTerminalTabId } from './terminal-tab-id'
+import { findTerminalTabForPane } from './terminal-tab-id'
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -113,51 +113,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
       ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
-      shouldContinue: () => {
-        const state = useAppStore.getState()
-        const unifiedTab = state.getTab?.(session.deps.tabId)
-        const initialOwnerWorktreeId =
-          state.getTerminalTabOwnerWorktreeId?.(session.deps.tabId) ??
-          (unifiedTab?.contentType === 'terminal'
-            ? state.getTerminalTabOwnerWorktreeId?.(unifiedTab.entityId)
-            : null)
-        const terminalTabId = resolveTerminalTabId(
-          {
-            getTab: state.getTab,
-            hasTerminalTab: (candidateId) =>
-              Boolean(
-                state.tabsByWorktree[session.deps.worktreeId]?.some(
-                  (candidate) => candidate.id === candidateId
-                ) ||
-                (initialOwnerWorktreeId
-                  ? state.tabsByWorktree[initialOwnerWorktreeId]?.some(
-                      (candidate) => candidate.id === candidateId
-                    )
-                  : false)
-              )
-          },
-          session.deps.tabId
-        )
-        const ownerWorktreeId =
-          state.getTerminalTabOwnerWorktreeId?.(terminalTabId) ?? initialOwnerWorktreeId
-        const terminalTab =
-          state.tabsByWorktree[session.deps.worktreeId]?.find(
-            (candidate) => candidate.id === terminalTabId
-          ) ??
-          (ownerWorktreeId
-            ? state.tabsByWorktree[ownerWorktreeId]?.find(
-                (candidate) => candidate.id === terminalTabId
-              )
-            : undefined)
-        const fallbackTab = Object.values(state.tabsByWorktree)
-          .find((tabs) => tabs.some((candidate) => candidate.id === terminalTabId))
-          ?.find((candidate) => candidate.id === terminalTabId)
-        const currentTab =
-          terminalTab ??
-          fallbackTab ??
-          (unifiedTab && 'generation' in unifiedTab ? unifiedTab : null)
-        return !session.disposed && (currentTab?.generation ?? 0) === session.tabGeneration
-      },
+      shouldContinue: () =>
+        !session.disposed &&
+        (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
+          ?.generation ?? 0) === session.tabGeneration,
       callbacks: outputCallbacks.callbacks
     })
 
