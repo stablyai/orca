@@ -201,6 +201,10 @@ function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatch
         variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
         path: params.agent === 'claude' ? '/host/.claude' : '/host/.codex'
       },
+      options:
+        params.agent === 'claude'
+          ? { model: 'opus', effort: 'high' }
+          : { model: 'gpt-5.6-sol', effort: 'medium' },
       runtimeKind: 'native'
     })),
     publishStructuredAgentSessionTab: vi.fn()
@@ -519,7 +523,8 @@ describe('method routing', () => {
     expect(hostCalls.attach).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' }
+        accountHome: { variable: 'CODEX_HOME', path: '/host/.codex' },
+        options: { model: 'gpt-5.6-sol', effort: 'medium' }
       })
     )
     expect(hostCalls.attach.mock.calls[0]?.[1]).not.toHaveProperty('providerHandle')
@@ -761,6 +766,41 @@ describe('parameter validation', () => {
       envelope: envelope(),
       itemId: 'item-1',
       optionId: 'allow'
+    })
+  })
+
+  it('accepts the maximum fully encoded Claude choice group and retains a finite bound', async () => {
+    const maximumSelections = Array.from({ length: 4 }, (_, questionIndex) => ({
+      questionId: `q${questionIndex + 1}`,
+      optionIds: Array.from(
+        { length: 4 },
+        (_, optionIndex) => `q${questionIndex + 1}:choice-${optionIndex + 1}`
+      )
+    }))
+    const optionId = `question-group:${encodeURIComponent(JSON.stringify(maximumSelections))}`
+    expect(optionId.length).toBe(610)
+
+    const response = await call(
+      'agentSession.respondToQuestion',
+      {
+        envelope: envelope(),
+        itemId: 'item-1',
+        expectedRevision: 1,
+        optionId
+      },
+      STRUCTURED_CLIENT
+    )
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.respondToPrompt).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ optionId })
+    )
+
+    await rejects('agentSession.respondToQuestion', {
+      envelope: envelope(),
+      itemId: 'item-1',
+      expectedRevision: 1,
+      optionId: 'x'.repeat(1025)
     })
   })
 

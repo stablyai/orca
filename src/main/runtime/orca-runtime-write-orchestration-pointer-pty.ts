@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from './orca-runtime-refresh-floating-workspace-pty-liveness'
-import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
+import { writeOrchestrationPointerWithSettlement } from './orchestration/mailbox-pointer-pty-write'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
@@ -16,35 +17,59 @@ import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { getLatestLeafTitle } from './runtime-worktree-status-projection'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import type { OrchestrationMailboxLeaf } from './orchestration/mailbox-owner'
+import type { OrchestrationMailboxPointerSubmitTarget } from './orchestration/mailbox-pointer-submit'
 
 export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
-  protected writeOrchestrationPointerPty(ptyId: string, data: string): boolean | Promise<boolean> {
-    try {
-      if (data === '\r') {
-        const admitted = this.orchestrationPointerAdmissionByPtyId.get(ptyId)
-        this.orchestrationPointerAdmissionByPtyId.delete(ptyId)
-        if (admitted) {
-          agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-        }
-      } else {
-        const admission = agentSessionPtyWriteGate.admit(ptyId)
-        if (!admission.admitted) {
-          this.orchestrationPointerAdmissionByPtyId.delete(ptyId)
-          return this.ptyController?.write(ptyId, data) ?? false
-        }
-        this.orchestrationPointerAdmissionByPtyId.set(ptyId, {
-          sessionId: admission.sessionId,
-          runtimeFence: admission.runtimeFence
-        })
-      }
-      return (
-        this.ptyController?.writeWithSettlement?.(ptyId, data).catch(() => false) ??
-        this.ptyController?.write(ptyId, data) ??
-        false
-      )
-    } catch {
-      return false
+  protected writeOrchestrationPointerPty(
+    ptyId: string,
+    data: string
+  ): WriteSettlement | Promise<WriteSettlement> {
+    return writeOrchestrationPointerWithSettlement({
+      ptyId,
+      data,
+      admissionByPtyId: this.orchestrationPointerAdmissionByPtyId,
+      controller: this.ptyController
+    })
+  }
+
+  // A parked leaf has left the renderer graph but its PTY is still addressable, so the pointer
+  // target is rebuilt from the PTY record rather than refused.
+  protected resolveOrchestrationPointerSubmitTarget(
+    stagedLeaf: OrchestrationMailboxLeaf,
+    ptyId: string
+  ): OrchestrationMailboxPointerSubmitTarget | null {
+    const leafKey = this.getLeafKey(stagedLeaf.tabId, stagedLeaf.leafId)
+    const currentLeaf = this.leaves.get(leafKey)
+    const parked = currentLeaf === undefined
+    const terminalHandle = parked
+      ? this.handleByPtyId.get(ptyId)
+      : this.handleByLeafKey.get(leafKey)
+    if (!terminalHandle) {
+      return null
     }
+    const pty = this.ptysById.get(ptyId)
+    const leaf = parked
+      ? pty?.connected &&
+        pty.tabId === stagedLeaf.tabId &&
+        isTerminalLeafId(stagedLeaf.leafId) &&
+        pty.paneKey === makePaneKey(stagedLeaf.tabId, stagedLeaf.leafId)
+        ? {
+            ...stagedLeaf,
+            writable: true,
+            lastAgentStatus: pty.lastAgentStatus,
+            lastAgentStatusObservedLive: pty.lastAgentStatusObservedLive,
+            lastOscTitle: pty.lastOscTitle
+          }
+        : null
+      : currentLeaf.ptyId === ptyId
+        ? currentLeaf
+        : null
+    if (!leaf) {
+      return null
+    }
+    const processIncarnation = this.getTerminalProcessIncarnation(terminalHandle)
+    return processIncarnation ? { leaf, terminalHandle, processIncarnation } : null
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {

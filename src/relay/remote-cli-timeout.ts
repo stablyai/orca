@@ -1,3 +1,4 @@
+import { CLI_BOOLEAN_FLAGS } from '../shared/cli-argument-boundary'
 import { clampOrchestrationAskTimeoutMs } from '../shared/orchestration-ask-timeout'
 import {
   isSafeTimerDelayMs,
@@ -14,23 +15,8 @@ import {
 const REMOTE_CLI_DEFAULT_TIMEOUT_MS = 5 * 60_000
 const REMOTE_CLI_WAIT_TIMEOUT_MS = 10 * 60_000
 const REMOTE_CLI_TIMEOUT_GRACE_MS = 60_000
-const ORCHESTRATION_ASK_RELAY_GRACE_MS = 3 * 60_000
-const ORCHESTRATION_ASK_RELAY_BASE_MS = 11 * 60_000
-
-const REMOTE_TIMEOUT_BOOLEAN_FLAGS = new Set([
-  'all',
-  'attachments',
-  'children',
-  'comments',
-  'current',
-  'full',
-  'help',
-  'inject',
-  'json',
-  'relations',
-  'unread',
-  'wait'
-])
+const REMOTE_CLI_LONG_WAIT_GRACE_MS = 3 * 60_000
+const REMOTE_CLI_LONG_WAIT_BASE_MS = 11 * 60_000
 
 export function remoteCliRequestTimeoutMs(params: Record<string, unknown>): number | undefined {
   const argv = getStringArgv(params)
@@ -38,12 +24,20 @@ export function remoteCliRequestTimeoutMs(params: Record<string, unknown>): numb
     return undefined
   }
   const commandPath = parseRemoteCommandPath(argv)
-  const timeoutFlag = findLastTimeoutMsFlag(argv)
+  const timeoutFlag = findLastTimeoutFlag(argv, 'timeout-ms')
+  if (commandPath[0] === 'terminal' && commandPath[1] === 'send') {
+    const waitFlag = findLastTimeoutFlag(argv, 'wait-submit')
+    const seconds =
+      waitFlag?.raw === undefined ? null : parsePositiveSafeIntegerNumericText(waitFlag.raw)
+    if (seconds !== null && seconds <= 3600) {
+      return Math.max(REMOTE_CLI_LONG_WAIT_BASE_MS, seconds * 1000 + REMOTE_CLI_LONG_WAIT_GRACE_MS)
+    }
+  }
   if (commandPath[0] === 'orchestration' && commandPath[1] === 'ask') {
     const parsed =
       timeoutFlag?.raw === undefined ? null : parsePositiveSafeIntegerText(timeoutFlag.raw)
     const effective = clampOrchestrationAskTimeoutMs(parsed ?? undefined)
-    return Math.max(ORCHESTRATION_ASK_RELAY_BASE_MS, effective + ORCHESTRATION_ASK_RELAY_GRACE_MS)
+    return Math.max(REMOTE_CLI_LONG_WAIT_BASE_MS, effective + REMOTE_CLI_LONG_WAIT_GRACE_MS)
   }
   const base = isWaitStyleCliRequest(argv, commandPath)
     ? REMOTE_CLI_WAIT_TIMEOUT_MS
@@ -69,15 +63,16 @@ function isWaitStyleCliRequest(argv: string[], commandPath: string[]): boolean {
   )
 }
 
-function findLastTimeoutMsFlag(argv: string[]): { raw: string | undefined } | null {
+function findLastTimeoutFlag(argv: string[], name: string): { raw: string | undefined } | null {
+  const flag = `--${name}`
   let result: { raw: string | undefined } | null = null
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]
-    if (token === '--timeout-ms') {
+    if (token === flag) {
       const next = argv[index + 1]
       result = { raw: next?.startsWith('--') ? undefined : next }
-    } else if (token.startsWith('--timeout-ms=')) {
-      result = { raw: token.slice('--timeout-ms='.length) }
+    } else if (token.startsWith(`${flag}=`)) {
+      result = { raw: token.slice(flag.length + 1) }
     }
   }
   return result
@@ -106,7 +101,7 @@ function parseRemoteCommandPath(argv: string[]): string[] {
     }
 
     const next = argv[index + 1]
-    if (!REMOTE_TIMEOUT_BOOLEAN_FLAGS.has(assignment) && next && !next.startsWith('--')) {
+    if (!CLI_BOOLEAN_FLAGS.has(assignment) && next && !next.startsWith('--')) {
       index += 1
     }
   }

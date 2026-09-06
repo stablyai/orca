@@ -361,6 +361,37 @@ describe('WorktreeJumpPalette', () => {
     expect(testContainer.textContent).toContain('Feature workspace')
   })
 
+  it('reseeds the repository filter when reopened during the close linger', async () => {
+    const secondRepo = {
+      ...makeRepo(),
+      id: 'repo-2',
+      path: '/repos/repo-2',
+      displayName: 'Repo 2'
+    }
+    const first = makeWorktree('first', 'First repository workspace')
+    const second = makeWorktree('second', 'Second repository workspace', { repoId: 'repo-2' })
+
+    await renderPalette({
+      repos: [makeRepo(), secondRepo],
+      worktreesByRepo: { 'repo-1': [first], 'repo-2': [second] },
+      filterRepoIds: ['repo-1'],
+      showSleepingWorkspaces: true
+    })
+
+    expect(testContainer.textContent).toContain('First repository workspace')
+    expect(testContainer.textContent).not.toContain('Second repository workspace')
+
+    await act(async () => {
+      useAppStore.setState({ activeModal: 'none', filterRepoIds: ['repo-2'] })
+    })
+    await flushEffects()
+    await act(async () => useAppStore.getState().openModal('worktree-palette'))
+    await flushEffects()
+
+    expect(testContainer.textContent).not.toContain('First repository workspace')
+    expect(testContainer.textContent).toContain('Second repository workspace')
+  })
+
   // STA-4343 closed: two workspaces sharing `repoId::path` across hosts are two distinct
   // rows. The documents map and worktreeMap are keyed by host identity, so each row resolves
   // to its OWN worktree, and render keys keep the two apart for React and cmdk.

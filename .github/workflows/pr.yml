@@ -45,6 +45,7 @@ jobs:
       test_files: ${{ steps.e2e_filter.outputs.test_files }}
       ssh_source_changed: ${{ steps.e2e_filter.outputs.ssh_source_changed }}
       native_ime_source_changed: ${{ steps.e2e_filter.outputs.native_ime_source_changed }}
+      wsl_source_changed: ${{ steps.e2e_filter.outputs.wsl_source_changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -92,6 +93,9 @@ jobs:
           # trigger on IME source rather than on a spec name in some route's list.
           NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
           echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
+          WSL_CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE" "$HEAD")"
+          WSL_SOURCE_CHANGED="$(printf '%s\n' "$WSL_CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --wsl-source)"
+          echo "wsl_source_changed=$WSL_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
           echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
           SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --reusable-workflow)"
           if [ "$SHOULD_RUN" = true ]; then
@@ -941,6 +945,16 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/terminal-ime-e2e.yml
+
+  windows_wsl:
+    name: real WSL terminal
+    needs: code_paths
+    if: needs.code_paths.outputs.wsl_source_changed == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-wsl-e2e.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
 
   verify:
     if: always()

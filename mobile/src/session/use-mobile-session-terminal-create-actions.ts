@@ -10,7 +10,8 @@ import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { Terminal, TerminalCreateResult } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
-import { createMobileStructuredCodexSession } from './mobile-structured-agent-session-launch'
+import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
@@ -63,9 +64,9 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       .slice(2, 10)}`
 
     try {
-      // Bare Codex launches follow structured support; prompted launches keep their startup semantics.
-      if (agent === 'codex' && options === undefined) {
-        const structured = await createMobileStructuredCodexSession(client, worktreeId)
+      // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
+      if (isAgentSessionHandleProvider(agent) && options === undefined) {
+        const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
         if (structured.kind === 'created') {
           const previous = activeHandleRef.current
           if (previous) {

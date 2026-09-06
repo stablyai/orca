@@ -39,7 +39,7 @@ import {
 import { mailDisposition, readMailRow } from './helpers/orchestration-mail-store'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
-const POINTER_COMMAND = 'orca orchestration check'
+const POINTER_COMMAND = 'orca-dev orchestration check'
 const NO_DELIVERY_SETTLE_MS = 5_000
 const DELIVERY_TIMEOUT_MS = 20_000
 
@@ -177,7 +177,11 @@ test('keeps mail pending across a restart and delivers it when the agent reports
         message: 'live idle frame never released the pending mail'
       })
       .toContain(POINTER_COMMAND)
-    expect(mailDisposition(readMailRow(session.userDataDir, messageId))).toBe('pushed')
+    await expect
+      .poll(() => mailDisposition(readMailRow(session.userDataDir, messageId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
   } finally {
     if (firstApp) {
       await session.close(firstApp)

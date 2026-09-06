@@ -1,6 +1,7 @@
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../../shared/pty-incarnation'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { LegacyWorkerTerminalRecoveryRow } from './types'
+import { WORKER_SETTLED_STATES } from './worker-terminal-ownership'
 
 export type LegacyWorkerTerminalRecoveryCandidate = {
   dispatchId: string
@@ -17,8 +18,16 @@ export type LegacyWorkerTerminalRecoveryCandidate = {
   incarnationId: PtyIncarnationId
 }
 
+export type LegacyWorkerTerminalRecoveryBlockedPane = {
+  worktreeId: string
+  paneKey: string
+  contractVersion: number
+  /** The dispatch reported an outcome; its pane needs the fence but owns no process to recover. */
+  settled: boolean
+}
+
 export type LegacyWorkerTerminalRecoveryPlan = {
-  blockedPanes: { worktreeId: string; paneKey: string; contractVersion: number }[]
+  blockedPanes: LegacyWorkerTerminalRecoveryBlockedPane[]
   candidates: LegacyWorkerTerminalRecoveryCandidate[]
   ambiguousDispatchIds: string[]
 }
@@ -50,21 +59,28 @@ function countCandidateKeys(
 export function planLegacyWorkerTerminalRecovery(
   rows: readonly LegacyWorkerTerminalRecoveryRow[]
 ): LegacyWorkerTerminalRecoveryPlan {
-  const blockedPanes = new Map<
-    string,
-    { worktreeId: string; paneKey: string; contractVersion: number }
-  >()
+  const blockedPanes = new Map<string, LegacyWorkerTerminalRecoveryBlockedPane>()
   const parsedCandidates: LegacyWorkerTerminalRecoveryCandidate[] = []
   for (const row of rows) {
     const worktreeId = row.worktree_id?.trim()
     const paneKey = row.assignee_pane_key?.trim()
     const pane = paneKey ? parsePaneKey(paneKey) : null
+    const settled = WORKER_SETTLED_STATES.includes(row.worker_state)
     if (worktreeId && paneKey && pane) {
-      blockedPanes.set(`${worktreeId}\0${paneKey}`, {
+      const blockedKey = `${worktreeId}\0${paneKey}`
+      const alreadySettled = blockedPanes.get(blockedKey)?.settled
+      blockedPanes.set(blockedKey, {
         worktreeId,
         paneKey,
-        contractVersion: row.contract_version
+        contractVersion: row.contract_version,
+        // A pane reused across dispatches is settled only once every dispatch holding it is.
+        settled: (alreadySettled ?? true) && settled
       })
+    }
+    // A settled worker owns no live process to adopt or roll back, so its identity must never
+    // compete with a running worker's in the ambiguity count below.
+    if (settled) {
+      continue
     }
     const terminalHandle = row.assignee_handle?.trim()
     const workerHandle = row.agent_terminal_handle?.trim()

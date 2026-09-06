@@ -143,21 +143,28 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     }
     let connectionId: string | null | undefined
     let launchToken: string | null | undefined
+    let wslDistro: string | undefined
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)
       const pty = this.ptysById.get(ptyId)
       connectionId = pty?.connectionId ?? null
       launchToken = pty?.launchToken ?? null
+      // A WSL pane's PTY is local, so its hook events only match once the distro is supplied.
+      wslDistro = pty?.connectionId
+        ? undefined
+        : (this.wslDistroByPtyId.get(ptyId) ?? pty?.wslDistro ?? undefined)
     } catch {
       // Exact worker validation rejects this in production; test/legacy providers may not expose PTY metadata.
       connectionId = undefined
       launchToken = undefined
+      wslDistro = undefined
     }
     return selectExactWorkerProviderSession({
       paneKey,
       processIncarnation,
       connectionId,
       launchToken,
+      wslDistro,
       observedAfter,
       statuses: this.getAgentStatusSnapshotFn?.() ?? []
     })
