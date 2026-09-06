@@ -24,8 +24,9 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CliInstaller } from './cli-installer'
+import { buildMacPrivilegedSymlinkTransaction } from './cli-command-filesystem-transaction'
 import { buildUnixDevLauncher } from './cli-dev-launcher'
+import { CliInstaller } from './cli-installer'
 
 const createdRoots: string[] = []
 const protectedDirectories: string[] = []
@@ -74,6 +75,21 @@ function fixtureInstallerOptions(fixture: Awaited<ReturnType<typeof createPrivil
   }
 }
 
+describe('buildMacPrivilegedSymlinkTransaction', () => {
+  it('publishes a world-readable symlink after private umask 077 staging', () => {
+    const command = buildMacPrivilegedSymlinkTransaction({
+      action: 'install',
+      commandPath: '/usr/local/bin/orca',
+      launcherPath: '/Applications/Orca.app/Contents/Resources/bin/orca',
+      expected: null,
+      expectedFileSha256: null,
+      expectedRawSymlinkTarget: null
+    })
+    expect(command.startsWith('umask 077;')).toBe(true)
+    expect(command).toMatch(/\/bin\/ln -s .+ && \/bin\/chmod -h 755 .+ && \/bin\/ln -P /)
+  })
+})
+
 describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
   'macOS privileged CLI command transaction',
   () => {
@@ -93,6 +109,8 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       const installed = await installer.install()
       expect(installed.state).toBe('installed')
       await expect(readlink(fixture.commandPath)).resolves.toBe(installed.launcherPath)
+      expect((await lstat(fixture.commandPath)).mode & 0o777).toBe(0o755)
+      expect(commands[0]).toContain('/bin/chmod -h 755 ')
 
       await chmod(fixture.protectedDirectory, 0o500)
       await expect(installer.remove()).resolves.toMatchObject({ state: 'not_installed' })
@@ -162,6 +180,34 @@ describe.skipIf(process.platform !== 'darwin' || process.getuid?.() === 0)(
       expect(
         (await readdir(fixture.protectedDirectory)).some((name) => name.startsWith('.orca-cli-'))
       ).toBe(false)
+    })
+
+    it('reports an unreadable command symlink as stale and replaces it', async () => {
+      const fixture = await createPrivilegedFixture()
+      const installer = new CliInstaller({
+        ...fixtureInstallerOptions(fixture),
+        privilegedRunner: async (command) => {
+          await chmod(fixture.protectedDirectory, 0o700)
+          await executePrivilegedShell(command)
+        }
+      })
+
+      const installed = await installer.install()
+      expect(installed.state).toBe('installed')
+      const chmodLink = await runProcess({
+        program: '/bin/chmod',
+        args: ['-h', '000', fixture.commandPath]
+      })
+      expect(chmodLink.code).toBe(0)
+      await expect(readlink(fixture.commandPath)).rejects.toMatchObject({ code: 'EACCES' })
+
+      await expect(installer.getStatus()).resolves.toMatchObject({ state: 'stale' })
+
+      await chmod(fixture.protectedDirectory, 0o500)
+      const repaired = await installer.install()
+      expect(repaired.state).toBe('installed')
+      await expect(readlink(fixture.commandPath)).resolves.toBe(installed.launcherPath)
+      expect((await lstat(fixture.commandPath)).mode & 0o777).toBe(0o755)
     })
 
     it('restores the displaced command when publication setup fails', async () => {
