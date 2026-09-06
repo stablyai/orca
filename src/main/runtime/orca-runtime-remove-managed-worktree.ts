@@ -196,6 +196,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             provider: route.provider,
             connectionId: route.connectionId,
             force,
+            runHooks,
             allowUnverifiedPtyStop,
             deleteBranch,
             acquireWatcherRemoval: this.acquireFileWatcherRemoval,
