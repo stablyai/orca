@@ -124,7 +124,7 @@ describe('NativeChatMessageList assistant messages', () => {
     )
   })
 
-  it('animates the running tool and the tail spinner without pulsing the activity text', () => {
+  it('keeps the broad fallback distinct from the running tool row', () => {
     render(
       <NativeChatMessageList
         session={{
@@ -148,44 +148,62 @@ describe('NativeChatMessageList assistant messages', () => {
           ]
         }}
         isWorking
-        turnActivity={{ kind: 'description', text: 'Verifying the change' }}
         expandSignal={false}
         fontScale={1}
       />
     )
 
-    expect(screen.getByText('Running pnpm test')).toHaveClass('animate-pulse')
-    const activity = screen.getByText('Verifying the change')
+    const toolLabel = screen.getByText('Running pnpm test')
+    expect(toolLabel).toHaveClass('animate-pulse')
+    expect(screen.getAllByText('Running pnpm test')).toHaveLength(1)
+    const activity = screen.getByText('Working…')
+    expect(activity.textContent).not.toBe(toolLabel.textContent)
+    expect(activity).not.toHaveTextContent('shell')
+    expect(activity).not.toHaveTextContent('pnpm test')
     const spinner = activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')
     expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
     expect(spinner).toHaveClass('animate-spin', 'motion-reduce:animate-none')
   })
 
-  it('restates a completed tool without claiming that it is still running', () => {
+  it('uses the broad fallback after a tool settles', () => {
     render(
       <NativeChatMessageList
-        session={{ ...session, status: 'working' }}
-        isWorking
-        turnActivity={{
-          kind: 'tool',
-          call: {
-            type: 'tool-call',
-            name: 'shell',
-            input: { command: 'pnpm test' },
-            state: 'completed'
-          }
+        session={{
+          ...session,
+          status: 'working',
+          messages: [
+            {
+              id: 'assistant-completed-tool',
+              role: 'assistant',
+              blocks: [
+                {
+                  type: 'tool-call',
+                  name: 'shell',
+                  input: { command: 'pnpm test' },
+                  state: 'completed'
+                },
+                { type: 'tool-result', output: 'passed' }
+              ],
+              timestamp: 1,
+              source: 'transcript'
+            }
+          ]
         }}
+        isWorking
         expandSignal={false}
         fontScale={1}
       />
     )
 
-    const activity = screen.getByText('Continuing after pnpm test…')
+    const settledTool = screen.getByText('shell pnpm test')
+    const activity = screen.getByText('Working…')
+    expect(activity.textContent).not.toBe(settledTool.textContent)
+    expect(activity).not.toHaveTextContent('shell')
+    expect(activity).not.toHaveTextContent('pnpm test')
     expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
     expect(activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')).toHaveClass(
       'animate-spin'
     )
-    expect(screen.queryByText('Running pnpm test')).toBeNull()
   })
 
   it('keeps a completed tool row static while the turn tail spins, then removes the tail', () => {

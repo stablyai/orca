@@ -1,12 +1,7 @@
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { normalizePromptField } from '../../../../shared/agent-status-field-normalization'
-import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 
-type ToolCall = Extract<NativeChatBlock, { type: 'tool-call' }>
-
-export type NativeChatTurnActivity =
-  | { kind: 'description'; text: string }
-  | { kind: 'tool'; call: ToolCall }
+export type NativeChatTurnActivity = { kind: 'description'; text: string }
 
 function activityLine(text: string): string | null {
   const lines = text
@@ -17,7 +12,7 @@ function activityLine(text: string): string | null {
   return latest ? normalizePromptField(latest) || null : null
 }
 
-/** Prefer provider-authored activity copy, then restate the latest tool in present tense. */
+/** Prefer provider-authored activity copy; callers provide the broad fallback. */
 export function selectStructuredAgentTurnActivity(
   items: readonly AgentJournalRenderItem[],
   turnId: string | null
@@ -40,21 +35,6 @@ export function selectStructuredAgentTurnActivity(
     const text = activityLine(body.text)
     if (text) {
       return { kind: 'description', text }
-    }
-  }
-  for (let index = turnItems.length - 1; index >= 0; index -= 1) {
-    const body = turnItems[index]?.body
-    if (body?.kind === 'tool-call') {
-      return {
-        kind: 'tool',
-        call: { type: 'tool-call', name: body.name, input: body.input, state: body.state }
-      }
-    }
-    if (body?.kind === 'diff') {
-      return {
-        kind: 'tool',
-        call: { type: 'tool-call', name: 'Diff', input: { path: body.path } }
-      }
     }
   }
   return null

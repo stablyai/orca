@@ -34,7 +34,7 @@ describe('selectStructuredAgentTurnActivity', () => {
     expect(activity).toEqual({ kind: 'description', text: 'Preparing the answer' })
   })
 
-  it('returns the latest tool for a safe present-tense restatement', () => {
+  it('ignores active and settled tools so the tail can use a broad fallback', () => {
     const activity = selectStructuredAgentTurnActivity(
       [
         turnStart,
@@ -42,16 +42,19 @@ describe('selectStructuredAgentTurnActivity', () => {
           kind: 'tool-call',
           name: 'shell',
           input: { command: 'pnpm test' },
+          state: 'running'
+        }),
+        item(3, {
+          kind: 'tool-call',
+          name: 'shell',
+          input: { command: 'pnpm lint' },
           state: 'completed'
         })
       ],
       'turn-1'
     )
 
-    expect(activity).toMatchObject({
-      kind: 'tool',
-      call: { name: 'shell', input: { command: 'pnpm test' }, state: 'completed' }
-    })
+    expect(activity).toBeNull()
   })
 
   it('ignores diagnostic provider frames and returns nothing after the turn settles', () => {

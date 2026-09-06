@@ -1,31 +1,13 @@
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatTurnActivity } from './native-chat-turn-activity'
-import { nativeChatToolActivityLabel } from './native-chat-tool-activity-label'
-import { describeActiveToolCall } from '../../../../shared/native-chat-tool-activity'
-
-function completedToolActivityLabel(activity: Extract<NativeChatTurnActivity, { kind: 'tool' }>) {
-  const { preview, toolName } = describeActiveToolCall(activity.call)
-  return translate(
-    'components.native-chat.activity.continuingAfter',
-    'Continuing after {{activity}}…',
-    { activity: preview || toolName }
-  )
-}
 
 export function NativeChatTurnActivityLine({
   activity
 }: {
   activity?: NativeChatTurnActivity | null
 }): React.JSX.Element {
-  const label =
-    activity?.kind === 'description'
-      ? activity.text
-      : activity?.kind === 'tool'
-        ? activity.call.state === 'running'
-          ? nativeChatToolActivityLabel(activity.call)
-          : completedToolActivityLabel(activity)
-        : translate('components.native-chat.status.working', 'Working…')
+  const label = activity?.text ?? translate('components.native-chat.status.working', 'Working…')
 
   return (
     <div
