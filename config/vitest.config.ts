@@ -34,8 +34,10 @@ const testOptions = {
   ],
   include: UNIT_INCLUDE,
   exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,
+  // testTimeout matches hookTimeout: under full-suite parallelism even ordinary
+  // renderer tests breach 30s (CPU saturation delays waitFor loops), flaking them.
   hookTimeout: 60_000,
-  testTimeout: 30_000
+  testTimeout: 60_000
 }
 const projects = [
   {
