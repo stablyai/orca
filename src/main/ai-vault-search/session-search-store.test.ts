@@ -78,7 +78,7 @@ describe('SessionSearchStore', () => {
       cwd: '/repo/app',
       evidence: { role: 'tool' }
     })
-    expect(literal.hits[0]?.evidence.snippet).toContain('[strict]')
+    expect(literal.hits[0]?.evidence.snippet).toContain('[[strict]]')
     expect(literal.route).toBe('phrase')
 
     // Identifier split: a partial camelCase name still matches.
@@ -202,6 +202,12 @@ describe('SessionSearchStore', () => {
     expect(store.search({ query: 'shared phrase', agents: ['codex'] }).hits).toHaveLength(0)
     expect(store.search({ query: 'shared phrase', scopePaths: ['/repo'] }).hits).toHaveLength(2)
     expect(store.search({ query: 'shared phrase', scopePaths: ['/other'] }).hits).toHaveLength(0)
+    // `_` is a LIKE wildcard; an escaped scope must not match `/repo` through `/r_po`.
+    expect(store.search({ query: 'shared phrase', scopePaths: ['/r_po'] }).hits).toHaveLength(0)
+    expect(store.search({ query: 'shared phrase', scopePaths: ['\\repo\\'] }).hits).toHaveLength(2)
+    // A non-positive limit from an unvalidated caller is clamped, not passed to SQL.
+    expect(store.search({ query: 'shared phrase', limit: -1 }).hits).toHaveLength(1)
+    expect(store.search({ query: 'shared phrase', limit: 0 }).hits).toHaveLength(1)
   })
 
   it('keeps a provider with discovered files and no indexed sessions in coverage', async () => {

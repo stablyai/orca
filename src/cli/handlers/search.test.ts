@@ -135,6 +135,23 @@ describe('orca search --agent-session', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('rejects non-ISO dates that Date.parse would accept', async () => {
+    for (const since of ['08/01/2026', 'Sat, 01 Aug 2026 00:00:00 GMT']) {
+      const error = await runSearch({ 'agent-session': 'q', since }).catch(
+        (caught: unknown) => caught
+      )
+      expect((error as RuntimeClientError).code).toBe('invalid_argument')
+    }
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves a ~user path alone instead of splicing HOME into it', async () => {
+    vi.stubEnv('HOME', '/home/tester')
+    await runSearch({ 'agent-session': 'q', path: '~other/repo' })
+    expect(searchParams().scopePaths).toEqual(['~other/repo'])
+    vi.unstubAllEnvs()
+  })
+
   it('normalizes --since to an ISO timestamp', async () => {
     await runSearch({ 'agent-session': 'q', since: '2026-08-01T00:00:00+02:00' })
     expect(searchParams().since).toBe('2026-07-31T22:00:00.000Z')

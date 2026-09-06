@@ -13,6 +13,7 @@ import type {
   SessionSearchIndexUpdate
 } from '../ai-vault/session-search-capture'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import { redactSessionSearchText } from './session-search-redaction'
 import { SessionSearchIndexWriter } from './session-search-index-writer'
 import { SessionSearchQuery } from './session-search-query'
 import { openSessionSearchDatabase } from './session-search-schema'
@@ -177,7 +178,7 @@ export class SessionSearchStore implements SessionSearchIndexSink {
         .prepare(
           'INSERT INTO search_log(ts, query, route, hits, duration_ms) VALUES (?, ?, ?, ?, ?)'
         )
-        .run(new Date().toISOString(), query, route, hits, durationMs)
+        .run(new Date().toISOString(), redactSessionSearchText(query), route, hits, durationMs)
       this.db
         .prepare(
           `DELETE FROM search_log WHERE id <= (

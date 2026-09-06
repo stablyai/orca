@@ -25,7 +25,10 @@ export function normalizeAiVaultSearchHistoryDays(value: unknown): number | null
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return null
   }
-  return Math.min(HISTORY_DAYS_MAX, Math.floor(value))
+  const days = Math.floor(value)
+  // Why: a fractional day floors to 0, which the UI shows as "all history"
+  // while the cutoff would be "now"; make the two agree.
+  return days <= 0 ? null : Math.min(HISTORY_DAYS_MAX, days)
 }
 
 export function resolveAiVaultSearchSettings(

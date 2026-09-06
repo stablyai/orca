@@ -59,6 +59,27 @@ describe('useAiVaultSearchCoveragePoll', () => {
     expect(searchCoverage).toHaveBeenCalledTimes(callsAfterFirstRead)
   })
 
+  it('ignores a slow running answer that lands after a newer complete one', async () => {
+    let releaseFirst: (value: ReturnType<typeof coverage>) => void = () => undefined
+    searchCoverage
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseFirst = resolve
+          })
+      )
+      .mockResolvedValueOnce(coverage('complete'))
+    const { result } = renderHook(() => useAiVaultSearchCoveragePoll(true), { wrapper })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AI_VAULT_SEARCH_COVERAGE_POLL_MS)
+    })
+    expect(result.current?.backfill).toBe('complete')
+    await act(async () => {
+      releaseFirst(coverage('running'))
+    })
+    expect(result.current?.backfill).toBe('complete')
+  })
+
   it('keeps polling while the backfill is still running', async () => {
     searchCoverage.mockResolvedValue(coverage('running'))
     renderHook(() => useAiVaultSearchCoveragePoll(true), { wrapper })

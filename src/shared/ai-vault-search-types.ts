@@ -24,7 +24,7 @@ export type AiVaultSearchArgs = {
 export type AiVaultSearchEvidence = {
   role: AiVaultSessionPreviewMessage['role']
   timestamp: string | null
-  /** FTS5 snippet with the matched terms wrapped in `[` `]`. */
+  /** FTS5 snippet with the matched terms wrapped in `[[` `]]`. */
   snippet: string
 }
 
@@ -84,3 +84,7 @@ export type AiVaultSearchCoverage = {
   filesPending: number
   lastIndexedAt: string | null
 }
+
+/** Snippet match markers; doubled so literal brackets in code never read as a match. */
+export const AI_VAULT_SEARCH_SNIPPET_MARK_OPEN = '[['
+export const AI_VAULT_SEARCH_SNIPPET_MARK_CLOSE = ']]'

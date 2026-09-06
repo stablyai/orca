@@ -8,11 +8,19 @@ afterEach(cleanup)
 
 describe('aiVaultSearchSnippetSegments', () => {
   it('splits a snippet on its match markers', () => {
-    expect(aiVaultSearchSnippetSegments('fix the [strict] mode [bug]')).toEqual([
+    expect(aiVaultSearchSnippetSegments('fix the [[strict]] mode [[bug]]')).toEqual([
       { text: 'fix the ', matched: false },
       { text: 'strict', matched: true },
       { text: ' mode ', matched: false },
       { text: 'bug', matched: true }
+    ])
+  })
+
+  it('keeps literal brackets from a transcript as plain text', () => {
+    expect(aiVaultSearchSnippetSegments('read arr[0] then [[index]] it')).toEqual([
+      { text: 'read arr[0] then ', matched: false },
+      { text: 'index', matched: true },
+      { text: ' it', matched: false }
     ])
   })
 
@@ -27,7 +35,7 @@ describe('AiVaultSearchEvidenceLine', () => {
   it('renders the role and marks the matched terms', () => {
     render(
       <AiVaultSearchEvidenceLine
-        evidence={{ role: 'user', timestamp: null, snippet: 'fix the [strict] mode' }}
+        evidence={{ role: 'user', timestamp: null, snippet: 'fix the [[strict]] mode' }}
       />
     )
     expect(screen.getByText('You')).toBeTruthy()

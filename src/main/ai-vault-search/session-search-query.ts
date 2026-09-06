@@ -6,7 +6,9 @@ import type {
 } from '../../shared/ai-vault-search-types'
 import {
   AI_VAULT_SEARCH_LIMIT_DEFAULT,
-  AI_VAULT_SEARCH_LIMIT_MAX
+  AI_VAULT_SEARCH_LIMIT_MAX,
+  AI_VAULT_SEARCH_SNIPPET_MARK_CLOSE,
+  AI_VAULT_SEARCH_SNIPPET_MARK_OPEN
 } from '../../shared/ai-vault-search-types'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import {
@@ -32,6 +34,10 @@ const MESSAGE_CANDIDATE_LIMIT = 600
 // Subtracted per session: `0.02 · ln(1 + messages)`; slightly positive on both eval sets.
 const LENGTH_PRIOR = 0.02
 const SNIPPET_TOKENS = 12
+// Why: single brackets are everywhere in code transcripts (`arr[0]`, regex
+// classes, markdown links) and would read as matches; doubled ones are rare.
+const SNIPPET_MARK_OPEN = AI_VAULT_SEARCH_SNIPPET_MARK_OPEN
+const SNIPPET_MARK_CLOSE = AI_VAULT_SEARCH_SNIPPET_MARK_CLOSE
 
 type MessageRow = {
   rowid: number
@@ -103,7 +109,7 @@ export class SessionSearchQuery {
     }
     const exact = this.retrieveLiteral(plan, retrieval.tier)
     if (exact) {
-      return { hits: this.rollUp(exact.rows, retrieval), route: exact.route }
+      return { hits: this.rollUp(exact.rows, retrieval, plan), route: exact.route }
     }
     // Why: repair runs before the OR fallback, not after it fails; a typo next
     // to a common word would otherwise be masked by the common word's hits.
@@ -115,7 +121,7 @@ export class SessionSearchQuery {
       route: 'or' as const
     }
     return {
-      hits: this.rollUp(result.rows, retrieval),
+      hits: this.rollUp(result.rows, retrieval, effective),
       route: repaired ? (`typo+${result.route}` as AiVaultSearchRoute) : result.route,
       ...(repaired ? { repairedTerms: repaired.body } : {})
     }
@@ -192,7 +198,11 @@ export class SessionSearchQuery {
     }
   }
 
-  private rollUp(rows: MessageRow[], retrieval: Retrieval): AiVaultSearchHit[] {
+  private rollUp(
+    rows: MessageRow[],
+    retrieval: Retrieval,
+    plan: SessionSearchQueryPlan
+  ): AiVaultSearchHit[] {
     const best = new Map<number, MessageRow>()
     for (const row of rows) {
       const current = best.get(row.session_row_id)
@@ -230,20 +240,22 @@ export class SessionSearchQuery {
         evidence: {
           role: message.role as AiVaultSearchHit['evidence']['role'],
           timestamp: message.ts,
-          snippet: this.snippet(table, message.rowid, retrieval.text)
+          snippet: this.snippet(table, message.rowid, plan)
         }
       }))
   }
 
-  private snippet(table: string, rowid: number, query: string): string {
-    const expression = orExpression(planSessionSearchQuery(query).terms)
+  // Why: the snippet must highlight the terms that actually retrieved the row,
+  // so a hit found through typo repair is marked with the repaired terms.
+  private snippet(table: string, rowid: number, plan: SessionSearchQueryPlan): string {
+    const expression = orExpression(plan.terms)
     try {
       // Why: a bound `rowid = ?` or `rowid IN (?)` next to MATCH is silently
       // ignored by the FTS5 planner (it returns the first match); only the
       // subselect form is honoured. Column -1 picks whichever column matched.
       const row = this.db
         .prepare(
-          `SELECT snippet(${table}, -1, '[', ']', '…', ${SNIPPET_TOKENS}) AS s
+          `SELECT snippet(${table}, -1, '${SNIPPET_MARK_OPEN}', '${SNIPPET_MARK_CLOSE}', '…', ${SNIPPET_TOKENS}) AS s
            FROM ${table} WHERE ${table} MATCH ? AND rowid IN (SELECT ?)`
         )
         .get(expression, rowid) as { s: string } | undefined
@@ -261,8 +273,13 @@ export class SessionSearchQuery {
   }
 }
 
+// Why: the desktop IPC forwards its payload unvalidated, so a non-positive
+// limit must be clamped here or `LIMIT -1` / `slice(0, -1)` leak through.
 function resolveLimit(args: AiVaultSearchArgs): number {
-  return Math.min(args.limit ?? AI_VAULT_SEARCH_LIMIT_DEFAULT, AI_VAULT_SEARCH_LIMIT_MAX)
+  const requested = Number.isInteger(args.limit)
+    ? (args.limit as number)
+    : AI_VAULT_SEARCH_LIMIT_DEFAULT
+  return Math.min(Math.max(1, requested), AI_VAULT_SEARCH_LIMIT_MAX)
 }
 
 function sessionFields(session: SessionRow): Omit<AiVaultSearchHit, 'score' | 'evidence'> {

@@ -12,11 +12,11 @@ const ROLE_GLYPH = {
 
 export type AiVaultSearchSnippetSegment = { text: string; matched: boolean }
 
-/** Splits an FTS5 snippet on its `[term]` match markers. */
+/** Splits an FTS5 snippet on its `[[term]]` match markers; single brackets are text. */
 export function aiVaultSearchSnippetSegments(snippet: string): AiVaultSearchSnippetSegment[] {
   const segments: AiVaultSearchSnippetSegment[] = []
   let cursor = 0
-  const pattern = /\[([^[\]]*)\]/g
+  const pattern = /\[\[(.*?)\]\]/g
   let match: RegExpExecArray | null
   while ((match = pattern.exec(snippet)) !== null) {
     if (match.index > cursor) {

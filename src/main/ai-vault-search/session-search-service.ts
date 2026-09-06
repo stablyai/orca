@@ -45,7 +45,38 @@ const REFRESH_RECENT_PER_AGENT = 12
 const BACKFILL_LOAD_PER_CPU_CEILING = 1.5
 const BACKFILL_LOAD_PAUSE_MS = 15_000
 
+/** null (all history) is the widest bound; otherwise more days means wider. */
+function widensHistory(previous: number | null, next: number | null): boolean {
+  if (previous === null) {
+    return false
+  }
+  return next === null || next > previous
+}
+
+// Why: Windows reports a zero load average, so the only signal left is the
+// scanner's own recent CPU share; back off when it has been near a full core.
+const WINDOWS_SELF_CPU_SHARE_CEILING = 0.8
+let lastCpuSample: { usage: NodeJS.CpuUsage; at: number } | null = null
+
+function selfCpuShareSinceLastYield(): number {
+  const now = performance.now()
+  const usage = process.cpuUsage()
+  const previous = lastCpuSample
+  lastCpuSample = { usage, at: now }
+  if (!previous) {
+    return 0
+  }
+  const busyMs = (usage.user - previous.usage.user + usage.system - previous.usage.system) / 1000
+  const elapsedMs = Math.max(1, now - previous.at)
+  return busyMs / elapsedMs
+}
+
 function backfillPauseMs(): number {
+  if (process.platform === 'win32') {
+    return selfCpuShareSinceLastYield() > WINDOWS_SELF_CPU_SHARE_CEILING
+      ? BACKFILL_LOAD_PAUSE_MS
+      : BACKFILL_YIELD_MS
+  }
   const perCpu = loadavg()[0] / Math.max(1, cpus().length)
   return perCpu > BACKFILL_LOAD_PER_CPU_CEILING ? BACKFILL_LOAD_PAUSE_MS : BACKFILL_YIELD_MS
 }
@@ -122,9 +153,14 @@ export class SessionSearchService {
     options: { clearIndex?: boolean } = {}
   ): Promise<AiVaultSearchCoverage> {
     const wasEnabled = this.policy.enabled
+    const previousDays = this.policy.historyDays
     this.policy = { enabled: next.enabled, historyDays: next.historyDays }
     if (options.clearIndex || (wasEnabled && !next.enabled)) {
       await this.stop()
+    } else if (wasEnabled && widensHistory(previousDays, next.historyDays)) {
+      // Why: a finished backfill is memoized; a wider window has files it
+      // skipped, so it has to enumerate again (rows already indexed are reused).
+      await this.stop({ keepStore: true })
     }
     if (options.clearIndex) {
       removeSessionSearchDatabase(this.databasePath)
@@ -146,11 +182,19 @@ export class SessionSearchService {
     }
     if (!this.backfillRun) {
       this.backfillController = new AbortController()
-      this.backfillRun = this.runBackfill(roots, this.backfillController.signal)
-        .catch((error) => console.warn('[ai-vault-search] backfill stopped:', error))
+      const run = this.runBackfill(roots, this.backfillController.signal)
+        .catch((error) => {
+          console.warn('[ai-vault-search] backfill stopped:', error)
+          // Why: a failed pass must not be memoized as done; the next search
+          // gets to try again instead of reporting an incomplete index forever.
+          if (this.backfillRun === run) {
+            this.backfillRun = null
+          }
+        })
         .finally(() => {
           this.backfillController = null
         })
+      this.backfillRun = run
     }
     return this.backfillRun
   }
@@ -173,14 +217,16 @@ export class SessionSearchService {
   }
 
   /** Waits for the aborted backfill so its last parse cannot write to a closed store. */
-  private async stop(): Promise<void> {
+  private async stop(options: { keepStore?: boolean } = {}): Promise<void> {
     this.backfillController?.abort()
     const run = this.backfillRun
     this.backfillRun = null
     if (run) {
       await run.catch(() => undefined)
     }
-    this.closeStore()
+    if (!options.keepStore) {
+      this.closeStore()
+    }
   }
 
   private closeStore(): void {
@@ -206,11 +252,21 @@ export class SessionSearchService {
   }
 
   private async reindexStale(signal?: AbortSignal): Promise<void> {
-    const stale = this.store?.takeStale() ?? []
-    if (stale.length === 0) {
+    const store = this.store
+    const stale = store?.takeStale() ?? []
+    if (stale.length === 0 || !store) {
       return
     }
-    await this.parseAll(stale, signal)
+    try {
+      await this.parseAll(stale, signal)
+    } catch (error) {
+      // Why: a cancelled search (the renderer retires them per keystroke) must
+      // not lose the queue; whatever did not get parsed goes back for next time.
+      for (const candidate of stale) {
+        store.markStale(candidate)
+      }
+      throw error
+    }
   }
 
   /** The retention bound is enforced on enumeration; already-indexed rows survive until a clear. */

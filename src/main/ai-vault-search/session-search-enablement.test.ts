@@ -110,4 +110,13 @@ describe('readAiVaultSearchIndexStatus', () => {
 
     expect(readAiVaultSearchIndexStatus().indexSizeBytes).toBe(123)
   })
+
+  it('treats a leftover sidecar without the database as no index', async () => {
+    const userData = await makeUserDataDir()
+    initSessionSearchPaths(userData)
+    await mkdir(join(userData, 'ai-vault-search'), { recursive: true })
+    await writeFile(join(userData, 'ai-vault-search', 'index.sqlite-wal'), 'y'.repeat(23))
+
+    expect(readAiVaultSearchIndexStatus().indexSizeBytes).toBeNull()
+  })
 })

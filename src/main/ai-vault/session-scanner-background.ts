@@ -104,7 +104,7 @@ export function readAiVaultSearchCoverageInBackground(
 ): Promise<AiVaultSearchCoverage> {
   return shouldUseAiVaultServiceProcess()
     ? readAiVaultSearchCoverageInService(request, signal)
-    : readAiVaultSearchCoverageInWorker(request)
+    : readAiVaultSearchCoverageInWorker(request, signal)
 }
 
 /** Null when no scanner is running: the next spawn reads the policy from its init payload. */

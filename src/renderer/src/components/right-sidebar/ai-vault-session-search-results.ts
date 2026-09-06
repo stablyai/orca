@@ -103,8 +103,8 @@ export function useAiVaultSessionSearchResults(input: {
         key: 'ai-vault-search-results',
         label: translate(
           'auto.components.right.sidebar.AiVaultPanel.searchMatches',
-          '{{value0}} matches',
-          { value0: hitSessions.sessions.length }
+          '{{count}} matches',
+          { count: hitSessions.sessions.length }
         ),
         sessions: hitSessions.sessions
       }
@@ -117,7 +117,12 @@ export function useAiVaultSessionSearchResults(input: {
       loading,
       updating,
       error,
-      coverage: result?.coverage ?? polledCoverage,
+      // Why: the poll keeps going after a retained result, so it is the fresher
+      // read once it says the backfill is done.
+      coverage:
+        polledCoverage?.backfill === 'complete'
+          ? polledCoverage
+          : (result?.coverage ?? polledCoverage),
       disabled: isAiVaultSearchDisabled(result?.coverage),
       flush,
       groups,

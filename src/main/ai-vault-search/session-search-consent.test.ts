@@ -2,8 +2,26 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// Why: the backfill's first await; failing it once is the cheapest way to make
+// a whole pass throw without touching the transcripts on disk.
+let failNextParseCacheLoad = false
+vi.mock('../ai-vault/session-parse-cache-persistence', async (importOriginal) => {
+  const actual = await importOriginal<typeof ParseCachePersistence>()
+  return {
+    ...actual,
+    ensureSessionParseCacheLoaded: (): Promise<void> => {
+      if (failNextParseCacheLoad) {
+        failNextParseCacheLoad = false
+        return Promise.reject(new Error('parse cache unavailable'))
+      }
+      return actual.ensureSessionParseCacheLoaded()
+    }
+  }
+})
 import { getSessionSearchIndexSink } from '../ai-vault/session-search-capture'
+import type * as ParseCachePersistence from '../ai-vault/session-parse-cache-persistence'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { isolatedScanRoots, jsonLines } from '../ai-vault/session-scanner-test-fixtures'
 import { SessionSearchService, type SessionSearchScanRoots } from './session-search-service'
@@ -156,6 +174,35 @@ describe('SessionSearchService consent gate', () => {
 
     expect(existsSync(databasePath)).toBe(false)
     expect(existsSync(`${databasePath}-wal`)).toBe(false)
+  })
+
+  it('retries a backfill that failed instead of memoizing the failure', async () => {
+    const { roots, databasePath } = await scanRoots()
+    await writeClaudeTranscript(roots, 'retry-session', 'the vacuum quota never settles')
+
+    const service = makeService(databasePath, { enabled: true, historyDays: null })
+    failNextParseCacheLoad = true
+    await service.ensureBackfill(roots)
+    expect(service.coverage().sessionsIndexed).toBe(0)
+    expect(service.coverage().backfill).toBe('idle')
+
+    await service.ensureBackfill(roots)
+    const result = await service.search({ query: 'vacuum', refresh: false }, roots)
+    expect(result.hits.map((hit) => hit.sessionId)).toContain('retry-session')
+  })
+
+  it('re-enumerates when the history bound is widened after a finished backfill', async () => {
+    const { roots, databasePath } = await scanRoots()
+    await writeClaudeTranscript(roots, 'recent-session', 'the vacuum quota never settles', 1)
+    await writeClaudeTranscript(roots, 'ancient-session', 'the vacuum quota never settles', 120)
+
+    const service = makeService(databasePath, { enabled: true, historyDays: 30 })
+    await service.ensureBackfill(roots)
+    await service.configure({ enabled: true, historyDays: null }, roots)
+    await service.ensureBackfill(roots)
+
+    const result = await service.search({ query: 'vacuum', refresh: false }, roots)
+    expect(result.hits.map((hit) => hit.sessionId)).toContain('ancient-session')
   })
 
   it('skips transcripts older than the history bound', async () => {

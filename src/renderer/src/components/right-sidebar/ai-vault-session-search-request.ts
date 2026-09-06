@@ -46,11 +46,8 @@ export function useAiVaultSessionSearchRequest(
   // Serialized so a fresh object identity with identical values does not
   // restart the debounce on every parent render.
   const argsKey = args ? JSON.stringify(args) : ''
-  const argsKeyRef = useRef(argsKey)
-  argsKeyRef.current = argsKey
 
-  const issue = useCallback((overrides: Partial<AiVaultSearchArgs>): void => {
-    const key = argsKeyRef.current
+  const issue = useCallback((key: string, overrides: Partial<AiVaultSearchArgs>): void => {
     if (!key) {
       return
     }
@@ -75,27 +72,44 @@ export function useAiVaultSessionSearchRequest(
       })
   }, [])
 
+  // Why: a flush has to cancel the debounce the args effect armed, and the two
+  // effects cannot share locals, so the args effect publishes its cancel.
+  const cancelDebounceRef = useRef<() => void>(() => undefined)
+
   useEffect(() => {
     if (!argsKey) {
       return
     }
     const typingTimer = setTimeout(
-      () => issue({ tier: 'conversation', refresh: false }),
+      () => issue(argsKey, { tier: 'conversation', refresh: false }),
       AI_VAULT_SEARCH_TYPING_DELAY_MS
     )
-    const settledTimer = setTimeout(() => issue({ tier: 'full' }), AI_VAULT_SEARCH_SETTLED_DELAY_MS)
-    return () => {
+    const settledTimer = setTimeout(
+      () => issue(argsKey, { tier: 'full' }),
+      AI_VAULT_SEARCH_SETTLED_DELAY_MS
+    )
+    const cancel = (): void => {
       clearTimeout(typingTimer)
       clearTimeout(settledTimer)
+    }
+    cancelDebounceRef.current = cancel
+    return () => {
+      cancel()
+      cancelDebounceRef.current = () => undefined
       // Retires anything still in flight for the query being replaced.
       sequenceRef.current += 1
     }
   }, [argsKey, issue])
 
+  // Why: the args effect must not re-run on flush (it would restart the
+  // debounce), so the flush reads the key it was rendered with. The pending
+  // debounce is dropped so a late typing-tier request cannot outrank it.
   useEffect(() => {
     if (flushSignal > 0) {
-      issue({ tier: 'full' })
+      cancelDebounceRef.current()
+      issue(argsKey, { tier: 'full' })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flushSignal, issue])
 
   const current = settled?.key === argsKey ? settled : null

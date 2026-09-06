@@ -35,12 +35,25 @@ function parseAgents(flags: Map<string, string | boolean>): AiVaultAgent[] | und
   return agents
 }
 
+const ISO_8601 =
+  /^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/
+
+/** `~` and `~/x` are the home directory; `~other/x` is left for the host to resolve. */
+function expandHomePath(value: string): string {
+  const home = process.env.HOME
+  if (!home || (value !== '~' && !value.startsWith('~/'))) {
+    return value
+  }
+  return `${home}${value.slice(1)}`
+}
+
 function parseSince(flags: Map<string, string | boolean>): string | undefined {
   const value = getOptionalStringFlag(flags, 'since')
   if (value === undefined) {
     return undefined
   }
-  const parsed = Date.parse(value)
+  // Why: Date.parse also accepts `08/01/2026` and RFC 2822; the flag documents ISO 8601.
+  const parsed = ISO_8601.test(value) ? Date.parse(value) : Number.NaN
   if (!Number.isFinite(parsed)) {
     throw new RuntimeClientError('invalid_argument', '--since must be an ISO 8601 timestamp.')
   }
@@ -78,9 +91,7 @@ export const SEARCH_HANDLERS: Record<string, CommandHandler> = {
         'Missing --agent-session <query>. Example: orca search --agent-session "strict mode violation"'
       )
     }
-    const scopePaths = getRepeatedStringFlag(flags, 'path').map((value) =>
-      value.startsWith('~') ? value.replace(/^~/, process.env.HOME ?? '~') : value
-    )
+    const scopePaths = getRepeatedStringFlag(flags, 'path').map(expandHomePath)
     const result = await client.call<AiVaultSearchResult>('aiVault.searchSessions', {
       query,
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),

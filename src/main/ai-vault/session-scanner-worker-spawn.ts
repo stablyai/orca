@@ -66,9 +66,10 @@ export function searchAiVaultSessionsInWorker(
 }
 
 export function readAiVaultSearchCoverageInWorker(
-  request: Pick<AiVaultServiceSearchRequest, 'roots'>
+  request: Pick<AiVaultServiceSearchRequest, 'roots'>,
+  signal?: AbortSignal
 ): Promise<AiVaultSearchCoverage> {
-  return getSharedClient().searchCoverage(request)
+  return getSharedClient().searchCoverage(request, signal)
 }
 
 /** Null when no worker exists yet; the next one reads the new policy from its workerData. */

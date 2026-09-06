@@ -1,5 +1,6 @@
 import { basename, dirname, join } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { timestampIso } from './session-scanner-accumulator'
 import { extractString, normalizeTitleText, readJsonObjectIfExists } from './session-scanner-values'
 
@@ -86,7 +87,12 @@ async function readCursorChatMetaIndex(chatsRoot: string): Promise<Map<string, s
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort()
-  } catch {
+  } catch (error) {
+    // Why: a refused WSL read is not "no chats"; letting it through keeps the
+    // session out of the parse cache instead of caching it without metadata.
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return new Map()
   }
   const signature = await readCursorChatsSignature(chatsRoot, workspaceDirs)
@@ -130,7 +136,10 @@ async function buildCursorChatMetaIndex(
     let chatDirs
     try {
       chatDirs = await wslGatedReaddir(join(chatsRoot, workspaceDir), 'scan')
-    } catch {
+    } catch (error) {
+      if (error instanceof WslTranscriptFsError) {
+        throw error
+      }
       continue
     }
     for (const chatDir of chatDirs) {

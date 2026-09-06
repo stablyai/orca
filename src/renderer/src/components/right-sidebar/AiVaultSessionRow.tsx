@@ -188,7 +188,7 @@ export function VaultSessionRow({
               onRequestDelete={requestDelete}
             />
           </div>
-          {!detailsExpanded && (latestTurn || !searchEvidence) ? (
+          {!detailsExpanded && !searchEvidence ? (
             <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
               {latestTurn ? (
                 <>

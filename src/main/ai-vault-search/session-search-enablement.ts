@@ -35,8 +35,18 @@ export function applyAiVaultSearchSettings(
     return Promise.resolve(null)
   }
   const policy: AiVaultSearchSettings = resolveAiVaultSearchSettings(settings)
-  return configureAiVaultSearch({ databasePath, ...policy }, { clearIndex: options.clearIndex })
+  // Why: each call resolves scan roots before it reaches the scanner, so two
+  // overlapping toggles could land out of order; apply them one after another.
+  const applied = applyChain
+    .catch(() => undefined)
+    .then(() =>
+      configureAiVaultSearch({ databasePath, ...policy }, { clearIndex: options.clearIndex })
+    )
+  applyChain = applied
+  return applied
 }
+
+let applyChain: Promise<unknown> = Promise.resolve()
 
 export function readAiVaultSearchIndexStatus(): AiVaultSearchIndexStatus {
   return { ...getSessionSearchPolicy(), indexSizeBytes: readAiVaultSearchIndexSizeBytes() }
@@ -76,12 +86,18 @@ export function readAiVaultSearchIndexSizeBytes(): number | null {
   if (!databasePath) {
     return null
   }
-  let total: number | null = null
-  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+  let total: number
+  try {
+    total = statSync(databasePath).size
+  } catch {
+    // Why: a leftover sidecar without the main file is not an index.
+    return null
+  }
+  for (const suffix of ['-wal', '-shm', '-journal']) {
     try {
-      total = (total ?? 0) + statSync(`${databasePath}${suffix}`).size
+      total += statSync(`${databasePath}${suffix}`).size
     } catch {
-      // A missing sidecar is normal; only a missing main file means "no index".
+      // A missing sidecar is normal.
     }
   }
   return total

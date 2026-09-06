@@ -33,7 +33,7 @@ function makeHit(overrides: Partial<AiVaultSearchHit> = {}): AiVaultSearchHit {
     evidence: {
       role: 'assistant',
       timestamp: '2026-09-01T11:29:00.000Z',
-      snippet: 'the [strict] [mode] guard fires\ntwice',
+      snippet: 'the [[strict]] [[mode]] guard fires\ntwice',
       ...overrides.evidence
     },
     ...overrides
@@ -64,6 +64,28 @@ afterEach(() => {
 })
 
 describe('formatAgentSessionSearch', () => {
+  it('strips terminal escape sequences and control bytes from transcript fields', () => {
+    const output = format(
+      makeResult({
+        hits: [
+          makeHit({
+            title: 'Fix \u001b]52;c;Zm9v\u0007 clipboard',
+            evidence: {
+              role: 'tool',
+              timestamp: null,
+              snippet: 'ran \u001b[31m[[rm]]\u001b[0m -rf\u0000 /tmp'
+            }
+          })
+        ]
+      }),
+      'rm'
+    )
+    expect(output).not.toContain('\u001b')
+    expect(output).not.toContain('\u0000')
+    expect(output).toContain('Fix  clipboard')
+    expect(output).toContain('ran [[rm]] -rf /tmp')
+  })
+
   it('reports no match with the query when there are no hits', () => {
     const output = format(makeResult({ hits: [] }), 'kernel panic')
     expect(output.split('\n')[0]).toBe('No sessions match "kernel panic".')
@@ -79,7 +101,7 @@ describe('formatAgentSessionSearch', () => {
 
   it('renders the evidence role glyph and a single-line snippet', () => {
     const evidence = format(makeResult()).split('\n')[1]
-    expect(evidence).toBe('    agent ▸ the [strict] [mode] guard fires twice')
+    expect(evidence).toBe('    agent ▸ the [[strict]] [[mode]] guard fires twice')
   })
 
   it('labels each evidence role distinctly', () => {

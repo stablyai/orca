@@ -1,3 +1,7 @@
+import {
+  stripAnsiEscapeSequences,
+  TERMINAL_CONTROL_CHARACTER_PATTERN
+} from '../shared/ansi-escape-sequences'
 import { basename } from 'node:path'
 import type { AiVaultSearchIndexStatus } from '../shared/ai-vault-search-settings'
 import { aiVaultAgentLabel } from '../shared/ai-vault-types'
@@ -41,13 +45,19 @@ function projectLabel(hit: AiVaultSearchHit): string {
   return hit.branch ? `${cwd} · ${hit.branch}` : cwd
 }
 
+// Why: transcript text reaches the terminal verbatim; an OSC 52 or cursor
+// sequence inside a tool log would otherwise execute on the user's terminal.
+function terminalSafe(value: string): string {
+  return stripAnsiEscapeSequences(value).replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
+}
+
 function formatHit(index: number, hit: AiVaultSearchHit): string {
-  const header = `${String(index + 1).padStart(2)}. ${hit.title}`
-  const meta = `${aiVaultAgentLabel(hit.agent)} · ${projectLabel(hit)} · ${relativeAge(hit.updatedAt)}`
+  const header = `${String(index + 1).padStart(2)}. ${terminalSafe(hit.title)}`
+  const meta = `${aiVaultAgentLabel(hit.agent)} · ${terminalSafe(projectLabel(hit))} · ${relativeAge(hit.updatedAt)}`
   const evidence = hit.evidence.snippet
-    ? `    ${ROLE_LABEL[hit.evidence.role]} ▸ ${hit.evidence.snippet.replaceAll('\n', ' ')}`
+    ? `    ${ROLE_LABEL[hit.evidence.role]} ▸ ${terminalSafe(hit.evidence.snippet).replaceAll('\n', ' ')}`
     : null
-  const resume = `    resume: ${hit.resumeCommand}${hit.cwd ? `  (cwd ${hit.cwd})` : ''}`
+  const resume = `    resume: ${terminalSafe(hit.resumeCommand)}${hit.cwd ? `  (cwd ${terminalSafe(hit.cwd)})` : ''}`
   return [`${header}    ${meta}`, evidence, resume].filter(Boolean).join('\n')
 }
 

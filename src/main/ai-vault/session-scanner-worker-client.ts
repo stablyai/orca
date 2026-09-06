@@ -82,11 +82,13 @@ export class AiVaultScannerWorkerClient {
   }
 
   searchCoverage(
-    request: Pick<AiVaultServiceSearchRequest, 'roots'>
+    request: Pick<AiVaultServiceSearchRequest, 'roots'>,
+    signal?: AbortSignal
   ): Promise<AiVaultSearchCoverage> {
     return this.dispatch(
       { kind: 'searchCoverage', request },
-      TITLE_TIMEOUT_MS
+      TITLE_TIMEOUT_MS,
+      signal
     ) as Promise<AiVaultSearchCoverage>
   }
 

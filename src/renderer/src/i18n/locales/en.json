@@ -13025,7 +13025,9 @@
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
             "sessionDeleteFailed": "Couldn't delete the session",
-            "searchMatches": "{{value0}} matches"
+            "searchMatches_one": "{{count}} match",
+            "searchMatches_other": "{{count}} matches",
+            "searchMatches": "{{count}} matches"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",

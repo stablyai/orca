@@ -687,7 +687,9 @@
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "remoteBrowseLocalHistory": "Remote workspaces can browse local history. Resume actions run from local workspaces.",
-            "valueCopyFailed": "Unable to copy {{value0}}"
+            "valueCopyFailed": "Unable to copy {{value0}}",
+            "searchMatches_one": "{{count}} match",
+            "searchMatches_other": "{{count}} matches"
           },
           "AiVaultPanelControls": {
             "allSessions": "All sessions",

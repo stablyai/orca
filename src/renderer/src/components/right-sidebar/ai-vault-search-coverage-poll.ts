@@ -20,16 +20,20 @@ export function useAiVaultSearchCoveragePoll(enabled: boolean): AiVaultSearchCov
       return
     }
     let stopped = false
+    let generation = 0
     // One interval, cleared unconditionally on unmount; the reads it drives stop
     // once the backfill is complete because there is nothing left to watch.
     const interval = setInterval(() => {
       read()
     }, AI_VAULT_SEARCH_COVERAGE_POLL_MS)
     function read(): void {
+      generation += 1
+      const issued = generation
       void window.api.aiVault
         .searchCoverage()
         .then((next) => {
-          if (stopped) {
+          // Why: a slow 'running' answer must not land after a newer 'complete'.
+          if (stopped || issued !== generation) {
             return
           }
           setCoverage(next)

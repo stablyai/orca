@@ -29,10 +29,14 @@ export function sessionRowFilter(
     filter.values.push(args.since)
   }
   if (args.scopePaths && args.scopePaths.length > 0) {
-    filter.conditions.push(`(${args.scopePaths.map(() => '(cwd = ? OR cwd LIKE ?)').join(' OR ')})`)
+    filter.conditions.push(
+      `(${args.scopePaths.map(() => `(${CWD} = ? OR ${CWD} LIKE ? ESCAPE '\\')`).join(' OR ')})`
+    )
     for (const scope of args.scopePaths) {
-      const trimmed = scope.replace(/[\\/]+$/, '')
-      filter.values.push(trimmed, `${trimmed}${trimmed.includes('\\') ? '\\' : '/'}%`)
+      // Same spelling as CWD so a Windows scope matches a POSIX-recorded cwd,
+      // and escaped so `%`/`_` in a folder name cannot widen the match.
+      const normalized = scope.replaceAll('\\', '/').replace(/\/+$/, '')
+      filter.values.push(normalized, `${escapeLike(normalized)}/%`)
     }
   }
   // Operators narrow, never widen: each one is its own ANDed condition on top
