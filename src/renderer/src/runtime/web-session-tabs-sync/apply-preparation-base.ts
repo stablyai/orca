@@ -27,6 +27,8 @@ import {
   shouldReplaceTerminalTab
 } from './terminal-surfaces'
 import { buildMirroredTerminalTabs } from './terminal-build'
+import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
+import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -163,10 +165,19 @@ export function prepareWebSessionTabsSnapshotBase(
   )
   const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
+  // Why an empty row rather than a deleted key: an explicit empty row is the closed-last-terminal
+  // tombstone every seeder reads (initial-terminal.ts), and dropping the key reads back as "never
+  // initialized", which re-seeds the workspace on every focus (STA-6173). `sameTerminalTabs` treats
+  // a missing row and an empty one as equal, so a worktree that never had a terminal still gets no
+  // row. A removal frame really is gone, and a synthesized unpublished frame is "ask me later", not
+  // evidence the user emptied anything — neither may leave a tombstone behind.
   const nextTerminalTabs =
     retainedTerminalTabs.length + mirroredTerminalTabEntries.length > 0
       ? [...retainedTerminalTabs, ...mirroredTerminalTabEntries]
-      : null
+      : isWebSessionTabsWorktreeRemovalFrame(snapshot) ||
+          !hostSnapshotAffirmsWorktreeContents(snapshot)
+        ? null
+        : []
   const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
