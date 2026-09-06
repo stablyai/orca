@@ -29,16 +29,23 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
     const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
-    const publishedIds = new Set(publishedBrowserTabs.map((tab) => tab.id))
     // An attached renderer owns its browser rows; the client-page registry cannot retire them.
-    // Ids the live build already published still lose, so a row can never appear twice.
     const rendererBrowserTabs =
       this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
-        ? existingBrowserTabs.filter(
-            (tab) => tab.placement?.kind !== 'client' && !publishedIds.has(tab.id)
-          )
+        ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
         : []
-    const liveBrowserTabs = [...rendererBrowserTabs, ...publishedBrowserTabs]
+    // Keyed by id so no row can publish twice whatever the two sources overlap on; a freshly
+    // built row wins over the retained one it replaces.
+    const liveById = new Map(
+      [...rendererBrowserTabs, ...publishedBrowserTabs].map((tab) => [tab.id, tab])
+    )
+    // Emit in the order the snapshot already had, because the equality check below compares by
+    // index: rebuilding renderer-first would read a pure reordering as a change and republish.
+    const retainedInOrder = existingBrowserTabs.flatMap((tab) => {
+      const live = liveById.get(tab.id)
+      return live && liveById.delete(tab.id) ? [live] : []
+    })
+    const liveBrowserTabs = [...retainedInOrder, ...liveById.values()]
     const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
     if (headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {

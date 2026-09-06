@@ -115,6 +115,16 @@ it('never publishes a row twice when the live build reclaims a renderer-owned id
   expect(published?.tabGroups?.[0].tabOrder).toEqual([rendererPage.id])
 })
 
+it('does not republish when a client row merely sits before a renderer row', () => {
+  const interleaved = {
+    ...snapshot,
+    tabs: [clientPage, rendererPage],
+    tabGroups: [{ id: 'group', activeTabId: 'renderer-tab', tabOrder: ['client', 'renderer-tab'] }]
+  }
+
+  expect(reconcile({ live: [clientPage] }, interleaved)).toBeUndefined()
+})
+
 it('keeps the renderer publication epoch when selecting a client-hosted browser tab', () => {
   const storeMobileSessionSnapshot = vi.fn()
   const runtime = OrcaRuntimeWithCloseStructuredAgentSessionTab.prototype as unknown as {
