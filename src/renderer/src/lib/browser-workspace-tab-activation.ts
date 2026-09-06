@@ -1,7 +1,8 @@
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
+import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
 
 type BrowserWorkspaceTabTarget = {
   worktreeId: string
@@ -18,6 +19,10 @@ export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTar
   if (params.executionHostId && !worktree) {
     return null
   }
+  // A hostless tab cannot be attributed when the same worktree ID exists on several hosts.
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(
+    getIndexedAllWorktrees(state.worktreesByRepo)
+  )
   // setActiveBrowserTab resolves its backing tab globally by workspace ID.
   const tabs = Object.values(state.unifiedTabsByWorktree).flat()
   const browserTabs = tabs.filter(
@@ -28,7 +33,7 @@ export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTar
     browserTabs.some(
       (tab) =>
         tab.worktreeId !== params.worktreeId ||
-        (worktree && !isUnifiedTabOwnedByWorktree(tab, worktree, new Set()))
+        (worktree && !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds))
     ) ||
     !unifiedTab ||
     tabs.filter((candidate) => candidate.id === unifiedTab.id).length !== 1

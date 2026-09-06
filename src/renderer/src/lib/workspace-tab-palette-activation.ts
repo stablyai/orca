@@ -8,7 +8,9 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorktree } from './worktree-activation'
+import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
+  findAmbiguousWorktreeIds,
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
@@ -41,6 +43,7 @@ type WorkspaceTabPaletteActivationState = Pick<
   | 'setActiveTab'
   | 'setActiveTabType'
   | 'unifiedTabsByWorktree'
+  | 'worktreesByRepo'
 >
 
 function validateTarget(
@@ -51,6 +54,10 @@ function validateTarget(
   if (!worktree) {
     return 'missing-worktree'
   }
+  // A hostless record cannot be attributed when the same worktree ID exists on several hosts.
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(
+    getIndexedAllWorktrees(state.worktreesByRepo)
+  )
   const group = (state.groupsByWorktree[result.worktreeId] ?? []).find(
     (candidate) => candidate.id === result.groupId
   )
@@ -66,7 +73,7 @@ function validateTarget(
       candidate.groupId === result.groupId &&
       candidate.worktreeId === result.worktreeId &&
       candidate.contentType === result.contentType &&
-      isUnifiedTabOwnedByWorktree(candidate, worktree, new Set())
+      isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
   )
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
@@ -77,9 +84,12 @@ function validateTarget(
       return 'missing-file'
     }
     const file = files[0]
-    const hasExplicitHost =
+    const hasExplicitHost = Boolean(
       file.operationProvenance || file.externalSshTargetId || file.runtimeEnvironmentId
-    if (hasExplicitHost && !isOpenFileOwnedByWorktree(file, worktree)) {
+    )
+    // A hostless file falls back to local ownership, which only decides the match when IDs collide.
+    const requiresOwnershipCheck = hasExplicitHost || ambiguousWorktreeIds.has(worktree.id)
+    if (requiresOwnershipCheck && !isOpenFileOwnedByWorktree(file, worktree)) {
       return 'missing-file'
     }
   }
