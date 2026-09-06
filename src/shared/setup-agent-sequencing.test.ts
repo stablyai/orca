@@ -301,8 +301,17 @@ describe('createSequencedSetupAgentCommands', () => {
     // `.ps1` — a `.ps1` IS policy gated even though `-EncodedCommand` is not. The relief
     // moves into the payload, where it is not part of the flagged command-line shape.
     expect(startupPowerShell).toContain(
-      'Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue'
+      'Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop'
     )
+    // Why `-ErrorAction Stop` and a reporting catch: autoload can fail for reasons that are
+    // not about policy at all (a 5.1 install with duplicate extended type data fails every
+    // cmdlet in Microsoft.PowerShell.Security), and the old SilentlyContinue plus `catch {}`
+    // hid that -- the user saw only their own script being refused. The catch must report and
+    // must NOT rethrow, or a broken policy cmdlet would take the whole startup with it.
+    expect(startupPowerShell).not.toContain('catch {}')
+    expect(startupPowerShell).toMatch(/catch \{ \[Console\]::Error\.WriteLine\(/)
+    expect(startupPowerShell).toContain('$_.FullyQualifiedErrorId')
+    expect(startupPowerShell).not.toMatch(/catch \{[^}]*throw/)
     // Why: the autoloaded module's progress record would otherwise corrupt this gate's stderr.
     expect(startupPowerShell).toContain("$ProgressPreference = 'SilentlyContinue'")
     expect(startupPowerShell).toContain('$ProgressPreference = $orcaProgress')

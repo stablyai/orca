@@ -233,8 +233,20 @@ function buildWindowsStartupCommand(
     // (same trade as the agent-hooks launcher). Progress must be silenced first and
     // restored after: Set-ExecutionPolicy autoloads a module whose "Preparing modules for
     // first use." record would otherwise land on the stderr this gate writes to.
+    //
+    // The failure is reported rather than swallowed. Autoload can fail for reasons that
+    // have nothing to do with policy -- a 5.1 install with duplicate extended type data
+    // fails every cmdlet in Microsoft.PowerShell.Security -- and the old
+    // `-ErrorAction SilentlyContinue` plus empty `catch` hid that completely, leaving the
+    // user with an execution-policy refusal from their own script and no trace that the
+    // relief had been attempted. `-ErrorAction Stop` is what routes a non-terminating
+    // failure into the catch at all. Still never throws: a diagnostic is worth a line of
+    // stderr, but not the startup this gate exists to run.
     "$orcaProgress = $ProgressPreference; $ProgressPreference = 'SilentlyContinue'",
-    'try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}',
+    'try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction Stop } ' +
+      'catch { [Console]::Error.WriteLine("Orca: could not relax the execution policy for this " + ' +
+      '"session (" + $_.FullyQualifiedErrorId + "). A startup command that runs a .ps1 " + ' +
+      '"may be blocked.") }',
     '$ProgressPreference = $orcaProgress',
     `$marker = ${quotePowerShellString(markerPath)}`,
     'if ([string]::IsNullOrWhiteSpace($marker)) {',
