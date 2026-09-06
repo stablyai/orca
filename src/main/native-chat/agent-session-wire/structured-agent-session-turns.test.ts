@@ -27,52 +27,61 @@ afterEach(async () => {
 })
 
 describe('performCancel', () => {
-  it('acknowledges only the request and leaves the running lifecycle row intact', async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-'))
-    const journal = await journals.open({ identity: IDENTITY, journalDir: root })
-    const lifecycleIdentity = {
-      provider: 'legacy' as const,
-      agent: 'codex' as const,
-      sessionId: 'session-1',
-      recordId: 'turn-lifecycle:turn-1'
-    }
-    await journal.appendItem(
-      lifecycleIdentity,
-      {
-        kind: 'status',
-        text: 'Agent is working…',
-        turnLifecycle: { turnId: 'turn-1', state: 'running' }
-      },
-      { fence: 1 }
-    )
-    const cancelTurn = vi.fn(async () => ({ cancelled: true }))
-    const ctx: AgentSessionTurnContext = {
-      sessionId: 'session-1',
-      journal,
-      fence: 1,
-      adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
-      persistOptions: async () => undefined,
-      resolvedBy: 'client-1',
-      publish: vi.fn(),
-      now: () => 1
-    }
+  it.each([
+    { cancelled: true, note: 'Cancellation requested.' },
+    { cancelled: false, note: 'The provider had already finished this turn.' }
+  ])(
+    'leaves the running lifecycle row intact when cancellation returns $cancelled',
+    async (outcome) => {
+      root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-'))
+      const journal = await journals.open({ identity: IDENTITY, journalDir: root })
+      const lifecycleIdentity = {
+        provider: 'legacy' as const,
+        agent: 'codex' as const,
+        sessionId: 'session-1',
+        recordId: 'turn-lifecycle:turn-1'
+      }
+      await journal.appendItem(
+        lifecycleIdentity,
+        {
+          kind: 'status',
+          text: 'Agent is working…',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        },
+        { fence: 1 }
+      )
+      const cancelTurn = vi.fn(async () => ({ cancelled: outcome.cancelled }))
+      const ctx: AgentSessionTurnContext = {
+        sessionId: 'session-1',
+        journal,
+        fence: 1,
+        adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
+        persistOptions: async () => undefined,
+        resolvedBy: 'client-1',
+        publish: vi.fn(),
+        now: () => 1
+      }
 
-    const result = await performCancel(ctx, {
-      clientOperationId: 'cancel-1',
-      turnId: 'turn-1'
-    })
+      const result = await performCancel(ctx, {
+        clientOperationId: 'cancel-1',
+        turnId: 'turn-1'
+      })
 
-    expect(result).toEqual({ ok: true, value: { turnId: 'turn-1', cancelled: true } })
-    expect(cancelTurn).toHaveBeenCalledOnce()
-    expect(journal.snapshot().items.map((item) => item.body)).toEqual([
-      {
-        kind: 'status',
-        text: 'Agent is working…',
-        turnLifecycle: { turnId: 'turn-1', state: 'running' }
-      },
-      { kind: 'status', text: 'Cancellation requested.' }
-    ])
-  })
+      expect(result).toEqual({
+        ok: true,
+        value: { turnId: 'turn-1', cancelled: outcome.cancelled }
+      })
+      expect(cancelTurn).toHaveBeenCalledOnce()
+      expect(journal.snapshot().items.map((item) => item.body)).toEqual([
+        {
+          kind: 'status',
+          text: 'Agent is working…',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        },
+        { kind: 'status', text: outcome.note }
+      ])
+    }
+  )
 
   it('stops background tasks without interrupting the foreground turn or writing a row', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-background-task-cancel-'))
