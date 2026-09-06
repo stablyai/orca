@@ -59,8 +59,19 @@ export async function createAndActivateWorktreeWithSetup(
   await ensureSetupHookCommitted(page)
 
   const name = `e2e-dead-term-${suffix}-${Date.now()}`
-  return page.evaluate(
+  const onConsole = (message: { text(): string }) => {
+    if (message.text().startsWith('[creation-stage]')) console.info(message.text())
+  }
+  const onNavigation = (frame: { url(): string }) => console.info('[creation-navigation] '+frame.url())
+  const onCrash = () => console.info('[creation-crash]')
+  page.on('console', onConsole)
+  page.on('framenavigated', onNavigation)
+  page.on('crash', onCrash)
+  try {
+    return await page.evaluate(
     async ({ worktreeName, direction }) => {
+      const stage = (value: string) => console.info('[creation-stage] '+JSON.stringify({ worktreeName, value, at: performance.now(), url: location.href }))
+      stage('entered')
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available')
@@ -79,13 +90,16 @@ export async function createAndActivateWorktreeWithSetup(
         throw new Error('Active worktree not found in store')
       }
 
+      stage('before-create')
       const result = await state.createWorktree(
         activeWorktree.repoId,
         worktreeName,
         undefined,
         'run'
       )
+      stage('created')
       await state.fetchWorktrees(activeWorktree.repoId)
+      stage('fetched')
       const worktreeId = result.worktree.id
 
       if (activeWorktree.repoId !== state.activeRepoId) {
@@ -95,10 +109,13 @@ export async function createAndActivateWorktreeWithSetup(
         state.setActiveView('terminal')
       }
       state.setActiveWorktree(worktreeId)
+      stage('activated')
 
       const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
+      stage('reconciled')
       if (renderableTabCount > 0) {
-        return worktreeId
+        stage('returning')
+      return worktreeId
       }
 
       const tab = state.createTab(worktreeId, undefined, undefined, {
@@ -117,10 +134,16 @@ export async function createAndActivateWorktreeWithSetup(
       }
 
       state.revealWorktreeInSidebar(worktreeId)
+      stage('returning')
       return worktreeId
     },
     { worktreeName: name, direction }
   )
+  } finally {
+    page.off('console', onConsole)
+    page.off('framenavigated', onNavigation)
+    page.off('crash', onCrash)
+  }
 }
 
 export async function removeWorktreeViaStore(page: TestPage, worktreeId: string): Promise<void> {
