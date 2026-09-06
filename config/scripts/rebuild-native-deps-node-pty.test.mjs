@@ -26,8 +26,12 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       try {
         const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
         writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
+        writeFakeElectronRebuild(projectDir, {
+          logPathEnv: 'ORCA_REBUILD_TEST_LOG'
+        })
+        writeFakeLoadableNodePty(projectDir, {
+          nativeDir: '../build/Release/'
+        })
         writeFakeWindowsRegistry(projectDir)
         writeFakeWindowsProcessTree(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
@@ -50,36 +54,41 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   )
 
-  it('stages windows-process-tree node-addon-api headers before a Windows rebuild', () => {
+  it('stages windows-process-tree outside pnpm and excludes it from the other Electron rebuild', () => {
     const projectDir = mkTempProject()
 
     try {
       writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-      writeFakeElectronRebuild(projectDir)
+      writeFakeElectronRebuild(projectDir, {
+        logPathEnv: 'ORCA_REBUILD_TEST_LOG'
+      })
       writeFakeNodePtyConptyPayload(projectDir, 'x64')
       writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
 
       const result = runRebuildScript(
         projectDir,
-        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        {
+          npm_config_platform: 'win32',
+          npm_config_arch: 'x64',
+          ORCA_REBUILD_TEST_LOG: join(projectDir, 'electron-rebuild.log')
+        },
         ['--platform=win32', '--arch=x64', '--force']
       )
 
       expect(result.status, result.stderr).toBe(0)
-      expect(
-        readFileSync(
-          join(
-            projectDir,
-            'node_modules',
-            '@vscode',
-            'windows-process-tree',
-            'deps',
-            'node-addon-api',
-            'napi.h'
-          ),
-          'utf8'
-        )
-      ).toBe('// napi.h\n')
+      const calls = readFileSync(join(projectDir, 'electron-rebuild.log'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+      expect(calls).toHaveLength(2)
+      expect(calls[0].buildPath).not.toContain(projectDir)
+      expect(calls[0].projectRootPath).toBe(calls[0].buildPath)
+      expect(calls[0].buildFromSource).toBe(true)
+      expect(calls[0].onlyModules).toEqual(['@vscode/windows-process-tree'])
+      expect(calls[1].onlyModules).not.toContain('@vscode/windows-process-tree')
+      expect(existsSync(join(projectDir, 'node_modules/@vscode/windows-process-tree/deps'))).toBe(
+        false
+      )
     } finally {
       removeTreeSync(projectDir)
     }
@@ -117,7 +126,9 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       try {
         const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
         writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeElectronRebuild(projectDir, {
+          logPathEnv: 'ORCA_REBUILD_TEST_LOG'
+        })
         writeFakeLoadableNodePty(projectDir)
         writeFakeWindowsProcessTree(projectDir)
         writeFakeNodePtyConptyPayload(projectDir, process.arch)
@@ -146,7 +157,9 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       try {
         const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
         writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeElectronRebuild(projectDir, {
+          logPathEnv: 'ORCA_REBUILD_TEST_LOG'
+        })
         writeFakeLoadableNodePty(projectDir, { ownsPtyJob: false })
         writeFakeWindowsRegistry(projectDir)
         writeFakeWindowsProcessTree(projectDir)
@@ -176,7 +189,9 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       try {
         const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
         writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeElectronRebuild(projectDir, {
+          logPathEnv: 'ORCA_REBUILD_TEST_LOG'
+        })
         writeFakeLoadableNodePty(projectDir)
         writeNodePtyPatchFile(projectDir)
 
@@ -207,8 +222,12 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       try {
         const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
         writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
+        writeFakeElectronRebuild(projectDir, {
+          logPathEnv: 'ORCA_REBUILD_TEST_LOG'
+        })
+        writeFakeLoadableNodePty(projectDir, {
+          nativeDir: '../build/Release/'
+        })
         writeNodePtyPatchFile(projectDir)
         writePatchedNodePtyBuildArtifacts(projectDir)
 
@@ -235,8 +254,12 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       try {
         const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
         writeFakeUsableElectronPackage(projectDir)
-        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
-        writeFakeLoadableNodePty(projectDir, { nativeDir: '../prebuilds/darwin-arm64/' })
+        writeFakeElectronRebuild(projectDir, {
+          logPathEnv: 'ORCA_REBUILD_TEST_LOG'
+        })
+        writeFakeLoadableNodePty(projectDir, {
+          nativeDir: '../prebuilds/darwin-arm64/'
+        })
         writeNodePtyPatchFile(projectDir)
         writePatchedNodePtyBuildArtifacts(projectDir)
 

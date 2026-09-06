@@ -5,6 +5,8 @@ import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
 import { basename, dirname, resolve } from 'node:path'
+import { rebuildWindowsProcessTreeForNode } from './windows-process-tree-gyp-rebuild.mjs'
+import { assertWindowsProcessTreeIdentity } from './windows-process-tree-capability.cjs'
 
 const require = createRequire(import.meta.url)
 const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
@@ -22,7 +24,7 @@ const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
 
 if (process.argv.includes(CHILD_CHECK_FLAG)) {
-  const failures = collectNativeModuleFailures()
+  const failures = await collectNativeModuleFailures()
   if (failures.length > 0) {
     for (const failure of failures) {
       console.error(`${failure.moduleName}: ${failure.message}`)
@@ -33,7 +35,7 @@ if (process.argv.includes(CHILD_CHECK_FLAG)) {
 }
 
 if (runtime === 'node') {
-  ensureNodeRuntime()
+  await ensureNodeRuntime()
 } else if (runtime === 'electron') {
   ensureElectronRuntime()
 } else {
@@ -55,7 +57,7 @@ function readRuntimeArg() {
   return null
 }
 
-function ensureNodeRuntime() {
+async function ensureNodeRuntime() {
   const initial = runNodeCheck()
   const patchedNodePtyRebuildReason = getPatchedNodePtyRebuildReason()
   if (initial.ok && !patchedNodePtyRebuildReason) {
@@ -72,7 +74,7 @@ function ensureNodeRuntime() {
       'node-pty',
       ...failedModules.filter((moduleName) => moduleName !== 'node-pty')
     ]
-    rebuildNodeRuntimeModules(rebuildModules)
+    await rebuildNodeRuntimeModules(rebuildModules)
     verifyNodeRuntimeAfterRebuild()
     return
   }
@@ -82,7 +84,7 @@ function ensureNodeRuntime() {
     `[native-runtime] ${formatRuntimeLabel('node')} cannot load native modules; rebuilding ${failedModules.join(', ')} for Node.`
   )
   printCheckError(initial)
-  rebuildNodeRuntimeModules(failedModules)
+  await rebuildNodeRuntimeModules(failedModules)
   verifyNodeRuntimeAfterRebuild()
 }
 
@@ -189,7 +191,10 @@ function resolveInstalledElectronExecutable() {
       ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
       : resolve(electronPackageDir, 'dist', platformPath)
     if (!existsSync(electronPath)) {
-      return { ok: false, error: new Error(`Electron executable is missing at ${electronPath}.`) }
+      return {
+        ok: false,
+        error: new Error(`Electron executable is missing at ${electronPath}.`)
+      }
     }
     return { ok: true, path: electronPath }
   } catch (error) {
@@ -239,11 +244,11 @@ function parseCheckFailures(stderr) {
   return failures
 }
 
-function collectNativeModuleFailures() {
+async function collectNativeModuleFailures() {
   const failures = []
   for (const moduleName of NATIVE_MODULES) {
     try {
-      loadNativeModule(moduleName)
+      await loadNativeModule(moduleName)
     } catch (cause) {
       failures.push({ moduleName, message: formatError(cause), cause })
     }
@@ -251,13 +256,9 @@ function collectNativeModuleFailures() {
   return failures
 }
 
-function loadNativeModule(moduleName) {
+async function loadNativeModule(moduleName) {
   if (moduleName === '@vscode/windows-process-tree') {
-    // A bare require already loads the .node addon on win32, so it catches an
-    // ABI mismatch on its own. What it cannot catch is a snapshot that comes
-    // back empty -- the shape a blocked CreateToolhelp32Snapshot produces --
-    // so check the addon actually enumerates before calling the runtime healthy.
-    require(moduleName)
+    await assertWindowsProcessTreeIdentity(require(moduleName))
     return
   }
   if (moduleName === 'windows-native-registry') {
@@ -365,11 +366,18 @@ function getWindowsBuildNumber() {
   return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
 }
 
-function rebuildNodeRuntimeModules(moduleNames) {
+async function rebuildNodeRuntimeModules(moduleNames) {
   for (const moduleName of moduleNames) {
     const moduleDir = dirname(require.resolve(`${moduleName}/package.json`))
     console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
-    runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+    if (moduleName === '@vscode/windows-process-tree') {
+      await rebuildWindowsProcessTreeForNode({
+        packageDir: moduleDir,
+        projectDir
+      })
+    } else {
+      runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+    }
     if (moduleName === 'node-pty' && process.platform === 'win32') {
       runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
     }
@@ -381,7 +389,10 @@ function runPnpm(args, { cwd = projectDir } = {}) {
   const command = 'pnpm'
   const env =
     process.platform === 'linux' && args.includes('node-gyp')
-      ? { ...process.env, CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim() }
+      ? {
+          ...process.env,
+          CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim()
+        }
       : process.env
   const result = spawnSync(command, args, {
     cwd,

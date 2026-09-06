@@ -20,8 +20,7 @@ describe('windows-process-tree node-addon-api gyp path', () => {
       join(projectDir, 'config/scripts/build-windows-process-tree-relay-addon.mjs'),
       'utf8'
     )
-    expect(buildScript).toContain('stageWindowsProcessTreeNodeAddonApiHeaders(PACKAGE_DIR)')
-    expect(buildScript).toContain('Repaired un-applied pnpm patch hunks before build.')
+    expect(buildScript).toContain('rebuildWindowsProcessTreeForNode(')
     const rebuildHelper = readFileSync(
       join(projectDir, 'config/scripts/windows-process-tree-gyp-rebuild.mjs'),
       'utf8'
@@ -35,7 +34,7 @@ describe('windows-process-tree node-addon-api gyp path', () => {
       join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
       'utf8'
     )
-    expect(rebuildScript).toContain('stageWindowsProcessTreeNodeAddonApiHeaders()')
+    expect(rebuildScript).toContain('withWindowsProcessTreeBuild(')
   })
 
   it('resolves node_addon_api.gyp to a real file from the package directory', () => {

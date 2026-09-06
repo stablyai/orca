@@ -343,3 +343,39 @@ instead of passing every case vacuously. That guard is what caught this.
 `requiresPatchedNodePtySourceBuild()` in `ensure-native-runtime.mjs` now covers
 win32 as well, and `pnpm rebuild node-pty` sets `npm_config_build_from_source`
 so the patched source build actually replaces the upstream prebuild.
+
+## Building from pnpm paths on Windows
+
+The Node runtime preparation, Electron rebuild and relay addon build share
+`config/scripts/windows-process-tree-gyp-rebuild.mjs`. Each rebuild copies the
+installed patched source and its resolved node-addon-api headers to a unique
+directory under the operating system's temporary directory. MSBuild runs there:
+pnpm's physical package directory can make FileTracker's generated `.tlog`
+paths exceed legacy `MAX_PATH`, even after compilation has succeeded.
+
+No fixed drive, user directory, drive mapping or machine-wide long-path setting
+is required. The temporary path is checked against a 239-character intermediate
+path budget before compilation; an unusually deep temporary root produces an
+explicit error. Standard Node/Electron build prerequisites, including Python
+and the requested MSVC architecture tools, are still required.
+
+Build-setting repairs affect only the temporary copy. Missing creation-time
+patch hunks fail the build. A successful build must produce the requested PE
+architecture; a matching host architecture also loads it in a fresh Node or
+Electron process and checks its own positive `creationTimeMs`. Runtime
+preparation performs the same capability check so an older, loadable N-API
+binary cannot silently bypass rebuilding. Cross-compiled arm64 output receives
+a PE check, not an arm64 runtime claim.
+
+Only validated output replaces the destination binary. Compiler/probe failures
+preserve the previous artifact, and relay builds publish directly to their
+existing architecture-specific artifact paths. The installed pnpm source is
+never rewritten by the staging step.
+
+The Windows PR packaging job runs
+`windows-process-tree-long-path.win32.test.mjs` with
+`ORCA_WINDOWS_PROCESS_TREE_BUILD_TEST=1`. It invokes all three default entrypoints
+from an isolated long-path fixture, compiles x64 and arm64 relay binaries, and
+checks native identity under Node and Electron. Ordinary unit runs skip this
+compiler-dependent test. The job's later unpacked-app packaging remains a
+separate validation boundary from installer/signing or real SSH deployment.

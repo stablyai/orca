@@ -137,6 +137,7 @@ const MANAGED_HOOK_PREFIXES = [
 ]
 
 const NATIVE_RUNTIME_PREFIXES = [
+  'config/scripts/windows-process-tree',
   'config/scripts/ensure-native-runtime',
   'config/scripts/rebuild-native-deps',
   'config/scripts/node-pty-job-ownership',
@@ -154,6 +155,8 @@ const NATIVE_CACHE_FILES = new Set([
 ])
 
 const NATIVE_CACHE_PREFIXES = [
+  'config/scripts/windows-process-tree',
+  'src/shared/child-process/',
   'config/patches/node-pty@',
   'config/patches/@vscode__windows-process-tree'
 ]
@@ -211,6 +214,14 @@ const LINUX_PACKAGE_TESTS = [
 ]
 
 const WINDOWS_PACKAGE_TESTS = [
+  'config/scripts/windows-process-tree-long-path.win32.test.mjs',
+  'config/scripts/windows-process-tree-gyp-rebuild.test.mjs',
+  'config/scripts/windows-process-tree-capability.test.mjs',
+  'config/scripts/windows-process-tree-gyp-path.test.mjs',
+  'config/scripts/windows-process-tree-patch-contract.test.mjs',
+  'config/scripts/ensure-native-runtime.test.mjs',
+  'config/scripts/rebuild-native-deps-node-pty.test.mjs',
+  'src/main/windows/windows-process-table.test.ts',
   ...LINUX_PACKAGE_TESTS,
   'config/scripts/rebuild-native-deps.test.mjs',
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',

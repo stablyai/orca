@@ -100,6 +100,16 @@ describe('docs-only path classification', () => {
 })
 
 describe('per-job path classification', () => {
+  it.each([
+    'config/scripts/windows-process-tree-gyp-rebuild.mjs',
+    'config/scripts/windows-process-tree-capability.cjs',
+    'config/scripts/windows-process-tree-long-path.win32.test.mjs'
+  ])('runs native packaging and invalidates caches for %s', (file) => {
+    const result = classifyPrJobs([file])
+    expect(result.package_windows).toBe(true)
+    expect(result.native_cache_changed).toBe(true)
+  })
+
   it('runs every expensive job on an empty diff rather than skipping by accident', () => {
     const result = classifyPrJobs([])
     expect(result.should_run).toBe(true)

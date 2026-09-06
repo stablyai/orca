@@ -20,7 +20,10 @@
 
 import { rebuild } from '@electron/rebuild'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { stageWindowsProcessTreeNodeAddonApiHeaders } from './windows-process-tree-gyp-rebuild.mjs'
+import {
+  withWindowsProcessTreeBuild,
+  probeWindowsProcessTreeBuild
+} from './windows-process-tree-gyp-rebuild.mjs'
 import {
   copyFileSync,
   existsSync,
@@ -141,29 +144,47 @@ if (!ignoreModules.includes('cpu-features')) {
   }
 }
 
-if (
-  rebuildPlatform === 'win32' &&
-  modulesToRebuild.includes('@vscode/windows-process-tree') &&
-  existsSync(join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json'))
-) {
-  stageWindowsProcessTreeNodeAddonApiHeaders()
-}
-
 try {
-  await rebuild({
-    buildPath: projectDir,
-    electronVersion,
-    platform: rebuildPlatform,
-    arch: rebuildArch,
-    ignoreModules,
-    onlyModules: modulesToRebuild,
-    // Why: without force, @electron/rebuild skips modules it considers
-    // "already built" — even when they were compiled for the wrong ABI
-    // (e.g., system Node instead of Electron's embedded Node). This is
-    // common after pnpm install, which compiles native modules for system
-    // Node before postinstall runs this script.
-    force: true
-  })
+  const processTreePackage = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
+  const rebuildProcessTree = modulesToRebuild.includes('@vscode/windows-process-tree')
+  const otherModules = modulesToRebuild.filter((name) => name !== '@vscode/windows-process-tree')
+  if (rebuildProcessTree) {
+    await withWindowsProcessTreeBuild(
+      { packageDir: processTreePackage, arch: rebuildArch },
+      async (buildDir) => {
+        await rebuild({
+          buildPath: buildDir,
+          projectRootPath: buildDir,
+          electronVersion,
+          platform: rebuildPlatform,
+          arch: rebuildArch,
+          force: true,
+          buildFromSource: true,
+          disablePreGypCopy: true,
+          onlyModules: ['@vscode/windows-process-tree']
+        })
+        if (rebuildPlatform === osPlatform() && rebuildArch === process.arch) {
+          await probeWindowsProcessTreeBuild(buildDir, getElectronExecutablePath(), true)
+        }
+      }
+    )
+  }
+  if (otherModules.length > 0) {
+    await rebuild({
+      buildPath: projectDir,
+      electronVersion,
+      platform: rebuildPlatform,
+      arch: rebuildArch,
+      ignoreModules,
+      onlyModules: otherModules,
+      // Why: without force, @electron/rebuild skips modules it considers
+      // "already built" — even when they were compiled for the wrong ABI
+      // (e.g., system Node instead of Electron's embedded Node). This is
+      // common after pnpm install, which compiles native modules for system
+      // Node before postinstall runs this script.
+      force: true
+    })
+  }
   restoreNodePtyWindowsConptyRuntime()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
@@ -468,11 +489,16 @@ function requiresPatchedNodePtySourceBuild() {
 
 function probeElectronNativeModules(moduleNames) {
   if (!electronPackageIsUsable()) {
-    return { ok: false, status: null, stderr: 'Electron package binary is unavailable.' }
+    return {
+      ok: false,
+      status: null,
+      stderr: 'Electron package binary is unavailable.'
+    }
   }
   const electronExecutable = getElectronExecutablePath()
 
   const probeSource = `
+;(async () => {
 const { createRequire } = require('node:module')
 const { existsSync } = require('node:fs')
 const { release } = require('node:os')
@@ -484,7 +510,7 @@ const failures = []
 
 for (const moduleName of moduleNames) {
   try {
-    loadNativeModule(moduleName)
+    await loadNativeModule(moduleName)
   } catch (error) {
     failures.push(moduleName + ': ' + formatError(error))
   }
@@ -495,7 +521,7 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-function loadNativeModule(moduleName) {
+async function loadNativeModule(moduleName) {
   if (moduleName === 'windows-native-registry') {
     const registry = projectRequire(moduleName)
     // Why: the package defers loading its .node addon until the first registry call.
@@ -519,6 +545,11 @@ function loadNativeModule(moduleName) {
           '; expected build/Release so Orca\\'s node-pty patch is active'
       )
     }
+    return
+  }
+  if (moduleName === '@vscode/windows-process-tree') {
+    const { assertWindowsProcessTreeIdentity } = projectRequire('./config/scripts/windows-process-tree-capability.cjs')
+    await assertWindowsProcessTreeIdentity(projectRequire(moduleName))
     return
   }
   projectRequire(moduleName)
@@ -560,6 +591,8 @@ function getNodePtyNativeModuleName() {
 function formatError(error) {
   return error instanceof Error ? error.message : String(error)
 }
+process.exit(0)
+})().catch((error) => { console.error(error); process.exit(1) })
 `
 
   const result = spawnSync(electronExecutable, ['-e', probeSource], {

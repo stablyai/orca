@@ -12,6 +12,10 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import {
+  copyWindowsProcessTreeBuildScripts,
+  LOADABLE_PROCESS_TREE
+} from './windows-process-tree-build-fixtures.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
@@ -68,7 +72,9 @@ describe('ensure-native-runtime', () => {
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
         copyFileSync(sourceScriptPath, scriptPath)
-        writeFakeNativeModules(projectDir, { windowsRegistryRequiresMarker: true })
+        writeFakeNativeModules(projectDir, {
+          windowsRegistryRequiresMarker: true
+        })
         writeNodePtyPatchFile(projectDir)
         writeFakePnpm(binDir)
 
@@ -172,7 +178,9 @@ describe('ensure-native-runtime', () => {
         const markerPath = join(projectDir, 'rebuilt.marker')
         const binDir = join(projectDir, 'bin')
         copyFileSync(sourceScriptPath, scriptPath)
-        writeLoadableNativeModules(projectDir, { nativeDir: '../build/Release/' })
+        writeLoadableNativeModules(projectDir, {
+          nativeDir: '../build/Release/'
+        })
         writeNodePtyPatchFile(projectDir)
         writePatchedNodePtyBuildArtifacts(projectDir)
         writeFakePnpm(binDir)
@@ -203,6 +211,7 @@ function mkTempProject() {
     sourceNodePtyJobOwnershipPath,
     join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')
   )
+  copyWindowsProcessTreeBuildScripts(projectDir)
   return projectDir
 }
 
@@ -254,7 +263,12 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
 }
 `
   )
-  writeFakeWindowsRegistry(projectDir, { requiresMarker: windowsRegistryRequiresMarker })
+  writeFakeWindowsRegistry(projectDir, {
+    requiresMarker: windowsRegistryRequiresMarker
+  })
+  if (process.platform === 'win32') {
+    writePatchedNodePtyBuildArtifacts(projectDir)
+  }
 }
 
 function writeLoadableNativeModules(projectDir, { nativeDir = null } = {}) {
@@ -311,7 +325,7 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   )
   const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
   mkdirSync(processTreeDir, { recursive: true })
-  writeFileSync(join(processTreeDir, 'index.js'), 'module.exports = {}\n')
+  writeFileSync(join(processTreeDir, 'index.js'), LOADABLE_PROCESS_TREE)
 }
 
 function writeNodePtyPatchFile(projectDir) {
