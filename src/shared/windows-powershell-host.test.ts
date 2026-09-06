@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 
-const statSyncMock = vi.fn()
+const statSyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
   return { ...actual, statSync: (...args: unknown[]) => statSyncMock(...args) }
 })
 
-const runProcessMock = vi.fn()
+const runProcessMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./child-process/run-process', () => ({
   runProcess: (...args: unknown[]) => runProcessMock(...args)
