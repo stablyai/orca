@@ -8,7 +8,11 @@ const REMOTE_WORKSPACE = 'E2E Palette Remote Workspace'
 const REMOTE_HOST = 'E2E Palette Builder'
 const SEARCH_PLACEHOLDER = 'Search chats, terminals, worktrees, settings, and actions...'
 
-type PaletteFilterFixture = { localWorktreeId: string; remoteWorktreeId: string }
+type PaletteFilterFixture = {
+  localRepoId: string
+  localWorktreeId: string
+  remoteWorktreeId: string
+}
 
 async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixture> {
   return page.evaluate(
@@ -31,13 +35,14 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
       const remoteConnectionId = `e2e-palette-host-${token}`
       const remoteRepoId = `e2e-palette-remote-repo-${token}`
       const remoteWorktreeId = `e2e-palette-remote-worktree-${token}`
+      const remoteHostId = `ssh:${remoteConnectionId}` as const
       const remoteRepo = {
         ...sourceRepo,
         id: remoteRepoId,
         path: `${sourceRepo.path}-e2e-palette-remote-${token}`,
         displayName: remoteProject,
         connectionId: remoteConnectionId,
-        executionHostId: `ssh:${remoteConnectionId}`
+        executionHostId: remoteHostId
       }
       const remoteWorktree = {
         ...sourceWorktree,
@@ -49,18 +54,11 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
         branch: 'refs/heads/e2e-palette-remote',
         isMainWorktree: false,
         isArchived: false,
-        hostId: `ssh:${remoteConnectionId}`
+        hostId: remoteHostId
       }
 
       const sshTargetLabels = new Map(state.sshTargetLabels)
       sshTargetLabels.set(remoteConnectionId, remoteHost)
-      // Filter options use project.displayName when a Project entity exists;
-      // renaming only the repo leaves the option labeled with the path basename.
-      const projects = state.projects.map((project) =>
-        project.sourceRepoIds.includes(sourceRepo.id)
-          ? { ...project, displayName: localProject }
-          : project
-      )
       store.setState({
         repos: [
           ...state.repos.map((repo) =>
@@ -68,7 +66,6 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
           ),
           remoteRepo
         ],
-        projects,
         sshTargetLabels,
         worktreesByRepo: {
           ...state.worktreesByRepo,
@@ -79,7 +76,11 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
         }
       })
 
-      return { localWorktreeId: sourceWorktree.id, remoteWorktreeId }
+      return {
+        localRepoId: sourceRepo.id,
+        localWorktreeId: sourceWorktree.id,
+        remoteWorktreeId
+      }
     },
     {
       localProject: LOCAL_PROJECT,
@@ -196,6 +197,21 @@ test.describe('Worktree jump-palette filters', () => {
     await openPalette(orcaPage)
     await searchFixtureWorkspaces(orcaPage, fixture)
     await expect(filterTrigger(orcaPage)).not.toContainText('1')
+  })
+
+  test('opens with the sidebar repository scope without widening it', async ({ orcaPage }) => {
+    const fixture = await seedPaletteFilterFixture(orcaPage)
+    await orcaPage.evaluate((repoId) => {
+      window.__store?.getState().setFilterRepoIds([repoId])
+    }, fixture.localRepoId)
+
+    await openPalette(orcaPage)
+    await palette(orcaPage).getByPlaceholder(SEARCH_PLACEHOLDER).fill('E2E Palette')
+
+    await expect(filterTrigger(orcaPage)).toContainText('1')
+    await expect(palette(orcaPage).getByLabel(`Remove filter ${LOCAL_PROJECT}`)).toBeVisible()
+    await expect(worktreeRow(orcaPage, fixture.localWorktreeId)).toBeVisible()
+    await expect(worktreeRow(orcaPage, fixture.remoteWorktreeId)).toHaveCount(0)
   })
 
   test('pressing Enter creates a worktree from a typed name', async ({ orcaPage }) => {

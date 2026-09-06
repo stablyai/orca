@@ -12,7 +12,6 @@ import {
 } from '@/lib/worktree-palette-create-action'
 import { useAppStore } from '@/store'
 import { CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID } from './worktree-jump-palette-model'
-import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
 import type { WorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
@@ -24,7 +23,6 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 
 type WorktreeJumpPaletteSelectionLifecycleInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteLocalState &
-  Pick<WorktreeJumpPaletteFilter, 'filterModel'> &
   WorktreeJumpPaletteOpenTabs &
   WorktreeJumpPaletteProjectTargets &
   WorktreeJumpPaletteQuickActions &
@@ -59,7 +57,6 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   setQuery,
   setSelectedItemId,
   setRawFilter,
-  filterModel,
   selectionMovedByUserRef,
   taskSourceUrl,
   listRef,
@@ -109,7 +106,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       setQuery('')
       setSelectedItemId('')
       selectionMovedByUserRef.current = false
-      setRawFilter(buildPaletteFilterFromSidebarScope(appState, filterModel))
+      setRawFilter(buildPaletteFilterFromSidebarScope(appState))
       listRef.current?.scrollTo(0, 0)
     }
     if (!visible && wasVisibleRef.current) {

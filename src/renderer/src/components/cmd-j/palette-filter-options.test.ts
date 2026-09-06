@@ -66,15 +66,17 @@ const buildModel = (worktrees: readonly Worktree[]) =>
   buildPaletteFilterModel({ repos, worktrees, hostOptions, projects, projectHostSetups })
 
 describe('buildPaletteFilterModel', () => {
-  it('collapses the repos of one project into a single row', () => {
+  it('keeps filter options repo-granular while retaining project-row membership', () => {
     const model = buildModel([worktree('w1', 'r1'), worktree('w2', 'r2'), worktree('w3', 'r3')])
 
     expect(model.repoIdsByProjectKey.get('project:p1')).toEqual(['r1', 'r2'])
     expect(model.projects.map((option) => [option.id, option.label, option.count])).toEqual([
-      ['project:p1', 'Orca', 2],
-      ['repo:r3', 'Solo', 1]
+      ['r1', 'Orca', 1],
+      ['r2', 'Orca (builder)', 1],
+      ['r3', 'Solo', 1]
     ])
-    expect(model.projects[0]?.searchText).toBe('orca')
+    expect(model.projects[0]?.searchText).toContain('orca')
+    expect(model.projects[0]?.searchText).toContain(path.join('/repos', 'r1'))
   })
 
   it('counts a worktree against its own host stamp, not its repo host', () => {
@@ -88,8 +90,8 @@ describe('buildPaletteFilterModel', () => {
       ['local', 1],
       ['ssh:ssh-1', 2]
     ])
-    // Host stamp does not move the workspace out of its project row.
-    expect(model.projects.find((option) => option.id === 'project:p1')?.count).toBe(3)
+    expect(model.projects.find((option) => option.id === 'r1')?.count).toBe(2)
+    expect(model.projects.find((option) => option.id === 'r2')?.count).toBe(1)
   })
 
   it('omits archived worktrees from every count', () => {
@@ -99,26 +101,37 @@ describe('buildPaletteFilterModel', () => {
       worktree('w3', 'r3', { isArchived: true })
     ])
 
-    expect(model.hosts.map((option) => option.id)).toEqual(['local'])
-    expect(model.hosts[0]?.count).toBe(1)
-    expect(model.projects.map((option) => option.id)).toEqual(['project:p1'])
+    expect(model.hosts.map((option) => [option.id, option.count])).toEqual([
+      ['local', 1],
+      ['ssh:ssh-1', 0]
+    ])
+    expect(model.projects.map((option) => [option.id, option.count])).toEqual([
+      ['r1', 1],
+      ['r2', 0],
+      ['r3', 0]
+    ])
   })
 
-  it('offers no options at all when there is nothing to narrow', () => {
+  it('retains options while worktrees are loading', () => {
     const model = buildModel([])
 
-    expect(model.hosts).toEqual([])
-    expect(model.projects).toEqual([])
-    // The mapping still resolves so a lingering selection prunes cleanly.
+    expect(model.hosts.map((option) => [option.id, option.count])).toEqual([
+      ['local', 0],
+      ['ssh:ssh-1', 0]
+    ])
+    expect(model.projects.map((option) => [option.id, option.count])).toEqual([
+      ['r1', 0],
+      ['r2', 0],
+      ['r3', 0]
+    ])
     expect(model.repoIdsByProjectKey.get('project:p1')).toEqual(['r1', 'r2'])
     expect(model.hostIdByRepoId.get('r2')).toBe('ssh:ssh-1')
   })
 
-  it('sorts project rows by workspace count then label', () => {
+  it('sorts repository options by workspace count then label', () => {
     const model = buildModel([worktree('w1', 'r3'), worktree('w2', 'r1'), worktree('w3', 'r2')])
 
-    // Orca has 2 workspaces, Solo has 1 — popularity beats alpha.
-    expect(model.projects.map((option) => option.label)).toEqual(['Orca', 'Solo'])
+    expect(model.projects.map((option) => option.label)).toEqual(['Orca', 'Orca (builder)', 'Solo'])
   })
 
   it('prefers a busier project ahead of an alphabetically earlier quiet one', () => {
@@ -131,7 +144,8 @@ describe('buildPaletteFilterModel', () => {
 
     expect(model.projects.map((option) => [option.label, option.count])).toEqual([
       ['Solo', 3],
-      ['Orca', 1]
+      ['Orca', 1],
+      ['Orca (builder)', 0]
     ])
   })
 })

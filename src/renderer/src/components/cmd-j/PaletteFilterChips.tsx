@@ -30,13 +30,13 @@ export default function PaletteFilterChips({
         id,
         label: hostLabels.get(id) ?? id
       })),
-      ...filter.projectKeys.map((id) => ({
+      ...filter.repoIds.map((id) => ({
         field: 'project' as const,
         id,
         label: projectLabels.get(id) ?? id
       }))
     ]
-  }, [filter.hostIds, filter.projectKeys, model.hosts, model.projects])
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.projects])
 
   if (!isPaletteFilterActive(filter) || chips.length === 0) {
     return null

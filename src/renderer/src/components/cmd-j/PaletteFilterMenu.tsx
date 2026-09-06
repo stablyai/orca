@@ -93,11 +93,11 @@ export default function PaletteFilterMenu({
         field: 'project',
         heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
         options: model.projects,
-        selected: filter.projectKeys
+        selected: filter.repoIds
       })
     }
     return entries
-  }, [filter.hostIds, filter.projectKeys, model.hosts, model.projects])
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.projects])
 
   // Stale field falls back to root if its group disappeared mid-session.
   const activeGroup =

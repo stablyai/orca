@@ -42,6 +42,7 @@ function toFilterOption({
 
 export type PaletteFilterModel = {
   hosts: readonly PaletteFilterOption[]
+  /** Repository-granular so the palette can preserve the sidebar's exact project scope. */
   projects: readonly PaletteFilterOption[]
   /** A project row can span several repos (Project.sourceRepoIds), so selection resolves through this. */
   repoIdsByProjectKey: ReadonlyMap<string, readonly string[]>
@@ -86,29 +87,25 @@ export function resolveRepoFilterHostId(
   return hostIdByRepoId.get(repoId) ?? defaultHostId
 }
 
-type ProjectRow = { key: string; label: string; repoIds: string[] }
-
-function buildProjectRows(
+function buildRepoIdsByProjectKey(
   repos: readonly Repo[],
   repoMap: Map<string, Repo>,
   grouping: ProjectGroupingModel
-): { rows: ProjectRow[]; keyByRepoId: Map<string, string> } {
-  const rows = new Map<string, ProjectRow>()
-  const keyByRepoId = new Map<string, string>()
+): Map<string, string[]> {
+  const repoIdsByProjectKey = new Map<string, string[]>()
   for (const repo of repos) {
     const target = getProjectHeaderRevealTarget(repo.id, repoMap, grouping)
     if (!target.repo) {
       continue
     }
-    const existing = rows.get(target.key)
-    if (existing) {
-      existing.repoIds.push(repo.id)
+    const repoIds = repoIdsByProjectKey.get(target.key)
+    if (repoIds) {
+      repoIds.push(repo.id)
     } else {
-      rows.set(target.key, { key: target.key, label: target.label, repoIds: [repo.id] })
+      repoIdsByProjectKey.set(target.key, [repo.id])
     }
-    keyByRepoId.set(repo.id, target.key)
   }
-  return { rows: [...rows.values()], keyByRepoId }
+  return repoIdsByProjectKey
 }
 
 export function buildPaletteFilterModel({
@@ -128,49 +125,43 @@ export function buildPaletteFilterModel({
 }): PaletteFilterModel {
   const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
   const hostIdByRepoId = buildRepoHostIndex(repos)
-  const { rows, keyByRepoId } = buildProjectRows(repos, repoMap, { projects, projectHostSetups })
+  const repoIdsByProjectKey = buildRepoIdsByProjectKey(repos, repoMap, {
+    projects,
+    projectHostSetups
+  })
 
   const worktreeCountByHostId = new Map<string, number>()
-  const worktreeCountByProjectKey = new Map<string, number>()
+  const worktreeCountByRepoId = new Map<string, number>()
   for (const worktree of worktrees) {
     if (worktree.isArchived) {
       continue
     }
     const hostId = resolveWorktreeFilterHostId(worktree, hostIdByRepoId, defaultHostId)
     worktreeCountByHostId.set(hostId, (worktreeCountByHostId.get(hostId) ?? 0) + 1)
-    const projectKey = keyByRepoId.get(worktree.repoId)
-    if (projectKey) {
-      worktreeCountByProjectKey.set(
-        projectKey,
-        (worktreeCountByProjectKey.get(projectKey) ?? 0) + 1
-      )
-    }
+    worktreeCountByRepoId.set(
+      worktree.repoId,
+      (worktreeCountByRepoId.get(worktree.repoId) ?? 0) + 1
+    )
   }
 
-  // Why: options are gated on a live workspace count, not on configuration — an
-  // option that can only ever yield an empty list is a trap, and it also keeps
-  // stale selections self-healing through reconcilePaletteFilter.
   // Registry order (local first, then SSH/runtime) matches the sidebar host headers.
-  const hosts = hostOptions
-    .filter((host) => (worktreeCountByHostId.get(host.id) ?? 0) > 0)
-    .map((host) =>
-      toFilterOption({
-        id: host.id,
-        label: host.label,
-        detail: host.detail,
-        count: worktreeCountByHostId.get(host.id) ?? 0
-      })
-    )
+  const hosts = hostOptions.map((host) =>
+    toFilterOption({
+      id: host.id,
+      label: host.label,
+      detail: host.detail,
+      count: worktreeCountByHostId.get(host.id) ?? 0
+    })
+  )
 
-  // Popularity first so a long project list surfaces busy workspaces without search.
-  const projectOptions = rows
-    .filter((row) => (worktreeCountByProjectKey.get(row.key) ?? 0) > 0)
-    .map((row) =>
+  // Keep repository IDs aligned with the sidebar; project grouping remains a row concern.
+  const projectOptions = repos
+    .map((repo) =>
       toFilterOption({
-        id: row.key,
-        label: row.label,
-        detail: '',
-        count: worktreeCountByProjectKey.get(row.key) ?? 0
+        id: repo.id,
+        label: repo.displayName,
+        detail: repo.path,
+        count: worktreeCountByRepoId.get(repo.id) ?? 0
       })
     )
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
@@ -178,7 +169,7 @@ export function buildPaletteFilterModel({
   return {
     hosts,
     projects: projectOptions,
-    repoIdsByProjectKey: new Map(rows.map((row) => [row.key, row.repoIds])),
+    repoIdsByProjectKey,
     hostIdByRepoId,
     defaultHostId
   }

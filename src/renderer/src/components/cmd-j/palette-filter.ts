@@ -15,30 +15,22 @@ export type PaletteFilterField = 'host' | 'project'
  */
 export type PaletteFilterState = {
   hostIds: readonly string[]
-  projectKeys: readonly string[]
+  repoIds: readonly string[]
 }
 
-export const EMPTY_PALETTE_FILTER: PaletteFilterState = { hostIds: [], projectKeys: [] }
-
-/** Guard against a pathological selection blowing up the predicate's Set build. */
-export const PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD = 500
+export const EMPTY_PALETTE_FILTER: PaletteFilterState = { hostIds: [], repoIds: [] }
 
 export function isPaletteFilterActive(filter: PaletteFilterState): boolean {
-  return filter.hostIds.length > 0 || filter.projectKeys.length > 0
+  return filter.hostIds.length > 0 || filter.repoIds.length > 0
 }
 
 export function getPaletteFilterSelectionCount(filter: PaletteFilterState): number {
-  return filter.hostIds.length + filter.projectKeys.length
+  return filter.hostIds.length + filter.repoIds.length
 }
 
 function toggleValue(values: readonly string[], id: string): readonly string[] {
   if (values.includes(id)) {
     return values.filter((value) => value !== id)
-  }
-  // Why: same reference on the capped no-op — a fresh array would invalidate
-  // every downstream search memo for a click that changed nothing.
-  if (values.length >= PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD) {
-    return values
   }
   return [...values, id].sort()
 }
@@ -50,29 +42,26 @@ export function togglePaletteFilterValue(
 ): PaletteFilterState {
   return field === 'host'
     ? { ...filter, hostIds: toggleValue(filter.hostIds, id) }
-    : { ...filter, projectKeys: toggleValue(filter.projectKeys, id) }
+    : { ...filter, repoIds: toggleValue(filter.repoIds, id) }
 }
 
 function addValues(values: readonly string[], ids: readonly string[]): readonly string[] {
-  if (ids.length === 0 || values.length >= PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD) {
+  if (ids.length === 0) {
     return values
   }
   const merged = new Set(values)
   const sizeBefore = merged.size
   for (const id of ids) {
-    if (merged.size >= PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD) {
-      break
-    }
     merged.add(id)
   }
-  // Why: same reference when nothing new fit — keeps search memos stable.
+  // Why: same reference when nothing was added keeps search memos stable.
   if (merged.size === sizeBefore) {
     return values
   }
   return [...merged].sort()
 }
 
-/** Bulk-add for "Select all matching"; respects the per-field cap and de-dupes. */
+/** Bulk-add for "Select all matching"; de-dupes while preserving stable no-ops. */
 export function addPaletteFilterValues(
   filter: PaletteFilterState,
   field: PaletteFilterField,
@@ -80,78 +69,36 @@ export function addPaletteFilterValues(
 ): PaletteFilterState {
   return field === 'host'
     ? { ...filter, hostIds: addValues(filter.hostIds, ids) }
-    : { ...filter, projectKeys: addValues(filter.projectKeys, ids) }
+    : { ...filter, repoIds: addValues(filter.repoIds, ids) }
 }
 
 export function clearPaletteFilterField(
   filter: PaletteFilterState,
   field: PaletteFilterField
 ): PaletteFilterState {
-  return field === 'host' ? { ...filter, hostIds: [] } : { ...filter, projectKeys: [] }
-}
-
-function pruneToAvailable(values: readonly string[], available: ReadonlySet<string>): string[] {
-  return values.filter((value) => available.has(value))
-}
-
-/**
- * Drops selections whose host or project disappeared (repo removed, SSH target
- * deleted). Without this a stale id would silently empty the palette forever.
- * Returns the same reference when nothing changed so memo deps stay stable.
- */
-export function reconcilePaletteFilter(
-  filter: PaletteFilterState,
-  model: PaletteFilterModel
-): PaletteFilterState {
-  if (!isPaletteFilterActive(filter)) {
-    return filter
-  }
-  const hostIds = pruneToAvailable(filter.hostIds, new Set(model.hosts.map((host) => host.id)))
-  const projectKeys = pruneToAvailable(
-    filter.projectKeys,
-    new Set(model.projects.map((project) => project.id))
-  )
-  if (
-    hostIds.length === filter.hostIds.length &&
-    projectKeys.length === filter.projectKeys.length
-  ) {
-    return filter
-  }
-  return { hostIds, projectKeys }
+  return field === 'host' ? { ...filter, hostIds: [] } : { ...filter, repoIds: [] }
 }
 
 type SidebarScopeForPaletteFilter = Parameters<typeof getVisibleWorkspaceHostIdSet>[0] & {
   filterRepoIds: readonly string[]
 }
 
-/** Omits fields that select every available option because they do not narrow results. */
+function sortedUnique(values: Iterable<string>): string[] {
+  return [...new Set(values)].sort()
+}
+
+/** Seeds the palette from the sidebar's exact host and repository scope. */
 export function buildPaletteFilterFromSidebarScope(
-  scope: SidebarScopeForPaletteFilter,
-  model: PaletteFilterModel
+  scope: SidebarScopeForPaletteFilter
 ): PaletteFilterState {
   const visibleHostIds = getVisibleWorkspaceHostIdSet(scope)
-  let hostIds: readonly string[] = []
-  if (visibleHostIds) {
-    const available = model.hosts.filter((host) => visibleHostIds.has(host.id as ExecutionHostId))
-    hostIds = available.length < model.hosts.length ? available.map((host) => host.id).sort() : []
-  }
+  const hostIds = visibleHostIds ? sortedUnique(visibleHostIds) : []
+  const repoIds = sortedUnique(scope.filterRepoIds)
 
-  let projectKeys: readonly string[] = []
-  if (scope.filterRepoIds.length > 0) {
-    const selectedRepoIds = new Set(scope.filterRepoIds)
-    const available = model.projects.filter((project) =>
-      (model.repoIdsByProjectKey.get(project.id) ?? []).some((repoId) =>
-        selectedRepoIds.has(repoId)
-      )
-    )
-    projectKeys =
-      available.length < model.projects.length ? available.map((project) => project.id).sort() : []
-  }
-
-  if (hostIds.length === 0 && projectKeys.length === 0) {
+  if (hostIds.length === 0 && repoIds.length === 0) {
     return EMPTY_PALETTE_FILTER
   }
-  return { hostIds, projectKeys }
+  return { hostIds, repoIds }
 }
 
 export type PaletteFilterPredicate = {
@@ -175,20 +122,12 @@ export function buildPaletteFilterPredicate(
   }
 
   const selectedHostIds = filter.hostIds.length > 0 ? new Set(filter.hostIds) : null
-  const selectedProjectKeys = filter.projectKeys.length > 0 ? new Set(filter.projectKeys) : null
-  let selectedRepoIds: Set<string> | null = null
-  if (selectedProjectKeys) {
-    selectedRepoIds = new Set<string>()
-    for (const projectKey of selectedProjectKeys) {
-      for (const repoId of model.repoIdsByProjectKey.get(projectKey) ?? []) {
-        selectedRepoIds.add(repoId)
-      }
-    }
-  }
+  const selectedRepoIds = filter.repoIds.length > 0 ? new Set(filter.repoIds) : null
 
   return {
     matchesProjectRowKey: (rowKey) => {
-      if (selectedProjectKeys && !selectedProjectKeys.has(rowKey)) {
+      const rowRepoIds = model.repoIdsByProjectKey.get(rowKey) ?? []
+      if (selectedRepoIds && !rowRepoIds.some((repoId) => selectedRepoIds.has(repoId))) {
         return false
       }
       if (!selectedHostIds) {
@@ -196,7 +135,7 @@ export function buildPaletteFilterPredicate(
       }
       // Why: the row survives if *any* of its repos is on a selected host — a
       // project checked out on both local and SSH is still reachable from either.
-      return (model.repoIdsByProjectKey.get(rowKey) ?? []).some((repoId) =>
+      return rowRepoIds.some((repoId) =>
         selectedHostIds.has(
           resolveRepoFilterHostId(repoId, model.hostIdByRepoId, model.defaultHostId)
         )
