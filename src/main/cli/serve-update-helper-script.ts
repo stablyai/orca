@@ -48,14 +48,19 @@ LOG_TAG="orca-serve-update-helper"
 
 log() { echo "[$LOG_TAG] $*" >&2; }
 
-# Prints whichever version is semver-higher. sort -V alone cannot do this: it
-# ranks a stable release BELOW its own prereleases (1.2.3 < 1.2.3-beta.1), so a
-# stable->own-prerelease move would pass a plain sort -V downgrade gate. Base
-# triples compare with sort -V; on a tie the stable side always wins, and two
-# prereleases of the same triple compare by their identifiers via sort -V
-# (alpha < beta < rc).
+# Prints whichever argument is semver-higher — always one of the raw inputs, so
+# the caller can string-compare the result against the raw target version.
+# sort -V alone cannot do this: it ranks a stable release BELOW its own
+# prereleases (1.2.3 < 1.2.3-beta.1), so a stable->own-prerelease move would
+# pass a plain sort -V downgrade gate. Build metadata (+...) is stripped before
+# comparing: SemVer gives 1.2.3 and 1.2.3+build.1 equal precedence but sort -V
+# does not. Base triples compare with sort -V; on a tie the stable side always
+# wins, two prereleases of the same triple compare by their identifiers via
+# sort -V (alpha < beta < rc), and an equal-precedence tie returns the current
+# version so the caller treats it as a no-op, never an upgrade.
 semver_higher() {
-  local cur="$1" tgt="$2"
+  local raw_cur="$1" raw_tgt="$2"
+  local cur="\${raw_cur%%+*}" tgt="\${raw_tgt%%+*}"
   local cbase="\${cur%%-*}" tbase="\${tgt%%-*}"
   local cpre="" tpre=""
   [[ "$cur" == *-* ]] && cpre="\${cur#*-}"
@@ -63,17 +68,17 @@ semver_higher() {
   if [[ "$cbase" != "$tbase" ]]; then
     local hi
     hi=$(printf '%s\\n' "$cbase" "$tbase" | sort -V | tail -n 1)
-    [[ "$hi" == "$tbase" ]] && printf '%s\\n' "$tgt" || printf '%s\\n' "$cur"
+    [[ "$hi" == "$tbase" ]] && printf '%s\\n' "$raw_tgt" || printf '%s\\n' "$raw_cur"
   elif [[ -z "$cpre" && -n "$tpre" ]]; then
-    printf '%s\\n' "$cur"
+    printf '%s\\n' "$raw_cur"
   elif [[ -n "$cpre" && -z "$tpre" ]]; then
-    printf '%s\\n' "$tgt"
+    printf '%s\\n' "$raw_tgt"
   elif [[ -n "$cpre" && -n "$tpre" && "$cpre" != "$tpre" ]]; then
     local hip
     hip=$(printf '%s\\n' "$cpre" "$tpre" | sort -V | tail -n 1)
-    [[ "$hip" == "$tpre" ]] && printf '%s\\n' "$tgt" || printf '%s\\n' "$cur"
+    [[ "$hip" == "$tpre" ]] && printf '%s\\n' "$raw_tgt" || printf '%s\\n' "$raw_cur"
   else
-    printf '%s\\n' "$tgt"
+    printf '%s\\n' "$raw_cur"
   fi
 }
 
@@ -263,6 +268,10 @@ rollback_and_fail() {
   fi
   if [[ -n "$OLD_VERSION_RECORD" ]]; then
     printf '%s\\n' "$OLD_VERSION_RECORD" > "$VERSION_TARGET" 2>/dev/null || true
+  else
+    # No version record existed before this update; a failed attempt must not
+    # leave the target's record behind or later updates are rejected as no-ops.
+    rm -f "$VERSION_TARGET" 2>/dev/null || true
   fi
   log "restarting unit after failure"
   systemctl reset-failed "$UNIT_NAME" 2>/dev/null || true

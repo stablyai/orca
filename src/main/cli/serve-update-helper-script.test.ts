@@ -83,7 +83,13 @@ describe('serve update helper script', () => {
       ['1.2.3-rc.1', '1.2.3-rc.2', 'ALLOW'],
       ['1.2.3-beta.1', '1.2.3-rc.1', 'ALLOW'],
       ['2.0.0', '1.9.9', 'REJECT'],
-      ['1.10.0', '1.9.9', 'REJECT']
+      ['1.10.0', '1.9.9', 'REJECT'],
+      // SemVer build metadata carries no precedence: 1.2.3 == 1.2.3+build.1.
+      ['1.2.3', '1.2.3+build.1', 'REJECT'],
+      ['1.2.3+build.1', '1.2.3', 'REJECT'],
+      ['1.2.3+build.1', '1.2.4', 'ALLOW'],
+      ['1.2.3+build.1', '1.2.3-beta.1', 'REJECT'],
+      ['1.2.3+build.9', '1.2.3+build.1', 'REJECT']
     ]
     const { execFileSync } = require('node:child_process')
     try {
@@ -117,6 +123,8 @@ describe('serve update helper script', () => {
     // start-failure and readiness-failure both route through rollback, not bare fail.
     expect(script).toContain('rollback_and_fail "new binary failed to start"')
     expect(script).toContain('rollback_and_fail "new binary did not report ready')
+    // A failed first-ever update must not leave the target's version record behind.
+    expect(script).toContain('rm -f "$VERSION_TARGET"')
   })
 
   it('verifies readiness via the new MainPID journal orca_server_ready line', () => {

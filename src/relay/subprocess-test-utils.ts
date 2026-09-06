@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import { StringDecoder } from 'node:string_decoder'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -43,10 +44,12 @@ export function spawnRelay(
 
   // Why: relayLogLine writes boot failures to stderr, which would otherwise be drained silently.
   // Oversized single chunks keep their tail instead of being dropped whole, so the failure
-  // diagnostics always carry the most recent output.
+  // diagnostics always carry the most recent output. The StringDecoder holds a multibyte
+  // character split across chunk boundaries instead of emitting U+FFFD per chunk.
+  const stderrDecoder = new StringDecoder('utf-8')
   let stderrTail = ''
   const recordStderr = (chunk: Buffer): void => {
-    stderrTail = `${stderrTail}${chunk.toString('utf-8')}`.slice(-8000)
+    stderrTail = `${stderrTail}${stderrDecoder.write(chunk)}`.slice(-8000)
   }
 
   const sentinelReceived = new Promise<void>((resolve, reject) => {
@@ -91,12 +94,12 @@ export function spawnRelay(
   proc.stderr!.on('data', recordStderr)
 
   // Why: a child that exits before the sentinel must fail the await instead of hanging the test.
-  proc.once('exit', () => {
+  proc.once('exit', (code) => {
     if (!sentinelResolved) {
       sentinelResolved = true
       sentinelReject(
         new Error(
-          `Relay exited (code=${proc.exitCode}, signal=${proc.signalCode}) before the READY sentinel.\nstderr:\n${stderrTail}`
+          `Relay exited (code=${code}, signal=${proc.signalCode}) before the READY sentinel.\nstderr:\n${stderrTail}`
         )
       )
     }
