@@ -6,6 +6,7 @@ import {
   isRuntimePathAbsolute,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath,
+  normalizeRuntimePathDots,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
@@ -262,5 +263,31 @@ describe('cross-platform path containment', () => {
     )
     expect(resolveRuntimePath('C:\\Repos\\app\\repo', 'D:\\worktrees')).toBe('D:/worktrees')
     expect(isRuntimePathAbsolute('/remote/worktrees', 'windows')).toBe(true)
+  })
+})
+
+describe('normalizeRuntimePathDots', () => {
+  it('normalizes POSIX leading ./ and internal . segments', () => {
+    expect(normalizeRuntimePathDots('./src/App.tsx')).toBe('src/App.tsx')
+    expect(normalizeRuntimePathDots('././src/./App.tsx')).toBe('src/App.tsx')
+    expect(normalizeRuntimePathDots('src/sub/../App.tsx')).toBe('src/App.tsx')
+    expect(normalizeRuntimePathDots('./')).toBe('.')
+    expect(normalizeRuntimePathDots('.')).toBe('.')
+  })
+
+  it('normalizes Windows leading .\\ and backslash separators', () => {
+    expect(normalizeRuntimePathDots('.\\src\\App.tsx')).toBe('src/App.tsx')
+    expect(normalizeRuntimePathDots('.\\.\\src\\App.tsx')).toBe('src/App.tsx')
+    expect(normalizeRuntimePathDots('.\\')).toBe('.')
+    expect(normalizeRuntimePathDots('C:\\repo\\.\\src\\..\\dist')).toBe('C:/repo/dist')
+  })
+
+  it('preserves leading .. traversal on relative paths', () => {
+    expect(normalizeRuntimePathDots('../outside.tsx')).toBe('../outside.tsx')
+    expect(normalizeRuntimePathDots('..\\outside.tsx')).toBe('../outside.tsx')
+  })
+
+  it('preserves backslashes in POSIX filenames', () => {
+    expect(normalizeRuntimePathDots('src/foo\\bar.ts')).toBe('src/foo\\bar.ts')
   })
 })
