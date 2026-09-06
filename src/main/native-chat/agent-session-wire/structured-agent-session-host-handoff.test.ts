@@ -226,7 +226,7 @@ describe('native handoff acquisition', () => {
       operation: { callerKey: 'test', operationId, fingerprint: 'unsupported' },
       now
     })
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity: {
         sessionId: 'session-handoff-unsupported',
         workspaceId: location.workspaceId,
@@ -275,6 +275,7 @@ describe('native handoff acquisition', () => {
         },
         {
           session: () => session,
+          findSession: () => session,
           eventSink: () => eventSink,
           flush: async () => undefined,
           serialize: async (_sessionId, task) => task(),
@@ -320,7 +321,7 @@ describe('native handoff acquisition', () => {
       operation: { callerKey: 'test', operationId, fingerprint: 'drift' },
       now
     })
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity: {
         sessionId,
         workspaceId: location.workspaceId,
@@ -368,6 +369,7 @@ describe('native handoff acquisition', () => {
         },
         {
           session: () => session,
+          findSession: () => session,
           eventSink: () => eventSink,
           flush: async () => undefined,
           serialize: async (_sessionId, task) => task(),

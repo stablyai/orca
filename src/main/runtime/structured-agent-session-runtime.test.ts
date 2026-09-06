@@ -291,6 +291,7 @@ describe('structured agent-session runtime install', () => {
         claimKeyId: 'key-1',
         resolveWorkspacePath: async () => stateDirectory!,
         resolveEnvironment: async () => ({}),
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         readProcessStartTime: async () => 1_700_000_000_000
       })
 

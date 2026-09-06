@@ -18,11 +18,7 @@ function route(overrides: Partial<Parameters<typeof resolveAgentLaunchRoute>[0]>
     agent: 'codex',
     settings,
     executionHostId: 'local',
-    platform: 'darwin',
     hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
-    windowsProcessStartTime: 'unavailable' as const,
-    isWebClient: false,
-    worktreeUsesWslPath: false,
     workspaceKind: 'git-worktree',
     nativeChatTranscriptIsLocalReadable: true,
     ...overrides
@@ -40,57 +36,16 @@ describe('resolveAgentLaunchRoute', () => {
     }
   )
 
-  /** Boundary guard between this lane and the one that owns Windows Codex. Codex's win32 refusal is
-   *  deliberate, so it is asserted against whatever currently lets Claude through rather than
-   *  against one host answer — a future gate swap must not be able to flip Codex on quietly. */
-  describe("Codex's Windows refusal", () => {
-    it('holds in the exact situation that routes Claude to structured', () => {
-      const onWindows = { platform: 'win32' } as const
-      expect(route({ ...onWindows, agent: 'claude' })).toBe('structured-native-chat')
-      expect(route({ ...onWindows, agent: 'codex' })).toBe('legacy-native-chat')
-    })
-
-    it('holds for every host capability set, including ones that carry extra gates', () => {
-      for (const hostCapabilities of [
-        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
-        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY, 'agent-session.structured.claude.v1'],
-        [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY, 'agent-session.structured.hold.v1']
-      ]) {
-        expect(route({ agent: 'codex', platform: 'win32', hostCapabilities })).toBe(
-          'legacy-native-chat'
-        )
-      }
-    })
-
-    it('holds for prompted and folder-workspace launches too', () => {
-      expect(
-        route({
-          agent: 'codex',
-          platform: 'win32',
-          launchText: 'go',
-          promptDelivery: 'auto-submit'
-        })
-      ).toBe('legacy-native-chat')
-      expect(route({ agent: 'codex', platform: 'win32', workspaceKind: 'folder' })).toBe(
-        'legacy-native-chat'
-      )
-    })
-  })
-
-  /** Pins Codex's whole platform answer, not just win32, so no platform silently changes here. */
-  it.each([
-    ['darwin', 'structured-native-chat'],
-    ['linux', 'structured-native-chat'],
-    ['win32', 'legacy-native-chat']
-  ] as const)('leaves Codex routing on %s unchanged', (platform, expected) => {
-    expect(route({ agent: 'codex', platform })).toBe(expected)
-  })
-
-  /** Claude's Windows answer is not a client-side platform guess: the route lets it through and the
-   *  executing host settles it with agentSession.createSupport at create time. */
-  it('lets a Windows Claude launch reach the host-measured create support check', () => {
-    expect(route({ agent: 'claude', platform: 'win32' })).toBe('structured-native-chat')
-  })
+  /** Windows eligibility is no client-side platform guess for either provider: the route lets the
+   *  launch through and the executing host settles it with agentSession.createSupport at create
+   *  time. A stale caller still passing the removed `platform` input must not flip Codex off the
+   *  structured route — the field is gone, not reinterpreted. */
+  it.each(['claude', 'codex'] as const)(
+    'routes %s to structured even when the caller claims a win32 client platform',
+    (agent) => {
+      expect(route({ agent, ...({ platform: 'win32' } as object) })).toBe('structured-native-chat')
+    }
+  )
 
   it('routes a supported local Codex launch to structured native chat', () => {
     expect(route()).toBe('structured-native-chat')
@@ -134,15 +89,13 @@ describe('resolveAgentLaunchRoute', () => {
   it.each(['git-worktree', 'folder'] as const)(
     'supports a local %s without widening floating-terminal scope',
     (workspaceKind) => {
-      expect(route({ workspaceKind, platform: 'linux' })).toBe('structured-native-chat')
+      expect(route({ workspaceKind })).toBe('structured-native-chat')
     }
   )
 
   it('keeps floating, WSL, and repair-required launches terminal-backed', () => {
     expect(route({ workspaceKind: 'floating' })).toBe('legacy-native-chat')
-    expect(route({ agent: 'claude', workspaceKind: 'floating', platform: 'win32' })).toBe(
-      'legacy-native-chat'
-    )
+    expect(route({ agent: 'claude', workspaceKind: 'floating' })).toBe('legacy-native-chat')
     expect(
       route({
         projectRuntime: {
@@ -189,81 +142,5 @@ describe('resolveAgentLaunchRoute', () => {
       false
     )
     expect(hasExplicitTuiAgentArgs('codex', '--model gpt-5.6-sol')).toBe(true)
-  })
-})
-
-describe('resolveAgentLaunchRoute Windows structured gate', () => {
-  // Ported from the structured-native-chat availability gate that #18248
-  // removed; these pin the Windows enablement this lane exists to deliver.
-  it('refuses Windows when the host never answered the start-time probe', () => {
-    expect(route({ platform: 'win32', windowsProcessStartTime: 'unknown' })).toBe(
-      'legacy-native-chat'
-    )
-  })
-
-  it('refuses Windows when the host proved it cannot read start times', () => {
-    expect(route({ platform: 'win32', windowsProcessStartTime: 'unavailable' })).toBe(
-      'legacy-native-chat'
-    )
-  })
-
-  it('allows Windows once native start-time proof is available', () => {
-    expect(route({ platform: 'win32', windowsProcessStartTime: 'available' })).toBe(
-      'structured-native-chat'
-    )
-  })
-
-  it('keeps a WSL UNC workspace on the legacy terminal even with proof', () => {
-    expect(
-      route({
-        platform: 'win32',
-        windowsProcessStartTime: 'available',
-        worktreeUsesWslPath: true
-      })
-    ).toBe('legacy-native-chat')
-  })
-
-  it('allows a Windows folder workspace once start-time proof is available', () => {
-    expect(
-      route({
-        platform: 'win32',
-        windowsProcessStartTime: 'available',
-        workspaceKind: 'folder'
-      })
-    ).toBe('structured-native-chat')
-  })
-
-  it('still refuses a non-local Windows host that has proof', () => {
-    expect(
-      route({
-        platform: 'win32',
-        windowsProcessStartTime: 'available',
-        executionHostId: 'ssh-1'
-      })
-    ).toBe('legacy-native-chat')
-  })
-})
-
-describe('resolveAgentLaunchRoute paired web client', () => {
-  // A web client's `platform` is the browser's machine, not the host that runs
-  // the agent, so the Windows gate cannot be evaluated. Refusing is the only
-  // safe answer until the host publishes eligibility itself.
-  it('refuses structured chat in a paired web client', () => {
-    expect(route({ isWebClient: true })).toBe('legacy-native-chat')
-  })
-
-  it('still refuses when the web client looks fully eligible on Windows', () => {
-    expect(
-      route({
-        isWebClient: true,
-        platform: 'win32',
-        windowsProcessStartTime: 'available',
-        worktreeUsesWslPath: false
-      })
-    ).toBe('legacy-native-chat')
-  })
-
-  it('leaves the desktop renderer unaffected', () => {
-    expect(route({ isWebClient: false })).toBe('structured-native-chat')
   })
 })

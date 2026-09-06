@@ -1,7 +1,6 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/connection-context'
-import { readWindowsStructuredGateInputs } from '@/lib/agent-launch-routing-windows-gate'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -98,9 +97,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
       agent: effectiveAgent,
       settings: args.settings,
       executionHostId: getExecutionHostIdForWorktree(args.latestStore, args.worktreeId),
-      platform: CLIENT_PLATFORM,
       hostCapabilities: readLocalRuntimeCapabilities(),
-      ...readWindowsStructuredGateInputs(args.latestStore, args.worktreeId),
       workspaceKind: 'git-worktree',
       projectRuntime: getLocalProjectExecutionRuntimeContext(
         args.latestStore,

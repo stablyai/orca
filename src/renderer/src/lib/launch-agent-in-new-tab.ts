@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { readWindowsStructuredGateInputs } from '@/lib/agent-launch-routing-windows-gate'
 import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
@@ -214,9 +213,7 @@ function launchAgentInNewTabInternal(
         agent,
         settings: store.settings,
         executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
-        platform: CLIENT_PLATFORM,
         hostCapabilities: readLocalRuntimeCapabilities(),
-        ...readWindowsStructuredGateInputs(store, worktreeId),
         workspaceKind,
         projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
         promptDelivery: viewModePromptDelivery,

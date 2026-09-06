@@ -1,10 +1,12 @@
-import { spawnProcess } from '../../shared/child-process/run-process'
-import type { ChildProcessHandle, ProcessSpec } from '../../shared/child-process/process-spec'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
-import { admitProcessTreeKill } from '../../shared/child-process/process-tree-kill-gate'
+import {
+  killCodexAppServerProcessTree,
+  spawnCodexAppServerProcess,
+  type CodexAppServerSpawn
+} from './codex-app-server-process-tree-kill'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -70,79 +72,6 @@ const JSON_RPC_METHOD_NOT_FOUND = -32601
 const STDERR_TAIL_MAX_BYTES = 8192
 const STDOUT_LINE_MAX_BYTES = 1024 * 1024
 
-export function killCodexAppServerProcessTree(
-  child: Pick<ChildProcessHandle, 'pid' | 'kill'>,
-  options: {
-    platform?: NodeJS.Platform
-    spawnImpl?: (
-      program: string,
-      args: string[],
-      options: Record<string, unknown>
-    ) => ChildProcessHandle
-  } = {}
-): void {
-  const platform = options.platform ?? process.platform
-  const spawnImpl =
-    options.spawnImpl ??
-    ((program: string, args: string[], spawnOptions: Record<string, unknown>) =>
-      spawnProcess({ program, args, ...spawnOptions } as ProcessSpec))
-  if (platform === 'win32' && child.pid) {
-    if (
-      !admitProcessTreeKill({
-        pid: child.pid,
-        site: 'codex-app-server-session-deadline',
-        scope: 'win-taskkill-tree'
-      })
-    ) {
-      // Refusal blocks the tree walk, not the termination: the root kill is
-      // handle-addressed, so it cannot reach the recycled pid we refused.
-      child.kill('SIGKILL')
-      return
-    }
-    try {
-      // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
-      // leaves the app-server child alive after a timeout or failed shutdown.
-      const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      let fellBack = false
-      const killDirectChild = (): void => {
-        if (!fellBack) {
-          fellBack = true
-          child.kill('SIGKILL')
-        }
-      }
-      killer.on('error', killDirectChild)
-      killer.on('exit', (code) => {
-        if (code !== 0) {
-          killDirectChild()
-        }
-      })
-      killer.unref()
-      return
-    } catch {
-      // Fall through to the direct-child best effort when taskkill cannot start.
-    }
-  }
-  if (child.pid) {
-    try {
-      // npm/package-manager launchers insert a shim child on POSIX. Reap its
-      // direct descendants before signalling the wrapper itself.
-      const descendants = spawnImpl('pkill', ['-KILL', '-P', String(child.pid)], {
-        stdio: 'ignore'
-      })
-      // A missing pkill surfaces as an async 'error' event, and an unhandled one
-      // takes down the main process.
-      descendants.on('error', () => undefined)
-      descendants.unref()
-    } catch {
-      // The direct kill below remains the fallback when pkill is unavailable.
-    }
-  }
-  child.kill('SIGKILL')
-}
-
 /** Codex answering "no such method" is the only response that proves the RPC
  *  surface is absent rather than temporarily failing. */
 export function isCodexMethodNotFoundError(error: unknown): boolean {
@@ -164,12 +93,7 @@ export function isCodexMethodNotFoundError(error: unknown): boolean {
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
   body: (rpc: CodexAppServerRpc) => Promise<T>,
-  spawnImpl: (
-    program: string,
-    args: string[],
-    options: Record<string, unknown>
-  ) => ChildProcessHandle = (program, args, options) =>
-    spawnProcess({ program, args, ...options } as ProcessSpec)
+  spawnImpl: CodexAppServerSpawn = spawnCodexAppServerProcess
 ): Promise<T> {
   // Why: a default-home grant must run against the real ~/.codex, so strip an
   // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
