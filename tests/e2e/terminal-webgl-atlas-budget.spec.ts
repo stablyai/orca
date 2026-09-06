@@ -431,7 +431,7 @@ async function runAtlasReplacementScenario(page: Page): Promise<AtlasReplacement
 test.describe('terminal WebGL atlas budget', () => {
   test.describe.configure({ timeout: 120_000 })
 
-  test('keeps shared glyph pages bindable through overflow and recovery @terminal-rendering-golden', async ({
+  test('@headful keeps shared glyph pages bindable through overflow and recovery @terminal-rendering-golden', async ({
     orcaPage
   }) => {
     await waitForActiveTerminalManager(orcaPage)
@@ -451,7 +451,7 @@ test.describe('terminal WebGL atlas budget', () => {
     expect(result.pixelDiffAfterWipe).toBe(0)
   })
 
-  test('rebuilds cached vertices after attaching a different shared atlas @terminal-rendering-golden', async ({
+  test('@headful rebuilds cached vertices after attaching a different shared atlas @terminal-rendering-golden', async ({
     orcaPage
   }) => {
     await waitForActiveTerminalManager(orcaPage)
