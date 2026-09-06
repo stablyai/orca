@@ -374,6 +374,7 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
       afterTabId: toWebTerminalSurfaceTabId(`${predecessorHostTabId}::${predecessorHostLeafId}`)
     })
     const legacyWebTabId = toWebTerminalSurfaceTabId(legacy.terminal.tabId)
+    try {
     await expect
       .poll(
         async () => {
@@ -384,6 +385,17 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
         { timeout: 15_000, message: 'Legacy placement did not reach the rendered tab order' }
       )
       .toEqual([predecessorWebTabId, legacyWebTabId, successorWebTabId])
+    } finally {
+      console.log('LEGACY_PLACEMENT_PROBE', JSON.stringify({
+        predecessorHostTabId, successorHostTabId, createdHostTabId: legacy.terminal.tabId,
+        hostRenderer: await readClientMirror(orcaPage, session.worktreeId),
+        authoritative: await callClient(client.page, 'session.tabs.list', {
+          worktree: `id:${session.worktreeId}`
+        }),
+        clientMirror: await readClientMirror(client.page, session.worktreeId),
+        rendered: await readRenderedTabOrder(client.page)
+      }))
+    }
     const mirroredLegacyGroup = (
       await readClientMirror(client.page, session.worktreeId)
     ).tabGroups.find((group) => group.id === legacyGroup.id)
