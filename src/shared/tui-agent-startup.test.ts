@@ -351,6 +351,22 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('launches Muse Spark trusted with the prompt as followup', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'muse',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toMatchObject({
+      agent: 'muse',
+      launchCommand: 'muse --yolo',
+      expectedProcess: 'muse',
+      followupPrompt: 'fix it'
+    })
+  })
+
   it('leaves Claude command overrides untouched', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

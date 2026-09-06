@@ -306,6 +306,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'muse',
+    label: translate('auto.lib.agent.catalog.muse_label', 'Muse'),
+    cmd: 'muse',
+    faviconDomain: 'dev.meta.ai',
+    homepageUrl: 'https://dev.meta.ai/docs/muse-code'
   }
 ])
 

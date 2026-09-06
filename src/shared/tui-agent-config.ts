@@ -285,6 +285,17 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     detectCmd: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  muse: {
+    detectCmd: 'muse',
+    // Why: supervised workers cannot answer approval prompts or a first-launch
+    // workspace-trust menu (both swallow the drafted preamble); --yolo covers
+    // trust plus approval/sandbox, matching agy --dangerously-skip-permissions.
+    launchCmd: 'muse --yolo',
+    // Why: bare-TUI launch plus paste-after-start, verified end-to-end via
+    // `orca terminal send` against Muse Code 1.0.3; positional-prompt
+    // auto-submit is undocumented, so argv is not used.
+    promptInjectionMode: 'stdin-after-start'
   }
 }
 
