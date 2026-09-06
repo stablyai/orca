@@ -38,6 +38,12 @@ function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Pro
   return new Promise((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | null = null
     let graceTimer: ReturnType<typeof setTimeout> | null = null
+    let graceExtended = false
+    const armGrace = (): ReturnType<typeof setTimeout> =>
+      setTimeout(() => {
+        finish()
+        reject(new Error('probe session reconnecting'))
+      }, RECONNECT_GRACE_MS)
     const unsubscribe = session.onStateChange((state) => {
       if (state === 'connected') {
         finish()
@@ -45,10 +51,16 @@ function waitForAuthenticatedSession(session: RpcClient, timeoutMs: number): Pro
         return
       }
       if (state === 'reconnecting' && !graceTimer) {
-        graceTimer = setTimeout(() => {
-          finish()
-          reject(new Error('probe session reconnecting'))
-        }, RECONNECT_GRACE_MS)
+        graceTimer = armGrace()
+        return
+      }
+      // Why: the redial fires at 500ms but 'connected' waits on the Noise handshake
+      // and a capability RPC. 'handshaking' is proof the peer answered, so extend
+      // once; a dead handshake still fails at ~4s, far inside the outer bound.
+      if (state === 'handshaking' && graceTimer && !graceExtended) {
+        graceExtended = true
+        clearTimeout(graceTimer)
+        graceTimer = armGrace()
         return
       }
       if (state === 'disconnected' || state === 'auth-failed' || state === 'reconnecting') {

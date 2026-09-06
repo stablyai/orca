@@ -291,6 +291,8 @@ describe('client accept abandoned mid-DB-phase', () => {
       slowResolve.resolve({ cellId: config.cellId })
       await accepting
 
+      // Proves the accept reached the third guard, not the first.
+      expect(resolveAssignment).toHaveBeenCalled()
       expect(h.store.reserveCredential).not.toHaveBeenCalled()
       expect(h.observer.recordClientAcceptAbandoned).toHaveBeenCalledWith(
         'assignment',
@@ -341,12 +343,16 @@ describe('control lease jitter', () => {
     const shortestAck = helloAck(await activeHost(shortest))
     const centered = harness({ now: () => now, random: () => 0.5 })
     const centeredAck = helloAck(await activeHost(centered))
-    const longest = harness({ now: () => now, random: () => 0.999999 })
+    const longestRoll = 0.999999
+    const longest = harness({ now: () => now, random: () => longestRoll })
     const longestAck = helloAck(await activeHost(longest))
 
+    // Pinned, not bounded: a jitter clamped to one side still satisfies an upper
+    // bound, so only the exact top of the band proves it is symmetric.
+    const longestOffset = Math.floor((longestRoll * 2 - 1) * CONTROL_LEASE_JITTER_MS)
     expect(shortestAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS - CONTROL_LEASE_JITTER_MS)
     expect(centeredAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS)
-    expect(longestAck.leaseExpiresAt).toBeLessThan(now + CONTROL_LEASE_MS + CONTROL_LEASE_JITTER_MS)
+    expect(longestAck.leaseExpiresAt).toBe(now + CONTROL_LEASE_MS + longestOffset)
     shortest.registry.drain(0)
     centered.registry.drain(0)
     longest.registry.drain(0)

@@ -117,6 +117,50 @@ describe('mobile direct endpoint probe', () => {
     expect(result?.client.close).not.toHaveBeenCalled()
   })
 
+  it('extends the grace once when the redial reaches a handshake', async () => {
+    // The redial fires at 500ms, but 'connected' waits on the Noise handshake and a
+    // capability RPC, so real work needs more than one grace window.
+    const openDirect = vi.fn((endpoint: string) => {
+      const client = new FakeClient('connecting')
+      if (endpoint.includes('100.64.0.2')) {
+        setTimeout(() => client.publishState('reconnecting'), 20)
+        setTimeout(() => client.publishState('handshaking'), 1_500)
+        // Past the first grace window: only the re-arm keeps this probe alive.
+        setTimeout(() => client.publishState('connected'), 3_000)
+      }
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(3_000)
+
+    expect((await probing)?.path).toBe('tailscale')
+  })
+
+  it('fails a handshake that stalls, one grace after it started', async () => {
+    const openDirect = vi.fn(() => {
+      const client = new FakeClient('connecting')
+      setTimeout(() => client.publishState('reconnecting'), 20)
+      setTimeout(() => client.publishState('handshaking'), 1_500)
+      // A restarted handshake must not buy a second extension.
+      setTimeout(() => client.publishState('handshaking'), 2_500)
+      return client
+    })
+
+    const probing = openAuthenticatedDirectEndpoint(host, openDirect, 12_000)
+    await vi.advanceTimersByTimeAsync(3_499)
+    let settled = false
+    void probing.then(() => {
+      settled = true
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(probing).resolves.toBeNull()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('gives up at the grace window when the redial never lands', async () => {
     const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
