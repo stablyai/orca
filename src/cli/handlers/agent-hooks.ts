@@ -208,6 +208,7 @@ async function setAgentHooksEnabled(
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks prepare-codex': async ({ client }) => {
+    console.error('ORCA_PREFLIGHT_HANDLER_BEGIN')
     if (process.env.WSL_DISTRO_NAME?.trim()) {
       try {
         await client.call(
@@ -224,12 +225,15 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
       }
       return
     }
+    console.error('ORCA_PREFLIGHT_SETTINGS_BEGIN')
     const settings = await readHookSettings(client)
+    console.error('ORCA_PREFLIGHT_SETTINGS_DONE')
     await prepareManagedCodexHomeBeforeShellLaunch({
       userDataPath: getDefaultUserDataPath(),
       hooksEnabled:
         settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
     })
+    console.error('ORCA_PREFLIGHT_INSTALL_DONE', JSON.stringify(process.getActiveResourcesInfo()))
   },
   'agent hooks status': async ({ json }) => {
     const { getManagedAgentHookStatuses } =
