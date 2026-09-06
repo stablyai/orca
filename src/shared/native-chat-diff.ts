@@ -5,7 +5,8 @@ export type NativeChatDiffLine = {
   text: string
 }
 
-const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace', 'apply_patch'])
+/** Tools whose call carries the edit itself, so its row is a file change. */
+export const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace', 'apply_patch'])
 const MAX_DIFF_CHARS = 32_000
 const DEFAULT_MAX_DIFF_LINES = 120
 const DIFF_TRUNCATED_LINE: NativeChatDiffLine = {
@@ -14,8 +15,11 @@ const DIFF_TRUNCATED_LINE: NativeChatDiffLine = {
 }
 
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/
-// Lines that open a new file section, so any hunk before them has ended.
-const FILE_SECTION_START =
+/** Lines that open a new file section, so any hunk before them has ended.
+ *  `--- `/`+++ ` are deliberately absent: inside a hunk they are content — a
+ *  removed `-- comment` is emitted as `--- comment` — so they go through
+ *  `isFileHeaderPair` instead. */
+export const FILE_SECTION_START =
   /^(?:diff |index |old mode |new mode |new file mode |deleted file mode |similarity index |dissimilarity index |rename |copy |Binary files )/
 // Markdown thematic break or YAML document separator, not a marker.
 const BARE_RULE = /^(?:-{3,}|\+{3,})$/
@@ -28,11 +32,17 @@ type DiffStructure = {
 }
 
 /**
- * Locates the `--- <old>` / `+++ <new>` file headers. A bare `---`/`+++` prefix
- * is not enough to spot one: a removed line whose content began with `--`
- * (SQL/Lua `-- comment`, C `--i`) is emitted as `---<content>`. Real headers
- * always come as an adjacent pair and never appear inside a hunk.
+ * True when the row at `index` opens a `--- <old>` / `+++ <new>` file header. A
+ * bare `---`/`+++` prefix is not enough to spot one: a removed line whose
+ * content began with `--` (SQL/Lua `-- comment`, C `--i`) is emitted as
+ * `---<content>`. Real headers always come as an adjacent pair and never appear
+ * inside a hunk, so callers must check this only outside one.
  */
+export function isFileHeaderPair(lines: readonly string[], index: number): boolean {
+  return (lines[index] ?? '').startsWith('--- ') && (lines[index + 1] ?? '').startsWith('+++ ')
+}
+
+/** Locates the file headers and rules that are structure rather than content. */
 function scanDiffStructure(lines: string[]): DiffStructure {
   const metaIndices = new Set<number>()
   let isStructuredDiff = false
@@ -57,7 +67,7 @@ function scanDiffStructure(lines: string[]): DiffStructure {
       metaIndices.add(index)
       continue
     }
-    if (line.startsWith('--- ') && (lines[index + 1] ?? '').startsWith('+++ ')) {
+    if (isFileHeaderPair(lines, index)) {
       metaIndices.add(index)
       metaIndices.add(index + 1)
       index += 1
@@ -80,6 +90,35 @@ function toLines(value: unknown, maxLines: number): { lines: string[]; truncated
   return { lines: bounded, truncated }
 }
 
+function patchTextFromToolInput(value: Record<string, unknown>): string | null {
+  if (typeof value.patch === 'string') {
+    return value.patch
+  }
+  if (typeof value.diff === 'string') {
+    return value.diff
+  }
+  if (!Array.isArray(value.changes)) {
+    return null
+  }
+  const sections = value.changes.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      return []
+    }
+    const change = entry as Record<string, unknown>
+    if (typeof change.diff !== 'string') {
+      return []
+    }
+    const path = typeof change.path === 'string' ? change.path : 'file'
+    const kind =
+      typeof change.kind === 'object' && change.kind !== null
+        ? (change.kind as Record<string, unknown>)
+        : null
+    const nextPath = kind && typeof kind.move_path === 'string' ? kind.move_path : path
+    return [`--- ${path}\n+++ ${nextPath}\n${change.diff}`]
+  })
+  return sections.length > 0 ? sections.join('\n') : null
+}
+
 export function diffFromToolCall(
   name: string,
   input: unknown,
@@ -89,6 +128,10 @@ export function diffFromToolCall(
     return null
   }
   const value = input as Record<string, unknown>
+  const patchText = patchTextFromToolInput(value)
+  if (patchText !== null) {
+    return diffFromText(patchText, maxLines)
+  }
   const oldLines = toLines(value.old_string ?? value.oldString ?? value.old, maxLines)
   const newLines = toLines(
     value.new_string ?? value.newString ?? value.new ?? value.content ?? value.file_text,

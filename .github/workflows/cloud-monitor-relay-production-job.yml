@@ -1,0 +1,213 @@
+name: Monitor Relay Production Job
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: true
+        type: string
+      expected-selector-generation:
+        required: true
+        type: string
+      expected-existing-only-cells:
+        required: true
+        type: string
+      expected-migration-only-cells:
+        required: true
+        type: string
+      expected-general-cells:
+        required: true
+        type: string
+      migration-policy:
+        required: true
+        type: string
+      recovery-source-cell-id:
+        required: true
+        type: string
+      capacity-cell-id:
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  monitor:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 100
+    environment: production
+    env:
+      EXPECTED_SELECTOR_GENERATION: ${{ inputs.expected-selector-generation }}
+      EXPECTED_EXISTING_ONLY_CELLS: ${{ inputs.expected-existing-only-cells }}
+      EXPECTED_MIGRATION_ONLY_CELLS: ${{ inputs.expected-migration-only-cells }}
+      EXPECTED_GENERAL_CELLS: ${{ inputs.expected-general-cells }}
+      MIGRATION_POLICY: ${{ inputs.migration-policy }}
+      RECOVERY_SOURCE_CELL_ID: ${{ inputs.recovery-source-cell-id }}
+      CAPACITY_CELL_ID: ${{ inputs.capacity-cell-id }}
+      INCIDENT_ID: relay-${{ github.run_id }}-${{ inputs.mode }}
+      MONITOR_MODE: ${{ inputs.mode }}
+      OUTPUT_DIRECTORY: ${{ github.workspace }}/relay-incident
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+
+      - id: prior-attempt
+        if: ${{ github.run_attempt > 1 }}
+        run: echo "value=$((GITHUB_RUN_ATTEMPT - 1))" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore prior private monitor state
+        if: ${{ github.run_attempt > 1 }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-${{ inputs.mode }}-${{ github.run_id }}-${{ steps.prior-attempt.outputs.value }}
+          path: ${{ github.workspace }}/relay-incident
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Verify restored state provenance
+        if: ${{ github.run_attempt > 1 }}
+        run: |
+          node dev/scripts/relay-monitor-evidence.mjs verify-restore \
+            --directory "${OUTPUT_DIRECTORY}" \
+            --incident-id "${INCIDENT_ID}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${{ steps.prior-attempt.outputs.value }}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode "${MONITOR_MODE}"
+          echo "RESTART_FLAG=--restart" >> "${GITHUB_ENV}"
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_MONITOR_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_MONITOR_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify exact-audience admin identity
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node -e "if (!/^[^.]+[.][^.]+[.][^.]+$/.test(process.env.ORCA_RELAY_ADMIN_ID_TOKEN ?? '')) process.exit(1)"
+
+      - name: Run read-only relay dry-run
+        if: ${{ inputs.mode == 'dry-run' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          pnpm --filter @orca-cloud/relay-ops incident:monitor \
+            --environment production \
+            --incident-id "${INCIDENT_ID}" \
+            --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${EXPECTED_MIGRATION_ONLY_CELLS}" \
+            --expected-general-cells "${EXPECTED_GENERAL_CELLS}" \
+            --migration-policy "${MIGRATION_POLICY}" \
+            --recovery-source-cell-id "${RECOVERY_SOURCE_CELL_ID}" \
+            --capacity-cell-id "${CAPACITY_CELL_ID}" \
+            --interval-seconds 60 \
+            --output-directory "${OUTPUT_DIRECTORY}" \
+            --duration-minutes 15 \
+            --pre-drain-dry-run \
+            ${RESTART_FLAG:-}
+
+      - name: Run first relay monitor segment
+        if: ${{ inputs.mode == 'monitor' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          pnpm --filter @orca-cloud/relay-ops incident:monitor \
+            --environment production \
+            --incident-id "${INCIDENT_ID}" \
+            --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${EXPECTED_MIGRATION_ONLY_CELLS}" \
+            --expected-general-cells "${EXPECTED_GENERAL_CELLS}" \
+            --migration-policy "${MIGRATION_POLICY}" \
+            --recovery-source-cell-id "${RECOVERY_SOURCE_CELL_ID}" \
+            --capacity-cell-id "${CAPACITY_CELL_ID}" \
+            --interval-seconds 60 \
+            --output-directory "${OUTPUT_DIRECTORY}" \
+            --duration-minutes 90 \
+            --max-samples-this-run 45 \
+            ${RESTART_FLAG:-}
+
+      - id: google-auth-refresh
+        if: ${{ inputs.mode == 'monitor' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_MONITOR_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_MONITOR_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Run remaining relay monitor window
+        if: ${{ inputs.mode == 'monitor' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth-refresh.outputs.id_token }}
+        run: |
+          node -e "if (!/^[^.]+[.][^.]+[.][^.]+$/.test(process.env.ORCA_RELAY_ADMIN_ID_TOKEN ?? '')) process.exit(1)"
+          pnpm --filter @orca-cloud/relay-ops incident:monitor \
+            --environment production \
+            --incident-id "${INCIDENT_ID}" \
+            --expected-selector-generation "${EXPECTED_SELECTOR_GENERATION}" \
+            --expected-existing-only-cells "${EXPECTED_EXISTING_ONLY_CELLS}" \
+            --expected-migration-only-cells "${EXPECTED_MIGRATION_ONLY_CELLS}" \
+            --expected-general-cells "${EXPECTED_GENERAL_CELLS}" \
+            --migration-policy "${MIGRATION_POLICY}" \
+            --recovery-source-cell-id "${RECOVERY_SOURCE_CELL_ID}" \
+            --capacity-cell-id "${CAPACITY_CELL_ID}" \
+            --interval-seconds 60 \
+            --output-directory "${OUTPUT_DIRECTORY}" \
+            --duration-minutes 90 \
+            --restart
+
+      - name: Seal private evidence provenance
+        if: ${{ always() }}
+        run: |
+          node dev/scripts/relay-monitor-evidence.mjs create \
+            --directory "${OUTPUT_DIRECTORY}" \
+            --incident-id "${INCIDENT_ID}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode "${MONITOR_MODE}"
+
+      - name: Publish aggregate job summary
+        if: ${{ always() }}
+        run: |
+          if [[ -f "${OUTPUT_DIRECTORY}/${INCIDENT_ID}.summary.md" ]]; then
+            cat "${OUTPUT_DIRECTORY}/${INCIDENT_ID}.summary.md" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "Relay monitor failed before its first aggregate checkpoint." \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload private aggregate evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-monitor-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/relay-incident
+          if-no-files-found: error
+          retention-days: 14

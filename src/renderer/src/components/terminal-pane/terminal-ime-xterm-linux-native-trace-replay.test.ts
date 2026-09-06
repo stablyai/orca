@@ -16,6 +16,10 @@ import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fcitx5Trace from './__fixtures__/fcitx5-hangul-mixed-ascii-terminal-trace.json'
 import ibusTrace from './__fixtures__/ibus-hangul-mixed-ascii-terminal-trace.json'
+import {
+  installTypingLatencyInputEvents,
+  type TypingInputSignal
+} from '@/lib/typing-latency/input-events'
 
 type RecordedEvent = {
   type: string
@@ -102,27 +106,35 @@ type PreeditSample = { data: string; shown: boolean }
 
 async function replayTrace(
   trace: RecordedTrace
-): Promise<{ stream: string; preedits: PreeditSample[] }> {
+): Promise<{ stream: string; preedits: PreeditSample[]; inputSignals: TypingInputSignal[] }> {
   const { emitted, terminal, textarea } = openTerminal()
   const preedits: PreeditSample[] = []
-  for (const recorded of trace.dom) {
-    // Keys were driven 20 ms apart, so every physical key event began its own task; the composition
-    // and input events the IME derived from one key stay in that key's task, which is what lets
-    // xterm's deferred commit see them.
-    if (recorded.type === 'keydown' || recorded.type === 'keyup') {
-      await nextEventLoop()
+  const inputSignals: TypingInputSignal[] = []
+  const detachInputEvents = installTypingLatencyInputEvents(window, (signal) => {
+    inputSignals.push(signal)
+  })
+  try {
+    for (const recorded of trace.dom) {
+      // Keys were driven 20 ms apart, so every physical key event began its own task; the composition
+      // and input events the IME derived from one key stay in that key's task, which is what lets
+      // xterm's deferred commit see them.
+      if (recorded.type === 'keydown' || recorded.type === 'keyup') {
+        await nextEventLoop()
+      }
+      replayEvent(textarea, recorded)
+      if (recorded.type === 'compositionupdate' && recorded.data) {
+        const view = terminal.element?.querySelector('.composition-view')
+        preedits.push({ data: recorded.data, shown: view?.classList.contains('active') === true })
+      }
     }
-    replayEvent(textarea, recorded)
-    if (recorded.type === 'compositionupdate' && recorded.data) {
-      const view = terminal.element?.querySelector('.composition-view')
-      preedits.push({ data: recorded.data, shown: view?.classList.contains('active') === true })
-    }
+    // Two turns: the commit's deferred send, then the late-native-commit window it opens.
+    await nextEventLoop()
+    await nextEventLoop()
+    return { stream: emitted.join(''), preedits, inputSignals }
+  } finally {
+    detachInputEvents()
+    terminal.dispose()
   }
-  // Two turns: the commit's deferred send, then the late-native-commit window it opens.
-  await nextEventLoop()
-  await nextEventLoop()
-  terminal.dispose()
-  return { stream: emitted.join(''), preedits }
 }
 
 describe.each([
@@ -150,6 +162,23 @@ describe.each([
     expect(stream.match(/글/g)).toHaveLength(trace.repetitions)
     // The ASCII typed between the two commits is the part a mis-scoped commit swallows.
     expect(stream.match(/abc/g)).toHaveLength(trace.repetitions)
+  })
+
+  it('reports each reconciled commit to the typing diagnostic', async () => {
+    const { inputSignals } = await replayTrace(trace)
+    const expectedCommits = trace.expectedLines.flatMap((line) => [line.at(0), line.at(-1)])
+    const commitSignals = inputSignals
+      .filter((signal) => signal.source === 'ime')
+      .map((signal) => signal.text)
+
+    if (trace.inputFramework === 'ibus') {
+      const rawEndData = trace.dom
+        .filter((recorded) => recorded.type === 'compositionend')
+        .map((recorded) => recorded.data ?? '')
+      expect(rawEndData.length).toBeGreaterThan(0)
+      expect(rawEndData.every((data) => data === '')).toBe(true)
+    }
+    expect(commitSignals).toEqual(expectedCommits)
   })
 
   it('matches the bytes the PTY received on the recorded run', async () => {

@@ -49,13 +49,13 @@ describe('GitHandler', () => {
         .spyOn(handler as unknown as GitSpyTarget, 'git')
         .mockRejectedValue(new Error('aborted'))
 
-      const result = await dispatcher.callRequest(
-        'git.listWorktrees',
-        { repoPath: tmpDir },
-        { isStale: () => false, signal: controller.signal }
-      )
-
-      expect(result).toEqual([])
+      await expect(
+        dispatcher.callRequest(
+          'git.listWorktrees',
+          { repoPath: tmpDir },
+          { isStale: () => false, signal: controller.signal }
+        )
+      ).rejects.toThrow('aborted')
       expect(gitSpy).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], tmpDir, {
         signal: controller.signal
       })

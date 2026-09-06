@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
+import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
+import {
+  getMarkdownRichModeEligibility,
+  getMarkdownRichModeUnsupportedMessage
+} from './markdown-rich-mode'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -46,6 +50,31 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     ).toBeNull()
   })
 
+  it('allows bare lowercase placeholders in prose', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage(
+        'Use --host runtime:<id>, --output <path>, and --project <project-id>.\n'
+      )
+    ).toBeNull()
+  })
+
+  it('allows bare lowercase placeholders in large documents', () => {
+    const content = `${'a'.repeat(50_001)}\nUse --host runtime:<id> and --project <project-id>.\n`
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it('still blocks large documents with actual html or jsx', () => {
+    const prefix = 'a'.repeat(50_001)
+
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<span>text</span>\n`)).not.toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<id>text</id>\n`)).not.toBeNull()
+    expect(getMarkdownRichModeUnsupportedMessage(`${prefix}\n<Widget />\n`)).not.toBeNull()
+    expect(
+      getMarkdownRichModeUnsupportedMessage(`${prefix}\n<project-id value="1">\n`)
+    ).not.toBeNull()
+  })
+
   it('allows block html and mdx-like tags by preserving them as passthrough nodes', () => {
     expect(getMarkdownRichModeUnsupportedMessage('<Widget />\n')).toBeNull()
     expect(getMarkdownRichModeUnsupportedMessage('<div>block</div>\n')).toBeNull()
@@ -89,5 +118,18 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
         pattern.source.startsWith('<!--[\\s\\S]*?-->')
     )
     expect(usedGlobalHtmlFragmentMatch).toBe(false)
+  })
+
+  it('keeps unsupported content blocked when it also exceeds the size limit', () => {
+    const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)}<Widget />`
+
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: false })).toEqual({
+      exceedsSizeLimit: true,
+      unsupportedMessage: expect.any(String)
+    })
+    expect(getMarkdownRichModeEligibility({ content, sizeOverridden: true })).toEqual({
+      exceedsSizeLimit: false,
+      unsupportedMessage: expect.any(String)
+    })
   })
 })

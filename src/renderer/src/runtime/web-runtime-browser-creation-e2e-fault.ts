@@ -5,6 +5,8 @@ type BrowserCreationFaultSnapshot = {
   armed: boolean
   capabilityRejectionArmed: boolean
   createdPageId: string | null
+  preparationArmed: boolean
+  preparationReached: boolean
   suppressedPageIds: string[]
 }
 
@@ -16,8 +18,10 @@ type BrowserCreationFaultApi = {
   arm: () => void
   armCapabilityRejection: () => void
   armInventoryRpcFailure: () => void
+  armPreparation: () => void
   armSettlement: () => void
   release: () => boolean
+  releasePreparation: () => boolean
   reset: () => void
   snapshot: () => BrowserCreationFaultSnapshot
   takeInventoryRpcFailure: () => string | null
@@ -35,6 +39,10 @@ let failNextReconciliation = false
 let failNextInventoryRpc = false
 let releaseCreatedPage: (() => void) | null = null
 let createdPageBarrier: Promise<void> | null = null
+let preparationArmed = false
+let preparationReached = false
+let releasePreparationBarrier: (() => void) | null = null
+let preparationBarrier: Promise<void> | null = null
 let settleCreation: ((settlement: BrowserCreationSettlement) => void) | null = null
 let creationSettlement: Promise<BrowserCreationSettlement> | null = null
 const suppressedPageIds = new Set<string>()
@@ -46,6 +54,11 @@ function rejectPendingCreationSettlement(error: string): void {
 
 function resetFault(): void {
   releaseCreatedPage?.()
+  releasePreparationBarrier?.()
+  preparationArmed = false
+  preparationReached = false
+  releasePreparationBarrier = null
+  preparationBarrier = null
   armed = false
   capabilityRejectionArmed = false
   createdPageId = null
@@ -79,6 +92,16 @@ function exposeFaultApi(): void {
     armInventoryRpcFailure: () => {
       failNextInventoryRpc = true
     },
+    // Why its own barrier: the client-host preparation runs before the create RPC, and it is a
+    // separate remote round-trip. Holding only the post-create barrier leaves that whole window
+    // untestable, and it is the window where a user action races an unguarded create.
+    armPreparation: () => {
+      resetFault()
+      preparationArmed = true
+      preparationBarrier = new Promise<void>((resolve) => {
+        releasePreparationBarrier = resolve
+      })
+    },
     armSettlement: () => {
       rejectPendingCreationSettlement('E2E browser creation settlement superseded')
       creationSettlement = new Promise<BrowserCreationSettlement>((resolve) => {
@@ -95,11 +118,22 @@ function exposeFaultApi(): void {
       release()
       return true
     },
+    releasePreparation: () => {
+      if (!preparationArmed || !releasePreparationBarrier) {
+        return false
+      }
+      const release = releasePreparationBarrier
+      releasePreparationBarrier = null
+      release()
+      return true
+    },
     reset: resetFault,
     snapshot: () => ({
       armed,
       capabilityRejectionArmed,
       createdPageId,
+      preparationArmed,
+      preparationReached,
       suppressedPageIds: [...suppressedPageIds]
     }),
     takeInventoryRpcFailure: () => {
@@ -145,11 +179,24 @@ export function throwIfE2eWebRuntimeBrowserCapabilityUnavailable(): void {
 }
 
 export async function pauseAfterE2eWebRuntimeBrowserCreate(remotePageId: string): Promise<void> {
-  if (!e2eConfig.exposeStore || !armed || !createdPageBarrier) {
+  if (!e2eConfig.exposeStore) {
     return
   }
+  // Recorded before the arm check so a journey that never arms the barrier can still prove no host
+  // page was created — a null id is only evidence if a real create would have set one.
   createdPageId = remotePageId
+  if (!armed || !createdPageBarrier) {
+    return
+  }
   await createdPageBarrier
+}
+
+export async function pauseDuringE2eWebRuntimeBrowserClientHostPreparation(): Promise<void> {
+  if (!e2eConfig.exposeStore || !preparationArmed || !preparationBarrier) {
+    return
+  }
+  preparationReached = true
+  await preparationBarrier
 }
 
 export function throwIfE2eWebRuntimeBrowserReconciliationFails(): void {

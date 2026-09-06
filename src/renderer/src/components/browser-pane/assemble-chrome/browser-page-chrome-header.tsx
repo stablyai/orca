@@ -66,11 +66,14 @@ export function BrowserPageChromeHeader({
       <BrowserPageToolbar
         browserPageId={browserTab.id}
         workspaceId={workspaceId}
+        worktreeId={worktreeId}
         sessionProfileId={sessionProfileId}
         viewportPresetId={browserTab.viewportPresetId ?? null}
         isActive={isActive}
         canGoBack={browserTab.canGoBack}
         canGoForward={browserTab.canGoForward}
+        convertedFrom={browserTab.convertedFrom ?? null}
+        convertedTo={browserTab.convertedTo ?? null}
         loading={browserTab.loading}
         webviewRef={webviewRef}
         reloadMenuOpen={reload.reloadMenuOpen}

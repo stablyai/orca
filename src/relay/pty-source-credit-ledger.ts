@@ -25,12 +25,10 @@ import {
   createDeliveryCancellation,
   createDeliveryRecord,
   createReplacementDeliveryRecord,
+  findPtySourceSpanForSend,
   matchingDeliverySnapshot,
   MAX_SOURCE_SPAN_DATA_BYTES,
   ptyOwnerKey,
-  retainedDataBytesTotal,
-  retainedSpanTotal,
-  retainedSourceTotal,
   sliceForSend,
   snapshotDeliveryRecord,
   type DeliveryRecord,
@@ -45,6 +43,7 @@ import {
   type PtySourceAckResult
 } from './pty-source-credit-settlement'
 import { chargedPtyRetainedStringBytes } from '../shared/pty-retained-string-memory'
+import { PtySourceCreditRetention } from './pty-source-credit-retention'
 
 export type { PtySourceSendReservation } from './pty-source-credit-record'
 export type { PtySourceCreditLedgerOptions } from './pty-source-credit-limits'
@@ -54,6 +53,7 @@ export class RelayPtySourceCreditLedger {
   private readonly upstreamOwnerByPty = new Map<string, string>()
   private readonly closedSnapshots = new Map<string, PtySourceDeliverySnapshot>()
   private readonly limits: PtySourceCreditLimits
+  private readonly retention = new PtySourceCreditRetention()
   private nextReservationId = 1
 
   constructor(options: PtySourceCreditLedgerOptions = {}) {
@@ -115,6 +115,7 @@ export class RelayPtySourceCreditLedger {
     record.spans.push(span)
     record.retainedDataBytes += retainedDataBytes
     record.receivedEndSu = sourceEndSu
+    this.retention.addSpan(input.transform.rawLengthSu, retainedDataBytes)
     return span
   }
 
@@ -134,10 +135,8 @@ export class RelayPtySourceCreditLedger {
     if (remainingWindowSu <= 0 || record.sentEndSu >= record.receivedEndSu) {
       return null
     }
-    const containing = record.spans.find(
-      (span) => span.sourceStartSu <= record.sentEndSu && span.sourceEndSu > record.sentEndSu
-    )
-    if (!containing) {
+    const containing = findPtySourceSpanForSend(record)
+    if (!containing || containing.sourceStartSu > record.sentEndSu) {
       throw new Error('PTY source delivery cursor is not covered by the retained ledger')
     }
     const reservedLengthSu = reservedPtySourceSendLength(record, remainingWindowSu, maxSourceSu)
@@ -164,7 +163,10 @@ export class RelayPtySourceCreditLedger {
 
   commitSend(reservation: PtySourceSendReservation): void {
     const record = this.requireDelivery(reservation.identity)
-    if (commitPtySourceSend(record, reservation)) {
+    const settled = this.retention.trackMutation(record, () =>
+      commitPtySourceSend(record, reservation)
+    )
+    if (settled) {
       this.maybeClose(record)
     }
   }
@@ -176,7 +178,9 @@ export class RelayPtySourceCreditLedger {
 
   acknowledge(identity: PtySourceDeliveryIdentity, ack: PtySourceCreditAck): PtySourceAckResult {
     const record = this.requireDelivery(identity)
-    const result = acknowledgeDeliveryRecord(record, ack)
+    const result = this.retention.trackMutation(record, () =>
+      acknowledgeDeliveryRecord(record, ack)
+    )
     if (result === 'advanced') {
       this.maybeClose(record)
     }
@@ -244,6 +248,8 @@ export class RelayPtySourceCreditLedger {
     )
     this.upstreamOwnerByPty.delete(ptyOwnerKey(old.identity))
     this.deliveries.set(replacementKey, replacement)
+    // Retention mirrors the delivery map, so count the replacement as it enters, not after cancel.
+    this.retention.addRecord(replacement)
     this.upstreamOwnerByPty.set(ptyOwnerKey(replacement.identity), replacementKey)
     const cancellation = this.cancel(oldIdentity, 'superseded', newIdentity.deliveryToken)
     return Object.freeze({ cancellation, recovery: Object.freeze(replacement.spans.slice()) })
@@ -263,23 +269,13 @@ export class RelayPtySourceCreditLedger {
     return snapshot
   }
 
-  retainedSourceSu = (): number => retainedSourceTotal(this.deliveries.values())
+  retainedSourceSu = (): number => this.retention.retainedSourceSu()
 
-  retainedDataBytes = (): number => retainedDataBytesTotal(this.deliveries.values())
+  retainedDataBytes = (): number => this.retention.retainedDataBytes()
 
-  retainedSpans = (): number => retainedSpanTotal(this.deliveries.values())
+  retainedSpans = (): number => this.retention.retainedSpans()
 
-  retentionSnapshot(): Readonly<{
-    sourceSu: number
-    dataBytes: number
-    spans: number
-  }> {
-    return Object.freeze({
-      sourceSu: this.retainedSourceSu(),
-      dataBytes: this.retainedDataBytes(),
-      spans: this.retainedSpans()
-    })
-  }
+  retentionSnapshot = () => this.retention.snapshot()
 
   private requireActive(identity: PtySourceDeliveryIdentity): DeliveryRecord {
     const record = this.requireDelivery(identity)
@@ -308,10 +304,15 @@ export class RelayPtySourceCreditLedger {
   }
 
   private closeRecord(record: DeliveryRecord): void {
+    if (record.state === 'closed') {
+      return
+    }
+    this.retention.removeRecord(record)
     record.state = 'closed'
     record.pendingSend = null
     record.spans = []
     record.retainedDataBytes = 0
+    record.sendSpanIndex = 0
     const key = ptySourceDeliveryKey(record.identity)
     const ownerKey = ptyOwnerKey(record.identity)
     if (this.upstreamOwnerByPty.get(ownerKey) === key) {

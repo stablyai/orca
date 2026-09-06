@@ -1,6 +1,27 @@
 import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../orchestration/db'
-import type { DispatchContextRow } from '../../orchestration/types'
+import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { DispatchContextRow, DispatchStatus } from '../../orchestration/types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+
+const ACTIVE_DISPATCH_STATUSES: readonly DispatchStatus[] = ['pending', 'dispatched']
+
+/**
+ * Reject mail addressed to a Dispatch mailbox nobody will ever read again.
+ *
+ * Why: a settled Dispatch has no active reader and `check` never reroutes its
+ * mailbox, so accepting the message reports success for a delivery that cannot
+ * happen. Federated targets keep their own liveness check.
+ */
+export function assertDispatchMailboxDeliverable(db: OrchestrationDb, dispatchId: string): void {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (!dispatch || ACTIVE_DISPATCH_STATUSES.includes(dispatch.status)) {
+    return
+  }
+  throw new OrchestrationError(
+    'dispatch_inactive',
+    `Dispatch ${dispatchId} is ${dispatch.status}; its worker will never read that mailbox. Send to run:${dispatch.run_id} instead, or start a new Dispatch for follow-up work.`
+  )
+}
 
 export type SendRecipientWarning = {
   code:

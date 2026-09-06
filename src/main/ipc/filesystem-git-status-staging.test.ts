@@ -94,11 +94,9 @@ describe('registerFilesystemHandlers', () => {
 
     // Why: validateGitRelativeFilePath uses path.relative() which produces
     // platform-specific separators (backslashes on Windows).
-    expect(stageFileMock).toHaveBeenCalledWith(
-      WORKTREE_FEATURE_PATH,
-      path.join('src', 'file.ts'),
-      {}
-    )
+    expect(stageFileMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, path.join('src', 'file.ts'), {
+      admissionTier: 'interactive'
+    })
   })
 
   it('uses worktree roots seeded by worktrees:list without rebuilding the cache', async () => {
@@ -111,7 +109,10 @@ describe('registerFilesystemHandlers', () => {
 
     expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(realpathMock).not.toHaveBeenCalledWith(WORKTREE_FEATURE_PATH)
-    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: false })
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
+      includeIgnored: false
+    })
   })
 
   it('passes configured shared links through the local status path', async () => {
@@ -135,6 +136,7 @@ describe('registerFilesystemHandlers', () => {
     await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
 
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
       includeIgnored: false,
       sharedLinkPaths: ['node_modules']
     })
@@ -149,7 +151,10 @@ describe('registerFilesystemHandlers', () => {
 
     expect(listWorktreesMock).not.toHaveBeenCalled()
     expect(realpathMock).not.toHaveBeenCalledWith(REPO_PATH)
-    expect(getStatusMock).toHaveBeenCalledWith(REPO_PATH, { includeIgnored: false })
+    expect(getStatusMock).toHaveBeenCalledWith(REPO_PATH, {
+      admissionTier: 'status',
+      includeIgnored: false
+    })
   })
 
   it('forwards includeIgnored through local and SSH git status IPC', async () => {
@@ -172,8 +177,14 @@ describe('registerFilesystemHandlers', () => {
       includeIgnored: true
     })
 
-    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: true })
-    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
+      includeIgnored: true
+    })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      admissionTier: 'status',
+      includeIgnored: true
+    })
   })
 
   it('returns capped-state metadata unchanged across local and SSH status IPC', async () => {
@@ -221,10 +232,12 @@ describe('registerFilesystemHandlers', () => {
     })
 
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
       includeIgnored: false,
       bypassEffectiveUpstreamNegativeCache: true
     })
     expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      admissionTier: 'status',
       includeIgnored: false,
       bypassEffectiveUpstreamNegativeCache: true
     })
@@ -250,12 +263,45 @@ describe('registerFilesystemHandlers', () => {
     })
 
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
       includeIgnored: false,
       reuseLineStats: true
     })
     expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      admissionTier: 'status',
       includeIgnored: false,
       reuseLineStats: true
+    })
+  })
+
+  it('forwards a false line-stats request through local and SSH git status IPC', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const sshProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      includeLineStats: false
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      includeLineStats: false
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'status',
+      includeIgnored: false,
+      includeLineStats: false
+    })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      admissionTier: 'status',
+      includeIgnored: false,
+      includeLineStats: false
     })
   })
 
@@ -346,7 +392,9 @@ describe('registerFilesystemHandlers', () => {
       connectionId: 'ssh-1'
     })
 
-    expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {})
+    expect(abortMergeMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'interactive'
+    })
     expect(sshProvider.abortMerge).toHaveBeenCalledWith('/remote/repo')
   })
 
@@ -366,7 +414,9 @@ describe('registerFilesystemHandlers', () => {
       connectionId: 'ssh-1'
     })
 
-    expect(abortRebaseMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {})
+    expect(abortRebaseMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      admissionTier: 'interactive'
+    })
     expect(sshProvider.abortRebase).toHaveBeenCalledWith('/remote/repo')
   })
 
@@ -410,7 +460,7 @@ describe('registerFilesystemHandlers', () => {
     expect(bulkStageFilesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
-      {}
+      { admissionTier: 'interactive' }
     )
   })
 
@@ -427,7 +477,7 @@ describe('registerFilesystemHandlers', () => {
     expect(bulkDiscardChangesMock).toHaveBeenCalledWith(
       WORKTREE_FEATURE_PATH,
       [path.join('src', 'file.ts'), path.join('nested', 'child.ts')],
-      {}
+      { admissionTier: 'interactive' }
     )
   })
 

@@ -33,6 +33,7 @@ export type AiVaultScanOptions = {
   primeAgentSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
+  clineSessionsDir?: string
   kimiSessionsDir?: string
   limit?: number
   unlimited?: boolean
@@ -91,6 +92,11 @@ export type ResumableParseFinalizeOptions = {
 // read or a display-only trailing line can never corrupt the cached fold.
 export type ResumableSessionParseState = {
   consumeLine(line: string): void
+  // Optional zero-copy path for parsers that can reject irrelevant records
+  // from a bounded byte prefix before decoding a potentially huge JSONL line.
+  consumeLineBytes?(line: Buffer): void
+  // Lets a parser terminate an excluded transcript without draining the file.
+  shouldStop?(): boolean
   clone(): ResumableSessionParseState
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void

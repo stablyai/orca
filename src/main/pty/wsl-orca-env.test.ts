@@ -5,10 +5,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
-import {
-  addOrcaWslInteropEnv,
-  stampWslOrchestrationCompatibilityHost
-} from './wsl-orca-env'
+import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from './wsl-orca-env'
 
 describe('addOrcaWslInteropEnv', () => {
   it('marks the Orca terminal handle for Windows to WSL env import', () => {
@@ -76,6 +73,7 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_AGENT_HOOK_TOKEN: 'token',
       ORCA_AGENT_HOOK_ENV: 'dev',
       ORCA_AGENT_HOOK_VERSION: '1',
+      ORCA_AGENT_HOOK_TRANSPORT: 'raw-json-v1',
       ORCA_WSL_HOOK_INSTANCE: 'testinstance',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
@@ -87,7 +85,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
     expect(env.WSLENV).toContain('ORCA_USER_DATA_PATH/p')
     expect(env.WSLENV).toContain('ORCA_CLI_COMMAND/u')
-    expect(env.WSLENV).not.toContain('ORCA_CODEX_LAUNCH_PREFLIGHT')
+    expect(env.WSLENV).toContain('ORCA_CODEX_LAUNCH_PREFLIGHT/p')
     expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
     expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
@@ -98,6 +96,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_ENV/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_VERSION/u')
+    expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TRANSPORT/u')
     expect(env.WSLENV).toContain('ORCA_WSL_HOOK_INSTANCE/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u')
@@ -246,4 +245,3 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).not.toContain('ORCA_OPENCODE_CONFIG_DIR')
   })
 })
-

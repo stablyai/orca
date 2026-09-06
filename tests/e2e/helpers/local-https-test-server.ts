@@ -6,7 +6,7 @@ import { WebSocketServer } from 'ws'
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from './local-https-test-certificate'
+} from '../../../src/main/browser/browser-local-https-test-certificate'
 
 export type LocalHttpsServer = {
   secureUrl: string

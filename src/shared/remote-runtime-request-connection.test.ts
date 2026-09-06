@@ -11,13 +11,7 @@ import {
   publicKeyToBase64
 } from './e2ee-crypto'
 import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
-import {
-  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
-} from './protocol-version'
-import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
+import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 
 type TestServer = {
   wss: WebSocketServer
@@ -64,13 +58,7 @@ describe('RemoteRuntimeRequestConnection', () => {
     expect(server.connectionCount()).toBe(1)
     expect(server.auths).toContainEqual(
       expect.objectContaining({
-        clientCapabilities: [
-          SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-          AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-          SKILL_INSTALL_RESULT_V2_CAPABILITY,
-          WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-          WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
-        ]
+        clientCapabilities: remoteRuntimeClientCapabilities()
       })
     )
     expect(server.requests).toMatchObject([
@@ -110,7 +98,8 @@ async function createServer(): Promise<TestServer> {
   const requests: unknown[] = []
   const auths: unknown[] = []
   let connectionCount = 0
-  const wss = new WebSocketServer({ port: 0 })
+  // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+  const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
 
   wss.on('connection', (ws) => {
@@ -141,13 +130,7 @@ async function createServer(): Promise<TestServer> {
         expect(auth).toEqual({
           type: 'e2ee_auth',
           deviceToken: 'device-token',
-          clientCapabilities: [
-            SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
-            AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
-            SKILL_INSTALL_RESULT_V2_CAPABILITY,
-            WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
-            WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
-          ]
+          clientCapabilities: remoteRuntimeClientCapabilities()
         })
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })

@@ -16,12 +16,14 @@ import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
 } from './electron-home-isolation'
+import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
 import { forwardElectronProcessLogs } from './orca-app'
 import {
   replaceRuntimePairingInPlace,
   type SameIdPairingReplacement
 } from './nested-runtime-same-id-pairing'
 import { createPairedWebClientUrl, type PairedWebClientOptions } from './paired-web-client-url'
+import { selectPairedRuntimeEnvironment } from './paired-client-runtime-environment'
 
 export type { SameIdPairingReplacement } from './nested-runtime-same-id-pairing'
 
@@ -34,6 +36,8 @@ export type PairedElectronClient = {
   getDirectSshAttemptTargetIds: () => Promise<string[]>
   installDirectSshAttemptProbe: () => Promise<void>
   replacePairingInPlace: (offer: RuntimeDesktopPairingOffer) => Promise<SameIdPairingReplacement>
+  /** Profile directory backing this client. Pass it to `reuseUserDataDir` to relaunch the same device. */
+  userDataDir: string
 }
 
 export type RuntimeDesktopPairingOffer = {
@@ -142,14 +146,20 @@ export async function launchPairedElectronClient(
   offer: RuntimeDesktopPairingOffer,
   testInfo: TestInfo,
   name: string,
-  options: { extraEnv?: Record<string, string> } = {}
+  // reuseUserDataDir relaunches on an existing profile, so its stored pairing credential — and
+  // therefore its pairedDeviceId — survives the restart, as it does for a real force-quit reopen.
+  options: { extraEnv?: Record<string, string>; reuseUserDataDir?: string } = {}
 ): Promise<PairedElectronClient> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
+  const reusedProfile = options.reuseUserDataDir !== undefined
+  const userDataDir =
+    options.reuseUserDataDir ?? mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
-  writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
-    `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-  )
+  if (!reusedProfile) {
+    writeFileSync(
+      path.join(userDataDir, 'orca-data.json'),
+      `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
+    )
+  }
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
   const homeIsolation = createElectronHomeIsolation({
@@ -169,12 +179,16 @@ export async function launchPairedElectronClient(
     }
   })
 
+  // Why before the home assert: forwarding starts here, so a client that fails during startup
+  // otherwise reaches CI as a bare Playwright error with none of its own output attached.
+  forwardElectronProcessLogs(app, testInfo)
   try {
     assertElectronResolvedIsolatedHome(
-      await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
+      await retryTransientMainEvaluate(() =>
+        app.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
+      ),
       homeIsolation
     )
-    forwardElectronProcessLogs(app, testInfo)
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
@@ -198,30 +212,11 @@ export async function launchPairedElectronClient(
       throw new Error('Paired-client direct SSH probe did not intercept its canary attempt')
     }
 
-    const environmentId = await page.evaluate(
-      async ({ name, pairingUrl }) => {
-        const store = window.__store
-        if (!store) {
-          throw new Error('Paired desktop store is unavailable')
-        }
-        const result = await window.api.runtimeEnvironments.addFromPairingCode({
-          name,
-          pairingCode: pairingUrl
-        })
-        const environments = await window.api.runtimeEnvironments.list()
-        store.getState().setRuntimeEnvironments(environments)
-        if (!(await store.getState().refreshRuntimeEnvironmentStatus(result.environment.id))) {
-          throw new Error('Paired desktop could not reach the HUB runtime')
-        }
-        if (
-          !(await store.getState().setActiveRuntimeEnvironmentPreference(result.environment.id))
-        ) {
-          throw new Error('Paired desktop could not select the HUB runtime')
-        }
-        return result.environment.id
-      },
-      { name, pairingUrl: offer.pairingUrl }
-    )
+    const environmentId = await selectPairedRuntimeEnvironment(page, {
+      name,
+      pairingUrl: offer.pairingUrl,
+      reusedProfile
+    })
     const captureDirectSshAttempts = async (): Promise<void> => {}
     const replacePairingInPlace = async (
       replacementOffer: RuntimeDesktopPairingOffer
@@ -249,7 +244,8 @@ export async function launchPairedElectronClient(
         )
       },
       installDirectSshAttemptProbe: async () => {},
-      replacePairingInPlace
+      replacePairingInPlace,
+      userDataDir
     }
   } catch (error) {
     await closeElectronAppForE2E(app)

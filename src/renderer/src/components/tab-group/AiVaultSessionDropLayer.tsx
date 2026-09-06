@@ -23,6 +23,7 @@ import { resolveDropZone } from './tab-drop-zone'
 import type { TabDropZone } from './useTabDragSplit'
 import { translate } from '@/i18n/i18n'
 import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
+import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
 
 type PaneDropTarget = {
   groupId: string
@@ -175,6 +176,18 @@ export default function AiVaultSessionDropLayer({
         )
         return true
       }
+      if (payload.structuredSession) {
+        const { sessionId, workspaceId } = payload.structuredSession
+        if (!activateStructuredAgentSessionById({ worktreeId: workspaceId, sessionId })) {
+          toast.error(
+            translate(
+              'auto.lib.activateAiVaultStructuredSession.unavailable',
+              'The structured agent session is not available yet. Retry in a moment.'
+            )
+          )
+        }
+        return true
+      }
 
       const state = useAppStore.getState()
       const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
@@ -224,6 +237,7 @@ export default function AiVaultSessionDropLayer({
         })
           ? window.api.aiVault.prepareSessionResume({
               agent: payload.agent,
+              sessionId: payload.sessionId,
               filePath: payload.sessionFilePath,
               executionHostId: payload.sessionExecutionHostId,
               codexHome: payload.codexHome

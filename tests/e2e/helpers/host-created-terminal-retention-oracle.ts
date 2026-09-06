@@ -97,7 +97,8 @@ function shellQuote(value: string): string {
 export function retentionFixtureCommand(fixturePath: string, sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
   return process.platform === 'win32'
-    ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
+    ? // PowerShell needs the call operator when the executable is quoted; cmd.exe also accepts it.
+      `& ${command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')}`
     : command.map(shellQuote).join(' ')
 }
 

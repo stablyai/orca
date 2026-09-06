@@ -6,9 +6,11 @@ export type SubprocessHandle = {
   pid: number
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
-  getForegroundProcess(): string | null
+  getForegroundProcess(options?: { rawFallback?: boolean }): string | null
   /** Await process-table evidence captured after this confirmation request. */
   confirmForegroundProcess?(): Promise<string | null>
+  /** Proves a fresh post-boundary PTY process tree contains only the shell. */
+  confirmShellForeground?(): Promise<boolean>
   /** True when shell launch args already delivered the startup command, so the host skips its stdin fallback write. */
   startupCommandDeliveredInShellArgs?: boolean
   /** Shell the subprocess actually spawned, after fallbacks. The host reconciles the caller's shell-ready

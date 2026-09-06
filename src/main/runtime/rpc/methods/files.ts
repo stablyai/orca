@@ -51,6 +51,12 @@ const FileOpenDiff = FileOpen.extend({
   staged: z.boolean().optional()
 })
 
+const DocPreviewFileRead = FileOpen.extend({
+  entryRelativePath: z.string().min(1),
+  implicitRootRelativePath: z.string().nullable(),
+  authorizedRootRelativePaths: z.array(z.string())
+})
+
 const FileTreePath = WorktreeSelector.extend({
   relativePath: z
     .unknown()
@@ -87,8 +93,13 @@ const FileSearch = WorktreeSelector.extend({
   maxResults: z.number().int().positive().optional()
 })
 
+// Why: `maxResults` is a new optional field (wire rule 1) — an older host strips it and keeps its
+// own default. It existed only on the Electron IPC hop, so "the client names its cap and a full page
+// means there is more" was true for desktop and merely incidental for web and mobile, which were
+// saved by `remoteFileContentBudget` defaulting the cap inside `listRuntimeFiles`.
 const FileListAll = WorktreeSelector.extend({
-  excludePaths: z.array(z.string()).optional()
+  excludePaths: z.array(z.string()).optional(),
+  maxResults: z.number().int().positive().optional()
 })
 
 const FileUnwatch = z.object({
@@ -147,6 +158,19 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileOpen,
     handler: async (params, { runtime }) =>
       runtime.readMobileFile(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.readDocPreview',
+    params: DocPreviewFileRead,
+    handler: async (params, { runtime, clientKind, requestId }) =>
+      runtime.readDocPreviewFile(
+        params.worktree,
+        params.relativePath,
+        params.entryRelativePath,
+        params.implicitRootRelativePath,
+        params.authorizedRootRelativePaths,
+        remoteFileContentBudget(clientKind, requestId)
+      )
   }),
   defineMethod({
     name: 'files.resolveTerminalPath',
@@ -217,6 +241,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
       return runtime.listRuntimeFiles(params.worktree, {
         excludePaths: params.excludePaths,
+        ...(params.maxResults === undefined ? {} : { maxResults: params.maxResults }),
         ...(signal === undefined ? {} : { signal }),
         ...(maxContentBytes === undefined ? {} : { maxContentBytes })
       })

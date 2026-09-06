@@ -4,7 +4,7 @@
 // missing-Orca-env path, so their writer may break there.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -60,6 +60,7 @@ import { DroidHookService } from '../droid/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
+
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
@@ -69,6 +70,16 @@ import { findGitBash } from './windows-git-bash-path.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')
+
+// Why: a developer box may set HKCU\...\Command Processor\AutoRun, which cmd.exe runs before any
+// .cmd — and MSYS spawns a .cmd without `/d`, so it fires on the Git Bash legs. Redirecting the
+// profile makes the usual `%USERPROFILE%\.cmd_aliases.cmd` target vanish, putting cmd's "not
+// recognized" on the hook's stderr. Seed an empty target so these suites measure the launcher
+// rather than the host's shell configuration.
+function seedCmdAutoRunTarget(profileDir: string): void {
+  mkdirSync(profileDir, { recursive: true })
+  writeFileSync(join(profileDir, '.cmd_aliases.cmd'), '@echo off\r\n', 'utf8')
+}
 const REMOTE_INSTALLERS = [
   {
     agent: 'antigravity',
@@ -209,11 +220,14 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
   return scripts
 }
 
-function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
+// Why: the Codex installer awaits an app-server trust-grant session, so the
+// override has to stay pinned across the await instead of being restored by a
+// synchronous `finally` while the install is still running.
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   try {
-    return run()
+    return await run()
   } finally {
     if (original) {
       Object.defineProperty(process, 'platform', original)
@@ -222,17 +236,18 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 }
 
 describe('Windows managed hook stdin structure', () => {
-  it('exits immediately when Orca env is missing and keeps drain for other failures', () => {
+  it('exits immediately when Orca env is missing and keeps drain for other failures', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
     homedirMock.mockReturnValue(home)
+    seedCmdAutoRunTarget(home)
     const previousGrokHome = process.env.GROK_HOME
     const previousKimiHome = process.env.KIMI_CODE_HOME
     delete process.env.GROK_HOME
     delete process.env.KIMI_CODE_HOME
     try {
-      withPlatform('win32', () => {
+      await withPlatform('win32', async () => {
         for (const entry of LOCAL_INSTALLERS) {
-          expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
+          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
         }
       })
       const hooksDir = join(home, '.orca', 'agent-hooks')
@@ -314,10 +329,11 @@ describe('Windows managed hook stdin structure', () => {
     async () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
+      seedCmdAutoRunTarget(home)
       try {
         const gitBash = findGitBash()
         for (const entry of LOCAL_INSTALLERS) {
-          expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
+          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
         }
         const hooksDir = join(home, '.orca', 'agent-hooks')
         const mainScripts = readdirSync(hooksDir).filter(
@@ -396,6 +412,9 @@ describe('Windows managed hook stdin structure', () => {
     async () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdout-json-'))
       homedirMock.mockReturnValue(home)
+      const absentProfile = join(home, 'absent')
+      seedCmdAutoRunTarget(home)
+      seedCmdAutoRunTarget(absentProfile)
       try {
         expect(new ClaudeHookService().install().state).toBe('installed')
         const settings = JSON.parse(
@@ -423,8 +442,12 @@ describe('Windows managed hook stdin structure', () => {
             })
           },
           {
+            // Why: the encoded launcher resolves %USERPROFILE% at run time, so redirecting it is
+            // what makes the script vanish for that shape. The direct launcher (#18875) carries
+            // an absolute path, so here it asserts only that a bogus profile changes nothing; its
+            // missing-script fallback is covered live in windows-direct-cmd-hook-command.test.ts.
             name: 'missing managed script',
-            env: hookEnvironment({ USERPROFILE: join(home, 'absent') })
+            env: hookEnvironment({ USERPROFILE: absentProfile })
           }
         ]
         for (const shell of shells) {

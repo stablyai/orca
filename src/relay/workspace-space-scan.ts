@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: local and relay Space scans share the same
-   cancellation, symlink, and top-level compaction semantics in one scanner. */
 import { execFile } from 'node:child_process'
 import type { Dirent } from 'node:fs'
 import { lstat, opendir } from 'node:fs/promises'

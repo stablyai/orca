@@ -41,6 +41,7 @@ const {
   mergePR: mergePRMock,
   setPRAutoMerge: setPRAutoMergeMock,
   updatePRState: updatePRStateMock,
+  markPRReadyForReview: markPRReadyForReviewMock,
   rerunPRChecks: rerunPRChecksMock,
   requestPRReviewers: requestPRReviewersMock,
   removePRReviewers: removePRReviewersMock
@@ -246,6 +247,7 @@ describe('registerGitHubHandlers', () => {
     mergePRMock.mockResolvedValue({ ok: true })
     setPRAutoMergeMock.mockResolvedValue({ ok: true })
     updatePRStateMock.mockResolvedValue({ ok: true })
+    markPRReadyForReviewMock.mockResolvedValue({ ok: true })
     rerunPRChecksMock.mockResolvedValue({ ok: true, count: 1 })
     requestPRReviewersMock.mockResolvedValue({ ok: true })
     removePRReviewersMock.mockResolvedValue({ ok: true })
@@ -378,6 +380,14 @@ describe('registerGitHubHandlers', () => {
         repoPath: '/workspace/repo',
         prNumber: 42,
         updates: { state: 'closed' },
+        prRepo
+      }
+    )
+    await handlers['gh:markPRReadyForReview'](
+      { sender: { id: 1 } },
+      {
+        repoPath: '/workspace/repo',
+        prNumber: 42,
         prRepo
       }
     )
@@ -532,6 +542,13 @@ describe('registerGitHubHandlers', () => {
       '/workspace/repo',
       42,
       { state: 'closed' },
+      null,
+      prRepo,
+      localGitOptions
+    )
+    expect(markPRReadyForReviewMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      42,
       null,
       prRepo,
       localGitOptions

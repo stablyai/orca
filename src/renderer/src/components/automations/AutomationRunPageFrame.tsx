@@ -26,7 +26,7 @@ export function AutomationRunPageFrame({
   onBack
 }: AutomationRunPageFrameProps): React.JSX.Element {
   return (
-    <div className="flex min-h-full flex-col rounded-md border border-border/50 bg-background shadow-sm">
+    <div className="flex min-h-full w-full flex-col rounded-md border border-border/50 bg-background shadow-sm">
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border/50 px-4 py-3">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <div className="shrink-0">

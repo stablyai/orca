@@ -201,7 +201,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onBrowserDriverChanged: (listener: MobileBrowserDriverListener) => {
             refs.browserDriver = listener
             return unsubscribeBrowserDriver
-          }
+          },
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         }
       })
     )
@@ -253,6 +255,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         {
           paneKey: FUTURE_PANE_KEY,
           state: 'working' as const,
+          workingMode: 'monitoring' as const,
           prompt: 'p',
           agentType: 'claude',
           receivedAt: 1_700_000_000_000,
@@ -340,7 +343,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(setAgentStatuses.mock.calls[0]?.[0]).toHaveLength(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,
-      expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
+      expect.objectContaining({
+        state: 'working',
+        workingMode: 'monitoring',
+        prompt: 'p',
+        agentType: 'claude'
+      }),
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
       expectWorktreeRouting('wt-1'),
@@ -478,17 +486,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
         return tabId
       }
     })
-    const snapshot = leafIds.map(
-      (leafId, index): AgentStatusSetData => ({
-        paneKey: makePaneKey(tabId, leafId),
-        worktreeId,
-        state: 'working',
-        prompt: `indexed prompt ${index}`,
-        agentType: 'claude',
-        receivedAt: 1_700_000_000_000 + index,
-        stateStartedAt: 1_700_000_000_000 + index
-      })
-    )
+    const snapshot = leafIds.map((leafId, index): AgentStatusSetData => ({
+      paneKey: makePaneKey(tabId, leafId),
+      worktreeId,
+      state: 'working',
+      prompt: `indexed prompt ${index}`,
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_000 + index,
+      stateStartedAt: 1_700_000_000_000 + index
+    }))
     let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
     const getSnapshot = vi.fn(
       () =>
@@ -645,11 +651,13 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(tabIdLookupCount).toBe(paneCount)
     expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)
 
+    // The routing index is memoized on the tab map, so a second snapshot against the same tabs
+    // reuses it instead of re-indexing every owner.
     tabIdLookupCount = 0
     resolveUnsupportedSnapshot(unsupportedSnapshot)
     await vi.waitFor(() => {
       expect(Object.keys(store.getState().migrationUnsupportedByPtyId)).toHaveLength(paneCount)
     })
-    expect(tabIdLookupCount).toBe(paneCount)
+    expect(tabIdLookupCount).toBe(0)
   })
 })

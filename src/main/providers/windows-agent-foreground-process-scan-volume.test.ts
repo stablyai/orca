@@ -62,7 +62,7 @@ describe('windows agent foreground inspection process-table scan volume', () => 
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: getAllProcessesMock
     }))
     vi.useFakeTimers({ toFake: ['Date'] })

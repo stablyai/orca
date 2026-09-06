@@ -5,6 +5,7 @@ import { DISPATCH_CIRCUIT_BREAK_FAILURES } from './db/dispatch-context/dispatch-
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 // STA-4604: failActiveDispatchOnExit fails the dispatch on worker PTY exit but used to
 // gate the "Agent exited unexpectedly" escalation on the legacy coordinator_runs table.
@@ -130,7 +131,7 @@ async function gradeWorkerExit(
       db.createCoordinatorRun({ spec: 'legacy coordinator loop', coordinatorHandle })
     }
     const task = db.createTask({ spec: 'do the work', runId })
-    const dispatch = db.createDispatchContext(task.id, workerHandle, WORKER_PANE_KEY)
+    const dispatch = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
     runtime.setOrchestrationDb(db as never)
 
     runtime.onPtyExit(WORKER_PTY_ID, 137)
@@ -170,6 +171,35 @@ async function gradeWorkerExit(
 }
 
 describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
+  // Why: every other case here uses a short single-line spec, where the derived title and the
+  // raw spec are identical — so a refactor that inlines `task.spec` stays green while the
+  // banner rots. Grade the prose the coordinator actually reads.
+  it('titles the escalation from task_title, not the raw spec', async () => {
+    const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const runId = db.createRun({
+        objective: 'escalation prose',
+        coordinatorHandle,
+        coordinatorPaneKey: COORDINATOR_PANE_KEY
+      }).id
+      const spec = `Fix the auth redirect loop\n\n${'detail '.repeat(60)}`
+      const task = db.createTask({ spec, runId, taskTitle: 'Fix auth redirect' })
+      createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
+      runtime.setOrchestrationDb(db as never)
+
+      runtime.onPtyExit(WORKER_PTY_ID, 137)
+      await settle()
+
+      const body = String(db.getUnreadRunMailbox(runId, 100, ['escalation'])[0]?.body ?? '')
+      expect(body).toContain('"Fix auth redirect"')
+      expect(body).not.toContain('detail detail')
+      expect(body.split('\n')).toHaveLength(1)
+    } finally {
+      db.close()
+    }
+  })
+
   it('delivers the escalation to a lightweight Run mailbox', async () => {
     const graded = await gradeWorkerExit('lightweight-run')
     expect(graded).toMatchObject({
@@ -239,7 +269,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
       const task = db.createTask({ spec: 'do the work', runId: run.id })
-      db.createDispatchContext(task.id, workerHandle, WORKER_PANE_KEY)
+      createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       runtime.setOrchestrationDb(db as never)
 
       const waiting = runtime.waitForMessage(`run:${run.id}`, {
@@ -281,7 +311,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         coordinatorPaneKey: makePaneKey('tab-other', '33333333-3333-4333-8333-333333333333')
       })
       const task = db.createTask({ spec: 'owned work', runId: ownRun.id })
-      db.createDispatchContext(task.id, workerHandle, WORKER_PANE_KEY)
+      createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       runtime.setOrchestrationDb(db as never)
 
       runtime.onPtyExit(WORKER_PTY_ID, 137)
@@ -306,7 +336,12 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
       const task = db.createTask({ spec: 'supervised work', runId: run.id })
-      const started = db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+      const started = db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: task.id,
+        startOptions: {}
+      })
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
         handle: workerHandle,
@@ -350,10 +385,10 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
       const task = db.createTask({ spec: 'repeatedly failing work', runId: run.id })
       // Burn the breaker down to its last life so this exit is the one that trips it.
       for (let attempt = 1; attempt < DISPATCH_CIRCUIT_BREAK_FAILURES; attempt += 1) {
-        const previous = db.createDispatchContext(task.id, workerHandle, WORKER_PANE_KEY)
+        const previous = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
         db.failDispatch(previous.id, `attempt ${attempt}`, { workerProcessExited: true })
       }
-      const dispatch = db.createDispatchContext(task.id, workerHandle, WORKER_PANE_KEY)
+      const dispatch = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       runtime.setOrchestrationDb(db as never)
 
       runtime.onPtyExit(WORKER_PTY_ID, 137)
@@ -414,7 +449,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
       const task = db.createTask({ spec: 'work outliving its coordinator', runId: run.id })
-      db.createDispatchContext(task.id, workerHandle, WORKER_PANE_KEY)
+      createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       // Rebinding the pane to a newer Run clears the old Run's coordinator_handle.
       db.createRun({
         objective: 'newer run on the same coordinator pane',

@@ -252,6 +252,7 @@ describe('orchestration new-worktree workers', () => {
         repoSelector: 'id:repo-explicit',
         baseBranch: 'origin/release',
         displayName: 'Windows release audit',
+        displayNameKind: 'user',
         comment: 'Created for a supervised audit',
         setupDecision: 'skip',
         runHooks: false,

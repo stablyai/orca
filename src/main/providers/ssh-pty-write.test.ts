@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SshPtyProvider } from './ssh-pty-provider'
 import { SSH_PTY_WRITE_SETTLEMENT_TIMEOUT_MS } from './ssh-pty-write'
+import { MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES } from '../ssh/ssh-multiplexer-transport-writer'
 
 describe('SSH PTY writes', () => {
   afterEach(() => {
@@ -40,6 +41,37 @@ describe('SSH PTY writes', () => {
     settle?.({ ok: false, error: new Error('transport rejected write') })
 
     await expect(pending).resolves.toBe(false)
+  })
+
+  it('rejects an atomic write that cannot fit in one ordinary relay frame', () => {
+    const mux = {
+      isDisposed: vi.fn().mockReturnValue(false),
+      notify: vi.fn(),
+      onNotification: vi.fn()
+    }
+    const provider = new SshPtyProvider('conn-1', mux as never)
+
+    expect(
+      provider.write('ssh:conn-1@@pty-1', 'x'.repeat(MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES))
+    ).toBe(false)
+    expect(mux.notify).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized settled write before touching the mux', async () => {
+    const mux = {
+      isDisposed: vi.fn().mockReturnValue(false),
+      notifyWithSettlement: vi.fn(),
+      onNotification: vi.fn()
+    }
+    const provider = new SshPtyProvider('conn-1', mux as never)
+
+    await expect(
+      provider.writeWithSettlement(
+        'ssh:conn-1@@pty-1',
+        'x'.repeat(MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES)
+      )
+    ).resolves.toBe(false)
+    expect(mux.notifyWithSettlement).not.toHaveBeenCalled()
   })
 
   it('rejects settled writes immediately after the transport is disposed', async () => {

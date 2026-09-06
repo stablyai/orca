@@ -152,6 +152,45 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     stopTarget(fixture)
   })
 
+  it('recovers a post-promotion install lock from a previous execution-host boot', async () => {
+    const activeFixture = fixture as TargetFixture
+    const remoteRelayDir = '/root/.orca-remote/relay-reboot-lock-oracle'
+    const previousBootId = 'linux:00000000-0000-0000-0000-000000000000:0'
+    dockerExec(
+      activeFixture,
+      [
+        `rm -rf ${shellQuote(remoteRelayDir)}`,
+        `mkdir -p ${shellQuote(`${remoteRelayDir}/.install-lock`)} ${shellQuote(`${remoteRelayDir}/node_modules`)}`,
+        `printf '%s\\n' promoted > ${shellQuote(`${remoteRelayDir}/relay.js`)}`,
+        `printf '%s\\n' ${shellQuote(previousBootId)} > ${shellQuote(`${remoteRelayDir}/.install-lock/.boot-id`)}`
+      ].join(' && ')
+    )
+    const connection = createConnection(activeFixture)
+    await connection.connect()
+    try {
+      const startedAt = Date.now()
+      await acquireInstallLock(connection, remoteRelayDir, getRemoteHostPlatform('linux-arm64'))
+      const elapsedMs = Date.now() - startedAt
+      const state = dockerExec(
+        activeFixture,
+        [
+          `cat ${shellQuote(`${remoteRelayDir}/.install-lock/.boot-id`)}`,
+          `cat ${shellQuote(`${remoteRelayDir}/relay.js`)}`,
+          `find ${shellQuote(remoteRelayDir)} -maxdepth 1 -name '.install-lock.tombstone.*' -print | wc -l | tr -d ' '`
+        ].join('; ')
+      ).split(/\r?\n/u)
+
+      expect(elapsedMs).toBeLessThan(10_000)
+      expect(state[0]).toMatch(/^linux:[0-9a-f-]+:[0-9]+$/u)
+      expect(state[0]).not.toBe(previousBootId)
+      expect(state[1]).toBe('promoted')
+      expect(state[2]).toBe('0')
+    } finally {
+      await connection.disconnect()
+      dockerExec(activeFixture, `rm -rf ${shellQuote(remoteRelayDir)}`)
+    }
+  }, 60_000)
+
   it('aborts a live SFTP upload after remote bytes arrive without creating the shared lock', async () => {
     const activeFixture = fixture as TargetFixture
     const localRelayDir = join(process.cwd(), 'out', 'relay', 'linux-arm64')

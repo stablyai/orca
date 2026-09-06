@@ -4,6 +4,15 @@ function pathSeparatorFor(pathValue: string): '/' | '\\' {
   return pathValue.includes('\\') ? '\\' : '/'
 }
 
+/** True only for `{home}/orca/projects` on the usual OS home layouts. A configured
+ *  directory that merely ends in `orca/projects` (e.g. `/data/orca/projects`) must
+ *  stay verbatim — the `~` shorthand would otherwise lie. */
+function isHomeProjectsFallback(pathValue: string): boolean {
+  return /^(?:\/(?:Users|home)\/[^/]+|[A-Za-z]:[\\/]Users[\\/][^\\/]+)[\\/]orca[\\/]projects$/.test(
+    pathValue
+  )
+}
+
 function trimTrailingSeparators(pathValue: string): string {
   const trimmed = pathValue.replace(/[\\/]+$/, '')
   if (trimmed === '' && pathValue.startsWith('/')) {
@@ -81,7 +90,13 @@ export function formatCreateProjectParentSummary({
   if (!trimmedParent) {
     return runtimeEnvironmentId || isRemoteHost ? missingServerLocationLabel : missingLocationLabel
   }
-  if (defaultParent && trimmedParent === defaultParent && !runtimeEnvironmentId && !isRemoteHost) {
+  if (
+    defaultParent &&
+    trimmedParent === defaultParent &&
+    !runtimeEnvironmentId &&
+    !isRemoteHost &&
+    isHomeProjectsFallback(trimmedParent)
+  ) {
     return '~/orca/projects'
   }
   return trimmedParent

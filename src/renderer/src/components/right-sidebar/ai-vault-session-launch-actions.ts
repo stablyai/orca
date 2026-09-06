@@ -2,8 +2,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
-  buildAiVaultResumeStartupForWorktree,
-  type AiVaultResumeStartup
+  buildAiVaultResumeStartupForWorktree
 } from '@/lib/ai-vault-resume-command'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import {
@@ -29,6 +28,7 @@ import {
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
@@ -40,14 +40,7 @@ export function useAiVaultSessionLaunchActions({
   activeWorktreeId: string | null
   targetState: AiVaultSessionResumeTargetState
   agentCmdOverrides?: Partial<Record<AiVaultAgent, string | null>>
-}): {
-  buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
-  copyResumeCommand: (session: AiVaultSession, worktreeId?: string | null) => Promise<void>
-  handleResume: (session: AiVaultSession, targetWorktreeId?: string) => void
-  handleContinueInNewSession: (session: AiVaultSession, targetWorktreeId: string) => void
-  continuationRequest: AgentSessionContinuationRequest | null
-  handleContinuationDialogOpenChange: (open: boolean) => void
-} {
+}) {
   const [continuationRequest, setContinuationRequest] =
     useState<AgentSessionContinuationRequest | null>(null)
 
@@ -93,6 +86,10 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResume = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
+      if (session.structuredSession) {
+        void activateAiVaultStructuredSession(session)
+        return
+      }
       const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,

@@ -5,6 +5,10 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
 import { useAppStore, type AppState } from '@/store'
 import {
+  clearRuntimeEnvironmentConnectionGenerationsForTests,
+  setRuntimeEnvironmentConnectionGenerationForTests
+} from '@/store/slices/runtime-status'
+import {
   BG_MIRROR_TAB_ID,
   BG_WT,
   ENV,
@@ -135,13 +139,17 @@ export function setDocumentVisibility(state: 'visible' | 'hidden'): void {
   document.dispatchEvent(new Event('visibilitychange'))
 }
 
-export async function publish(subscription: RuntimeSubscription, result: unknown): Promise<void> {
+export async function publish(
+  subscription: RuntimeSubscription,
+  result: unknown,
+  runtimeId = 'runtime-a'
+): Promise<void> {
   await act(async () => {
     subscription.callbacks.onResponse({
       id: 'subscription-event',
       ok: true as const,
       result,
-      _meta: { runtimeId: 'runtime-a' }
+      _meta: { runtimeId }
     } as never)
     await settle()
   })
@@ -189,6 +197,7 @@ export function installFrameOrderingHarness(options: { fakeTimers?: boolean } = 
     }
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetHostSessionMirrorHydrationForTests()
+    setRuntimeEnvironmentConnectionGenerationForTests(ENV, 1)
     seedState()
   })
 
@@ -198,6 +207,7 @@ export function installFrameOrderingHarness(options: { fakeTimers?: boolean } = 
     replaceRuntimeEnvironmentRevisions([])
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetHostSessionMirrorHydrationForTests()
+    clearRuntimeEnvironmentConnectionGenerationsForTests()
     if (options.fakeTimers) {
       resetStaleDocumentVisibilityForTesting()
       setDocumentVisibility('visible')

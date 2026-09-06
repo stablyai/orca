@@ -57,6 +57,69 @@ describe('buildHydratedTabState – unified format', () => {
     expect(result.activeGroupIdByWorktree.w1).toBe('g1')
   })
 
+  // Why this shape exists at all: a preview used to be an editor tab whose id encoded the document,
+  // and its document was never persisted — so sessions written before previews became browser tabs
+  // carry chrome for a surface no restore can produce. The reader's other tabs must be untouched.
+  it('drops the chrome of a preview tab from before previews were browser tabs', () => {
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      openFilesByWorktree: {
+        w1: [
+          {
+            filePath: '/repo/docs/report.html',
+            relativePath: 'docs/report.html',
+            worktreeId: 'w1',
+            language: 'html'
+          }
+        ]
+      },
+      unifiedTabs: {
+        w1: [
+          {
+            id: 'preview-1',
+            entityId: 'html-preview::w1::/repo/docs/report.html',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'editor',
+            label: 'docs/report.html (preview)',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: 'editor-1',
+            entityId: '/repo/docs/report.html',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'editor',
+            label: 'report.html',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          }
+        ]
+      },
+      tabGroups: {
+        w1: [
+          {
+            id: 'g1',
+            worktreeId: 'w1',
+            activeTabId: 'preview-1',
+            tabOrder: ['preview-1', 'editor-1']
+          }
+        ]
+      }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1']))
+
+    // The presence half: the ordinary editor tab for the very same document survives, so a filter
+    // that dropped editor chrome wholesale would fail here rather than pass on an empty strip.
+    expect(result.unifiedTabsByWorktree.w1?.map((tab) => tab.id)).toEqual(['editor-1'])
+  })
+
   it('collapses groups and layout when transient tabs are dropped during hydration', () => {
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),
@@ -351,9 +414,9 @@ describe('buildHydratedTabState – legacy format', () => {
     // Why: editor owner migration re-stamped a tab id a sibling record already
     // held. Two rows under one id repeat a React key and strand a ghost row.
     const duplicateId = 'editor:wt%3A%3Alungfish:env-a:FINAL-REPORT.md'
-    const editorTab = (id: string, sortOrder: number) => ({
+    const editorTab = (id: string, entityId: string, sortOrder: number) => ({
       id,
-      entityId: 'editor:wt%3A%3Alungfish:env-b:FINAL-REPORT.md',
+      entityId,
       groupId: 'g1',
       worktreeId: 'w1',
       contentType: 'editor' as const,
@@ -366,7 +429,11 @@ describe('buildHydratedTabState – legacy format', () => {
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),
       unifiedTabs: {
-        w1: [editorTab('t-unique', 0), editorTab(duplicateId, 1), editorTab(duplicateId, 2)]
+        w1: [
+          editorTab('t-unique', 'editor:wt%3A%3Alungfish:env-c:FINAL-REPORT.md', 0),
+          editorTab(duplicateId, 'editor:wt%3A%3Alungfish:env-b:FINAL-REPORT.md', 1),
+          editorTab(duplicateId, 'editor:wt%3A%3Alungfish:env-b:FINAL-REPORT.md', 2)
+        ]
       },
       tabGroups: {
         w1: [

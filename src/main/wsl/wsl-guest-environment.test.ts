@@ -156,7 +156,7 @@ describe('a failed verdict does not outlive its usefulness', () => {
     expect(await getWslGuestEnvironment('Ubuntu', 9_000)).not.toBeNull()
   })
 
-  it('bounds a joiner by its own budget, not the starter\'s', async () => {
+  it("bounds a joiner by its own budget, not the starter's", async () => {
     // Joining used to mean waiting out the starter's probe, so a joiner could
     // reach its own command with 1ms left.
     let release: (v: unknown) => void = () => {}

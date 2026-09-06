@@ -118,14 +118,20 @@ export {
 
 export function wrapWindowsHookCommand(
   scriptPath: string,
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
+  // Why: POSIX wrap already answers missing-script with stdout; Windows must match so gate events cannot drift (#15462).
+  options: { fallbackStdout?: string } = {}
 ): string {
   // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
   const quoted = quotePowerShellString(scriptPath)
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
     .join('')
-  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  const fallback =
+    options.fallbackStdout === undefined
+      ? ''
+      : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
+  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; ${fallback}exit 0`
   return wrapWindowsPowerShellEncodedCommand(command)
 }
 

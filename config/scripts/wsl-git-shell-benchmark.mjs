@@ -5,6 +5,11 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 
 import { createJiti } from 'jiti'
+import {
+  BENCHMARK_SAMPLE_AGGREGATION,
+  summarizeBenchmarkSamples
+} from './benchmark-sample-summary.mjs'
+import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const DEFAULT_SAMPLES = 20
 const DEFAULT_WARMUPS = 3
@@ -48,6 +53,9 @@ function parseArgs(argv) {
     if (!Number.isInteger(value) || value < minimum || value > 1_000) {
       throw new Error(`--${name} must be an integer between ${minimum} and 1000`)
     }
+  }
+  if (options.samples % 2 !== 0) {
+    throw new Error('--samples must be even so ABBA blocks are counterbalanced')
   }
   if (!options.nativeRepo || !options.mountedRepo) {
     throw new Error('--native-repo and --mounted-repo are required')
@@ -103,21 +111,6 @@ async function resolveDistro(requested) {
     throw new Error('No WSL distro is installed')
   }
   return distro
-}
-
-function percentile(samples, value) {
-  const sorted = [...samples].sort((left, right) => left - right)
-  return sorted[Math.ceil((value / 100) * sorted.length) - 1]
-}
-
-function summarize(samples) {
-  return {
-    samples: samples.length,
-    medianMs: Number(percentile(samples, 50).toFixed(1)),
-    p95Ms: Number(percentile(samples, 95).toFixed(1)),
-    minMs: Number(Math.min(...samples).toFixed(1)),
-    maxMs: Number(Math.max(...samples).toFixed(1))
-  }
 }
 
 function assertRepoPath(path, expectedPrefix) {
@@ -195,8 +188,8 @@ async function main() {
       await runArm('fast')
     }
     const samples = { login: [], fast: [] }
-    for (let index = 0; index < options.samples; index += 1) {
-      const order = index % 2 === 0 ? ['login', 'fast'] : ['fast', 'login']
+    const schedule = buildCounterbalancedSchedule(options.samples, 'login', 'fast')
+    for (const order of schedule) {
       const results = []
       for (const mode of order) {
         const result = await runArm(mode)
@@ -215,8 +208,8 @@ async function main() {
         )
       }
     }
-    const login = summarize(samples.login)
-    const fast = summarize(samples.fast)
+    const login = summarizeBenchmarkSamples(samples.login)
+    const fast = summarizeBenchmarkSamples(samples.fast)
     return {
       login,
       fast,
@@ -362,6 +355,7 @@ async function main() {
       .trim(),
     samples: options.samples,
     warmups: options.warmups,
+    sampleAggregation: BENCHMARK_SAMPLE_AGGREGATION,
     injectedLoginDelayMs: options.loginDelayMs,
     loginProbePreambleBytes: Buffer.byteLength(probeText.split('__ORCA_PATH__', 1)[0]),
     guestProcessShape: {

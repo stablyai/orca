@@ -794,6 +794,8 @@ describe('registerBrowserHandlers', () => {
 
   it('validates annotation viewport bridge requests before syncing to the guest', async () => {
     registerBrowserHandlers()
+    const guest = { isDestroyed: () => false } as Electron.WebContents
+    getAuthorizedGuestMock.mockReturnValue(guest)
 
     const syncHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setAnnotationViewportBridge'
@@ -818,12 +820,52 @@ describe('registerBrowserHandlers', () => {
     )
 
     expect(result).toBe(true)
-    expect(setAnnotationViewportBridgeMock).toHaveBeenCalledWith('page-1', {
-      emitViewport: false,
-      enabled: true,
-      markers: [],
-      token: 'annotationviewporttoken'
-    })
+    expect(setAnnotationViewportBridgeMock).toHaveBeenCalledWith(
+      'page-1',
+      {
+        emitViewport: false,
+        enabled: true,
+        markers: [],
+        token: 'annotationviewporttoken'
+      },
+      // Why a resolver and not the guest: the op is serialized per page, so it has to read the
+      // registry when it runs — a navigation while it waited may have swapped the contents.
+      // Which guest it then resolves is pinned in browser-manager-annotation-bridge.test.ts.
+      expect.any(Function)
+    )
+  })
+
+  // Why this is new: the channel used to hand a page id straight to the manager, so any trusted
+  // renderer could drive any page's guest. It now resolves through the same authority the grab
+  // channels use, which pins the request to the renderer that registered the page.
+  it('refuses an annotation viewport bridge request from a renderer that does not own the page', async () => {
+    registerBrowserHandlers()
+    getAuthorizedGuestMock.mockReturnValue(null)
+
+    const syncHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:setAnnotationViewportBridge'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => Promise<boolean> | boolean
+
+    const result = await syncHandler(
+      {
+        sender: {
+          id: 91,
+          isDestroyed: () => false,
+          getType: () => 'window',
+          getURL: () => 'file:///renderer/index.html'
+        } as Electron.WebContents
+      },
+      {
+        browserPageId: 'page-1',
+        emitViewport: false,
+        enabled: true,
+        markers: [],
+        token: 'annotationviewporttoken'
+      }
+    )
+
+    expect(result).toBe(false)
+    expect(setAnnotationViewportBridgeMock).not.toHaveBeenCalled()
   })
 
   it('rejects invalid annotation viewport bridge requests', async () => {

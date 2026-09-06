@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { matchPaletteDocument } from './match-document'
 import { mapNormalizedRange, normalizePaletteText } from './normalized-text'
 import { preparePaletteQuery, PALETTE_QUERY_MAX_TOKENS } from './palette-query'
-import { buildPaletteDocument, type PaletteDocumentInput } from './palette-document'
+import {
+  buildPaletteDocument,
+  comparePaletteDocumentRank,
+  type PaletteDocumentInput
+} from './palette-document'
 import { segmentPaletteText } from './text-segments'
 import { isWithinOnePaletteEdit } from './typo-distance'
 
@@ -383,7 +387,7 @@ describe('typo distance', () => {
 })
 
 describe('container field matching', () => {
-  it('marks matchedDirectField as 1 and demotes quality class when all tokens land on container fields', () => {
+  it('counts a container-only token and demotes quality class when every token lands on containers', () => {
     const tabDoc: PaletteDocumentInput = {
       id: 'tab-1',
       visibleFields: [
@@ -394,11 +398,11 @@ describe('container field matching', () => {
     }
     const match = run(tabDoc, '4360')
     expect(match).not.toBeNull()
-    expect(match?.rank.matchedDirectField).toBe(1)
+    expect(match?.rank.containerOnlyTokenCount).toBe(1)
     expect(match?.qualityClass).toBe('exact-evidence')
   })
 
-  it('marks matchedDirectField as 0 when at least one token lands on a direct field', () => {
+  it('does not count a token that lands on a direct field', () => {
     const tabDoc: PaletteDocumentInput = {
       id: 'tab-1',
       visibleFields: [
@@ -409,7 +413,40 @@ describe('container field matching', () => {
     }
     const match = run(tabDoc, '4360')
     expect(match).not.toBeNull()
-    expect(match?.rank.matchedDirectField).toBe(0)
+    expect(match?.rank.containerOnlyTokenCount).toBe(0)
     expect(match?.qualityClass).toBe('exact-visible')
+  })
+
+  it('ranks an all-direct multi-token match ahead of a mixed direct and container match', () => {
+    const direct = run(
+      {
+        id: 'direct',
+        visibleFields: [
+          { id: 'title', profile: 'structured-label', text: 'alpha' },
+          { id: 'path', profile: 'structured-label', text: 'beta' }
+        ],
+        evidence: []
+      },
+      'alpha beta'
+    )
+    const mixed = run(
+      {
+        id: 'mixed',
+        visibleFields: [
+          { id: 'title', profile: 'structured-label', text: 'alpha' },
+          { id: 'worktree', profile: 'structured-label', text: 'beta', isContainer: true }
+        ],
+        evidence: []
+      },
+      'alpha beta'
+    )
+
+    expect(direct).not.toBeNull()
+    expect(mixed).not.toBeNull()
+    expect(direct?.rank.containerOnlyTokenCount).toBe(0)
+    expect(mixed?.rank.containerOnlyTokenCount).toBe(1)
+    if (direct && mixed) {
+      expect(comparePaletteDocumentRank(direct.rank, mixed.rank)).toBeLessThan(0)
+    }
   })
 })

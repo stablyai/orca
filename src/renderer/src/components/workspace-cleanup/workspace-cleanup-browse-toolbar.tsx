@@ -71,6 +71,7 @@ export function WorkspaceCleanupBrowseToolbar({
         gitEvidence={{ pendingCount: gitPendingCount, totalCount: gitCheckedTotal }}
         onQueryChange={(query) => browse.patchFilters('query', query)}
         onClearFilters={browse.clearFilters}
+        onClearAppliedFilter={(filter) => browse.replaceFilters(filter.clear)}
       />
       <WorkspaceCleanupSortHeader
         sort={browse.sort}

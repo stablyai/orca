@@ -9,6 +9,7 @@ import type {
 import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
 import { expect } from './orca-app'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
+import { readFreshTerminalInventory } from './terminal-inventory-observation'
 
 const RECOVERY_DEADLINE_MS = 8_000
 
@@ -86,15 +87,13 @@ async function expectSingleOwningPty(
   await expect
     .poll(
       async () => {
-        const listed = await callStartupExecRuntime<RuntimeTerminalListResult>(
-          page,
-          'terminal.list',
-          {
+        const listed = await readFreshTerminalInventory(() =>
+          callStartupExecRuntime<RuntimeTerminalListResult>(page, 'terminal.list', {
             worktree: `id:${worktreeId}`,
             requireFreshPtyLiveness: true
-          }
+          })
         )
-        return listed.terminals
+        return (listed?.terminals ?? [])
           .filter((candidate) => candidate.tabId === tabId)
           .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
       },

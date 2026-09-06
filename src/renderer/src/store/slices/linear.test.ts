@@ -86,6 +86,40 @@ describe('createLinearSlice', () => {
     expect(store.getState().linearStatusChecked).toBe(true)
   })
 
+  it('preserves status identity when a connection probe leaves its scope unchanged', async () => {
+    const store = createTestStore()
+    const currentStatus: LinearConnectionStatus = {
+      connected: true,
+      viewer: {
+        displayName: 'Test User',
+        email: 'test@example.com',
+        organizationName: 'Test Org'
+      },
+      selectedWorkspaceId: 'workspace-1',
+      activeWorkspaceId: 'workspace-1',
+      workspaces: [
+        {
+          id: 'workspace-1',
+          organizationId: 'workspace-1',
+          organizationName: 'Test Org',
+          displayName: 'Test User',
+          email: 'test@example.com'
+        }
+      ]
+    }
+    store.setState({
+      linearStatus: currentStatus,
+      linearStatusChecked: true,
+      linearStatusContextKey: 'local#0'
+    })
+    linearTestConnection.mockResolvedValueOnce({ ok: true, viewer: currentStatus.viewer })
+    linearStatus.mockResolvedValueOnce({ ...currentStatus, viewer: { ...currentStatus.viewer } })
+
+    await store.getState().testLinearConnection()
+
+    expect(store.getState().linearStatus).toBe(currentStatus)
+  })
+
   it('ignores stale forced connection checks when a newer forced check finishes first', async () => {
     const staleCheck = deferred<LinearConnectionStatus>()
     const freshCheck = deferred<LinearConnectionStatus>()

@@ -1,7 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
+import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 
 /**
  * Builds the dashboard snapshot directly from the live renderer store for the
@@ -10,9 +11,12 @@ import { buildDashboardSnapshot } from './build-dashboard-snapshot'
  * is no relay, so we derive it here from the same builder the bridge uses.
  */
 export function useLiveDashboardSnapshot(): DashboardSnapshot {
+  const rowsCacheRef = useRef<ReturnType<typeof createWorktreeAgentRowsCache>>(undefined!)
+  rowsCacheRef.current ??= createWorktreeAgentRowsCache()
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
@@ -68,6 +72,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           repos,
           worktreesByRepo,
           tabsByWorktree,
+          unifiedTabsByWorktree,
           agentStatusByPaneKey,
           retainedAgentsByPaneKey,
           migrationUnsupportedByPtyId,
@@ -100,13 +105,17 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           // rebuild the board. Matches the bridge's republish gate.
           agentLaunchConfigByPaneKey: useAppStore.getState().agentLaunchConfigByPaneKey
         },
-        Date.now()
+        Date.now(),
+        // Why: unchanged worktrees reuse their row pipeline; card assembly still runs
+        // fresh against the review/host/status slices this memo subscribes to.
+        { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch }
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       repos,
       worktreesByRepo,
       tabsByWorktree,
+      unifiedTabsByWorktree,
       agentStatusByPaneKey,
       retainedAgentsByPaneKey,
       migrationUnsupportedByPtyId,

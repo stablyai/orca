@@ -507,6 +507,7 @@ describe('Store', () => {
     )
   })
 
+  // ~9s locally; the 30s default timeout leaves too little headroom on a loaded CI shard.
   it('loads legacy pane aliases from very large persisted split layouts', async () => {
     const leafCount = 130_000
     writeDataFile({
@@ -561,7 +562,7 @@ describe('Store', () => {
         (entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === `tab1:${leafCount}`
       )
     ).toBe(true)
-  })
+  }, 120_000)
 
   it('converts unambiguous dev migration rows into persisted aliases', async () => {
     const stablePaneKey = makePaneKey('tab1', TEST_LEAF_1)

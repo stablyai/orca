@@ -8,10 +8,10 @@ import {
 
 describe('queueWatcherEvents', () => {
   function events(count: number): WatcherEvent[] {
-    return Array.from(
-      { length: count },
-      (_, index): WatcherEvent => ({ type: 'update', path: `/repo/file-${index}.ts` })
-    )
+    return Array.from({ length: count }, (_, index): WatcherEvent => ({
+      type: 'update',
+      path: `/repo/file-${index}.ts`
+    }))
   }
 
   it('keeps precise events while the batch remains under the overflow limit', () => {

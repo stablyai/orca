@@ -5,11 +5,9 @@ import type { TreeNode } from './file-explorer-types'
 // already removes the child, and issuing both requests races on the
 // now-missing path and produces spurious errors.
 export function selectDeletionRoots(nodes: TreeNode[]): TreeNode[] {
+  const directories = nodes.filter((node) => node.isDirectory)
   return nodes.filter(
-    (n) =>
-      !nodes.some(
-        (other) => other !== n && other.isDirectory && isPathEqualOrDescendant(n.path, other.path)
-      )
+    (n) => !directories.some((other) => other !== n && isPathEqualOrDescendant(n.path, other.path))
   )
 }
 

@@ -2,16 +2,29 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { getControlSocketPath, type SystemSshResolvedConfig } from './ssh-control-socket'
 
 export type SystemSshBuildArgsOptions = {
+  configFile?: string
   resolvedConfig?: SystemSshResolvedConfig | null
   disableControlMaster?: boolean
   suppressOrcaControlMaster?: boolean
   gssapiOnly?: boolean
+  nonInteractive?: boolean
+  /**
+   * `false` only when the parsed ssh_config proves no `Host`/`Match` block claims `configHost`.
+   *
+   * Absent or `true` keeps the config alias fully authoritative, which is right whenever a block
+   * really does name it — and is the only safe default, since a caller that cannot answer must not
+   * be read as having answered "nothing claims it". See `sshConfigMayClaimAlias`.
+   */
+  aliasClaimedByConfig?: boolean
 }
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
   const args: string[] = []
 
-  args.push('-o', options?.gssapiOnly ? 'BatchMode=yes' : 'BatchMode=no')
+  if (options?.configFile) {
+    args.push('-F', options.configFile)
+  }
+  args.push('-o', options?.gssapiOnly || options?.nonInteractive ? 'BatchMode=yes' : 'BatchMode=no')
   if (options?.gssapiOnly) {
     // Why: the probe must neither authenticate with a key nor open an OpenSSH
     // credential prompt; failure belongs to Orca's existing ssh2 prompt path.
@@ -45,6 +58,15 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   }
 
   const useConfigHost = shouldUseOpenSshConfigHost(target)
+
+  // Why: a wildcard `Host *` block supplies ProxyCommand/ProxyJump for every alias, so an alias
+  // whose own Host block was renamed or deleted still looks config-backed and gets dialled bare —
+  // as the wildcard's user, at the wildcard's host, discarding the endpoint Orca stored. Keep the
+  // system transport (OpenSSH must still apply that proxy) but state the stored endpoint, and only
+  // where the config proves no block claims the alias.
+  if (useConfigHost && options?.aliasClaimedByConfig === false) {
+    appendUnclaimedAliasEndpoint(args, target)
+  }
 
   if (!useConfigHost && target.port !== 22) {
     args.push('-p', String(target.port))
@@ -99,6 +121,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   options: SystemSshBuildArgsOptions | undefined
 ): SystemSshBuildArgsOptions | undefined {
   const buildArgsOptions: SystemSshBuildArgsOptions = {}
+  if (options?.configFile !== undefined) {
+    buildArgsOptions.configFile = options.configFile
+  }
   if (options?.resolvedConfig !== undefined) {
     buildArgsOptions.resolvedConfig = options.resolvedConfig
   }
@@ -110,6 +135,12 @@ export function getSystemSshBuildArgsFromOperationOptions(
   }
   if (options?.gssapiOnly === true) {
     buildArgsOptions.gssapiOnly = true
+  }
+  if (options?.nonInteractive === true) {
+    buildArgsOptions.nonInteractive = true
+  }
+  if (options?.aliasClaimedByConfig === false) {
+    buildArgsOptions.aliasClaimedByConfig = false
   }
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }
@@ -159,6 +190,27 @@ function hasEnabledControlMaster(value: string | undefined): boolean {
 function hasEnabledControlPath(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase()
   return normalized != null && normalized !== '' && normalized !== 'none'
+}
+
+/**
+ * Restore only Hostname/Port/User, and only where they diverge from the alias.
+ *
+ * Not `-i`/`-J`/ProxyCommand: the wildcard block is still the route to this network, and `-o
+ * Hostname=` does not change which blocks OpenSSH selects (matching uses the original destination),
+ * so the proxy keeps applying and `%h` now expands to the host we actually mean.
+ */
+function appendUnclaimedAliasEndpoint(args: string[], target: SshTarget): void {
+  const alias = target.configHost
+  const storedHost = target.host.trim()
+  if (storedHost && alias && storedHost !== alias) {
+    args.push('-o', `Hostname=${storedHost}`)
+  }
+  if (target.port && target.port !== 22) {
+    args.push('-p', String(target.port))
+  }
+  if (target.username) {
+    args.push('-l', target.username)
+  }
 }
 
 function shouldUseOpenSshConfigHost(target: SshTarget): boolean {

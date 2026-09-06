@@ -1,0 +1,815 @@
+name: Deploy Relay Production Capacity Job
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        required: true
+        type: string
+      target-cell-id:
+        required: true
+        type: string
+      confirmation:
+        required: true
+        type: string
+      monitor-run-id:
+        required: true
+        type: string
+      monitor-run-attempt:
+        required: true
+        type: string
+      evidence-mode:
+        required: true
+        type: string
+      wave-cell-ids:
+        required: true
+        type: string
+      wave-index:
+        required: true
+        type: string
+      source-wave-run-id:
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  capacity:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 75
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      GCP_REGION: ${{ vars.PRODUCTION_GCP_REGION }}
+      DIRECTOR_SERVICE_NAME: orca-cloud-relay
+      DIRECTOR_ORIGIN: https://relay.onorca.dev
+      TARGET_CELL_ID: ${{ inputs.target-cell-id }}
+      CAPACITY_CELL_IDS: production-gce-c7,production-gce-c8,production-gce-c9,production-gce-c10,production-gce-c13,production-gce-c14,production-gce-c15,production-gce-c16,production-gce-c19,production-gce-c20,production-gce-c21,production-gce-c22,production-gce-c23,production-gce-c24,production-gce-c25,production-gce-c26
+      PREDECESSOR_IMAGE_DIGEST: sha256:0e83408b0dc08531f1e8182019dc151afc38d63ddde4ad5cc01e40247ef3681d
+      COMPATIBLE_DIRECTOR_IMAGE_DIGEST: sha256:01b7fc3e6dce66180034f268a2dc92c05458706c5b3a0dc4450dcdd6161f6e73
+      COMPATIBLE_CELL_IMAGE_DIGEST: sha256:c77ec7aef565009fdb645b0989806859bfa40a7aa14e4a57ab55ac92fee6c34f
+      CAPACITY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+      DEPLOY_MODE: ${{ inputs.mode }}
+      EVIDENCE_MODE: ${{ inputs.evidence-mode }}
+      MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
+      MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+      WAVE_CELL_IDS: ${{ inputs.wave-cell-ids }}
+      WAVE_INDEX: ${{ inputs.wave-index }}
+      SOURCE_WAVE_RUN_ID: ${{ inputs.source-wave-run-id }}
+    steps:
+      - name: Require exact reusable-workflow invocation
+        working-directory: .
+        run: |
+          [[ "${DEPLOY_MODE}" =~ ^(verify|apply|rollback)$ ]]
+          if test "${EVIDENCE_MODE}" = continuation; then
+            test "${DEPLOY_MODE}" = apply
+            [[ "${WAVE_INDEX}" =~ ^[0-3]$ ]]
+            test "${WAVE_CELL_IDS}" != none
+            test "${SOURCE_WAVE_RUN_ID}" = none
+          elif test "${EVIDENCE_MODE}" = resume; then
+            test "${DEPLOY_MODE}" = apply
+            test "${WAVE_INDEX}" = resume
+            test "${WAVE_CELL_IDS}" != none
+            [[ "${SOURCE_WAVE_RUN_ID}" =~ ^[0-9]+$ ]]
+          else
+            test "${EVIDENCE_MODE}" = single
+            test "${WAVE_CELL_IDS}" = none
+            test "${WAVE_INDEX}" = 0
+            test "${SOURCE_WAVE_RUN_ID}" = none
+          fi
+
+      - name: Require production workflow configuration
+        working-directory: .
+        env:
+          DEPLOY_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          DEPLOY_SERVICE_ACCOUNT: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          CAPACITY_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+        run: |
+          test -n "${GCP_REGION}"
+          test -n "${DEPLOY_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${DEPLOY_SERVICE_ACCOUNT}"
+          test -n "${CAPACITY_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${CAPACITY_SERVICE_ACCOUNT}"
+
+      - uses: actions/checkout@v4
+
+      - id: resume-provenance
+        if: ${{ inputs.evidence-mode == 'resume' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "${MONITOR_RUN_ATTEMPT}" = 1
+          case "${MONITOR_RUN_ID}:${SOURCE_WAVE_RUN_ID}:${WAVE_CELL_IDS}:${TARGET_CELL_ID}" in
+            31554591366:31555510376:production-gce-c16,production-gce-c15,production-gce-c14,production-gce-c13:production-gce-c13)
+              EXPECTED_SHA=a917e8e1fc1a2654e8cb81ba39b57733ec56be9c
+              EXPECTED_SOURCE_ATTEMPT=1
+              ;;
+            31562760783:31563664692:production-gce-c10,production-gce-c9,production-gce-c8,production-gce-c7:production-gce-c10)
+              EXPECTED_SHA=6082e9ca89a918ca51f0c87db003f5e8805b64b7
+              EXPECTED_SOURCE_ATTEMPT=1
+              ;;
+            31571019947:31572080665:production-gce-c9,production-gce-c8,production-gce-c7:production-gce-c8)
+              EXPECTED_SHA=e59958130c9d9b7a6cd805df2678d08997842c7c
+              EXPECTED_SOURCE_ATTEMPT=2
+              ;;
+            *) exit 1 ;;
+          esac
+          MONITOR_SHA="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${MONITOR_RUN_ID}" \
+            --jq 'select(.name == "Monitor Relay Production" and
+              .path == ".github/workflows/cloud-monitor-relay-production.yml" and
+              .head_branch == "main" and .head_repository.full_name == env.GITHUB_REPOSITORY and
+              .event == "workflow_dispatch" and .conclusion == "success" and .run_attempt == 1) |
+              .head_sha')"
+          SOURCE_SHA="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_WAVE_RUN_ID}" \
+            --jq 'select(.name == "Deploy Relay Production Capacity" and
+              .path == ".github/workflows/cloud-deploy-relay-production-capacity.yml" and
+              .head_branch == "main" and .head_repository.full_name == env.GITHUB_REPOSITORY and
+              .event == "workflow_dispatch" and .conclusion == "failure") |
+              .head_sha')"
+          SOURCE_ATTEMPT="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_WAVE_RUN_ID}" \
+            --jq '.run_attempt')"
+          [[ "${MONITOR_SHA}" =~ ^[0-9a-f]{40}$ ]]
+          test "${MONITOR_SHA}" = "${EXPECTED_SHA}"
+          test "${SOURCE_SHA}" = "${MONITOR_SHA}"
+          test "${SOURCE_ATTEMPT}" = "${EXPECTED_SOURCE_ATTEMPT}"
+          echo "commit-sha=${MONITOR_SHA}" >> "${GITHUB_OUTPUT}"
+
+      - name: Require fresh dry-run evidence reference
+        if: ${{ inputs.mode == 'apply' }}
+        run: |
+          [[ "${MONITOR_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Download private dry-run evidence
+        if: ${{ inputs.mode == 'apply' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-dry-run-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-monitor-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.monitor-run-id }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Verify dry-run artifact before cloud authentication
+        if: ${{ inputs.mode == 'apply' }}
+        run: |
+          EVIDENCE_COMMIT_SHA="${GITHUB_SHA}"
+          if test "${EVIDENCE_MODE:-single}" = resume; then
+            EVIDENCE_COMMIT_SHA="${{ steps.resume-provenance.outputs.commit-sha }}"
+          fi
+          node dev/scripts/relay-monitor-evidence.mjs verify-restore \
+            --directory "${RUNNER_TEMP}/relay-monitor-evidence" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" \
+            --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${EVIDENCE_COMMIT_SHA}" \
+            --mode dry-run
+
+      - name: Reject previously consumed dry-run evidence
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'single' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          COUNT="$(gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${MARKER_NAME}&per_page=1" \
+            --jq '.total_count')"
+          test "${COUNT}" = "0"
+
+      - name: Download this workflow's wave authority
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'continuation' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-wave-authority
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Download the failed wave authority for resume
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'resume' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-wave-authority
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.source-wave-run-id }}
+
+      - name: Require wave evidence consumed by this workflow
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'continuation' }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          test "$(< "${RUNNER_TEMP}/relay-wave-authority/${MARKER_NAME}")" = "${GITHUB_RUN_ID}"
+
+      - name: Require wave evidence consumed by the failed source workflow
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'resume' }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          test "$(< "${RUNNER_TEMP}/relay-wave-authority/${MARKER_NAME}")" = "${SOURCE_WAVE_RUN_ID}"
+
+      - id: deploy-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+          release: 'false'
+
+      - name: Require exact mutation confirmation
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if test "${EVIDENCE_MODE:-single}" = resume; then
+            test "${CONFIRMATION}" = "RESUME_SELECTED_CELL_TO_1000 ${TARGET_CELL_ID}"
+          elif test "${DEPLOY_MODE}" = apply; then
+            test "${CONFIRMATION}" = "RAISE_SELECTED_CELL_TO_1000"
+          else
+            test "${CONFIRMATION}" = "ROLL_BACK_SELECTED_CELL_TO_600 ${TARGET_CELL_ID}"
+          fi
+
+      - name: Initialize the exact production backend
+        run: node dev/scripts/infra.mjs init --env production
+
+      - name: Build the exact selected-cell configuration
+        shell: bash
+        run: |
+          if test "${DEPLOY_MODE}" = rollback; then
+            TARGET_HARD_CAP=600
+          else
+            TARGET_HARD_CAP=1000
+          fi
+          TARGET_UNOBSERVED_BOUND=60
+          TARGET_HOSTNAME="${TARGET_CELL_ID#production-gce-}"
+          [[ "${TARGET_HOSTNAME}" =~ ^c(7|8|9|10|13|14|15|16|19|20|21|22|23|24|25|26)$ ]]
+          CELL_ORIGIN="https://${TARGET_HOSTNAME}.relay.onorca.dev"
+          CELLS_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/production.tfvars \
+            <<< 'jsonencode(var.relay_gce_cells)' | jq -er '.')"
+          OVERRIDE_CELLS_JSON="$(jq -ce \
+            --arg cell "${TARGET_CELL_ID}" \
+            --argjson cap "${TARGET_HARD_CAP}" \
+            --argjson bound "${TARGET_UNOBSERVED_BOUND}" \
+            '.[$cell].connection_hard_cap = $cap |
+             .[$cell].connection_unobserved_bound = $bound' \
+            <<< "${CELLS_JSON}")"
+          jq -n --argjson cells "${OVERRIDE_CELLS_JSON}" \
+            '{relay_gce_cells:$cells}' > "${RUNNER_TEMP}/relay-capacity.tfvars.json"
+          BASE_CELLS_JSON="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/production.tfvars \
+            <<< 'local.relay_director_cells_json' | jq -er '.')"
+          IMAGE_EXPRESSION="var.relay_gce_cells[\"${TARGET_CELL_ID}\"].image"
+          ZONE_EXPRESSION="var.relay_gce_cells[\"${TARGET_CELL_ID}\"].zone"
+          DESIRED_IMAGE="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/production.tfvars \
+            -var-file="${RUNNER_TEMP}/relay-capacity.tfvars.json" \
+            <<< "${IMAGE_EXPRESSION}" | jq -r '.')"
+          TARGET_ZONE="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/production.tfvars \
+            -var-file="${RUNNER_TEMP}/relay-capacity.tfvars.json" \
+            <<< "${ZONE_EXPRESSION}" | jq -r '.')"
+          MIG_NAME="$(terraform -chdir=infra/terraform output -json relay_gce_cell_deployments \
+            | jq -r --arg cell "${TARGET_CELL_ID}" '.[$cell].mig_name')"
+          jq -e --arg cell "${TARGET_CELL_ID}" \
+            'any(.[]; .id == $cell and .connectionHardCap == 1000 and
+              .connectionUnobservedBound == 60)' \
+            <<< "${BASE_CELLS_JSON}" >/dev/null
+          [[ "${DESIRED_IMAGE}" =~ @sha256:[0-9a-f]{64}$ ]]
+          DESIRED_IMAGE_DIGEST="${DESIRED_IMAGE##*@}"
+          [[ "${TARGET_ZONE}" =~ ^[a-z0-9-]+$ ]]
+          test "${MIG_NAME}" = "orca-cloud-relay-gce-${TARGET_HOSTNAME}"
+          {
+            echo "CELL_ORIGIN=${CELL_ORIGIN}"
+            echo "TARGET_HOSTNAME=${TARGET_HOSTNAME}"
+            echo "TARGET_HARD_CAP=${TARGET_HARD_CAP}"
+            echo "TARGET_UNOBSERVED_BOUND=${TARGET_UNOBSERVED_BOUND}"
+            echo "DESIRED_IMAGE=${DESIRED_IMAGE}"
+            echo "DESIRED_IMAGE_DIGEST=${DESIRED_IMAGE_DIGEST}"
+            echo "TARGET_ZONE=${TARGET_ZONE}"
+            echo "MIG_NAME=${MIG_NAME}"
+            echo "BASE_CELLS_JSON=${BASE_CELLS_JSON}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Require the exact compatible production image and topology
+        shell: bash
+        run: |
+          SERVICE_JSON="$(gcloud run services describe "${DIRECTOR_SERVICE_NAME}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          ACTIVE_REVISION="$(jq -r \
+            '[.status.traffic[] | select((.percent // 0) > 0)] |
+             if length == 1 and .[0].percent == 100 then .[0].revisionName else empty end' \
+            <<< "${SERVICE_JSON}")"
+          test -n "${ACTIVE_REVISION}"
+          ACTIVE_REVISION_JSON="$(gcloud run revisions describe "${ACTIVE_REVISION}" \
+            --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format=json)"
+          ACTIVE_IMAGE="$(jq -er '.spec.containers[0].image' <<< "${ACTIVE_REVISION_JSON}")"
+          ACTIVE_IMAGE_DIGEST="${ACTIVE_IMAGE##*@}"
+          if test "${ACTIVE_IMAGE}" != "${DESIRED_IMAGE}"; then
+            test "${ACTIVE_IMAGE_DIGEST}" = "${COMPATIBLE_DIRECTOR_IMAGE_DIGEST}"
+            test "${DESIRED_IMAGE_DIGEST}" = "${COMPATIBLE_CELL_IMAGE_DIGEST}"
+          fi
+          CURRENT_CELLS_JSON="$(jq -cer '[.spec.containers[0].env[]? |
+                select(.name == "ORCA_RELAY_CELLS_JSON") | .value] |
+              if length == 1 then .[0] | fromjson else error("missing director topology") end' \
+            <<< "${ACTIVE_REVISION_JSON}")"
+          CURRENT_CAPACITY_SERVICE_ACCOUNT_JSON="$(
+            node dev/scripts/read-relay-production-capacity-identity.mjs \
+              <<< "${ACTIVE_REVISION_JSON}"
+          )"
+          CLASSIFICATION="$(jq -nc \
+            --argjson baseCells "${BASE_CELLS_JSON}" \
+            --argjson currentCells "${CURRENT_CELLS_JSON}" \
+            --arg capacityCellIds "${CAPACITY_CELL_IDS}" \
+            --arg targetCellId "${TARGET_CELL_ID}" \
+            --argjson targetHardCap "${TARGET_HARD_CAP}" \
+            --argjson currentCapacityServiceAccount \
+              "${CURRENT_CAPACITY_SERVICE_ACCOUNT_JSON}" \
+            '{baseCells:$baseCells, currentCells:$currentCells,
+              capacityCellIds:($capacityCellIds | split(",")),
+              targetCellId:$targetCellId, targetHardCap:$targetHardCap,
+              currentCapacityServiceAccount:$currentCapacityServiceAccount}' \
+            | node dev/scripts/classify-relay-production-capacity-director.mjs \
+                --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}")"
+          TOPOLOGY_PHASE="$(jq -er '.topologyPhase' <<< "${CLASSIFICATION}")"
+          DESIRED_CELLS_JSON="$(jq -cer '.desiredCells' <<< "${CLASSIFICATION}")"
+          DIRECTOR_READY="$(jq -er \
+            'if (.directorReady | type) == "boolean" then
+               (.directorReady | tostring)
+             else error("invalid directorReady classification") end' \
+            <<< "${CLASSIFICATION}")"
+          {
+            echo "ACTIVE_IMAGE=${ACTIVE_IMAGE}"
+            echo "TOPOLOGY_PHASE=${TOPOLOGY_PHASE}"
+            echo "DIRECTOR_READY=${DIRECTOR_READY}"
+            echo "DESIRED_CELLS_JSON=${DESIRED_CELLS_JSON}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Require the exact wave predecessor topology
+        if: ${{ inputs.mode == 'apply' && (inputs.evidence-mode == 'continuation' || inputs.evidence-mode == 'resume') }}
+        run: test "${TOPOLOGY_PHASE}" = predecessor
+
+      - name: Verify fresh dry-run evidence against the live selector
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'single' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/relay-monitor-evidence.mjs verify-mutation \
+            --directory "${RUNNER_TEMP}/relay-monitor-evidence" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" \
+            --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode dry-run \
+            --mutation-mode capacity-transition \
+            --source-cell-id "${TARGET_CELL_ID}" \
+            --director-origin "${DIRECTOR_ORIGIN}"
+
+      - name: Recheck every live safety signal
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'single' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          pnpm incident:relay-preflight -- \
+            --state-file "${RUNNER_TEMP}/relay-monitor-evidence/relay-${MONITOR_RUN_ID}-dry-run.state.json"
+
+      - name: Recheck exact wave state and every live safety signal
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'continuation' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/relay-production-capacity-wave.mjs build-preflight \
+            --state-file "${RUNNER_TEMP}/relay-monitor-evidence/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
+            --wave-cell-ids "${WAVE_CELL_IDS}" \
+            --wave-index "${WAVE_INDEX}" \
+            --target-cell-id "${TARGET_CELL_ID}" \
+            --output-file "${RUNNER_TEMP}/relay-capacity-wave-preflight.json"
+          RETRY_ARGS=()
+          if test "${WAVE_INDEX}" != 0; then RETRY_ARGS=(--retry-freshness); fi
+          pnpm incident:relay-preflight -- \
+            --state-file "${RUNNER_TEMP}/relay-capacity-wave-preflight.json" \
+            "${RETRY_ARGS[@]}"
+
+      - name: Recheck exact isolated resume state and every live safety signal
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'resume' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/relay-production-capacity-wave.mjs build-resume-preflight \
+            --state-file "${RUNNER_TEMP}/relay-monitor-evidence/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
+            --wave-cell-ids "${WAVE_CELL_IDS}" \
+            --target-cell-id "${TARGET_CELL_ID}" \
+            --output-file "${RUNNER_TEMP}/relay-capacity-wave-preflight.json"
+          pnpm incident:relay-preflight -- \
+            --state-file "${RUNNER_TEMP}/relay-capacity-wave-preflight.json" \
+            --retry-freshness
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap 600 \
+            --unobserved-bound 60 \
+            --heartbeat fresh \
+            --admission migration-only \
+            --draining required \
+            --activity allowed \
+            --runtime required \
+            --expected-image-digests "${PREDECESSOR_IMAGE_DIGEST}"
+
+      - name: Consume the single-use dry-run evidence
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'single' }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          mkdir -p "${RUNNER_TEMP}/relay-monitor-consumption"
+          printf '%s\n' "${GITHUB_RUN_ID}" \
+            > "${RUNNER_TEMP}/relay-monitor-consumption/${MARKER_NAME}"
+
+      - name: Publish the consumed-evidence marker
+        if: ${{ inputs.mode == 'apply' && inputs.evidence-mode == 'single' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-monitor-consumption/relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Verify current selected-cell capacity
+        if: ${{ inputs.mode == 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          CURRENT_CAP="${TARGET_HARD_CAP}"
+          CURRENT_IMAGE_DIGEST="${DESIRED_IMAGE_DIGEST}"
+          if test "${TOPOLOGY_PHASE}" = predecessor; then
+            CURRENT_CAP=600
+            CURRENT_IMAGE_DIGEST="${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}"
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${CURRENT_CAP}" \
+            --unobserved-bound "${TARGET_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission general \
+            --draining forbidden \
+            --activity allowed \
+            --expected-image-digests "${CURRENT_IMAGE_DIGEST}"
+
+      - name: Arm fail-closed mutation cleanup
+        if: ${{ inputs.mode != 'verify' }}
+        run: echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
+
+      - name: Reversibly isolate only the selected cell
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          test "${MUTATION_STARTED:-false}" = true || exit 0
+          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode isolate
+
+      - name: Drain the selected cell or prove an offline rollback
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
+        run: |
+          if node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode drain; then
+            echo "OFFLINE_ROLLBACK=false" >> "${GITHUB_ENV}"
+          elif test "${DEPLOY_MODE}" = rollback; then
+            echo "OFFLINE_ROLLBACK=true" >> "${GITHUB_ENV}"
+          else
+            exit 1
+          fi
+
+      - id: restart-auth-one
+        if: ${{ inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - id: restart-gate-one
+        name: Require restart-safe selected-cell activity
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.restart-auth-one.outputs.id_token }}
+        run: |
+          if test "${OFFLINE_ROLLBACK:-false}" = true; then
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" \
+              --heartbeat stale \
+              --admission migration-only \
+              --draining either \
+              --activity restart-safe \
+              --runtime unavailable
+            echo "settled=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          CURRENT_CAP=600
+          if test "${TOPOLOGY_PHASE}" = desired; then
+            CURRENT_CAP="${TARGET_HARD_CAP}"
+          elif test "${TARGET_HARD_CAP}" = 600; then
+            CURRENT_CAP=1000
+          fi
+          GATE_LOG="${RUNNER_TEMP}/relay-capacity-restart-gate-one.log"
+          set +e
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${CURRENT_CAP}" \
+            --unobserved-bound 60 \
+            --heartbeat either \
+            --admission migration-only \
+            --draining required \
+            --activity restart-safe \
+            --runtime required \
+            --timeout-ms 450000 \
+            --expected-image-digests \
+              "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}" \
+            2> "${GATE_LOG}"
+          GATE_EXIT=$?
+          set -e
+          cat "${GATE_LOG}" >&2
+          if test "${GATE_EXIT}" = 0; then
+            echo "settled=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if test "$(wc -l < "${GATE_LOG}" | tr -d ' ')" = 1 &&
+             grep -Eq '^capacity transition verification timed out: \{.*\}$' "${GATE_LOG}"; then
+            echo "settled=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          exit "${GATE_EXIT}"
+
+      - id: restart-auth-two
+        if: ${{ steps.restart-gate-one.outputs.settled == 'false' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Require extended restart-safe selected-cell activity
+        if: ${{ steps.restart-gate-one.outputs.settled == 'false' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.restart-auth-two.outputs.id_token }}
+        run: |
+          CURRENT_CAP=600
+          if test "${TOPOLOGY_PHASE}" = desired; then
+            CURRENT_CAP="${TARGET_HARD_CAP}"
+          elif test "${TARGET_HARD_CAP}" = 600; then
+            CURRENT_CAP=1000
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${CURRENT_CAP}" \
+            --unobserved-bound 60 \
+            --heartbeat either \
+            --admission migration-only \
+            --draining required \
+            --activity restart-safe \
+            --runtime required \
+            --timeout-ms 450000 \
+            --expected-image-digests \
+              "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}"
+
+      - name: Deploy only the reviewed director topology
+        if: ${{ inputs.mode != 'verify' }}
+        run: |
+          if test "${DIRECTOR_READY}" = true; then exit 0; fi
+          RELEASE_ID="capacity-${TARGET_HOSTNAME}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:8}"
+          node dev/scripts/deploy-relay-blue-green.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --service "${DIRECTOR_SERVICE_NAME}" \
+            --image "${ACTIVE_IMAGE}" \
+            --role director \
+            --max-instances 5 \
+            --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
+            --capacity-cell-id "${TARGET_CELL_ID}" \
+            --director-cells-json "${DESIRED_CELLS_JSON}" \
+            --min-instances 5 \
+            --prune-revisions false \
+            --release-id "${RELEASE_ID}"
+
+      - id: director-transition-auth
+        if: ${{ inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Require fail-closed director transition
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.director-transition-auth.outputs.id_token }}
+        run: |
+          if test "${OFFLINE_ROLLBACK:-false}" = true; then
+            node dev/scripts/verify-relay-capacity-transition.mjs \
+              --director-origin "${DIRECTOR_ORIGIN}" \
+              --cell-origin "${CELL_ORIGIN}" \
+              --cell-id "${TARGET_CELL_ID}" \
+              --heartbeat stale \
+              --admission migration-only \
+              --draining either \
+              --activity restart-safe \
+              --runtime unavailable
+            exit 0
+          fi
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${TARGET_HARD_CAP}" \
+            --unobserved-bound "${TARGET_UNOBSERVED_BOUND}" \
+            --heartbeat either \
+            --admission migration-only \
+            --draining required \
+            --activity restart-safe \
+            --runtime required \
+            --expected-image-digests \
+              "${DESIRED_IMAGE_DIGEST},${PREDECESSOR_IMAGE_DIGEST}"
+
+      - id: capacity-auth
+        if: ${{ inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Plan and apply only the empty selected cell
+        if: ${{ inputs.mode != 'verify' }}
+        shell: bash
+        run: |
+          terraform -chdir=infra/terraform plan \
+            -var-file=environments/production.tfvars \
+            -var-file="${RUNNER_TEMP}/relay-capacity.tfvars.json" \
+            "-target=google_compute_instance_template.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            "-target=google_compute_instance_group_manager.relay_gce_cell[\"${TARGET_CELL_ID}\"]" \
+            -out="${RUNNER_TEMP}/relay-capacity-cell.tfplan"
+          PLAN_RESULT="$(terraform -chdir=infra/terraform show -json \
+            "${RUNNER_TEMP}/relay-capacity-cell.tfplan" \
+            | node dev/scripts/validate-relay-capacity-plan.mjs \
+                --mode bootstrap-cell \
+                --cell-id "${TARGET_CELL_ID}" \
+                --hard-cap "${TARGET_HARD_CAP}" \
+                --unobserved-bound "${TARGET_UNOBSERVED_BOUND}" \
+                --image "${DESIRED_IMAGE}" \
+                --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}")"
+          echo "${PLAN_RESULT}"
+          PLAN_CHANGES="$(jq -r '.changes' <<< "${PLAN_RESULT}")"
+          [[ "${PLAN_CHANGES}" =~ ^(0|1|2)$ ]]
+          if test "${PLAN_CHANGES}" != 0; then
+            terraform -chdir=infra/terraform apply \
+              -auto-approve "${RUNNER_TEMP}/relay-capacity-cell.tfplan"
+          else
+            INSTANCE="$(gcloud compute instance-groups managed list-instances \
+              "${MIG_NAME}" --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" \
+              --format=json | jq -er 'if length == 1 and
+                .[0].instanceStatus == "RUNNING" and .[0].currentAction == "NONE"
+                then .[0].instance | split("/") | last
+                else error("selected cell is not one stable running instance") end')"
+            gcloud compute instance-groups managed recreate-instances \
+              "${MIG_NAME}" --instances "${INSTANCE}" \
+              --project "${GCP_PROJECT_ID}" --zone "${TARGET_ZONE}" --quiet
+          fi
+          gcloud compute instance-groups managed wait-until \
+            "${MIG_NAME}" --stable --project "${GCP_PROJECT_ID}" \
+            --zone "${TARGET_ZONE}" --timeout 900
+
+      - id: capacity-transition-auth
+        if: ${{ inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Verify fresh exact selected-cell heartbeat before admission
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.capacity-transition-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${TARGET_HARD_CAP}" \
+            --unobserved-bound "${TARGET_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission migration-only \
+            --draining forbidden \
+            --activity allowed \
+            --expected-image-digests "${DESIRED_IMAGE_DIGEST}"
+
+      - name: Restore only the selected cell to general admission
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.capacity-transition-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode activate
+
+      - name: Verify the live general selected cell
+        if: ${{ inputs.mode != 'verify' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.capacity-transition-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/verify-relay-capacity-transition.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --hard-cap "${TARGET_HARD_CAP}" \
+            --unobserved-bound "${TARGET_UNOBSERVED_BOUND}" \
+            --heartbeat fresh \
+            --admission general \
+            --draining forbidden \
+            --activity allowed \
+            --expected-image-digests "${DESIRED_IMAGE_DIGEST}"
+
+      - id: cleanup-auth
+        if: ${{ failure() && inputs.mode != 'verify' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Keep the selected cell isolated after a failed mutation
+        if: ${{ failure() && inputs.mode != 'verify' }}
+        continue-on-error: true
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.cleanup-auth.outputs.id_token }}
+        run: |
+          test "${MUTATION_STARTED:-false}" = true || exit 0
+          CLEANUP_STATUS=0
+          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode isolate || CLEANUP_STATUS=$?
+          node dev/scripts/prepare-relay-production-capacity-canary.mjs \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --cell-origin "${CELL_ORIGIN}" \
+            --cell-id "${TARGET_CELL_ID}" \
+            --mode drain || CLEANUP_STATUS=$?
+          exit "${CLEANUP_STATUS}"

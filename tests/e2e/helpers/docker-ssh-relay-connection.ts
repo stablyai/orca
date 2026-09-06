@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import { expect, type Page } from '@stablyai/playwright-test'
 
 import {
   DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH,
@@ -16,6 +16,13 @@ type DockerSshRelayConnectionOptions = {
   relayGracePeriodSeconds?: number
   remotePath?: string
   viaProxyJump?: boolean
+  /**
+   * Seed a terminal tab when the worktree has none. Default true.
+   *
+   * Why it is optional: a spec asking whether the PRODUCT adds a tab cannot tell this helper's
+   * tab from the one under test, so it must be able to leave the worktree empty.
+   */
+  seedInitialTab?: boolean
 }
 
 export async function connectDockerSshRelayTarget(
@@ -24,7 +31,7 @@ export async function connectDockerSshRelayTarget(
   options: DockerSshRelayConnectionOptions = {}
 ): Promise<ConnectedDockerSshRelayTarget> {
   return page.evaluate(
-    async ({ target, remotePath, relayGracePeriodSeconds, viaProxyJump }) => {
+    async ({ target, remotePath, relayGracePeriodSeconds, viaProxyJump, seedInitialTab }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
@@ -147,7 +154,7 @@ export async function connectDockerSshRelayTarget(
           throw new Error(`No remote worktree found for ${result.repo.path}`)
         }
         store.getState().setActiveWorktree(worktree.id)
-        if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
+        if (seedInitialTab && (store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
           store.getState().createTab(worktree.id)
         }
         store.getState().setActiveTabType('terminal')
@@ -168,6 +175,7 @@ export async function connectDockerSshRelayTarget(
           ? DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH
           : DOCKER_SSH_RELAY_REMOTE_REPO_PATH),
       viaProxyJump: options.viaProxyJump ?? false,
+      seedInitialTab: options.seedInitialTab ?? true,
       relayGracePeriodSeconds: options.relayGracePeriodSeconds ?? 1
     }
   )
@@ -218,4 +226,34 @@ export async function reconnectDisconnectedDockerSshRelayTarget(
   targetId: string
 ): Promise<void> {
   return performDockerSshRelayReconnect(page, targetId, false)
+}
+
+export async function recoverDockerSshRelayAfterFault(
+  page: Page,
+  targetId: string,
+  injectFault: () => void | Promise<void>
+): Promise<void> {
+  const readAuthority = () =>
+    page.evaluate((id) => window.__store?.getState().sshConnectionStates.get(id), targetId)
+  const before = await readAuthority()
+  expect(before).toMatchObject({
+    status: 'connected',
+    providerEpoch: expect.any(String),
+    connectionGeneration: expect.any(Number)
+  })
+  await injectFault()
+  // The pre-fault connected publication can remain visible until the next IPC event.
+  await expect
+    .poll(
+      async () => {
+        const after = await readAuthority()
+        return (
+          after?.status === 'connected' &&
+          (after.providerEpoch !== before?.providerEpoch ||
+            after.connectionGeneration !== before?.connectionGeneration)
+        )
+      },
+      { timeout: 120_000, message: 'SSH authority did not recover after the injected fault' }
+    )
+    .toBe(true)
 }

@@ -1,3 +1,9 @@
+import {
+  getRepoExecutionHostId,
+  getSshTargetIdForExecutionHost,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import type { Repo } from '../shared/repo-types'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 
@@ -39,8 +45,20 @@ const pendingChangeListeners = new Set<() => void>()
 let sweepInFlight: Promise<void> | null = null
 let rerunRequested = false
 
-function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
-  return `${repo.connectionId ?? 'local'}\0${repo.path}`
+// Keyed on the resolved host, not the raw field: two rows at the same path on different hosts are
+// different locations, and collapsing them shares one probe (and one abort) across both.
+function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>): string {
+  return `${getRepoExecutionHostId(repo)}\0${repo.path}`
+}
+
+/**
+ * The host *this* process may run the probe on. `getSshTargetIdForExecutionHost`, not the row's
+ * file-holding target: a `runtime:` row's nested SSH target lives in that server's namespace, so
+ * dialing it here would reach a same-named box of ours — a wrong-host answer, not a local one.
+ */
+function getRepoProbeHostId(repo: Repo): ExecutionHostId {
+  const hostId = getRepoExecutionHostId(repo)
+  return getSshTargetIdForExecutionHost(hostId) ? hostId : LOCAL_EXECUTION_HOST_ID
 }
 
 function getCurrentRepo(store: RepoIdentityStore, id: string): Repo | undefined {
@@ -52,7 +70,7 @@ function isSameProbedRepo(snapshot: Repo, current: Repo | undefined): current is
     !!current &&
     current.kind !== 'folder' &&
     current.path === snapshot.path &&
-    (current.connectionId ?? null) === (snapshot.connectionId ?? null)
+    getRepoExecutionHostId(current) === getRepoExecutionHostId(snapshot)
   )
 }
 
@@ -101,7 +119,7 @@ async function enrichRepoGitRemoteIdentity(store: RepoIdentityStore, repo: Repo)
     : NO_IDENTITY_RETRY_TTL_MS
   const controller = new AbortController()
   const promise = (async () => {
-    const result = await probeGitRemoteIdentity(repo.path, repo.connectionId, {
+    const result = await probeGitRemoteIdentity(repo.path, getRepoProbeHostId(repo), {
       signal: controller.signal
     })
     // Why the signal and not a catch: probeGitRemoteIdentity swallows the AbortError and RESOLVES

@@ -22,10 +22,14 @@ export type TestStore = {
   getSparsePresets: StoreMock
   getSettings: StoreMock
   getWorktreeMeta: KeyedStoreMock
+  getWorktreeMetaForHost: StoreMock
   getAllWorktreeMeta: StoreMock
+  captureNativeLocalWorktreeMetadataScanExpectation: StoreMock
   setWorktreeMeta: KeyedStoreWriteMock
+  setWorktreeMetaForHost: StoreMock
   getProjectHostSetups: StoreMock
   removeWorktreeMeta: KeyedStoreMock
+  pruneSessionlessMissingLocalWorktreeMetadataForRepo: StoreMock
   removeWorkspaceSessionStateForWorktree: KeyedStoreMock
   getAllWorktreeLineage: StoreMock
   removeWorktreeLineage: KeyedStoreMock
@@ -54,10 +58,14 @@ export const store: TestStore = {
   getSparsePresets: vi.fn(),
   getSettings: vi.fn(),
   getWorktreeMeta: vi.fn(),
+  getWorktreeMetaForHost: vi.fn(),
   getAllWorktreeMeta: vi.fn(),
+  captureNativeLocalWorktreeMetadataScanExpectation: vi.fn(),
   setWorktreeMeta: vi.fn(),
+  setWorktreeMetaForHost: vi.fn(),
   getProjectHostSetups: vi.fn(),
   removeWorktreeMeta: vi.fn(),
+  pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(),
   removeWorkspaceSessionStateForWorktree: vi.fn(),
   getAllWorktreeLineage: vi.fn(),
   removeWorktreeLineage: vi.fn(),

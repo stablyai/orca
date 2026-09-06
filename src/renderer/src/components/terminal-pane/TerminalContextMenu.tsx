@@ -56,6 +56,8 @@ type TerminalContextMenuProps = {
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
   onForkAgentSession: () => void
+  /** True when this pane may switch between the terminal and native chat views.
+   *  Structured sessions are excluded — they have no terminal underneath. */
   canToggleNativeChat: boolean
   isNativeChatView: boolean
   onToggleNativeChat: () => void
@@ -72,6 +74,8 @@ type TerminalContextMenuProps = {
   canClearPaneTitle: boolean
   onCopyTerminalId: () => void
   onCopyPaneId: () => void
+  canCopyAgentSessionId: boolean
+  onCopyAgentSessionId: () => void
 }
 
 export default function TerminalContextMenu({
@@ -110,7 +114,9 @@ export default function TerminalContextMenu({
   onClearPaneTitle,
   canClearPaneTitle,
   onCopyTerminalId,
-  onCopyPaneId
+  onCopyPaneId,
+  canCopyAgentSessionId,
+  onCopyAgentSessionId
 }: TerminalContextMenuProps): React.JSX.Element {
   // Why: one primary binding prevents Windows/Linux shortcut labels from forcing row wraps.
   const shortcuts = useMemo(
@@ -299,6 +305,15 @@ export default function TerminalContextMenu({
             {showClearPaneTitleShortcut ? (
               <DropdownMenuShortcut>{shortcuts.clearPaneTitle}</DropdownMenuShortcut>
             ) : null}
+          </DropdownMenuItem>
+        ) : null}
+        {canCopyAgentSessionId ? (
+          <DropdownMenuItem onSelect={onCopyAgentSessionId}>
+            <Copy />
+            {translate(
+              'components.terminalPane.TerminalContextMenu.copySessionId',
+              'Copy Session ID'
+            )}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={onCopyTerminalId}>
