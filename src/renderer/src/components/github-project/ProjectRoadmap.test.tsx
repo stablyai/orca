@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ProjectRoadmap from './ProjectRoadmap'
 import type {
@@ -90,9 +90,69 @@ function table(fields: GitHubProjectField[], rows: GitHubProjectRow[]): GitHubPr
   }
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+  window.localStorage.clear()
+})
 
 describe('ProjectRoadmap', () => {
+  it('moves the today marker across local midnight without resetting scroll and cleans up its timer', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 8, 5, 23, 59, 59))
+    const { unmount } = render(
+      <ProjectRoadmap
+        table={table(
+          [START_FIELD, TARGET_FIELD],
+          [row('one', 'Scheduled', [{ kind: 'date', fieldId: 'f_start', date: '2026-09-01' }])]
+        )}
+        fallback={<div>list</div>}
+      />
+    )
+    const scroller = screen.getByTestId('project-roadmap-scroller')
+    const marker = scroller.querySelector<HTMLElement>('.sticky.top-0 .absolute')!
+    const before = Number.parseFloat(marker.style.left)
+    scroller.scrollLeft = 123
+    act(() => vi.advanceTimersByTime(2100))
+    expect(Number.parseFloat(marker.style.left) - before).toBeCloseTo(148 / 30)
+    expect(scroller.scrollLeft).toBe(123)
+    expect(vi.getTimerCount()).toBe(1)
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each([false, true])(
+    'centers when an initially empty view gains dated rows (fields hidden: %s)',
+    (hidden) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2026, 8, 5, 12))
+      const fields = hidden ? [TITLE_FIELD] : [TITLE_FIELD, START_FIELD, TARGET_FIELD]
+      const { rerender } = render(
+        <ProjectRoadmap table={table(fields, [])} fallback={<div>list</div>} />
+      )
+      const populated = table(fields, [
+        row('one', 'Arrived', [
+          { kind: 'date', fieldId: 'f_start', date: '2026-01-01' },
+          { kind: 'date', fieldId: 'f_end', date: '2026-09-10' }
+        ])
+      ])
+      rerender(<ProjectRoadmap table={populated} fallback={<div>list</div>} />)
+      const scroller = screen.getByTestId('project-roadmap-scroller')
+      expect(scroller.scrollLeft).toBeGreaterThan(1000)
+      scroller.scrollLeft = 123
+      rerender(
+        <ProjectRoadmap
+          table={{ ...populated, rows: [...populated.rows] }}
+          fallback={<div>list</div>}
+        />
+      )
+      expect(scroller.scrollLeft).toBe(123)
+      fireEvent.click(screen.getByRole('button', { name: 'Year' }))
+      expect(scroller.scrollLeft).not.toBe(123)
+      expect(window.localStorage.getItem('orca.githubProject.roadmapZoom')).toBe('year')
+    }
+  )
+
   it('places a dated row on the timeline and names the fields driving it', () => {
     render(
       <ProjectRoadmap

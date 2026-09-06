@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CalendarClock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { cn } from '@/lib/utils'
 import { i18n, translate } from '@/i18n/i18n'
 import ProjectGroupHeader from './ProjectGroupHeader'
@@ -45,6 +46,7 @@ export default function ProjectRoadmap({
   fallback
 }: Props): React.JSX.Element {
   const view = table.selectedView
+  const prefersReducedMotion = usePrefersReducedMotion()
   const locale = i18n.resolvedLanguage ?? i18n.language
   // Why: the grid lives on UTC calendar days (parseRoadmapDate), so "today"
   // must be the viewer's LOCAL calendar date mapped to UTC midnight — the raw
@@ -94,6 +96,7 @@ export default function ProjectRoadmap({
   )
   const timelineWidth = ticks.length * tickWidth
   const todayPx = roadmapOffsetPx(todayMs, ticks, tickWidth)
+  const hasTimeline = source !== null && table.rows.length > 0
 
   // Why: the interesting part of a roadmap is around now — open there instead
   // of at the padded left edge, and re-centre when the zoom changes scale.
@@ -103,15 +106,16 @@ export default function ProjectRoadmap({
       return
     }
     const lead = (scroller.clientWidth - LABEL_WIDTH_PX) / 3
-    scroller.scrollTo({ left: Math.max(0, todayPx - lead), behavior: 'smooth' })
-  }, [todayPx])
+    scroller.scrollTo({
+      left: Math.max(0, todayPx - lead),
+      behavior: prefersReducedMotion ? 'instant' : 'smooth'
+    })
+  }, [todayPx, prefersReducedMotion])
   const todayPxRef = useRef(todayPx)
   useLayoutEffect(() => {
     todayPxRef.current = todayPx
   })
-  // Why: position on mount and re-centre on zoom rescale ONLY — keying this on
-  // todayPx would yank the user's scroll back to today whenever a background
-  // refetch prepends grid columns and shifts the left edge.
+  // Center when the timeline appears or zoom changes; refetches must preserve user scroll.
   useEffect(() => {
     const scroller = scrollRef.current
     if (!scroller) {
@@ -119,7 +123,7 @@ export default function ProjectRoadmap({
     }
     const lead = (scroller.clientWidth - LABEL_WIDTH_PX) / 3
     scroller.scrollLeft = Math.max(0, todayPxRef.current - lead)
-  }, [zoom])
+  }, [zoom, hasTimeline])
 
   const colorFieldId = useMemo(() => {
     const grouped = view.groupByFields.find((field) => field.kind === 'single-select')
