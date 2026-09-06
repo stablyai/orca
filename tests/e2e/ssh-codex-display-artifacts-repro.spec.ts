@@ -62,7 +62,8 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
   test.skip(process.platform === 'win32', 'Docker SSH repro uses POSIX ssh tooling.')
 
   test('does not leave duplicated Codex status output after SSH replay', async ({
-    orcaPage
+    orcaPage,
+    electronApp
   }, testInfo: TestInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
@@ -82,9 +83,9 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       await enableRiskyTerminalRendererPath(orcaPage)
-      await installPtyReplayProbe(orcaPage)
 
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await installPtyReplayProbe(orcaPage, electronApp, ptyId)
       const doneMarker = RUN_REAL_REMOTE_CODEX
         ? `ORCA_REAL_REMOTE_CODEX_DONE_${Date.now()}`
         : REMOTE_TUI_DONE
@@ -140,14 +141,14 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
       }
 
       const { analysis, screenshot } = await captureGraySlabAnalysis(orcaPage)
-      analysis.replayDebug = await readReplayProbeSnapshot(orcaPage)
+      analysis.replayDebug = await readReplayProbeSnapshot(orcaPage, electronApp)
       analysis.duplicateStatusRows = await readDuplicateStatusRows(orcaPage)
       const evidenceLabel = RUN_REAL_REMOTE_CODEX
         ? 'real-remote-codex-reconnect-replay'
         : 'fixture-codex-reconnect-replay'
       persistReproEvidence(evidenceLabel, analysis, screenshot)
       const resetEvidence = await resetWebglAndCaptureGraySlabAnalysis(orcaPage)
-      resetEvidence.analysis.replayDebug = await readReplayProbeSnapshot(orcaPage)
+      resetEvidence.analysis.replayDebug = await readReplayProbeSnapshot(orcaPage, electronApp)
       resetEvidence.analysis.duplicateStatusRows = await readDuplicateStatusRows(orcaPage)
       persistReproEvidence(
         `${evidenceLabel}-after-webgl-reset`,
@@ -181,6 +182,7 @@ test.describe('Remote SSH Codex display artifacts repro', () => {
         expect(analysis.rawSlabCount + analysis.staleStatusGlyphRowCount).toBeGreaterThan(0)
       }
       if (FORCE_SSH_RECONNECT_DURING_TUI) {
+        expect(await waitForActivePanePtyId(orcaPage, 60_000)).toBe(ptyId)
         expect(Number(analysis.replayDebug?.replayCount ?? 0)).toBeGreaterThan(0)
       }
       if (RUN_REAL_REMOTE_CODEX) {
