@@ -28,12 +28,69 @@ describe('responsive layout metrics', () => {
     })
   })
 
-  it('keeps landscape phones out of wide tablet layout', () => {
+  it('uses wide layout on sufficiently wide landscape phones', () => {
     expect(getResponsiveLayoutMetrics(932, 430)).toMatchObject({
       isLandscape: true,
       isTabletLayout: false,
+      isWideLayout: true,
+      horizontalPadding: spacing.xl
+    })
+  })
+
+  it.each([
+    {
+      width: 699,
+      height: 430,
+      isLandscape: true,
+      isTabletLayout: false,
       isWideLayout: false,
-      horizontalPadding: spacing.lg
+      label: 'landscape phone below 700px'
+    },
+    {
+      width: 700,
+      height: 430,
+      isLandscape: true,
+      isTabletLayout: false,
+      isWideLayout: true,
+      label: 'landscape phone at 700px'
+    },
+    {
+      width: 700,
+      height: 700,
+      isLandscape: false,
+      isTabletLayout: true,
+      isWideLayout: true,
+      label: 'square tablet at 700px'
+    },
+    {
+      width: 699,
+      height: 700,
+      isLandscape: false,
+      isTabletLayout: true,
+      isWideLayout: false,
+      label: 'tablet window below 700px'
+    },
+    {
+      width: 600,
+      height: 900,
+      isLandscape: false,
+      isTabletLayout: true,
+      isWideLayout: false,
+      label: 'tablet short side at 600px'
+    },
+    {
+      width: 599,
+      height: 900,
+      isLandscape: false,
+      isTabletLayout: false,
+      isWideLayout: false,
+      label: 'tablet short side below 600px'
+    }
+  ])('classifies $label', ({ width, height, isLandscape, isTabletLayout, isWideLayout }) => {
+    expect(getResponsiveLayoutMetrics(width, height)).toMatchObject({
+      isLandscape,
+      isTabletLayout,
+      isWideLayout
     })
   })
 })

@@ -3,6 +3,7 @@ import { View, StyleSheet, PanResponder } from 'react-native'
 import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
 import { colors } from '../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
+import { getHostSidebarPresentation } from '../../src/layout/host-sidebar-presentation'
 import {
   HOST_SIDEBAR_DEFAULT_WIDTH,
   HOST_SIDEBAR_MAX_WIDTH,
@@ -11,6 +12,7 @@ import {
   saveHostSidebarWidth
 } from '../../src/storage/preferences'
 import { HostProtocolGate } from '../../src/components/HostProtocolGate'
+import { HostSidebarToggleButton } from '../../src/components/HostSidebarToggleButton'
 import { HostScreen } from './[hostId]/index'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
@@ -94,13 +96,12 @@ export default function HostGroupLayout() {
   }, [windowWidth])
 
   const hideSidebar = useCallback(() => setSidebarOpen(false), [])
+  const revealSidebar = useCallback(() => setSidebarOpen(true), [])
   const showSidebar = isWideLayout && !!hostId
   const detailHasContent = !!hostId && pathname !== `/h/${hostId}`
   const canCollapseSidebar = showSidebar && detailHasContent
+  const sidebarPresentation = getHostSidebarPresentation(showSidebar, detailHasContent, sidebarOpen)
 
-  // Why: there is no reveal button — navigating Back to the base host route brings
-  // the sidebar back (and that route's detail pane is only a placeholder, so a
-  // hidden sidebar would leave nothing useful).
   useEffect(() => {
     if (showSidebar && !detailHasContent) {
       setSidebarOpen(true)
@@ -141,7 +142,7 @@ export default function HostGroupLayout() {
   return (
     <HostProtocolGate hostId={hostId}>
       <View style={styles.row}>
-        {showSidebar && sidebarOpen ? (
+        {sidebarPresentation === 'sidebar' ? (
           <View style={[styles.sidebar, { width: sidebarWidth }]}>
             <HostScreen
               embedded
@@ -151,6 +152,11 @@ export default function HostGroupLayout() {
             />
             {/* Dedicated drag handle straddling the right border — see resizer note. */}
             <View style={styles.resizeHandle} {...resizer.panHandlers} />
+          </View>
+        ) : null}
+        {sidebarPresentation === 'reveal' ? (
+          <View style={styles.revealTab}>
+            <HostSidebarToggleButton expanded={false} onPress={revealSidebar} />
           </View>
         ) : null}
         <View style={styles.detail}>
@@ -170,6 +176,15 @@ const styles = StyleSheet.create({
   sidebar: {
     borderRightWidth: 1,
     borderRightColor: colors.borderSubtle
+  },
+  revealTab: {
+    position: 'absolute',
+    left: 0,
+    // Keep the control above a landscape phone's side-mounted camera island.
+    top: '25%',
+    transform: [{ translateY: -16 }],
+    zIndex: 20,
+    elevation: 20
   },
   // Invisible grab strip over the sidebar's right edge. Absolute + elevated so it
   // sits above the worktree list and reliably owns the drag on Android.

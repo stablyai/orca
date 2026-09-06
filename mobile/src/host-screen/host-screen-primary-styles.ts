@@ -26,14 +26,6 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.xs
   },
-  sidebarCollapseButton: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    marginLeft: spacing.xs
-  },
   hostIdentity: {
     flex: 1,
     flexDirection: 'row',
