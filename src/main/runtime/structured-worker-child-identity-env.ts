@@ -21,13 +21,23 @@
  * precisely because a structured session emits no hook agent status. The CLI needs none of it once
  * the handle is present.
  *
- * A session that is not a dispatched worker is handed back its own env untouched, so an ordinary
- * chat session's child is unchanged. The handle is read from the registry at spawn time, so an
- * in-host recovery respawn re-bakes the SAME handle rather than a stale or fresh one.
+ * A session that is not a dispatched worker gets ONE variable, `ORCA_STRUCTURED_SESSION`, and it
+ * names nothing: no handle, no pane key, no session id, no token. Its only meaning is "this child
+ * is a structured session with no orchestration identity", which is what a verb needs in order to
+ * REFUSE rather than guess one. Because it names nothing it cannot be replayed, cannot impersonate,
+ * and cannot flow into the hook, agent-row or mobile-projection pipelines the way a pane key would
+ * — which is why it is a different decision from withholding `ORCA_PANE_KEY`, not a reversal of it.
+ * Without it, `check` fell through to the active-terminal guess and destructively consumed a
+ * SIBLING pane's oldest unread batch; `requireUnambiguous` only narrows that, because with exactly
+ * one terminal pane in the worktree the guess still resolves — to a sibling.
+ *
+ * The handle is read from the registry at spawn time, so an in-host recovery respawn re-bakes the
+ * SAME handle rather than a stale or fresh one.
  */
 
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { prependOrcaCliDirToChildPath } from '../cli/orca-cli-child-path'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
 import { structuredWorkerIdentities } from './structured-worker-identity'
 
 export function structuredWorkerChildIdentityEnv(
@@ -36,7 +46,7 @@ export function structuredWorkerChildIdentityEnv(
 ): Record<string, string> {
   const identity = structuredWorkerIdentities.getBySessionId(sessionId)
   if (!identity) {
-    return childEnv
+    return { ...childEnv, [ORCA_STRUCTURED_SESSION_ENV]: '1' }
   }
   const env: Record<string, string> = {
     ...childEnv,

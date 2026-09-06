@@ -2,6 +2,7 @@ import type { RuntimeClient } from '../../runtime-client'
 import { getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { getTerminalHandle } from '../../selectors'
+import { isStructuredSessionWithoutIdentity } from '../../../shared/structured-session-marker'
 
 export async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
@@ -28,6 +29,18 @@ export async function resolveOrchestrationTerminalHandle(
       }
     }
     return envHandle
+  }
+  // Past this point every remaining route GUESSES an implicit terminal, and a structured session
+  // has no pane for the guess to land on — so it lands on a sibling. `check` is destructive by
+  // default, so that guess consumed another pane's oldest unread batch and marked it read, and the
+  // rightful worker never saw its mail. Refusing is the only honest answer: this child genuinely
+  // cannot infer its own identity.
+  if (isStructuredSessionWithoutIdentity()) {
+    throw new RuntimeClientError(
+      'no_active_sender_terminal',
+      `This chat session has no orchestration identity of its own, so --${flagName} cannot be inferred. ` +
+        `Pass --${flagName} <terminal-handle> explicitly; guessing would act on another pane's mailbox.`
+    )
   }
   if (flagName === 'from') {
     return await resolveImplicitOrchestrationSender(flags, cwd, client)

@@ -155,9 +155,16 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
     // sender — and an arbitrary iteration-order pick answers that with someone else's pane: a bare
     // `send --type worker_done` then settles a SIBLING's context-only dispatch, a tier that has no
     // capability token to reject on, and every message it sends is attributed to that sibling.
-    // Refusing is the only safe answer when more than one leaf could be meant. (`check` resolves
-    // through the `--terminal` scope, which still guesses; a structured worker is covered instead
-    // by the `ORCA_TERMINAL_HANDLE` its child is spawned with.)
+    // Refusing is the only safe answer when more than one leaf could be meant.
+    //
+    // `check` resolves through the `--terminal` scope, which still guesses, and a DISPATCHED
+    // structured worker is covered by the `ORCA_TERMINAL_HANDLE` its child is spawned with. That
+    // was once written as covering structured sessions generally, and it never did: an ordinary
+    // structured chat session is not in the worker registry, so it is spawned with no handle at
+    // all, and the guess below handed it a sibling's pane — which a destructive `check` then
+    // consumed. `requireUnambiguous` does not save it either, because with exactly one terminal
+    // pane the guess resolves. Such a child now carries `ORCA_STRUCTURED_SESSION` and the CLI
+    // refuses before reaching here (`shared/structured-session-marker.ts`).
     const candidates: RuntimeLeafRecord[] = []
     for (const leaf of this.leaves.values()) {
       if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
