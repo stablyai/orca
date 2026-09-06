@@ -29,6 +29,10 @@ test.describe('Dead Terminal Stress @headful', () => {
   const createdWorktreeIds: string[] = []
 
   test.beforeEach(async ({ orcaPage }) => {
+    orcaPage.on('framenavigated', frame => console.info('[stress-navigation] '+JSON.stringify({kind:'navigated',url:frame.url(),main:frame===orcaPage.mainFrame()})))
+    orcaPage.on('crash', () => console.info('[stress-navigation] renderer crashed'))
+    orcaPage.on('close', () => console.info('[stress-navigation] page closed'))
+
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)

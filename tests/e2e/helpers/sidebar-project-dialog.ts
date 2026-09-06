@@ -21,9 +21,9 @@ export async function openSidebarProjectDialog(page: Page): Promise<void> {
     })
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-state'] })
     root.__sidebarMenuDiagnostic = { events, dispose: () => { HTMLElement.prototype.focus = focus; observer.disconnect(); document.removeEventListener('focusin', onFocus, true); document.removeEventListener('focusout', onFocus, true) } }
+    window.__store!.getState().setSidebarWidth(220)
   })
   try {
-    await page.evaluate(() => window.__store!.getState().setSidebarWidth(220))
     await page.getByRole('button', { name: 'More workspace actions', exact: true }).click()
     await page.getByRole('menuitem', { name: 'Add Project', exact: true }).click()
     await expect(page.getByRole('dialog', { name: /Add a project/i })).toBeVisible()
