@@ -50,6 +50,8 @@ export type LaunchAgentInNewTabArgs = {
   prompt?: string
   /** Optional CLI arguments appended to the selected agent command. */
   agentArgs?: string | null
+  /** Prevent a startup update prompt from replacing a launch that carries generated context. */
+  suppressStartupUpdatePrompt?: boolean
   initialCwd?: string | null
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -98,6 +100,7 @@ function launchAgentInNewTabInternal(
     groupId,
     prompt,
     agentArgs,
+    suppressStartupUpdatePrompt = false,
     initialCwd,
     promptDelivery = 'auto-submit',
     launchSource,
@@ -157,6 +160,9 @@ function launchAgentInNewTabInternal(
     shell: queuedShell,
     isRemote,
     agentArgs: effectiveAgentArgs,
+    ...(agent === 'codex' && suppressStartupUpdatePrompt
+      ? { transientAgentArgs: ['-c', 'check_for_update_on_startup=false'] }
+      : {}),
     agentEnv,
     sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
   }

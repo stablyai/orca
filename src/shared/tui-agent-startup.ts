@@ -45,6 +45,8 @@ export function buildAgentStartupPlan(args: {
   shell?: AgentStartupShell
   allowEmptyPromptLaunch?: boolean
   agentArgs?: string | null
+  /** Launch-only arguments omitted from persisted resume configuration. */
+  transientAgentArgs?: readonly string[]
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs?: boolean
@@ -63,6 +65,7 @@ export function buildAgentStartupPlan(args: {
     platform,
     shell,
     agentArgs: usesQuery ? null : args.agentArgs,
+    transientAgentArgs: args.transientAgentArgs,
     sessionOptions: args.sessionOptions,
     sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote

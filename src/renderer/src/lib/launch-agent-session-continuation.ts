@@ -111,6 +111,7 @@ export async function launchAgentSessionContinuation({
     ...(groupId ? { groupId } : {}),
     prompt,
     promptDelivery: 'submit-after-ready',
+    suppressStartupUpdatePrompt: true,
     launchSource,
     ...(initialCwd ? { initialCwd } : {}),
     onPromptDelivered: () =>
