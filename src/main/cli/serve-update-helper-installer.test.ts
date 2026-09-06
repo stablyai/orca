@@ -17,7 +17,7 @@ describe('serve update helper installer', () => {
     expect(script).toContain("chmod 0755 '/usr/lib/orca/serve-update-helper.sh'")
     expect(script).toContain("chown root:root '/var/lib/orca-server-update/helper.json'")
     expect(script).toContain(
-      `printf '{"helperVersion":1,"unitName":"%s"}' 'orca-serve.service' > '/var/lib/orca-server-update/helper.json'`
+      `printf '{"helperVersion":1,"unitName":%s}' "$(printf '%s' 'orca-serve.service' | jq -Rs .)" > '/var/lib/orca-server-update/helper.json'`
     )
     // sudoers drop-in is validated before publication and cleaned up on failure
     expect(script).toContain("visudo -cf '/etc/sudoers.d/orca-serve-update-helper.new'")
