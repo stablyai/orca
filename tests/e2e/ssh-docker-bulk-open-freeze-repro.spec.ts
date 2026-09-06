@@ -78,7 +78,7 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
   // The cost is real and is recorded in run-ssh-docker-e2e.mjs: 5 simultaneously flooding SSH panes
   // exercise writer saturation, ACK/credit accounting and per-pane polling together, and nothing
   // else covers that combination. It is a gap, not coverage living somewhere else.
-  test.fixme('bulk-open many flooding SSH terminals and measure renderer lag @freeze-repro', async ({
+  test('bulk-open many flooding SSH terminals and measure renderer lag @freeze-repro @headful', async ({
     orcaPage,
     registerPostElectronShutdownCleanup
   }, testInfo) => {
