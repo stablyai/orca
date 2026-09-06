@@ -1,6 +1,7 @@
 import type { ListAndDetailEffectsModel } from './use-mobile-tasks-list-and-detail-effects'
 import { useEffect } from './mobile-tasks-dependencies'
 import { type GitHubAssignableUser, isSuccess } from './mobile-tasks-legacy-foundation'
+import { detailPayloadBody } from './mobile-tasks-provider-detail-types'
 
 export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffectsModel) {
   const {
@@ -21,9 +22,7 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
       setItemBodyDraft('')
       return
     }
-    setItemBodyDraft(
-      detailPayload.provider === 'linear' ? detailPayload.description : detailPayload.body
-    )
+    setItemBodyDraft(detailPayloadBody(detailPayload))
   }, [detailPayload])
 
   useEffect(() => {

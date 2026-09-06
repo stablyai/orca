@@ -122,8 +122,8 @@ export {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
-} from './mobile-task-providers'
-export type { TaskProvider } from './mobile-task-providers'
+} from '../../../src/shared/task-providers'
+export type { TaskProvider } from '../../../src/shared/task-providers'
 export { hasSettledHostRepoList } from './host-repo-list'
 export { useHostRepoList } from './use-host-repo-list'
 export { isHostedTaskRepo, reconcileRepoSelection } from './hosted-repo-selection'

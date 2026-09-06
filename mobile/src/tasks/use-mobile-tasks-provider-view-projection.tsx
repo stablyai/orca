@@ -1,4 +1,6 @@
 import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
+import { JIRA_FILTER_LABELS } from './mobile-jira-issue-filters'
+import { jiraSiteLabel } from './jira-mobile-connection'
 import {
   type PickerOption,
   githubProjectKey,
@@ -36,6 +38,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     items,
     linearDisplayProperties,
     linearFilter,
+    jiraFilter,
+    jiraConnection,
     linearGroupBy,
     linearOrderBy,
     linearTeamPropertyTouched,
@@ -62,6 +66,12 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     githubPresetOptions.find((preset) => preset.value === githubPreset)?.label ?? 'Open'
   const gitlabFilterLabel =
     GITLAB_FILTER_OPTIONS.find((filter) => filter.value === gitlabFilter)?.label ?? 'Open'
+  const jiraFilterLabel = JIRA_FILTER_LABELS[jiraFilter]
+  const jiraSelectedSite =
+    jiraConnection.selection && jiraConnection.selection !== 'all'
+      ? (jiraConnection.sites.find((site) => site.id === jiraConnection.selection) ?? null)
+      : null
+  const jiraSiteChipLabel = jiraSelectedSite ? jiraSiteLabel(jiraSelectedSite) : 'All sites'
   const linearFilterLabel =
     LINEAR_FILTER_OPTIONS.find((filter) => filter.value === linearFilter)?.label ?? 'All'
   const linearViewLabel =
@@ -248,6 +258,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     githubPresetPickerOptions,
     githubPresetLabel,
     gitlabFilterLabel,
+    jiraFilterLabel,
+    jiraSiteChipLabel,
     linearFilterLabel,
     linearViewLabel,
     linearGroupLabel,

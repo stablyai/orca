@@ -4,7 +4,7 @@ import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
-} from '../tasks/mobile-task-providers'
+} from '../../../src/shared/task-providers'
 import type { RpcClient } from '../transport/rpc-client'
 import { sendSingleFlightRequest } from '../transport/request-single-flight'
 

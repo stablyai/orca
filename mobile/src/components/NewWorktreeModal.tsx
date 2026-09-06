@@ -134,7 +134,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     hasRepo: selectedRepo != null,
     githubAvailable: runtime.availableProviders.includes('github'),
     gitlabAvailable: runtime.availableProviders.includes('gitlab'),
-    linearAvailable: runtime.availableProviders.includes('linear')
+    linearAvailable: runtime.availableProviders.includes('linear'),
+    jiraAvailable: runtime.jiraConnection.connected && runtime.availableProviders.includes('jira')
   }
   const pasteRepos = useMemo<PasteRepoCandidate[]>(
     () =>
@@ -239,6 +240,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         selectedRepo={selectedRepo}
         repos={repos}
         pasteRepos={pasteRepos}
+        jiraSiteId={runtime.jiraConnection.selection}
+        jiraSites={runtime.jiraConnection.sites}
         sshReady={!executionTarget.sshGate.requiresConnection}
         projectPickerItems={projectPickerItems}
         selectedProjectId={selectedProjectId}

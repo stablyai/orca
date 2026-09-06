@@ -38,6 +38,8 @@ import {
   renderMobileTasksGitHubProjectFieldsPicker,
   renderMobileTasksGitLabViewPicker,
   renderMobileTasksGitLabFilterPicker,
+  renderMobileTasksJiraFilterPicker,
+  renderMobileTasksJiraSitePicker,
   renderMobileTasksLinearFilterPicker,
   renderMobileTasksLinearWorkspacePicker,
   renderMobileTasksLinearTeamPicker,
@@ -203,6 +205,8 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
       {renderMobileTasksGitLabFilterPicker(model)}
 
       {renderMobileTasksLinearFilterPicker(model)}
+      {renderMobileTasksJiraFilterPicker(model)}
+      {renderMobileTasksJiraSitePicker(model)}
 
       {renderMobileTasksLinearWorkspacePicker(model)}
 

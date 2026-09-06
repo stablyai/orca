@@ -16,6 +16,7 @@ import { getMobileWorkspaceRepoBadgeColor } from './new-worktree-modal-types'
 import { PickerListDrawer } from './PickerListDrawer'
 import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
 import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
+import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira-types'
 import type { NewWorktreeDrawerView } from './use-new-worktree-drawer-navigation'
 
 type Composer = ReturnType<typeof useMobileComposerSource>
@@ -29,6 +30,8 @@ export function NewWorktreeModalDrawers(props: {
   selectedRepo: MobileWorkspaceRepo | null
   repos: MobileWorkspaceRepo[]
   pasteRepos: PasteRepoCandidate[]
+  jiraSiteId: JiraSiteSelection | null
+  jiraSites: readonly JiraSite[]
   sshReady: boolean
   projectPickerItems: NewWorkspaceProjectOption<MobileWorkspaceRepo>[]
   selectedProjectId: string | null
@@ -54,6 +57,8 @@ export function NewWorktreeModalDrawers(props: {
         availability={props.sourceAvailability}
         repoId={props.selectedRepo?.id ?? null}
         repos={props.pasteRepos}
+        jiraSiteId={props.jiraSiteId}
+        jiraSites={props.jiraSites}
         sshReady={props.sshReady}
         onRepoChange={(repoId) => {
           const nextRepo = props.repos.find((repo) => repo.id === repoId)

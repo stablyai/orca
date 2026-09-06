@@ -44,6 +44,8 @@ import {
   isSuccess
 } from './mobile-tasks-legacy-foundation'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
+import type { MobileJiraConnection } from './jira-mobile-connection'
+import type { JiraIssueFilter } from '../../../src/shared/jira-types'
 
 export function useMobileTasksRouteAndItemState() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
@@ -75,6 +77,15 @@ export function useMobileTasksRouteAndItemState() {
     normalizeVisibleTaskProviders(undefined)
   )
   const [linearConnected, setLinearConnected] = useState(false)
+  const [jiraConnection, setJiraConnection] = useState<MobileJiraConnection>({
+    connected: false,
+    sites: [],
+    selection: null,
+    credentialError: null
+  })
+  const [jiraFilter, setJiraFilter] = useState<JiraIssueFilter>('assigned')
+  const [showJiraFilterPicker, setShowJiraFilterPicker] = useState(false)
+  const [showJiraSitePicker, setShowJiraSitePicker] = useState(false)
   const [githubMode, setGithubMode] = useState<'items' | 'project'>('items')
   const [githubKind, setGithubKind] = useState<GitHubTaskKind>('issues')
   const [githubPreset, setGithubPreset] = useState<GitHubPreset>('issues')
@@ -191,6 +202,14 @@ export function useMobileTasksRouteAndItemState() {
     setVisibleProviders,
     linearConnected,
     setLinearConnected,
+    jiraConnection,
+    setJiraConnection,
+    jiraFilter,
+    setJiraFilter,
+    showJiraFilterPicker,
+    setShowJiraFilterPicker,
+    showJiraSitePicker,
+    setShowJiraSitePicker,
     githubMode,
     setGithubMode,
     githubKind,

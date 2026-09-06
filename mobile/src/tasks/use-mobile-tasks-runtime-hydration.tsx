@@ -1,4 +1,6 @@
 import type { ClientSettingsActionsModel } from './use-mobile-tasks-client-settings-actions'
+import { extractJiraConnection } from './jira-mobile-connection'
+import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 import {
   MOBILE_TASKS_CAPABILITY,
   type PersistedTrustedOrcaHooks,
@@ -50,6 +52,8 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setGithubProjectTable,
     setItems,
     setLinearConnected,
+    setJiraConnection,
+    setJiraFilter,
     setLinearFilter,
     setLinearStatusPickerItem,
     setLinearTeams,
@@ -248,13 +252,19 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       }
       setTasksSupportState({ kind: 'supported', client })
       setError('')
-      const [settingsResponse, uiResponse, preflightResponse, linearStatusResponse] =
-        await Promise.all([
-          client.sendRequest('settings.get'),
-          client.sendRequest('ui.get'),
-          client.sendRequest('preflight.check'),
-          client.sendRequest('linear.status')
-        ])
+      const [
+        settingsResponse,
+        uiResponse,
+        preflightResponse,
+        linearStatusResponse,
+        jiraStatusResponse
+      ] = await Promise.all([
+        client.sendRequest('settings.get'),
+        client.sendRequest('ui.get'),
+        client.sendRequest('preflight.check'),
+        client.sendRequest('linear.status'),
+        client.sendRequest('jira.status')
+      ])
       if (stale) {
         return
       }
@@ -296,6 +306,11 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
           ? [...availableProviders, 'linear' as const]
           : availableProviders
       setLinearConnected(linearIsConnected)
+      // A host without the Jira RPCs answers with an error; extractJiraConnection
+      // maps that to disconnected so Jira still lists as a connectable source.
+      setJiraConnection(
+        extractJiraConnection(isSuccess(jiraStatusResponse) ? jiraStatusResponse.result : null)
+      )
       if (!linearIsConnected) {
         setLinearWorkspaces([])
         setLinearTeams([])
@@ -320,10 +335,18 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
           : getTaskPresetQuery(preset)
       const nextLinearFilter = normalizeLinearFilter(resume.linearPreset)
       const nextLinearQuery = resume.linearQuery ?? ''
+      const nextJiraFilter = normalizeJiraFilter(resume.jiraPreset)
+      const nextJiraQuery = resume.jiraQuery ?? ''
       defaultRepoSelectionRef.current = settings.defaultRepoSelection ?? null
       defaultLinearTeamSelectionRef.current = settings.defaultLinearTeamSelection ?? null
       const nextQuery =
-        nextProvider === 'github' ? githubQuery : nextProvider === 'linear' ? nextLinearQuery : ''
+        nextProvider === 'github'
+          ? githubQuery
+          : nextProvider === 'linear'
+            ? nextLinearQuery
+            : nextProvider === 'jira'
+              ? nextJiraQuery
+              : ''
       const nextAppliedQuery =
         nextProvider === 'github'
           ? scopeGitHubTaskSearch(githubQuery, githubKindFromQuery(githubQuery, preset))
@@ -336,6 +359,7 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setGithubPreset(preset)
       setGithubKind(githubKindFromQuery(githubQuery, preset))
       setLinearFilter(nextLinearFilter)
+      setJiraFilter(nextJiraFilter)
       setGithubProjectSettings(settings.githubProjects ?? EMPTY_GITHUB_PROJECT_SETTINGS)
       setQuery(nextQuery)
       setAppliedQuery(nextAppliedQuery)

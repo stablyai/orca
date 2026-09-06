@@ -10,7 +10,7 @@ import {
   type HostStackRouter,
   type PendingHostStackNavigation
 } from '../navigation/host-stack-navigation'
-import type { TaskProvider } from './mobile-task-providers'
+import type { TaskProvider } from '../../../src/shared/task-providers'
 
 export type MobileTasksHostRoute = HostStackHostRoute
 export type MobileTasksNavigationState = HostStackNavigationState

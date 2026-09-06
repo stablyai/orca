@@ -260,3 +260,19 @@ export type DetailPayload =
       project?: LinearProject
       children: LinearIssueChild[]
     }
+  | {
+      provider: 'jira'
+      description: string
+      comments: DetailComment[]
+      labels: string[]
+      assignee?: string
+      projectName: string
+      issueTypeName: string
+      priorityName?: string
+    }
+
+export function detailPayloadBody(payload: DetailPayload): string {
+  return payload.provider === 'linear' || payload.provider === 'jira'
+    ? payload.description
+    : payload.body
+}

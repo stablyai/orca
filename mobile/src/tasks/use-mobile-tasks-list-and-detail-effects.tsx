@@ -30,6 +30,8 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     hostedRepos,
     linearConnected,
     linearFilter,
+    jiraFilter,
+    refreshJiraConnection,
     linearMetadataItem,
     loadGitHubProjectTable,
     loadGitHubProjects,
@@ -120,6 +122,27 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       linearQuery: appliedQuery.trim()
     })
   }, [appliedQuery, linearFilter, persistTaskResumeState, provider, taskUiReady])
+
+  useEffect(() => {
+    if (!taskUiReady || provider !== 'jira') {
+      return
+    }
+    persistTaskResumeState({
+      jiraPreset: jiraFilter,
+      jiraQuery: appliedQuery.trim()
+    })
+  }, [appliedQuery, jiraFilter, persistTaskResumeState, provider, taskUiReady])
+
+  // Re-check on every switch to the Jira tab so a desktop-side connect is picked
+  // up without restarting the app.
+  useEffect(() => {
+    if (!taskStateHydrated || provider !== 'jira') {
+      return
+    }
+    void refreshJiraConnection().catch((err) => {
+      setError(err instanceof Error ? err.message : 'Failed to read Jira status')
+    })
+  }, [provider, refreshJiraConnection, taskStateHydrated])
 
   useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {
