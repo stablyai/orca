@@ -26,10 +26,12 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
   type ProcessExitState = {
     startup: PtyPaneStartup
     detector: GitBashConsoleCapacityDetector
+    userInteracted: boolean
   }
   session.createProcessExitState = (startup: PtyPaneStartup): ProcessExitState => ({
     startup,
-    detector: createGitBashConsoleCapacityDetector()
+    detector: createGitBashConsoleCapacityDetector(),
+    userInteracted: false
   })
   session.currentProcessExitState = session.createProcessExitState(session.paneStartup)
   session.processExitStateByPtyId = new Map<string, ProcessExitState>()
@@ -41,6 +43,16 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     if (replacedPtyId && replacedPtyId !== ptyId) {
       session.processExitStateByPtyId.delete(replacedPtyId)
     }
+  }
+  // Why: the capacity overlay may only claim a shell that died on startup. Mark
+  // at the write *attempt* (not the async accept) and key it to the PTY that was
+  // bound then, so an in-flight write counts as interaction and a late accept can
+  // never make a replacement PTY look typed-into.
+  session.noteTerminalInputForPty = (ptyId: string | null | undefined): void => {
+    const state: ProcessExitState =
+      (ptyId ? session.processExitStateByPtyId.get(ptyId) : undefined) ??
+      session.currentProcessExitState
+    state.userInteracted = true
   }
   session.focusSurvivingPtyPaneAfterKeptExit = (): void => {
     if (session.manager.getActivePane()?.id !== session.pane.id) {
@@ -293,15 +305,25 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return
     }
     session.manager.setPaneGpuRendering(session.pane.id, true)
-    const failedLocalProcess =
-      !session.connectionId && session.runtimeEnvironmentId === null && exitCode !== 0
-    if (failedLocalProcess && session.deps.onPaneProcessDied) {
-      const gitBashConsoleCapacityFailure = processExitState.detector.detected()
+    // Why (#16045 regression): retaining every non-zero local exit is not a
+    // capacity detector — an ordinary shell exiting after a failed command hit it
+    // on macOS/Linux too. Claim the exit only for the Windows Git Bash console
+    // ceiling: a native local ConPTY whose *own* fresh spawn died non-zero before
+    // any input, having printed the exact MSYS marker. Everything else falls
+    // through to the unchanged teardown path below.
+    const gitBashConsoleCapacityFailure =
+      session.isNativeWindowsConpty &&
+      session.runtimeEnvironmentId === null &&
+      exitCode !== 0 &&
+      session.spawnedFreshPtyId === ptyId &&
+      !processExitState.userInteracted &&
+      processExitState.detector.detected()
+    if (gitBashConsoleCapacityFailure && session.deps.onPaneProcessDied) {
       session.deps.onPaneProcessDied({
         paneId: session.pane.id,
         exitCode,
-        startup: gitBashConsoleCapacityFailure ? processExitState.startup : null,
-        reason: gitBashConsoleCapacityFailure ? 'git-bash-console-capacity' : 'process-failed'
+        startup: processExitState.startup,
+        reason: 'git-bash-console-capacity'
       })
       return
     }

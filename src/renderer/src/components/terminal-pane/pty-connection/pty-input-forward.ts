@@ -90,6 +90,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.clearPendingTerminalInputIntent()
       return
     }
+    // Why here: the last chokepoint every dropped-input guard has already passed,
+    // and before any send branch — so paste/drop/quick-command input marks this
+    // PTY as interacted without threading a signal through each caller.
+    session.noteTerminalInputForPty(currentPtyId)
     const intent = session.pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
     // listener missed the press. Exact Ctrl+C/Escape bytes are still safe to
