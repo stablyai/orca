@@ -133,9 +133,19 @@ function recordSite(field: string): void {
   sites.set(site, (sites.get(site) ?? 0) + 1)
 }
 
-function recordWrite(previous: Record<string, unknown>, next: Record<string, unknown>): void {
+/**
+ * `fields` is the write's own keys, not the whole state: `set(partial)` merges, so
+ * no field outside the partial can have changed. Scanning the full post-write state
+ * would make the armed cost scale with the store's field count instead of the
+ * write's size.
+ */
+function recordWrite(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+  fields: readonly string[]
+): void {
   const budget: CompareBudget = { nodesLeft: NODE_BUDGET }
-  for (const field of Object.keys(next)) {
+  for (const field of fields) {
     const before = previous[field]
     const after = next[field]
     if (Object.is(before, after)) {
@@ -170,9 +180,22 @@ export function withStoreIdentityChurnProbe<TState>(
         return
       }
       const previous = get() as Record<string, unknown>
-      ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
+      // Why resolve the updater here: zustand would otherwise compute the partial
+      // internally and the probe could only recover the changed fields by scanning
+      // the whole state. Same function, same argument, called once.
+      const resolved =
+        typeof partial === 'function'
+          ? (partial as (state: Record<string, unknown>) => unknown)(previous)
+          : partial
+      ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(resolved, replace)
       try {
-        recordWrite(previous, get() as Record<string, unknown>)
+        const next = get() as Record<string, unknown>
+        // A replace write drops absent fields, so every field is in play.
+        const fields =
+          replace === true || resolved === null || typeof resolved !== 'object'
+            ? Object.keys(next)
+            : Object.keys(resolved as Record<string, unknown>)
+        recordWrite(previous, next, fields)
       } catch {
         // A diagnostic on the app's universal write path must never break writes.
       }

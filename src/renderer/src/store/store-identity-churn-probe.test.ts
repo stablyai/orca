@@ -97,6 +97,32 @@ describe('store identity churn probe', () => {
     expect(row.sites[0].site).toContain('store-identity-churn-probe.test')
   })
 
+  it('runs a functional update exactly once', () => {
+    // The probe resolves the updater itself before handing the object to zustand;
+    // calling it twice would double any work a slice does inside its updater.
+    const store = createProbeStore()
+    let calls = 0
+    armStoreIdentityChurnProbe()
+
+    store.setState((state) => {
+      calls += 1
+      return { counter: state.counter + 1 }
+    })
+
+    expect(calls).toBe(1)
+    expect(store.getState().counter).toBe(1)
+  })
+
+  it('still sees churn on a replace write', () => {
+    const store = createProbeStore()
+    const rows = store.getState().rows
+    armStoreIdentityChurnProbe()
+
+    store.setState({ ...store.getState(), rows: [{ ...rows[0] }] }, true)
+
+    expect(churnFor('rows')).toBe(1)
+  })
+
   it('records nothing while disarmed', () => {
     const store = createProbeStore()
 
