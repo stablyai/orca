@@ -22,6 +22,19 @@ export function buildPRCommentConversationReplyBody(
 
 const ACK_SNIPPET_MAX_LENGTH = 72
 
+/**
+ * Echoing a comment body verbatim makes GitHub re-render its `@handle` mentions and
+ * `#123` references, which re-pings the bots we are only quoting (burning a review
+ * credit) and cross-links unrelated issues. Inline code keeps the text readable and inert.
+ */
+function neutralizePRCommentReferences(line: string): string {
+  // `#\d+` must not match the numeric head of a longer word: a hex colour such as
+  // `#123abc` would come back as `` `#123`abc ``. GitHub does not linkify `#123abc`
+  // either, so skipping it loses nothing. The boundary excludes only `\w` — `#123-foo`
+  // *is* linkified by GitHub, so that one still has to be neutralized.
+  return line.replace(/(^|[^\w`/])(@[a-zA-Z0-9][\w-]*|#\d+(?!\w))/g, '$1`$2`')
+}
+
 /** First readable line of a comment body, minus HTML comments and markdown markers. */
 function summarizePRCommentBody(body: string): string {
   const line = body
@@ -37,9 +50,11 @@ function summarizePRCommentBody(body: string): string {
   if (!line) {
     return ''
   }
-  return line.length > ACK_SNIPPET_MAX_LENGTH
-    ? `${line.slice(0, ACK_SNIPPET_MAX_LENGTH - 1).trimEnd()}…`
-    : line
+  const truncated =
+    line.length > ACK_SNIPPET_MAX_LENGTH
+      ? `${line.slice(0, ACK_SNIPPET_MAX_LENGTH - 1).trimEnd()}…`
+      : line
+  return neutralizePRCommentReferences(truncated)
 }
 
 /** Short "what this was" label so the batched reply names each item without quoting it whole. */
