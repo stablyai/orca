@@ -212,6 +212,49 @@ describe('RateLimitService', () => {
     )
   })
 
+  it('publishes an error row when an inactive Claude fetch throws, instead of a silent gap', async () => {
+    const service = new RateLimitService()
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    ])
+    vi.mocked(fetchManagedAccountUsage).mockRejectedValueOnce(new Error('keychain locked'))
+
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    const row = service.getState().inactiveClaudeAccounts.find((a) => a.accountId === 'account-1')
+    expect(row?.isFetching).toBe(false)
+    expect(row?.rateLimits?.status).toBe('error')
+    expect(row?.rateLimits?.error).toBe('keychain locked')
+    expect(row?.rateLimits?.usageMetadata?.failureKind).toBe('unknown')
+  })
+
+  it('keeps the last known windows on a thrown inactive Claude fetch', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-17T12:00:00Z'))
+    try {
+      const service = new RateLimitService()
+      service.setInactiveClaudeAccountsResolver(() => [
+        { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+      ])
+      vi.mocked(fetchManagedAccountUsage).mockResolvedValueOnce(
+        okProvider('claude', 33, Date.now())
+      )
+      await service.fetchInactiveClaudeAccountsOnOpen()
+      // Past the 60s on-open debounce, inside the 30-minute stale window.
+      await vi.advanceTimersByTimeAsync(2 * 60_000)
+      vi.mocked(fetchManagedAccountUsage).mockRejectedValueOnce(new Error('offline'))
+
+      await service.fetchInactiveClaudeAccountsOnOpen()
+
+      const row = service.getState().inactiveClaudeAccounts.find((a) => a.accountId === 'account-1')
+      expect(row?.rateLimits?.status).toBe('error')
+      expect(row?.rateLimits?.error).toBe('offline')
+      expect(row?.rateLimits?.session?.usedPercent).toBe(33)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not start overlapping inactive Claude preview fetches', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()

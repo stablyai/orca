@@ -1,3 +1,4 @@
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import { fetchManagedAccountUsage } from '../claude-fetcher'
 import { fetchCodexRateLimits } from '../codex-fetcher'
 import { RateLimitServicePolling } from './service-polling'
@@ -6,6 +7,22 @@ import {
   INACTIVE_FETCH_DEBOUNCE_MS,
   delayUnlessAborted
 } from './service-types'
+
+function inactiveAccountFetchFailure(
+  provider: ProviderRateLimits['provider'],
+  error: unknown
+): ProviderRateLimits {
+  return {
+    provider,
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: error instanceof Error ? error.message : String(error || 'Unknown error'),
+    status: 'error',
+    // Why: only credential/keychain reads escape the fetcher unclassified; network and HTTP failures are classified inside it.
+    usageMetadata: { failureKind: 'unknown' }
+  }
+}
 
 export abstract class RateLimitServiceInactiveAccounts extends RateLimitServicePolling {
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
@@ -63,7 +80,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
           this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
-        } catch {
+        } catch (error) {
           // Why: per-account try/catch keeps one Keychain/network error from aborting the remaining accounts in the batch.
           if (
             signal.aborted ||
@@ -71,6 +88,13 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             !this.isCurrentInactiveClaudeAccount(account.id)
           ) {
             this.inactiveClaudeCache.delete(account.id)
+          } else {
+            // Why: a thrown failure must still produce a row; a silent gap in the switcher is indistinguishable from "no data".
+            const cached = this.inactiveClaudeCache.get(account.id) ?? null
+            this.inactiveClaudeCache.set(
+              account.id,
+              this.applyStalePolicy(inactiveAccountFetchFailure('claude', error), cached)
+            )
           }
         }
         this.inactiveClaudeFetching.delete(account.id)

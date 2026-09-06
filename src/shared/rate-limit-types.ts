@@ -20,6 +20,8 @@ export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
 export type UsageRateLimitFailureKind =
   | 'missing-credentials'
   | 'stale-token'
+  /** The refresh token itself was rejected; only a new login recovers the account. */
+  | 'reauth-required'
   | 'refreshable-credentials-without-token'
   | 'delegated-refresh-required'
   | 'deferred-by-live-session'
