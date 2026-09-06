@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
+  MOBILE_WEB_SHELL_FEATURES,
   parseMobileWebBridgeInitialMessage
 } from '../../../src/shared/mobile-web/bridge-contract'
 import { MOBILE_WEB_PRODUCTION_GRANTS } from './mobile-web-production-grants'
@@ -22,7 +23,8 @@ function hybridInitMessage(shellSessionId: string) {
     reconnectAttempts: 0,
     lastConnectedAt: 1_788_000_000_000,
     resumeRoute: { kind: 'workspaceList' },
-    grants: [...MOBILE_WEB_PRODUCTION_GRANTS]
+    grants: [...MOBILE_WEB_PRODUCTION_GRANTS],
+    shellFeatures: [...MOBILE_WEB_SHELL_FEATURES]
   }
 }
 
@@ -33,6 +35,30 @@ describe('hosted shell init contract', () => {
     )
 
     expect(parsed.ok ? 'ok' : parsed.error).toBe('ok')
+  })
+
+  // A newer APK advertises features this page has never heard of. They are opaque strings for
+  // exactly this reason: a closed set would fail the array, and a failed init costs every grant.
+  it('keeps init parseable when the shell advertises an unknown feature', () => {
+    const parsed = parseMobileWebBridgeInitialMessage(
+      JSON.stringify({
+        ...hybridInitMessage(NATIVE_SESSION_ID),
+        shellFeatures: [...MOBILE_WEB_SHELL_FEATURES, 'nativeChat.somethingNewer.v1']
+      })
+    )
+
+    expect(parsed.ok ? 'ok' : parsed.error).toBe('ok')
+    expect(parsed.ok && parsed.value.shellFeatures).toContain('nativeChat.somethingNewer.v1')
+    expect(parsed.ok && parsed.value.grants.length).toBe(MOBILE_WEB_PRODUCTION_GRANTS.length)
+  })
+
+  // A shell built before any feature existed sends no list at all, which must read as "none".
+  it('parses an init from a shell that advertises nothing', () => {
+    const { shellFeatures: _omitted, ...withoutFeatures } = hybridInitMessage(NATIVE_SESSION_ID)
+    const parsed = parseMobileWebBridgeInitialMessage(JSON.stringify(withoutFeatures))
+
+    expect(parsed.ok ? 'ok' : parsed.error).toBe('ok')
+    expect(parsed.ok && parsed.value.shellFeatures).toBeUndefined()
   })
 
   it('pins the session id shape the native stores must mint', () => {

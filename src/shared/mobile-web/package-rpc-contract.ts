@@ -17,8 +17,22 @@ export const MOBILE_WEB_PACKAGE_MAX_IN_FLIGHT_BYTES =
   MOBILE_WEB_PACKAGE_MAX_CONCURRENT_READS * MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES
 export const MOBILE_WEB_PACKAGE_CHUNK_BASE64_CHARS =
   Math.ceil(MOBILE_WEB_PACKAGE_CHUNK_BYTES / 3) * 4
-// Deflate can add a small stored-block header to incompressible chunks.
-export const MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES = MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES + 64
+// zlib's own deflateBound: incompressible input grows by up to a bit per byte plus a block
+// header per 64 bytes, and the gzip wrapper adds a 10-byte header and an 8-byte trailer. A flat
+// margin is not enough — level 6 on 384 KiB of random bytes really does exceed the source length.
+export const MOBILE_WEB_PACKAGE_GZIP_WRAPPER_BYTES = 18
+export function mobileWebPackageGzipBound(sourceByteLength: number): number {
+  return (
+    sourceByteLength +
+    ((sourceByteLength + 7) >> 3) +
+    ((sourceByteLength + 63) >> 6) +
+    5 +
+    MOBILE_WEB_PACKAGE_GZIP_WRAPPER_BYTES
+  )
+}
+export const MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES = mobileWebPackageGzipBound(
+  MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES
+)
 export const MOBILE_WEB_PACKAGE_GZIP_CHUNK_BASE64_CHARS =
   Math.ceil(MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES / 3) * 4
 

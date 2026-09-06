@@ -1,3 +1,4 @@
+import { MOBILE_WEB_SHELL_NATIVE_CHAT_PASTE_FOLLOWED_BY_TEXT_FEATURE } from '../../../src/shared/mobile-web/bridge-contract'
 import {
   MobileWebBridgeClientError,
   type MobileWebBridgeClient
@@ -133,13 +134,19 @@ export function webHostSessionNativeChatOperations(
       if (!budget) {
         return false
       }
+      // Why gated: page->shell payloads are strict, so a shell that predates the field answers
+      // `invalid_request` and the paste fails outright. Without it the shell writes no trailing
+      // separator, which is what every shell did before the field existed.
+      const separatorSupported = client.supportsShellFeature(
+        MOBILE_WEB_SHELL_NATIVE_CHAT_PASTE_FOLLOWED_BY_TEXT_FEATURE
+      )
       try {
         return (
           await client.nativeChat.pasteImages(
             bridgeTarget(target, {
               references: [...references],
               deadline: budget.deadline,
-              ...(followedByText ? { followedByText } : {})
+              ...(followedByText && separatorSupported ? { followedByText } : {})
             }),
             { timeoutMs: budget.timeoutMs }
           )

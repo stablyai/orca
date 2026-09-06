@@ -172,7 +172,7 @@ export class MobileWebPackageAssets {
       )
     }
     const read = await this.readVerifiedRange(params, options, requestedLength)
-    const compressed = gzipSync(read.bytes, { level: 6 })
+    const compressed = compressAssetRange(read.bytes)
     this.storeGzipChunk(key, compressed)
     return this.gzipResponse(
       read.buildId,
@@ -287,3 +287,10 @@ export class MobileWebPackageAssets {
 }
 
 export const mobileWebPackageAssets = new MobileWebPackageAssets()
+
+// Why: gzip buys nothing on a PNG or a woff2, and level 6 expands such a range past the
+// declared ceiling. Stored blocks are the smallest framing deflate has for it.
+function compressAssetRange(bytes: Buffer): Buffer {
+  const deflated = gzipSync(bytes, { level: 6 })
+  return deflated.byteLength < bytes.byteLength ? deflated : gzipSync(bytes, { level: 0 })
+}

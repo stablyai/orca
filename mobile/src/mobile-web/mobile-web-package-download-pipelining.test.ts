@@ -1,4 +1,5 @@
 import { Buffer } from 'buffer/'
+import { randomBytes } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 import { sha256 } from '@noble/hashes/sha256'
 import { describe, expect, it, vi } from 'vitest'
@@ -164,6 +165,22 @@ describe('mobile web package download pipelining', () => {
     expect(fixture.paramsByCall.length).toBe(chunkCount(fixture.manifest))
   })
 
+  // A PNG/woff2 range gzips larger than its source, which the page's chunk schema rejected while
+  // its ceiling was a flat +64 over the range — the download failed on `invalid_chunk`.
+  it('accepts a full incompressible range that gzip expands', async () => {
+    const fixture = createFixture({ incompressibleScript: true })
+    const stager = createStager()
+
+    await downloadMobileWebPackage(fixture.request, stager, {
+      shellBridgeVersion: 1,
+      useGzip: true,
+      rangeBytes: MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES
+    })
+
+    expect(stager.abort).not.toHaveBeenCalled()
+    expectStagedInOrder(fixture, stager)
+  })
+
   it('rejects a ranged asset whose bytes do not hash to the manifest entry', async () => {
     const fixture = createFixture({ alterLastRangeByte: true })
     const stager = createStager()
@@ -203,13 +220,17 @@ function chunkCount(manifest: MobileWebManifest): number {
 }
 
 function createFixture(
-  options: { readLimitedCalls?: number; alterLastRangeByte?: boolean } = {}
+  options: {
+    readLimitedCalls?: number
+    alterLastRangeByte?: boolean
+    incompressibleScript?: boolean
+  } = {}
 ): Fixture {
   const document = Buffer.from('<!doctype html><title>Orca</title>')
-  const script = Buffer.alloc(
-    MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES + MOBILE_WEB_PACKAGE_CHUNK_BYTES + 11,
-    0x61
-  )
+  const scriptBytes = MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES + MOBILE_WEB_PACKAGE_CHUNK_BYTES + 11
+  const script = options.incompressibleScript
+    ? Buffer.from(randomBytes(scriptBytes))
+    : Buffer.alloc(scriptBytes, 0x61)
   const assets: MobileWebAsset[] = [
     asset('index.html', document, 'text/html; charset=utf-8', 'document'),
     asset(`assets/${sha256Hex(script)}.js`, script, 'text/javascript; charset=utf-8', 'script')

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MOBILE_WEB_SHELL_NATIVE_CHAT_PASTE_FOLLOWED_BY_TEXT_FEATURE } from '../../../src/shared/mobile-web/bridge-contract'
 import type { MobileWebBridgeClient } from '../../../src/mobile-web/src/mobile-web-bridge-client'
 import type { HostSessionNativeChatTarget } from './host-session-native-chat-operations'
 import {
@@ -84,8 +85,9 @@ describe('hosted native-chat deadlines', () => {
     vi.useFakeTimers()
     vi.setSystemTime(10_000)
     const pasteImages = vi.fn().mockResolvedValue({ pasted: true })
-    const client = { nativeChat: { pasteImages } } as unknown as MobileWebBridgeClient
-    const operations = webHostSessionNativeChatOperations(client)
+    const operations = webHostSessionNativeChatOperations(
+      pasteImagesClient(pasteImages, [MOBILE_WEB_SHELL_NATIVE_CHAT_PASTE_FOLLOWED_BY_TEXT_FEATURE])
+    )
 
     await expect(operations.pasteImages!(TARGET, ['opaque-image'], 20_000, true)).resolves.toBe(
       true
@@ -94,28 +96,34 @@ describe('hosted native-chat deadlines', () => {
       true
     )
 
-    // Why: an older strict shell rejects unknown keys, so the flag rides only when it is true.
     expect(pasteImages).toHaveBeenNthCalledWith(
       1,
-      {
-        workspaceId: 'workspace',
-        sessionId: 'native_chat_session',
-        references: ['opaque-image'],
-        deadline: 20_000,
-        followedByText: true
-      },
+      { ...pastePayload(), followedByText: true },
       { timeoutMs: 10_000 }
     )
-    expect(pasteImages).toHaveBeenNthCalledWith(
-      2,
-      {
-        workspaceId: 'workspace',
-        sessionId: 'native_chat_session',
-        references: ['opaque-image'],
-        deadline: 20_000
-      },
-      { timeoutMs: 10_000 }
-    )
+    expect(pasteImages).toHaveBeenNthCalledWith(2, pastePayload(), { timeoutMs: 10_000 })
+  })
+
+  // Why: page->shell payloads are strict, so an unadvertised key is `invalid_request` on the whole
+  // paste — the image never lands at all, which is far worse than a missing trailing space.
+  it('withholds the following-text hint from a shell that does not advertise it', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+    const pasteImages = vi.fn().mockResolvedValue({ pasted: true })
+
+    for (const features of [[], ['nativeChat.pasteImages.somethingElse.v1']]) {
+      const operations = webHostSessionNativeChatOperations(
+        pasteImagesClient(pasteImages, features)
+      )
+      await expect(operations.pasteImages!(TARGET, ['opaque-image'], 20_000, true)).resolves.toBe(
+        true
+      )
+    }
+
+    expect(pasteImages).toHaveBeenCalledTimes(2)
+    for (const [payload] of pasteImages.mock.calls) {
+      expect(payload).not.toHaveProperty('followedByText')
+    }
   })
 
   it('clears a stale hosted composer only after the shell accepts preparation', async () => {
@@ -157,3 +165,22 @@ describe('hosted native-chat deadlines', () => {
     })
   })
 })
+
+function pasteImagesClient(
+  pasteImages: ReturnType<typeof vi.fn>,
+  shellFeatures: readonly string[]
+): MobileWebBridgeClient {
+  return {
+    nativeChat: { pasteImages },
+    supportsShellFeature: (feature: string) => shellFeatures.includes(feature)
+  } as unknown as MobileWebBridgeClient
+}
+
+function pastePayload(): Record<string, unknown> {
+  return {
+    workspaceId: 'workspace',
+    sessionId: 'native_chat_session',
+    references: ['opaque-image'],
+    deadline: 20_000
+  }
+}

@@ -2,6 +2,7 @@ import { onTestFinished } from 'vitest'
 import {
   MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
   parseMobileWebBridgePageMessage,
+  MOBILE_WEB_SHELL_FEATURES,
   parseMobileWebBridgeShellMessage,
   type MobileWebBridgeMessageContext,
   type MobileWebBridgePageMessage,
@@ -23,6 +24,8 @@ export const MOBILE_WEB_BRIDGE_ROUNDTRIP_CONTEXT = {
 
 export function createMobileWebBridgeRoundtripFixture(options: {
   grants: InitMessage['grants']
+  /** Defaults to what the hybrid screen really advertises; pass [] to model an older shell. */
+  shellFeatures?: readonly string[]
   rpcClient?: RpcClient | null
   context?: MobileWebBridgeMessageContext
   createRequestId?: () => string
@@ -40,6 +43,7 @@ export function createMobileWebBridgeRoundtripFixture(options: {
   const client = new MobileWebBridgeClient({
     context,
     grants: options.grants,
+    shellFeatures: options.shellFeatures ?? MOBILE_WEB_SHELL_FEATURES,
     createRequestId: options.createRequestId,
     postMessage(message) {
       const parsed = parseMobileWebBridgePageMessage(JSON.stringify(message), context)
