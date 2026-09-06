@@ -279,6 +279,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.
   dismissOnboarding: [true, { option: true }],
   seedTestRepo: [true, { option: true }],
+  // Test-scoped so generation scenarios can isolate Git indexes and remotes.
   seededRepoPath: async ({ testRepoPath }, provideFixture) => {
     await provideFixture(testRepoPath)
   },
