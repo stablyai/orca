@@ -8,7 +8,7 @@ import {
 import {
   setSecurePathHardeningReporter,
   type SecurePathHardeningReport
-} from './secure-path-windows-acl'
+} from './secure-path-hardening-report'
 
 const PATH = 'C:\\Users\\me\\.orca\\secret.json'
 const OTHER = 'C:\\Users\\me\\.orca\\other.json'
@@ -152,5 +152,23 @@ describe('secure path hardening retry budget', () => {
 
     expect(mayAttemptHardening(PATH)).toBe(false)
     expect(mayAttemptHardening(OTHER)).toBe(true)
+  })
+
+  /**
+   * The state every other test here configures away: a module instance nobody has called
+   * `configureHardeningRetryBudget` on, which is what a second importer gets. It used to throw,
+   * and from the async lane that throw is an unhandled rejection rather than a caught error, so
+   * "the budget is unconfigured" surfaced as a dead main process. Nothing is imported here but
+   * the module itself — importing `secure-file.ts` is what used to hide this.
+   */
+  it('defaults its bounds when nothing configured it', async () => {
+    vi.resetModules()
+    const budget = await import('./secure-path-hardening-retry-budget.js')
+
+    expect(budget.mayAttemptHardening(PATH)).toBe(true)
+    expect(() => budget.recordHardeningOutcome(PATH, false)).not.toThrow()
+    // Proof it recorded into a real cache rather than merely not throwing.
+    expect(budget.mayAttemptHardening(PATH)).toBe(false)
+    expect(budget.mayAttemptHardening(OTHER)).toBe(true)
   })
 })

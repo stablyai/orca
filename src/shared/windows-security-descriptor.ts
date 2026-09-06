@@ -7,6 +7,28 @@
  * full control to the wrong principal entirely. SDDL carries raw SIDs, so identity is checkable.
  */
 
+/**
+ * Aliases naming an account by RID within the machine's *own* SID, so no constant can hold them:
+ * the built-in Administrator is `S-1-5-21-<machine>-500`, and icacls prints `LA` for it. A box
+ * whose interactive user is that account (a CI runner, an Administrator-only install) therefore
+ * reads back an ACE no fixed table can match.
+ */
+const LOCAL_DOMAIN_RELATIVE_RIDS: Record<string, number> = {
+  LA: 500,
+  LG: 501
+}
+
+/** `S-1-5-21-x-y-z-<rid>` split into the machine/domain authority and its RID. */
+const DOMAIN_RELATIVE_SID_PATTERN = /^(S-1-5-21(?:-\d+){3})-\d+$/
+
+/**
+ * The machine/domain authority an account SID belongs to, or null when the SID is not
+ * domain-relative (`S-1-5-18` and the `S-1-5-32-*` built-ins never are).
+ */
+export function localDomainSidOf(accountSid: string): string | null {
+  return DOMAIN_RELATIVE_SID_PATTERN.exec(accountSid.toUpperCase())?.[1] ?? null
+}
+
 /** The two-letter aliases SDDL substitutes for well-known SIDs. */
 const SDDL_SID_ALIASES: Record<string, string> = {
   AN: 'S-1-5-7',
@@ -28,7 +50,11 @@ export type WindowsAce = {
   /** Two-letter inheritance/audit tokens, e.g. `['OI', 'CI']` or `['ID']`. */
   flags: string[]
   rights: string
-  /** Always a raw SID: aliases are resolved, unknown tokens are passed through upper-cased. */
+  /**
+   * Always a raw SID: aliases are resolved, unknown tokens are passed through upper-cased.
+   * Machine-relative aliases resolve only when `localDomainSid` is supplied, so an unresolved
+   * `LA` compares unequal to every real SID and the caller fails closed.
+   */
   sid: string
 }
 
@@ -38,7 +64,7 @@ export type WindowsDacl = {
   aces: WindowsAce[]
 }
 
-export function parseSddlDacl(sddl: string): WindowsDacl | null {
+export function parseSddlDacl(sddl: string, localDomainSid?: string): WindowsDacl | null {
   // ACE bodies never contain parentheses, so the group stops cleanly at a following `S:` SACL.
   const dacl = /D:([A-Z]*)((?:\([^()]*\))*)/.exec(sddl)
   if (!dacl) {
@@ -54,7 +80,7 @@ export function parseSddlDacl(sddl: string): WindowsDacl | null {
       type: fields[0]!.toUpperCase(),
       flags: splitAceFlags(fields[1]!),
       rights: fields[2]!.toUpperCase(),
-      sid: resolveSddlSid(fields[5]!)
+      sid: resolveSddlSid(fields[5]!, localDomainSid)
     })
   }
   return { isProtected: dacl[1]!.includes('P'), aces }
@@ -72,7 +98,11 @@ function splitAceFlags(flags: string): string[] {
   return tokens
 }
 
-export function resolveSddlSid(token: string): string {
+export function resolveSddlSid(token: string, localDomainSid?: string): string {
   const upper = token.toUpperCase()
+  const rid = LOCAL_DOMAIN_RELATIVE_RIDS[upper]
+  if (rid !== undefined) {
+    return localDomainSid ? `${localDomainSid}-${rid}` : upper
+  }
   return SDDL_SID_ALIASES[upper] ?? upper
 }

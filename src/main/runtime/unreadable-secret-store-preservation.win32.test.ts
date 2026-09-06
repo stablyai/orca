@@ -1,0 +1,149 @@
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { runProcessSync } from '../../shared/child-process/run-process'
+import { windowsSystem32Binary } from '../../shared/child-process/windows-system-binary'
+import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+
+/**
+ * What a *successful* harden does to a reader that cannot read.
+ *
+ * Path hardening writes a protected DACL granting only the SIDs the running process holds. Where
+ * the data root came from somewhere else — a relocated `ORCA_USER_DATA_PATH`, a share, a roaming
+ * profile, a backup restored under a recreated local account, or a harden whose `/reset` landed
+ * and whose `/grant` did not — the file ends up granting a SID this process does not have. It then
+ * reads as `EPERM` while its *directory* stays writable, because file hardening is synchronous on
+ * the write path and directory hardening is fire-and-forget.
+ *
+ * Every store below used to treat any read failure as "malformed — regenerate", and the
+ * regeneration succeeds: `renameSync` over an unreadable file needs `FILE_DELETE_CHILD` on the
+ * parent, not `DELETE` on the file. So the healing path destroyed the thing it could not read.
+ * Before hardening actually applied, this failed open — the file was simply readable.
+ *
+ * These assert the file still holds its original bytes afterwards. Runs only on win32, where a
+ * DACL is the mechanism; skipped elsewhere.
+ */
+const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
+
+/** Grants only the local Administrators group, which an unelevated token holds deny-only. */
+const FOREIGN_SID = 'S-1-5-32-544'
+
+function icacls(...args: string[]): number | null {
+  return runProcessSync({
+    program: windowsSystem32Binary('icacls.exe'),
+    args,
+    timeoutMs: 10_000
+  }).code
+}
+
+/** The on-disk state a successful harden leaves for a SID this process does not hold. */
+function makeUnreadable(filePath: string): void {
+  expect(icacls(filePath, '/inheritance:r', '/grant:r', `*${FOREIGN_SID}:(F)`, '/q')).toBe(0)
+  let code: string | undefined
+  try {
+    readFileSync(filePath, 'utf8')
+  } catch (error) {
+    code = (error as NodeJS.ErrnoException).code
+  }
+  // The whole premise. Elevated, the grant is readable and every assertion below would be vacuous.
+  expect(code, 'expected the hardened file to be unreadable; are you running elevated?').toMatch(
+    /^(?:EPERM|EACCES)$/
+  )
+}
+
+describeOnWindows('a secure store that exists but cannot be read', () => {
+  let root: string
+
+  beforeAll(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-unreadable-'))
+  })
+
+  afterAll(() => {
+    // Reset first: the tree is not removable while its files grant only Administrators.
+    for (const name of ['e2ee-keypair.json', 'devices.json', 'secrets.json.enc']) {
+      icacls(join(root, name), '/reset', '/q')
+    }
+    icacls(root, '/reset', '/t', '/q')
+    removeTreeSync(root)
+  })
+
+  it('does not regenerate the E2EE keypair, which would un-pair every device', async () => {
+    const { loadOrCreateE2EEKeypair } = await import('./e2ee-keypair')
+    const { E2EE_KEYPAIR_FILENAME } = await import('./mobile-pairing-files')
+    const dir = join(root, 'e2ee')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, E2EE_KEYPAIR_FILENAME)
+    const original = JSON.stringify({
+      v: 1,
+      publicKeyB64: Buffer.alloc(32, 7).toString('base64'),
+      secretKeyB64: Buffer.alloc(32, 9).toString('base64')
+    })
+    writeFileSync(filePath, original)
+    makeUnreadable(filePath)
+
+    expect(() => loadOrCreateE2EEKeypair(dir)).toThrow(/permission denied/i)
+
+    // The point: the secret key is still the one every paired phone derived its shared secret from.
+    icacls(filePath, '/reset', '/q')
+    expect(readFileSync(filePath, 'utf8')).toBe(original)
+  })
+
+  it('does not erase the device registry, which would revoke every paired token', async () => {
+    const { DeviceRegistry } = await import('./device-registry')
+    const { DEVICE_REGISTRY_FILENAME } = await import('./mobile-pairing-files')
+    const dir = join(root, 'devices')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, DEVICE_REGISTRY_FILENAME)
+    const original = JSON.stringify([
+      {
+        deviceId: 'device-1',
+        name: 'Phone',
+        token: 'bearer-token-that-must-survive',
+        scope: 'mobile',
+        pairedAt: 1,
+        lastSeenAt: 2
+      }
+    ])
+    writeFileSync(filePath, original)
+    makeUnreadable(filePath)
+
+    const registry = new DeviceRegistry(dir)
+    // Any mutator reaches save(); it must refuse rather than write the empty list it loaded.
+    expect(() => registry.addDevice('Another phone', 'mobile')).toThrow(/permission denied/i)
+
+    icacls(filePath, '/reset', '/q')
+    expect(readFileSync(filePath, 'utf8')).toBe(original)
+  })
+
+  it('does not blank the plugin secret vault on write', async () => {
+    vi.doMock('electron', () => ({
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(`enc:${value}`),
+        decryptString: (buffer: Buffer) => buffer.toString().replace(/^enc:/, '')
+      }
+    }))
+    const { PluginSecretsStore } = await import('./../plugins/plugin-secrets-store')
+    const dir = join(root, 'plugin-secrets')
+    mkdirSync(dir, { recursive: true })
+    const store = new PluginSecretsStore(dir, 'publisher.plugin')
+    // Reach the path the store computes rather than restating its layout here.
+    const filePath = (store as unknown as { filePath: string }).filePath
+    mkdirSync(join(filePath, '..'), { recursive: true })
+    const original = JSON.stringify({
+      version: 1,
+      format: 'electron-safe-storage-v1',
+      ciphertexts: { existing: Buffer.from('enc:keep-me').toString('base64') }
+    })
+    writeFileSync(filePath, original)
+    makeUnreadable(filePath)
+
+    expect(store.set('added', 'value')).toEqual({ ok: false, error: expect.any(String) })
+    store.delete('existing')
+
+    icacls(filePath, '/reset', '/q')
+    expect(readFileSync(filePath, 'utf8')).toBe(original)
+    vi.doUnmock('electron')
+  })
+})

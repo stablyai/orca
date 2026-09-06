@@ -49,7 +49,7 @@ import {
   type UploadBundleResult
 } from './diagnostic-bundle-upload'
 import { setActiveSink, startSpan } from './tracer'
-import { setSecurePathHardeningReporter } from '../../shared/secure-path-windows-acl'
+import { setSecurePathHardeningReporter } from '../../shared/secure-path-hardening-report'
 
 const CI_ENV_VARS = [
   'CI',

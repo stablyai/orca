@@ -1,8 +1,9 @@
 import {
+  DEFAULT_HARDENING_CACHE_BOUNDS,
   SecurePathHardeningCache,
   type SecurePathHardeningCacheBounds
 } from './secure-path-hardening-cache'
-import { reportSecurePathHardening } from './secure-path-windows-acl'
+import { reportSecurePathHardening } from './secure-path-hardening-report'
 
 type HardeningFailureRecord = { at: number; attempts: number }
 
@@ -45,13 +46,21 @@ export function hardeningRetryDelayMs(attempts: number): number {
 
 let hardeningFailures: SecurePathHardeningCache<HardeningFailureRecord> | null = null
 
+/**
+ * Why it defaults instead of throwing: this used to require `configureHardeningRetryBudget` first,
+ * and the only thing keeping that contract was import order — one module configured it at module
+ * scope and happened to be the sole importer. Any second importer got a throw, and from the async
+ * lane that throw lands in a `.then` handler as an unhandled rejection, which takes the Electron
+ * main process down. A retry budget is not worth a crash, and a default is not worth a caller.
+ */
 function failures(): SecurePathHardeningCache<HardeningFailureRecord> {
-  if (!hardeningFailures) {
-    throw new Error('secure path hardening retry budget used before it was configured')
-  }
+  hardeningFailures ??= new SecurePathHardeningCache<HardeningFailureRecord>(
+    DEFAULT_HARDENING_CACHE_BOUNDS
+  )
   return hardeningFailures
 }
 
+/** Overrides the default bounds. Optional: nothing has to call this before the budget is used. */
 export function configureHardeningRetryBudget(bounds: SecurePathHardeningCacheBounds): void {
   hardeningFailures = new SecurePathHardeningCache<HardeningFailureRecord>(bounds)
 }

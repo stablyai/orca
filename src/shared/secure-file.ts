@@ -13,6 +13,7 @@ import {
 } from 'node:fs'
 import { dirname } from 'node:path'
 import {
+  DEFAULT_HARDENING_CACHE_BOUNDS,
   SecurePathHardeningCache,
   type SecurePathHardeningCacheBounds
 } from './secure-path-hardening-cache'
@@ -38,16 +39,6 @@ type HardenedPathCacheEntry = {
   birthtimeMs: number
 }
 
-export const SECURE_PATH_HARDENING_CACHE_MAX_ENTRIES = 1024
-export const SECURE_PATH_HARDENING_CACHE_KEY_MAX_BYTES = 64 * 1024
-export const SECURE_PATH_HARDENING_CACHE_KEYS_MAX_BYTES = 512 * 1024
-
-const DEFAULT_HARDENING_CACHE_BOUNDS: SecurePathHardeningCacheBounds = {
-  maxEntries: SECURE_PATH_HARDENING_CACHE_MAX_ENTRIES,
-  maxKeyBytes: SECURE_PATH_HARDENING_CACHE_KEY_MAX_BYTES,
-  maxTotalKeyBytes: SECURE_PATH_HARDENING_CACHE_KEYS_MAX_BYTES
-}
-
 const UNSUPPORTED_DIRECTORY_FSYNC_CODES = new Set(['EINVAL', 'ENOTSUP', 'EOPNOTSUPP'])
 
 // Why: hardening spawns icacls synchronously (once when the DACL already verifies, four times when it must be rewritten), so cache idempotent re-hardens per process.
@@ -60,9 +51,6 @@ let hardenedPathsThisProcess = new SecurePathHardeningCache<HardenedPathCacheEnt
 let hardenedDirectoryPathsThisProcess = new SecurePathHardeningCache<true>(
   DEFAULT_HARDENING_CACHE_BOUNDS
 )
-
-// Bounds the retry rate for paths whose hardening keeps failing; see the module for why.
-configureHardeningRetryBudget(DEFAULT_HARDENING_CACHE_BOUNDS)
 
 function hardenSecureDirectoryOnce(dirPath: string): void {
   // Why: dir hardening stays async — re-applying it stormed the main thread (#4901); files inside are hardened synchronously anyway.
@@ -201,6 +189,21 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
     }
     throw error
   }
+}
+
+/**
+ * Whether a failure means "you may not read this", as opposed to "this is not valid".
+ *
+ * Why it matters here: a secure file whose DACL grants a SID this process does not hold reads as
+ * `EPERM`/`EACCES`, and a reader that treats every failure as corruption regenerates it. The
+ * regeneration succeeds — `renameSync` over an unreadable file needs `FILE_DELETE_CHILD` on the
+ * parent, not `DELETE` on the file — so the original is destroyed by the very code meant to heal
+ * it. The state is reachable through a relocated user-data path, a share or roaming profile, a
+ * restored backup under a new local SID, or a half-applied harden.
+ */
+export function isPermissionDeniedError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'EPERM' || code === 'EACCES'
 }
 
 export function hardenExistingSecureFile(targetPath: string): void {

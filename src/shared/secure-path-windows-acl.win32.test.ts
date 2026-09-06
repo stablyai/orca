@@ -5,6 +5,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { runProcessSync } from './child-process/run-process'
 import { windowsSystem32Binary } from './child-process/windows-system-binary'
 import {
+  setSecurePathHardeningReporter,
+  type SecurePathHardeningReport
+} from './secure-path-hardening-report'
+import {
+  bestEffortRestrictWindowsPath,
   resetSecureFileWindowsUserSidForTests,
   restrictWindowsPathSync
 } from './secure-path-windows-acl'
@@ -349,5 +354,47 @@ describeOnWindows('restrictWindowsPathSync against a real filesystem', () => {
       expect.objectContaining({ detail: expect.stringContaining('denied') })
     )
     warn.mockRestore()
+  })
+
+  /**
+   * `void promise.then(onSettled)` attaches no rejection handler, so a throw from `onSettled` —
+   * which runs *after* the promise resolved, outside every try/catch inside the apply — rejects a
+   * promise nobody holds. Node's default turns that into a dead Electron main process, which
+   * presents as an Orca crash rather than as the hardening problem it is.
+   */
+  it('reports rather than crashes when the settlement callback throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const reports: SecurePathHardeningReport[] = []
+    setSecurePathHardeningReporter((entry) => reports.push(entry))
+    const file = join(root, 'settle-throws.json')
+    writeFileSync(file, '{}')
+
+    const unhandled: unknown[] = []
+    const capture = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', capture)
+    let settled = false
+    try {
+      bestEffortRestrictWindowsPath(file, false, () => {
+        settled = true
+        throw new Error('settlement callback exploded')
+      })
+      await vi.waitFor(() => expect(settled).toBe(true))
+      // An unhandled rejection is raised a turn later, so give the loop one.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    } finally {
+      process.off('unhandledRejection', capture)
+      setSecurePathHardeningReporter(null)
+      warn.mockRestore()
+    }
+
+    expect(unhandled).toEqual([])
+    expect(reports).toContainEqual(
+      expect.objectContaining({
+        stage: 'settle',
+        detail: expect.stringContaining('settlement callback exploded')
+      })
+    )
   })
 })

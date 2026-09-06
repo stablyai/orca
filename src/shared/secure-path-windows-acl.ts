@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import { join, win32 as pathWin32 } from 'node:path'
 import { runProcess, runProcessSync } from './child-process/run-process'
 import { windowsSystem32Binary } from './child-process/windows-system-binary'
-import { parseSddlDacl } from './windows-security-descriptor'
+import {
+  reportSecurePathHardening,
+  type SecurePathHardeningReport
+} from './secure-path-hardening-report'
+import { localDomainSidOf, parseSddlDacl } from './windows-security-descriptor'
 
 const ACL_TIMEOUT_MS = 5000
 
@@ -14,19 +18,14 @@ const BUILTIN_ADMINISTRATORS_SID = 'S-1-5-32-544'
 
 const WINDOWS_SID_PATTERN = /^S-1-\d+(?:-\d+)+$/
 
-export type SecurePathHardeningReport = {
-  targetPath: string
-  /** `throttled` and `recovered` mark entering and leaving the rate-limited degraded state. */
-  stage: 'sid-lookup' | 'reset' | 'grant' | 'verify' | 'throttled' | 'recovered'
-  detail: string
-}
-
 type AclPlan = {
   program: string
   /** The path as icacls must receive it, already extended-length prefixed when needed. */
   icaclsPath: string
   isDirectory: boolean
   allowedSids: string[]
+  /** Resolves the machine-relative aliases `/save` emits; null when the user SID is not one. */
+  localDomainSid: string | null
   resetArgs: string[]
   grantArgs: string[]
 }
@@ -35,14 +34,13 @@ function buildAclPlan(targetPath: string, currentUserSid: string, isDirectory: b
   const icaclsPath = toIcaclsPath(targetPath)
   // Directories propagate to children (artifact-intent files rely on inheritance); files take no flags.
   const rights = isDirectory ? '(OI)(CI)(F)' : '(F)'
-  const allowedSids = [
-    ...new Set([currentUserSid, LOCAL_SYSTEM_SID, BUILTIN_ADMINISTRATORS_SID])
-  ]
+  const allowedSids = [...new Set([currentUserSid, LOCAL_SYSTEM_SID, BUILTIN_ADMINISTRATORS_SID])]
   return {
     program: windowsSystem32Binary('icacls.exe'),
     icaclsPath,
     isDirectory,
     allowedSids,
+    localDomainSid: localDomainSidOf(currentUserSid),
     // `/reset` purges explicit ACEs, which `/inheritance:r` leaves in place — a planted
     // `Everyone:(R)` survives the grant pass otherwise. The two cannot be combined in one call.
     resetArgs: [icaclsPath, '/reset', '/q'],
@@ -87,7 +85,7 @@ function evaluateSavedAcl(
 }
 
 function validateHardenedDacl(sddl: string, plan: AclPlan): string | null {
-  const dacl = parseSddlDacl(sddl)
+  const dacl = parseSddlDacl(sddl, plan.localDomainSid ?? undefined)
   if (!dacl) {
     return 'no DACL in the saved security descriptor'
   }
@@ -153,37 +151,6 @@ function toIcaclsPath(targetPath: string): string {
   return targetPath
 }
 
-/**
- * Why a hook: hardening runs in the Electron main process, which is GUI-subsystem on Windows and
- * owns no console, so `console.warn` reaches nothing in a packaged build. The main process
- * installs a reporter that routes into the diagnostic trace; the console default keeps dev runs
- * and the CLI readable.
- */
-const consoleReporter = (entry: SecurePathHardeningReport): void => {
-  if (entry.stage === 'recovered') {
-    console.info('[secure-path.windows-acl] path hardening recovered', entry)
-    return
-  }
-  console.warn('[secure-path.windows-acl] failed to restrict path', entry)
-}
-
-let reportEntry: (entry: SecurePathHardeningReport) => void = consoleReporter
-
-export function setSecurePathHardeningReporter(
-  reporter: ((entry: SecurePathHardeningReport) => void) | null
-): void {
-  reportEntry = reporter ?? consoleReporter
-}
-
-/** Exported so the caller owning the retry budget reports degradation and recovery on this lane. */
-export function reportSecurePathHardening(
-  targetPath: string,
-  stage: SecurePathHardeningReport['stage'],
-  detail: string
-): void {
-  reportEntry({ targetPath, stage, detail: detail.trim().slice(0, 500) })
-}
-
 function report(
   targetPath: string,
   stage: SecurePathHardeningReport['stage'],
@@ -207,7 +174,25 @@ export function bestEffortRestrictWindowsPath(
     return
   }
   // Why async: hardening runs on the read path, and blocking it on a spawn stormed the main thread (#4901).
-  void restrictAsync(targetPath, plan).then(onSettled)
+  // Why both arms and a terminal catch: a bare `void p.then(fn)` makes a rejected `restrictAsync`
+  // *and* a throw from `onSettled` itself an unhandled rejection, which Node's default turns into
+  // a main-process crash — the exact opposite of what the reporter hook exists for. `false` is the
+  // right value on the error arm: it drops the path from the caller's cache and leaves it retryable.
+  void restrictAsync(targetPath, plan)
+    .then(onSettled, () => onSettled?.(false))
+    .catch((error: unknown) => reportSettlementThrow(targetPath, error))
+}
+
+/**
+ * The last frame before an unhandled rejection, so it must not throw either — and the reporter it
+ * calls is a caller-installed hook, which is the one thing here that plausibly does.
+ */
+function reportSettlementThrow(targetPath: string, error: unknown): void {
+  try {
+    report(targetPath, 'settle', `hardening settlement callback threw: ${String(error)}`)
+  } catch {
+    // Nothing left to report through; losing one diagnostic beats crashing the main process.
+  }
 }
 
 async function restrictAsync(targetPath: string, plan: AclPlan): Promise<boolean> {
