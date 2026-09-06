@@ -49,11 +49,13 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
 describe('AutomationService', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-automations-test-'))
+    vi.stubEnv('TZ', 'UTC')
     vi.useFakeTimers()
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllEnvs()
     rmSync(testState.dir, { recursive: true, force: true })
   })
 

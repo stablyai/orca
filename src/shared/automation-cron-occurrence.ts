@@ -25,11 +25,20 @@ export function cronMatches(rule: ParsedCron, timestamp: number): boolean {
 
 export function cronDateMatches(rule: ParsedCron, timestamp: number): boolean {
   const date = new Date(timestamp)
-  if (!rule.months.has(date.getMonth() + 1)) {
+  return cronCalendarDateMatches(rule, date.getMonth() + 1, date.getDate(), date.getDay())
+}
+
+export function cronCalendarDateMatches(
+  rule: ParsedCron,
+  month: number,
+  dayOfMonth: number,
+  dayOfWeek: number
+): boolean {
+  if (!rule.months.has(month)) {
     return false
   }
-  const dayOfMonthMatches = rule.daysOfMonth.has(date.getDate())
-  const dayOfWeekMatches = rule.daysOfWeek.has(date.getDay())
+  const dayOfMonthMatches = rule.daysOfMonth.has(dayOfMonth)
+  const dayOfWeekMatches = rule.daysOfWeek.has(dayOfWeek)
   if (rule.dayOfMonthRestricted && rule.dayOfWeekRestricted) {
     return dayOfMonthMatches || dayOfWeekMatches
   }

@@ -16,7 +16,12 @@ export function advanceAutomationNextRun(
     throw new Error('Automation not found.')
   }
   const current = state.automations[index]
-  const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
+  const nextRunAt = nextAutomationOccurrenceAfter(
+    current.rrule,
+    current.dtstart,
+    now,
+    current.timezone
+  )
   const updated = { ...current, nextRunAt, updatedAt: now }
   // Replaced, not patched in place: the list projection caches on array identity.
   state.automations = state.automations.map((entry) => (entry.id === id ? updated : entry))
@@ -28,5 +33,10 @@ export function getLatestAutomationOccurrence(
   automation: Automation,
   now = Date.now()
 ): number | null {
-  return latestAutomationOccurrenceAtOrBefore(automation.rrule, automation.dtstart, now)
+  return latestAutomationOccurrenceAtOrBefore(
+    automation.rrule,
+    automation.dtstart,
+    now,
+    automation.timezone
+  )
 }
