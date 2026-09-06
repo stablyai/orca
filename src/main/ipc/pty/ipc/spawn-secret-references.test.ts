@@ -65,10 +65,10 @@ function arrangeStableOwnerPane(ctx: ReturnType<typeof createState>, ptyId: stri
     onPtyExit: () => {
       paneRetired = true
     }
-  } as unknown as PtySpawnIpcDeps['runtime']
+  } as Partial<NonNullable<PtySpawnIpcDeps['runtime']>> as PtySpawnIpcDeps['runtime']
   ctx.deps.store = {
     getWorkspaceSession: () => ({})
-  } as unknown as PtySpawnIpcDeps['store']
+  } as Partial<NonNullable<PtySpawnIpcDeps['store']>> as PtySpawnIpcDeps['store']
 }
 
 describe('IPC PTY secret references', () => {

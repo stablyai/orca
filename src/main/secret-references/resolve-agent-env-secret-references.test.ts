@@ -89,20 +89,20 @@ describe('resolveSecretReferencesIntoChildEnv', () => {
     runProcessMock.mockRejectedValue(new Error(SENTINEL))
     const childEnv = { POSTHOG_READ_ONLY: REFERENCE }
 
-    let error: unknown
+    let error: Error | undefined
     try {
       await resolveSecretReferencesIntoChildEnv({
         childEnv,
         target: { ssh: false, wsl: false }
       })
     } catch (cause) {
-      error = cause
+      error = cause instanceof Error ? cause : new Error(String(cause))
     }
 
     expect(error).toBeInstanceOf(SecretReferenceResolutionError)
     expect(error).toMatchObject({ code: 'spawn-failure', envKey: 'POSTHOG_READ_ONLY' })
     expect(String(error)).not.toContain(SENTINEL)
-    expect((error as Error & { cause?: unknown }).cause).toBeUndefined()
+    expect(error?.cause).toBeUndefined()
   })
 
   it('does not apply partial values when a later read fails', async () => {

@@ -35,13 +35,18 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
   } as AgentSessionRecord
 }
 
+function storeWith(getRecord: AgentSessionRecordStore['getRecord']): AgentSessionRecordStore {
+  const partial: Partial<AgentSessionRecordStore> = { getRecord }
+  return partial as AgentSessionRecordStore
+}
+
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
   resolveRollout: () => Promise<string | null> = async () => null
 ) {
   return createCodexStructuredLaunchResolver({
-    store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
+    store: storeWith(() => value),
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     resolveRollout
@@ -66,7 +71,7 @@ describe('codex structured launch resolution', () => {
 
     await withPlatform('win32', async () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
-        store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+        store: storeWith(() => record()),
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
         resolveCommand: () => command
       })
@@ -173,7 +178,7 @@ describe('codex structured launch resolution', () => {
   ])('rejects %s secret references before command resolution', async (_name, environment) => {
     const resolveCommand = vi.fn(() => '/usr/local/bin/codex')
     const resolveLaunch = createCodexStructuredLaunchResolver({
-      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      store: storeWith(() => record()),
       resolveWorkspacePath: async () => '/repos/workspace-1',
       resolveCommand,
       resolveEnvironment: async () => environment
@@ -188,7 +193,7 @@ describe('codex structured launch resolution', () => {
   it('keeps valid reference strings in the launch record', async () => {
     const reference = 'doppler-ref://lets-tango/dev_ops/POSTHOG_READ_ONLY'
     const resolveLaunch = createCodexStructuredLaunchResolver({
-      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      store: storeWith(() => record()),
       resolveWorkspacePath: async () => '/repos/workspace-1',
       resolveCommand: () => '/usr/local/bin/codex',
       resolveEnvironment: async () => ({ PATH: '/usr/bin', POSTHOG_READ_ONLY: reference })

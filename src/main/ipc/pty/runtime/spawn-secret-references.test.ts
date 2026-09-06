@@ -114,10 +114,12 @@ function arrangeStableOwnerPane(ctx: ReturnType<typeof createState>, ptyId: stri
     onPtyExit: () => {
       paneRetired = true
     }
-  } as unknown as PtyRuntimeControllerDeps['runtime']
+  } as Partial<
+    NonNullable<PtyRuntimeControllerDeps['runtime']>
+  > as PtyRuntimeControllerDeps['runtime']
   ctx.deps.store = {
     getWorkspaceSession: () => ({})
-  } as unknown as PtyRuntimeControllerDeps['store']
+  } as Partial<NonNullable<PtyRuntimeControllerDeps['store']>> as PtyRuntimeControllerDeps['store']
 }
 
 describe('runtime PTY secret references', () => {

@@ -106,7 +106,7 @@ export async function acquireCodexStructuredSession(input: {
     await resolveSecretReferencesIntoChildEnv({
       childEnv,
       target: { ssh: false, wsl: false }
-    }).catch((error: unknown) => {
+    }).catch((error: Error) => {
       throw new AgentSessionPreSpawnError(error)
     })
     acquisitions.assertCurrent(sessionId, attempt)
