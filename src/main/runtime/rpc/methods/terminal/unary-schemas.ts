@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../../schemas'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../../shared/feature-education-telemetry'
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
+import { ResourceReservationRequestSchema } from '../../../../../shared/resource-reservation-binding'
 
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle'),
@@ -138,6 +139,13 @@ export const TerminalWait = TerminalHandle.extend({
 export const TerminalCreateParams = z.object({
   worktree: OptionalString,
   clientMutationId: z.string().min(1).max(128).optional(),
+  // Why: a caller-generated single-use key plus its ledger binding. Gated by
+  // RESOURCE_RESERVATION_ATTRIBUTION_RUNTIME_CAPABILITY because an older host drops this object
+  // and answers with a terminal the caller cannot attribute.
+  reservation: ResourceReservationRequestSchema.refine(
+    (value) => value.resourceKind === 'terminal',
+    { message: 'reservation.resourceKind must be "terminal" on terminal.create' }
+  ).optional(),
   reconcileExisting: z.boolean().optional(),
   command: OptionalString,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),

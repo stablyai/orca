@@ -19,6 +19,44 @@ const TRASH_ENTRY_PATTERN = /^wt-\d+-[0-9a-f]{8}$/
 
 // Why: the sweep must stay cheap on a workspace root holding many repo containers.
 const TRASH_SWEEP_MAX_CONTAINERS = 200
+export const TRASH_SWEEP_REMOVE_MAX_ATTEMPTS = 3
+const TRASH_SWEEP_RETRY_DELAY_MS = 25
+
+type RemoveTree = (path: string) => Promise<void>
+
+function isDirectoryNotEmpty(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as NodeJS.ErrnoException).code === 'ENOTEMPTY'
+  )
+}
+
+export async function removeStaleWorktreeTrashEntry(
+  target: string,
+  options: { removeTree?: RemoveTree; delay?: (milliseconds: number) => Promise<void> } = {}
+): Promise<void> {
+  const removeTree = options.removeTree ?? removeHostTree
+  const delay =
+    options.delay ??
+    ((milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds)))
+  for (let attempt = 1; attempt <= TRASH_SWEEP_REMOVE_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await removeTree(target)
+      return
+    } catch (error) {
+      if (!isDirectoryNotEmpty(error) || attempt === TRASH_SWEEP_REMOVE_MAX_ATTEMPTS) {
+        throw new Error(
+          `Failed to remove stale worktree trash entry ${target} after ${attempt} attempt(s)`,
+          { cause: error }
+        )
+      }
+      // POSIX recursive removal may observe a directory recreated by a writer between scan and rmdir.
+      await delay(TRASH_SWEEP_RETRY_DELAY_MS * attempt)
+    }
+  }
+}
 
 /** Trash root for a worktree: a hidden sibling, so the rename always stays on one volume. */
 export function getWorktreeTrashRoot(worktreePath: string): string {
@@ -116,7 +154,7 @@ export async function sweepStaleWorktreeTrash(
         continue
       }
       try {
-        await removeHostTree(join(trashRoot, entry))
+        await removeStaleWorktreeTrashEntry(join(trashRoot, entry))
         removed += 1
       } catch (error) {
         console.warn(

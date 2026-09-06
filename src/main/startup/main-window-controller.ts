@@ -44,6 +44,7 @@ import {
   stopSyntheticTitleSpinnerTimer
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
+import { registerMainWindowCloseDisposer } from '../window/main-window-close-disposers'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
@@ -201,7 +202,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         minIntervalMs: AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS
       })
   })
-  window.on('closed', () => {
+  registerMainWindowCloseDisposer(window, () => {
     if (state.mainWindow === window) {
       state.mainWindow = null
     }

@@ -2,13 +2,14 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/repo-types'
 import {
   collectWorktreeTrashSweepRoots,
   getWorktreeTrashRoot,
   isWorktreeTrashEntryName,
   moveWorktreeDirectoryToTrash,
+  removeStaleWorktreeTrashEntry,
   restoreWorktreeDirectoryFromTrash,
   scheduleWorktreeTrashDeletion,
   sweepStaleWorktreeTrash,
@@ -119,6 +120,38 @@ describe('scheduleWorktreeTrashDeletion', () => {
 })
 
 describe('sweepStaleWorktreeTrash', () => {
+  it('recovers from a one-shot POSIX ENOTEMPTY removal race', async () => {
+    const removeTree = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('directory not empty'), { code: 'ENOTEMPTY' }))
+      .mockResolvedValueOnce(undefined)
+    const delay = vi.fn().mockResolvedValue(undefined)
+
+    await removeStaleWorktreeTrashEntry('/workspace/.orca-worktree-trash/wt-1-abcdef01', {
+      removeTree,
+      delay
+    })
+
+    expect(removeTree).toHaveBeenCalledTimes(2)
+    expect(delay).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds persistent ENOTEMPTY retries with actionable diagnostics', async () => {
+    const removeTree = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('directory not empty'), { code: 'ENOTEMPTY' }))
+
+    await expect(
+      removeStaleWorktreeTrashEntry('/workspace/.orca-worktree-trash/wt-1-abcdef01', {
+        removeTree,
+        delay: vi.fn().mockResolvedValue(undefined)
+      })
+    ).rejects.toThrow(
+      'Failed to remove stale worktree trash entry /workspace/.orca-worktree-trash/wt-1-abcdef01 after 3 attempt(s)'
+    )
+    expect(removeTree).toHaveBeenCalledTimes(3)
+  })
+
   it('removes leftover entries from both workspace layouts and nothing else', async () => {
     const nestedTrashRoot = join(scratchDir, 'repo', WORKTREE_TRASH_DIR_NAME)
     const flatTrashRoot = join(scratchDir, WORKTREE_TRASH_DIR_NAME)

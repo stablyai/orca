@@ -73,7 +73,8 @@ export const TERMINAL_LIFECYCLE_METHODS: RpcAnyMethod[] = [
               tabId: params.tabId,
               leafId: params.leafId,
               ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-            })
+            }),
+          params.reservation
         )
       }
     }

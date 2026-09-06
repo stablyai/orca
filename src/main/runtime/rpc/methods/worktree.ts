@@ -23,6 +23,11 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-schemas'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
+import {
+  recordWorktreeReservationCreateReceiptOrRollback,
+  replayReservedManagedWorktree
+} from './worktree-create-reservation'
+import { buildResourceReservationBinding } from '../../../../shared/resource-reservation-binding'
 
 export const WORKTREE_METHODS: RpcMethod[] = [
   ...WORKTREE_CATALOG_METHODS,
@@ -79,43 +84,86 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       // Why: a mobile create interrupted by a connection migration is retried with
       // the same clientMutationId; dedupe so the host returns the in-flight/created
       // worktree instead of spawning a duplicate. No key (desktop/CLI) runs plainly.
-      context.runtime.dedupeWorktreeCreate(params.repo, params.clientMutationId, async () => {
-        const { runtime } = context
-        const repo = await runtime.showRepo(params.repo)
-        const automationProvenance = resolveAutomationWorkspaceProvenance({
-          authority: runtime,
-          repoSelector: params.repo,
-          repo,
-          request: params.automationProvenanceRequest
-        })
-        // Why: provenance tokens are reserved before creation so retries can recover,
-        // but failed create attempts must release the reservation for a safe retry.
-        try {
-          const result = await runtime.createManagedWorktree(
-            buildManagedWorktreeCreateArgs(
-              params,
-              {
-                automationProvenance,
-                cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
-                  startupAgent: params.startupAgent ?? params.createdWithAgent,
-                  createdAt: Date.now()
-                }),
-                creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
-              },
-              context.clientKind ? { clientKind: context.clientKind } : {}
+      // Why the reservation key also feeds the dedupe: two concurrent retries must collapse onto
+      // one in-flight create, not race past the durable replay lookup below and both create.
+      context.runtime.dedupeWorktreeCreate(
+        params.repo,
+        params.reservation?.key ?? params.clientMutationId,
+        async () => {
+          const { runtime } = context
+          const replay = params.reservation
+            ? await replayReservedManagedWorktree(runtime, params.reservation)
+            : null
+          if (replay) {
+            return replay
+          }
+          const repo = await runtime.showRepo(params.repo)
+          const automationProvenance = resolveAutomationWorkspaceProvenance({
+            authority: runtime,
+            repoSelector: params.repo,
+            repo,
+            request: params.automationProvenanceRequest
+          })
+          // Why: provenance tokens are reserved before creation so retries can recover,
+          // but failed create attempts must release the reservation for a safe retry.
+          try {
+            const result = await runtime.createManagedWorktree(
+              buildManagedWorktreeCreateArgs(
+                params,
+                {
+                  automationProvenance,
+                  cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+                    startupAgent: params.startupAgent ?? params.createdWithAgent,
+                    createdAt: Date.now()
+                  }),
+                  creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context),
+                  ...(params.reservation
+                    ? {
+                        reservation: buildResourceReservationBinding(params.reservation, {
+                          boundAt: Date.now()
+                        })
+                      }
+                    : {})
+                },
+                context.clientKind ? { clientKind: context.clientKind } : {}
+              )
             )
-          )
-          finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-          // Why: agent callers need a stable dispatch target without traversing
-          // terminal-list layout duplicates after creating the worktree.
-          return params.startupAgent && result.startupTerminal?.handle
-            ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
-            : result
-        } catch (error) {
-          releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-          throw error
-        }
-      })
+            finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+            // Why: agent callers need a stable dispatch target without traversing
+            // terminal-list layout duplicates after creating the worktree.
+            const response = {
+              ...result,
+              warnings: result.warnings ?? [],
+              agentTerminalHandle:
+                params.startupAgent && result.startupTerminal?.handle
+                  ? result.startupTerminal.handle
+                  : undefined
+            }
+            if (params.reservation) {
+              await recordWorktreeReservationCreateReceiptOrRollback(runtime, {
+                worktreeId: result.worktree.id,
+                hostId: result.worktree.identity?.executionHostId ?? result.worktree.hostId,
+                receipt: {
+                  version: 1,
+                  warnings: response.warnings,
+                  ...(response.warning !== undefined ? { warning: response.warning } : {}),
+                  ...(response.startupTerminal
+                    ? { startupTerminal: response.startupTerminal }
+                    : {}),
+                  ...(response.agentTerminalHandle
+                    ? { agentTerminalHandle: response.agentTerminalHandle }
+                    : {})
+                }
+              })
+            }
+            return response
+          } catch (error) {
+            releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
+            throw error
+          }
+        },
+        params.reservation
+      )
   }),
   defineMethod({
     name: 'worktree.prefetchCreateBase',

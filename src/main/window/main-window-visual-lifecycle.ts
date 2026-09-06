@@ -1,5 +1,6 @@
 import { ipcMain, type BrowserWindow } from 'electron'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
+import { registerMainWindowCloseDisposer } from './main-window-close-disposers'
 
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
 export function forceRepaint(window: BrowserWindow): void {
@@ -89,7 +90,7 @@ export function installMacosVisibilityRepaint(window: BrowserWindow): void {
       window.webContents.invalidate()
     }
   })
-  window.on('closed', () => {
+  registerMainWindowCloseDisposer(window, () => {
     clearDelayedRepaint()
     ipcMain.removeListener('ui:window-revealed', onRendererRevealed)
   })

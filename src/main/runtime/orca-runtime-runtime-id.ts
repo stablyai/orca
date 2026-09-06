@@ -25,7 +25,9 @@ import { ClientHostedPageReconciliationWindow } from './client-hosted-page-recon
 import { ClientSessionTabSelectionStore } from './client-session-tab-selection'
 import { WorktreeTerminalMutationLock } from './worktree-terminal-mutation-lock'
 import { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
+import { TerminalReservationBindings } from './terminal-reservation-bindings'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { ResourceReservationRequest } from '../../shared/resource-reservation-binding'
 import type { MobileSessionTabsNotifyCoalescer } from './mobile-session-tabs-notify-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from './mobile-session-tabs-notify-coalescer'
 import type { MobileSessionTabsAgentStatusHeartbeat } from './mobile-session-tabs-agent-status-heartbeat'
@@ -165,6 +167,7 @@ export class OrcaRuntimeWithRuntimeId {
   >()
 
   protected readonly terminalCreateIdempotency = new RemoteRuntimeTerminalCreateIdempotency()
+  protected readonly terminalReservations = new TerminalReservationBindings()
 
   // Why: concurrent clients sleeping one host workspace must share one physical teardown.
   protected terminalSleepByWorktreeId = new Map<
@@ -193,7 +196,10 @@ export class OrcaRuntimeWithRuntimeId {
   // Why: idempotency map for worktree.create — a create interrupted by a mobile
   // connection migration is retried with the same clientMutationId and returns
   // the in-flight (or just-finished) operation instead of a duplicate worktree.
-  protected worktreeCreateByMutationId = new Map<string, Promise<unknown>>()
+  protected worktreeCreateByMutationId = new Map<
+    string,
+    { promise: Promise<unknown>; reservation?: ResourceReservationRequest }
+  >()
 
   // Why: a mobile create waits for the renderer to publish the new tab's surface
   // via graph-sync, but a throttled/hidden renderer can park that past the surface

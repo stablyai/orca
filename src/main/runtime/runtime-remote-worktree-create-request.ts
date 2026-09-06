@@ -62,7 +62,8 @@ export async function requestRuntimeRemoteWorktree(
       ...(args.pendingFirstAgentMessageRename ? { pendingFirstAgentMessageRename: true } : {}),
       ...(args.nameWasGenerated === true ? { nameWasGenerated: true } : {}),
       ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
-      ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {})
+      ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
+      ...(args.reservation ? { reservation: args.reservation } : {})
     },
     repo,
     store as unknown as Store,

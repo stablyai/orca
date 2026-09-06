@@ -104,3 +104,50 @@ describe('mergeWorktree identity projection', () => {
     expect(worktree.suppressedGitHubPR).toBe(42)
   })
 })
+
+describe('mergeWorktree reservation projection', () => {
+  it('projects the persisted reservation binding so show and list expose it verbatim', () => {
+    const reservation = {
+      key: 'key-1',
+      reservationId: 'res-1',
+      sessionId: 'session-1',
+      resourceKind: 'worktree' as const,
+      ownershipGeneration: 4,
+      issuer: 'openloop',
+      boundAt: 9
+    }
+
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'feature',
+      reservation,
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    })
+
+    expect(worktree.reservation).toEqual(reservation)
+  })
+
+  it('leaves an unreserved workspace with no binding to misread', () => {
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    })
+
+    expect(worktree.reservation).toBeUndefined()
+  })
+})

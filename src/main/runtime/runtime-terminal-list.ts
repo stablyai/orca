@@ -1,5 +1,6 @@
 import type {
   RuntimeMobileSessionTabsSnapshot,
+  RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../shared/runtime-types'
@@ -45,7 +46,7 @@ type RuntimeTerminalListDependencies = {
     terminals: readonly RuntimeTerminalSummary[],
     worktrees: Iterable<ResolvedWorktree>,
     queriedHostIds: ReadonlySet<ExecutionHostId>
-  ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] }
+  ): RuntimeTerminalListHostScope
 }
 
 export class RuntimeTerminalList {
@@ -163,14 +164,22 @@ export class RuntimeTerminalList {
               : snapshots.values(),
             getTabTitle: (tabId) => this.deps.getTabTitle(tabId)
           })
+    const hostScope = this.deps.buildHostScope(
+      targetId,
+      matching,
+      worktreesById.values(),
+      (inventory?.queriedHostIds ?? new Set()) as ReadonlySet<ExecutionHostId>
+    )
     return {
       terminals: listed,
-      hostScope: this.deps.buildHostScope(
-        targetId,
-        matching,
-        worktreesById.values(),
-        (inventory?.queriedHostIds ?? new Set()) as ReadonlySet<ExecutionHostId>
-      ),
+      // Why the listing's own page limit folds into completeness: a truncated page is not a
+      // complete inventory either, and callers must not have to combine two flags to learn that.
+      hostScope: {
+        ...hostScope,
+        ...(hostScope.complete !== undefined
+          ? { complete: hostScope.complete && matching.length <= limit }
+          : {})
+      },
       ...(visualLayouts.length > 0 ? { visualLayouts } : {}),
       topologyRevisions: Object.fromEntries(
         [...new Set(matching.map((terminal) => terminal.worktreeId))].map((worktreeId) => [

@@ -163,9 +163,14 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
         (id) => queriedHostIds.has(id) && parseExecutionHostId(id)?.kind !== 'runtime'
       )
     )
+    const omittedHostIds = [...known].filter((id) => !covered.has(id)).sort()
     return {
       hostIds: [...covered].sort(),
-      omittedHostIds: [...known].filter((id) => !covered.has(id)).sort()
+      omittedHostIds,
+      // Why explicit: `truncated` answers page size, not cross-host coverage. Callers were reading
+      // `truncated: false` as a complete inventory while hosts were being omitted.
+      complete: omittedHostIds.length === 0,
+      observedAt: Date.now()
     }
   }
 

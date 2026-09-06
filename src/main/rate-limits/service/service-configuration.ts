@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { registerMainWindowCloseDisposer } from '../../window/main-window-close-disposers'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import {
@@ -71,12 +72,13 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     const refreshOnResume = (): void => {
       void this.refreshIfWindowActive()
     }
+    let unregisterWindowClose = (): void => {}
     // Why: attach() can replace windows; remove the previous closed listener too, not only the focus listeners.
     const detachWindowListeners = (): void => {
       mainWindow.removeListener('focus', refreshOnResume)
       mainWindow.removeListener('show', refreshOnResume)
       mainWindow.removeListener('restore', refreshOnResume)
-      mainWindow.removeListener('closed', onClosed)
+      unregisterWindowClose()
     }
     const onClosed = (): void => {
       detachWindowListeners()
@@ -90,7 +92,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
     mainWindow.on('focus', refreshOnResume)
     mainWindow.on('show', refreshOnResume)
     mainWindow.on('restore', refreshOnResume)
-    mainWindow.on('closed', onClosed)
+    unregisterWindowClose = registerMainWindowCloseDisposer(mainWindow, onClosed)
     this.detachWindowListeners = detachWindowListeners
   }
 

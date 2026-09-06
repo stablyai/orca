@@ -17,6 +17,7 @@ import { registerRendererDocumentNavigation } from './renderer-document-navigati
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
+import { registerMainWindowCloseDisposer } from './main-window-close-disposers'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -230,7 +231,7 @@ export function registerRuntimeWindowLifecycle(
   mainWebContents.on('render-process-gone', () => {
     rendererNotifications.onRendererProcessGone()
   })
-  mainWindow.on('closed', () => {
+  registerMainWindowCloseDisposer(mainWindow, () => {
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

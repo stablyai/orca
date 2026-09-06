@@ -220,12 +220,22 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
     }
+    let reservationRetirementError: unknown
     if (preservesIntentionalHandlelessSurface || preservesAbnormalSshSurface) {
       // Why: relay loss is recoverable; keep the HUB-owned pane addressable through the bounded reconnect grace.
       this.touchMobileSessionSnapshotsForPty(ptyId, { immediate: true })
     } else {
       // Why: permanent process exit is absence, not a starting/sleeping tab.
       // Retire before publishing so paired clients never persist a ghost.
+      if (exitedTeamLeaderHandle) {
+        try {
+          this.terminalReservations.retire(exitedTeamLeaderHandle)
+        } catch (error) {
+          // Process death cannot be rolled back. Preserve the durable-store failure, but finish
+          // independent in-memory teardown before surfacing it to the caller.
+          reservationRetirementError = error
+        }
+      }
       this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
     }
 
@@ -257,6 +267,9 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       }
     }
     this.pruneDisconnectedPtyRecords()
+    if (reservationRetirementError !== undefined) {
+      throw reservationRetirementError
+    }
   }
 
   private notifyPtyExitListeners(ptyId: string): void {

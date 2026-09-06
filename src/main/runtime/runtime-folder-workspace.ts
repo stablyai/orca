@@ -68,6 +68,7 @@ export function mergeRuntimeFolderWorkspace(
       ? { automationProvenance: meta.automationProvenance }
       : {}),
     ...(meta.cliProvenance !== undefined ? { cliProvenance: meta.cliProvenance } : {}),
+    ...(meta.reservation !== undefined ? { reservation: meta.reservation } : {}),
     ...(meta.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,
     diffComments: meta.diffComments,

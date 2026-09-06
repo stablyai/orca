@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { registerMainWindowCloseDisposer } from '../window/main-window-close-disposers'
 import type { Store } from '../persistence'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
@@ -219,7 +220,7 @@ export function setWorktreeBaseDirectoryWatcherSyncContext(
   // Why: older integration tests use lean BrowserWindow stubs; real windows still
   // clear this context on close so stale watcher syncs cannot target dead chrome.
   if (typeof mainWindow.once === 'function') {
-    mainWindow.once('closed', () => {
+    registerMainWindowCloseDisposer(mainWindow, () => {
       if (latestSyncContext?.mainWindow === mainWindow) {
         latestSyncContext = null
       }

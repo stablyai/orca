@@ -7,6 +7,7 @@ import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
+import type { ResourceReservationBinding } from './resource-reservation-binding'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
@@ -34,6 +35,9 @@ export type RuntimeTerminalSummary = {
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
   executionHostId?: ExecutionHostId
+  /** Immutable caller-supplied reservation this terminal was created under; absent means the
+   *  terminal has no ledger binding. Never infer one from the handle alone. */
+  reservation?: ResourceReservationBinding
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -266,6 +270,9 @@ export type RuntimeTerminalCreate = {
   title: string | null
   executionHostId?: ExecutionHostId
   hostPlatform?: NodeJS.Platform
+  /** Echo of the reservation this create was bound to, so a caller can confirm the host honored
+   *  it rather than silently dropping the param. */
+  reservation?: ResourceReservationBinding
   surface?: 'background' | 'visible'
   warning?: string
   agentSessionDisposition?: 'created' | 'adopted'

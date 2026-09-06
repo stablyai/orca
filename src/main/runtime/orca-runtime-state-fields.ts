@@ -92,6 +92,10 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         this.notifyMobileSessionTabsChanged()
       }
     })
+    const profileStorageDirectory = store?.getProfileStorageDirectory?.()
+    if (profileStorageDirectory) {
+      this.terminalReservations.configurePersistence(profileStorageDirectory)
+    }
     const runtime = this as RuntimeCommandSurfaceHost<this>
     installRuntimeFileCommandSurface(runtime, this.fileCommands)
     installRuntimeGitCommandSurface(runtime, this.gitCommands)

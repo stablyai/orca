@@ -38,6 +38,7 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from './main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
+import { registerMainWindowCloseDisposer } from './main-window-close-disposers'
 
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
@@ -147,7 +148,7 @@ export function attachMainWindowServices(
     }
   )
 
-  mainWindow.on('closed', () => {
+  registerMainWindowCloseDisposer(mainWindow, () => {
     // Why: clear main-owned guest registrations on close so stale tab→webContents ids don't leak across relaunch/hot-reload.
     browserManager.unregisterAll()
   })
@@ -197,7 +198,7 @@ function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
     }
   })
   // Why: macOS can stay windowless; drop stale closures without letting an old close clear newer handlers.
-  mainWindow.on('closed', () => {
+  registerMainWindowCloseDisposer(mainWindow, () => {
     if (activeTccPromptHandlerToken !== handlerToken) {
       return
     }
@@ -230,7 +231,7 @@ function registerAppReloadHandler(
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()
   })
-  mainWindow.on('closed', () => {
+  registerMainWindowCloseDisposer(mainWindow, () => {
     if (activeAppReloadHandlerToken !== handlerToken) {
       return
     }
@@ -260,7 +261,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
     mainWindow.webContents.send('terminal:file-drop', args)
   }
   ipcMain.on(channel, relayFileDrop)
-  mainWindow.on('closed', () => {
+  registerMainWindowCloseDisposer(mainWindow, () => {
     // Why: macOS keeps the process alive after window close; drop the closure so the destroyed window isn't retained.
     ipcMain.removeListener(channel, relayFileDrop)
   })

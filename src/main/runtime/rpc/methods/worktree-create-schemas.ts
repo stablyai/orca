@@ -11,6 +11,7 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../schemas'
+import { ResourceReservationRequestSchema } from '../../../../shared/resource-reservation-binding'
 import {
   assertLinkedWorkItemSourceContextMatch,
   AutomationWorkspaceProvenanceRequest,
@@ -120,6 +121,10 @@ export const WorktreeCreate = z
     // Why: mobile retries a create interrupted by a connection migration with the
     // same key so the host dedupes instead of spawning a duplicate worktree.
     clientMutationId: z.string().min(1).max(128).optional(),
+    // Why: a caller-generated single-use key plus its ledger binding, persisted atomically with
+    // the workspace. Gated by RESOURCE_RESERVATION_ATTRIBUTION_RUNTIME_CAPABILITY because an
+    // older host silently drops this object and answers with an unattributable workspace.
+    reservation: ResourceReservationRequestSchema.optional(),
     automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional(),
     cliProvenanceRequest: CliWorkspaceProvenanceRequest.optional()
   })
@@ -135,6 +140,12 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either one parent selector or --no-parent.'
+      })
+    }
+    if (params.reservation && params.reservation.resourceKind !== 'worktree') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'reservation.resourceKind must be "worktree" on worktree.create'
       })
     }
     if (params.startupPrompt !== undefined && params.startupAgent === undefined) {

@@ -19,8 +19,9 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     const title = getLatestPtyTitle(pty)
     const pane = parsePaneKey(pty.paneKey ?? '')
     const orphaned = !pty.tabId || !pane || pane.tabId !== pty.tabId
+    const handle = this.issuePtyHandle(pty)
     return {
-      handle: this.issuePtyHandle(pty),
+      handle,
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       orphaned,
@@ -36,6 +37,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       preview: pty.preview,
       ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
       ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId),
+      ...this.terminalReservationField(handle),
       ...this.resolvePaneAgentIdentityField(
         pty.launchAgent,
         pty.foregroundAgent,

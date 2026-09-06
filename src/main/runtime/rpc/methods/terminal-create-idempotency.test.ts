@@ -44,7 +44,8 @@ describe('terminal.create RPC idempotency', () => {
       'id:worktree-1',
       'mutation-1',
       false,
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     )
     expect(createTerminal).toHaveBeenCalledWith(
       'id:worktree-1',

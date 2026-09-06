@@ -227,7 +227,8 @@ describe('agent session RPC methods', () => {
       'id:worktree-1',
       undefined,
       false,
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     )
     expect(createTerminal).toHaveBeenCalledWith('id:worktree-1', {
       command: 'codex resume provider-session-1',

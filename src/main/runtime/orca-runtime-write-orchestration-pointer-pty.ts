@@ -51,6 +51,13 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     return this.getLeavesForPty(ptyId)[0] ?? null
   }
 
+  /** Projects the create-time reservation onto every show/list row so a caller can read the exact
+   *  binding back from inventory instead of re-deriving attribution. */
+  protected terminalReservationField(handle: string): Pick<RuntimeTerminalSummary, 'reservation'> {
+    const reservation = this.terminalReservations.get(handle)
+    return reservation ? { reservation } : {}
+  }
+
   protected terminalExecutionHostField(
     ptyId: string | null,
     worktreeId: string
@@ -140,8 +147,9 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       !leaf.ptyId.startsWith('remote:') &&
       parseAppSshPtyId(leaf.ptyId) === null &&
       this.ptyController?.hasPty?.(leaf.ptyId) !== true
+    const handle = this.issueHandle(leaf)
     return {
-      handle: this.issueHandle(leaf),
+      handle,
       ptyId: leaf.ptyId,
       incarnationId: pty?.incarnationId ?? null,
       orphaned: false,
@@ -157,6 +165,7 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       preview: leaf.preview,
       ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId),
+      ...this.terminalReservationField(handle),
       ...this.resolvePaneAgentIdentityField(
         pty?.launchAgent,
         pty?.foregroundAgent,
