@@ -65,7 +65,9 @@ export class AndroidEmulatorInputController {
   }
 
   async setPosture(deviceId: string, posture: EmulatorPosture): Promise<void> {
-    await androidSetPosture(this.runner, this.sdk(), await this.resolveDeviceId(deviceId), posture)
+    const serial = await this.resolveDeviceId(deviceId)
+    await androidSetPosture(this.runner, this.sdk(), serial, posture)
+    this.invalidateScreenSize(serial)
   }
 
   async rotate(deviceId: string, orientation: string): Promise<void> {
