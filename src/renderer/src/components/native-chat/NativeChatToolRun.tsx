@@ -22,25 +22,13 @@ import {
   truncateToolDetail
 } from './native-chat-tool-summary'
 import {
-  describeActiveToolCall,
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
 import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
 import { NativeChatDiffView } from './NativeChatDiffView'
 import { NativeChatToolIcon, NativeChatToolRunIcon } from './NativeChatToolIcon'
-
-function activeToolLabel(call: Extract<NativeChatBlock, { type: 'tool-call' }>): string {
-  const { key, toolName, preview } = describeActiveToolCall(call)
-  const copy = NATIVE_CHAT_TOOL_ACTIVITY_COPY[key]
-  return key === 'runningPreview'
-    ? translate('components.native-chat.tool.runningPreview', copy, { preview })
-    : key === 'runningCommand'
-      ? translate('components.native-chat.tool.runningCommand', copy)
-      : key === 'runningNamedPreview'
-        ? translate('components.native-chat.tool.runningNamedPreview', copy, { toolName, preview })
-        : translate('components.native-chat.tool.runningNamed', copy, { toolName })
-}
+import { nativeChatToolActivityLabel } from './native-chat-tool-activity-label'
 
 /** A single inline tool line — `▸ ToolName  preview` — that expands in place to
  *  show the call's diff/input or the result's body. Tool calls read as flat
@@ -267,7 +255,7 @@ export function NativeChatToolRun({
         >
           <NativeChatToolIcon rowWord={latestActiveCall.name} className="text-muted-foreground" />
           <span className="min-w-0 flex-1 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
-            {activeToolLabel(latestActiveCall)}
+            {nativeChatToolActivityLabel(latestActiveCall)}
           </span>
           {open ? <ChevronRight className="size-3.5 rotate-90 text-muted-foreground" /> : null}
         </button>

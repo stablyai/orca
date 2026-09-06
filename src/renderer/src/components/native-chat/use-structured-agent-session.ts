@@ -28,6 +28,7 @@ import {
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
 
 export type StructuredPromptItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
@@ -140,6 +141,10 @@ export function useStructuredAgentSession(args: {
   // on the frame that opens each one, so re-read the options as a turn changes
   // rather than leaving the last write unconfirmed for the life of the session.
   const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const turnActivity = useMemo(
+    () => selectStructuredAgentTurnActivity(state.items, turnId),
+    [state.items, turnId]
+  )
   const isMonitoringBackgroundTasks =
     turnId === null && state.backgroundTasks?.state === 'monitoring'
 
@@ -243,6 +248,7 @@ export function useStructuredAgentSession(args: {
     send: outboxController.send,
     retry: outboxController.retry,
     isWorking: turnId !== null,
+    turnActivity,
     isMonitoringBackgroundTasks,
     backgroundTasks: state.backgroundTasks?.tasks ?? [],
     supportsBackgroundTaskStop: state.backgroundTasks?.supportsTaskStop === true,
