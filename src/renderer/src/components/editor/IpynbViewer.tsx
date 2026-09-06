@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { AlertCircle, Save } from 'lucide-react'
+import { AlertCircle, Eye, Pencil, Save } from 'lucide-react'
 import { computeEditorFontSize, resolveEditorFontFamilyOrInherit } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -14,8 +14,15 @@ import {
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { editorShortcutMatches } from './editor-shortcuts'
+import { IpynbCellHeader } from './IpynbCellHeader'
 import { IpynbCellToolbar, IpynbToolbarButton } from './IpynbCellToolbar'
-import { IpynbCodeCell, IpynbEditableTextCell, IpynbMarkdownCell } from './IpynbCellEditor'
+import {
+  IpynbCodeCell,
+  IpynbEditableTextCell,
+  IpynbMarkdownCell,
+  IpynbMarkdownCellEditor,
+  IpynbRawCell
+} from './IpynbCellEditor'
 import { IpynbCellOutputs } from './IpynbCellOutputs'
 import { parseIpynb } from './ipynb-parse'
 import {
@@ -49,6 +56,7 @@ export default function IpynbViewer({
 }: IpynbViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const [editingEnabled, setEditingEnabled] = useState(false)
   const [editingCellKey, setEditingCellKey] = useState<string | null>(null)
   const parsed = useMemo(() => {
     try {
@@ -101,11 +109,15 @@ export default function IpynbViewer({
       if (event.repeat || !editorShortcutMatches('editor.save', event)) {
         return
       }
+      // Preview is read-only: ignore the save shortcut until editing is enabled.
+      if (!editingEnabled) {
+        return
+      }
       event.preventDefault()
       event.stopPropagation()
       void saveNotebook()
     },
-    [saveNotebook]
+    [editingEnabled, saveNotebook]
   )
 
   const handleNotebookPointerDownCapture = useCallback(
@@ -114,7 +126,7 @@ export default function IpynbViewer({
         return
       }
       const target = event.target instanceof Element ? event.target : null
-      if (!target?.closest('.monaco-editor')) {
+      if (!target?.closest('.monaco-editor, [data-ipynb-cell-editor="true"]')) {
         setEditingCellKey(null)
       }
     },
@@ -160,12 +172,27 @@ export default function IpynbViewer({
         {execution.runError ? <span className="text-destructive">{execution.runError}</span> : null}
         <div className="ml-auto flex items-center gap-2">
           <IpynbToolbarButton
-            label={translate('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
-            shortcut={saveShortcut}
-            onClick={() => void saveNotebook()}
+            label={
+              editingEnabled
+                ? translate('auto.components.editor.EditorViewToggle.0d193dc03c', 'Preview')
+                : translate('auto.components.editor.EditorViewToggle.ac3bb87913', 'Edit')
+            }
+            onClick={() => {
+              setEditingEnabled((current) => !current)
+              setEditingCellKey(null)
+            }}
           >
-            <Save className="size-3.5" />
+            {editingEnabled ? <Eye className="size-3.5" /> : <Pencil className="size-3.5" />}
           </IpynbToolbarButton>
+          {editingEnabled ? (
+            <IpynbToolbarButton
+              label={translate('auto.components.editor.IpynbViewer.15ec40a735', 'Save notebook')}
+              shortcut={saveShortcut}
+              onClick={() => void saveNotebook()}
+            >
+              <Save className="size-3.5" />
+            </IpynbToolbarButton>
+          ) : null}
           <span className="rounded-sm border border-border bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">
             {translate('auto.components.editor.IpynbViewer.329764e9fc', 'BETA')}
           </span>
@@ -191,47 +218,53 @@ export default function IpynbViewer({
                 key={cellKey}
                 className="overflow-hidden rounded-md border border-border bg-background"
               >
-                <IpynbCellToolbar
-                  cell={cell}
-                  index={index}
-                  running={execution.runningCellIndex === index}
-                  canMoveUp={index > 0}
-                  canMoveDown={index < notebook.cells.length - 1}
-                  onRun={() => void execution.runCell(index)}
-                  onKindChange={(kind) => updateCellKind(index, kind)}
-                  onInsertAbove={(kind) => insertCell(index, kind)}
-                  onInsertBelow={(kind) => insertCell(index + 1, kind)}
-                  onMoveUp={() => moveCell(index, -1)}
-                  onMoveDown={() => moveCell(index, 1)}
-                  onDelete={() => deleteCell(index)}
-                />
+                <IpynbCellHeader cell={cell} index={index} />
+                {editingEnabled ? (
+                  <IpynbCellToolbar
+                    cell={cell}
+                    running={execution.runningCellIndex === index}
+                    canMoveUp={index > 0}
+                    canMoveDown={index < notebook.cells.length - 1}
+                    onRun={() => void execution.runCell(index)}
+                    onEdit={() => setEditingCellKey(cellKey)}
+                    onKindChange={(kind) => updateCellKind(index, kind)}
+                    onInsertAbove={(kind) => insertCell(index, kind)}
+                    onInsertBelow={(kind) => insertCell(index + 1, kind)}
+                    onMoveUp={() => moveCell(index, -1)}
+                    onMoveDown={() => moveCell(index, 1)}
+                    onDelete={() => deleteCell(index)}
+                  />
+                ) : null}
                 {cell.kind === 'markdown' ? (
-                  <div className="grid gap-0 lg:grid-cols-2">
-                    <IpynbEditableTextCell
+                  editingEnabled ? (
+                    <IpynbMarkdownCellEditor
                       source={source}
+                      active={editingCellKey === cellKey}
+                      onActivate={() => setEditingCellKey(cellKey)}
                       onChange={(nextSource) => updateCellSource(index, nextSource)}
                     />
-                    <div className="border-t border-border/50 lg:border-l lg:border-t-0">
-                      <IpynbMarkdownCell source={source} />
-                    </div>
-                  </div>
+                  ) : (
+                    <IpynbMarkdownCell source={source} />
+                  )
                 ) : cell.kind === 'code' ? (
                   <IpynbCodeCell
                     cell={cell}
                     source={source}
-                    active={editingCellKey === cellKey}
-                    onActivate={() => setEditingCellKey(cellKey)}
+                    active={editingEnabled && editingCellKey === cellKey}
+                    onActivate={editingEnabled ? () => setEditingCellKey(cellKey) : undefined}
                     onDeactivate={() =>
                       setEditingCellKey((current) => (current === cellKey ? null : current))
                     }
                     onChange={(nextSource) => updateCellSource(index, nextSource)}
                     onSaveRequest={saveNotebook}
                   />
-                ) : (
+                ) : editingEnabled ? (
                   <IpynbEditableTextCell
                     source={source}
                     onChange={(nextSource) => updateCellSource(index, nextSource)}
                   />
+                ) : (
+                  <IpynbRawCell source={source} />
                 )}
                 <IpynbCellOutputs cell={cell} />
               </section>

@@ -29,12 +29,17 @@ export type ParsedIpynb = {
 const DISPLAY_MIME_ORDER = [
   'text/html',
   'image/png',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
   'image/jpeg',
   'image/jpg',
   'image/svg+xml',
   'application/json',
   'text/markdown',
-  'text/plain'
+  'text/plain',
+  // Last resort: Chromium/Electron has no TIFF decoder, so a legible text/plain fallback must win.
+  'image/tiff'
 ] as const
 
 const JUPYTER_LANGUAGE_TO_MONACO_LANGUAGE: Record<string, string> = {
