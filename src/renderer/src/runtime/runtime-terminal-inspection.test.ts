@@ -146,6 +146,58 @@ describe('runtime terminal owner routing', () => {
     expect(localHasChildren).not.toHaveBeenCalled()
   })
 
+  // Why these exist: the close guards ask the host to pay for a real child-process read, and the
+  // environment path used to drop the option before it reached the wire. The host then declined to
+  // scan and answered `unverifiable`, which the guard reads as running work -- a confirmation
+  // dialog on every idle close of a remote Windows pane. Found by review on #18591.
+  it('forwards scanChildProcesses to the PTY owning environment', async () => {
+    await inspectRuntimeTerminalProcess(
+      { activeRuntimeEnvironmentId: 'env-2' },
+      'remote:env-1@@terminal-1',
+      { scanChildProcesses: true }
+    )
+
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.inspectProcess',
+      params: { terminal: 'terminal-1', scanChildProcesses: true },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('forwards scanChildProcesses alongside the incarnation fence', async () => {
+    await inspectRuntimeTerminalProcess(
+      { activeRuntimeEnvironmentId: 'env-2' },
+      'remote:env-1@@terminal-1',
+      { expectedIncarnationId: 'incarnation-1', scanChildProcesses: true }
+    )
+
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.inspectProcess',
+      params: {
+        terminal: 'terminal-1',
+        expectedIncarnationId: 'incarnation-1',
+        scanChildProcesses: true
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('omits scanChildProcesses when the caller is only polling', async () => {
+    await inspectRuntimeTerminalProcess(
+      { activeRuntimeEnvironmentId: 'env-2' },
+      'remote:env-1@@terminal-1'
+    )
+
+    expect(runtimeCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'terminal.inspectProcess',
+      params: { terminal: 'terminal-1' },
+      timeoutMs: 15_000
+    })
+  })
+
   it('maps an old host inspection to client-only unverifiable', async () => {
     runtimeCall.mockResolvedValue({
       ok: true,

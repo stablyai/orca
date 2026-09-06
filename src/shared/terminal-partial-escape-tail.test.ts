@@ -84,3 +84,43 @@ describe('advancePartialEscapeTail', () => {
     expect(advancePartialEscapeTail('', huge)).toBe('')
   })
 })
+
+describe('advancePartialEscapeTail ESC-free fast path', () => {
+  // Every pending-tail state the scanner can be left in x every chunk shape, asserted
+  // indistinguishable from the unconditional fold the gate sits in front of.
+  const pieces = [
+    '',
+    'plain output\n',
+    '\x1b[32mgreen\x1b[0m',
+    '\x1b[3',
+    '\x1b]0;title\x07',
+    '\x1b]0;partial',
+    '\x1bP dcs payload',
+    '\x1b',
+    '\x18',
+    '\x1a',
+    '\x1b]8;;https://example.com\x1b\\',
+    '\x1b(',
+    '\x1b[1;2;3'
+  ]
+
+  it('matches an unconditional fold for every pending-tail and chunk pairing', () => {
+    for (const pending of pieces.map((piece) => extractPartialEscapeTail(piece))) {
+      for (const chunk of pieces) {
+        // The cap belongs in the expectation: `advancePartialEscapeTail` abandons a tail over
+        // MAX_PARTIAL_ESCAPE_TAIL_LENGTH, so comparing it against an uncapped extract would stop
+        // modelling the function the moment a pairing crossed the cap.
+        const unguarded = extractPartialEscapeTail(pending + chunk)
+        expect(advancePartialEscapeTail(pending, chunk), JSON.stringify({ pending, chunk })).toBe(
+          unguarded.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : unguarded
+        )
+      }
+    }
+  })
+
+  it('still carries a pending tail through an ESC-free chunk', () => {
+    expect(advancePartialEscapeTail('\x1b]0;my-title', ' still in the OSC')).toBe(
+      '\x1b]0;my-title still in the OSC'
+    )
+  })
+})

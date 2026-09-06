@@ -11,12 +11,14 @@ import {
 } from '../pane/serializer-state'
 import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
+import { resolveCommittedPtySize, type PtyGrid } from '../delivery/attached-pty-size'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
   rendererPreSignaled: boolean
   rendererAlreadyRegistered: boolean
+  committedSize: PtyGrid
 }> {
   const args = ctx.args
   try {
@@ -89,7 +91,12 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       ctx.agentTeamsLeaderHandle = null
     }
   }
-  ptySizes.set(ctx.result.id, { cols: args.cols, rows: args.rows })
+  const committedSize = resolveCommittedPtySize({
+    result: ctx.result,
+    requested: { cols: args.cols, rows: args.rows },
+    cachedBeforeAttach: ctx.sessionSizeBeforeAttach
+  })
+  ptySizes.set(ctx.result.id, committedSize)
   if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
     ptySizes.delete(ctx.effectiveSessionAppId)
   }
@@ -157,5 +164,5 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       pendingPtyIdBySerializerGeneration.set(pending.gen, ctx.result.id)
     }
   }
-  return { rendererPreSignaled, rendererAlreadyRegistered }
+  return { rendererPreSignaled, rendererAlreadyRegistered, committedSize }
 }

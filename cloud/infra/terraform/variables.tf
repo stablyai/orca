@@ -468,6 +468,12 @@ variable "relay_gce_fenced_cells" {
   default     = []
 }
 
+variable "relay_cloud_sql_private_ip" {
+  type        = bool
+  description = "Dial Cloud SQL over its private IP inside this VPC instead of its public IP through Cloud NAT. Requires the foundation root's private services access peering to be applied first; a cell that cannot reach the private IP never becomes ready."
+  default     = false
+}
+
 variable "relay_gce_cloud_sql_proxy_image" {
   type        = string
   description = "Digest-pinned Cloud SQL Auth Proxy image used by private relay workers."

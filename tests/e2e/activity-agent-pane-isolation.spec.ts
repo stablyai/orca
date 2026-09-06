@@ -32,7 +32,7 @@ type SplitGroupTerminal = {
 }
 
 function agentsSidebarButton(page: Page) {
-  return page.getByRole('radio', { name: /^Agents$/ }).first()
+  return page.getByRole('button', { name: 'View activity', exact: true })
 }
 
 async function seedActivityThread(
@@ -124,8 +124,7 @@ async function enableInlineAgentCards(page: Page): Promise<void> {
 
 async function enableActivityAgentsView(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    // Why: the Agents tab is on by default, but a fresh profile opens the intro popover
-    // over it; stamping it as shown keeps the toggle clickable without dismissing it first.
+    // Keep the migration intro from covering the activity toggle.
     const settings = await window.api.settings.set({
       agentsSidebarIntroShown: true
     })
@@ -252,6 +251,8 @@ test.describe('Activity Agent Pane Isolation', () => {
         activeLeafId: first.leafId
       })
 
+    // Revealing a workspace returns the sidebar to its workspace list.
+    await agentsSidebarButton(orcaPage).click()
     await orcaPage.getByRole('button').filter({ hasText: second.prompt }).first().click()
     await expect
       .poll(async () => readActivePaneSelection(orcaPage), {

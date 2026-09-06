@@ -73,6 +73,13 @@ for a committed forward-recovery gate. Durable files default to
 gap resets the active window at the next fresh sample and preserves the prior
 window evidence. A threshold freeze never clears automatically.
 
+A signal that reads missing or stale may miss up to two consecutive samples
+without restarting the window. The sample still counts and is still checked
+against every threshold it can read, and each tolerated gap is recorded in
+`continuityEvents` with `tolerated: true`. A third consecutive miss of the same
+signal, a failed collector, a runner gap, or any threshold breach restarts or
+freezes as before.
+
 A production candidate or multi-target mutation must download the exact
 dry-run artifact by workflow run ID and attempt. It verifies the artifact
 hashes and provenance, requires a green completed 15-minute state no older
@@ -89,7 +96,8 @@ durably marked consumed before mutation and cannot authorize another run.
 | Signal | Freeze condition |
 | --- | ---: |
 | Active probe age | over 60 seconds |
-| Cloud/log data age | over 180 seconds |
+| Cloud Monitoring data age | over 330 seconds |
+| Relay log and director admin data age | over 180 seconds |
 | Cell heartbeat age | over 45 seconds |
 | Endpoint latency | over 2,000 ms |
 | Cloud SQL CPU | over 80% |
@@ -155,6 +163,25 @@ heartbeats, and matching live admission.
   separate it from today's baseline; the exhausted-retry bar (incident peak
   467 vs bar 300), director concurrency, and the pool bars carry that role.
   Re-tighten after the fleet is on the 500 ms lock wait.
+- Raised the Cloud Monitoring freshness bar from 180 s to 330 s and let a
+  freshness-only failure miss up to two consecutive samples without restarting
+  the window (2026-09-05). Basis: Google's metric list documents Cloud Run
+  `request_count`, `container/instance_count`, `container/cpu/utilizations`,
+  `container/memory/utilizations` and `container/max_request_concurrencies` as
+  "Sampled every 60 seconds. After sampling, data is not visible for up to 120
+  seconds", and Cloud SQL `database/cpu/utilization`,
+  `database/memory/utilization`, `database/postgresql/num_backends`,
+  `database/postgresql/backends_in_wait` and `database/postgresql/deadlock_count`
+  as "up to 165 seconds", so the newest visible point is up to 180 s and 225 s
+  old respectively. Window-sum signals age further: `observedAt` is the newest
+  point in the 5-minute query window, so a label series that stops emitting
+  reads as 300 s old while its summed value is complete. The old bar sat under
+  all three. Production on 2026-09-04/05 restarted healthy 15-minute windows at
+  181 s and 255 s (`auth.errors`, run 33928912676) and at 189 s
+  (`cloud_sql.lock_waits`, run 33944873727), and the last of those then blew the
+  25-minute lineage cap at 1 500 004 ms, so a green fleet produced no verdict.
+  The director admin bar stays at 180 s and the nonzero lock-wait carry window
+  stays at 180 s; both publish on our own cadence.
 - Recalibrated the exhausted-PostgreSQL-retry freeze from 0 to 300 per five
   minutes (2026-09-04). Basis: #18521 cut the request-path cell-inventory
   lock wait from the 1 s pool `lock_timeout` to 500 ms, so contended waiters

@@ -10,9 +10,17 @@ type Clock = () => number
 const monotonicNow = (): number => performance.now()
 let now: Clock = monotonicNow
 let systemSessionEndedAt: number | null = null
+let systemSessionEnded = false
 
 export function markSystemSessionEnding(): void {
   systemSessionEndedAt = now()
+  systemSessionEnded = true
+}
+
+// Why latched, unlike the 5s crash-suppression window below: a native dialog or a recovery verdict is never
+// right once the OS is tearing the session down, however long the process outlives the signal.
+export function isSystemSessionEnding(): boolean {
+  return systemSessionEnded
 }
 
 function isRecentSystemSessionEnd(): boolean {
@@ -55,4 +63,5 @@ export function resolveExpectedTeardownScope({
 export function resetExpectedTeardownStateForTest(clock: Clock = monotonicNow): void {
   now = clock
   systemSessionEndedAt = null
+  systemSessionEnded = false
 }

@@ -13,6 +13,7 @@ import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-s
 import { RelayPendingRequests } from './relay-pending-requests'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
+import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
@@ -40,6 +41,7 @@ export function connectMobileRelayRpcSession(args: {
   desktopPublicKeyB64: string
   requestTimeoutMs?: number
   createSocket?: (url: string) => WebSocket
+  onHostCloseReason?: (reason: RelayHostCloseReason) => void
   onLog?: ConnectionLogSink
 }): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
@@ -69,6 +71,7 @@ export function connectMobileRelayRpcSession(args: {
     deviceToken: args.deviceToken,
     desktopPublicKeyB64: args.desktopPublicKeyB64,
     createSocket: args.createSocket,
+    onHostCloseReason: args.onHostCloseReason,
     onOpen: () => dialStage.advance('awaiting-hello'),
     onHello: (hello) => {
       if (

@@ -2,7 +2,8 @@ import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
   annotateSparseCheckoutStatus,
   listWorktreeGraph as listWorktreeGraphUnshared,
-  listWorktreesStrict as listWorktreesStrictUnshared
+  listWorktreesStrict as listWorktreesStrictUnshared,
+  listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared
 } from './worktree-listing'
 import type { GitWorktreeExecOptions } from './worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
@@ -10,7 +11,7 @@ import { WORKTREE_LIST_TIMEOUT_MS } from './worktree-operation-options'
 // Why: share concurrent `git worktree list` scans, which are expensive on Windows.
 const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 
-type WorktreeScanKind = 'graph' | 'lenient' | 'strict'
+type WorktreeScanKind = 'graph' | 'lenient' | 'strict' | 'strict-true-empty'
 
 // Why: mutation generations prevent listings from joining stale scans.
 const worktreeScanGenerations = new Map<string, number>()
@@ -138,4 +139,21 @@ export function listWorktreesSharedStrict(
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
   return shareWorktreeScan(repoPath, options, 'strict', listWorktreesStrictUnshared)
+}
+
+/**
+ * The detected scan's discipline: reject a Git/host failure so it cannot publish as an
+ * authoritative empty listing, but still answer `[]` for a repo that is gone or not a repo.
+ * Its own kind because neither a strict nor a lenient joiner may inherit that middle contract.
+ */
+export function listWorktreesSharedStrictAllowingTrueEmpty(
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  return shareWorktreeScan(
+    repoPath,
+    options,
+    'strict-true-empty',
+    listWorktreesStrictAllowingTrueEmptyUnshared
+  )
 }

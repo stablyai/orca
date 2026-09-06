@@ -2,7 +2,7 @@ import type { DetectedWorktreeListResult, Worktree } from '../../shared/worktree
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import { buildWorktreeListingPage } from './worktree-listing-host-scope'
+import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -80,7 +80,7 @@ export class RuntimeManagedWorktreeQueries {
       throw new Error('invalid_limit')
     }
     const resolved = await this.deps.listResolved()
-    const repoId = repoSelector ? (await this.deps.resolveRepo(repoSelector)).id : null
+    const scopedRepo = repoSelector ? await this.deps.resolveRepo(repoSelector) : null
     const pathsByRepo = new Map<string, string[]>()
     for (const worktree of resolved) {
       const paths = pathsByRepo.get(worktree.repoId) ?? []
@@ -100,12 +100,12 @@ export class RuntimeManagedWorktreeQueries {
     )
     const worktrees = resolved.filter(
       (worktree) =>
-        (!repoId || worktree.repoId === repoId) &&
+        (!scopedRepo || worktree.repoId === scopedRepo.id) &&
         this.isVisible(worktree, matchers.get(worktree.repoId), sourceDefaultsSupported)
     )
-    // Why: a `--repo` listing was scoped by the caller, so naming every configured host as
-    // omitted would report a gap the caller deliberately excluded.
-    return buildWorktreeListingPage(worktrees, limit, repoId ? [] : this.deps.listKnownHostIds())
+    // See `listingKnownHostIds`: a scoped listing must still name the host it was asked about.
+    const knownHostIds = listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds())
+    return buildWorktreeListingPage(worktrees, limit, knownHostIds)
   }
 
   resolveRepoForConnection(selector: string, connectionId?: string | null): Promise<Repo> {

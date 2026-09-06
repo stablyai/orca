@@ -145,10 +145,22 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
   })
   isPairingRejected = () => this.pairingRejected
+  private hostSignedOut = false
+  setHostSignedOut = vi.fn((signedOut: boolean) => {
+    if (this.hostSignedOut === signedOut) {
+      return
+    }
+    this.hostSignedOut = signedOut
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isHostSignedOut = () => this.hostSignedOut
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false
+      this.hostSignedOut = false
     }
     super.publishState(state)
   }
@@ -264,7 +276,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 3 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -353,7 +366,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(deps.openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 2 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
@@ -382,7 +396,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(openRelay).toHaveBeenLastCalledWith(
       relay,
       expect.objectContaining({ version: 1 }),
-      expect.any(String)
+      expect.any(String),
+      expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()

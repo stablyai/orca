@@ -131,6 +131,32 @@ describe('orchestration hot-path statement compilation', () => {
     }
   })
 
+  // Why: getTask sits on the dispatch/lifecycle path and listTasks runs several times per
+  // coordinator tick, so a wildcard there recompiles on every call the same way the publish did.
+  it('compiles the task lookup and listing SQL exactly once across repeated calls', () => {
+    const db = openDatabase(':memory:')
+    seedDispatchedWorker(db)
+    const seeded = db.listTasks()
+    expect(seeded.length).toBeGreaterThan(0)
+    const taskId = seeded[0].id
+
+    const compiled = trackCompiledSql(db)
+    for (let call = 0; call < 5; call += 1) {
+      db.getTask(taskId)
+      db.listTasks()
+      db.listTasks({ ready: true })
+      db.listTasks({ status: 'pending' })
+      db.listTasks({ runId: seeded[0].run_id })
+    }
+
+    const compilationsPerSql = new Map<string, number>()
+    for (const sql of compiled) {
+      compilationsPerSql.set(sql, (compilationsPerSql.get(sql) ?? 0) + 1)
+    }
+    expect([...compilationsPerSql].filter(([, count]) => count > 1)).toEqual([])
+    expect(compiled.filter((sql) => WILDCARD_PROJECTION.test(sql))).toEqual([])
+  })
+
   // Why: `SELECT *` is what made these statements uncacheable, and a retained wildcard is the only
   // way node:sqlite could build a row from stale column names after another connection's ALTER.
   // Seeds on one connection and publishes on a second so every compilation here is hot-path SQL.

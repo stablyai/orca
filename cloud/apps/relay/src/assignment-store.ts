@@ -645,9 +645,17 @@ export class RelayAssignmentStore {
   ): Promise<RelayAssignment | null> {
     const now = this.now()
     return await this.database.transaction(async (transaction) => {
-      const lockedCells = inventoryFirst
-        ? await this.lockCellInventory(transaction, lockMode)
+      // Why: the retry exists to take a cell row before the assignment row, the
+      // order placement uses. It only ever needs the one cell this host is
+      // pinned to, so read the pin unlocked and lock that row alone; taking all
+      // 23 queued every sticky refresh in the fleet behind every other one.
+      const pinnedCellId = inventoryFirst
+        ? await this.pinnedCellId(transaction, identity)
         : undefined
+      const lockedCells =
+        pinnedCellId === undefined
+          ? undefined
+          : await this.lockCellRows(transaction, [pinnedCellId], lockMode)
       const existing = await this.assignmentRow(transaction, identity, inventoryFirst)
       if (!existing) return null
       const activityLeases = await this.lockAssignmentActivities(transaction, identity, true)
@@ -661,6 +669,11 @@ export class RelayAssignmentStore {
       }
 
       const currentCellId = text(existing, 'cell_id')
+      // The pin moved between the unlocked read and the assignment lock, so the
+      // row held is the wrong one. Same recovery as losing the lock: retry.
+      if (pinnedCellId !== undefined && pinnedCellId !== currentCellId) {
+        throw new Error('database_lock_unavailable')
+      }
       const hadControl = holdsControlLease(
         activityLeases,
         currentCellId,
@@ -701,14 +714,9 @@ export class RelayAssignmentStore {
       if (hadControl) {
         await this.touchAssignment(transaction, identity, leaseExpiresAt, now)
       } else {
-        const nextReservation = integer(currentRow, 'reserved_requests') + 1
-        if (nextReservation > integer(currentRow, 'capacity_requests')) {
-          throw new Error('relay_capacity_exhausted')
-        }
-        await transaction.query(
-          `UPDATE relay_cells SET reserved_requests = ?, updated_at = ? WHERE cell_id = ?`,
-          [nextReservation, now, currentCellId]
-        )
+        // Delta, not the value read from the snapshot: an absolute write here
+        // would clobber any concurrent movement of the same counter.
+        await this.adjustCellReservationAtomically(transaction, currentCellId, 1)
         await this.adjustActivityCount(transaction, identity, 'control', 1, leaseExpiresAt, now)
         await this.insertPendingControlLease(
           transaction,
@@ -3202,8 +3210,7 @@ export class RelayAssignmentStore {
         )
         const requestDelta = ACTIVITY_REQUEST_UNITS[kind] * (after - before)
         if (requestDelta !== 0) {
-          await this.lockCellInventory(transaction, 'request')
-          await this.adjustCellReservation(transaction, text(row, 'cell_id'), requestDelta)
+          await this.adjustCellReservationAtomically(transaction, text(row, 'cell_id'), requestDelta)
         }
       })
     })
@@ -3263,9 +3270,12 @@ export class RelayAssignmentStore {
         }
         const units = ACTIVITY_REQUEST_UNITS[input.kind]
         if (existing) {
-          await this.lockCellInventory(transaction, 'request')
+          // Why: a client-chosen activity id can move between cells, so lock the
+          // one or two rows this path touches in cell_id order, the same order
+          // placement takes the inventory in, and no cycle can form.
+          await this.lockCellRows(transaction, [text(existing, 'cell_id'), input.cellId])
           await this.removeActivityLease(transaction, identity, existing, now)
-          await this.adjustCellReservation(transaction, input.cellId, units)
+          await this.adjustCellReservationAtomically(transaction, input.cellId, units)
         }
         await this.adjustActivityCount(transaction, identity, input.kind, 1, expiresAt, now)
         await transaction.query(
@@ -3580,8 +3590,7 @@ export class RelayAssignmentStore {
             )
             await this.touchAssignment(transaction, identity, expiresAt, now)
           } else {
-            await this.lockCellInventory(transaction, 'request')
-            await this.adjustCellReservation(transaction, input.cellId, 1)
+            await this.adjustCellReservationAtomically(transaction, input.cellId, 1)
             await this.adjustActivityCount(transaction, identity, 'control', 1, expiresAt, now)
             await transaction.query(
               `INSERT INTO relay_assignment_activity_leases
@@ -6863,13 +6872,24 @@ export class RelayAssignmentStore {
           targetCellId
         ]
       )
-      const cells = await this.lockCellInventory(transaction, 'pool-default')
+      // Only the two cells this repairs need holding. The id set below is an
+      // existence check against a table that only reconcileCells writes, so it
+      // reads unlocked instead of dragging the other 21 rows into the section.
+      const cellIds = new Set(
+        (await transaction.query(`SELECT cell_id FROM relay_cells`)).map((row) =>
+          text(row, 'cell_id')
+        )
+      )
+      const cells = await this.lockCellRows(
+        transaction,
+        [sourceCellId, targetCellId],
+        'pool-default'
+      )
       const assignmentKeys = new Set(
         assignments.map((row) =>
           assignmentKey(text(row, 'user_id'), text(row, 'relay_host_id'))
         )
       )
-      const cellIds = new Set(cells.map((row) => text(row, 'cell_id')))
       const assignmentCounts = new Map<
         string,
         { counts: Record<AssignmentActivityKind, number>; leaseExpiresAt: number }
@@ -6923,9 +6943,7 @@ export class RelayAssignmentStore {
         )
       }
 
-      for (const row of cells.filter((cell) =>
-        [sourceCellId, targetCellId].includes(text(cell, 'cell_id'))
-      )) {
+      for (const row of cells) {
         const cellId = text(row, 'cell_id')
         const expected = cellUnits.get(cellId) ?? 0
         if (expected > integer(row, 'capacity_requests')) {
@@ -6954,6 +6972,43 @@ export class RelayAssignmentStore {
     return rows
   }
 
+  // Per-connection paths touch one or two cells. Locking exactly those rows,
+  // in the same ascending order the inventory lock uses (ORDER BY fixes the
+  // row-lock order), keeps them off the fleet-wide lock without a cycle.
+  // The wait policy follows the caller for the same reason the inventory lock's
+  // does: a sweep must not fail terminally on ordinary contention. Hold time is
+  // deliberately not sampled here — the metric tracks the fleet-wide lock these
+  // rows replace, and mixing in short single-row holds would flatter it.
+  private async lockCellRows(
+    database: RelayDatabase,
+    cellIds: string[],
+    mode: CellInventoryLockMode = 'request'
+  ): Promise<SqlRow[]> {
+    const distinct = [...new Set(cellIds)]
+    const { measureHoldMs: _sampled, ...wait } = cellInventoryLockOptions(mode)
+    return await database.queryLocked(
+      `SELECT * FROM relay_cells WHERE cell_id IN (${distinct.map(() => '?').join(', ')})
+       ORDER BY cell_id ASC`,
+      distinct,
+      wait
+    )
+  }
+
+  // Unlocked on purpose: this only names the row to lock next, and the caller
+  // re-checks the pin once the assignment row is held.
+  private async pinnedCellId(
+    database: RelayDatabase,
+    identity: AssignmentIdentity
+  ): Promise<string | undefined> {
+    const row = (
+      await database.query(
+        `SELECT cell_id FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    return row ? text(row, 'cell_id') : undefined
+  }
+
   private async lockGeneralCellInventory(
     database: RelayDatabase,
     mode: CellInventoryLockMode
@@ -6972,10 +7027,11 @@ export class RelayAssignmentStore {
 
   private async leastLoadedCell(
     database: RelayDatabase,
-    lockedCells: SqlRow[] | undefined,
+    // Required: the one caller has already locked the inventory it selects from,
+    // and an optional parameter left a second fleet-wide lock reachable here.
+    rows: SqlRow[],
     preferredRegion: RelayRegion
   ): Promise<CellRow | null> {
-    const rows = lockedCells ?? (await this.lockCellInventory(database, 'pool-default'))
     const regions = new Map(
       (await database.query(`SELECT cell_id, region FROM relay_cell_regions`)).map((row) => [
         text(row, 'cell_id'),
@@ -7590,7 +7646,10 @@ export class RelayAssignmentStore {
     ) {
       throw new Error('activity_lease_shape_mismatch')
     }
-    const cells = await this.lockCellInventory(database, 'request')
+    // Why: this recomputes one cell's reservation from its leases, so only that
+    // row needs to be held; the 23-row inventory lock here serialised every
+    // desktop control rebind in the fleet behind every other one.
+    const cellRow = (await this.lockCellRows(database, [cellId]))[0]
     await database.query(
       `DELETE FROM relay_assignment_activity_leases
        WHERE user_id = ? AND relay_host_id = ? AND activity_kind = 'control'
@@ -7611,7 +7670,6 @@ export class RelayAssignmentStore {
         [cellId]
       )
     )[0]!
-    const cellRow = cells.find((cell) => text(cell, 'cell_id') === cellId)
     const cellUnits = integer(cellUnitsRow, 'request_units')
     if (!cellRow) throw new Error('assigned_cell_missing')
     if (cellUnits > integer(cellRow, 'capacity_requests')) {

@@ -8,8 +8,7 @@ import { spawnProcess } from '../../../shared/child-process/run-process'
 import { CODEX_SPAWN_TOKEN_ENV } from '../../codex/codex-structured-owner-identity'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { readProcessStartTimeMs } from '../../runtime/agent-session-process-identity-probe'
-import { createStructuredAgentSessionOwnerProbe } from '../../runtime/structured-agent-session-runtime'
-import { probeWindowsProcessStartTimeAvailability } from '../../windows/windows-process-table'
+import { createStructuredAgentSessionOwnerProbe } from '../../runtime/structured-agent-session-owner-probe'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -274,14 +273,7 @@ describe('recovery exits', () => {
     })
   })
 
-  // This scenario deliberately captures a real child identity. An unpatched
-  // Windows process-tree addon cannot provide creation time, and fabricating a
-  // timestamp would test the opposite of the ownership contract.
-  it('recovers when the outgoing runtime writes after the replacement probes its dying owner', async (ctx) => {
-    // Probe asynchronously so a healthy Windows addon is not skipped before its first read.
-    if (process.platform === 'win32' && !(await probeWindowsProcessStartTimeAvailability())) {
-      return ctx.skip()
-    }
+  it('recovers when the outgoing runtime writes after the replacement probes its dying owner', async () => {
     const outgoing = await spawnOwner('spawn-a')
     acquire.mockResolvedValueOnce({
       process: outgoing.process,
@@ -298,10 +290,7 @@ describe('recovery exits', () => {
     const outgoingHost = host
     const outgoingStore = store
     supersededHosts.add(outgoingHost)
-    store = await AgentSessionRecordStore.open({
-      directory: join(root, 'store'),
-      hostId: 'local'
-    })
+    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
     const realProbe = createStructuredAgentSessionOwnerProbe('local')
     let overlapDriven = false
     openHost({

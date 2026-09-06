@@ -17,8 +17,9 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
-import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -101,8 +102,11 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               ...(launch.startup ? { startup: launch.startup } : {}),
               ...(launch.route === 'structured-native-chat' ? { providesInitialSurface: true } : {})
             })
-            if (launch.route === 'structured-native-chat' && launch.agent === 'codex') {
-              const structured = startStructuredCodexLaunch(folderWorktree.id)
+            if (
+              launch.route === 'structured-native-chat' &&
+              isAgentSessionHandleProvider(launch.agent)
+            ) {
+              const structured = startStructuredAgentLaunch(folderWorktree.id, launch.agent)
               const fallback = structured.claimDefinitiveRefusalFallback(() => {
                 activateAndRevealWorktree(folderWorktree.id, {
                   sidebarRevealBehavior: 'auto',

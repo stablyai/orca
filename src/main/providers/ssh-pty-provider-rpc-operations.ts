@@ -56,13 +56,15 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
     // Guarded by ssh-pty-inspect-observation-identity.test.ts; #17525 removes the poll.
     inspectProcess: async (
       id: string,
-      options?: { expectedIncarnationId?: string }
+      options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
     ): Promise<PtyProcessInspection> => {
       return (await mux.request('pty.inspectProcess', {
         id: toRelayPtyId(id),
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
-          : {})
+          : {}),
+        // Additive request member: an older relay ignores it and answers as it always did.
+        ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       })) as PtyProcessInspection
     },
     serialize: async (ids: string[]): Promise<string> => {

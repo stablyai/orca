@@ -2,6 +2,7 @@ import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../src/shared/agent-session-wire'
+import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session-definitive-refusal'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 import type { RpcClient } from '../transport/rpc-client'
 import { structuredSessionOperationId } from './mobile-structured-agent-session-rpc'
@@ -66,6 +67,13 @@ function unknownCreateResult(error: unknown): MobileStructuredCodexLaunchResult 
   }
 }
 
+function classifyCreateRefusal(code: string, message: string): MobileStructuredCodexLaunchResult {
+  if (!isDefinitiveAgentSessionCreateRefusal(code)) {
+    return unknownCreateResult(new Error(message))
+  }
+  return { kind: 'failed', message: message || 'Could not open Codex chat.' }
+}
+
 export async function createMobileStructuredCodexSession(
   client: RpcClient,
   worktreeId: string
@@ -125,10 +133,7 @@ export async function createMobileStructuredCodexSession(
     ) {
       return unknownCreateResult(new Error('The Codex chat result could not be confirmed.'))
     }
-    if (response.error.code === 'agent_session_operation_unknown') {
-      return unknownCreateResult(new Error(response.error.message))
-    }
-    return { kind: 'failed', message: response.error.message || 'Could not open Codex chat.' }
+    return classifyCreateRefusal(response.error.code, response.error.message)
   }
   const result = response.result as AgentSessionMutationResult<AgentSessionAttachResult>
   if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
@@ -142,10 +147,7 @@ export async function createMobileStructuredCodexSession(
     ) {
       return unknownCreateResult(new Error('The Codex chat result could not be confirmed.'))
     }
-    if (result.refusal.code === 'agent_session_operation_unknown') {
-      return unknownCreateResult(new Error(result.refusal.message))
-    }
-    return { kind: 'failed', message: result.refusal.message || 'Could not open Codex chat.' }
+    return classifyCreateRefusal(result.refusal.code, result.refusal.message)
   }
   if (
     !result.value ||

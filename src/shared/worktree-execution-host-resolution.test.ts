@@ -156,6 +156,40 @@ describe('resolveWorktreeExecutionHost', () => {
     it('reports an unknown owner distinctly from a conflicting one', () => {
       expect(resolve([], { repoId: 'r' })).toEqual({ kind: 'unresolved', reason: 'unknown' })
     })
+
+    // `unknown` is a verdict the launch path disposes of as a plain local folder, so a row that
+    // declared a host and named an unparseable one must not share the word — it has to fail closed.
+    it('reports a row naming an unparseable host distinctly from an unknown one', () => {
+      for (const executionHostId of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box']) {
+        expect(resolve([{ id: 'r', executionHostId }], { repoId: 'r' })).toEqual({
+          kind: 'unresolved',
+          reason: 'malformed'
+        })
+      }
+    })
+
+    it('does not recover a host from the connectionId such a row overrode', () => {
+      expect(
+        resolve([{ id: 'r', executionHostId: 'ssh:a|b', connectionId: 'openclaw' }], {
+          repoId: 'r'
+        })
+      ).toEqual({ kind: 'unresolved', reason: 'malformed' })
+    })
+
+    it('still resolves every row that names a parseable host', () => {
+      expect(resolve([{ id: 'r', executionHostId: 'ssh:box' }], { repoId: 'r' })).toMatchObject({
+        kind: 'resolved',
+        hostId: 'ssh:box'
+      })
+      expect(resolve([{ id: 'r', connectionId: 'box' }], { repoId: 'r' })).toMatchObject({
+        kind: 'resolved',
+        hostId: 'ssh:box'
+      })
+      expect(resolve([{ id: 'r' }], { repoId: 'r' })).toMatchObject({
+        kind: 'resolved',
+        hostId: 'local'
+      })
+    })
   })
 
   it('ignores an unparseable host id rather than treating it as a host', () => {

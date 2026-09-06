@@ -2,9 +2,14 @@
 // way the terminal wire harness is: current code against a real published release.
 //
 // Three skews matter here, and none can be checked from one build alone — an old
-// client must not be shown a session it cannot render, a new client must find an
-// old host's missing surface cleanly, and a client's cursor must survive the host
-// process that minted it.
+// client must not receive a journal-backed RPC surface it cannot read, a new client
+// must find an old host's missing surface cleanly, and a client's cursor must survive
+// the host process that minted it.
+//
+// The session-tabs projection may keep a metadata-only row for an incapable mobile client so the
+// chat is not simply absent on the phone. Every `agentSession.*` method and destructive close stays
+// refused, which is what the tests below pin; the row-level behaviour is pinned in
+// src/main/runtime/rpc/methods/session-tab-agent-status-projection.test.ts.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -18,7 +23,10 @@ import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/age
 import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   loadAgentSessionWireBuild,
@@ -36,6 +44,7 @@ const WORKSPACE = 'workspace-1'
 const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 const NOW = 1_800_000_000_000
 const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
+const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
 
 /** Every method the structured surface publishes: the host method it must reach,
  *  and the result it must hand back. A gate that hides one method and leaks
@@ -78,6 +87,11 @@ const STRUCTURED_CALLS: {
     result: { ok: true, replayed: false }
   },
   {
+    method: 'agentSession.requestHandoff',
+    hostMethod: 'requestHandoff',
+    result: { status: { owner: 'native' } }
+  },
+  {
     method: 'agentSession.handoffStatus',
     hostMethod: 'handoffStatus',
     result: { owner: 'native' }
@@ -97,6 +111,12 @@ const STRUCTURED_CALLS: {
   // A subscription that opens with nothing to say answers with no reply at all,
   // so reaching the host is the only signal that the gate opened.
   { method: 'agentSession.subscribe', hostMethod: 'subscribe' },
+  // The status feed opens with a snapshot of every session, so its first reply is the contract.
+  {
+    method: STATUS_FEED_METHOD,
+    hostMethod: 'subscribeStatus',
+    result: { type: 'snapshot', sessions: [] }
+  },
   // Teardown runs through the runtime's subscription registry rather than the
   // host, so its reply is the only signal that the gate opened.
   { method: 'agentSession.unsubscribe', hostMethod: null, result: { unsubscribed: true } }
@@ -197,6 +217,14 @@ function paramsFor(method: string): unknown {
       const fields = { itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
     }
+    case 'agentSession.requestHandoff': {
+      const fields = {
+        direction: 'to-tui' as const,
+        mode: 'now' as const,
+        action: 'start' as const
+      }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.setOption': {
       const fields = { key: 'model', value: 'gpt-5' }
       return { envelope: envelope({ method, fields, fence }), ...fields }
@@ -286,6 +314,10 @@ async function callBuild(
 function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
   return {
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId: SESSION } })),
+    // Attach-shaped entries take a client-supplied location, so the host is asked whether it
+    // supports creating there. A real host always answers; leaving it unstubbed made every
+    // `ensure` refuse for the harness's own reason rather than the location's.
+    supportsCreate: vi.fn(() => true),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
@@ -298,6 +330,10 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     subscribe: vi.fn(() => () => undefined),
+    subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
+      subscriber.emit({ type: 'snapshot', sessions: [] })
+      return () => undefined
+    }),
     unsubscribe: vi.fn()
   }
 }
@@ -421,6 +457,14 @@ describe('cross-version structured agent sessions', () => {
       expect(baseline.capabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)).toBe(
         baselineStructuredMethods().length > 0
       )
+      // The status feed is additive to a surface that already shipped, so it carries its own
+      // capability or a client cannot tell "host too old" from "the call failed" — and it
+      // would relay-retry a method_not_found forever instead of degrading once.
+      for (const build of [current, baseline]) {
+        expect(build.capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY)).toBe(
+          build.methodNames.includes(STATUS_FEED_METHOD)
+        )
+      }
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
       expect(current.protocolVersion).toBe(baseline.protocolVersion)
@@ -723,6 +767,10 @@ describe('cross-version structured agent sessions', () => {
     /** Phase 2 owns provider processes; the adapter is the only stub here. */
     function adapter(): StructuredAgentSessionAdapter {
       return {
+        // Every real adapter answers this; without it adapterSupportsCreate falls through to
+        // `supportsLocation`, which this fake also lacks, so the client-supplied-location gate
+        // refused for the fake's silence rather than for the location.
+        supportsCreate: () => true,
         acquire: async ({ fence }) => ({
           process: {
             hostId: 'local',

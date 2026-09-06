@@ -39,7 +39,7 @@ const nativeImeSpec = readFileSync(
   'utf8'
 )
 
-const filterStep = prWorkflow.jobs['e2e-paths'].steps.find(
+const filterStep = prWorkflow.jobs.code_paths.steps.find(
   (step) => step.name === 'Filter changed E2E specs'
 )
 const rollbackStep = prWorkflow.jobs.static_analysis.steps.find(
@@ -106,16 +106,16 @@ describe('PR E2E gate contract', () => {
     // Why: without this the job could lose its filter and run on every PR — the
     // cost the path filter exists to avoid — while the gate assertions above
     // stay green.
-    expect(prWorkflow.jobs.e2e.needs).toBe('e2e-paths')
-    expect(prWorkflow.jobs.e2e.if).toBe("needs.e2e-paths.outputs.should_run == 'true'")
-    expect(prWorkflow.jobs['e2e-paths'].outputs.should_run).toBe(
-      '${{ steps.filter.outputs.should_run }}'
+    expect(prWorkflow.jobs.e2e.needs).toBe('code_paths')
+    expect(prWorkflow.jobs.e2e.if).toBe("needs.code_paths.outputs.e2e_should_run == 'true'")
+    expect(prWorkflow.jobs.code_paths.outputs.e2e_should_run).toBe(
+      '${{ steps.e2e_filter.outputs.should_run }}'
     )
-    expect(prWorkflow.jobs['e2e-paths'].outputs.test_files).toBe(
-      '${{ steps.filter.outputs.test_files }}'
+    expect(prWorkflow.jobs.code_paths.outputs.test_files).toBe(
+      '${{ steps.e2e_filter.outputs.test_files }}'
     )
     expect(prWorkflow.jobs.e2e.with.ref).toBe('${{ github.event.pull_request.head.sha }}')
-    expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.e2e-paths.outputs.test_files }}')
+    expect(prWorkflow.jobs.e2e.with.test_files).toBe('${{ needs.code_paths.outputs.test_files }}')
   })
 
   it('enforces every job verify depends on', () => {
@@ -360,11 +360,11 @@ describe('PR E2E gate contract', () => {
     expect(sshLaneCondition).toContain("inputs.ssh_source_changed == 'true' ||")
 
     expect(e2eWorkflow.on.workflow_call.inputs.ssh_source_changed.type).toBe('string')
-    expect(prWorkflow.jobs['e2e-paths'].outputs.ssh_source_changed).toBe(
-      '${{ steps.filter.outputs.ssh_source_changed }}'
+    expect(prWorkflow.jobs.code_paths.outputs.ssh_source_changed).toBe(
+      '${{ steps.e2e_filter.outputs.ssh_source_changed }}'
     )
     expect(prWorkflow.jobs.e2e.with.ssh_source_changed).toBe(
-      '${{ needs.e2e-paths.outputs.ssh_source_changed }}'
+      '${{ needs.code_paths.outputs.ssh_source_changed }}'
     )
     expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --ssh-source')
     expect(filterStep.run).toContain('ssh_source_changed=$SSH_SOURCE_CHANGED')
@@ -565,12 +565,12 @@ describe('PR E2E gate contract', () => {
     expect(prWorkflow.jobs.terminal_ime_native.uses).toBe(
       './.github/workflows/terminal-ime-e2e.yml'
     )
-    expect(prWorkflow.jobs.terminal_ime_native.needs).toBe('e2e-paths')
+    expect(prWorkflow.jobs.terminal_ime_native.needs).toBe('code_paths')
     expect(prWorkflow.jobs.terminal_ime_native.if).toBe(
-      "needs.e2e-paths.outputs.native_ime_source_changed == 'true'"
+      "needs.code_paths.outputs.native_ime_source_changed == 'true'"
     )
-    expect(prWorkflow.jobs['e2e-paths'].outputs.native_ime_source_changed).toBe(
-      '${{ steps.filter.outputs.native_ime_source_changed }}'
+    expect(prWorkflow.jobs.code_paths.outputs.native_ime_source_changed).toBe(
+      '${{ steps.e2e_filter.outputs.native_ime_source_changed }}'
     )
     expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --native-ime-source')
     expect(filterStep.run).toContain('native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED')

@@ -25,6 +25,7 @@ import type { StructuredAgentSessionAdapter } from './structured-agent-session-a
 import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import {
   AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   isAgentSessionPreSpawnError,
   rethrowAfterAgentSessionAcquisitionCleanup
@@ -56,8 +57,9 @@ export type AttachFlowInput = {
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** Removes any partial host publication after journal attachment fails. */
-  onAttachFailed?: () => void
+  /** Removes any partial host publication after journal attachment fails, and
+   *  closes the journal handle of the map entry it drops. Awaited: see eviction. */
+  onAttachFailed?: () => Promise<void>
 }
 
 export async function performAttach(
@@ -142,7 +144,9 @@ export async function performAttach(
         ? 'processless'
         : error instanceof AgentSessionAcquisitionExitUnprovenError
           ? 'unproven'
-          : 'exit-proven'
+          : error instanceof AgentSessionAcquisitionRootExitObservedError
+            ? 'root-exit-observed'
+            : 'exit-proven'
       const outcome =
         error instanceof AgentSessionAcquisitionExitUnprovenError
           ? {
@@ -260,15 +264,21 @@ async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
     cleanupError = error
     exitProof =
-      error instanceof AgentSessionAcquisitionExitUnprovenError ? 'unproven' : 'exit-proven'
+      error instanceof AgentSessionAcquisitionExitUnprovenError
+        ? 'unproven'
+        : error instanceof AgentSessionAcquisitionRootExitObservedError
+          ? 'root-exit-observed'
+          : 'exit-proven'
   }
-  input.onAttachFailed?.()
+  // Why: the close is awaited so the map entry is gone only once its handle is
+  // released, but a failed close must not also cost the store settlement below.
+  await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,

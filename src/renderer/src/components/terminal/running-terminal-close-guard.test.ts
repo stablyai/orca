@@ -111,7 +111,9 @@ describe('guardRunningTerminalClose', () => {
     guard(onClose)
     await settleProbe()
 
-    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith(expect.anything(), 'pty-a')
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledWith(expect.anything(), 'pty-a', {
+      scanChildProcesses: true
+    })
     expect(onClose).not.toHaveBeenCalled()
     expect(visibleRequest()).toMatchObject({ terminalTabId: 'tab-1' })
   })

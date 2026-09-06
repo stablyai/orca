@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { runtimeTargetForExecutionHostId, type RuntimeClientTarget } from './runtime-client-target'
@@ -10,7 +11,6 @@ import { runtimeTargetForExecutionHostId, type RuntimeClientTarget } from './run
 export function useWorktreeRuntimeTarget(
   worktreeId: string | null | undefined
 ): RuntimeClientTarget | null {
-  return useAppStore((state) =>
-    runtimeTargetForExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
-  )
+  const executionHostId = useAppStore((state) => getExecutionHostIdForWorktree(state, worktreeId))
+  return useMemo(() => runtimeTargetForExecutionHostId(executionHostId), [executionHostId])
 }

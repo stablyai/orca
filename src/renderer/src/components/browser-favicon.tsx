@@ -1,34 +1,30 @@
 import { useState } from 'react'
 import { Globe } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-function displayableFaviconUrl(faviconUrl: string | null | undefined): string | null {
-  const trimmed = faviconUrl?.trim()
-  if (!trimmed) {
-    return null
-  }
-  if (trimmed.startsWith('data:image/')) {
-    return trimmed
-  }
-  try {
-    const url = new URL(trimmed)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? trimmed : null
-  } catch {
-    return null
-  }
-}
+import { displayableFaviconUrl } from './browser-pane/describe-page/browser-favicon-url'
 
 export function BrowserFavicon({
   faviconUrl,
+  loading = false,
   className,
   fallbackClassName
 }: {
   faviconUrl: string | null | undefined
+  loading?: boolean
   className?: string
   fallbackClassName?: string
 }): React.JSX.Element {
   const displayUrl = displayableFaviconUrl(faviconUrl)
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  const [previousLoading, setPreviousLoading] = useState(loading)
+
+  // Retry after navigation settles, when cookies and connectivity may have recovered.
+  if (previousLoading !== loading) {
+    setPreviousLoading(loading)
+    if (!loading) {
+      setFailedUrl(null)
+    }
+  }
 
   // Why: reset during render on any favicon identity change — including a clear to null while
   // a page loads — so navigating back to the same url retries instead of keeping the fallback.

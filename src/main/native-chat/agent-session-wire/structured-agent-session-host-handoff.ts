@@ -18,6 +18,8 @@ import { adapterSupportsCreateIfDeclared } from './structured-agent-session-prov
 
 type HostHandoffAccess = {
   session: (sessionId: string) => StructuredAgentSessionHostSession
+  /** Non-throwing lookup, for the paths that only observe a detached session. */
+  findSession: (sessionId: string) => StructuredAgentSessionHostSession | undefined
   eventSink: (sessionId: string) => DeferredStructuredAgentSessionEventSink
   flush: (sessionId: string) => Promise<void>
   serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
@@ -96,8 +98,14 @@ export function createStructuredAgentSessionHostHandoff(
     activateTuiHistoryCatchup: (sessionId) => tuiHistoryCatchup.activate(sessionId),
     stopTuiHistoryCatchup: (sessionId) => tuiHistoryCatchup.stop(sessionId),
     publish: (sessionId, status) => {
-      const session = host.session(sessionId)
-      const fence = deps.store.getRecord(sessionId)?.lease.runtimeFence ?? session.fence
+      // A status publish is a notification, not a mutation. Eviction and host teardown both drop
+      // the session while a handoff flow is still settling, and `requireSession` would turn that
+      // last publish — usually the FAILED one — into an unhandled rejection nothing can catch.
+      const fence =
+        deps.store.getRecord(sessionId)?.lease.runtimeFence ?? host.findSession(sessionId)?.fence
+      if (fence === undefined) {
+        return
+      }
       host.subscribers.handoff(sessionId, fence, status)
     },
     schedule: host.serialize,

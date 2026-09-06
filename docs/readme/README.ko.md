@@ -238,9 +238,9 @@ yay -S stably-orca-bin
 
 - **Discord:** **[Discord](https://discord.gg/fzjDKHxv8Q)** 커뮤니티에 참여하세요.
 - **Twitter / X:** 업데이트와 공지는 **[@orca_build](https://x.com/orca_build)** 를 팔로우하세요.
-- **WeChat:** QR 코드를 스캔해 Orca 커뮤니티 WeChat 그룹 8에 참여하세요.
+- **WeChat:** QR 코드를 스캔해 Orca 커뮤니티 WeChat 그룹 8에 참여하세요. 그룹 8이 가득 찼을 수 있으니, 그런 경우 그룹 9 QR 코드를 스캔하세요.
 
-  <img src="../assets/wechat-qr-group8.jpg" alt="Orca 커뮤니티 WeChat 그룹 8 QR 코드" width="160" />
+  <img src="../assets/wechat-qr-group8.jpg" alt="Orca 커뮤니티 WeChat 그룹 8 QR 코드" width="160" />&nbsp;&nbsp;<img src="../assets/wechat-qr-group9.jpg" alt="Orca 커뮤니티 WeChat 그룹 9 QR 코드" width="160" />
 
 - **피드백과 아이디어:** 우리는 빠르게 출시합니다. 필요한 기능이 있나요? [새 기능을 요청](https://github.com/stablyai/orca/issues)하세요.
 - **개인정보 보호:** Orca가 수집하는 익명 사용 데이터와 수집 거부 방법은 [개인정보 및 텔레메트리 문서](https://www.onorca.dev/docs/telemetry)를 참고하세요.

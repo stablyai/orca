@@ -57,6 +57,10 @@ export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   // title request with no title and no error.
   { filename: 'wsl-transcript-fs-process-entry.js' },
   { filename: 'node-pty-1.1.0-console-list-agent-patch.cjs', windowsOnly: true },
+  // The ConPTY teardown release the desktop's own node-pty patch already carries; pnpm patches do
+  // not cross the SSH boundary, so a relay ran the unpatched npm tree and leaked one Windows File
+  // handle per terminal for the life of the relay process.
+  { filename: 'node-pty-1.1.0-windows-pty-teardown-patch.cjs', windowsOnly: true },
   // Only Linux relays run it, but it ships everywhere: the manifest's only
   // platform axis is Windows, and a second one would buy nothing but a fork in
   // the hash. Its presence is what moves a host to a fresh relay directory, and

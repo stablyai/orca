@@ -102,6 +102,9 @@ export type ResourceInventory = {
 
 const unavailableEndpoint = (): EndpointHealth => ({ health: null, ready: null, latencyMs: null })
 const independentEndpointRetryDelayMs = 11_000
+const transientProbeRetryDelayMs = 1_000
+const sleep = async (ms: number): Promise<void> =>
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
 
 function finalSegment(value: string): string {
   return value.split('/').at(-1) ?? value
@@ -120,6 +123,12 @@ function parseService(value: unknown): ServiceInventory {
   }
 }
 
+class GoogleApiError extends Error {
+  constructor(readonly status: number) {
+    super(`Google API returned ${status}`)
+  }
+}
+
 async function googleRequest(
   fetchImpl: typeof fetch,
   token: string,
@@ -134,45 +143,97 @@ async function googleRequest(
     },
     signal: AbortSignal.timeout(30_000)
   })
-  if (!response.ok) throw new Error(`Google API returned ${response.status}`)
+  if (!response.ok) throw new GoogleApiError(response.status)
   return await response.json()
 }
 
-async function endpointProbe(origin: string, fetchImpl: typeof fetch): Promise<EndpointHealth> {
-  const startedAt = performance.now()
-  const check = async (path: '/health' | '/ready'): Promise<boolean> => {
+// A 404 is the API's answer about the resource; anything else is the absence of a reading, so re-ask.
+async function readOnceMore(
+  read: () => Promise<unknown>,
+  wait: (ms: number) => Promise<void>
+): Promise<unknown> {
+  try {
+    return await read()
+  } catch (error) {
+    if (error instanceof GoogleApiError && error.status === 404) throw error
+    await wait(transientProbeRetryDelayMs)
+    return await read()
+  }
+}
+
+// A reading the endpoint actually produced: ok is its answer, latencyMs is that answer's round trip.
+type PathReading = { ok: boolean; latencyMs: number | null }
+
+async function probePath(
+  origin: string,
+  path: '/health' | '/ready',
+  fetchImpl: typeof fetch,
+  wait: (ms: number) => Promise<void>
+): Promise<PathReading> {
+  // null means the request never produced an answer (DNS/TCP/TLS failure or the 8s abort).
+  const attempt = async (): Promise<PathReading | null> => {
+    const startedAt = performance.now()
     try {
       const response = await fetchImpl(`${origin}${path}`, {
         redirect: 'error',
         signal: AbortSignal.timeout(8_000)
       })
-      return response.ok
+      return { ok: response.ok, latencyMs: Math.round(performance.now() - startedAt) }
     } catch {
-      return false
+      return null
     }
   }
-  const [health, ready] = await Promise.all([check('/health'), check('/ready')])
-  return { health, ready, latencyMs: Math.round(performance.now() - startedAt) }
+  const first = await attempt()
+  if (first) return first
+  // A thrown fetch is the absence of a reading, not an unhealthy answer, so re-ask before concluding.
+  await wait(transientProbeRetryDelayMs)
+  return (await attempt()) ?? { ok: false, latencyMs: null }
+}
+
+async function endpointProbe(
+  origin: string,
+  fetchImpl: typeof fetch,
+  requiresReady: boolean,
+  wait: (ms: number) => Promise<void>
+): Promise<EndpointHealth> {
+  const [health, ready] = await Promise.all([
+    probePath(origin, '/health', fetchImpl, wait),
+    requiresReady ? probePath(origin, '/ready', fetchImpl, wait) : null
+  ])
+  // Latency is the slowest answering round trip in this probe; retry delays are not serving latency.
+  const latencies = [health.latencyMs, ready?.latencyMs ?? null].filter(
+    (value): value is number => value !== null
+  )
+  return {
+    health: health.ok,
+    ready: ready ? ready.ok : null,
+    latencyMs: latencies.length > 0 ? Math.max(...latencies) : null
+  }
+}
+
+export type EndpointProbeOptions = {
+  // Auth serves no /ready by design, so it is judged on /health and latency alone.
+  requiresReady?: boolean
+  wait?: (ms: number) => Promise<void>
 }
 
 export async function probeEndpointHealth(
   origin: string,
   fetchImpl: typeof fetch,
-  wait: (ms: number) => Promise<void> = async (ms) =>
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
+  options: EndpointProbeOptions = {}
 ): Promise<EndpointHealth> {
-  const first = await endpointProbe(origin, fetchImpl)
-  if (
-    first.health &&
-    first.ready &&
-    first.latencyMs !== null &&
-    first.latencyMs <= INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs
-  ) {
-    return first
-  }
+  const requiresReady = options.requiresReady ?? true
+  const wait = options.wait ?? sleep
+  const accepted = (probe: EndpointHealth): boolean =>
+    probe.health === true &&
+    (!requiresReady || probe.ready === true) &&
+    probe.latencyMs !== null &&
+    probe.latencyMs <= INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs
+  const first = await endpointProbe(origin, fetchImpl, requiresReady, wait)
+  if (accepted(first)) return first
   // Outwait Relay's ten-second readiness cache before treating the retry as independent.
   await wait(independentEndpointRetryDelayMs)
-  return await endpointProbe(origin, fetchImpl)
+  return await endpointProbe(origin, fetchImpl, requiresReady, wait)
 }
 
 function imageDigest(template: z.infer<typeof TemplateSchema>): string | null {
@@ -285,11 +346,17 @@ function unavailableInventory(environment: RelayOpsEnvironment, warning: string)
   }
 }
 
+export type ResourceInventoryOptions = {
+  wait?: (ms: number) => Promise<void>
+}
+
 export async function readResourceInventory(
   environment: RelayOpsEnvironment,
   gcloud: GcloudClient,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
+  options: ResourceInventoryOptions = {}
 ): Promise<ResourceInventory> {
+  const wait = options.wait ?? sleep
   let token: string
   try {
     token = await gcloud.accessToken()
@@ -316,7 +383,10 @@ export async function readResourceInventory(
       token,
       `https://certificatemanager.googleapis.com/v1/projects/${environment.project}/locations/global/certificates/${environment.certificateName}`
     ),
-    ...environment.cells.map((cell) => googleRequest(fetchImpl, token, migUrl(cell)))
+    // One transient Compute read must never become a verdict on a cell's power state.
+    ...environment.cells.map((cell) =>
+      readOnceMore(async () => await googleRequest(fetchImpl, token, migUrl(cell)), wait)
+    )
   ])
   const warnings: string[] = []
   const directorValue = parsed(settled[0]!, RunServiceSchema, 'Director service inventory is unavailable.', warnings)
@@ -338,7 +408,8 @@ export async function readResourceInventory(
     ? [unavailableEndpoint(), unavailableEndpoint()]
     : await Promise.all([
         probeEndpointHealth(environment.directorOrigin, fetchImpl),
-        probeEndpointHealth(environment.authOrigin, fetchImpl)
+        // The auth service exposes no /ready, so requiring it would fail every first probe.
+        probeEndpointHealth(environment.authOrigin, fetchImpl, { requiresReady: false })
       ])
   const cells = await Promise.all(environment.cells.map((cell, index) =>
     readCell(environment, cell, migValues[index] ?? null, token, fetchImpl)

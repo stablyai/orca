@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -27,20 +28,6 @@ export type AgentLaunchRoutingInput = {
   executionHostId: string
   platform: NodeJS.Platform
   hostCapabilities: readonly string[]
-  /** Whether the host PROVED its process table exposes creation times, which is
-   *  what makes Windows PID ownership decidable. Required (not optional) so a
-   *  new call site cannot silently disable Windows by omitting it; 'unknown'
-   *  is refused so a recycled PID can never be adopted. */
-  windowsProcessStartTime: 'available' | 'unavailable' | 'unknown'
-  /** Whether the workspace resolves through a WSL UNC path, which belongs to
-   *  the distro's runtime and must keep the legacy terminal. Required for the
-   *  same reason. */
-  worktreeUsesWslPath: boolean
-  /** True when this renderer is a paired web client. Its `platform` then
-   *  describes the browser's machine, not the host that will run the agent, so
-   *  the Windows gate below cannot be evaluated and must refuse rather than
-   *  guess. Lifting this needs host-published eligibility, not a client probe. */
-  isWebClient: boolean
   workspaceKind?: 'git-worktree' | 'folder' | 'floating'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
@@ -105,20 +92,17 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   const hasInitialSessionOptions = Boolean(
     input.initialSessionOptions && Object.keys(input.initialSessionOptions).length > 0
   )
-  // Windows structured ownership is safe only once the host proved it can read
-  // process creation times; a WSL UNC workspace stays on the legacy terminal.
-  const windowsStructuredAllowed =
-    input.platform !== 'win32' ||
-    (input.windowsProcessStartTime === 'available' && !input.worktreeUsesWslPath)
   const structuredSupported =
-    !input.isWebClient &&
-    input.agent === 'codex' &&
+    isAgentSessionHandleProvider(input.agent) &&
     input.promptDelivery !== 'draft' &&
     input.workspaceKind !== 'floating' &&
     input.requiresTuiLaunchCustomization !== true &&
     !hasInitialSessionOptions &&
     input.executionHostId === 'local' &&
-    windowsStructuredAllowed &&
+    // Codex's Windows refusal is deliberate and settled elsewhere, so it stays a client-side
+    // answer. Claude's is measured by the executing host at create time (agentSession.createSupport)
+    // because only that host knows whether it can read a provider child's start time.
+    (input.agent !== 'codex' || input.platform !== 'win32') &&
     !runtimeRefused &&
     input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
 

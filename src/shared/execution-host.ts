@@ -226,13 +226,18 @@ export function getSettingsFocusedExecutionHostId(
     : LOCAL_EXECUTION_HOST_ID
 }
 
-export function getExecutionHostLabel(id: ExecutionHostScope): string {
+export function getExecutionHostLabel(id: ExecutionHostScope | null | undefined): string {
   if (id === ALL_EXECUTION_HOSTS_SCOPE) {
     return 'All hosts'
   }
   const parsed = parseExecutionHostId(id)
   if (!parsed) {
-    return 'All hosts'
+    // Not "All hosts": an id that names no host is one *unknown* host, and answering with the
+    // everything-scope label shows an unroutable row as though it were on every host.
+    // Plain English like every other label in this module (`Local Mac`, `This computer`,
+    // `All hosts`) — none of them resolve through the renderer's i18n catalog, so a lone
+    // translated string here would read inconsistently.
+    return 'Unknown host'
   }
   switch (parsed.kind) {
     case 'local':

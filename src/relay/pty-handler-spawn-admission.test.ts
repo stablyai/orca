@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import * as ptyShellUtils from './pty-shell-utils'
 import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
 
@@ -92,7 +93,7 @@ describe('PtyHandler', () => {
   })
 
   it('rescans the process table for a close decision but not for a poll', async () => {
-    const hasChildren = vi.mocked(ptyShellUtils.processHasChildren)
+    const hasChildren = vi.mocked(ptyChildProcessInspection.processHasChildren)
     const snapshot = vi
       .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
       .mockResolvedValue({
@@ -125,6 +126,46 @@ describe('PtyHandler', () => {
     expect(hasChildren).toHaveBeenLastCalledWith(mockPtyInstance.pid, { fresh: true })
   })
 
+  it('does not re-enter the shared capture after the evidence read gave up on it', async () => {
+    // The budget is worthless if the compatibility fields answer by joining the very capture the
+    // evidence read just abandoned: `inspectPtyChildProcesses` and `getForegroundProcessName`
+    // read the same TTL-shared table with no budget of their own, so on a slow host this call
+    // would still block for the whole capture -- once, then once per managed PTY in the listing.
+    const snapshot = vi
+      .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
+      .mockRejectedValue(new Error('process table unreadable: capture_over_budget'))
+    const hasChildren = vi.spyOn(ptyChildProcessInspection, 'inspectPtyChildProcesses')
+    const foregroundName = vi.spyOn(ptyShellUtils, 'getForegroundProcessName')
+
+    const { id } = (await spawnPty({ cols: 80, rows: 24 })) as { id: string }
+    hasChildren.mockClear()
+    foregroundName.mockClear()
+
+    const inspection = (await dispatcher.callRequest('pty.inspectProcess', { id })) as {
+      hasChildProcesses: boolean
+      childProcessEvidence?: string
+      foregroundProcessEvidence?: { verdict: string; reason?: string }
+    }
+
+    expect(snapshot).toHaveBeenCalled()
+    expect(hasChildren).not.toHaveBeenCalled()
+    // The verdict the gates already handle, reached promptly instead of late.
+    expect(inspection.foregroundProcessEvidence?.verdict).toBe('unverifiable')
+    expect(inspection.foregroundProcessEvidence?.reason).toBe('process_table_unreadable')
+    // The honest verdict rather than a fabricated negative, reached without the wait. The
+    // compatibility boolean still spells `unverifiable` as `false` for older clients.
+    expect(inspection.childProcessEvidence).toBe('unverifiable')
+    expect(inspection.hasChildProcesses).toBe(false)
+
+    const listing = (await dispatcher.callRequest('pty.listProcesses', {})) as {
+      id: string
+      title: string
+    }[]
+
+    expect(foregroundName).not.toHaveBeenCalled()
+    expect(listing.find((entry) => entry.id === id)?.title).toBeTruthy()
+  })
+
   it('rejects strict process inspection for a missing relay PTY', async () => {
     await expect(dispatcher.callRequest('pty.inspectProcess', { id: 'missing' })).rejects.toThrow(
       'terminal_gone'
@@ -133,7 +174,13 @@ describe('PtyHandler', () => {
 
   it('spawns a PTY and returns an id', async () => {
     const result = await spawnPty({ cols: 80, rows: 24 })
-    expect(result).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
+    // shellReadyArmed rides every spawn reply, false included: absent has to keep
+    // meaning "host predates the field", not "host did not arm".
+    expect(result).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
   })
@@ -152,7 +199,11 @@ describe('PtyHandler', () => {
       agentSessionCreateOperationId: operationId
     })
 
-    expect(replayed).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
+    expect(replayed).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
     expect(mockPtyInstance.kill).not.toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)

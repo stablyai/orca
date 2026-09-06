@@ -49,6 +49,22 @@ describe('createCommandCodeOutputStatusDetector', () => {
     expect(onWorking).toHaveBeenCalledWith('')
   })
 
+  it('detects the banner after chunks that carry no banner characters at all', () => {
+    const onWorking = vi.fn()
+    const detector = createCommandCodeOutputStatusDetector({
+      startupCommand: null,
+      onWorking
+    })
+
+    // Ordinary agent output with no '#': the raw prefilter skips these without building a window.
+    expect(detector.observe('Codex is editing the file and rendering a diff\r\n')).toBe(false)
+    expect(detector.observe('Codex wrote 12 lines\r\n')).toBe(false)
+    expect(detector.observe('# Command Code v0.27.2\r\n')).toBe(false)
+    expect(detector.observe('⌘ Parsing...')).toBe(true)
+
+    expect(onWorking).toHaveBeenCalledWith('')
+  })
+
   it('detects the Command Code banner when ANSI styling splits the words', () => {
     const onWorking = vi.fn()
     const detector = createCommandCodeOutputStatusDetector({

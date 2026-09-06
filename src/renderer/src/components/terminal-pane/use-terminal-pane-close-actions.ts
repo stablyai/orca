@@ -5,7 +5,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { resolveLeafCloseCopyKind } from '../terminal/terminal-close-copy-kind'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-close-guard'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { probePtyRunningWork } from '../terminal/pty-running-work-probe'
 import {
   detachTerminalPaneToTab,
   isTerminalTabStripDropTarget,
@@ -99,12 +99,14 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
           copyKind: getCloseDialogCopyKind(paneId)
         })
       const probeTimeout = setTimeout(() => decide(confirmClose), RUNNING_CLOSE_PROBE_TIMEOUT_MS)
-      void inspectRuntimeTerminalProcess(settings, ptyId)
-        .then((process) => {
+      // Why the shared probe rather than a direct inspect: this is the same question the tab-close
+      // guard asks, and the two must not drift on what an unanswered host means.
+      void probePtyRunningWork(settings, [ptyId], { timeoutMs: RUNNING_CLOSE_PROBE_TIMEOUT_MS })
+        .then((probes) => {
           clearTimeout(probeTimeout)
           decide(() => {
             if (
-              !process.hasChildProcesses ||
+              probes[0]?.verdict !== 'live' ||
               settings?.skipCloseTerminalWithRunningProcessConfirm
             ) {
               executeClosePane(paneId)

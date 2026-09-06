@@ -134,6 +134,77 @@ describe('PtyHandler', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'emits shell-ready markers for plain Codex on a line-editor shell',
+    async () => {
+      const oldShell = process.env.SHELL
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-plain-codex-spawn-'))
+
+      process.env.SHELL = '/bin/bash'
+      process.env.HOME = homeDir
+      try {
+        // No prefill flag and no shell-ready hint: the host decides from its own
+        // shell, because the client cannot see it (#18767).
+        const reply = await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir },
+          command: 'codex'
+        })
+        expect(reply).toMatchObject({ shellReadyArmed: true })
+      } finally {
+        if (oldShell === undefined) {
+          delete process.env.SHELL
+        } else {
+          process.env.SHELL = oldShell
+        }
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
+      vi.advanceTimersByTime(15_000)
+      expect(handler.retainedStartupCommandCount).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'leaves plain Codex unwaited on a shell that emits the marker before its reader',
+    async () => {
+      const oldHome = process.env.HOME
+      const homeDir = mkdtempSync(join(tmpdir(), 'relay-plain-codex-fish-spawn-'))
+
+      process.env.HOME = homeDir
+      try {
+        const reply = await dispatcher.callRequest('pty.spawn', {
+          env: { HOME: homeDir, SHELL: '/usr/bin/fish' },
+          command: 'codex'
+        })
+        // Why the reply carries it: the client cannot see this shell, and without
+        // the verdict it waits the full fallback for a marker fish never emits.
+        expect(reply).toMatchObject({ shellReadyArmed: false })
+      } finally {
+        if (oldHome === undefined) {
+          delete process.env.HOME
+        } else {
+          process.env.HOME = oldHome
+        }
+        rmSync(homeDir, { recursive: true, force: true })
+      }
+
+      const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
+        | { env?: Record<string, string> }
+        | undefined
+      expect(spawnOptions?.env?.ORCA_SHELL_FEATURES ?? '').not.toContain('ready')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'emits shell-ready markers for renderer-delivered Codex native prefill commands',
     async () => {
       const oldShell = process.env.SHELL
