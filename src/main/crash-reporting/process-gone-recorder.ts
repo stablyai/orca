@@ -34,6 +34,7 @@ import {
   findSiblingChildDeaths,
   siblingProcessDeathDetails
 } from './process-gone-sibling-correlation'
+import { selfInitiatedTreeKillDetails } from './self-initiated-tree-kill-log'
 import { getMainProcessLifecycleIdentity } from './main-process-lifecycle-identity'
 import {
   captureMinidumpSignature,
@@ -247,7 +248,10 @@ export function recordProcessGoneCrash(
     {
       ...event.details,
       ...mainProcessLifecycle,
-      ...siblingDetails
+      ...siblingDetails,
+      // Why: an Orca-issued kill and an external one are identical in every other
+      // recorded field, so this is what answers "did we do this to ourselves?"
+      ...selfInitiatedTreeKillDetails(goneAt)
     },
     event.processType
   )

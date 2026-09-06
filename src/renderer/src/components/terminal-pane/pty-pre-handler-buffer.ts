@@ -63,15 +63,18 @@ export function currentPreHandlerPtySequence(): number {
   return preHandlerPtySequence
 }
 
-/** Map preserves insertion order, so the first key is the least recently admitted id. */
-function evictOldestPtyIfAtCap<V>(map: Map<string, V>, ptyId: string, cap: number): void {
+/** Map preserves insertion order, so the first key is the least recently admitted id.
+ *  Returns the evicted id so the caller can drop state keyed alongside the entry. */
+function evictOldestPtyIfAtCap<V>(map: Map<string, V>, ptyId: string, cap: number): string | null {
   if (map.has(ptyId) || map.size < cap) {
-    return
+    return null
   }
   const oldestPtyId = map.keys().next().value
   if (typeof oldestPtyId === 'string') {
     map.delete(oldestPtyId)
+    return oldestPtyId
   }
+  return null
 }
 
 /** Drop a buffered exit proven to describe a different lifetime of `ptyId` than the one now
@@ -129,7 +132,15 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
   if (!chunk.data) {
     return
   }
-  evictOldestPtyIfAtCap(preHandlerPtyData, ptyId, PRE_HANDLER_PTY_DATA_MAX_PTYS)
+  const evictedPtyId = evictOldestPtyIfAtCap(
+    preHandlerPtyData,
+    ptyId,
+    PRE_HANDLER_PTY_DATA_MAX_PTYS
+  )
+  if (evictedPtyId !== null) {
+    // The warn breadcrumb describes buffered bytes that no longer exist.
+    warnedLostHandlerPtyIds.delete(evictedPtyId)
+  }
   const bufferedMeta =
     meta && chunk.data.length !== data.length && typeof meta.rawLength === 'number'
       ? { ...meta, rawLength: chunk.bytes }

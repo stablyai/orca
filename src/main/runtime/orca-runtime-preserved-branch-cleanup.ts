@@ -26,6 +26,8 @@ import { RuntimeAccountController } from './runtime-account-controller'
 import { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
+import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
+import type { Store } from '../persistence'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
@@ -194,6 +196,17 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     listRepos: () => this.listRepos(),
     addRepo: (path, kind, hostId) =>
       (this as RuntimeCommandSurfaceHost<this>).addRepo(path, kind, hostId),
+    addRemoteRepo: async (remote) => {
+      // The same registration the desktop IPC handler uses, so both surfaces agree on SSH hosts.
+      const result = await addRemoteRepoFromPath(this.requireStore() as unknown as Store, remote)
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(result.repo.id)
+      this.notifyReposChanged()
+      return result.repo
+    },
     cloneRepo: (url, destination, hostId) =>
       (this as RuntimeCommandSurfaceHost<this>).cloneRepo(url, destination, hostId),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),

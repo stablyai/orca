@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type { Repo } from '../../shared/repo-types'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import {
@@ -161,7 +161,13 @@ export class RuntimeRepositoryCloneController {
       }
       return existing
     }
-    const detected = await detectRepoIconAndUpstream({ repoPath: clonePath, kind: 'git' })
+    // `cloneRepo` ran `git clone` in this process (see `assertCloneHostIsSupported`), so the
+    // checkout is here regardless of the host id stamped on the row.
+    const detected = await detectRepoIconAndUpstream({
+      repoPath: clonePath,
+      kind: 'git',
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
     const repo: Repo = {
       id: randomUUID(),
       path: clonePath,

@@ -4,11 +4,24 @@ import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../../shared/feature-educa
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 
 export const TerminalHandle = z.object({
-  terminal: requiredString('Missing terminal handle')
+  terminal: requiredString('Missing terminal handle'),
+  // Additive fence understood by newer hosts; legacy hosts safely ignore it.
+  expectedIncarnationId: requiredString('Missing PTY incarnation').optional()
 })
 
 export const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
+})
+
+/**
+ * `terminal.inspectProcess` carries one member the sibling handle methods must not: whether the
+ * caller's answer decides something once, which is what licenses the host to pay for a process-table
+ * read. Extended rather than added to `TerminalHandle` so `clearBuffer`/`agentStatus`/`isRunningAgent`
+ * keep refusing an option they have no use for.
+ */
+export const TerminalInspectProcess = TerminalHandle.extend({
+  // Additive request member understood by newer hosts; legacy hosts safely ignore it.
+  scanChildProcesses: z.boolean().optional()
 })
 
 export const TerminalListParams = z.object({
@@ -180,6 +193,8 @@ export const TerminalSplit = TerminalHandle.extend({
 export const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })
+
+export const TerminalCloseAll = TerminalStop
 
 export const TerminalSleep = TerminalStop
 

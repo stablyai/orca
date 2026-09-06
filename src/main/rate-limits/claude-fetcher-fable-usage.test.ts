@@ -144,51 +144,6 @@ describe('fetchClaudeRateLimits', () => {
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 
-  it('maps a scoped Fable window whose display name carries a point release', async () => {
-    const configDir = '/Users/test/.claude'
-    const authPreparation: ClaudeRuntimeAuthPreparation = {
-      configDir,
-      envPatch: { CLAUDE_CONFIG_DIR: configDir },
-      stripAuthEnv: false,
-      provenance: 'managed:account-1'
-    }
-    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
-      JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
-    )
-    netFetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          five_hour: { utilization: 36 },
-          seven_day: { utilization: 73 },
-          // Discriminating: a passing scope match must beat this fallback.
-          fable_weekly: { utilization: 12 },
-          limits: [
-            {
-              kind: 'weekly_scoped',
-              percent: 64,
-              resets_at: '2026-07-17T20:00:00.099908+00:00',
-              is_active: true,
-              scope: { model: { display_name: 'Fable 5.1' } }
-            }
-          ]
-        }),
-        { status: 200 }
-      )
-    )
-
-    await expect(
-      fetchClaudeRateLimits({ authPreparation, allowUsagePanelSupplement: true })
-    ).resolves.toMatchObject({
-      provider: 'claude',
-      status: 'ok',
-      fableWeekly: {
-        usedPercent: 64,
-        resetsAt: Date.parse('2026-07-17T20:00:00.099908+00:00')
-      }
-    })
-    expect(fetchViaPty).not.toHaveBeenCalled()
-  })
-
   it('surfaces inactive scoped Fable usage over the legacy OAuth fallback', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {

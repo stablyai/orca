@@ -32,6 +32,8 @@ export function TerminalPaneSurface({
   const {
     activePane,
     activePaneCanContinueInNewSession,
+    activePaneCanToggleChat,
+    activePaneIsChatLeaf,
     activatePaneTitleInteraction,
     agentSessionContinuation,
     agentSessionFork,
@@ -39,6 +41,8 @@ export function TerminalPaneSurface({
     closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
+    contextMenuCanToggleChat,
+    contextMenuIsChatView,
     cwd,
     daemonActions,
     dismissTerminalError,
@@ -46,6 +50,7 @@ export function TerminalPaneSurface({
     expandedPaneId,
     handleCancelClose,
     handleConfirmClose,
+    handleContextMenuToggleNativeChat,
     handlePrimarySelectionAuxClick,
     handlePrimarySelectionMiddleMouseDown,
     handleRemoveTitle,
@@ -54,11 +59,13 @@ export function TerminalPaneSurface({
     handleRenameSubmit,
     handleRequestClosePane,
     handleStartRename,
+    handleToggleNativeChat,
     hiddenStartupStyle,
     isActive,
     keybindings,
     managedPanes,
     managerRef,
+    menuAgentSessionId,
     menuPaneHasCustomTitle,
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
@@ -230,6 +237,9 @@ export function TerminalPaneSurface({
         canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
         onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
+        canToggleNativeChat={contextMenuCanToggleChat}
+        isNativeChatView={contextMenuIsChatView}
+        onToggleNativeChat={handleContextMenuToggleNativeChat}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
         quickCommandHosts={visibleQuickCommandHosts}
         quickCommandHostLoadFailed={quickCommandHostLoadFailed}
@@ -247,6 +257,8 @@ export function TerminalPaneSurface({
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
+        canCopyAgentSessionId={menuAgentSessionId !== null}
+        onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
       />
       <TerminalLinkActionPopover
         request={terminalLinkActionRequest}
@@ -300,6 +312,9 @@ export function TerminalPaneSurface({
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
+        canToggleNativeChat={activePaneCanToggleChat}
+        isChatViewMode={activePaneIsChatLeaf}
+        onToggleNativeChat={handleToggleNativeChat}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

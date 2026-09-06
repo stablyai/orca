@@ -223,7 +223,13 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             signal: controller?.signal
           })
         }
-        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
+        return await listQuickOpenFiles(
+          args.rootPath,
+          store,
+          args.excludePaths,
+          controller?.signal,
+          args.maxResults
+        )
       } finally {
         listFilesCancellations.finish(event, args.requestToken, controller)
       }

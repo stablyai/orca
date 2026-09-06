@@ -61,7 +61,7 @@ export function formatCommandHelp(spec: CommandSpec): string {
 }
 
 export function formatGroupHelp(specs: CommandSpec[], group: string): string {
-  const groupSpecs = specs.filter((spec) => spec.path[0] === group)
+  const groupSpecs = specs.filter((spec) => spec.path[0] === group && spec.hidden !== true)
   const lines = [`orca ${group}`, '', `Usage: orca ${group} <command> [options]`, '', 'Commands:']
   for (const spec of groupSpecs) {
     lines.push(`  ${spec.path.slice(1).join(' ').padEnd(18)} ${spec.summary}`)

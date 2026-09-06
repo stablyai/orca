@@ -65,6 +65,29 @@ describe('provider frame classification catalog', () => {
     ).toBe('error-surface')
   })
 
+  it('keeps command queue bookkeeping off the transcript without hiding a failed one', () => {
+    expect(
+      classifyProviderFrame('claude', 'message:command_lifecycle', {
+        command_uuid: 'command-1',
+        state: 'started'
+      })
+    ).toBe('status-chrome')
+    expect(
+      classifyProviderFrame('claude', 'message:command_lifecycle', {
+        command_uuid: 'command-1',
+        state: 'cancelled'
+      })
+    ).toBe('status-chrome')
+    // Payload inspection outranks the catalogue, so suppressing the kind cannot
+    // swallow a state the provider reports as a failure.
+    expect(
+      classifyProviderFrame('claude', 'message:command_lifecycle', {
+        command_uuid: 'command-1',
+        state: 'failed'
+      })
+    ).toBe('error-surface')
+  })
+
   it('keeps unknown future frames on the substantive bounded fallback path', () => {
     expect(classifyProviderFrame('codex', 'notification:future/event', {})).toBe(
       'timeline-substantive'
@@ -88,5 +111,53 @@ describe('provider frame classification catalog', () => {
     )
     // An item type nobody has dispositioned still falls through visibly.
     expect(classifyProviderFrame('codex', 'item:futureThing', {})).toBe('timeline-substantive')
+  })
+
+  it('chromes the one unmodelled codex item type that carries no content', () => {
+    expect(classifyProviderFrame('codex', 'item:sleep', { id: 's', durationMs: 20_000 })).toBe(
+      'status-chrome'
+    )
+    // Payload inspection still outranks the item catalog, so chroming a type
+    // cannot swallow one that reports a failure.
+    expect(classifyProviderFrame('codex', 'item:sleep', { id: 's', status: 'failed' })).toBe(
+      'error-surface'
+    )
+  })
+
+  it('keeps subagent items visible — the only evidence a spawned agent is working', () => {
+    expect(
+      classifyProviderFrame('codex', 'item:subAgentActivity', {
+        id: 'a-1',
+        kind: 'started',
+        agentThreadId: 'thread-child',
+        agentPath: '/root/list_directory'
+      })
+    ).toBe('timeline-substantive')
+    expect(
+      classifyProviderFrame('codex', 'item:collabAgentToolCall', {
+        id: 'c-1',
+        tool: 'spawn',
+        status: 'inProgress',
+        senderThreadId: 'thread-root',
+        receiverThreadIds: ['thread-child'],
+        agentsStates: {}
+      })
+    ).toBe('timeline-substantive')
+  })
+
+  it('leaves content-bearing codex item types on the visible fallback', () => {
+    // Each carries text or a path a user would want: review output, the image
+    // the agent looked at or generated, injected hook prompt text.
+    for (const type of [
+      'imageView',
+      'imageGeneration',
+      'enteredReviewMode',
+      'exitedReviewMode',
+      'hookPrompt'
+    ]) {
+      expect(classifyProviderFrame('codex', `item:${type}`, { id: 'i' }), type).toBe(
+        'timeline-substantive'
+      )
+    }
   })
 })

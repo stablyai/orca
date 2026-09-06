@@ -49,7 +49,14 @@ export type LegacyImportOptions = ResolveSessionFileOptions & {
 const MAX_LEGACY_IMPORT_SOURCE_BYTES = 16 * 1024 * 1024
 
 export type LegacyImportResult =
-  | { ok: true; epoch: string; cursor: AgentJournalCursor; imported: number }
+  | {
+      ok: true
+      epoch: string
+      cursor: AgentJournalCursor
+      imported: number
+      /** False when the transcript held no messages and the epoch was left as it stood. */
+      replaced: boolean
+    }
   | { ok: false; error: string }
 
 export async function appendLegacyTranscriptMessages(input: {
@@ -61,16 +68,14 @@ export async function appendLegacyTranscriptMessages(input: {
 }): Promise<number> {
   let appended = 0
   for (const message of input.messages) {
-    const mapped = legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-    await input.journal.appendItemWithBlobs(
+    await input.journal.appendItem(
       {
         provider: 'legacy',
         agent: input.agent,
         sessionId: input.sessionId,
         recordId: message.id
       },
-      mapped.body,
-      mapped.blobs,
+      legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       { fence: input.fence, observedAt: message.timestamp ?? undefined }
     )
     appended += 1
@@ -134,16 +139,28 @@ export async function importLegacyTranscriptIntoJournal(input: {
     if (!identity) {
       continue
     }
-    const mapped = legacyItemBody(message, limits)
     replacement.push({
       identity,
-      body: mapped.body,
-      blobs: mapped.blobs,
+      body: legacyItemBody(message, limits),
       observedAt: message.timestamp ?? undefined
     })
   }
+  // A transcript that decodes to nothing reconstructs nothing, and an empty
+  // replacement is not a harmless no-op: it would delete the repair's anchor and
+  // its disclosure, leaving nothing to ask for the history again. The epoch
+  // stands so a later read can still rebuild it.
+  if (replacement.length === 0) {
+    const current = input.journal.cursor()
+    return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
+  }
   const cursor = await input.journal.replaceEpochItems('legacy_import', input.fence, replacement)
-  return { ok: true, epoch: cursor.epoch, cursor, imported: decoded.messages.length }
+  return {
+    ok: true,
+    epoch: cursor.epoch,
+    cursor,
+    imported: decoded.messages.length,
+    replaced: true
+  }
 }
 
 const TRANSCRIPT_DECODERS = {
@@ -199,11 +216,6 @@ async function decodeWithIdentities(input: {
   return { messages, identities }
 }
 
-type MappedLegacyItem = {
-  body: AgentJournalItemBody
-  blobs: { digest: string; payload: string }[]
-}
-
 /**
  * A message whose only content is a tool invocation becomes a tool-call item so
  * the reducer renders it as one. Everything else stays a message item with its
@@ -212,55 +224,49 @@ type MappedLegacyItem = {
 function legacyItemBody(
   message: NativeChatMessage,
   limits: JournalPayloadLimits
-): MappedLegacyItem {
+): AgentJournalItemBody {
   const only = message.blocks.length === 1 ? message.blocks[0] : undefined
   if (only?.type === 'tool-call') {
+    // Legacy transcripts are untrusted and can contain arbitrarily large tool
+    // arguments. Keep them on the same bounded path as live events before the
+    // replacement epoch is published.
     return {
-      // Legacy transcripts are untrusted and can contain arbitrarily large
-      // tool arguments. Keep them on the same bounded path as live events
-      // before the replacement epoch is staged or published.
-      body: {
-        kind: 'tool-call',
-        name: only.name,
-        input: boundToolInput(only.input, limits),
-        state: 'completed'
-      },
-      blobs: []
+      kind: 'tool-call',
+      name: only.name,
+      input: boundToolInput(only.input, limits),
+      state: 'completed'
     }
   }
   if (only?.type === 'tool-result') {
-    const output = boundPayload(only.output, limits)
     return {
-      body: {
-        kind: 'tool-call',
-        name: 'tool-result',
-        input: null,
-        state: only.isError ? 'failed' : 'completed',
-        output
-      },
-      blobs: output.truncated ? [{ digest: output.digest, payload: only.output }] : []
+      kind: 'tool-call',
+      name: 'tool-result',
+      input: null,
+      state: only.isError ? 'failed' : 'completed',
+      output: boundPayload(only.output, limits)
     }
   }
   return {
-    body: {
-      kind: 'message',
-      role: message.role,
-      blocks: message.blocks.map((block) => boundBlock(block, limits))
-    },
-    blobs: []
+    kind: 'message',
+    role: message.role,
+    blocks: message.blocks.map((block) => boundBlock(block, limits))
   }
 }
 
-/** Inline block text keeps only a bounded head plus an explicit marker. No blob
- *  is written: the marker carries the digest and byte length, and the source
- *  transcript remains the full copy — a blob here would be unreferenced by the
- *  render model and pruned at the next compaction. */
+/** Every block that can carry untrusted bulk is bounded here, tool calls
+ *  included: a provider decoder is free to put one alongside narration, and the
+ *  sole-block path above never sees those. The remainder is discarded rather
+ *  than stored elsewhere — the marker keeps its digest and byte length, and the
+ *  source transcript remains the full copy. */
 function boundBlock(block: NativeChatBlock, limits: JournalPayloadLimits): NativeChatBlock {
   if (block.type === 'text') {
     return { ...block, text: boundInlineText(block.text, limits).text }
   }
   if (block.type === 'tool-result') {
     return { ...block, output: boundInlineText(block.output, limits).text }
+  }
+  if (block.type === 'tool-call') {
+    return { ...block, input: boundToolInput(block.input, limits) }
   }
   return block
 }

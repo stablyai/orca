@@ -18,7 +18,7 @@ import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
-import { parseUnmergedEntry } from './status-conflict-entries'
+import { parseUnmergedEntry } from '../../../shared/git-status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
 import {
   getShortBranchName,

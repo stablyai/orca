@@ -149,6 +149,41 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).toHaveBeenCalledOnce()
   })
 
+  it('shapes the launch for the route it resolved, not a repo row on another host', async () => {
+    // `scope.repo` is display metadata and can be a row from a different host than the worktree
+    // names (#11163). Reading it made a locally-routed launch emit the SSH relay shim name.
+    const runtime = createRuntime({
+      supportsAgentSessionClaims: () => true,
+      supportsAgentSessionCreateOperations: () => true
+    })
+    const internal = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
+    }
+    internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
+      id: 'worktree-1',
+      path: '/repo/worktree-1',
+      connectionId: null,
+      // The rival row names openclaw while the worktree resolved to no SSH route at all.
+      repo: {
+        id: 'repo-1',
+        connectionId: 'openclaw',
+        executionHostId: null,
+        path: '/srv/openclaw'
+      },
+      folderWorkspace: null
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await runtime.createAgentSession(
+      request(operationId(), { agent: 'claude-agent-teams', prompt: '' })
+    )
+
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:worktree-1',
+      expect.objectContaining({ command: expect.stringContaining('orca-ide claude-teams') })
+    )
+  })
+
   it('requests exact client legacy fallback before nested SSH side effects', async () => {
     const runtime = createRuntime()
     const internal = runtime as unknown as {

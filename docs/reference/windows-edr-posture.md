@@ -72,12 +72,20 @@ behavioural engine can be expected to score it low.
 
 ### Every process gets a handle, on a timer
 
-`src/main/windows/windows-process-table.ts` takes a Toolhelp32 snapshot under one
-of two flag sets. Identity (`None | CreationTime`) answers pid/ppid/name from the
-snapshot alone and opens nothing; the detailed set adds `CommandLine`, which
-costs one `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` per process. `Memory`
-is retired — it took a second handle carrying `PROCESS_VM_READ` and never read
-through it.
+`src/main/windows/windows-process-table.ts` takes a Toolhelp32 snapshot under
+**one** flag set, `CommandLine | CreationTime`, shared by every caller. pid, ppid
+and name come out of the snapshot itself and open nothing. `CommandLine` is what
+opens a handle: the addon calls `GetProcessCommandLine` per process, which opens
+`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` and walks the PEB with three
+`ReadProcessMemory` calls (`src/process_commandline.cc:32,41-47` in the vendored
+`@vscode/windows-process-tree` 0.8.0 source that `config/patches/` patches).
+
+`Memory` is retired as of this change, and that is a real reduction: it made
+`GetProcessMemoryUsage` open a **second** `PROCESS_QUERY_INFORMATION |
+PROCESS_VM_READ` handle per process for a `GetProcessMemoryInfo` call whose
+result no caller read (`src/process.cc:47-63`). Dropping it halves the handles
+opened per snapshot. It does not remove the remote memory read, because the
+command line still performs one.
 
 It exists because seven independent readers used to fork `powershell.exe` for a
 `Get-CimInstance Win32_Process` scan. That cost, measured: a PowerShell
@@ -90,23 +98,41 @@ panes multiplied it (#15036). The native snapshot answers the same question in
 See
 [`windows-process-enumeration.md`](./windows-process-enumeration.md).
 
-Asking for fewer fields is cheaper, and since the split the module does: one
-cache per flag set, so teardown identity and the session owner probe open no
-handle at all (6.3 ms p50) while only the callers that read a command line pay
-for one (12.3 ms p50, at 492 processes). Each cache still single-flights within
-itself, and one gate serializes the native reads because the vendored wrapper
-coalesces the flags of two overlapping calls.
+Asking for fewer fields is cheaper, and the module now asks for the smallest set
+that still answers every caller. There is **no** per-flag-set cache split: one
+TTL-cached snapshot serves everyone, deliberately, because a split would restore
+the per-pane fan-out the cache exists to remove — a 32-wide teardown has to
+collapse into one scan. So the cheap identity-only read is not something any
+caller can select; every read pays for `CommandLine`. An earlier revision of this
+file described a two-cache design with 6.3 ms / 12.3 ms p50 figures at 492
+processes. That design is not in the tree and those numbers describe no code
+path here; the figures that do apply are the module's own, in
+[`windows-process-enumeration.md`](./windows-process-enumeration.md).
 
 **How an EDR reads it:** a cross-process handle plus a remote memory read against
 every process on the box, repeating on a cadence, is the read half of the
 telemetry that credential dumping and process injection produce. MDE surfaced it
-as "suspicious memory activity". The memory read is gone: the command line now
-comes from the kernel, through `NtQueryInformationProcess`'s
-`ProcessCommandLineInformation` class, which needs only
-`PROCESS_QUERY_LIMITED_INFORMATION`. `ReadProcessMemory` is absent from the
-compiled addon, asserted against the binary's import table because the published
-prebuild loads fine and emits byte-identical strings. What is left to declare to
-administrators is the per-process handle itself.
+as "suspicious memory activity".
+
+**That signal is still present.** An earlier revision of this file claimed the
+command line "now comes from the kernel" through `NtQueryInformationProcess`'s
+`ProcessCommandLineInformation` class, needing only
+`PROCESS_QUERY_LIMITED_INFORMATION`, and that `ReadProcessMemory` was absent from
+the compiled addon. None of that is true of the code we ship.
+`process_commandline.cc` calls `NtQueryInformationProcess` with
+`ProcessBasicInformation` only — to locate the PEB — and then issues three
+`ReadProcessMemory` calls against a `PROCESS_VM_READ` handle to read the PEB, the
+`RTL_USER_PROCESS_PARAMETERS`, and the command-line buffer. Nothing asserts an
+import table, and no such assertion would pass.
+
+What this change did remove is the `Memory` flag's second handle and its
+`GetProcessMemoryInfo` call, so the per-process handle count per snapshot halves.
+What remains to declare to administrators is unchanged in kind: one
+`PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` handle and a PEB read against every
+process on the box, at the shared snapshot's cadence. Moving to
+`ProcessCommandLineInformation` (Windows 8.1+, `PROCESS_QUERY_LIMITED_INFORMATION`
+only) would genuinely retire the remote read, but it is an addon patch nobody has
+written; treat it as unclaimed work, not as shipped.
 
 ### Encoded, policy-bypassing PowerShell
 
@@ -140,7 +166,8 @@ What remains is `-EncodedCommand` without the bypass: the PTY bootstraps
 `src/main/providers/windows-shell-args.ts`), the hook wrappers
 (`src/main/agent-hooks/windows-powershell-hook-launcher.ts` and its callers
 `src/main/agent-hooks/runtime-home-hook-command.ts`,
-`src/main/agent-hooks/installer-utils.ts`, `src/main/claude/hook-settings.ts`),
+`src/main/agent-hooks/installer-utils.ts`, and `src/main/claude/hook-settings.ts`
+— that last one only as a *fallback* since #18875, see below),
 `src/main/runtime/windows-default-route-interfaces.ts`,
 `src/main/runtime/orchestration/setup-completion-signal.ts`,
 `src/shared/hermes-startup-query.ts`, and the four ex-bypass sites above.
@@ -215,6 +242,41 @@ Nothing here is avoidable in principle. What is controllable is depth and
 breadth: every interpreter hop between Orca and the thing the user asked for adds
 a scored edge, which is why the shipped doctrine of #15520 and #15595 is to
 *shorten the interpreter chain* rather than to hide a window.
+
+#18875 is a worked example of that doctrine. The Claude Code lifecycle hook was
+registered as `powershell.exe -NoProfile -EncodedCommand <...>` whose entire
+decoded payload was a `Test-Path` and a call to `~/.orca/agent-hooks/claude-hook.cmd`.
+It now registers the script path itself (`<path> || echo {}`), so `bash ->
+powershell -> cmd -> curl` became `bash -> cmd -> curl` and one
+`powershell.exe -EncodedCommand` per hook event — a first-class Defender alert
+title — leaves the tree. The reporting box fired ~6 900 of them in five days,
+70% from Claude sessions that were not running under Orca at all and whose hook
+exits at its first `ORCA_PANE_KEY` guard.
+
+What is measured is latency and the hop count, nothing else: median 471 ms ->
+213 ms per event idle, and 656 ms -> 296 ms (p95 696 ms -> 337 ms) under 10-way
+concurrency, invoked as Claude Code invokes it. **No EDR verdict on either tree
+was measured**, so claim the removed `-EncodedCommand` spelling and the shorter
+chain, not a score. `cmd.exe` remains in the tree, spelled by MSYS's own `.cmd`
+spawn rather than by us — the doc's one "unavoidable for `.cmd`/`.bat`" case,
+carrying an absolute path and two literal tokens, with no caret escaping, no
+encoding and no free text. The encoded launcher is still the shape for profile
+paths the shells cannot carry bare (a space, `%`, `^`, `&`, non-ASCII, a UNC
+profile) and for hosts where Git Bash is not resolvable, because PowerShell 5.1
+rejects `||` (measured: parse error, exit 1).
+
+That last clause is the standing assumption of this change, and it is worth
+stating plainly because it is **not** measured. `||` parses in Git Bash, cmd.exe
+and pwsh, but not in Windows PowerShell 5.1, so the direct shape is correct for
+any host that is one of the first three. Claude Code itself is a Git Bash host on
+native Windows. What no one here has verified is which host a *compat consumer*
+uses: cursor-agent and Devin import `~/.claude/settings.json` and run `command`
+through their own launcher (the managed `.cmd` carries a `DEVIN_PROJECT_DIR` skip
+for exactly that). If one of them spawns hook strings through Windows PowerShell
+5.1, its imported Claude events become a parse error with empty stdout, which is
+the fail-closed case #14818 exists to prevent. The encoded launcher had no such
+assumption — it was a `powershell.exe` invocation and therefore parsed anywhere.
+Before widening the direct shape to another agent, measure that consumer's host.
 
 ### Computer use: screen capture, synthetic input, runtime-compiled MSIL
 

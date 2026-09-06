@@ -1,8 +1,14 @@
 import type { Repo } from '../shared/repo-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
-import { listWorktreeGraph, listWorktrees, listWorktreesStrict } from './git/worktree'
+import {
+  listWorktreeGraph,
+  listWorktrees,
+  listWorktreesSharedStrictAllowingTrueEmpty,
+  listWorktreesStrict
+} from './git/worktree'
 import { isFolderRepo } from '../shared/repo-kind'
-import { getSshGitProvider } from './providers/ssh-git-dispatch'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { resolveGitRouteForHost } from './providers/execution-host-provider-dispatch'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
 import { WorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
 
@@ -16,8 +22,12 @@ function hasLocalRepoWorktreeListOptions(options: LocalRepoWorktreeListOptions |
 }
 
 export function isRepoRoot(repos: Repo[], resolvedTarget: string): boolean {
+  // Why: `!repo.connectionId` matched a remote path against a local one for a row that spells its
+  // owner only as `executionHostId: 'ssh:<target>'`. Resolve the host instead of reading one field.
   return repos.some(
-    (repo) => !repo.connectionId && areWorktreePathsEqual(repo.path, resolvedTarget)
+    (repo) =>
+      getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+      areWorktreePathsEqual(repo.path, resolvedTarget)
   )
 }
 
@@ -38,24 +48,54 @@ export async function listRepoWorktrees(
   repo: Repo,
   options?: LocalRepoWorktreeListOptions
 ): Promise<GitWorktreeInfo[]> {
+  return listRoutedRepoWorktrees(repo, options, listWorktrees)
+}
+
+/**
+ * The detected scan's listing: a Git or host failure rejects instead of softening to `[]`, so a
+ * failed scan cannot be published as an authoritative empty listing and prune the repo's worktrees
+ * (#1158's retention guard only fires when the listing admits it failed).
+ */
+export async function listRepoWorktreesForDetectedScan(
+  repo: Repo,
+  options?: LocalRepoWorktreeListOptions
+): Promise<GitWorktreeInfo[]> {
+  return listRoutedRepoWorktrees(repo, options, listWorktreesSharedStrictAllowingTrueEmpty)
+}
+
+async function listRoutedRepoWorktrees(
+  repo: Repo,
+  options: LocalRepoWorktreeListOptions | undefined,
+  listLocal: (
+    repoPath: string,
+    options?: LocalRepoWorktreeListOptions
+  ) => Promise<GitWorktreeInfo[]>
+): Promise<GitWorktreeInfo[]> {
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  if (repo.connectionId) {
-    const provider = getSshGitProvider(repo.connectionId)
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  if (route.kind === 'runtime') {
+    // A runtime row's `connectionId` names a target in the *server's* namespace, not one this
+    // client may dial. Reading it here would answer from a same-named local target.
+    throw new WorktreeCatalogUnavailableError(
+      `Worktree catalog unavailable for ${repo.path}: host ${route.hostId} is not reachable from this process.`
+    )
+  }
+  if (route.kind === 'ssh') {
     // Why: runtime worktree resolution can run before SSH providers have reattached during startup.
     // Never fall back to local git against a server path, and never report the unreachable host as an
     // empty catalog (#14004) — callers treat a resolved listing as authoritative.
-    if (!provider) {
+    if (!route.provider) {
       throw new WorktreeCatalogUnavailableError(
-        `Worktree catalog unavailable for ${repo.path}: SSH connection "${repo.connectionId}" is not connected.`
+        `Worktree catalog unavailable for ${repo.path}: SSH connection "${route.connectionId}" is not connected.`
       )
     }
-    return await provider.listWorktrees(repo.path)
+    return await route.provider.listWorktrees(repo.path)
   }
   return hasLocalRepoWorktreeListOptions(options)
-    ? await listWorktrees(repo.path, options)
-    : await listWorktrees(repo.path)
+    ? await listLocal(repo.path, options)
+    : await listLocal(repo.path)
 }
 
 /**
@@ -72,9 +112,15 @@ export async function listRepoWorktreeGraph(
   if (isFolderRepo(repo)) {
     return [createFolderWorktree(repo)]
   }
-  if (repo.connectionId) {
-    const provider = getSshGitProvider(repo.connectionId)
-    return provider ? await provider.listWorktrees(repo.path) : []
+  const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+  // An unreachable remote host answers `[]` here, unlike listRepoWorktrees above, which throws.
+  // Preserved as-is: this call site's callers treat the graph as best-effort. The inconsistency is
+  // real but is a separate behavior decision from resolving the host correctly.
+  if (route.kind === 'runtime') {
+    return []
+  }
+  if (route.kind === 'ssh') {
+    return route.provider ? await route.provider.listWorktrees(repo.path) : []
   }
   return hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
@@ -85,7 +131,7 @@ export async function listLocalRepoWorktreesStrict(
   repo: Repo,
   options?: LocalRepoWorktreeListOptions
 ): Promise<GitWorktreeInfo[]> {
-  if (repo.connectionId) {
+  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
     throw new Error('Cannot list worktrees for a remote repository')
   }
   if (isFolderRepo(repo)) {

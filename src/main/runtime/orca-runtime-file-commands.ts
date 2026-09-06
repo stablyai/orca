@@ -29,8 +29,8 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     requireStore: () => this.requireStore(),
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-    resolveKnownWorkspaceFileTarget: (absolutePath, connectionId) =>
-      this.resolveKnownWorkspaceFileTarget(absolutePath, connectionId),
+    resolveKnownWorkspaceFileTarget: (absolutePath, executionHostId) =>
+      this.resolveKnownWorkspaceFileTarget(absolutePath, executionHostId),
     resolveTerminalCwd: (terminalHandle) => this.resolveTerminalCwd(terminalHandle),
     resolveTerminalContext: (terminalHandle) => this.resolveTerminalContext(terminalHandle),
     resolveTerminalFileUriHostname: (terminalHandle) =>

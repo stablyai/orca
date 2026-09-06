@@ -25,6 +25,7 @@ import {
   writeRelayFile
 } from './fs-path-mutation-requests'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
+import { resolveQuickOpenResultLimit } from '../shared/quick-open-listing-limits'
 import { maybeStreamRpcResponse, type GitResponseStreamRegistry } from './git-response-stream'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
 import { readRelayFileRange } from './fs-handler-file-range'
@@ -217,11 +218,14 @@ export class FsHandler {
     context?: RequestContext
   ): Promise<unknown> {
     const rootPath = expandTilde(params.rootPath as string)
+    // Why no host-side default: #17954 made an oversized reply streamable, so a caller that names no
+    // limit gets its whole listing instead of an unannounced prefix it would report as complete.
+    // A requested limit is still clamped to the shared ceiling the scan's retention budget assumes.
     const maxResults =
       typeof params.maxResults === 'number' &&
       Number.isInteger(params.maxResults) &&
       params.maxResults > 0
-        ? Math.min(params.maxResults, 20_001)
+        ? resolveQuickOpenResultLimit(params.maxResults)
         : undefined
     const searchQuery =
       typeof params.searchQuery === 'string' && params.searchQuery.trim().length > 0

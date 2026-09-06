@@ -4,6 +4,12 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 
 ## Electron UI Validation
 
+Always run tests and agent-launched apps in the background with `ORCA_BACKGROUND_LAUNCH=1`.
+Never steal monitor focus or reveal test windows: no `show()`, `showInactive()`, `bringToFront()`,
+`app.focus()`, or OS activation. Use CDP screenshots of hidden renderers. Keep native-focus and
+visible-window tests paused on the user's desktop; run them on an isolated display or CI.
+Rebuild modified launch-policy code before running an app; stale build wrappers are not safe.
+
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 
 # Style

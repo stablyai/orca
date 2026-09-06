@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { listWorktreeGraphMock, listWorktreesMock, listWorktreesStrictMock } = vi.hoisted(() => ({
   listWorktreeGraphMock: vi.fn(),
@@ -19,6 +19,8 @@ import {
   listRepoWorktreeGraph,
   listRepoWorktrees
 } from './repo-worktrees'
+import { registerSshGitProvider, unregisterSshGitProvider } from './providers/ssh-git-dispatch'
+import { WorktreeCatalogUnavailableError } from '../shared/worktree/worktree-catalog-availability'
 
 describe('repo-worktrees', () => {
   beforeEach(() => {
@@ -194,6 +196,63 @@ describe('repo-worktrees', () => {
       })
     ).rejects.toThrow('remote repository')
     expect(listWorktreesStrictMock).not.toHaveBeenCalled()
+  })
+
+  // #11163: a row may spell its owner only as `executionHostId`. Reading `connectionId` answers
+  // "local" for it and runs the listing against a same-named path on this machine.
+  describe('rows that spell their owner only as executionHostId', () => {
+    const sshOnlyRepo = {
+      id: 'repo-1',
+      path: '/srv/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'git' as const,
+      executionHostId: 'ssh:host-a' as const
+    }
+
+    afterEach(() => {
+      unregisterSshGitProvider('host-a')
+      unregisterSshGitProvider('nested-target')
+    })
+
+    it('never lists an ssh-owned row with local git', async () => {
+      await expect(listRepoWorktrees(sshOnlyRepo)).rejects.toThrow(WorktreeCatalogUnavailableError)
+      expect(listWorktreesMock).not.toHaveBeenCalled()
+    })
+
+    it('lists an ssh-owned row through its registered provider', async () => {
+      const listWorktrees = vi.fn().mockResolvedValue([{ path: '/srv/repo' }])
+      registerSshGitProvider('host-a', { listWorktrees } as never)
+
+      await expect(listRepoWorktrees(sshOnlyRepo)).resolves.toEqual([{ path: '/srv/repo' }])
+      expect(listWorktrees).toHaveBeenCalledWith('/srv/repo')
+      expect(listWorktreesMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps an ssh-owned root out of the local repo-root match', () => {
+      expect(isRepoRoot([sshOnlyRepo], '/srv/repo')).toBe(false)
+    })
+
+    it('rejects strict local listing for an ssh-owned row', async () => {
+      await expect(listLocalRepoWorktreesStrict(sshOnlyRepo)).rejects.toThrow('remote repository')
+      expect(listWorktreesStrictMock).not.toHaveBeenCalled()
+    })
+
+    it('refuses to answer a runtime-owned row from a same-named local target', async () => {
+      const listWorktrees = vi.fn().mockResolvedValue([{ path: '/wrong/host' }])
+      registerSshGitProvider('nested-target', { listWorktrees } as never)
+
+      await expect(
+        listRepoWorktrees({
+          ...sshOnlyRepo,
+          executionHostId: 'runtime:env-7',
+          connectionId: 'nested-target'
+        })
+      ).rejects.toThrow(WorktreeCatalogUnavailableError)
+      expect(listWorktrees).not.toHaveBeenCalled()
+      expect(listWorktreesMock).not.toHaveBeenCalled()
+    })
   })
 
   it('treats Windows repo root casing differences as the same local root', () => {

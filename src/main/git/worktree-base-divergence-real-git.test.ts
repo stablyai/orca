@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import {
   measureRetargetDivergence,
   RETARGET_MAX_COMMIT_DIVERGENCE
@@ -10,8 +11,13 @@ import {
 
 const tempRoots: string[] = []
 
+// Why the maintenance suppression: `git commit` detaches `git maintenance run --auto`, and its
+// commit-graph task arms once a fixture crosses 100 new commits — which the cap-sized histories
+// below always do. That detached process keeps writing `.git/objects/info/commit-graphs` after the
+// synchronous exec has returned, so it re-creates entries under a `.git/objects` the temp-root
+// teardown is midway through deleting, and the recursive remove dies with ENOTEMPTY.
 function git(cwd: string, args: string[]): string {
-  return execFileSync('git', args, {
+  return execFileSync('git', [...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS, ...args], {
     cwd,
     encoding: 'utf8',
     stdio: ['pipe', 'pipe', 'pipe']
@@ -32,9 +38,17 @@ async function createRepo(): Promise<string> {
   return repoPath
 }
 
+// Why unique across calls: an empty commit's hash covers only parent, tree, message and a
+// one-second-granularity timestamp. On a fast runner the whole 100-commit build finishes inside
+// one second, so a post-reset `commit 0` off the same fork point hashed identically to the first
+// `commit 0` of the chain and Git handed back that same object — leaving the branch 99/0 apart
+// instead of 100/1.
+let emptyCommitSequence = 0
+
 function commitEmpty(repoPath: string, count: number): void {
   for (let index = 0; index < count; index += 1) {
-    git(repoPath, ['commit', '--quiet', '--allow-empty', '-m', `commit ${index}`])
+    emptyCommitSequence += 1
+    git(repoPath, ['commit', '--quiet', '--allow-empty', '-m', `commit ${emptyCommitSequence}`])
   }
 }
 

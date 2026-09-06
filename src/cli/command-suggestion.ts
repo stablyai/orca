@@ -67,6 +67,9 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
   for (const spec of specs) {
+    if (spec.hidden) {
+      continue
+    }
     if (spec.destructive && !allowDestructive) {
       continue
     }

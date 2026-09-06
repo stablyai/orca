@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.178-rc.2",
+  "version": "1.4.197",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -10,8 +10,10 @@
   },
   "main": "./out/main/index.js",
   "scripts": {
+    "audit:perf": "oxlint --config config/oxlint-performance-audit.json --format json src",
+    "test:perf:contracts": "vitest run --config config/vitest.performance.config.ts",
     "format": "oxfmt --write .",
-    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
+    "lint": "oxlint && pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run check:reliability-gates && pnpm run check:max-lines-ratchet && pnpm run check:ts-nocheck-ratchet && pnpm run check:runtime-electron-ratchet && pnpm run verify:bundled-skill-guides && pnpm run verify:skill-bundle-manifest && pnpm run verify:localization-catalog && pnpm run verify:localization-runtime-catalog && pnpm run verify:localization-extraction && pnpm run verify:localization-coverage",
     "audit:code-quality": "pnpm run audit:code-quality:native && pnpm run audit:code-quality:type-aware && pnpm run audit:react-doctor",
     "audit:code-quality:native": "oxlint --config config/oxlint-code-quality-native-plugins.json src config tests mobile --deny-warnings",
     "audit:code-quality:type-aware": "oxlint --type-aware --config config/oxlint-code-quality-type-aware.json src config tests --deny-warnings",
@@ -69,8 +71,11 @@
     "verify:computer-native": "node config/scripts/verify-computer-native.mjs",
     "verify:cli-bin": "node config/scripts/verify-cli-bin.mjs",
     "verify:built-skills-cli": "node config/scripts/verify-skills-cli-runtime.cjs out",
+    "verify:renderer-boot-graph": "node config/scripts/verify-renderer-boot-graph.mjs",
     "verify:localization-catalog": "node config/scripts/verify-localization-catalog.mjs",
     "sync:localization-catalog": "node config/scripts/verify-localization-catalog.mjs --fix",
+    "verify:localization-runtime-catalog": "node config/scripts/generate-runtime-required-english-catalog.mjs",
+    "sync:localization-runtime-catalog": "node config/scripts/generate-runtime-required-english-catalog.mjs --fix",
     "verify:localization-extraction": "node config/scripts/verify-localization-extraction.mjs",
     "verify:localization-coverage": "node config/scripts/audit-localization-coverage.mjs --check",
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
@@ -138,6 +143,10 @@
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tests/tools/benchmarks/main-thread-jank-bench.mjs",
     "bench:worktree-deletion": "node tests/tools/benchmarks/worktree-deletion-dev-bench.mjs",
     "bench:zustand-selector-fanout": "node config/scripts/zustand-selector-fanout-benchmark.mjs",
+    "bench:agent-inspection-cadence": "node config/scripts/agent-inspection-cadence-batching-benchmark.mjs",
+    "bench:renderer-quadratic-scans": "node config/scripts/renderer-quadratic-scan-benchmark.mjs",
+    "bench:session-write-hot-path": "node config/scripts/session-write-hot-path-benchmark.mjs",
+    "bench:terminal-partial-escape-tail": "node config/scripts/terminal-partial-escape-tail-benchmark.mjs",
     "bench:worktree-refresh-churn": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/worktree-refresh-churn-benchmark.mjs",
     "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
     "bench:ai-vault-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-ai-vault-typing-bench.mjs",
@@ -150,6 +159,7 @@
     "repro:live-remote-realistic-freeze": "node config/scripts/live-remote-realistic-freeze-repro.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.251",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "1.7.6",
@@ -290,12 +300,12 @@
     "windows-native-registry": "3.2.2"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
+    "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [
       "oxlint",
       "oxlint --config config/oxlint-react-doctor.json",
       "oxfmt --write"
     ],
-    "*.{json,css}": [
+    "{*.{json,css},!(cloud)/**/*.{json,css}}": [
       "oxfmt --write"
     ]
   },

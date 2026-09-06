@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { getCachedWorktrees } from '../cache/worktree-cache'
@@ -56,6 +57,12 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
   )
   // displayName → repo id: filters key on repo id, but section headers/rows key on displayName, so bridge the two.
   const [repoIdsByName, setRepoIdsByName] = useState<Map<string, string>>(new Map())
+  // Host-label inputs for rows: repo → host, SSH/override labels, and the host's own platform.
+  const [repoHostIdByRepoId, setRepoHostIdByRepoId] = useState<Map<string, ExecutionHostId>>(
+    new Map()
+  )
+  const [hostLabelById, setHostLabelById] = useState<Map<ExecutionHostId, string>>(new Map())
+  const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
   const [showSortPicker, setShowSortPicker] = useState(false)
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
@@ -93,13 +100,16 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     fetchWorktreesInFlightRef,
     filters,
     groupMode,
+    hostLabelById,
     hostName,
+    hostPlatform,
     lastKnownWorktrees,
     newWorktreeModalRef,
     newWorktreeModalVisibleRef,
     optimisticActiveWorktreeIdentity,
     pinnedIds,
     repoColorsByName,
+    repoHostIdByRepoId,
     repoIconsByName,
     repoIdsByName,
     repoMetadataFetchedAtRef,
@@ -113,11 +123,14 @@ export function useHostScreenState(hostId: string | undefined, action: string | 
     setError,
     setFilters,
     setGroupMode,
+    setHostLabelById,
     setHostName,
+    setHostPlatform,
     setLastKnownWorktrees,
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
     setRepoColorsByName,
+    setRepoHostIdByRepoId,
     setRepoIconsByName,
     setRepoIdsByName,
     setRouteActionState,

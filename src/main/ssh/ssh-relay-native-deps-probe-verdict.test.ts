@@ -153,6 +153,11 @@ describe('native-deps repair probe verdicts', () => {
     expect(warnings().some((message) => message.includes('Repairing missing native deps'))).toBe(
       false
     )
+    // Why: the wrongful rebuild used to be the only visible symptom of a dropped exec channel.
+    expect(
+      warnings().some((message) => message.includes('Native deps probe unanswered')),
+      'an unanswered probe must still leave a trace'
+    ).toBe(true)
     expect(commands.some((command) => command.includes(NODE_PTY_RESET))).toBe(false)
     expect(commands.some((command) => command.includes(WATCHER_RESET))).toBe(false)
     expect(commands.some((command) => command.includes('npm install'))).toBe(false)

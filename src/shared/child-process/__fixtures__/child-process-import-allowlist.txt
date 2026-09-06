@@ -181,7 +181,7 @@ src/relay/workspace-space-scan.ts
 src/shared/ephemeral-vm-recipe-process.ts
 src/shared/ephemeral-vm-recipe-runner.ts
 src/shared/fish-binary-requirement.ts
-src/shared/process-table-snapshot.ts
+src/shared/process-table-snapshot-reader.ts
 src/shared/pty-slave-line-discipline-echo.ts
 src/shared/ripgrep-process-availability.ts
 src/shared/secure-path-windows-acl.ts

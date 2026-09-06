@@ -45,6 +45,11 @@ export class RelayRuntimeServices {
       (id, paused) => this.ptyHandler.setConsumerDeliveryPaused(id, paused),
       (id) => this.ptyHandler.handleSourceCreditAvailable(id)
     )
+    // Why wired after construction: the handler is built first, but PTY ownership has to be
+    // attested from the consumer grant the adapter holds.
+    this.ptyHandler.setConsumerIdentityResolver((clientId) =>
+      this.ptyConsumerSessionAdapter.clientInstanceIdFor(clientId)
+    )
     this.ptySourcePublication = new RelayPtySourcePublication(
       dispatcher,
       this.ptyConsumerSessionAdapter,

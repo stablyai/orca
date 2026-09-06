@@ -13,15 +13,12 @@ import {
   resolveTerminalAbsolutePath
 } from './runtime-file-commands-terminal-file-paths'
 import { stat } from 'node:fs/promises'
-import { getRuntimeFileTargetExecutionHostId } from './runtime-file-watcher-leases'
+import { runtimeFileRouteForTarget } from './runtime-file-command-target'
 import { isSafeMobileRelativePath } from './runtime-file-command-host'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import type { RuntimeFileStatLike } from './runtime-file-commands-mobile-file-list-limit'
-import {
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
+import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 
 export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileCommandsWithReadMobileFile {
   // Resolves a mobile terminal tap to a worktree-relative path; relatives resolve against cwd, else the worktree root.
@@ -36,7 +33,9 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
   ): Promise<RuntimeTerminalPathResolution> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
-    const { worktree, connectionId } = target
+    const { worktree } = target
+    const route = runtimeFileRouteForTarget(target)
+    const connectionId = route.kind === 'ssh' ? route.connectionId : undefined
     // Why: mobile may attach after OSC7 cwd was emitted; the runtime still owns the terminal's latest cwd to resolve the tap.
     const normalizedTerminalHandle =
       terminalHandle && terminalHandle.trim().length > 0 ? terminalHandle.trim() : null
@@ -74,13 +73,13 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
     // follow-up files.open, so retargeting to a sibling workspace must be opt-in.
     const knownWorkspaceTarget =
       crossWorkspace && relativePath === null
-        ? await this.host.resolveKnownWorkspaceFileTarget?.(
-            absolutePath,
-            getRuntimeFileTargetExecutionHostId(target)
-          )
+        ? await this.host.resolveKnownWorkspaceFileTarget?.(absolutePath, target.executionHostId)
         : null
     const ownedWorktree = knownWorkspaceTarget?.worktree ?? worktree
-    const ownedConnectionId = knownWorkspaceTarget?.connectionId ?? connectionId
+    // Why: the owner's host replaces this target's outright. Coalescing an optional connection
+    // instead let a sibling workspace resolved as `local` inherit this worktree's SSH target and
+    // stat a local path on the remote host.
+    const ownedRoute = runtimeFileRouteForTarget(knownWorkspaceTarget ?? target)
     const ownedRelativePath = knownWorkspaceTarget?.relativePath ?? relativePath
 
     try {
@@ -88,9 +87,10 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
         ownedRelativePath !== null &&
         (ownedRelativePath === '' || isSafeMobileRelativePath(ownedRelativePath))
       ) {
-        const stats = ownedConnectionId
-          ? await this.statRemoteTerminalPath(absolutePath, ownedConnectionId)
-          : await stat(await resolveAuthorizedPath(absolutePath, store))
+        const stats =
+          ownedRoute.kind === 'ssh'
+            ? await this.statRemoteTerminalPath(absolutePath, ownedRoute.connectionId)
+            : await stat(await resolveAuthorizedPath(absolutePath, store))
         return {
           worktree: ownedWorktree.id,
           relativePath: ownedRelativePath,
@@ -101,7 +101,7 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
             ? undefined
             : {
                 kind: 'worktree-file',
-                provider: ownedConnectionId ? 'ssh' : 'local',
+                provider: ownedRoute.kind,
                 relativePath: ownedRelativePath,
                 absolutePath
               }
@@ -168,7 +168,7 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
       // Report genuine not-found as missing; let transport/permission errors surface so remote taps aren't all reported missing.
       if (
         isENOENT(error) ||
-        (ownedConnectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+        (ownedRoute.kind === 'ssh' && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
       ) {
         return {
           ...empty,
@@ -181,15 +181,13 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
     }
   }
 
+  // Leaf helper: only ever reached from a route already resolved to `ssh`, so the id it takes is
+  // this client's dialable target rather than a repo row's raw `connectionId`.
   protected async statRemoteTerminalPath(
     absolutePath: string,
     connectionId: string
   ): Promise<RuntimeFileStatLike & { isDirectory: () => boolean }> {
-    const provider = getSshFilesystemProvider(connectionId)
-    if (!provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
-    const stats = await provider.stat(absolutePath)
+    const stats = await requireSshFilesystemProvider(connectionId).stat(absolutePath)
     return { ...stats, isDirectory: () => stats.type === 'directory' }
   }
 }

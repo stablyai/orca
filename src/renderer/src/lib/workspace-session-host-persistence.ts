@@ -9,6 +9,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
@@ -187,8 +188,9 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
     if (!repoHostId) {
       return LOCAL_EXECUTION_HOST_ID
     }
-    const parsed = parseExecutionHostId(repoHostId)
-    return parsed?.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
+    // Why: SSH-owned worktrees stay in the 'local' partition here while the runtime writes them to
+    // `ssh:<targetId>`; the shared owner map records that divergence (#12723).
+    return workspaceSessionPartitionHostId(repoHostId, 'local-partition')
   }
   return { hostIdByWorktreeId, claims }
 }

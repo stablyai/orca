@@ -11,14 +11,24 @@ export {
 // to leave room for the `/c` wrapper sshd adds before cmd.exe counts the line.
 const WINDOWS_REMOTE_COMMAND_LINE_BUDGET_CHARS = 8_000
 
-export function powerShellCommand(script: string): string {
-  const inline = encodedPowerShellCommand(script)
+/**
+ * `pwsh.exe` is PowerShell 7. It is not present on a stock Windows install, so it is only ever
+ * chosen after a probe — but where it exists it reads a redirected stdin correctly, which Windows
+ * PowerShell 5.1 does not (see `system-ssh-file-binary-transfer.ts`).
+ */
+export type WindowsPowerShellExecutable = 'powershell.exe' | 'pwsh.exe'
+
+export function powerShellCommand(
+  script: string,
+  executable: WindowsPowerShellExecutable = 'powershell.exe'
+): string {
+  const inline = encodedPowerShellCommand(script, executable)
   if (inline.length <= WINDOWS_REMOTE_COMMAND_LINE_BUDGET_CHARS) {
     return inline
   }
   // Why: these scripts are repetitive enough that gzip beats the UTF-16LE tax by
   // ~4x, which is the difference between a line cmd.exe runs and one it refuses.
-  const compressed = encodedPowerShellCommand(selfExtractingPowerShellScript(script))
+  const compressed = encodedPowerShellCommand(selfExtractingPowerShellScript(script), executable)
   if (compressed.length > WINDOWS_REMOTE_COMMAND_LINE_BUDGET_CHARS) {
     throw new Error(
       `Remote Windows command needs ${compressed.length} characters; Orca budgets ${WINDOWS_REMOTE_COMMAND_LINE_BUDGET_CHARS} for a line sshd hands to cmd.exe, which itself refuses more than ${CMD_EXE_COMMAND_LINE_MAX_CHARS}.`
@@ -27,8 +37,8 @@ export function powerShellCommand(script: string): string {
   return compressed
 }
 
-function encodedPowerShellCommand(script: string): string {
-  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
+function encodedPowerShellCommand(script: string, executable: WindowsPowerShellExecutable): string {
+  return `${executable} -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
 }
 
 /** Orca-prefixed names so the payload can never shadow the bootstrap's own state. */

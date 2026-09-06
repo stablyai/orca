@@ -27,6 +27,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     worktreeId,
     connState,
     client,
+    clientId,
     sessionTabs,
     setLiveInputCapture,
     liveInputTerminalHandles,
@@ -42,7 +43,9 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   const terminalGestureInputInFlightRef = useRef<Set<string>>(new Set())
   const terminalCwdRef = useRef<Map<string, string>>(new Map())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
-  const deviceTokenRef = useRef<string | null>(null)
+  const deviceTokenRef = useRef<string | null>(clientId)
+  // Keep the authenticated identity synchronous with the client exposed to downstream hooks.
+  deviceTokenRef.current = clientId
   // Why: state (not a ref) so the connection verdict re-renders when the endpoint loads and the Tailscale hint can appear.
   const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
@@ -123,11 +126,13 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
-  const { canCompose, canSend } = resolveMobileTerminalInputGate({
+  const inputGate = resolveMobileTerminalInputGate({
     connState,
     activeHandle,
     activeSessionTabType: activeSessionTab?.type
   })
+  const canCompose = inputGate.canCompose
+  const canSend = inputGate.canSend && clientId !== null
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,

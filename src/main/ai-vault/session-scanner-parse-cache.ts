@@ -209,6 +209,8 @@ export async function parseAgentSessionFileCached(
         entry.session = { ...entry.session, subagentTranscriptCount }
       }
     }
+    // Codex titles come from session_index.jsonl, which mtime+size can't see.
+    // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
     if (entry.session && candidate.agent === 'codex') {
       entry.session = await refreshCachedCodexTitle(candidate, entry.session)
     }

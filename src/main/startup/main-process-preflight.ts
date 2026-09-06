@@ -48,6 +48,7 @@ import {
 } from './single-instance-lock'
 import { setAppEnvironment } from '../../shared/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
+import { installMainProcessTreeKillGate } from '../own-chromium-tree-kill-guard'
 import { setSecretStore } from '../../shared/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
 import { setPtyHostBindings } from '../ipc/pty-host-bindings'
@@ -161,6 +162,9 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
       }
     })
   }
+  // Why before any spawn: `signalProcessTree` is shared with the CLI and relay, so
+  // it can only reach the main-process guard and breadcrumb store once this is registered.
+  installMainProcessTreeKillGate()
   const isDev = is.dev
   configureDevUserDataPath(isDev)
   configureOrcaUserDataPathEnv()

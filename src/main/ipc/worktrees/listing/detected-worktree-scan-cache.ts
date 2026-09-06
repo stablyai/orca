@@ -3,7 +3,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listRepoWorktrees } from '../../../repo-worktrees'
+import { listRepoWorktreesForDetectedScan } from '../../../repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
@@ -111,7 +111,7 @@ export async function listDetectedGitWorktrees(
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   if (repo.connectionId || isFolderRepo(repo)) {
     return {
-      gitWorktrees: await listRepoWorktrees(repo, localWorktreeGitOptions),
+      gitWorktrees: await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
       fresh: true
     }
   }
@@ -144,7 +144,7 @@ export async function listDetectedGitWorktrees(
       : undefined
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktrees(repo, localWorktreeGitOptions),
+    promise: listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
     sideEffectToken: { generation, authorizedRootsRevision },
     hygieneDue,
     ...(metadataPruneExpectation

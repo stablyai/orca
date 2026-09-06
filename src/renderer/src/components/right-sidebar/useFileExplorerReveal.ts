@@ -18,6 +18,7 @@ type UseFileExplorerRevealParams = {
   clearPendingExplorerReveal: () => void
   expanded: Set<string>
   dirCache: Record<string, DirCache>
+  loadingDirPaths: ReadonlySet<string>
   rootCache: DirCache | undefined
   rowProjection: FileExplorerRowProjection
   loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
@@ -34,6 +35,7 @@ export function useFileExplorerReveal({
   clearPendingExplorerReveal,
   expanded,
   dirCache,
+  loadingDirPaths,
   rootCache,
   rowProjection,
   loadDir,
@@ -154,14 +156,15 @@ export function useFileExplorerReveal({
     const missingAncestor = pendingRevealAncestorDirs.find(
       (dirPath) => !rowProjection.hasPath(dirPath)
     )
+    const rootStillLoading = !rootCache || loadingDirPaths.has(worktreePath)
     const parentDirStillLoading =
       parentDirPath === worktreePath
-        ? (rootCache?.loading ?? true)
-        : (parentDirCache?.loading ?? true)
+        ? rootStillLoading
+        : !parentDirCache || loadingDirPaths.has(parentDirPath)
     const parentDirKnown = parentDirPath === worktreePath ? !!rootCache : !!parentDirCache
 
     if (
-      (rootCache?.loading ?? true) ||
+      rootStillLoading ||
       missingExpandedAncestor ||
       missingAncestor ||
       parentDirStillLoading ||
@@ -210,6 +213,7 @@ export function useFileExplorerReveal({
     clearPendingExplorerReveal,
     dirCache,
     expanded,
+    loadingDirPaths,
     pendingExplorerReveal,
     pendingRevealAncestorDirs,
     rowProjection,

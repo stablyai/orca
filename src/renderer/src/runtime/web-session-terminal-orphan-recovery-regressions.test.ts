@@ -23,7 +23,16 @@ describe('web session terminal orphan recovery regressions', () => {
   const ROOTLESS_SOLE_MAP_LEAF = '22222222-2222-4222-8222-222222222222'
   const ROOTLESS_OFF_TREE_LEAF = '33333333-3333-4333-8333-333333333333'
 
-  it('removes only a PTY-mismatched leaf while retaining an unresolved sibling and other tabs', async () => {
+  // Retargeted (#11495). This previously asserted the mismatched leaf was REMOVED, and that was
+  // deliberate — it kept a leaf whose pending row named a ptyId the host no longer reported from
+  // lingering. But `terminal.list` ran with `requireFreshPtyLiveness: true` and answered with the
+  // handle live under `pty-replacement`, so the only thing the old assertion proved was that the
+  // host had relaunched the PTY. Stale-leaf accumulation is already covered by the two host-attested
+  // branches in the same file (`retiredTerminalSurfaces` proof, and two authoritative inventories
+  // omitting the identity), which is why this branch is the outlier. Removing on it is destructive:
+  // shouldReplaceTerminalTab rebuilds the whole mirror from one frame, so a dropped leaf takes
+  // ptyIdsByTabId and terminalLayoutsByTabId with it — the only surviving record of how to rebind.
+  it('rebinds a PTY-mismatched leaf to the handle the host still reports live', async () => {
     const worktree = 'repo::mismatch'
     const leaves = [
       { leafId: 'leaf-bad', handle: 'term-bad' },
@@ -70,6 +79,12 @@ describe('web session terminal orphan recovery regressions', () => {
 
     expect(recovered?.tabs).toEqual([
       browser,
+      expect.objectContaining({
+        parentTabId: tabId,
+        leafId: 'leaf-bad',
+        status: 'ready',
+        terminal: 'term-bad'
+      }),
       expect.objectContaining({
         parentTabId: tabId,
         leafId: 'leaf-hold',

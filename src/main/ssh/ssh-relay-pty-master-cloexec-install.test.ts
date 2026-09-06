@@ -88,11 +88,12 @@ import {
 const PATCH_ASSET = 'node-pty-1.1.0-master-cloexec-patch.cjs'
 
 /**
- * The relay installs stock node-pty from npm, so the app's pnpm patch never reaches it and every
- * later child of the relay inherits a live pty master (#17915). The compile that closes it sits on
+ * The relay installs stock node-pty from npm, so the app's pnpm patch never reaches it and the
+ * relay leaks a pty fd per terminal (#17915) -- the master into every later child on Linux, an
+ * orphaned /dev/ptmx throwaway in `pty_posix_spawn` on macOS. The compile that closes both sits on
  * the connect path, so what these specs pin is the blast radius, not the patch itself.
  */
-describe('relay pty-master close-on-exec patch on the install path', () => {
+describe('relay pty fd-leak patch on the install path', () => {
   const sftpCapture: SftpWriteCapture = {
     paths: [],
     contents: {},
@@ -211,9 +212,9 @@ describe('relay pty-master close-on-exec patch on the install path', () => {
   })
 
   it('does not publish a tree the patch refused to touch', async () => {
-    // `skipped:` is not one verdict. Every form except `skipped:not-linux` means the patch was
-    // declined and the leaky build is still on disk, which is indistinguishable from `failed:`
-    // as far as what would get published.
+    // `skipped:` is not one verdict. Every form except `skipped:unsupported-platform` means the
+    // patch was declined and the leaky build is still on disk, which is indistinguishable from
+    // `failed:` as far as what would get published.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const conn = makeMockConnection(sftpCapture)
@@ -281,25 +282,39 @@ describe('relay pty-master close-on-exec patch on the install path', () => {
     expect(patchCommands()).toEqual([])
   })
 
-  it('never adds a compile to a macOS relay, which does not leak the master', async () => {
+  it('runs the patch on a macOS relay, which orphans a /dev/ptmx fd per spawn', async () => {
+    // macOS takes `pty_posix_spawn`, not forkpty, so the asset's original replacements rewrote
+    // nothing macOS executes -- and this gate answered 'fixed' without running anything, which is
+    // exactly what publishes to the shared cache. Every later host on the machine then linked a
+    // tree that leaks one /dev/ptmx fd per terminal, measured +1 per open/close cycle on
+    // darwin-arm64. macOS pays a first compile here, unlike Linux's second, and that is the price.
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('darwin-arm64')
     const conn = makeMockConnection(sftpCapture)
-    feed([
-      ...makeStagedFirstInstallExecPrefix(),
-      '', // npm install native deps
-      '', // chmod prebuilds
-      'ORCA-NPTY-PROBE-OK\n',
-      '', // rm probe stderr
-      '', // promote into the shared native-deps cache
-      '', // clean stage root
-      'DEAD',
-      '', // publish the per-launch credential
-      'READY'
-    ])
+    feed(makeExecResponses({ npmInstall: 'ok', probe: 'ok' }))
 
     await deployAndLaunchRelay(conn)
 
-    expect(patchCommands()).toEqual([])
+    expect(patchCommands()).toHaveLength(1)
+    expect(promoted()).toBe(true)
+  })
+
+  it('does not publish a macOS tree whose compile failed', async () => {
+    // The darwin rollback restores the shipped prebuild, so the relay still works -- and that is
+    // precisely why the status, not the exit code, has to decide publishability: a rolled-back
+    // macOS tree probes loadable and still leaks.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      vi.mocked(parseUnameToRelayPlatform).mockReturnValue('darwin-arm64')
+      const conn = makeMockConnection(sftpCapture)
+      feed(firstInstallReporting('failed:npm rebuild node-pty exited 1: gyp ERR! not ok'))
+
+      await deployAndLaunchRelay(conn)
+
+      expect(patchCommands()).toHaveLength(1)
+      expect(promoted()).toBe(false)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('connects anyway when the patch command fails outright', async () => {
