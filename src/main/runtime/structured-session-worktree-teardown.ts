@@ -59,14 +59,19 @@ export function listLiveStructuredSessionsForWorktree(
     .map((record) => ({ sessionId: record.sessionId, agent: record.provider }))
 }
 
+/**
+ * Counts and providers, never session ids.
+ *
+ * A session id is one tab-id hop from the random pane key that gates a worker's mailbox, and this
+ * string reaches agent-readable CLI output and a desktop toast. The count and the providers are
+ * what a user deciding whether to force actually needs; the ids identify nothing they can act on.
+ */
 export function describeLiveStructuredSessions(
-  worktreeId: string,
   sessions: readonly LiveStructuredSessionInWorkspace[]
 ): string {
   const noun = sessions.length === 1 ? 'agent session' : 'agent sessions'
-  return `${sessions.length} running ${noun} in ${worktreeId} (${sessions
-    .map((session) => `${session.agent}:${session.sessionId}`)
-    .join(', ')})`
+  const providers = [...new Set(sessions.map((session) => session.agent))].sort().join(', ')
+  return `${sessions.length} running ${noun} (${providers})`
 }
 
 /**
@@ -79,6 +84,11 @@ export async function closeStructuredSessionsForWorktree(
   worktreeId: string,
   runtime?: StructuredWorktreeSweepRuntime
 ): Promise<{ closed: number; unstopped: LiveStructuredSessionInWorkspace[] }> {
+  // No `afterClose` for a dispatched worker: `host.close` drops the holds, so nothing keeps a
+  // provider child un-evictable, but the dispatch's redrive subscription and registry entry do
+  // survive until it settles by another verb. That is a bounded leak, not a hazard — and passing
+  // one here would mean resolving a dispatch id per session on a teardown path that must stay
+  // inside the sweep deadline.
   const sessions = listLiveStructuredSessionsForWorktree(worktreeId)
   const unstopped: LiveStructuredSessionInWorkspace[] = []
   let closed = 0

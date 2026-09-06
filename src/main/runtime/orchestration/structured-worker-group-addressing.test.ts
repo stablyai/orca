@@ -11,6 +11,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 const { listAddressableStructuredWorkers, structuredWorkerAgentStatus } =
   await import('./structured-worker-group-addressing')
 const { resolveGroupAddress } = await import('./groups')
+const { sendGroupMessage } = await import('../rpc/methods/orchestration-send-group')
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -162,5 +163,58 @@ describe('group addressing and structured workers', () => {
     // Unknown must never read as idle, or `@idle` wakes a worker mid-turn.
     hostRef.current = null
     expect(structuredWorkerAgentStatus(SESSION_ID)).toBeNull()
+  })
+})
+
+describe('sendGroupMessage actually composes structured workers in', () => {
+  beforeEach(() => {
+    structuredWorkerIdentities.clear()
+    hostRef.current = null
+  })
+
+  /**
+   * Drives the real `sendGroupMessage`, not `resolveGroupAddress`.
+   *
+   * The suite above hand-composed `[PTY_TERMINAL, ...listAddressableStructuredWorkers()]` itself,
+   * so deleting the composition at the call site left it green — the exact regression the fix
+   * describes could come straight back. This test owns that seam.
+   */
+  it('addresses a structured worker that only the call site can enumerate', async () => {
+    const handle = registerWorker()
+    installHost({})
+    const inserted: { to: string }[] = []
+    const db = {
+      getLegacyAdoptedRunMailboxOwner: () => null,
+      getCurrentRunForPane: () => undefined,
+      getActiveDispatchMailboxOwners: () => [],
+      getRunMailboxOwnerIdsForHandle: () => [],
+      insertMessages: (rows: { to: string }[]) => {
+        inserted.push(...rows)
+        return rows.map((row, index) => ({ id: `m${index}`, to_handle: row.to, type: 'status' }))
+      }
+    }
+    const runtime = {
+      // No PTY terminals at all: if the call site does not compose structured workers in, the
+      // group resolves empty and this throws instead of delivering.
+      listTerminals: async () => ({ terminals: [] }),
+      getAgentStatusForHandle: () => 'idle',
+      getLiveTerminalPaneKey: () => structuredWorkerIdentities.get(handle)!.paneKey,
+      notifyMessageArrived: () => {}
+    }
+    await sendGroupMessage({
+      params: { subject: 's', body: 'b', type: 'status', priority: 'normal' },
+      runtime: runtime as never,
+      db: db as never,
+      from: 'term_sender',
+      groupAddress: '@all',
+      senderPaneKey: undefined,
+      senderRunId: undefined,
+      explicitRunId: undefined,
+      legacyCoordinatorRunId: undefined,
+      revalidateLegacyCoordinator: undefined,
+      recordMutationReceipt: undefined,
+      withSendWarnings: (receipt) => receipt
+    } as never)
+    expect(inserted.map((row) => row.to)).toEqual([handle])
   })
 })

@@ -8,6 +8,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 const { killAllProcessesForWorktree } = await import('./worktree-teardown')
+const { classifyWorktreeForceDeleteReason } = await import('../../shared/worktree/removal')
 const { listLiveStructuredSessionsForWorktree } =
   await import('./structured-session-worktree-teardown')
 
@@ -97,6 +98,49 @@ describe('worktree teardown and structured agent sessions', () => {
   it('names the force escape hatch in the refusal, like the unstopped-PTY gate', async () => {
     installHost({ records: [record('s1', WORKTREE)] })
     await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).rejects.toThrow(/force/i)
+  })
+
+  it('classifies for the desktop Force Delete button, not just the CLI', async () => {
+    // The #11960 dead end, and the shape this file's own comments warn about: the desktop
+    // affordance comes ONLY from the classifier, and an ordinary delete already passes force:true
+    // for the dirty-file skip — so a refusal with no matcher shows raw CLI wording with no button.
+    installHost({ records: [record('s1', WORKTREE)] })
+    const error = await killAllProcessesForWorktree(WORKTREE, destructiveDeps()).catch(
+      (thrown: Error) => thrown.message
+    )
+    expect(classifyWorktreeForceDeleteReason(error as string, true)).toBe('running-agent-session')
+    // Nulled once the waiver is spent, exactly as `unstopped-pty` is, so the button does not
+    // reappear on a delete the user already forced.
+    expect(classifyWorktreeForceDeleteReason(error as string, true, true)).toBeNull()
+  })
+
+  it('keeps session ids out of a message users and agents read', async () => {
+    // A session id is one tab-id hop from the random pane key that gates a worker's mailbox, and
+    // this string reaches CLI output and a desktop toast. A count and the providers are what a
+    // user deciding whether to force actually needs.
+    installHost({ records: [record('s1', WORKTREE)] })
+    const error = await killAllProcessesForWorktree(WORKTREE, destructiveDeps()).catch(
+      (thrown: Error) => thrown.message
+    )
+    expect(error).not.toContain('s1')
+    expect(error).toContain('1 running agent session')
+  })
+
+  it('closes best-effort for a folder-workspace removal, which requires no stop proof', async () => {
+    // Those paths sweep and kill PTYs without `requirePhysicalStop`, so the structured sweep used
+    // to no-op there and left a live session bound to a workspace Orca was about to forget. They
+    // do not refuse: the root is shared so no checkout vanishes, and one of them is a never-throw
+    // forget that a refusal would wedge.
+    const host = installHost({ records: [record('s1', WORKTREE)] })
+    await expect(
+      killAllProcessesForWorktree(WORKTREE, {
+        localProvider,
+        includeProviderInventory: false,
+        includeLocalRegistry: false,
+        closeStructuredSessions: true
+      })
+    ).resolves.toMatchObject({ structuredStopped: 1 })
+    expect(host.closed).toEqual(['s1'])
   })
 
   it('closes them under force instead of orphaning the child', async () => {

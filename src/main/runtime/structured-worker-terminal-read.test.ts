@@ -87,15 +87,29 @@ describe('reading a structured worker through the terminal-read path', () => {
     expect(read?.truncated).toBe(false)
   })
 
-  it('pages by cursor and limit exactly as a PTY read does', () => {
+  it('honours limit, and claims no cursor space it cannot honour', () => {
     const handle = registerWorker()
     installHost({ items: [message('i1', 'a'), message('i2', 'b'), message('i3', 'c')] })
-    const first = readStructuredWorkerTerminal({ handle, db: null, cursor: 0, limit: 2 })
-    expect(first?.tail).toEqual(['[assistant] a', '[assistant] b'])
-    expect(first?.nextCursor).toBe('2')
-    const second = readStructuredWorkerTerminal({ handle, db: null, cursor: 2 })
-    expect(second?.tail).toEqual(['[assistant] c'])
-    expect(second?.latestCursor).toBe('3')
+    const read = readStructuredWorkerTerminal({ handle, db: null, limit: 2 })
+    expect(read?.tail).toEqual(['[assistant] b', '[assistant] c'])
+    // No index is advertised: the next read re-projects a sliding window, so 0/length would name
+    // positions that address different lines by then.
+    expect(read?.nextCursor).toBeNull()
+    expect(read?.oldestCursor).toBeUndefined()
+    expect(read?.latestCursor).toBeUndefined()
+  })
+
+  it('refuses a cursor read rather than silently misdelivering lines', () => {
+    // The PTY cursor indexes an append-only completed-line buffer with a monotone count. This
+    // window is a bounded tail re-projected every read, so a saved index addresses different lines
+    // as the journal grows — and `truncated` could never fire to say so, because it tests
+    // `cursor < oldestCursor` and `oldestCursor` was always 0. A poller would get wrong or
+    // duplicated lines with `truncated:false`.
+    const handle = registerWorker()
+    installHost({ items: [message('i1', 'a')] })
+    expect(() => readStructuredWorkerTerminal({ handle, db: null, cursor: 0 })).toThrow(
+      /worker-read --source transcript/
+    )
   })
 
   it('reports dropped history as truncated rather than pretending the page is whole', () => {

@@ -2,6 +2,8 @@ import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import {
   isUnstoppedPtyRemovalError,
+  RUNNING_AGENT_SESSION_REMOVAL_PREFIX,
+  UNSTOPPED_PTY_DETAIL_SEPARATOR,
   WORKTREE_TEARDOWN_FORCE_HINT,
   WORKTREE_TEARDOWN_TIMEOUT_PREFIX
 } from '../../shared/worktree/removal'
@@ -40,6 +42,15 @@ export type WorktreeTeardownDeps = {
   allowUnverifiedStop?: boolean
   includeProviderInventory?: boolean
   includeLocalRegistry?: boolean
+  /**
+   * Close structured agent sessions best-effort, for a destructive removal that does NOT require
+   * PTY-stop proof — the folder-workspace paths, which sweep and kill PTYs the same way.
+   *
+   * Separate from `requirePhysicalStop` because the two questions are different: that one asks
+   * whether a stop must be PROVEN before files are touched, and it is what licenses a refusal.
+   * Reconciliation sweeps set neither; they repair state and must never close anything.
+   */
+  closeStructuredSessions?: boolean
 }
 
 export type WorktreeTeardownResult = {
@@ -92,7 +103,7 @@ export async function killAllProcessesForWorktree(
   // of the three surfaces below, so all three answered zero and removal deleted the checkout out
   // from under a running provider child. Refusing costs nothing when there are none, and the check
   // is synchronous, so a destructive removal fails fast instead of after the whole sweep budget.
-  const structuredStopped = await sweepStructuredSessions(worktreeId, deps)
+  const structuredStopped = await sweepStructuredSessions(worktreeId, deps, deadline, deadlineError)
   const sweeps = createWorktreeSweepTracker()
   const stopAttempts = new Map<string, Promise<boolean>>()
   const stopPty = (
@@ -243,7 +254,10 @@ export async function killAllProcessesForWorktree(
       }
     } else {
       const summary = describeUnstoppedPtys(worktreeId, failedPtyIds, verdict)
-      if (!deps.allowUnverifiedStop) {
+      // Only a proof-requiring removal may refuse. A folder-workspace removal shares its root, so no
+      // checkout disappears under the child — the harm is a session left pointing at a workspace Orca
+      // has forgotten — and one of those paths is a never-throw forget, which a refusal would wedge.
+      if (deps.requirePhysicalStop && !deps.allowUnverifiedStop) {
         throw new Error(`${summary}. ${WORKTREE_TEARDOWN_FORCE_HINT}`)
       }
       // Why: force is the documented escape hatch, so removal continues — but the
@@ -271,31 +285,50 @@ export async function killAllProcessesForWorktree(
  * the same `--force` escape hatch. Force closes them properly instead of orphaning a child against
  * a `cwd` that is about to disappear.
  *
- * Only the destructive path (`requirePhysicalStop`) participates: the best-effort callers are
- * reconciliation sweeps that must never fail a repair, and they delete nothing.
+ * Two callers participate, for different reasons. A proof-requiring removal (`requirePhysicalStop`)
+ * refuses, then closes under force. A folder-workspace removal (`closeStructuredSessions`) closes
+ * best-effort without refusing: it shares its root so no checkout vanishes under the child, and one
+ * of those paths is a never-throw forget that a refusal would wedge. Reconciliation sweeps set
+ * neither — they repair state, delete nothing, and must never close a session.
  */
 async function sweepStructuredSessions(
   worktreeId: string,
-  deps: WorktreeTeardownDeps
+  deps: WorktreeTeardownDeps,
+  deadline: number,
+  deadlineError: Error
 ): Promise<number> {
-  if (!deps.requirePhysicalStop) {
+  if (!deps.requirePhysicalStop && !deps.closeStructuredSessions) {
     return 0
   }
   const live = listLiveStructuredSessionsForWorktree(worktreeId)
   if (live.length === 0) {
     return 0
   }
-  if (!deps.allowUnverifiedStop) {
+  // Only a proof-requiring removal may refuse. A folder-workspace removal shares its root, so no
+  // checkout disappears under the child — the harm is a session left pointing at a workspace Orca
+  // has forgotten — and one of those paths is a never-throw forget, which a refusal would wedge.
+  if (deps.requirePhysicalStop && !deps.allowUnverifiedStop) {
+    // The prefix is what the desktop classifier matches on; without it the toast shows raw CLI
+    // wording and hides the Force Delete button — the #11960 dead end this file already documents.
     throw new Error(
-      `Refusing to remove ${worktreeId}: ${describeLiveStructuredSessions(worktreeId, live)}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
+      `${RUNNING_AGENT_SESSION_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeLiveStructuredSessions(live)}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
     )
   }
-  const { closed, unstopped } = await closeStructuredSessionsForWorktree(worktreeId, deps.runtime)
+  // Raced against the same sweep budget every PTY surface is bounded by: `host.close` awaits a
+  // provider round trip, and a wedged one would otherwise hang `worktree rm --force` forever with
+  // no timeout error at all. On expiry the force path reports the timeout exactly as the PTY
+  // sweeps do rather than proceeding as if the sessions had closed.
+  const { closed, unstopped } = await settleBeforeDeadline(
+    () => closeStructuredSessionsForWorktree(worktreeId, deps.runtime),
+    { closed: 0, unstopped: live },
+    deadline,
+    deadlineError
+  )
   if (unstopped.length > 0) {
     // Force is the documented escape hatch, so removal continues — but say so, because the child
     // outliving its `cwd` is the failure this sweep exists to make visible.
     console.warn(
-      `[worktree-teardown] forcing removal with ${describeLiveStructuredSessions(worktreeId, unstopped)} still attached`
+      `[worktree-teardown] forcing removal of ${worktreeId} with ${describeLiveStructuredSessions(unstopped)} still attached`
     )
   }
   return closed
