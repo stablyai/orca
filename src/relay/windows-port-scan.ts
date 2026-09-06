@@ -19,14 +19,22 @@ const WINDOWS_PORT_SCAN_MAX_OUTPUT_BYTES = 4 * 1024 * 1024
 /**
  * Listening TCP ports, attributed to their owning process.
  *
- * `netstat.exe -ano` answers all of it except the process name, and the name
- * comes from the shared native process table -- so the ordinary scan starts no
- * PowerShell at all. It used to start one first: `-ExecutionPolicy Bypass
- * -EncodedCommand <base64>` wrapping `Get-NetTCPConnection` joined to
- * `Get-Process`. Base64 beside a policy override is the highest-weighted token
- * pair Defender for Endpoint scores on a PowerShell command line, and listing
- * listeners with their owners reads as network discovery (T1049) on top of it.
- * That payload survives only as the last resort below, without the override.
+ * `netstat.exe -ano` answers all of it except the process name, which comes
+ * from the shared process table -- so this scan starts no PowerShell of its
+ * own. One still runs on a released relay: without the optional
+ * `windows-process-tree.node` addon (built only by dev-channel-win-build.yml,
+ * so no release carries it) that table falls back to a CIM scan that forks one
+ * `powershell.exe`. That scan is TTL-shared with pane naming, so a relay with a
+ * live pane pays nothing extra for it.
+ *
+ * The EDR win is therefore the shape, not the absence of PowerShell. The
+ * retired payload ran `-ExecutionPolicy Bypass -EncodedCommand <base64>`
+ * wrapping `Get-NetTCPConnection` joined to `Get-Process`: base64 beside a
+ * policy override is the highest-weighted token pair Defender for Endpoint
+ * scores on a PowerShell command line, and listing listeners with their owners
+ * reads as network discovery (T1049) on top of it. The shared CIM scan carries
+ * neither token. That payload survives only as the last resort below, without
+ * the override.
  */
 export async function scanWindowsListeningPorts(signal?: AbortSignal): Promise<DetectedPort[]> {
   const netstatPorts = await readWindowsNetstatPorts(signal)
@@ -116,11 +124,13 @@ export function resetWindowsPortScanDiagnosticsForTests(): void {
 }
 
 /**
- * Fill in owning-process names from the shared native snapshot.
+ * Fill in owning-process names from the shared process-table snapshot.
  *
  * Names are optional data — the panel renders host/port/pid without them — so a
- * host that cannot read the table keeps its rows rather than forking a shell of
- * its own. See docs/reference/windows-process-enumeration.md.
+ * host that cannot read the table keeps its rows. This shares whatever scan the
+ * table already runs rather than avoiding one: without the native addon that
+ * scan is itself a `powershell.exe` CIM query, just not a second one.
+ * See docs/reference/windows-process-enumeration.md.
  *
  * Best-effort by design: the snapshot is shared and TTL-cached, so it can
  * predate netstat and hand a recycled PID its previous owner's name. Only
