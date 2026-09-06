@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
-import type { useAppStore } from '@/store'
+import { useAppStore } from '@/store'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import {
   useEditorPanelExternalContentEvents,
@@ -154,7 +154,11 @@ export function useEditorPanelContentState({
           delete next[file.id]
           return next
         })
-        void loadDiffContent(file, { force: true })
+        void loadDiffContent(file, { force: true }).then((replaced) => {
+          if (replaced) {
+            requestDiffContentReload(file.id)
+          }
+        })
         return
       }
       delete fileLoadRetryAttemptsRef.current[file.id]
@@ -170,7 +174,7 @@ export function useEditorPanelContentState({
         force: true
       })
     },
-    [loadDiffContent, loadFileContent]
+    [loadDiffContent, loadFileContent, requestDiffContentReload]
   )
 
   useLocalLogTail({ openFiles, fileContents, setFileContents, reloadContent })
@@ -210,7 +214,8 @@ export function useEditorPanelContentState({
     invalidateDiffContent,
     invalidateFileContent,
     loadDiffContent,
-    loadFileContent
+    loadFileContent,
+    requestDiffContentReload
   })
 
   useEditorPanelExternalContentEvents({

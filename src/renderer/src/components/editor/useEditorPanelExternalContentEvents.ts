@@ -23,7 +23,10 @@ type UseEditorPanelExternalContentEventsParams = {
   invalidateContent: (fileIds: string[]) => void
   invalidateDiffContent: (fileIds: string[]) => void
   isVisibleRef: MutableRefObject<boolean>
-  loadDiffContent: (file: OpenFile | null, options?: EditorPanelContentLoadOptions) => Promise<void>
+  loadDiffContent: (
+    file: OpenFile | null,
+    options?: EditorPanelContentLoadOptions
+  ) => Promise<boolean>
   loadFileContent: (
     filePath: string,
     id: string,
@@ -65,6 +68,18 @@ export function useEditorPanelExternalContentEvents({
   requestDiffContentReload
 }: UseEditorPanelExternalContentEventsParams): void {
   useEffect(() => {
+    const reloadDiffContent = (file: OpenFile, eventGeneration: number): void => {
+      // Why: replace the content before rotating the model path so a fresh
+      // model is seeded from the external result, not the stale model.
+      void loadDiffContent(file, {
+        force: true,
+        externalEventGeneration: eventGeneration
+      }).then((replaced) => {
+        if (replaced) {
+          requestDiffContentReload(file.id)
+        }
+      })
+    }
     const handler = (event: Event): void => {
       const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
       if (!detail) {
@@ -92,20 +107,12 @@ export function useEditorPanelExternalContentEvents({
             externalEventGeneration: eventGeneration
           })
           if (editorViewModeRef.current[file.id] === 'changes') {
-            requestDiffContentReload(file.id)
-            void loadDiffContent(file, {
-              force: true,
-              externalEventGeneration: eventGeneration
-            })
+            reloadDiffContent(file, eventGeneration)
           } else {
             invalidatedDiffFileIds.push(file.id)
           }
         } else if (isReloadableSingleFileDiffTab(file)) {
-          requestDiffContentReload(file.id)
-          void loadDiffContent(file, {
-            force: true,
-            externalEventGeneration: eventGeneration
-          })
+          reloadDiffContent(file, eventGeneration)
         }
       }
       if (invalidatedFileIds.length > 0) {

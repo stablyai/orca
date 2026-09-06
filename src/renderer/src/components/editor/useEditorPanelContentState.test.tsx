@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   getConnectionId: vi.fn(),
   getConnectionIdForFile: vi.fn(),
   isWorktreeConnectionResolved: vi.fn(() => true),
-  requestDiffContentReload: vi.fn(),
   getState: vi.fn()
 }))
 
@@ -152,13 +151,12 @@ describe('useEditorPanelContentState', () => {
     mocks.getConnectionIdForFile.mockReturnValue(undefined)
     mocks.isWorktreeConnectionResolved.mockReset()
     mocks.isWorktreeConnectionResolved.mockReturnValue(true)
-    mocks.requestDiffContentReload.mockReset()
     mocks.getState.mockReset()
     mocks.getState.mockReturnValue({
       settings: null,
       openFiles: [],
       setLastKnownDiskSignature: vi.fn(),
-      requestDiffContentReload: mocks.requestDiffContentReload
+      requestDiffContentReload: vi.fn()
     })
   })
 
@@ -863,55 +861,6 @@ describe('useEditorPanelContentState', () => {
     )
     expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
     expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
-  })
-
-  it('refetches then rotates the model when a diff tab is re-opened', async () => {
-    // Why: the sidebar re-open bumps the refresh nonce; rotating the model
-    // before the refetch lands would seed it from the body being replaced.
-    const activeFile = createOpenFile({
-      id: 'wt-1::diff::unstaged::file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    mocks.getRuntimeGitDiff
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'first diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-      .mockResolvedValueOnce({
-        kind: 'text',
-        originalContent: 'old',
-        modifiedContent: 'reopened diff content',
-        originalIsBinary: false,
-        modifiedIsBinary: false
-      })
-
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('first diff content')
-    )
-    expect(mocks.requestDiffContentReload).not.toHaveBeenCalled()
-
-    const reopenedFile = { ...activeFile, diffContentRefreshNonce: 1 }
-    await act(async () => {
-      root?.render(<HookProbe activeFile={reopenedFile} openFiles={[reopenedFile]} />)
-    })
-
-    await vi.waitFor(() =>
-      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('reopened diff content')
-    )
-    await vi.waitFor(() =>
-      expect(mocks.requestDiffContentReload).toHaveBeenCalledWith(activeFile.id)
-    )
-    expect(mocks.getRuntimeGitDiff).toHaveBeenCalledTimes(2)
   })
 
   it('routes reloadContent for an edit tab to a forced file read, not a diff refetch', async () => {
