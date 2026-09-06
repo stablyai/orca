@@ -155,6 +155,13 @@ test.describe('Worktree jump-palette filters', () => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
   })
+  test.afterEach(async ({ orcaPage }) => {
+    await orcaPage.evaluate(() => {
+      const store = window.__store?.getState()
+      store?.setFilterRepoIds([])
+      store?.closeModal()
+    })
+  })
 
   test('filters workspace results by host, intersects project selection, and resets on close', async ({
     orcaPage

@@ -70,7 +70,7 @@ export function WorktreeJumpPaletteSurface({
             <PaletteFilterMenu
               model={controller.filterModel}
               filter={controller.filter}
-              onFilterChange={controller.setRawFilter}
+              onFilterChange={controller.setFilterState}
               onRequestInputFocus={controller.focusPaletteInput}
               portalContainer={controller.dialogElement}
             />
@@ -93,7 +93,7 @@ export function WorktreeJumpPaletteSurface({
       <PaletteFilterChips
         model={controller.filterModel}
         filter={controller.filter}
-        onFilterChange={controller.setRawFilter}
+        onFilterChange={controller.setFilterState}
       />
       <CommandList
         ref={controller.listRef}

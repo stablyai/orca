@@ -26,7 +26,7 @@ const option = (id: string, count = 1) => ({
 // r1 + r2 are two repos behind one project row; r3 is a standalone repo row.
 const model: PaletteFilterModel = {
   hosts: [option('local'), option('ssh:builder'), option('runtime:env-1')],
-  projects: [option('r1'), option('r2'), option('r3')],
+  repositories: [option('r1'), option('r2'), option('r3')],
   repoIdsByProjectKey: new Map([
     ['project:p1', ['r1', 'r2']],
     ['repo:r3', ['r3']]

@@ -70,13 +70,13 @@ describe('buildPaletteFilterModel', () => {
     const model = buildModel([worktree('w1', 'r1'), worktree('w2', 'r2'), worktree('w3', 'r3')])
 
     expect(model.repoIdsByProjectKey.get('project:p1')).toEqual(['r1', 'r2'])
-    expect(model.projects.map((option) => [option.id, option.label, option.count])).toEqual([
+    expect(model.repositories.map((option) => [option.id, option.label, option.count])).toEqual([
       ['r1', 'Orca', 1],
       ['r2', 'Orca (builder)', 1],
       ['r3', 'Solo', 1]
     ])
-    expect(model.projects[0]?.searchText).toContain('orca')
-    expect(model.projects[0]?.searchText).toContain(path.join('/repos', 'r1'))
+    expect(model.repositories[0]?.searchText).toContain('orca')
+    expect(model.repositories[0]?.searchText).toContain(path.join('/repos', 'r1'))
   })
 
   it('counts a worktree against its own host stamp, not its repo host', () => {
@@ -90,8 +90,8 @@ describe('buildPaletteFilterModel', () => {
       ['local', 1],
       ['ssh:ssh-1', 2]
     ])
-    expect(model.projects.find((option) => option.id === 'r1')?.count).toBe(2)
-    expect(model.projects.find((option) => option.id === 'r2')?.count).toBe(1)
+    expect(model.repositories.find((option) => option.id === 'r1')?.count).toBe(2)
+    expect(model.repositories.find((option) => option.id === 'r2')?.count).toBe(1)
   })
 
   it('omits archived worktrees from every count', () => {
@@ -105,7 +105,7 @@ describe('buildPaletteFilterModel', () => {
       ['local', 1],
       ['ssh:ssh-1', 0]
     ])
-    expect(model.projects.map((option) => [option.id, option.count])).toEqual([
+    expect(model.repositories.map((option) => [option.id, option.count])).toEqual([
       ['r1', 1],
       ['r2', 0],
       ['r3', 0]
@@ -119,7 +119,7 @@ describe('buildPaletteFilterModel', () => {
       ['local', 0],
       ['ssh:ssh-1', 0]
     ])
-    expect(model.projects.map((option) => [option.id, option.count])).toEqual([
+    expect(model.repositories.map((option) => [option.id, option.count])).toEqual([
       ['r1', 0],
       ['r2', 0],
       ['r3', 0]
@@ -131,7 +131,11 @@ describe('buildPaletteFilterModel', () => {
   it('sorts repository options by workspace count then label', () => {
     const model = buildModel([worktree('w1', 'r3'), worktree('w2', 'r1'), worktree('w3', 'r2')])
 
-    expect(model.projects.map((option) => option.label)).toEqual(['Orca', 'Orca (builder)', 'Solo'])
+    expect(model.repositories.map((option) => option.label)).toEqual([
+      'Orca',
+      'Orca (builder)',
+      'Solo'
+    ])
   })
 
   it('prefers a busier project ahead of an alphabetically earlier quiet one', () => {
@@ -142,7 +146,7 @@ describe('buildPaletteFilterModel', () => {
       worktree('w4', 'r1')
     ])
 
-    expect(model.projects.map((option) => [option.label, option.count])).toEqual([
+    expect(model.repositories.map((option) => [option.label, option.count])).toEqual([
       ['Solo', 3],
       ['Orca', 1],
       ['Orca (builder)', 0]

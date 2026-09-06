@@ -25,7 +25,7 @@ type WorktreeJumpPaletteFilterInput = Pick<
   | 'projectHostSetups'
   | 'projectGroups'
 > &
-  Pick<WorktreeJumpPaletteLocalState, 'rawFilter'>
+  Pick<WorktreeJumpPaletteLocalState, 'filterState'>
 
 export function useWorktreeJumpPaletteFilter({
   repos,
@@ -38,7 +38,7 @@ export function useWorktreeJumpPaletteFilter({
   projects,
   projectHostSetups,
   projectGroups,
-  rawFilter
+  filterState
 }: WorktreeJumpPaletteFilterInput) {
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const repoByHostIdentity = useMemo(
@@ -81,7 +81,7 @@ export function useWorktreeJumpPaletteFilter({
       }),
     [allWorktrees, defaultHostId, hostOptions, projectHostSetups, projects, repos]
   )
-  const filter = rawFilter
+  const filter = filterState
   const filterActive = isPaletteFilterActive(filter)
   const hostFilterActive = filter.hostIds.length > 0
   const filterPredicate = useMemo(

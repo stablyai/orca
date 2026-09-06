@@ -42,8 +42,7 @@ function toFilterOption({
 
 export type PaletteFilterModel = {
   hosts: readonly PaletteFilterOption[]
-  /** Repository-granular so the palette can preserve the sidebar's exact project scope. */
-  projects: readonly PaletteFilterOption[]
+  repositories: readonly PaletteFilterOption[]
   /** A project row can span several repos (Project.sourceRepoIds), so selection resolves through this. */
   repoIdsByProjectKey: ReadonlyMap<string, readonly string[]>
   /** Only repos that carry a host stamp; absent means "inherit defaultHostId". */
@@ -155,7 +154,7 @@ export function buildPaletteFilterModel({
   )
 
   // Keep repository IDs aligned with the sidebar; project grouping remains a row concern.
-  const projectOptions = repos
+  const repositoryOptions = repos
     .map((repo) =>
       toFilterOption({
         id: repo.id,
@@ -168,7 +167,7 @@ export function buildPaletteFilterModel({
 
   return {
     hosts,
-    projects: projectOptions,
+    repositories: repositoryOptions,
     repoIdsByProjectKey,
     hostIdByRepoId,
     defaultHostId

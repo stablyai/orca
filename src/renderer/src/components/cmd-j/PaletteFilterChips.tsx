@@ -23,7 +23,9 @@ export default function PaletteFilterChips({
 }): React.JSX.Element | null {
   const chips = useMemo<Chip[]>(() => {
     const hostLabels = new Map(model.hosts.map((host) => [host.id, host.label]))
-    const projectLabels = new Map(model.projects.map((project) => [project.id, project.label]))
+    const repositoryLabels = new Map(
+      model.repositories.map((repository) => [repository.id, repository.label])
+    )
     return [
       ...filter.hostIds.map((id) => ({
         field: 'host' as const,
@@ -33,10 +35,10 @@ export default function PaletteFilterChips({
       ...filter.repoIds.map((id) => ({
         field: 'project' as const,
         id,
-        label: projectLabels.get(id) ?? id
+        label: repositoryLabels.get(id) ?? id
       }))
     ]
-  }, [filter.hostIds, filter.repoIds, model.hosts, model.projects])
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
 
   if (!isPaletteFilterActive(filter) || chips.length === 0) {
     return null
