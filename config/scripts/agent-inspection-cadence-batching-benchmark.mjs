@@ -57,7 +57,7 @@ const { POLL_TIER_INTERVAL_MS } = await import(
   path.join(ROOT, 'src/renderer/src/components/terminal-pane/agent-completion-poll-cadence.ts')
 )
 const { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } = await import(
-  path.join(ROOT, 'src/shared/process-table-snapshot-reader.ts')
+  path.join(ROOT, 'src/shared/process-table-snapshot.ts')
 )
 
 // Pre-change: independent ±10% jitter per pane, re-rolled on every reschedule.
