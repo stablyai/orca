@@ -10,7 +10,7 @@ const readWorkflow = (relativePath) => parse(readFileSync(join(projectDir, relat
 
 describe('Windows signing workflow contract', () => {
   it('preflights SignPath module install before Windows signing side effects', () => {
-    const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
+    const parsedWorkflow = readWorkflow('.github/workflows/release-windows-signing.yml')
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
     const installStepIndexes = stepNames.flatMap((name, index) =>
@@ -18,11 +18,12 @@ describe('Windows signing workflow contract', () => {
     )
     const buildIndex = stepNames.indexOf('Build Windows release artifacts')
     const verifyNodePtyIndex = stepNames.indexOf('Verify Windows node-pty ConPTY runtime')
-    const uploadIndex = stepNames.indexOf('Upload unsigned Windows installer for SignPath')
+    const uploadIndex = stepNames.indexOf('Upload unsigned inner binaries for SignPath')
     const downloadIndex = stepNames.indexOf('Download signed Windows installer from SignPath')
 
     expect(verifyNodePtyIndex).toBe(buildIndex + 1)
-    expect(installStepIndexes).toEqual([verifyNodePtyIndex + 1])
+    expect(installStepIndexes).toHaveLength(1)
+    expect(installStepIndexes[0]).toBeLessThan(buildIndex)
     expect(installStepIndexes[0]).toBeLessThan(uploadIndex)
 
     expect(steps[verifyNodePtyIndex].run).toContain(
@@ -39,7 +40,7 @@ describe('Windows signing workflow contract', () => {
 
     const installStep = steps[installStepIndexes[0]]
 
-    expect(installStep.if).toBe("matrix.platform == 'win' && github.run_attempt == 1")
+    expect(installStep.if).toBe('github.run_attempt == 1')
     expect(installStep.uses).toBe('./.github/actions/install-signpath-module')
     expect(installStep.run).toBeUndefined()
 
@@ -106,11 +107,11 @@ describe('Windows signing workflow contract', () => {
   })
 
   it('still installs SignPath when the cut ref predates the composite action', () => {
-    const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
+    const parsedWorkflow = readWorkflow('.github/workflows/release-windows-signing.yml')
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
     const checkoutIndex = stepNames.indexOf('Checkout')
-    const restoreIndex = stepNames.indexOf('Restore composite actions from the workflow ref')
+    const restoreIndex = stepNames.indexOf('Load signing control from the workflow commit')
     const installIndex = stepNames.indexOf('Install SignPath PowerShell module')
 
     // Why: the build job checks out the cut tag, which for a hotfix cut from an
@@ -123,7 +124,7 @@ describe('Windows signing workflow contract', () => {
     const restoreRun = restoreStep.run
 
     expect(restoreStep.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
-    expect(restoreRun).toContain('.github/actions/install-signpath-module/action.yml')
+    expect(restoreRun).toContain('config/windows-signing')
     expect(restoreRun).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
     expect(restoreRun).toContain('git checkout "$WORKFLOW_SHA" -- .github/actions')
 
@@ -140,88 +141,61 @@ describe('Windows signing workflow contract', () => {
     expect(installRun).toContain('throw "SHA-256 mismatch for $source')
   })
 
-  it('never recreates Windows signing requests on a workflow rerun', () => {
-    const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
-    const steps = parsedWorkflow.jobs.build.steps
-    const stepNames = steps.map((step) => step.name)
-    const skipStep = steps.find((step) => step.name === 'Skip Windows artifact rebuild on rerun')
-
-    expect(skipStep?.if).toBe("matrix.platform == 'win' && github.run_attempt != 1")
-    expect(skipStep?.run).toContain('Existing signed release assets must be reused')
-
-    const signingStepNames = [
-      'Build Windows release artifacts',
-      'Stage unsigned inner PE files for signing',
-      'Upload unsigned inner binaries for SignPath',
-      'Submit inner binaries signing request',
-      'Download signed inner binaries from SignPath',
-      'Upload unsigned Windows installer for SignPath',
-      'Submit Windows installer signing request',
-      'Download signed Windows installer from SignPath',
-      'Stage signed Windows release assets',
-      'Publish signed Windows release artifacts'
-    ]
-
-    for (const stepName of signingStepNames) {
-      const step = steps[stepNames.indexOf(stepName)]
-      expect(step?.if, stepName).toContain('github.run_attempt == 1')
+  it('never recreates signing requests on reruns and resumes immutable checkpoints', () => {
+    const { jobs } = readWorkflow('.github/workflows/release-windows-signing.yml')
+    for (const name of ['build', 'package']) {
+      const steps = jobs[name].steps
+      const submissions = steps.filter((s) => s.uses?.startsWith('signpath/'))
+      expect(submissions).toHaveLength(1)
+      expect(submissions[0].if).toBe('github.run_attempt == 1')
+      expect(submissions[0].with['wait-for-completion']).toBe(false)
+      expect(
+        steps.some(
+          (s) => s.name.startsWith('Restore original') && s.if === 'github.run_attempt != 1'
+        )
+      ).toBe(true)
+      expect(steps.find((s) => s.name.startsWith('Upload immutable')).with.name).toContain(
+        '${{ github.run_id }}-1-'
+      )
     }
   })
 
-  it('shares one SignPath module install path between release and rehearsal', () => {
-    const rehearsalWorkflow = readWorkflow('.github/workflows/windows-signing-rehearsal.yml')
-    const stepNames = rehearsalWorkflow.jobs.rehearse.steps.map((step) => step.name)
-    const installIndex = stepNames.indexOf('Install SignPath PowerShell module')
-
-    // Why: the rehearsal exists to prove the real signing flow, so it must
-    // install the module exactly the way the release job does.
-    expect(rehearsalWorkflow.jobs.rehearse.steps[installIndex].uses).toBe(
-      './.github/actions/install-signpath-module'
-    )
-    expect(rehearsalWorkflow.jobs.rehearse.steps[installIndex].run).toBeUndefined()
-    expect(installIndex).toBeLessThan(
-      stepNames.indexOf('Download signed inner binaries from SignPath')
-    )
+  it('uses the exact production stage graph for isolated nonpublishing rehearsal', () => {
+    const rehearsal = readWorkflow('.github/workflows/windows-signing-rehearsal.yml').jobs.signing
+    expect(rehearsal.uses).toBe('./.github/workflows/release-windows-signing.yml')
+    expect(rehearsal.with.publish).toBe(false)
+    expect(rehearsal.with.signing_policy).toBe('test-signing')
+    expect(rehearsal.with.environment_prefix).toBe('windows-rehearsal')
   })
 
-  it('verifies Windows inner binary signatures fail-open before publishing', () => {
-    const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
-    const steps = parsedWorkflow.jobs.build.steps
-    const stepNames = steps.map((step) => step.name)
-    const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
-    const innerVerifyIndex = stepNames.indexOf('Verify Windows inner binary signatures')
-    const evidenceIndex = stepNames.indexOf('Upload Windows inner signing evidence')
-    const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
-
-    expect(outerVerifyIndex).toBeGreaterThan(-1)
-    expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
-    expect(evidenceIndex).toBe(innerVerifyIndex + 1)
-    expect(publishIndex).toBe(evidenceIndex + 1)
-
-    // Why fail-open: unsigned inner binaries must warn, not block, until the
-    // flow is proven on a real release (issue #7785). Flip this to 'true'
-    // together with the workflow env to make the gate required.
-    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
-
-    // Why: every step in the inner-signing chain must be unable to fail the
-    // release — a SignPath outage or timeout falls through to today's
-    // unsigned-inner flow instead of blocking the cut.
-    const innerChainStepNames = [
-      'Stage unsigned inner PE files for signing',
-      'Upload unsigned inner binaries for SignPath',
-      'Submit inner binaries signing request',
-      'Notify Slack that inner-binary signing is waiting for approval',
-      'Download signed inner binaries from SignPath',
-      'Restore signed inner binaries into unpacked app',
-      'Restore signed uninstaller for the installer rebuild',
-      'Replace cached elevate.exe with the signed copy',
-      'Rebuild NSIS installer from signed unpacked app'
-    ]
-    for (const stepName of innerChainStepNames) {
-      const step = steps[stepNames.indexOf(stepName)]
-      expect(step, stepName).toBeDefined()
-      expect(step['continue-on-error'], stepName).toBe(true)
+  it('waits before runner allocation and blocks publication on both signature gates', () => {
+    const { jobs } = readWorkflow('.github/workflows/release-windows-signing.yml')
+    expect(jobs.package.needs).toBe('build')
+    expect(jobs.package.environment.name).toBe('${{ inputs.environment_prefix }}-inner-signing')
+    expect(jobs.finalize.needs).toBe('package')
+    expect(jobs.finalize.environment.name).toBe(
+      '${{ inputs.environment_prefix }}-installer-signing'
+    )
+    for (const job of Object.values(jobs)) {
+      expect(job['runs-on']).toBe('windows-2022')
+      expect(job.steps[0].name).toBe('Validate signing mode')
+      for (const step of job.steps.filter((s) => !s.name.startsWith('Notify Slack'))) {
+        expect(step['continue-on-error'], step.name).toBeUndefined()
+      }
     }
+    const names = jobs.finalize.steps.map((s) => s.name)
+    const publish = names.indexOf('Publish signed Windows release artifacts')
+    for (const gate of [
+      'Verify signed Windows installer',
+      'Regenerate signed installer update metadata',
+      'Verify Windows inner binary signatures'
+    ]) {
+      expect(names.indexOf(gate)).toBeGreaterThan(-1)
+      expect(names.indexOf(gate)).toBeLessThan(publish)
+    }
+    expect(
+      readWorkflow('.github/workflows/release-cut.yml').jobs['publish-release'].needs
+    ).toContain('build-windows')
   })
 })
 

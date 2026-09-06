@@ -1,0 +1,651 @@
+name: Windows release signing
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+      source_ref:
+        required: true
+        type: string
+      source_sha:
+        required: true
+        type: string
+      signing_policy:
+        type: string
+        default: release-signing
+      environment_prefix:
+        type: string
+        default: windows
+      publish:
+        type: boolean
+        default: true
+    secrets:
+      SIGNPATH_API_TOKEN:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: false
+      ORCA_POSTHOG_WRITE_KEY:
+        required: false
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: Validate signing mode
+        shell: pwsh
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          ENVIRONMENT_PREFIX: ${{ inputs.environment_prefix }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+        run: |-
+          $ErrorActionPreference = 'Stop'
+          if ($env:PUBLISH -eq 'true') {
+            if ($env:SIGNING_POLICY -ne 'release-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows') { throw 'Publication requires production signing gates.' }
+          } elseif ($env:SIGNING_POLICY -ne 'test-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows-rehearsal' -or $env:TEST_CERTIFICATE_THUMBPRINT -notmatch '^[a-fA-F0-9]{40}$') {
+            throw 'Rehearsal requires isolated gates and a pinned test certificate.'
+          }
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - name: Load signing control from the workflow commit
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/signing-control"
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git archive "$WORKFLOW_SHA" config/windows-signing | tar -x -C "$RUNNER_TEMP/signing-control"
+          git checkout "$WORKFLOW_SHA" -- .github/actions/install-signpath-module
+          git checkout "$WORKFLOW_SHA" -- config/scripts/resolve-7za-path.mjs config/scripts/generate-windows-blockmap.mjs
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+        if: github.run_attempt == 1
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+        if: github.run_attempt == 1
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |-
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-builder-win-
+        if: github.run_attempt == 1
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+        if: github.run_attempt == 1
+      - name: Install SignPath PowerShell module
+        if: github.run_attempt == 1
+        uses: ./.github/actions/install-signpath-module
+      - name: Classify release tag for telemetry build identity
+        id: tag-classify
+        shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Why the optional trailing identifier: suffixed side-branch RCs
+          # (vX.Y.Z-rc.N.perf) are rc-channel prerelease builds — same telemetry
+          # identity as plain RCs.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+(\.[0-9A-Za-z]+)?$ ]]; then
+            identity=rc
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            identity=stable
+          else
+            echo "::error::Tag $TAG does not match stable or rc pattern; refusing to build official artifact"
+            exit 1
+          fi
+          echo "identity=$identity" >>"$GITHUB_OUTPUT"
+          echo "Classified $TAG as $identity"
+        if: github.run_attempt == 1
+      - name: Build app
+        run: pnpm build:release
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          ORCA_BUILD_IDENTITY: ${{ inputs.publish && steps.tag-classify.outputs.identity || '' }}
+          ORCA_DIAGNOSTICS_TOKEN_URL: ${{ inputs.publish && 'https://www.onorca.dev/diagnostics/token' || '' }}
+          ORCA_POSTHOG_WRITE_KEY: ${{ inputs.publish && secrets.ORCA_POSTHOG_WRITE_KEY || '' }}
+        if: github.run_attempt == 1
+      - name: Gate SSH relay watcher process isolation
+        run: |
+          # Why: the remote native watcher shares a daemon with live PTYs.
+          # Kill only its child and require both PTY and watch recovery before packaging.
+          node config/scripts/relay-watcher-fault-harness.mjs
+        if: github.run_attempt == 1
+      - name: Build Windows release artifacts
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 30
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: github.run_attempt == 1
+      - name: Verify Windows node-pty ConPTY runtime
+        shell: pwsh
+        run: |
+          $runtimeDir = 'dist/win-unpacked/resources/node_modules/node-pty/build/Release'
+          $requiredFiles = @(
+            "$runtimeDir/conpty.node",
+            "$runtimeDir/conpty/conpty.dll",
+            "$runtimeDir/conpty/OpenConsole.exe"
+          )
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+              throw "Missing Windows node-pty runtime file: $file"
+            }
+            Get-Item -LiteralPath $file
+          }
+        if: github.run_attempt == 1
+      - name: Stage unsigned inner PE files for signing
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/stage-inner.ps1"'
+        id: stage-inner
+        if: github.run_attempt == 1
+      - name: Upload unsigned inner binaries for SignPath
+        id: upload-unsigned-inner
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-inner-unsigned-${{ inputs.tag }}
+          path: signing-stage/**
+          if-no-files-found: error
+        if: github.run_attempt == 1
+      - name: Submit inner binaries signing request
+        id: submit-inner-signing
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: ${{ inputs.signing_policy }}
+          artifact-configuration-slug: windows-inner-binaries-zip
+          github-artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
+          wait-for-completion: false
+        if: github.run_attempt == 1
+      - name: Checkpoint inner signing request
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/checkpoint.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: inner
+          REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+          MODE: save
+        if: github.run_attempt == 1
+      - name: Upload immutable inner signing checkpoint
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-signing-inner-${{ github.run_id }}-1-${{ steps.submit-inner-signing.outputs.signing-request-id }}
+          path: |-
+            signing-checkpoint/checkpoint.json
+            signing-checkpoint/checkpoint.tar.gz
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+        if: github.run_attempt == 1
+      - name: Notify Slack that inner-binary signing is waiting for approval
+        id: notify-inner-signing
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SIGNPATH_ORGANIZATION_ID: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+          SIGNPATH_REQUEST_URL: ${{ steps.submit-inner-signing.outputs.signing-request-web-url }}
+          TAG: ${{ inputs.tag }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ inputs.source_sha }}
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
+          }
+
+          $requestUrl = $env:SIGNPATH_REQUEST_URL
+          if ([string]::IsNullOrWhiteSpace($requestUrl)) {
+            $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
+          }
+
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
+          } else {
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` inner-binaries signing request (1 of 2) is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
+          $payload = @{
+            text = $message
+            blocks = @(
+              @{
+                type = 'section'
+                text = @{
+                  type = 'mrkdwn'
+                  text = $message
+                }
+              }
+            )
+          } | ConvertTo-Json -Depth 5
+
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
+        if: github.run_attempt == 1
+      - name: Restore original inner signing checkpoint
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/checkpoint.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: inner
+          MODE: restore
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: github.run_attempt != 1
+  package:
+    needs: build
+    environment:
+      name: ${{ inputs.environment_prefix }}-inner-signing
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Validate signing mode
+        shell: pwsh
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          ENVIRONMENT_PREFIX: ${{ inputs.environment_prefix }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+        run: |-
+          $ErrorActionPreference = 'Stop'
+          if ($env:PUBLISH -eq 'true') {
+            if ($env:SIGNING_POLICY -ne 'release-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows') { throw 'Publication requires production signing gates.' }
+          } elseif ($env:SIGNING_POLICY -ne 'test-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows-rehearsal' -or $env:TEST_CERTIFICATE_THUMBPRINT -notmatch '^[a-fA-F0-9]{40}$') {
+            throw 'Rehearsal requires isolated gates and a pinned test certificate.'
+          }
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - name: Load signing control from the workflow commit
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/signing-control"
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git archive "$WORKFLOW_SHA" config/windows-signing | tar -x -C "$RUNNER_TEMP/signing-control"
+          git checkout "$WORKFLOW_SHA" -- .github/actions/install-signpath-module
+          git checkout "$WORKFLOW_SHA" -- config/scripts/resolve-7za-path.mjs config/scripts/generate-windows-blockmap.mjs
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+        if: github.run_attempt == 1
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+        if: github.run_attempt == 1
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |-
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-builder-win-
+        if: github.run_attempt == 1
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+        if: github.run_attempt == 1
+      - name: Install SignPath PowerShell module
+        if: github.run_attempt == 1
+        uses: ./.github/actions/install-signpath-module
+      - name: Restore original inner signing checkpoint
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/checkpoint.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: inner
+          MODE: restore
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: github.run_attempt == 1
+      - name: Download signed inner binaries
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/download.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: inner
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+        if: github.run_attempt == 1
+      - name: Restore signed inner binaries into unpacked app
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/restore-inner.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+        if: github.run_attempt == 1
+      - name: Replace cached elevate.exe with the signed copy
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/replace-elevate.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+        if: github.run_attempt == 1
+      - name: Rebuild NSIS installer from signed unpacked app
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/package-installer.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+        if: github.run_attempt == 1
+      - name: Upload unsigned Windows installer for SignPath
+        id: upload-unsigned-windows-installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-unsigned-${{ inputs.tag }}
+          path: dist/orca-windows-setup.exe
+          compression-level: 0
+          if-no-files-found: error
+        if: github.run_attempt == 1
+      - name: Submit Windows installer signing request
+        id: submit-signing-request
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: ${{ inputs.signing_policy }}
+          artifact-configuration-slug: github-actions-windows-installer
+          github-artifact-id: ${{ steps.upload-unsigned-windows-installer.outputs.artifact-id }}
+          wait-for-completion: false
+        if: github.run_attempt == 1
+      - name: Checkpoint installer signing request
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/checkpoint.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: installer
+          REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
+          MODE: save
+        if: github.run_attempt == 1
+      - name: Upload immutable installer signing checkpoint
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-signing-installer-${{ github.run_id }}-1-${{ steps.submit-signing-request.outputs.signing-request-id }}
+          path: |-
+            signing-checkpoint/checkpoint.json
+            signing-checkpoint/checkpoint.tar.gz
+          compression-level: 0
+          retention-days: 30
+          if-no-files-found: error
+        if: github.run_attempt == 1
+      - name: Notify Slack that Windows signing is waiting for approval
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SIGNPATH_ORGANIZATION_ID: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
+          SIGNPATH_REQUEST_URL: ${{ steps.submit-signing-request.outputs.signing-request-web-url }}
+          TAG: ${{ inputs.tag }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ inputs.source_sha }}
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INNER_SIGNING_SUBMITTED: 'true'
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
+          }
+
+          $requestUrl = $env:SIGNPATH_REQUEST_URL
+          if ([string]::IsNullOrWhiteSpace($requestUrl)) {
+            $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
+          }
+
+          # Why: releases where inner signing fell through have only this one request.
+          $stage = if ($env:INNER_SIGNING_SUBMITTED -eq 'true') { 'installer signing request (2 of 2)' } else { 'signing request' }
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
+          } else {
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` $stage is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
+          $payload = @{
+            text = $message
+            blocks = @(
+              @{
+                type = 'section'
+                text = @{
+                  type = 'mrkdwn'
+                  text = $message
+                }
+              }
+            )
+          } | ConvertTo-Json -Depth 5
+
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
+        continue-on-error: true
+        if: github.run_attempt == 1
+      - name: Restore original installer signing checkpoint
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/checkpoint.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: installer
+          MODE: restore
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: github.run_attempt != 1
+  finalize:
+    needs: package
+    environment:
+      name: ${{ inputs.environment_prefix }}-installer-signing
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Validate signing mode
+        shell: pwsh
+        env:
+          PUBLISH: ${{ inputs.publish }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          ENVIRONMENT_PREFIX: ${{ inputs.environment_prefix }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+        run: |-
+          $ErrorActionPreference = 'Stop'
+          if ($env:PUBLISH -eq 'true') {
+            if ($env:SIGNING_POLICY -ne 'release-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows') { throw 'Publication requires production signing gates.' }
+          } elseif ($env:SIGNING_POLICY -ne 'test-signing' -or $env:ENVIRONMENT_PREFIX -ne 'windows-rehearsal' -or $env:TEST_CERTIFICATE_THUMBPRINT -notmatch '^[a-fA-F0-9]{40}$') {
+            throw 'Rehearsal requires isolated gates and a pinned test certificate.'
+          }
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+      - name: Load signing control from the workflow commit
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/signing-control"
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git archive "$WORKFLOW_SHA" config/windows-signing | tar -x -C "$RUNNER_TEMP/signing-control"
+          git checkout "$WORKFLOW_SHA" -- .github/actions/install-signpath-module
+          git checkout "$WORKFLOW_SHA" -- config/scripts/resolve-7za-path.mjs config/scripts/generate-windows-blockmap.mjs
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |-
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: electron-builder-win-
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+      - name: Install SignPath PowerShell module
+        uses: ./.github/actions/install-signpath-module
+      - name: Restore original installer signing checkpoint
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/checkpoint.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: installer
+          MODE: restore
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download signed Windows installer
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/download.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+          STAGE: installer
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      - name: Verify signed Windows installer
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/verify-installer.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+      - name: Regenerate signed installer update metadata
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/update-metadata.ps1"'
+      - name: Verify Windows inner binary signatures
+        shell: pwsh
+        run: '& "$env:RUNNER_TEMP/signing-control/config/windows-signing/verify-inner.ps1"'
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNING_POLICY: ${{ inputs.signing_policy }}
+          TEST_CERTIFICATE_THUMBPRINT: ${{ vars.SIGNPATH_TEST_CERTIFICATE_THUMBPRINT }}
+      - name: Upload Windows inner signing evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-inner-signing-evidence-${{ inputs.tag }}-${{ github.run_attempt }}
+          path: |
+            inner-signing-evidence.txt
+            inner-signing-list.txt
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Publish signed Windows release artifacts
+        if: inputs.publish
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: gh release upload "${{ inputs.tag }}" "dist/orca-windows-setup.exe" "dist/orca-windows-setup.exe.blockmap" "dist/latest.yml" --clobber --repo "${{ github.repository }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify release remains draft after artifact upload
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          releases_json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100")"
+          # Why: release upload must validate the draft before it is publicly visible.
+          draft="$(jq -e -r --arg tag "$TAG" '
+            map(select(.tag_name == $tag))
+            | if length == 1 and (.[0].draft | type) == "boolean" then (.[0].draft | tostring) else empty end
+          ' <<<"$releases_json")" || {
+            echo "::error::Release $TAG was not found in the draft-aware releases list, or its draft state was missing."
+            exit 1
+          }
+          if [[ "$draft" != "true" ]]; then
+            echo "::error::Release $TAG was published during the Windows artifact upload."
+            exit 1
+          fi
+        if: inputs.publish
+      - name: Verify telemetry constants present in app.asar
+        run: node config/scripts/verify-telemetry-constants.mjs
+        if: inputs.publish
