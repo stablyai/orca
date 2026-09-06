@@ -2,7 +2,10 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import {
+  hasRenderableTerminalWorktreeSurface,
+  resolveTerminalWorktreeRoute
+} from '@/lib/terminal-worktree-route'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import {
@@ -14,6 +17,7 @@ import {
 export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onRequestTerminalCreate((data) => {
+      let createdTabId: string | undefined
       try {
         const store = useAppStore.getState()
         const worktreeId = data.worktreeId ?? store.activeWorktreeId
@@ -43,6 +47,16 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
               'auto.hooks.useIpcEvents.7a64b31991',
               'Local terminal creation is unavailable while a remote runtime is active'
             )
+          })
+          return
+        }
+        // Why: routing can accept repo metadata without a row that can mount the new pane.
+        if (!hasRenderableTerminalWorktreeSurface(store, worktreeId)) {
+          window.api.ui.replyTerminalCreate({
+            requestId: data.requestId,
+            errorCode: 'worktree_not_renderable',
+            error:
+              'This window has no terminal surface for the worktree. Show it in Non-Orca worktrees or select a visible workspace, then retry.'
           })
           return
         }
@@ -78,6 +92,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
         const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+        createdTabId = tab.id
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
@@ -142,6 +157,13 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           title: data.title ?? tab.title
         })
       } catch (err) {
+        if (createdTabId) {
+          // Why: failed creates must not leave a tab whose startup command can run later.
+          useAppStore.getState().closeTab(createdTabId, {
+            reason: 'cleanup',
+            recordInteraction: false
+          })
+        }
         window.api.ui.replyTerminalCreate({
           requestId: data.requestId,
           error: err instanceof Error ? err.message : 'Terminal creation failed'

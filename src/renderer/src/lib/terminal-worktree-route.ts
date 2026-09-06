@@ -3,6 +3,7 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral-se
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
+import { getIndexedWorktreeMap } from '../store/worktree-repo-index'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getRuntimeEnvironmentIdForWorktree,
@@ -13,6 +14,28 @@ import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-ow
 
 export type TerminalWorktreeRoute = {
   runtimeEnvironmentId: string | null
+}
+
+export function hasRenderableTerminalWorktreeSurface(
+  state: Pick<AppState, 'worktreesByRepo' | 'folderWorkspaces'>,
+  worktreeId: string | null | undefined
+): boolean {
+  if (!worktreeId) {
+    return false
+  }
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return true
+  }
+  const scope = parseWorkspaceKey(worktreeId)
+  if (scope?.type === 'folder') {
+    return (
+      state.folderWorkspaces?.some((workspace) => workspace.id === scope.folderWorkspaceId) ?? false
+    )
+  }
+  // Only the workbench's row index can host new tabs; detected rows and inline setup ids cannot.
+  return state.worktreesByRepo
+    ? getIndexedWorktreeMap(state.worktreesByRepo).has(worktreeId)
+    : false
 }
 
 /**
