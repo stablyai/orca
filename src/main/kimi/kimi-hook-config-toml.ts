@@ -26,13 +26,22 @@ const BLOCK_START = '# >>> orca-managed-kimi-hooks (managed by Orca; do not edit
 const BLOCK_END = '# <<< orca-managed-kimi-hooks <<<'
 
 // Matches the managed block plus any blank lines immediately preceding it so
-// repeated install/remove cycles do not accumulate whitespace. The `|$`
-// fallback also matches from BLOCK_START to end-of-file when the trailing
-// BLOCK_END marker is missing (e.g. a hand-edit deleted it): the managed block
-// is always written last, so this recovers orphaned hook tables and lets
-// install re-converge in one step instead of appending a duplicate block.
+// repeated install/remove cycles do not accumulate whitespace. Two shapes:
+// 1. The complete block, from BLOCK_START through the trailing BLOCK_END line.
+// 2. An orphaned block whose trailing BLOCK_END was hand-deleted: recovery is
+//    bounded to the contiguous installer-shaped `[[hooks]]` tables (header +
+//    event/command/timeout lines), so user TOML appended after the orphaned
+//    tables survives remove/reinstall instead of being swallowed to EOF (#18861).
+//    A user table that happens to mirror the exact installer shape remains
+//    indistinguishable by form alone — stopping at the first non-managed table
+//    is the accepted bound of orphan recovery.
+const MANAGED_HOOK_TABLE =
+  '\\[\\[hooks\\]\\]\\n' +
+  'event\\s*=\\s*"[^"\\n]*"\\n' +
+  'command\\s*=\\s*"(?:[^"\\\\]|\\\\.)*"\\n' +
+  'timeout\\s*=\\s*\\d+'
 const MANAGED_BLOCK_RE = new RegExp(
-  `\\n*${escapeRegex(BLOCK_START)}[\\s\\S]*?(?:${escapeRegex(BLOCK_END)}[^\\n]*|$)`,
+  `\\n*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\n(?:${MANAGED_HOOK_TABLE}(?:\\n|$))+)`,
   'g'
 )
 

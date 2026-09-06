@@ -100,6 +100,38 @@ describe('kimi managed hooks TOML block', () => {
     expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
   })
 
+  it('preserves user TOML appended after an orphaned block (#18861)', () => {
+    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+    // User appends their own hook table and tool table after the block, then
+    // the trailing BLOCK_END marker is lost to a hand-edit.
+    const orphanedWithUserTail = installed
+      .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, '\n')
+      .concat(
+        '[[hooks]]\n',
+        'event = "SessionStart"\n',
+        'command = "node my-own-hook.mjs"\n',
+        '\n',
+        '[[tools]]\n',
+        'name = "user-tool"\n'
+      )
+
+    // Remove strips the orphaned installer-shaped tables and nothing else.
+    const removed = removeManagedKimiHooks(orphanedWithUserTail)
+    expect(removed.changed).toBe(true)
+    expect(removed.text).toContain('event = "SessionStart"')
+    expect(removed.text).toContain('node my-own-hook.mjs')
+    expect(removed.text).toContain('[[tools]]')
+    expect(removed.text).toContain('name = "user-tool"')
+    expect(removed.text).not.toContain('orca-managed-kimi-hooks')
+    expect(removed.text).not.toContain(COMMAND)
+
+    // Reinstall still converges to one block and keeps the user tail intact.
+    const reinstalled = applyManagedKimiHooks(orphanedWithUserTail, COMMAND)
+    expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
+    expect(reinstalled).toContain('name = "user-tool"')
+    expect(reinstalled).toContain('node my-own-hook.mjs')
+  })
+
   it('treats stale managed entries pointing at a moved script path as managed', () => {
     const staleCommand =
       "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"
