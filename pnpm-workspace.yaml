@@ -10,6 +10,7 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - pdfjs-dist@6.3.289
   - zod@4.5.4
+  - '@pierre/diffs@1.4.1'
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via

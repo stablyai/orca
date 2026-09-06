@@ -10,7 +10,12 @@ export default defineConfig({
   resolve: {
     alias: {
       '@renderer': resolve('src/renderer/src'),
-      '@': resolve('src/renderer/src')
+      '@': resolve('src/renderer/src'),
+      // Why: Vitest doesn't implement Vite's `?worker` transform, so the real
+      // import resolves to a non-constructor and the pool rejects on mount.
+      '@pierre/diffs/worker/worker.js?worker': resolve(
+        'config/test-stubs/pierre-diffs-worker-stub.ts'
+      )
     }
   },
   test: {

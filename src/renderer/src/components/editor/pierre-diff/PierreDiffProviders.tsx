@@ -4,10 +4,9 @@ import { PierreDiffEditProvider } from './pierre-diff-editor-provider'
 /**
  * Wraps a diff surface with the Shiki worker pool and the editor factory.
  *
- * KNOWN BLOCKER: @pierre/diffs 1.3.6 does not survive React StrictMode's
- * mount/unmount/mount. Its shadow DOM is never committed on the second mount,
- * so every diff renders blank in dev. Verified by toggling StrictMode alone,
- * with and without the worker pool. Production builds do not run StrictMode.
+ * Requires @pierre/diffs >= 1.4.0. In 1.3.6 nothing rendered under React
+ * StrictMode: the shadow DOM was never committed on the remount, so every diff
+ * was blank in dev. Do not downgrade below 1.4.
  */
 export function PierreDiffProviders({
   children

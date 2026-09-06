@@ -305,73 +305,73 @@ export function PRFilesCombinedDiffViewer({
 
   return (
     <PierreDiffProviders>
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
-      <PRFilesDiffToolbar
-        files={files}
-        fileTreeCollapsed={fileTreeCollapsed}
-        allSectionsCollapsed={allSectionsCollapsed}
-        sideBySide={sideBySide}
-        onShowFileTree={() => setFileTreeCollapsed(false)}
-        onToggleAllCollapsed={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
-        onToggleSideBySide={() => setSideBySide((prev) => !prev)}
-      />
-      <div className="flex min-h-0 flex-1">
-        <CombinedDiffFileTree
-          mode="commit"
-          worktreePath={repoPath}
-          entries={entries}
-          sectionIndexByKey={sectionIndexByKey}
-          activeSectionKey={visibleActiveTreeSectionKey}
-          viewedSectionKeys={viewedSectionKeys}
-          collapsed={fileTreeCollapsed}
-          onCollapsedChange={setFileTreeCollapsed}
-          onNavigate={handleTreeNavigate}
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+        <PRFilesDiffToolbar
+          files={files}
+          fileTreeCollapsed={fileTreeCollapsed}
+          allSectionsCollapsed={allSectionsCollapsed}
+          sideBySide={sideBySide}
+          onShowFileTree={() => setFileTreeCollapsed(false)}
+          onToggleAllCollapsed={() => setAllSectionsCollapsed(!allSectionsCollapsed)}
+          onToggleSideBySide={() => setSideBySide((prev) => !prev)}
         />
-        <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
-          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const section = sections[virtualItem.index]
-              if (!section) {
-                return null
-              }
-              return (
-                <div
-                  key={virtualItem.key}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute left-0 top-0 w-full"
-                  style={{ top: `${virtualItem.start}px` }}
-                >
-                  <DiffSectionItem
-                    section={section}
-                    index={virtualItem.index}
-                    isBranchMode={false}
-                    sideBySide={sideBySide}
-                    settings={settings}
-                    sectionHeight={sectionHeights[virtualItem.index]}
-                    worktreeId={`github-pr:${repoId}:${prNumber}`}
-                    inlineComments={inlineReviewComments}
-                    loadSection={loadSection}
-                    retrySection={retrySection}
-                    toggleSection={toggleSection}
-                    openSection={openFilesOnGitHub}
-                    openSectionTitle="Open files on GitHub"
-                    renderHeaderTrailingContent={renderViewedCheckbox}
-                    onAddLineComment={handleAddLineComment}
-                    addLineCommentLabel="Comment"
-                    addLineCommentPlaceholder="Add a review comment"
-                    getCommentableLineNumbers={getCommentableLineNumbers}
-                    setSectionHeights={setSectionHeights}
-                    setSections={setSections}
-                    handleSectionSaveRef={handleSectionSaveRef}
-                  />
-                </div>
-              )
-            })}
+        <div className="flex min-h-0 flex-1">
+          <CombinedDiffFileTree
+            mode="commit"
+            worktreePath={repoPath}
+            entries={entries}
+            sectionIndexByKey={sectionIndexByKey}
+            activeSectionKey={visibleActiveTreeSectionKey}
+            viewedSectionKeys={viewedSectionKeys}
+            collapsed={fileTreeCollapsed}
+            onCollapsedChange={setFileTreeCollapsed}
+            onNavigate={handleTreeNavigate}
+          />
+          <div ref={scrollContainerRef} className="min-w-0 flex-1 overflow-auto scrollbar-editor">
+            <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const section = sections[virtualItem.index]
+                if (!section) {
+                  return null
+                }
+                return (
+                  <div
+                    key={virtualItem.key}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ top: `${virtualItem.start}px` }}
+                  >
+                    <DiffSectionItem
+                      section={section}
+                      index={virtualItem.index}
+                      isBranchMode={false}
+                      sideBySide={sideBySide}
+                      settings={settings}
+                      sectionHeight={sectionHeights[virtualItem.index]}
+                      worktreeId={`github-pr:${repoId}:${prNumber}`}
+                      inlineComments={inlineReviewComments}
+                      loadSection={loadSection}
+                      retrySection={retrySection}
+                      toggleSection={toggleSection}
+                      openSection={openFilesOnGitHub}
+                      openSectionTitle="Open files on GitHub"
+                      renderHeaderTrailingContent={renderViewedCheckbox}
+                      onAddLineComment={handleAddLineComment}
+                      addLineCommentLabel="Comment"
+                      addLineCommentPlaceholder="Add a review comment"
+                      getCommentableLineNumbers={getCommentableLineNumbers}
+                      setSectionHeights={setSectionHeights}
+                      setSections={setSections}
+                      handleSectionSaveRef={handleSectionSaveRef}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </PierreDiffProviders>
   )
 }

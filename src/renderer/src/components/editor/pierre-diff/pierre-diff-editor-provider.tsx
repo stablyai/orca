@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
 import { EditProvider } from '@pierre/diffs/react'
-import type { CreateEditor } from '@pierre/diffs/react'
-import type { DiffsEditor } from '@pierre/diffs'
-import { Editor, type EditorOptions } from '@pierre/diffs/edit'
+import type { EditorFactory } from '@pierre/diffs/react'
+import { Editor } from '@pierre/diffs/edit'
+import type { PierreDiffAnnotationData } from './pierre-diff-comment-annotations'
 
 /**
  * Supplies the editor factory every editable diff surface pulls from. Pierre
@@ -14,10 +14,14 @@ export function PierreDiffEditProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
-  const createEditor = useCallback<CreateEditor<undefined>>(
-    (options: EditorOptions<undefined>): DiffsEditor<undefined> => new Editor(options),
+  const createEditor = useCallback<EditorFactory<PierreDiffAnnotationData, undefined>>(
+    (editorType, options, editStateKey) => new Editor(editorType, options, editStateKey),
     []
   )
 
-  return <EditProvider createEditor={createEditor}>{children}</EditProvider>
+  return (
+    <EditProvider<PierreDiffAnnotationData, undefined> createEditor={createEditor}>
+      {children}
+    </EditProvider>
+  )
 }

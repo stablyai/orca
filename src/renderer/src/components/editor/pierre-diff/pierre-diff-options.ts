@@ -36,7 +36,7 @@ export function buildPierreDiffOptions<LAnnotation>({
   settings?: PierreDiffSettings | null
   sideBySide: boolean
   collapsed?: boolean
-}): FileDiffOptions<LAnnotation> {
+}): FileDiffOptions<LAnnotation, undefined> {
   return {
     diffStyle: sideBySide ? 'split' : 'unified',
     themeType: settings?.theme ?? 'system',

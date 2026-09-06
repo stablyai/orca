@@ -101,10 +101,11 @@ export function PierreDiffSurface({
     () => buildPierreDiffCommentAnnotations(comments, pendingComment),
     [comments, pendingComment]
   )
-  const editorOptions = useMemo<EditorOptions<PierreDiffAnnotationData>>(
+  const editorOptions = useMemo<EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>>(
     () => ({
       onAttach: handleEditorAttach,
-      onChange: (file) => onEditChange?.(file)
+      // Why: 1.4 delivers a change event; the live document is on `.file`.
+      onChange: (event) => onEditChange?.(event.file)
     }),
     [handleEditorAttach, onEditChange]
   )
