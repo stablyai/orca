@@ -1,5 +1,4 @@
 import { mkdirSync } from 'node:fs'
-import { cpus, loadavg } from 'node:os'
 import { dirname } from 'node:path'
 import type {
   AiVaultSearchArgs,
@@ -28,57 +27,23 @@ import {
   registerSessionSearchIndexSink,
   withSessionSearchIndexRequired
 } from '../ai-vault/session-search-capture'
+import { backfillPauseMs } from './session-search-backfill-pacing'
 import { removeSessionSearchDatabase } from './session-search-schema'
 import { SessionSearchStore } from './session-search-store'
 
 // Why: the backfill shares the scanner process's cache lane with list scans,
 // so it yields between files and never holds the lane for long.
 const BACKFILL_YIELD_EVERY_FILES = 8
-const BACKFILL_YIELD_MS = 5
 // Why: a search must see a session that is being written right now even when
 // no list scan has run; re-reading the newest few files per provider is a
 // readdir + stat plus the appended bytes, well under the query budget.
 const REFRESH_RECENT_PER_AGENT = 12
-// Why: the backfill is the one CPU-heavy thing this feature does, and it runs
-// unasked. When the host is already saturated it backs off in coarse steps
-// instead of competing; the per-file cursor makes every pause free.
-const BACKFILL_LOAD_PER_CPU_CEILING = 1.5
-const BACKFILL_LOAD_PAUSE_MS = 15_000
-
 /** null (all history) is the widest bound; otherwise more days means wider. */
 function widensHistory(previous: number | null, next: number | null): boolean {
   if (previous === null) {
     return false
   }
   return next === null || next > previous
-}
-
-// Why: Windows reports a zero load average, so the only signal left is the
-// scanner's own recent CPU share; back off when it has been near a full core.
-const WINDOWS_SELF_CPU_SHARE_CEILING = 0.8
-let lastCpuSample: { usage: NodeJS.CpuUsage; at: number } | null = null
-
-function selfCpuShareSinceLastYield(): number {
-  const now = performance.now()
-  const usage = process.cpuUsage()
-  const previous = lastCpuSample
-  lastCpuSample = { usage, at: now }
-  if (!previous) {
-    return 0
-  }
-  const busyMs = (usage.user - previous.usage.user + usage.system - previous.usage.system) / 1000
-  const elapsedMs = Math.max(1, now - previous.at)
-  return busyMs / elapsedMs
-}
-
-function backfillPauseMs(): number {
-  if (process.platform === 'win32') {
-    return selfCpuShareSinceLastYield() > WINDOWS_SELF_CPU_SHARE_CEILING
-      ? BACKFILL_LOAD_PAUSE_MS
-      : BACKFILL_YIELD_MS
-  }
-  const perCpu = loadavg()[0] / Math.max(1, cpus().length)
-  return perCpu > BACKFILL_LOAD_PER_CPU_CEILING ? BACKFILL_LOAD_PAUSE_MS : BACKFILL_YIELD_MS
 }
 
 export type SessionSearchServiceOptions = { databasePath: string } & AiVaultSearchSettings
@@ -109,6 +74,8 @@ export class SessionSearchService {
   private policy: AiVaultSearchSettings
   private store: SessionSearchStore | null = null
   private backfillRun: Promise<void> | null = null
+  private searchesInFlight = 0
+  private releaseBackfill: (() => void) | null = null
   private backfillController: AbortController | null = null
 
   constructor(options: SessionSearchServiceOptions) {
@@ -130,12 +97,32 @@ export class SessionSearchService {
       return { hits: [], route: 'and', durationMs: 0, coverage: DISABLED_COVERAGE }
     }
     const backfill = this.ensureBackfill(roots)
-    if (args.refresh !== false) {
-      await this.refreshRecent(roots, signal)
-      await this.reindexStale(signal)
+    // Why: the backfill parses in this same process and an 80 MB transcript
+    // blocks it for ~170 ms; a search waiting behind a run of those read as a
+    // 1.5 s query. Holding the backfill for the search's duration keeps the
+    // query at its own cost.
+    this.searchesInFlight += 1
+    try {
+      if (args.refresh !== false) {
+        await this.refreshRecent(roots, signal)
+        await this.reindexStale(signal)
+      }
+      void backfill
+      return store.search(args)
+    } finally {
+      this.searchesInFlight -= 1
+      this.releaseBackfill?.()
     }
-    void backfill
-    return store.search(args)
+  }
+
+  /** Resolves once no search is in flight; the backfill checks this between files. */
+  private async waitForIdleSearches(): Promise<void> {
+    while (this.searchesInFlight > 0) {
+      await new Promise<void>((resolve) => {
+        this.releaseBackfill = resolve
+      })
+      this.releaseBackfill = null
+    }
   }
 
   /** Observational only: reading coverage must never be what starts an index build. */
@@ -219,6 +206,7 @@ export class SessionSearchService {
   /** Waits for the aborted backfill so its last parse cannot write to a closed store. */
   private async stop(options: { keepStore?: boolean } = {}): Promise<void> {
     this.backfillController?.abort()
+    this.releaseBackfill?.()
     const run = this.backfillRun
     this.backfillRun = null
     if (run) {
@@ -294,7 +282,7 @@ export class SessionSearchService {
       })
       const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
       this.recordDiscovered(discoveries, issues)
-      await this.parseAll(this.withinHistory(candidates), signal)
+      await this.parseAll(this.withinHistory(candidates), signal, { yieldToSearches: true })
       store.setBackfillState('complete')
     } catch (error) {
       this.store?.setBackfillState('idle')
@@ -322,7 +310,11 @@ export class SessionSearchService {
     }
   }
 
-  private async parseAll(candidates: SessionFileCandidate[], signal?: AbortSignal): Promise<void> {
+  private async parseAll(
+    candidates: SessionFileCandidate[],
+    signal?: AbortSignal,
+    options: { yieldToSearches?: boolean } = {}
+  ): Promise<void> {
     const stats = createSessionParseStats()
     let sinceYield = 0
     await withSessionSearchIndexRequired(async () => {
@@ -337,6 +329,10 @@ export class SessionSearchService {
         } catch (error) {
           this.store?.recordParseFailure(candidate.agent)
           console.warn('[ai-vault-search] backfill skipped', candidate.file.path, error)
+        }
+        if (options.yieldToSearches && this.searchesInFlight > 0) {
+          await this.waitForIdleSearches()
+          throwIfAiVaultScanCancelled(signal)
         }
         sinceYield += 1
         if (sinceYield >= BACKFILL_YIELD_EVERY_FILES) {

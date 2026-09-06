@@ -249,17 +249,30 @@ export class SessionSearchQuery {
   // so a hit found through typo repair is marked with the repaired terms.
   private snippet(table: string, rowid: number, plan: SessionSearchQueryPlan): string {
     const expression = orExpression(plan.terms)
+    // Why: the identifier shadow column is word soup; a hit that also matches
+    // in a prose column should be shown from there. Column -1 (any column) is
+    // the fallback for rows that only matched through the shadow column.
+    const columns = table === 'messages_fts' ? [0, 1, 2, -1] : [0, 1, -1]
+    const select = columns
+      .map(
+        (column, index) =>
+          `snippet(${table}, ${column}, '${SNIPPET_MARK_OPEN}', '${SNIPPET_MARK_CLOSE}', '…', ${SNIPPET_TOKENS}) AS c${index}`
+      )
+      .join(', ')
     try {
       // Why: a bound `rowid = ?` or `rowid IN (?)` next to MATCH is silently
       // ignored by the FTS5 planner (it returns the first match); only the
-      // subselect form is honoured. Column -1 picks whichever column matched.
+      // subselect form is honoured.
       const row = this.db
-        .prepare(
-          `SELECT snippet(${table}, -1, '${SNIPPET_MARK_OPEN}', '${SNIPPET_MARK_CLOSE}', '…', ${SNIPPET_TOKENS}) AS s
-           FROM ${table} WHERE ${table} MATCH ? AND rowid IN (SELECT ?)`
-        )
-        .get(expression, rowid) as { s: string } | undefined
-      return row?.s ?? ''
+        .prepare(`SELECT ${select} FROM ${table} WHERE ${table} MATCH ? AND rowid IN (SELECT ?)`)
+        .get(expression, rowid) as Record<string, string> | undefined
+      if (!row) {
+        return ''
+      }
+      // A snippet with nothing highlighted tells the user nothing; omit it.
+      return (
+        columns.map((_, index) => row[`c${index}`]).find((s) => s.includes(SNIPPET_MARK_OPEN)) ?? ''
+      )
     } catch {
       return ''
     }

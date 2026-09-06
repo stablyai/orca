@@ -182,4 +182,48 @@ describe('SessionSearchStore.search snippets', () => {
     expect(result.hits[1]?.evidence.snippet).toContain('marmoset')
     store.close()
   })
+
+  it('shows the prose column, not the identifier shadow, when both match', async () => {
+    const root = await makeTempDir()
+    const store = new SessionSearchStore(join(root, 'index.sqlite'), (error) => {
+      throw error
+    })
+    registerSessionSearchIndexSink(store)
+    const path = join(root, 'aaaaaaaa-0000-4000-8000-0000000000b1.jsonl')
+    // The shadow column holds "resolve terminal path" with both query terms
+    // adjacent; in the prose they sit further apart than one snippet window,
+    // so column -1 scores the shadow higher and would show word soup.
+    await writeFile(
+      path,
+      `${userRecord(0, 'resolveTerminalPath is broken and the terminal never comes up for a pane, which is odd because every other pane on this host resolves its path', 'aaaaaaaa-0000-4000-8000-0000000000b1')}\n`
+    )
+    await parse(path)
+
+    const snippet = store.search({ query: 'terminal path' }).hits[0]?.evidence.snippet ?? ''
+    expect(snippet).toContain('[[')
+    expect(snippet).not.toContain('resolveterminalpath')
+    expect(snippet).not.toContain('resolve [[terminal]] [[path]]')
+    store.close()
+  })
+
+  it('omits a snippet that carries no highlighted term', async () => {
+    const root = await makeTempDir()
+    const store = new SessionSearchStore(join(root, 'index.sqlite'), (error) => {
+      throw error
+    })
+    registerSessionSearchIndexSink(store)
+    const path = join(root, 'aaaaaaaa-0000-4000-8000-0000000000b2.jsonl')
+    await writeFile(
+      path,
+      `${userRecord(0, 'nothing in prose mentions it, only the id kern.tty.ptmx_max does', 'aaaaaaaa-0000-4000-8000-0000000000b2')}\n`
+    )
+    await parse(path)
+
+    // "ptmx" exists only in the identifier shadow column; the fallback column
+    // still highlights it, so the snippet is kept. A query the row matches via
+    // typo repair alone has nothing to highlight and yields ''.
+    const shadowHit = store.search({ query: 'ptmx' }).hits[0]
+    expect(shadowHit?.evidence.snippet).toContain('[[ptmx]]')
+    store.close()
+  })
 })

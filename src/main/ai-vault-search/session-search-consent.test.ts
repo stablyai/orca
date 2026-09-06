@@ -205,6 +205,21 @@ describe('SessionSearchService consent gate', () => {
     expect(result.hits.map((hit) => hit.sessionId)).toContain('ancient-session')
   })
 
+  it('parks the backfill while a search is in flight', async () => {
+    const { roots, databasePath } = await scanRoots()
+    for (let i = 0; i < 24; i += 1) {
+      await writeClaudeTranscript(roots, `bulk-session-${i}`, 'the vacuum quota never settles')
+    }
+    const service = makeService(databasePath, { enabled: true, historyDays: null })
+    const backfill = service.ensureBackfill(roots)
+    const indexedBeforeSearch = service.coverage().sessionsIndexed
+    // While this search runs the backfill must not advance past the file it is on.
+    const during = await service.search({ query: 'vacuum', refresh: false }, roots)
+    expect(during.coverage.sessionsIndexed).toBeLessThanOrEqual(indexedBeforeSearch + 1)
+    await backfill
+    expect(service.coverage().sessionsIndexed).toBe(24)
+  })
+
   it('skips transcripts older than the history bound', async () => {
     const { roots, databasePath } = await scanRoots()
     await writeClaudeTranscript(roots, 'recent-session', 'the vacuum quota never settles', 1)
