@@ -689,34 +689,36 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
  
      auto status = tsfn.BlockingCall(exit_event, callback); // In main thread
      switch (status) {
-@@ -242,6 +294,18 @@
+@@ -242,6 +294,20 @@
    return HRESULT_FROM_WIN32(GetLastError());
  }
  
-+// MSYS automatically escapes any job that advertises breakaway support.
-+static bool isMsysShell(const std::wstring& shellpath) {
++// Cygwin and MSYS request breakaway for every child whenever the job allows it,
++// so their shells need one that does not. The runtime DLL on the exe's search
++// path is the signal; Git for Windows ships bash.exe in bin\ beside usr\bin\.
++static bool usesCygwinRuntime(const std::wstring& shellpath) {
 +  const size_t separator = shellpath.find_last_of(L"\\/");
 +  if (separator == std::wstring::npos) return false;
-+  const std::wstring name = shellpath.substr(separator + 1);
-+  if (_wcsicmp(name.c_str(), L"bash.exe") != 0 &&
-+      _wcsicmp(name.c_str(), L"sh.exe") != 0) return false;
 +  const std::wstring directory = shellpath.substr(0, separator + 1);
-+  return path_util::file_exists(directory + L"msys-2.0.dll") ||
-+         path_util::file_exists(directory + L"..\\usr\\bin\\msys-2.0.dll");
++  for (const wchar_t* dll : {L"msys-2.0.dll", L"cygwin1.dll"}) {
++    if (path_util::file_exists(directory + dll) ||
++        path_util::file_exists(directory + L"..\\usr\\bin\\" + dll)) return true;
++  }
++  return false;
 +}
 +
  static Napi::Value PtyStartProcess(const Napi::CallbackInfo& info) {
    Napi::Env env(info.Env());
    Napi::HandleScope scope(env);
-@@ -303,6 +367,7 @@
+@@ -303,6 +369,7 @@
      marshal.Set("pty", Napi::Number::New(env, ptyId));
      ptyHandles.emplace_back(
          std::make_unique<pty_baton>(ptyId, hIn, hOut, hpc));
-+    ptyHandles.back()->allowJobBreakaway = !isMsysShell(shellpath);
++    ptyHandles.back()->allowJobBreakaway = !usesCygwinRuntime(shellpath);
    } else {
      throw Napi::Error::New(env, "Cannot launch conpty");
    }
-@@ -409,6 +474,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -409,6 +476,15 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "UpdateProcThreadAttribute failed");
    }
  
@@ -732,7 +734,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
    PROCESS_INFORMATION piClient{};
    fSuccess = !!CreateProcessW(
        nullptr,
-@@ -416,7 +490,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -416,7 +492,10 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
        nullptr,                      // lpProcessAttributes
        nullptr,                      // lpThreadAttributes
        false,                        // bInheritHandles VERY IMPORTANT that this is false
@@ -744,7 +746,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
        envArg,                       // lpEnvironment
        mutableCwd.get(),             // lpCurrentDirectory
        &siEx.StartupInfo,            // lpStartupInfo
-@@ -426,8 +503,48 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -426,8 +505,48 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
      throw errorWithCode(info, "Cannot create process");
    }
  
@@ -763,9 +765,9 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
 +  HANDLE hJob = CreateJobObjectW(nullptr, nullptr);
 +  if (hJob != nullptr) {
 +    // Native shells retain explicit breakaway for installers and updaters.
-+    // MSYS requests breakaway automatically for ordinary children whenever
-+    // this flag is present, so its shells need strict per-PTY membership.
-+    // Explicit breakaway requests inside an MSYS pane are consequently denied;
++    // Cygwin/MSYS shells take it automatically for ordinary children whenever
++    // this flag is present, so they get strict per-PTY membership instead.
++    // Explicit breakaway requests inside such a pane are consequently denied;
 +    // ordinary backgrounding and clean shell exit remain supported.
 +    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobLimits{};
 +    jobLimits.BasicLimitInformation.LimitFlags =
@@ -795,7 +797,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
    if (useConptyDll && fLoadedDll)
    {
      PFNRELEASEPSEUDOCONSOLE const pfnReleasePseudoConsole = (PFNRELEASEPSEUDOCONSOLE)GetProcAddress(
-@@ -440,6 +557,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
+@@ -440,6 +559,8 @@ static Napi::Value PtyConnect(const Napi::CallbackInfo& info) {
  
    // Update handle
    handle->hShell = piClient.hProcess;
@@ -804,7 +806,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
  
    // Close the thread handle to avoid resource leak
    CloseHandle(piClient.hThread);
-@@ -544,27 +663,213 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,27 +665,213 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -1034,7 +1036,7 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
  }
  
  /**
-@@ -577,6 +882,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +884,9 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
