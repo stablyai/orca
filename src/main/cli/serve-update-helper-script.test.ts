@@ -106,6 +106,13 @@ describe('serve update helper script', () => {
     // The later install step must not re-copy from the (mutable) cache path.
     const installSection = script.slice(script.indexOf('systemctl stop "$UNIT_NAME"'))
     expect(installSection).not.toContain('cp -- "$ARTIFACT_PATH"')
+    // Cheap pre-acceptance checks run before the copy so a refused downgrade or
+    // no-op never pays the staging cost or leaves a stale .new file behind.
+    const downgradeAt = script.indexOf('refusing downgrade')
+    const noOpAt = script.indexOf('already at version')
+    expect(downgradeAt).toBeGreaterThan(-1)
+    expect(downgradeAt).toBeLessThan(cpAt)
+    expect(noOpAt).toBeLessThan(cpAt)
   })
 
   it('echoes the per-attempt attemptId in accepted and ok verdicts', () => {
