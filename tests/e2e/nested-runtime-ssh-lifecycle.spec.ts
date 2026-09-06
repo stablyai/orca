@@ -750,6 +750,18 @@ test('restores a paired nested SSH route after the HUB restarts', async ({
     expect(afterRestart.runtimeOwnerEnvironmentId).toBe(client.environmentId)
     expect(afterRestart.ptyId).toContain(encodeURIComponent(client.environmentId))
     expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
+    const nextOffer = await createRuntimeDesktopPairingOffer(hubLaunch.page)
+    const replacement = await client.replacePairingInPlace(nextOffer)
+    expect(replacement.environmentId).toBe(client.environmentId)
+    expect(replacement.nextPairingRevision).toBeGreaterThan(replacement.previousPairingRevision)
+    const afterCredentialReplacement = await assertInteractiveTerminal(
+      client,
+      remote.repoId,
+      `HUB_REPAIR_REPLACE_${Date.now()}`,
+      { waitForReconnectReady: true }
+    )
+    expect(afterCredentialReplacement.runtimeOwnerEnvironmentId).toBe(client.environmentId)
+    expect(await client.getDirectSshAttemptTargetIds()).toEqual([])
   } finally {
     await client?.dispose()
     if (hubLaunch) {
