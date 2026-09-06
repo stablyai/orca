@@ -3,6 +3,7 @@ import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
 import { startLocalWorker } from './orchestration-local-worker-start'
 import { WorkerStartParams } from './orchestration-worker-start-schema'
+import { taskNotFoundError } from '../../orchestration/task-dispatch-refusal'
 import { resolveOrchestrationCaller } from './orchestration-run-scope'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -44,10 +45,10 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       const task = db.getTask(params.task)
       if (!task || task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${params.task} was not found in Run ${run.id}.`
-        )
+        throw taskNotFoundError(`Task ${params.task} was not found in Run ${run.id}.`, {
+          taskId: params.task,
+          runId: run.id
+        })
       }
 
       const mode = decideWorkerStartMode({

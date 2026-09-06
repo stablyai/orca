@@ -78,6 +78,34 @@ describe('createMainWindow', () => {
     }
   }
 
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'keeps explicit background startup hidden through ready/load/fallback on %s',
+    (platform) => {
+      vi.useFakeTimers()
+      vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+      const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+      const showInactive = vi.fn()
+      Object.assign(browserWindowInstance, { showInactive })
+      try {
+        withPlatform(platform, () => {
+          createMainWindow(createStartupRevealStore(true) as never, { revealOnDidFinishLoad: true })
+          const revealAfterLoad = browserWindowInstance.webContents.on.mock.calls.find(
+            ([event]) => event === 'did-finish-load'
+          )?.[1]
+          expect(revealAfterLoad).toBeTypeOf('function')
+          revealAfterLoad?.()
+          windowHandlers['ready-to-show']()
+          vi.advanceTimersByTime(10_000)
+          expect(browserWindowInstance.show).not.toHaveBeenCalled()
+          expect(showInactive).not.toHaveBeenCalled()
+          expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+        })
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    }
+  )
+
   it('ignores duplicate ready-to-show events after startup maximize has already run', () => {
     const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
 

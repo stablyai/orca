@@ -166,7 +166,8 @@ What remains is `-EncodedCommand` without the bypass: the PTY bootstraps
 `src/main/providers/windows-shell-args.ts`), the hook wrappers
 (`src/main/agent-hooks/windows-powershell-hook-launcher.ts` and its callers
 `src/main/agent-hooks/runtime-home-hook-command.ts`,
-`src/main/agent-hooks/installer-utils.ts`, `src/main/claude/hook-settings.ts`),
+`src/main/agent-hooks/installer-utils.ts`, and `src/main/claude/hook-settings.ts`
+— that last one only as a *fallback* since #18875, see below),
 `src/main/runtime/windows-default-route-interfaces.ts`,
 `src/main/runtime/orchestration/setup-completion-signal.ts`,
 `src/shared/hermes-startup-query.ts`, and the four ex-bypass sites above.
@@ -241,6 +242,41 @@ Nothing here is avoidable in principle. What is controllable is depth and
 breadth: every interpreter hop between Orca and the thing the user asked for adds
 a scored edge, which is why the shipped doctrine of #15520 and #15595 is to
 *shorten the interpreter chain* rather than to hide a window.
+
+#18875 is a worked example of that doctrine. The Claude Code lifecycle hook was
+registered as `powershell.exe -NoProfile -EncodedCommand <...>` whose entire
+decoded payload was a `Test-Path` and a call to `~/.orca/agent-hooks/claude-hook.cmd`.
+It now registers the script path itself (`<path> || echo {}`), so `bash ->
+powershell -> cmd -> curl` became `bash -> cmd -> curl` and one
+`powershell.exe -EncodedCommand` per hook event — a first-class Defender alert
+title — leaves the tree. The reporting box fired ~6 900 of them in five days,
+70% from Claude sessions that were not running under Orca at all and whose hook
+exits at its first `ORCA_PANE_KEY` guard.
+
+What is measured is latency and the hop count, nothing else: median 471 ms ->
+213 ms per event idle, and 656 ms -> 296 ms (p95 696 ms -> 337 ms) under 10-way
+concurrency, invoked as Claude Code invokes it. **No EDR verdict on either tree
+was measured**, so claim the removed `-EncodedCommand` spelling and the shorter
+chain, not a score. `cmd.exe` remains in the tree, spelled by MSYS's own `.cmd`
+spawn rather than by us — the doc's one "unavoidable for `.cmd`/`.bat`" case,
+carrying an absolute path and two literal tokens, with no caret escaping, no
+encoding and no free text. The encoded launcher is still the shape for profile
+paths the shells cannot carry bare (a space, `%`, `^`, `&`, non-ASCII, a UNC
+profile) and for hosts where Git Bash is not resolvable, because PowerShell 5.1
+rejects `||` (measured: parse error, exit 1).
+
+That last clause is the standing assumption of this change, and it is worth
+stating plainly because it is **not** measured. `||` parses in Git Bash, cmd.exe
+and pwsh, but not in Windows PowerShell 5.1, so the direct shape is correct for
+any host that is one of the first three. Claude Code itself is a Git Bash host on
+native Windows. What no one here has verified is which host a *compat consumer*
+uses: cursor-agent and Devin import `~/.claude/settings.json` and run `command`
+through their own launcher (the managed `.cmd` carries a `DEVIN_PROJECT_DIR` skip
+for exactly that). If one of them spawns hook strings through Windows PowerShell
+5.1, its imported Claude events become a parse error with empty stdout, which is
+the fail-closed case #14818 exists to prevent. The encoded launcher had no such
+assumption — it was a `powershell.exe` invocation and therefore parsed anywhere.
+Before widening the direct shape to another agent, measure that consumer's host.
 
 ### Computer use: screen capture, synthetic input, runtime-compiled MSIL
 
