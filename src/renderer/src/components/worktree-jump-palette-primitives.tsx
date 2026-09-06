@@ -124,28 +124,35 @@ export function PaletteOpenTabPrimaryLine({
         </>
       ) : null}
       {additionalSecondaryMatches.length ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span
-              aria-label={additionalSecondaryMatches.map((match) => match.text).join(', ')}
-              tabIndex={0}
-              className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              +{additionalSecondaryMatches.length}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4} align="start" className="max-w-96 space-y-1">
-            {additionalSecondaryMatches.map((match) => (
-              <div className="break-all" key={match.text}>
-                <HighlightedText
-                  text={match.text}
-                  matchRanges={match.ranges}
-                  highlightClassName="font-semibold text-inherit"
-                />
-              </div>
-            ))}
-          </TooltipContent>
-        </Tooltip>
+        <>
+          {/* Tab selects the palette filter, so the badge stays out of the tab order and
+              reads its matches through the row's own accessible name instead. */}
+          <span className="sr-only" data-slot="palette-open-tab-extra-matches">
+            {additionalSecondaryMatches.map((match) => match.text).join(', ')}
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                aria-hidden
+                tabIndex={-1}
+                className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
+              >
+                +{additionalSecondaryMatches.length}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4} align="start" className="max-w-96 space-y-1">
+              {additionalSecondaryMatches.map((match) => (
+                <div className="break-all" key={match.text}>
+                  <HighlightedText
+                    text={match.text}
+                    matchRanges={match.ranges}
+                    highlightClassName="font-semibold text-inherit"
+                  />
+                </div>
+              ))}
+            </TooltipContent>
+          </Tooltip>
+        </>
       ) : null}
       {showWorktree ? (
         <>

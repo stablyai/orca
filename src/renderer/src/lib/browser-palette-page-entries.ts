@@ -1,9 +1,12 @@
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import {
+  getPaletteWorktreeIdentity,
+  isPaletteCurrentWorktree,
+  resolvePaletteRepoForWorktree
+} from './palette-repo-resolution'
 import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
@@ -64,7 +67,7 @@ export function buildSearchableBrowserPages({
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
     const worktreeSortIndex =
-      worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
+      worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
     const focusedAtByWorkspaceId = new Map<string, number>()
@@ -126,6 +129,7 @@ export function buildSearchableBrowserPages({
             activeWorkspaceExecutionHostId
           ),
           // Workspace focus is a lossy proxy for only its currently active page.
+          lastFocusedAt: workspace.activePageId === page.id ? workspaceFocusedAt : undefined,
           lastActiveAt:
             workspace.activePageId === page.id && workspaceFocusedAt
               ? maxValidPaletteActivityTimestamp([workspaceFocusedAt, page.createdAt])

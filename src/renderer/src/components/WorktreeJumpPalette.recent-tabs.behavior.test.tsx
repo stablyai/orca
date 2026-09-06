@@ -363,7 +363,20 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   it('activates the row a digit chord addresses while open', async () => {
     await renderPalette(
       makeRecentTabState({
-        lastVisitedAtByWorktreeId: { 'wt-beta': Date.now() }
+        unifiedTabsByWorktree: {
+          'wt-alpha': [
+            {
+              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
+              lastFocusedAt: Date.now() - 3 * 86400_000
+            }
+          ],
+          'wt-beta': [
+            {
+              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
+              lastFocusedAt: Date.now()
+            }
+          ]
+        }
       })
     )
 

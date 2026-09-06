@@ -1,4 +1,3 @@
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { matchPaletteDocument } from './palette-match/match-document'
 import { preparePaletteQuery } from './palette-match/palette-query'
 import type { MatchRange } from './palette-match/normalized-text'
@@ -25,7 +24,11 @@ import {
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import {
+  getPaletteWorktreeExecutionHostId,
+  getPaletteWorktreeIdentity,
+  resolvePaletteRepoForWorktree
+} from './palette-repo-resolution'
 import {
   matchWorktreePaletteTaskUrl,
   parseCmdJTaskSourceUrl
@@ -191,7 +194,12 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
   }
   if (prepared.state === 'empty') {
     return args.worktrees.map((worktree) =>
-      makeEmptyPaletteSearchResult(worktree.id, worktree.hostId, context, worktree.lastActivityAt)
+      makeEmptyPaletteSearchResult(
+        worktree.id,
+        getPaletteWorktreeExecutionHostId(worktree),
+        context,
+        worktree.lastActivityAt
+      )
     )
   }
 
@@ -216,7 +224,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
       continue
     }
 
-    const document = args.documents.get(getWorktreeHostIdentity(worktree))
+    const document = args.documents.get(getPaletteWorktreeIdentity(worktree))
     if (!document) {
       continue
     }
@@ -231,7 +239,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
         toWorktreePaletteSearchResult(
           worktree.id,
           match,
-          worktree.hostId,
+          getPaletteWorktreeExecutionHostId(worktree),
           context,
           worktree.lastActivityAt
         )

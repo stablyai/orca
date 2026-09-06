@@ -9,14 +9,14 @@ import {
 } from '../../../shared/execution-host'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import type { AppState } from '@/store/types'
+import { dedupePaletteWorktrees } from './palette-repo-resolution'
 
 export function getPaletteOwnershipWorktreeIds(
   state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
 ): Pick<Worktree, 'id'>[] {
   return [
-    ...getIndexedAllWorktrees(state.worktreesByRepo),
+    ...dedupePaletteWorktrees(Object.values(state.worktreesByRepo).flat()),
     ...(state.folderWorkspaces ?? []).map((workspace) => ({ id: folderWorkspaceKey(workspace.id) }))
   ]
 }

@@ -1,8 +1,8 @@
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import { getPaletteWorktreeIdentity, isPaletteCurrentWorktree } from './palette-repo-resolution'
+import { resolvePaletteRepoForWorktree } from './palette-repo-resolution'
 import { getActiveSimulatorTabId } from './simulator-palette-active-tab'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
@@ -212,7 +212,7 @@ export function buildSearchableSimulatorTabs({
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
     const worktreeSortIndex =
-      worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
+      worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
     const activeUnifiedTabId = getActiveSimulatorTabId({

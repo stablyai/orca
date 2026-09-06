@@ -459,6 +459,38 @@ describe('WorktreeJumpPalette', () => {
     ).toContain('SSH workspace')
   })
 
+  it('routes same-target SSH rows through their paired runtime owner', async () => {
+    const hubA = makeWorktree('shared-runtime', 'Hub A workspace', {
+      hostId: 'ssh:same-private-target',
+      runtimeOwnerEnvironmentId: 'hub-a'
+    })
+    const hubB = makeWorktree('shared-runtime', 'Hub B workspace', {
+      hostId: 'ssh:same-private-target',
+      runtimeOwnerEnvironmentId: 'hub-b'
+    })
+
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [hubA, hubB] },
+      showSleepingWorkspaces: true
+    })
+    await act(async () => setCommandQuery?.('workspace'))
+    await flushEffects()
+
+    const hubARow = testContainer.querySelector<HTMLButtonElement>(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-a|shared-runtime'])}"]`
+    )
+    const hubBRow = testContainer.querySelector(
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-b|shared-runtime'])}"]`
+    )
+    expect(hubARow).not.toBeNull()
+    expect(hubBRow).not.toBeNull()
+
+    await act(async () => fireEvent.click(hubARow!))
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared-runtime', {
+      executionHostId: 'runtime:hub-a'
+    })
+  })
+
   it('does not badge a runtime-owned row with its physical SSH repo', async () => {
     const worktree = makeWorktree('runtime-repo', 'Runtime workspace', {
       hostId: 'ssh:box',
@@ -472,7 +504,7 @@ describe('WorktreeJumpPalette', () => {
     })
 
     const row = testContainer.querySelector(
-      `[data-command-item="${encodePaletteIdentity(['worktree', 'ssh:box|runtime-repo'])}"]`
+      `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:missing-runtime|runtime-repo'])}"]`
     )
     expect(row?.textContent).toContain('Runtime workspace')
     expect(row?.textContent).not.toContain('Physical SSH repo')

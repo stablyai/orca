@@ -384,6 +384,7 @@ describe('buildSearchableBrowserPages', () => {
     })
 
     expect(entries.map((entry) => entry.lastActiveAt)).toEqual([4000, 9000])
+    expect(entries.map((entry) => entry.lastFocusedAt)).toEqual([4000, undefined])
   })
 
   it('moves the workspace-focus proxy when the active browser page changes', () => {
@@ -418,6 +419,8 @@ describe('buildSearchableBrowserPages', () => {
 
     expect(build('page-1').map((entry) => entry.lastActiveAt)).toEqual([8_000, 2_000])
     expect(build('page-2').map((entry) => entry.lastActiveAt)).toEqual([1_000, 8_000])
+    expect(build('page-1').map((entry) => entry.lastFocusedAt)).toEqual([8_000, undefined])
+    expect(build('page-2').map((entry) => entry.lastFocusedAt)).toEqual([undefined, 8_000])
   })
 
   it('feeds Cmd+J browser search the same ranking as the inline builder did', () => {

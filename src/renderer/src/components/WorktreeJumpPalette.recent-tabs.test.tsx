@@ -572,14 +572,25 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe(movedTo)
   })
 
-  it('re-ranks once when terminal entities hydrate after unified tabs', async () => {
-    // Why split hydration: unified tabs can land before tabsByWorktree; without a re-capture every
-    // row ranks IDLE. A deliberate second-row highlight must survive that one re-rank.
+  it('preserves visit ordering and selection when terminal entities hydrate', async () => {
     const hydrated = makeRecentTabState({
       agentStatusByPaneKey: {
         [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
       },
-      lastVisitedAtByWorktreeId: { 'wt-beta': Date.now() }
+      unifiedTabsByWorktree: {
+        'wt-alpha': [
+          {
+            ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
+            lastFocusedAt: Date.now() - 3 * 86400_000
+          }
+        ],
+        'wt-beta': [
+          {
+            ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
+            lastFocusedAt: Date.now()
+          }
+        ]
+      }
     })
     await renderPalette({ ...hydrated, tabsByWorktree: {} })
     expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
@@ -594,7 +605,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       useAppStore.setState({ tabsByWorktree: hydrated.tabsByWorktree } as Partial<AppState>)
     })
     await flushEffects()
-    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
+    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
     expect(getCommandValue()).toBe(movedTo)
   })
 
@@ -622,23 +633,49 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
   })
 
-  it('ranks a blocked agent above a more recently visited idle tab', async () => {
+  it('ranks a recently visited idle tab above a three-day-old blocked tab', async () => {
     await renderPalette(
       makeRecentTabState({
         agentStatusByPaneKey: {
           [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
         },
-        lastVisitedAtByWorktreeId: { 'wt-beta': Date.now() }
+        unifiedTabsByWorktree: {
+          'wt-alpha': [
+            {
+              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
+              lastFocusedAt: Date.now() - 3 * 86400_000
+            }
+          ],
+          'wt-beta': [
+            {
+              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
+              lastFocusedAt: Date.now()
+            }
+          ]
+        }
       })
     )
 
-    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
+    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
   })
 
   it('freezes the order captured on open while statuses keep changing', async () => {
     await renderPalette(
       makeRecentTabState({
-        lastVisitedAtByWorktreeId: { 'wt-beta': Date.now() }
+        unifiedTabsByWorktree: {
+          'wt-alpha': [
+            {
+              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
+              lastFocusedAt: Date.now() - 3 * 86400_000
+            }
+          ],
+          'wt-beta': [
+            {
+              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
+              lastFocusedAt: Date.now()
+            }
+          ]
+        }
       })
     )
 
@@ -705,13 +742,26 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         agentStatusByPaneKey: {
           [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
         },
-        lastVisitedAtByWorktreeId: { 'wt-beta': Date.now() }
+        unifiedTabsByWorktree: {
+          'wt-alpha': [
+            {
+              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
+              lastFocusedAt: Date.now() - 3 * 86400_000
+            }
+          ],
+          'wt-beta': [
+            {
+              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
+              lastFocusedAt: Date.now()
+            }
+          ]
+        }
       })
     )
 
     // Why: high-signal current tabs stay scannable (ask-question / permission badge) even though
     // idle "where you are" rows are still dropped.
-    expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
+    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
     expect(testContainer.textContent).toContain('Current Tab')
   })
 

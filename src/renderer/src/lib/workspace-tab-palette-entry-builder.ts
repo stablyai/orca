@@ -1,4 +1,3 @@
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
@@ -6,7 +5,11 @@ import {
 import type { Tab } from '../../../shared/tab-types'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
-import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import {
+  getPaletteWorktreeIdentity,
+  isPaletteCurrentWorktree,
+  resolvePaletteRepoForWorktree
+} from './palette-repo-resolution'
 import { resolveOpenTabOccupantAgent } from './open-tab-occupant-agent'
 import {
   resolveWorktreeBranchLabel,
@@ -143,7 +146,7 @@ export function buildSearchableWorkspaceTabEntries({
     const worktreeName = resolveWorktreeDisplayName(worktree)
     const branch = resolveWorktreeBranchLabel(worktree)
     const worktreeSortIndex =
-      worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
+      worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
     const isCurrentWorktree = isPaletteCurrentWorktree(

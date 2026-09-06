@@ -39,6 +39,7 @@ export type SearchableBrowserPage = {
   isCurrentWorktree: boolean
   /** Last time the owning browser workspace was focused; null when never focused. */
   lastActiveAt?: number | null
+  lastFocusedAt?: number
   /** Normalized field index, built once per entry rather than per keystroke. */
   document: PaletteDocument
 }

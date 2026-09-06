@@ -4,7 +4,6 @@ import {
   type TabPaneInputSources
 } from '@/components/sidebar/smart-attention'
 import {
-  buildFocusedGroupTabRecency,
   orderRecentWorkspaceTabs,
   type RecentWorkspaceTabRow
 } from '@/lib/recent-workspace-tab-rows'
@@ -19,6 +18,11 @@ import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
+import {
+  getPaletteWorktreeExecutionHostId,
+  getPaletteWorktreeIdentity
+} from '@/lib/palette-repo-resolution'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 
 type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteOpenTabs &
@@ -46,6 +50,9 @@ export function useWorktreeJumpPaletteRecentTabs({
   runtimePaneTitlesByTabId,
   terminalLayoutsByTabId,
   openTabItems,
+  workspaceTabEntries,
+  simulatorTabEntries,
+  browserPageEntries,
   resolveWorktree,
   unreadTerminalTabs,
   unreadAgentCompletionPanes,
@@ -53,12 +60,25 @@ export function useWorktreeJumpPaletteRecentTabs({
   hasQuery,
   query,
   filter,
-  lastVisitedAtByWorktreeId,
-  activeGroupIdByWorktree,
-  groupsByWorktree,
   autoSelectedItemIdRef,
   setSelectedItemId
 }: WorktreeJumpPaletteRecentTabsInput) {
+  const tabFocusTimes = useMemo(() => {
+    const times = new Map<string, number | undefined>()
+    for (const entry of [...workspaceTabEntries, ...simulatorTabEntries]) {
+      times.set(
+        encodePaletteIdentity(['tab', getPaletteWorktreeIdentity(entry.worktree), entry.tab.id]),
+        entry.tab.lastFocusedAt
+      )
+    }
+    for (const entry of browserPageEntries) {
+      times.set(
+        encodePaletteIdentity(['page', getPaletteWorktreeIdentity(entry.worktree), entry.page.id]),
+        entry.lastFocusedAt
+      )
+    }
+    return times
+  }, [workspaceTabEntries, simulatorTabEntries, browserPageEntries])
   const occurrenceIds = useMemo(() => {
     const counts = new Map<string, number>()
     return openTabItems.map((item) => {
@@ -113,7 +133,14 @@ export function useWorktreeJumpPaletteRecentTabs({
           id: item.id,
           occurrenceId,
           worktreeId: worktree.id,
-          worktreeHostId: worktree.hostId,
+          worktreeHostId: getPaletteWorktreeExecutionHostId(worktree),
+          lastFocusedAt: tabFocusTimes.get(
+            encodePaletteIdentity([
+              item.type === 'browser-page' ? 'page' : 'tab',
+              getPaletteWorktreeIdentity(worktree),
+              item.type === 'browser-page' ? item.result.pageId : item.result.tabId
+            ])
+          ),
           unifiedTabId: item.type === 'browser-page' ? null : item.result.tabId,
           terminalTab:
             item.type === 'workspace-tab' && item.result.contentType === 'terminal'
@@ -124,7 +151,7 @@ export function useWorktreeJumpPaletteRecentTabs({
       })
     }
     return entries
-  }, [occurrenceIds, openTabItems, resolveWorktree, terminalTabsByWorktree])
+  }, [occurrenceIds, openTabItems, resolveWorktree, terminalTabsByWorktree, tabFocusTimes])
   const recentTabRowByItem = useMemo(
     () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]
@@ -188,11 +215,7 @@ export function useWorktreeJumpPaletteRecentTabs({
       return
     }
     const order = orderRecentWorkspaceTabs({
-      rows: recentTabRows,
-      paneSources: recentTabPaneSources,
-      now: Date.now(),
-      lastVisitedAtByWorktreeId,
-      focusedGroupTabRecency: buildFocusedGroupTabRecency(activeGroupIdByWorktree, groupsByWorktree)
+      rows: recentTabRows
     })
     if (order.length === 0) {
       setRecentTabSnapshot(EMPTY_RECENT_TAB_SNAPSHOT)
@@ -204,11 +227,8 @@ export function useWorktreeJumpPaletteRecentTabs({
     )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
   }, [
-    activeGroupIdByWorktree,
     filter,
-    groupsByWorktree,
     hasQuery,
-    lastVisitedAtByWorktreeId,
     query.length,
     recentOrderAttentionIncomplete,
     recentTabSnapshot,

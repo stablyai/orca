@@ -12,7 +12,7 @@ import {
   type SearchableWorkspaceTab
 } from '@/lib/workspace-tab-palette-search'
 import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import { getPaletteWorktreeIdentity } from '@/lib/palette-repo-resolution'
 import type {
   BrowserPaletteItem,
   OpenTabPaletteItem,
@@ -229,7 +229,7 @@ export function useWorktreeJumpPaletteOpenTabs({
         const worktree = resolveWorktree(match.worktreeId, match.worktreeHostId)
         return worktree
           ? {
-              id: encodePaletteIdentity(['worktree', getWorktreeHostIdentity(worktree)]),
+              id: encodePaletteIdentity(['worktree', getPaletteWorktreeIdentity(worktree)]),
               type: 'worktree' as const,
               match,
               worktree
@@ -241,19 +241,19 @@ export function useWorktreeJumpPaletteOpenTabs({
       return items
     }
     const orderByIdentity = new Map(
-      items.map((item, index) => [getWorktreeHostIdentity(item.worktree), index])
+      items.map((item, index) => [getPaletteWorktreeIdentity(item.worktree), index])
     )
     return items.sort((left, right) =>
       comparePaletteRankedItems(
         {
           rank: left.match.rank,
-          order: orderByIdentity.get(getWorktreeHostIdentity(left.worktree)) ?? 0,
+          order: orderByIdentity.get(getPaletteWorktreeIdentity(left.worktree)) ?? 0,
           identity: left.id,
           activity: left.match.activity
         },
         {
           rank: right.match.rank,
-          order: orderByIdentity.get(getWorktreeHostIdentity(right.worktree)) ?? 0,
+          order: orderByIdentity.get(getPaletteWorktreeIdentity(right.worktree)) ?? 0,
           identity: right.id,
           activity: right.match.activity
         }
