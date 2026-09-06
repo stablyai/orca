@@ -55,6 +55,7 @@ type TerminalOverlayTabAssignment = {
 
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
 
+/** Keep parking decisions and background watchers in sync so hidden live terminals remain usable. */
 export function useTerminalTabColdParking(args: {
   worktreeId: string
   terminalTabs: readonly TerminalTab[]
@@ -120,7 +121,7 @@ export function useTerminalTabColdParking(args: {
   // subscribing to it re-rendered this worktree on every other worktree's write.
   const sleepingRecordOwnedTabIds = useAppStore(
     useShallow((state) =>
-      selectSleepingRecordParkExemptTabIds(state.sleepingAgentSessionsByPaneKey, worktreeId)
+      selectSleepingRecordParkExemptTabIds(state.sleepingAgentSessionsByPaneKey, worktreeId, state)
     )
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())

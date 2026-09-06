@@ -88,13 +88,8 @@ function hasRestorableStablePanePty(
   )
 }
 
-// Why: a pane whose PTY is live *right now* already owns its running session
-// — e.g. a Pi TUI that finished a turn but stays alive in a background tab.
-// Resume must never fork such a pane into a duplicate tab, even when it isn't
-// the pane that reconnects on activation. Liveness comes from the runtime
-// live-PTY map (ptyIdsByTabId), not the layout's ptyIdsByLeafId snapshot, which
-// persists stale across sleep/restart.
-function stablePaneHasLivePty(
+/** Prevent duplicate restores by checking runtime PTY ownership; saved layout bindings can be stale. */
+export function stablePaneHasLivePty(
   tabId: string,
   leafId: string,
   ptyIdsByTabId: Record<string, string[]>,
