@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 
-const EPOCH = 'headless:test'
-
 function makeSnapshot(): RuntimeMobileSessionTabsSnapshot {
   return {
     worktree: 'wt-1',
@@ -46,8 +44,7 @@ function select(overrides: { focusesHost: boolean; targetGroupId?: string }) {
     snapshot: makeSnapshot(),
     tabId: 'page-new',
     focusesHost: overrides.focusesHost,
-    ...(overrides.targetGroupId ? { targetGroupId: overrides.targetGroupId } : {}),
-    publicationEpoch: EPOCH
+    ...(overrides.targetGroupId ? { targetGroupId: overrides.targetGroupId } : {})
   })
 }
 
@@ -115,10 +112,11 @@ describe('applyBrowserSessionTabSelection', () => {
     expect(snapshot.activeGroupId).toBe('group-left')
   })
 
-  it('republishes under a fresh epoch and a newer version either way', () => {
+  // Rotating the epoch here retires the renderer's own publication client-side.
+  it('keeps the publication epoch and advances the version either way', () => {
     for (const focusesHost of [true, false]) {
       const { snapshot } = select({ focusesHost })
-      expect(snapshot.publicationEpoch).toBe(EPOCH)
+      expect(snapshot.publicationEpoch).toBe('headless:before')
       expect(snapshot.snapshotVersion).toBe(5)
     }
   })
