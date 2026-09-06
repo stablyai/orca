@@ -102,7 +102,12 @@ export function getWorktreeMirrorDistro(
   store: ProjectRuntimeResolutionStore,
   repo: Repo
 ): string | undefined {
-  const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+  return getWorktreeMirrorDistroForRuntime(resolveLocalProjectRuntimeForRepo(store, repo))
+}
+
+export function getWorktreeMirrorDistroForRuntime(
+  projectRuntime: ProjectExecutionRuntimeResolution | undefined
+): string | undefined {
   if (!projectRuntime || projectRuntime.status !== 'resolved') {
     return undefined
   }

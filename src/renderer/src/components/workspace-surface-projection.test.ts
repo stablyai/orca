@@ -7,7 +7,7 @@
  * SSH/paired-runtime host therefore reached the mount loops twice, mounting the
  * same tabIds under duplicate React keys with both trees marked visible.
  */
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { projectWorkspaceSurfaces } from './workspace-surface-projection'
@@ -74,7 +74,9 @@ function project(input: {
   return projectWorkspaceSurfaces({
     // Built through the production index so the test pins the composition the
     // workbench actually runs, not a re-implementation of the per-id collapse.
-    worktreesById: getIndexedWorktreeMap({ 'repo-shared': [...(input.worktrees ?? [])] }),
+    worktreesById: getIndexedWorktreeMap({
+      'repo-shared': [...(input.worktrees ?? [])]
+    }),
     folderWorkspaces: input.folderWorkspaces ?? [],
     activeWorkspaceId: input.activeWorkspaceId ?? null,
     activeWorkspaceResolvedHostId: input.activeWorkspaceResolvedHostId ?? null
@@ -98,7 +100,9 @@ describe('projectWorkspaceSurfaces', () => {
   })
 
   it('emits one surface per folder workspace id across hosts', () => {
-    const surfaces = project({ folderWorkspaces: [localFolder, runtimeFolder] })
+    const surfaces = project({
+      folderWorkspaces: [localFolder, runtimeFolder]
+    })
 
     expect(surfaces).toHaveLength(1)
     expect(surfaces[0]?.id).toBe('folder:folder-shared')
@@ -115,7 +119,9 @@ describe('projectWorkspaceSurfaces', () => {
   })
 
   it('keeps the first row when no resolved host disambiguates the folder collision', () => {
-    const surfaces = project({ folderWorkspaces: [runtimeFolder, localFolder] })
+    const surfaces = project({
+      folderWorkspaces: [runtimeFolder, localFolder]
+    })
 
     expect(surfaces).toEqual([{ id: 'folder:folder-shared', path: '/remote/orca' }])
   })
@@ -133,7 +139,10 @@ describe('projectWorkspaceSurfaces', () => {
     expect(surfaces).toEqual([{ id: 'folder:folder-shared', path: '/work/orca-local' }])
     expect(warn).toHaveBeenCalledWith(
       '[workspace-surface] dropping colliding folder path',
-      expect.objectContaining({ kept: '/work/orca-local', dropped: '/remote/orca' })
+      expect.objectContaining({
+        kept: '/work/orca-local',
+        dropped: '/remote/orca'
+      })
     )
     warn.mockRestore()
   })
@@ -198,7 +207,10 @@ describe('projectWorkspaceSurfaces', () => {
 // fixes, so every shape that reaches the workbench is pinned against dropping one.
 describe('projectWorkspaceSurfaces never under-selects', () => {
   const unqualifiedWorktree: Worktree = { ...localWorktree, hostId: undefined }
-  const secondSshWorktree: Worktree = { ...localWorktree, hostId: 'ssh:ci-box' }
+  const secondSshWorktree: Worktree = {
+    ...localWorktree,
+    hostId: 'ssh:ci-box'
+  }
   const localOnlyFolder: FolderWorkspace = {
     ...localFolder,
     id: 'folder-local-only',
@@ -211,7 +223,10 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
       id: 'repo-shared::/work/orca-ssh-only',
       path: '/work/orca-ssh-only'
     }
-    const distinctFolder: FolderWorkspace = { ...runtimeFolder, id: 'folder-runtime-only' }
+    const distinctFolder: FolderWorkspace = {
+      ...runtimeFolder,
+      id: 'folder-runtime-only'
+    }
     const worktrees = [localWorktree, sshWorktree, secondSshWorktree, distinctWorktree]
     const folderWorkspaces = [localFolder, runtimeFolder, localOnlyFolder, distinctFolder]
 
@@ -336,13 +351,12 @@ describe('worktree surface feed subscription identity', () => {
 })
 
 // Why source text: the per-id collapse lives in the store index, so the module
-// tests above stay green even if Terminal.tsx goes back to flattening the
+// tests above stay green even if the workbench goes back to flattening the
 // host-qualified array itself. The feed is the half that has to be ratcheted.
+const FOUNDATION_PATH = 'src/renderer/src/components/use-terminal-workspace-foundation.ts'
+
 describe('Terminal workbench surface feed', () => {
-  const source = readFileSync(
-    join(process.cwd(), 'src/renderer/src/components/Terminal.tsx'),
-    'utf8'
-  )
+  const source = readFileSync(join(process.cwd(), FOUNDATION_PATH), 'utf8')
 
   it('feeds the projection from the store per-id index, never the host-qualified array', () => {
     expect(source).not.toContain('useAllWorktrees')
@@ -350,10 +364,17 @@ describe('Terminal workbench surface feed', () => {
   })
 
   it('has exactly one projection call site, so no second flatten can hide beside it', () => {
-    expect(
-      source.split('projectWorkspaceSurfaces(').length - 1,
-      'expected exactly one projectWorkspaceSurfaces call in Terminal.tsx'
-    ).toBe(1)
+    const componentsDir = join(process.cwd(), 'src/renderer/src/components')
+    const callSiteFiles = readdirSync(componentsDir)
+      .filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.'))
+      .filter((name) =>
+        readFileSync(join(componentsDir, name), 'utf8').includes('projectWorkspaceSurfaces(')
+      )
+    expect(callSiteFiles.sort()).toEqual([
+      'use-terminal-workspace-foundation.ts',
+      'workspace-surface-projection.ts'
+    ])
+    expect(source.split('projectWorkspaceSurfaces(').length - 1).toBe(1)
     expect(source).toContain('worktreesById,\n        folderWorkspaces,')
   })
 })

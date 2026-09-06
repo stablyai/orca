@@ -9,11 +9,19 @@ import { exposeRunTimestamps } from '../utc-timestamp'
 import { encodeRunListCursor, decodeRunListCursor } from '../run-list-cursor'
 import type { RunListPage } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
+import { RUN_COLUMN_LIST } from '../row-column-lists'
 
 export type LegacyAdoptedMailboxOwner = {
   runId: string
   terminalHandle: string
 }
+
+// Why: hoisted and wildcard-free so the per-publish run lookups hit the SyncDatabase statement cache.
+const RUN_BY_ID_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs WHERE id = ?`
+const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
+         WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
+           AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid`
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
   const run = this.getRunRaw(id)
@@ -103,14 +111,7 @@ export function getCurrentRunForPane(this: OrchestrationDb, paneKey: string): Ru
 // reminted tab halves keep matching and unparseable keys keep requiring an exact match.
 export function runsBoundToPane(this: OrchestrationDb, paneKey: string): RunRow[] {
   return (
-    this.db
-      .prepare(
-        `SELECT * FROM runs
-         WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
-           AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
-         ORDER BY rowid`
-      )
-      .all(paneKeyMatchSuffix(paneKey)) as RunRow[]
+    this.db.prepare(RUNS_BOUND_TO_PANE_SQL).all(paneKeyMatchSuffix(paneKey)) as RunRow[]
   ).filter(
     (run) =>
       run.coordinator_pane_key !== null && isEquivalentPaneKey(run.coordinator_pane_key, paneKey)
@@ -118,7 +119,7 @@ export function runsBoundToPane(this: OrchestrationDb, paneKey: string): RunRow[
 }
 
 export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined {
-  return this.db.prepare('SELECT * FROM runs WHERE id = ?').get(id) as RunRow | undefined
+  return this.db.prepare(RUN_BY_ID_SQL).get(id) as RunRow | undefined
 }
 
 export function unbindOtherRunsForPane(

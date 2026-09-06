@@ -112,6 +112,12 @@ export class SshPtyConsumerSessionAdapter {
     })
   }
 
+  /** The authenticated client identity behind a transport connection, or null when it holds no
+   *  active grant. Used to stamp host-attested ownership on a PTY at spawn. */
+  clientInstanceIdFor(clientId: number): string | null {
+    return this.session.activeClientInstanceId(String(clientId))
+  }
+
   openDelivery(
     clientId: number,
     id: string,

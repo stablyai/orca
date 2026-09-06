@@ -1,4 +1,9 @@
+import { resolveCanonicalPaneAgentEvidence } from './pane-agent-identity-adapter'
+import type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
 import type { TuiAgent } from './tui-agent'
+
+export { PANE_AGENT_EVIDENCE_SOURCES } from './pane-agent-evidence-sources'
+export type { PaneAgentEvidenceSource } from './pane-agent-evidence-sources'
 
 /**
  * One place that answers "which agent is in this pane".
@@ -23,27 +28,6 @@ import type { TuiAgent } from './tui-agent'
  * launch, a recognized command at a shell prompt, a host-confirmed foreground change, a new
  * provider session. Never by a title changing, and never by transport loss.
  */
-export const PANE_AGENT_EVIDENCE_SOURCES = [
-  /** A live provider hook for a turn in progress. The agent is running and said so. */
-  'live-hook',
-  /** The pane's foreground process, as read on the execution host. */
-  'process',
-  /** Orca launched, resumed, or accepted a command for this agent. A fact Orca owns. */
-  'launch',
-  /** A provider hook from a turn that finished. Still authoritative about identity. */
-  'completed-hook',
-  /** A sleeping session record restored for this pane. */
-  'sleeping-session',
-  /** Another pane in the same tab. Tab-level surfaces only; never pane-scoped routing. */
-  'sibling',
-  /** Parsed from the terminal title. A decoration channel; anyone can type an agent's name. */
-  'title'
-] as const
-export type PaneAgentEvidenceSource = (typeof PANE_AGENT_EVIDENCE_SOURCES)[number]
-
-/** Authority order, strongest first. Position here is the ONLY place precedence is expressed. */
-const SOURCE_RANK: readonly PaneAgentEvidenceSource[] = PANE_AGENT_EVIDENCE_SOURCES
-
 /**
  * Which agent run a piece of evidence belongs to.
  *
@@ -112,52 +96,5 @@ export type PaneAgentIdentity<A extends string = TuiAgent> = {
 export function resolvePaneAgentIdentity<A extends string = TuiAgent>(
   input: PaneAgentIdentityInput<A>
 ): PaneAgentIdentity<A> {
-  const superseded: PaneAgentEvidenceSource[] = []
-  const floor = input.minimumSource
-    ? SOURCE_RANK.indexOf(input.minimumSource)
-    : Number.MAX_SAFE_INTEGER
-
-  const eligible = input.evidence.filter((item) => {
-    if (item.source === 'sibling' && input.allowSibling !== true) {
-      return false
-    }
-    // Why the floor: an action consumer must not be able to act on a title, at any rank. Dropping
-    // the evidence entirely rather than ranking it lower makes misuse impossible rather than
-    // unlikely — a caller cannot accidentally consult it by reordering.
-    if (SOURCE_RANK.indexOf(item.source) > floor) {
-      return false
-    }
-    if (input.currentRun === undefined || item.run === undefined) {
-      // Why eligible: absence means "this peer does not publish run keys", not "this is stale".
-      // Treating unknown as superseded would blank every row from an older host.
-      return true
-    }
-    if (item.run.authorityId !== input.currentRun.authorityId) {
-      // Why eligible and NOT superseded: runs from different authorities are incomparable, not
-      // older. A restarted main counts from its own floor, so `incarnation` alone would falsely
-      // equate unrelated runs. Incomparable evidence is treated as unknown, like an absent key.
-      return true
-    }
-    if (item.run.incarnation === input.currentRun.incarnation) {
-      return true
-    }
-    superseded.push(item.source)
-    return false
-  })
-
-  for (const source of SOURCE_RANK) {
-    const matches = eligible.filter((item) => item.source === source)
-    if (matches.length === 0) {
-      continue
-    }
-    const agents = new Set(matches.map((item) => item.agent))
-    if (agents.size > 1) {
-      // Why null and not the first: two observations of the same class naming different agents is
-      // a genuine conflict, and picking one would make the answer depend on array order — the very
-      // property this resolver exists to remove. Fall through to nothing rather than guess.
-      return { agent: null, source: null, ambiguousAt: source, supersededSources: superseded }
-    }
-    return { agent: matches[0].agent, source, supersededSources: superseded }
-  }
-  return { agent: null, source: null, supersededSources: superseded }
+  return resolveCanonicalPaneAgentEvidence(input)
 }

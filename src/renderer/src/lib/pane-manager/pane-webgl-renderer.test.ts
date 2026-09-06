@@ -6,6 +6,7 @@ import {
   clearTerminalWebglAttachBackoff,
   presentPaneViewport,
   presentPaneViewportPreservingSynchronizedOutput,
+  primeTerminalWebglAddon,
   resetTerminalWebglSuggestion,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
@@ -110,7 +111,8 @@ function createPausedPane(display: 'block' | 'none'): {
 }
 
 describe('terminal WebGL addon lifecycle', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     resetTerminalWebglSuggestion()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -528,5 +530,76 @@ describe('the deferred fit-anchored refit frame', () => {
 
     expect(frames.length).toBe(1)
     expect(pane.pendingWebglRefreshRafId).toBeNull()
+  })
+})
+
+// The deferred addon load replaced a static import, so these cover the two
+// failure modes a static import could not have: a load that never lands, and a
+// pane that opens before one that does.
+describe('deferred WebGL addon load', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(16)
+      return 1
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.doUnmock('@xterm/addon-webgl')
+    vi.resetModules()
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('refits a pane that attached while the addon was still loading', async () => {
+    // Without the refit the pane keeps the grid the initial fit measured under
+    // the DOM renderer, and WebGL floors the device cell width — a permanently
+    // narrow PTY, not a one-frame flicker.
+    const renderer = await import('./pane-webgl-renderer')
+    const pane = createFittablePane()
+
+    renderer.attachWebgl(pane)
+    expect(pane.webglAddon).toBeNull()
+
+    await renderer.primeTerminalWebglAddon()
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.fitAddon.fit).toHaveBeenCalled()
+  })
+
+  it('retries a failed load instead of latching the DOM renderer for the session', async () => {
+    let loadShouldFail = true
+    vi.doMock('@xterm/addon-webgl', () => {
+      if (loadShouldFail) {
+        throw new Error('chunk load failed')
+      }
+      return {
+        WebglAddon: class {
+          onContextLoss(): void {}
+          clearTextureAtlas(): void {}
+          dispose(): void {}
+        }
+      }
+    })
+    const renderer = await import('./pane-webgl-renderer')
+    const pane = createPane()
+
+    await renderer.primeTerminalWebglAddon()
+    renderer.attachWebgl(pane)
+    await Promise.resolve()
+    expect(pane.webglAddon).toBeNull()
+
+    // The documented GPU-setting recovery boundary has to re-arm the load, not
+    // just the auto decision — a cached settled promise would never retry.
+    loadShouldFail = false
+    renderer.resetTerminalWebglSuggestion()
+    renderer.clearTerminalWebglAttachBackoff(pane)
+    await renderer.primeTerminalWebglAddon()
+    renderer.attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
   })
 })

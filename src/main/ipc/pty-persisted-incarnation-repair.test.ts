@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { statSyncMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
-import { TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
+import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from '../daemon/daemon-errors'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { registerPtyHandlers, clearProviderPtyState, setLocalPtyProvider } from './pty'
 
@@ -230,7 +230,7 @@ describe('registerPtyHandlers', () => {
       const providerSpawn = vi.fn(
         async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
           if (options.attachOnly) {
-            throw new Error('Session not found: pty-dead-persisted-owner')
+            throw new SessionNotFoundError('pty-dead-persisted-owner')
           }
           return { id: 'pty-fresh-recovery', incarnationId: 'inc-fresh-recovery' }
         }
@@ -352,8 +352,9 @@ describe('registerPtyHandlers', () => {
         expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
         expect(runtime.onPtyExit).toHaveBeenCalledWith(
           'pty-dead-persisted-owner',
-          0,
-          'inc-dead-persisted-owner'
+          -1,
+          'inc-dead-persisted-owner',
+          { hostExitConfirmed: true }
         )
         return
       }
@@ -376,8 +377,9 @@ describe('registerPtyHandlers', () => {
       expect(store.flushOrThrow).toHaveBeenCalledOnce()
       expect(runtime.onPtyExit).toHaveBeenCalledWith(
         'pty-dead-persisted-owner',
-        0,
-        'inc-dead-persisted-owner'
+        -1,
+        'inc-dead-persisted-owner',
+        { hostExitConfirmed: true }
       )
     }
   )

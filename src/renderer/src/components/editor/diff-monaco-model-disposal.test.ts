@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   disposeUnattachedDiffViewerMonacoModels,
   disposeUnattachedMonacoModelPaths,
-  disposeUnattachedMonacoModelsByPathPrefix,
+  disposeUnattachedMonacoModelsByPathPrefixes,
   getDiffViewerMonacoModelPathPrefixes,
   getDiffViewerMonacoModelPaths
 } from './diff-monaco-model-disposal'
@@ -139,7 +139,7 @@ describe('diff Monaco model disposal', () => {
     const monacoRegistry = createRegistry(models)
     const { originalModelPathPrefix } = getDiffViewerMonacoModelPathPrefixes('tab-1')
 
-    disposeUnattachedMonacoModelsByPathPrefix(monacoRegistry, originalModelPathPrefix)
+    disposeUnattachedMonacoModelsByPathPrefixes(monacoRegistry, [originalModelPathPrefix])
 
     expect(baseDispose).toHaveBeenCalledOnce()
     expect(generatedDispose).toHaveBeenCalledOnce()
@@ -177,7 +177,7 @@ describe('diff Monaco model disposal', () => {
     const monacoRegistry = createRegistry(models)
     const { originalModelPathPrefix } = getDiffViewerMonacoModelPathPrefixes('foo')
 
-    disposeUnattachedMonacoModelsByPathPrefix(monacoRegistry, originalModelPathPrefix)
+    disposeUnattachedMonacoModelsByPathPrefixes(monacoRegistry, [originalModelPathPrefix])
 
     expect(ownedDispose).toHaveBeenCalledOnce()
     expect(siblingDispose).not.toHaveBeenCalled()

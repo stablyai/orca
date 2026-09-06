@@ -97,8 +97,8 @@ async function rearmDormantRemoteWatcher(
     worktreePath,
     listeners.filter((_, index) => results[index] === 'installed')
   )
-  // Why: 'cancelled' means shutdown or the last listener left, so only 'unavailable' stays dormant.
-  if (results.some((result) => result === 'unavailable')) {
+  // Why: 'cancelled' means shutdown or the last listener left, so only a refusal stays dormant.
+  if (results.some((result) => result === 'unavailable' || result === 'capacity')) {
     scheduleDormantRemoteWatcherRearmCore(
       connectionId,
       worktreePath,

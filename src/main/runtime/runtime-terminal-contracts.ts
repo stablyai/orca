@@ -54,9 +54,19 @@ export type TerminalCreateOptions = {
   deferMobileSessionPublish?: boolean
 }
 
+/** Identity a fenced spawn can be re-found by in the execution host's own inventory. */
+export type AgentSessionCreateReclaimIdentity = {
+  worktreeId: string
+  connectionId: string | null
+  terminalHandle: string
+}
+
 export type AgentSessionCreateOperation = {
   fingerprint: string
   promise: Promise<RuntimeCreateAgentSessionResult>
+  // Why: a lost pty.spawn response leaves the host holding a live PTY the client
+  // never named; this is the name it was launched under, so a replay can adopt it.
+  reclaim: { identity?: AgentSessionCreateReclaimIdentity }
 }
 
 export type PtyForegroundAgentRefresh = {
@@ -147,7 +157,8 @@ export type TerminalWaiter = {
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
-  pollInterval: NodeJS.Timeout | null
+  /** Retires this waiter from the shared idle-poll sweep; null when not polling. */
+  cancelIdlePoll: (() => void) | null
   abortCleanup: (() => void) | null
 }
 

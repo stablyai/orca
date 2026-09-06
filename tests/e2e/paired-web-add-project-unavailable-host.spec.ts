@@ -1,3 +1,4 @@
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
@@ -61,10 +62,7 @@ async function assertCreationActionsDisabled(args: {
   testInfo: TestInfo
   topology: 'headed' | 'headless'
 }): Promise<void> {
-  await args.page
-    .getByRole('button', { name: /Add Project/i })
-    .first()
-    .click()
+  await openSidebarProjectDialog(args.page)
   const dialog = args.page.getByRole('dialog', { name: /Add a project/i })
   await expect(dialog).toBeVisible()
   const hostPicker = dialog.getByRole('combobox')

@@ -6,7 +6,7 @@ import {
   startGitHubListScrollRestore,
   supersedeGitHubListScrollRestore,
   type GitHubListRestoreWrite
-} from './task-page/github/github-list-scroll-restore'
+} from './task-page-github-list-scroll-restore'
 
 type FakeResizeObserver = {
   targets: Set<Element>

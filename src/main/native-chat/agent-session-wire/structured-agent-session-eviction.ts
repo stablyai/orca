@@ -25,7 +25,10 @@ export type StructuredAgentSessionEvictionContext = {
   hasProviderChild?: boolean
   eventSink: DeferredStructuredAgentSessionEventSink
   adapter: StructuredAgentSessionAdapter
-  forget: () => void
+  /** Closes the session's journal handle and drops the map entry. Async and
+   *  awaited: `close()` is ordered behind queued writes, and a delete that
+   *  returns while the close is still queued leaves nothing to retry. */
+  forget: () => Promise<void>
   /** Drops the cached sink so a later attach mints a fresh one. */
   discardSink: () => void
   /** Hands the lease back now that this host's child is proven gone. No-ops when the record is

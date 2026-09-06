@@ -1,22 +1,66 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
-import { getWorktreeMapFromState } from '@/store/selectors'
+import {
+  getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
+import type { AppState } from '@/store/types'
 import type { AgentPaneThread } from './activity-thread-types'
 
+// Same focused-host fallback the Agents scope filter uses; defaulting to `local` here would
+// look up a hostless runtime-owned workspace on the wrong host and silently drop the jump.
+function getActivityThreadExecutionHostId(
+  thread: AgentPaneThread,
+  defaultHostId: ExecutionHostId
+): ExecutionHostId {
+  return getWorktreeExecutionHostId(thread.worktree, thread.repo ?? undefined, defaultHostId)
+}
+
+type ActivityThreadWorkspaceCatalog = Pick<
+  AppState,
+  'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces'
+> & { defaultHostId: ExecutionHostId }
+
+function readActivityThreadWorkspaceCatalog(): ActivityThreadWorkspaceCatalog {
+  const state = useAppStore.getState()
+  return { ...state, defaultHostId: getSettingsFocusedExecutionHostId(state.settings) }
+}
+
+export function hasActivityThreadWorkspace(
+  thread: AgentPaneThread,
+  catalog: ActivityThreadWorkspaceCatalog = readActivityThreadWorkspaceCatalog()
+): boolean {
+  return Boolean(
+    findKnownWorktreeById(
+      catalog,
+      thread.worktree.id,
+      getActivityThreadExecutionHostId(thread, catalog.defaultHostId)
+    )
+  )
+}
+
 export function createActivityThreadActions({
-  allThreads,
+  getMarkAllReadThreads,
   acknowledgeAgents,
   unacknowledgeAgents,
   setSelectedPaneKey
 }: {
-  allThreads: AgentPaneThread[]
+  /** Getter (not a snapshot) so the handlers keep one identity for the row memo
+   *  bail-outs while bulk actions still see the current thread set. This is the
+   *  badge-coherent set (child-filter only), not the search/scope-narrowed one,
+   *  so Mark all read always drives the Agents badge to zero. */
+  getMarkAllReadThreads: () => AgentPaneThread[]
   acknowledgeAgents: (paneKeys: string[]) => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   setSelectedPaneKey: (paneKey: string | null) => void
 }): {
-  hasUnreadThreads: boolean
+  markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
   selectThread: (thread: AgentPaneThread) => void
   jumpToWorkspace: (thread: AgentPaneThread) => void
@@ -30,51 +74,60 @@ export function createActivityThreadActions({
     unacknowledgeAgents([thread.paneKey])
   }
 
-  const activateThreadTerminal = (thread: AgentPaneThread): void => {
-    const state = useAppStore.getState()
-    const worktree = getWorktreeMapFromState(state).get(thread.worktree.id)
-    if (!worktree) {
+  const activateThreadTarget = (thread: AgentPaneThread): void => {
+    const executionHostId = getActivityThreadExecutionHostId(
+      thread,
+      getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
+    )
+    // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
+    // state of an SSH session that was never revived — has no resident tab until
+    // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
+    // Probing tab residency first is what made a remote row click a silent no-op (#16731).
+    if (activateAndRevealWorkspace(thread.worktree.id, { executionHostId }) === false) {
       return
     }
-    // Why: retained-agent threads can outlive their tab; without a live tab, reorienting the workspace and focusing a dead tab id would just confuse the user.
-    const liveTabs = state.tabsByWorktree[worktree.id] ?? []
-    const hasLiveTab = liveTabs.some((t) => t.id === thread.tab.id)
-    if (!hasLiveTab) {
+    if (
+      activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })
+    ) {
       return
     }
-    if (state.activeRepoId !== worktree.repoId) {
-      state.setActiveRepo(worktree.repoId)
+    // Read post-activation: the tab this thread points at may have only just been revived.
+    const activated = useAppStore.getState()
+    const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
+    if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
+      // Retained threads outlive their tab; the workspace is still activated, but there is
+      // no pane to focus and focusing a sibling would be worse than focusing nothing.
+      return
     }
-    if (state.activeWorktreeId !== worktree.id) {
-      state.setActiveWorktree(worktree.id)
-    }
-    state.setActiveTabType('terminal')
+    activated.setActiveTabType('terminal')
     const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
       thread.tab.id,
       parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,
-      { scrollToBottomIfOutputSinceLastView: true }
+      { flashFocusedPane: true, scrollToBottomIfOutputSinceLastView: true }
     )
   }
 
   const selectThread = (thread: AgentPaneThread): void => {
     setSelectedPaneKey(thread.paneKey)
-    activateThreadTerminal(thread)
+    activateThreadTarget(thread)
   }
 
   const jumpToWorkspace = (thread: AgentPaneThread): void => {
-    const state = useAppStore.getState()
-    if (!getWorktreeMapFromState(state).has(thread.worktree.id)) {
+    const catalog = readActivityThreadWorkspaceCatalog()
+    if (!hasActivityThreadWorkspace(thread, catalog)) {
       return
     }
     markThreadRead(thread)
-    activateAndRevealWorktree(thread.worktree.id)
+    jumpToWorktreeFromSidebar(thread.worktree.id, {
+      executionHostId: getActivityThreadExecutionHostId(thread, catalog.defaultHostId)
+    })
   }
 
-  const hasUnreadThreads = allThreads.some((thread) => thread.unread)
-
   const markAllThreadsRead = (): void => {
-    const unreadKeys = allThreads.filter((t) => t.unread).map((t) => t.paneKey)
+    const unreadKeys = getMarkAllReadThreads()
+      .filter((t) => t.unread)
+      .map((t) => t.paneKey)
     if (unreadKeys.length === 0) {
       return
     }
@@ -82,7 +135,7 @@ export function createActivityThreadActions({
   }
 
   return {
-    hasUnreadThreads,
+    markThreadRead,
     markThreadUnread,
     selectThread,
     jumpToWorkspace,

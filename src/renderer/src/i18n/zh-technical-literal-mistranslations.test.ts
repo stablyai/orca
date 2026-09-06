@@ -125,3 +125,16 @@ describe('zh provider usage wording (#12881)', () => {
     }
   })
 })
+
+// Duplicate is an action ("make a copy of"), not the adjective 重复. In the file explorer row
+// menu it sat next to Copy — both read 复制, two different actions under one label.
+describe('zh Duplicate vs Copy wording', () => {
+  it('separates the file explorer Duplicate action from Copy', () => {
+    expect(findByKey(zh, '0fec99bfd7')).toBe('创建副本') // Duplicate, not 复制
+    expect(findByKey(zh, '98a79948b3')).toBe('复制') // Copy keeps the clipboard sense
+  })
+
+  it('reads Duplicate Tab as an action, matching the menu on 选项卡', () => {
+    expect(findByKey(zh, '5d6e89891f')).toBe('复制选项卡') // not 重复选项卡
+  })
+})

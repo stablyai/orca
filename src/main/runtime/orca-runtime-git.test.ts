@@ -86,9 +86,13 @@ function makeWorktree(path: string, linkedIssue: number | null = null): Resolved
   return worktree as unknown as ResolvedRuntimeGitWorktree
 }
 
+function localTarget(worktreePath: string, linkedIssue: number | null = null) {
+  return { worktree: makeWorktree(worktreePath, linkedIssue), executionHostId: 'local' as const }
+}
+
 function makeCommands(worktreePath: string): RuntimeGitCommands {
   return new RuntimeGitCommands({
-    resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+    resolveRuntimeGitTarget: async () => localTarget(worktreePath),
     getRuntimeSettings: () => ({}) as GlobalSettings
   })
 }
@@ -125,6 +129,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getStatus.mockResolvedValue({ entries: [], conflictOperation: 'none' })
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
+        executionHostId: 'local',
         worktree: makeWorktree('/workspace/feature'),
         repo: { path: '/workspace/repo', symlinkPaths: ['node_modules'] } as never
       }),
@@ -146,7 +151,7 @@ describe('RuntimeGitCommands', () => {
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
         repo: { path: '/remote/repo', symlinkPaths: ['node_modules'] } as never,
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
@@ -162,6 +167,7 @@ describe('RuntimeGitCommands', () => {
     tempDirs.push(worktreePath)
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
+        executionHostId: 'local',
         worktree: makeWorktree(worktreePath),
         localGitOptions: { wslDistro: 'Ubuntu' }
       }),
@@ -186,7 +192,7 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
@@ -217,6 +223,7 @@ describe('RuntimeGitCommands', () => {
   it('prioritizes a local single-file discard without losing WSL routing', async () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
+        executionHostId: 'local',
         worktree: makeWorktree('/workspace/repo'),
         localGitOptions: { wslDistro: 'Ubuntu' }
       }),
@@ -237,7 +244,7 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
@@ -256,7 +263,7 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree('/remote/repo'),
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
@@ -299,7 +306,7 @@ describe('RuntimeGitCommands', () => {
       message: 'docs: update readme'
     })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () =>
         ({
           commitMessageAi: { enabled: true, agentId: 'codex' },
@@ -352,6 +359,7 @@ describe('RuntimeGitCommands', () => {
     })
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
+        executionHostId: 'local',
         worktree: makeWorktree(worktreePath),
         localGitOptions: { wslDistro: 'Ubuntu' }
       }),
@@ -410,7 +418,7 @@ describe('RuntimeGitCommands', () => {
       message: 'feat: update readme'
     })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () =>
         ({
           sourceControlAi: {
@@ -471,7 +479,7 @@ describe('RuntimeGitCommands', () => {
       }
     })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () =>
         ({
           sourceControlAi: {
@@ -542,7 +550,7 @@ describe('RuntimeGitCommands', () => {
       }
     })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
 
@@ -595,7 +603,7 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree(worktreePath),
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () =>
         ({
@@ -637,7 +645,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath, 123) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
 
@@ -663,7 +671,7 @@ describe('RuntimeGitCommands', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: makeWorktree(worktreePath, 77),
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })
@@ -687,7 +695,7 @@ describe('RuntimeGitCommands', () => {
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
     const getWorktreeLinkedIssue = vi.fn(() => 321)
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath, 123) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
       getWorktreeLinkedIssue
     })
@@ -713,7 +721,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath, 123) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
       getWorktreeLinkedIssue: () => null
     })
@@ -734,7 +742,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getStagedCommitContext.mockResolvedValue(context)
     mocks.generateCommitMessageFromContext.mockResolvedValue({ success: true, message: 'docs' })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath, 123) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
       // Why: what the host reports when its store is not initialized yet.
       getWorktreeLinkedIssue: () => undefined
@@ -765,7 +773,7 @@ describe('RuntimeGitCommands', () => {
     mocks.getPullRequestDraftContext.mockResolvedValue(context)
     mocks.generatePullRequestFieldsFromContext.mockResolvedValue({ success: true, fields: {} })
     const commands = new RuntimeGitCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath, 123) }),
+      resolveRuntimeGitTarget: async () => localTarget(worktreePath, 123),
       getRuntimeSettings: () => ({}) as GlobalSettings,
       getWorktreeLinkedIssue: () => 321
     })
@@ -827,7 +835,7 @@ describe('RuntimeGitCommands', () => {
       const commands = new RuntimeGitCommands({
         resolveRuntimeGitTarget: async () => ({
           worktree: makeWorktree(worktreePath, 55),
-          ...(connectionId ? { connectionId } : {})
+          executionHostId: connectionId ? (`ssh:${connectionId}` as const) : ('local' as const)
         }),
         getRuntimeSettings: () => ({}) as GlobalSettings
       })

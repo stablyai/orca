@@ -117,17 +117,25 @@ export function buildUpdateCardErrorModel({
   }
   return {
     title: cachedVersion ? 'Update Error' : 'Update Check Failed',
-    summary: cachedVersion ? 'Could not complete the update.' : 'Could not check for updates.',
+    summary:
+      cachedVersion && status.retryable === false
+        ? status.message
+        : cachedVersion
+          ? 'Could not complete the update.'
+          : 'Could not check for updates.',
     detail: status.message,
     releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
-    primaryAction: cachedVersion
-      ? {
-          label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
-          onClick: onRetryDownload
-        }
-      : {
-          label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
-          onClick: onRecheck
-        }
+    primaryAction:
+      cachedVersion && status.retryable !== false
+        ? {
+            label: translate('auto.components.UpdateCard.48565a32bc', 'Retry Download'),
+            onClick: onRetryDownload
+          }
+        : !cachedVersion
+          ? {
+              label: translate('auto.components.UpdateCard.6b0085010d', 'Re-check'),
+              onClick: onRecheck
+            }
+          : undefined
   }
 }

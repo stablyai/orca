@@ -1,4 +1,5 @@
 import { execFile, execFileSync } from 'node:child_process'
+import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 
 type WslAvailabilityCache =
   | { available: true }
@@ -35,6 +36,9 @@ function wslAvailabilityRetryDelayMs(cache: { retryable: boolean; failures: numb
   return Math.min(base * 2 ** (cache.failures - 1), WSL_AVAILABILITY_MAX_RETRY_DELAY_MS)
 }
 
+// Why ENOENT stays definitive: it means wsl.exe is not on PATH. It used to also mean
+// "the cwd this process inherited was deleted", which is not answer-shaped at all --
+// naming an explicit spawn directory below is what removes that source (#16463).
 // Why: a non-zero exit (wsl.exe ran and said no) or ENOENT (not installed) is answer-shaped,
 // so it earns a long window rather than the short one a timeout gets. execFileSync reports the
 // exit code as `status`, the execFile callback as a numeric `code`; both must count as
@@ -95,7 +99,14 @@ function probeWslStatus(): Promise<void> {
     execFile(
       'wsl.exe',
       ['--status'],
-      { timeout: WSL_AVAILABILITY_PROBE_TIMEOUT_MS, windowsHide: true },
+      {
+        timeout: WSL_AVAILABILITY_PROBE_TIMEOUT_MS,
+        windowsHide: true,
+        // Why explicit (#16463): inheriting a cwd the user deleted makes
+        // CreateProcessW fail ENOENT, which this cache reads as "WSL is not
+        // installed" and holds on the definitive TTL with backoff.
+        cwd: resolveWslInteropSpawnCwd()
+      },
       (error: unknown) => {
         if (error) {
           reject(error)
@@ -129,7 +140,10 @@ export function isWslAvailable(): boolean {
   try {
     execFileSync('wsl.exe', ['--status'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: WSL_AVAILABILITY_PROBE_TIMEOUT_MS
+      timeout: WSL_AVAILABILITY_PROBE_TIMEOUT_MS,
+      // Same reason as the async twin: they share one cache, so a false ENOENT
+      // from either poisons both.
+      cwd: resolveWslInteropSpawnCwd()
     })
     return cacheWslAvailabilityProbeResult(null, startedAtGeneration)
   } catch (error) {

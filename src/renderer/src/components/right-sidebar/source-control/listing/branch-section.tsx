@@ -39,7 +39,7 @@ export function SourceControlBranchSection({
   collapsedSections: Set<string>
   toggleSection: (section: string) => void
   sourceControlViewMode: SourceControlViewMode
-  visibleBranchTreeRows: SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[]
+  visibleBranchTreeRows: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[]
   fileListScrollElement: HTMLDivElement | null
   collapsedTreeDirs: Set<string>
   toggleTreeDir: (key: string) => void
