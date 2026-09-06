@@ -141,6 +141,11 @@ export class StructuredWorkerIdentityRegistry {
     return this.bySessionId.get(sessionId) ?? null
   }
 
+  /** Every worker this process knows about; callers apply their own liveness gate. */
+  list(): StructuredWorkerIdentity[] {
+    return [...this.byHandle.values()]
+  }
+
   forget(handle: string): void {
     const identity = this.byHandle.get(handle)
     if (!identity) {

@@ -9,7 +9,10 @@
 import { AGENT_SESSION_NOT_ATTACHED } from '../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-delivery'
-import { structuredSessionGateFacts } from './structured-session-pointer-delivery'
+import {
+  structuredSessionGateFacts,
+  type StructuredSessionGateFacts
+} from './structured-session-pointer-delivery'
 
 /** Per-dispatch so one worker's nudges cannot exhaust the shared runtime operation-ledger budget. */
 export function structuredPointerCallerKey(dispatchId: string): string {
@@ -27,24 +30,36 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
   return `trusted-local:orchestration:session:${sessionId}`
 }
 
+/**
+ * The idle gate for a structured session, read off its FULL reduced timeline.
+ *
+ * Never a bounded page. Settlement tombstones the running turn's lifecycle item rather than
+ * rewriting it to `completed`, so on any tail window an idle session and a busy one whose
+ * lifecycle item scrolled off look identical — and idle-with-history is the normal steady state of
+ * a working agent. Shared so the pointer lane and group addressing cannot disagree about it.
+ */
+export function readStructuredSessionGateFacts(
+  sessionId: string
+): StructuredSessionGateFacts | null {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    return null
+  }
+  try {
+    return structuredSessionGateFacts(host.journalSnapshot(sessionId).items)
+  } catch (error) {
+    // Not attached is a retain reason, not a failure; anything else is still unreadable.
+    if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
+      console.warn('[orchestration] structured journal unreadable', sessionId, error)
+    }
+    return null
+  }
+}
+
 export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHost {
   return {
     readGateFacts(sessionId) {
-      const host = getStructuredAgentSessionHost()
-      if (!host) {
-        return null
-      }
-      try {
-        // The full reduced timeline, never a page: settlement tombstones the running turn's
-        // lifecycle item, so a bounded tail cannot tell an idle worker from a busy one.
-        return structuredSessionGateFacts(host.journalSnapshot(sessionId).items)
-      } catch (error) {
-        // Not attached is a retain reason, not a failure; anything else is still unreadable.
-        if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
-          console.warn('[orchestration] structured journal unreadable', sessionId, error)
-        }
-        return null
-      }
+      return readStructuredSessionGateFacts(sessionId)
     },
 
     currentFence(sessionId) {

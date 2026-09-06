@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { resolveGroupAddress } from '../../orchestration/groups'
 import { resolveBareOrchestrationRecipient } from './orchestration-recipient-routing'
+import { listAddressableStructuredWorkers } from '../../orchestration/structured-worker-group-addressing'
 import { legacyWorkerDeliveryContract } from './orchestration-routing'
 import type { SendRecipientWarning } from './orchestration-recipient-routing'
 import type { SendParams } from './orchestration-schemas'
@@ -42,7 +43,11 @@ export async function sendGroupMessage(args: {
   const { terminals } = await runtime.listTerminals(undefined, undefined, {
     includeVisualLayouts: false
   })
-  const handles = resolveGroupAddress(groupAddress, from, terminals, (handle: string) =>
+  // Structured workers are on no PTY surface, so `listTerminals` cannot see them and a broadcast
+  // silently missed every one. Composed here rather than inside `listTerminals`, whose result is
+  // published to paired clients and to consumers that assume a summary is writable.
+  const recipients = [...terminals, ...listAddressableStructuredWorkers()]
+  const handles = resolveGroupAddress(groupAddress, from, recipients, (handle: string) =>
     runtime.getAgentStatusForHandle(handle)
   )
   if (handles.length === 0) {
