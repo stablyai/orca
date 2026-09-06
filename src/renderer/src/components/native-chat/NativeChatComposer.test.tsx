@@ -288,7 +288,9 @@ describe('NativeChatComposer', () => {
           optionsSurface,
           optionSnapshot,
           onError: vi.fn(),
-          runtime: 'local'
+          runtime: 'local',
+          sessionId: 'session-test',
+          runtimeEnvironmentId: null
         }}
       />
     )
@@ -328,7 +330,9 @@ describe('NativeChatComposer', () => {
           },
           optionSnapshot: [],
           onError: vi.fn(),
-          runtime: 'local'
+          runtime: 'local',
+          sessionId: 'session-test',
+          runtimeEnvironmentId: null
         }}
       />
     )
@@ -367,7 +371,9 @@ describe('NativeChatComposer', () => {
           optionSnapshot: [],
           worktreeId: 'wt-1',
           onError: vi.fn(),
-          runtime: 'local'
+          runtime: 'local',
+          sessionId: 'session-test',
+          runtimeEnvironmentId: null
         }}
       />
     )

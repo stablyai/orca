@@ -141,9 +141,19 @@ export function NativeChatStructuredSession(
       optionPickerRequest,
       worktreeId: fileLinkContext?.worktreeId,
       onError: setComposerError,
-      runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote'
+      runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote',
+      sessionId: props.sessionId,
+      runtimeEnvironmentId:
+        props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
     }),
-    [controller, fileLinkContext?.worktreeId, optionPickerRequest, props.agent, props.target.kind]
+    [
+      controller,
+      fileLinkContext?.worktreeId,
+      optionPickerRequest,
+      props.agent,
+      props.sessionId,
+      props.target
+    ]
   )
 
   return (

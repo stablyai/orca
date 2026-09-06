@@ -6,6 +6,7 @@ import { detectAgentStatusFromTitle, isClaudeManagementTitle } from '../../share
 import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
+import { structuredWorkerIdentities } from './structured-worker-identity'
 import { isSettledNativeOwner } from './orchestration/structured-session-pointer-delivery'
 import type { StructuredPointerTarget } from './orchestration/structured-mailbox-pointer-delivery'
 import {
@@ -163,6 +164,20 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
         this.getLiveLeafForHandle(handle)
       }
     })
+  }
+
+  /**
+   * A structured worker's own pane key, for callers that can only name the session.
+   *
+   * Resolved HERE rather than published: the pane key is a random identity credential — anyone
+   * holding it can read and consume that worker's mailbox, and session ids are embedded in tab ids
+   * — so it must never travel to a renderer to be echoed back.
+   */
+  getStructuredWorkerPaneKeyForSession(sessionId: string): string | null {
+    const identity = structuredWorkerIdentities.getBySessionId(sessionId)
+    return identity && resolveStructuredWorkerAuthority(identity.handle, this._orchestrationDb)
+      ? identity.paneKey
+      : null
   }
 
   deliverPendingMessagesForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
