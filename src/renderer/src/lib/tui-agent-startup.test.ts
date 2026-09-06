@@ -125,10 +125,11 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'trae',
-      launchCommand: "traecli -- 'Summarize the failing tests'",
+      launchCommand:
+        "traecli '-c' 'tui.terminal_title=[\"thread-title\"]' -- 'Summarize the failing tests'",
       expectedProcess: 'traecli',
       followupPrompt: null,
-      launchConfig: emptyLaunchConfig('traecli')
+      launchConfig: emptyLaunchConfig("traecli '-c' 'tui.terminal_title=[\"thread-title\"]'")
     })
   })
 
@@ -141,7 +142,7 @@ describe('buildAgentStartupPlan', () => {
         cmdOverrides: {},
         platform: 'linux'
       })?.launchCommand
-    ).toBe("traecli -- 'help me name this config'")
+    ).toBe("traecli '-c' 'tui.terminal_title=[\"thread-title\"]' -- 'help me name this config'")
   })
 
   it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {

@@ -29,4 +29,8 @@ describe('TUI_AGENT_CONFIG', () => {
       expect(TUI_AGENT_CONFIG[agent as TuiAgent]).toMatchObject(expected)
     }
   })
+
+  it('enables TraeCLI native thread titles as structured launch arguments', () => {
+    expect(TUI_AGENT_CONFIG.trae.launchArgs).toEqual(['-c', 'tui.terminal_title=["thread-title"]'])
+  })
 })

@@ -3,6 +3,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { focusActiveTerminalInput, waitForTerminalOutput } from './terminal'
 import type { BuiltInWindowsTerminalShell } from '../../../src/shared/windows-terminal-shell'
+import { quoteStartupArg } from '../../../src/shared/tui-agent-startup-shell'
 
 export const GOLDEN_STUB_READY_MARKER = 'GOLDEN_STUB_AGENT_READY'
 export const GOLDEN_STUB_EXIT_MARKER = 'GOLDEN_STUB_AGENT_EXITED'
@@ -10,10 +11,22 @@ export const GOLDEN_STUB_EXIT_MARKER = 'GOLDEN_STUB_AGENT_EXITED'
 /** Agents exposed by the fixture directory for tab-bar detection. */
 export const GOLDEN_STUB_AGENTS = [
   { id: 'codex', menuItemName: /^Codex(?:\s|$)/i },
-  { id: 'claude', menuItemName: /^Claude(?:\s|$)/i }
+  { id: 'claude', menuItemName: /^Claude(?:\s|$)/i },
+  { id: 'trae', menuItemName: /^Trae(?:\s|$)/i }
 ] as const
 
 const fixtureDir = path.join(process.cwd(), 'tests', 'e2e', 'fixtures', 'golden-stub-agent')
+
+function getGoldenStubAgentCommand(agent: (typeof GOLDEN_STUB_AGENTS)[number]['id']): string {
+  const executable = agent === 'trae' ? 'traecli' : agent
+  // Why absolute on POSIX: Orca's bash wrapper sources /etc/profile, and some
+  // distributions replace PATH there before the startup command is delivered.
+  // Windows shells keep the fixture PATH and need different absolute-path
+  // invocation syntax, so use the bare shim name there.
+  return process.platform === 'win32'
+    ? executable
+    : quoteStartupArg(path.join(fixtureDir, executable), 'posix')
+}
 
 export function getGoldenStubAgentLaunchEnv(): NodeJS.ProcessEnv {
   const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
@@ -32,20 +45,26 @@ export async function configureGoldenStubAgent(
   } = {}
 ): Promise<void> {
   const agent = options.agent ?? 'codex'
+  const agentCommand = getGoldenStubAgentCommand(agent)
   await page.evaluate(
-    async ({ agent, agentArgs, windowsShell }) => {
+    async ({ agent, agentCommand, agentArgs, windowsShell }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Orca store is unavailable')
       }
       await store.getState().updateSettings({
         defaultTuiAgent: agent,
-        agentCmdOverrides: { [agent]: 'golden-stub-agent' },
+        agentCmdOverrides: { [agent]: agentCommand },
         agentDefaultArgs: { [agent]: agentArgs },
         ...(windowsShell ? { terminalWindowsShell: windowsShell } : {})
       })
     },
-    { agent, agentArgs: options.agentArgs ?? '', windowsShell: options.windowsShell ?? null }
+    {
+      agent,
+      agentCommand,
+      agentArgs: options.agentArgs ?? '',
+      windowsShell: options.windowsShell ?? null
+    }
   )
 }
 

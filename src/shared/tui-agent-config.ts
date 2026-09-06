@@ -26,6 +26,8 @@ export type TuiAgentConfig = {
   /** Detection runtimes where this launch mode is not available as a detected agent. */
   detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
   launchCmd: string
+  /** Arguments Orca always adds before user-configured agent arguments. */
+  launchArgs?: readonly string[]
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
@@ -116,6 +118,10 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: the unrelated open-source bytedance/trae-agent also installs a `trae-cli`
     // binary, so detect TRAE CN's CLI on `traecli`, an alias only TRAE CN ships.
     detectCmd: 'traecli',
+    // Why: TraeCLI publishes its live thread name through OSC 0 only when the
+    // thread-title item is enabled. Keeping this as argv lets every target
+    // shell quote the JSON value correctly.
+    launchArgs: ['-c', 'tui.terminal_title=["thread-title"]'],
     // Why: `traecli [prompt]` takes the task as a positional argv, same as Claude/Codex.
     promptInjectionMode: 'argv',
     // Why: separator so prompts starting with `help`/`config`/`-…` aren't parsed as a

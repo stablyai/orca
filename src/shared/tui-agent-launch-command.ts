@@ -5,6 +5,7 @@ import {
 import type { SessionOptionValue } from './native-chat-session-options'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
+  isPosixStartupShell,
   planAgentCliArgsSuffix,
   quoteStartupArg,
   tokenizeStartupCommand,
@@ -31,12 +32,26 @@ export function resolveAgentLaunchCommand(args: {
   sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
 }): ResolvedAgentLaunchCommand {
+  const config = TUI_AGENT_CONFIG[args.agent]
   const override = args.cmdOverrides[args.agent]
-  const command =
+  const launchCommand =
     override ||
-    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
+    getTuiAgentLaunchCommand(config, args.platform, {
       isRemote: args.isRemote
     })
+  const launchArgs = config.launchArgs ?? []
+  const quotedLaunchArgs = launchArgs.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
+  const command =
+    override && quotedLaunchArgs
+      ? insertLaunchArgsIntoOverride(
+          override,
+          quotedLaunchArgs,
+          [config.detectCmd, ...(config.detectCmdAliases ?? [])],
+          args.shell
+        )
+      : quotedLaunchArgs
+        ? `${launchCommand} ${quotedLaunchArgs}`
+        : launchCommand
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -98,6 +113,47 @@ export function resolveAgentLaunchCommand(args: {
     commandWithoutSessionOptions,
     appliedSessionOptions: resolvedOptions.appliedValues
   }
+}
+
+/**
+ * Inserts Orca-owned arguments immediately after a directly invoked agent binary.
+ * User override arguments therefore stay later (and can override defaults), while
+ * an option terminator cannot turn the injected arguments into positional input.
+ */
+function insertLaunchArgsIntoOverride(
+  command: string,
+  quotedLaunchArgs: string,
+  executableNames: readonly string[],
+  shell: AgentStartupShell
+): string {
+  const tokenized = tokenizeStartupCommand(command, shell)
+  if (!tokenized.ok) {
+    return command
+  }
+  const normalizedNames = new Set(executableNames.map(normalizeExecutableName))
+  let commandPosition = true
+  for (let index = 0; index < tokenized.tokens.length; index += 1) {
+    const token = tokenized.tokens[index]
+    if (commandPosition && normalizedNames.has(normalizeExecutableName(token))) {
+      const insertionPoint = tokenized.spans[index].end
+      return `${command.slice(0, insertionPoint)} ${quotedLaunchArgs}${command.slice(insertionPoint)}`
+    }
+    if (commandPosition) {
+      if (isPosixStartupShell(shell) && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) {
+        continue
+      }
+      if (shell === 'powershell' && index === 0 && token === '&') {
+        continue
+      }
+      commandPosition = false
+    }
+  }
+  return command
+}
+
+function normalizeExecutableName(commandToken: string): string {
+  const basename = commandToken.split(/[\\/]/).pop() ?? ''
+  return basename.replace(/\.(exe|cmd|bat|ps1)$/i, '').toLowerCase()
 }
 
 function insertBeforeTerminator(tokens: readonly string[], inserted: readonly string[]): string[] {

@@ -27,7 +27,13 @@ export function getBrowserPagesByWorkspace(state: AppState): AppState['browserPa
 export function resolveRuntimeTerminalTitle(
   tab: Pick<
     TerminalTab,
-    'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title'
+    | 'customTitle'
+    | 'quickCommandLabel'
+    | 'aiVaultTitle'
+    | 'generatedTitle'
+    | 'title'
+    | 'defaultTitle'
+    | 'launchAgent'
   >,
   generatedTitlesEnabled: boolean,
   liveTitle = tab.title

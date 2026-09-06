@@ -48,6 +48,76 @@ describe('tab title resolution', () => {
     ).toBe('Refactor auth')
   })
 
+  it('uses TraeCLI native thread titles before generated titles', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          defaultTitle: 'Terminal 1',
+          generatedTitle: 'Orca generated',
+          launchAgent: 'trae',
+          title: 'Repair authentication retries'
+        },
+        true
+      )
+    ).toBe('Repair authentication retries')
+  })
+
+  it('keeps manual and quick command labels ahead of TraeCLI native titles', () => {
+    const tab = {
+      defaultTitle: 'Terminal 1',
+      generatedTitle: 'Orca generated',
+      launchAgent: 'trae' as const,
+      title: 'Repair authentication retries'
+    }
+    expect(
+      resolveTerminalTabTitle(
+        { ...tab, customTitle: 'Manual label', quickCommandLabel: 'Run tests' },
+        true
+      )
+    ).toBe('Manual label')
+    expect(
+      resolveTerminalTabTitle({ ...tab, customTitle: null, quickCommandLabel: 'Run tests' }, true)
+    ).toBe('Run tests')
+  })
+
+  it('does not promote generic, unnamed, or non-Trae live titles over generated titles', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          defaultTitle: 'Terminal 1',
+          generatedTitle: 'Orca generated',
+          launchAgent: 'trae',
+          title: 'Terminal 1'
+        },
+        true
+      )
+    ).toBe('Orca generated')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'Orca generated',
+          launchAgent: 'trae',
+          title: '01991234-7abc-4def-8123-0123456789ab'
+        },
+        true
+      )
+    ).toBe('Orca generated')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          generatedTitle: 'Orca generated',
+          launchAgent: 'codex',
+          title: 'Repair authentication retries'
+        },
+        true
+      )
+    ).toBe('Orca generated')
+  })
+
   it('places quick command labels between manual and generated titles', () => {
     expect(
       resolveTerminalTabTitle(
@@ -179,6 +249,21 @@ describe('tab title resolution', () => {
         true
       )
     ).toBe('OC | Native Stable Session')
+  })
+
+  it('uses TraeCLI native thread titles for unified labels', () => {
+    expect(
+      resolveUnifiedTabLabel(
+        {
+          customLabel: null,
+          defaultTitle: 'Terminal 1',
+          generatedLabel: 'Orca generated',
+          label: 'Repair authentication retries',
+          launchAgent: 'trae'
+        },
+        true
+      )
+    ).toBe('Repair authentication retries')
   })
 
   it('keeps manual and quick command labels ahead of native OpenCode labels', () => {

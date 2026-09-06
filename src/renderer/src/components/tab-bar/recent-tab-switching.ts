@@ -1,5 +1,6 @@
 import type { CtrlTabOrderMode, Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '../../store/types'
 import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
 import { getActiveTabNavOrder, type VisibleTabRef } from './group-tab-order'
@@ -87,23 +88,37 @@ function getActiveVisibleTabKey(
 
 function getTabLabel(
   tab: Tab | undefined,
+  terminalTab: TerminalTab | undefined,
   generatedTitlesEnabled: boolean,
   fallback: string
 ): string {
-  return resolveUnifiedTabLabel(tab, generatedTitlesEnabled, fallback)
+  return resolveUnifiedTabLabel(
+    tab
+      ? {
+          ...tab,
+          defaultTitle: terminalTab?.defaultTitle,
+          launchAgent: terminalTab?.launchAgent
+        }
+      : undefined,
+    generatedTitlesEnabled,
+    fallback
+  )
 }
 
 function toSwitcherItem(
   entry: VisibleTabRef,
   tabById: ReadonlyMap<string, Tab>,
+  terminalTabById: ReadonlyMap<string, TerminalTab>,
   dirtyFileIds: ReadonlySet<string>,
   generatedTitlesEnabled: boolean
 ): RecentTabSwitcherItem {
   const backingTab = entry.tabId ? tabById.get(entry.tabId) : undefined
+  const terminalTab =
+    backingTab?.contentType === 'terminal' ? terminalTabById.get(backingTab.entityId) : undefined
   return {
     ...entry,
     key: getVisibleTabKey(entry),
-    label: getTabLabel(backingTab, generatedTitlesEnabled, entry.id),
+    label: getTabLabel(backingTab, terminalTab, generatedTitlesEnabled, entry.id),
     contentType: backingTab?.contentType ?? (entry.type === 'editor' ? 'editor' : entry.type),
     isDirty: entry.type === 'editor' && dirtyFileIds.has(entry.id)
   }
@@ -162,6 +177,9 @@ export function buildRecentTabSwitcherModel(
   const tabById = new Map(
     (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
   )
+  const terminalTabById = new Map(
+    (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
+  )
   const dirtyFileIds = new Set(
     state.openFiles
       .filter((file) => file.worktreeId === worktreeId && file.isDirty)
@@ -170,7 +188,13 @@ export function buildRecentTabSwitcherModel(
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const itemByKey = new Map(
     visibleEntries.map((entry) => {
-      const item = toSwitcherItem(entry, tabById, dirtyFileIds, generatedTitlesEnabled)
+      const item = toSwitcherItem(
+        entry,
+        tabById,
+        terminalTabById,
+        dirtyFileIds,
+        generatedTitlesEnabled
+      )
       return [item.key, item] as const
     })
   )

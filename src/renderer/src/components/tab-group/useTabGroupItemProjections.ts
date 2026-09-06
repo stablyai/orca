@@ -78,7 +78,9 @@ export function useTabGroupItemProjections({
               {
                 ...item,
                 quickCommandLabel: item.quickCommandLabel ?? terminalTab?.quickCommandLabel,
-                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
+                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle,
+                defaultTitle: terminalTab?.defaultTitle,
+                launchAgent: terminalTab?.launchAgent
               },
               worktreeState.generatedTabTitlesEnabled,
               item.label

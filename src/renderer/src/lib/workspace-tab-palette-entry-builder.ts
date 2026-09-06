@@ -203,7 +203,9 @@ export function buildSearchableWorkspaceTabEntries({
             ...tab,
             customLabel: tab.customLabel ?? terminalTab?.customTitle ?? null,
             quickCommandLabel: tab.quickCommandLabel ?? terminalTab?.quickCommandLabel,
-            generatedLabel: tab.generatedLabel ?? terminalTab?.generatedTitle
+            generatedLabel: tab.generatedLabel ?? terminalTab?.generatedTitle,
+            defaultTitle: terminalTab?.defaultTitle,
+            launchAgent: terminalTab?.launchAgent
           },
           generatedTitlesEnabled,
           terminalTitle

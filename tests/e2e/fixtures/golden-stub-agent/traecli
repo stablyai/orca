@@ -1,0 +1,2 @@
+#!/bin/sh
+GOLDEN_STUB_AGENT_REPORT_ARGS=1 exec "$(dirname "$0")/golden-stub-agent" "$@"

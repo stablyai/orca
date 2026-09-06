@@ -11,7 +11,20 @@ export function resolvePinnedTabLabel(
   const tab = (state.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
     (candidate) => candidate.id === visibleId || candidate.entityId === visibleId
   )
-  return resolveUnifiedTabLabel(tab, state.settings?.tabAutoGenerateTitle === true)
+  const terminalTab =
+    tab?.contentType === 'terminal'
+      ? (state.tabsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === tab.entityId)
+      : undefined
+  return resolveUnifiedTabLabel(
+    tab
+      ? {
+          ...tab,
+          defaultTitle: terminalTab?.defaultTitle,
+          launchAgent: terminalTab?.launchAgent
+        }
+      : undefined,
+    state.settings?.tabAutoGenerateTitle === true
+  )
 }
 
 /** Whether the unified tab matching `tabId` (by id or entityId) in the given

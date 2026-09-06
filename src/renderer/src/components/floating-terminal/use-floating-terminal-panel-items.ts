@@ -101,7 +101,9 @@ export function useFloatingTerminalPanelItems({
                 {
                   ...tab,
                   quickCommandLabel: tab.quickCommandLabel ?? terminalTab.quickCommandLabel,
-                  generatedLabel: tab.generatedLabel ?? terminalTab.generatedTitle
+                  generatedLabel: tab.generatedLabel ?? terminalTab.generatedTitle,
+                  defaultTitle: terminalTab.defaultTitle,
+                  launchAgent: terminalTab.launchAgent
                 },
                 generatedTabTitlesEnabled,
                 tab.label

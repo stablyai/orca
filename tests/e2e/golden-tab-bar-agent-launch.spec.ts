@@ -44,7 +44,44 @@ for (const { id, menuItemName } of GOLDEN_STUB_AGENTS) {
     const activeTab = orcaPage.locator('[data-testid="sortable-tab"][data-active="true"]')
     await expect(activeTab).toHaveAttribute('data-tab-title', /Golden Stub Agent|Codex|Claude/i)
     // The marker distinguishes an agent launch from an identical bare-shell tab.
-    expect(await getTerminalContent(orcaPage)).toContain(GOLDEN_STUB_READY_MARKER)
+    const terminalContent = await getTerminalContent(orcaPage)
+    expect(terminalContent).toContain(GOLDEN_STUB_READY_MARKER)
+    if (id === 'trae') {
+      expect(terminalContent).toContain('tui.terminal_title=["thread-title"]')
+      await orcaPage.evaluate(() => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('Orca store is unavailable')
+        }
+        const state = store.getState()
+        const worktreeId = state.activeWorktreeId
+        const terminalTab = (state.tabsByWorktree[worktreeId ?? ''] ?? []).find(
+          (tab) => tab.launchAgent === 'trae'
+        )
+        if (!worktreeId || !terminalTab) {
+          throw new Error('Launched Trae terminal tab is unavailable')
+        }
+        const generatedTitle = 'Orca generated title'
+        store.setState({
+          settings: { ...state.settings, tabAutoGenerateTitle: true },
+          tabsByWorktree: {
+            ...state.tabsByWorktree,
+            [worktreeId]: state.tabsByWorktree[worktreeId]!.map((tab) =>
+              tab.id === terminalTab.id ? { ...tab, generatedTitle } : tab
+            )
+          },
+          unifiedTabsByWorktree: {
+            ...state.unifiedTabsByWorktree,
+            [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
+              tab.contentType === 'terminal' && tab.entityId === terminalTab.id
+                ? { ...tab, generatedLabel: generatedTitle }
+                : tab
+            )
+          }
+        })
+      })
+      await expect(activeTab).toHaveAttribute('data-tab-title', 'Golden Stub Agent')
+    }
   })
 }
 
