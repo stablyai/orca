@@ -113,22 +113,3 @@ export async function restrictWindowsRelayEndpointCredential(
     )
   }
 }
-
-/**
- * Whether a credential presented by a client may be adopted from disk.
- *
- * A file inside the relay directory that is owner-only and owned by this uid was written by us
- * or by something that already runs as us; a client that presents its exact content has read it
- * legitimately. Adopting it heals a credential rotated by a client-side launch that lost the
- * bind, instead of refusing every client until someone signals the daemon by hand.
- */
-export function readRotatedRelayEndpointCredential(
-  credentialFile: string | undefined,
-  presented: string | undefined
-): string | undefined {
-  if (!credentialFile || presented === undefined || !isValidRelayEndpointCredential(presented)) {
-    return undefined
-  }
-  const onDisk = readOwnerOnlyRelayEndpointCredential(credentialFile)
-  return onDisk === presented ? onDisk : undefined
-}

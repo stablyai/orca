@@ -7,7 +7,6 @@ import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import {
   readAdoptableRelayEndpointCredential,
-  readRotatedRelayEndpointCredential,
   writeRelayEndpointCredentialFile
 } from './relay-endpoint-credential-publication'
 import { EXIT_CODE_CREDENTIAL_MISMATCH } from './relay-handshake'
@@ -141,31 +140,7 @@ describe.skipIf(process.platform === 'win32')('relay endpoint credential publica
     expect(resp.error).toBeUndefined()
   }, 15_000)
 
-  it('accepts a client presenting a credential rotated on disk with owner-only mode', async () => {
-    freshDir('relay-cred-rotate-')
-    const daemon = startDaemon()
-    const daemonStderr = captureStderr(daemon)
-    await daemon.sentinelReceived
-    const original = readFileSync(credentialFile, 'utf8').trim()
-
-    // The wedge shape: something rewrote the file while the daemon kept its in-memory value.
-    writeRelayEndpointCredentialFile(credentialFile, 'c'.repeat(48))
-    expect(readFileSync(credentialFile, 'utf8')).not.toBe(original)
-
-    const bridge = connect()
-    await bridge.sentinelReceived
-    const resp = await bridge.waitForResponse(bridge.send('relay.status'))
-    expect(resp.error).toBeUndefined()
-    expect(daemonStderr()).toContain('Endpoint credential rotated on disk; adopting')
-    expect(daemonStderr()).not.toContain('Endpoint credential mismatch')
-
-    // A second client with the same rotated value is plain-accepted, no re-adoption noise.
-    const second = connect()
-    await second.sentinelReceived
-    expect(daemonStderr().match(/rotated on disk/g)).toHaveLength(1)
-  }, 15_000)
-
-  it('refuses a credential that matches neither memory nor disk, with a typed bridge exit', async () => {
+  it('refuses a credential that is not the one it published, with a typed bridge exit', async () => {
     freshDir('relay-cred-refuse-')
     const daemon = startDaemon()
     const daemonStderr = captureStderr(daemon)
@@ -187,46 +162,34 @@ describe.skipIf(process.platform === 'win32')('relay endpoint credential publica
     await good.sentinelReceived
     const resp = await good.waitForResponse(good.send('relay.status'))
     expect(resp.error).toBeUndefined()
-  }, 15_000)
+
+    // Fixed for the process lifetime: rewriting the file does not move the daemon's credential.
+    writeRelayEndpointCredentialFile(credentialFile, 'e'.repeat(48))
+    const rotated = connect()
+    expect(await rotated.waitForExit(8000)).toBe(EXIT_CODE_CREDENTIAL_MISMATCH)
+    writeRelayEndpointCredentialFile(credentialFile, original)
+    const restored = connect()
+    await restored.sentinelReceived
+  }, 20_000)
 })
 
-describe.skipIf(process.platform === 'win32')('readRotatedRelayEndpointCredential', () => {
+describe.skipIf(process.platform === 'win32')('readAdoptableRelayEndpointCredential', () => {
   let dir: string
   afterEach(async () => {
     await rm(dir, { recursive: true, force: true }).catch(() => {})
   })
 
-  it('returns the on-disk value only when it matches, is well-formed, and is owner-only', () => {
-    dir = mkdtempSync(path.join(tmpdir(), 'relay-cred-read-'))
-    const file = path.join(dir, 'relay.sock.credential')
-    const value = 'e'.repeat(32)
-    writeFileSync(file, `${value}\n`, { mode: 0o600 })
-    expect(readRotatedRelayEndpointCredential(file, value)).toBe(value)
-    expect(readRotatedRelayEndpointCredential(file, 'f'.repeat(32))).toBeUndefined()
-    expect(readRotatedRelayEndpointCredential(file, undefined)).toBeUndefined()
-    expect(readRotatedRelayEndpointCredential(undefined, value)).toBeUndefined()
-    chmodSync(file, 0o640)
-    expect(readRotatedRelayEndpointCredential(file, value)).toBeUndefined()
-  })
-
-  it('applies the same owner-only rule at startup adoption', () => {
+  it('adopts only a well-formed, owner-only file owned by this uid', () => {
     dir = mkdtempSync(path.join(tmpdir(), 'relay-cred-read-'))
     const file = path.join(dir, 'relay.sock.credential')
     const value = 'h'.repeat(32)
-    writeFileSync(file, value, { mode: 0o600 })
+    writeFileSync(file, `${value}\n`, { mode: 0o600 })
     expect(readAdoptableRelayEndpointCredential(file)).toBe(value)
     chmodSync(file, 0o644)
     expect(readAdoptableRelayEndpointCredential(file)).toBeUndefined()
-    expect(readAdoptableRelayEndpointCredential(path.join(dir, 'missing'))).toBeUndefined()
-  })
-
-  it('never adopts a value that cannot authenticate a reconnect client', () => {
-    dir = mkdtempSync(path.join(tmpdir(), 'relay-cred-read-'))
-    const file = path.join(dir, 'relay.sock.credential')
+    chmodSync(file, 0o600)
     writeFileSync(file, 'short', { mode: 0o600 })
-    expect(readRotatedRelayEndpointCredential(file, 'short')).toBeUndefined()
-    expect(readRotatedRelayEndpointCredential(path.join(dir, 'missing'), 'g'.repeat(32))).toBe(
-      undefined
-    )
+    expect(readAdoptableRelayEndpointCredential(file)).toBeUndefined()
+    expect(readAdoptableRelayEndpointCredential(path.join(dir, 'missing'))).toBeUndefined()
   })
 })

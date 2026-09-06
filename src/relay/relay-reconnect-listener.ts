@@ -1,7 +1,6 @@
 import type { Socket } from 'node:net'
 import type { RelayDispatcher } from './dispatcher'
 import { setupDaemonHandshake } from './relay-handshake'
-import { readRotatedRelayEndpointCredential } from './relay-endpoint-credential-publication'
 import { relayLogLine } from './relay-diagnostic-log'
 import type { RelaySocketOwnership } from './relay-socket-ownership'
 
@@ -16,6 +15,7 @@ export class RelayReconnectListener {
   private acceptedSocketConnections = 0
   private acceptedSocketClient = false
   private endpointCredential: string | undefined
+  private endpointCredentialPublished = false
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
@@ -25,9 +25,10 @@ export class RelayReconnectListener {
     private readonly callbacks: RelayReconnectCallbacks
   ) {}
 
-  /** Set once the bind succeeded; connections accepted before this see no credential. */
+  /** Set once the bind succeeded and the file is published; fixed for the process lifetime. */
   setEndpointCredential(credential: string | undefined): void {
     this.endpointCredential = credential
+    this.endpointCredentialPublished = true
   }
 
   get clientCount(): number {
@@ -47,10 +48,17 @@ export class RelayReconnectListener {
   }
 
   private acceptConnection(socket: Socket): void {
+    // Why fail closed: the credential is set right after listen() resolves, and today no
+    // connection can be delivered in between. Do not let an auth boundary rest on event-loop
+    // ordering — a client that arrives before publication is refused, never admitted unproved.
+    if (this.credentialFile !== undefined && !this.endpointCredentialPublished) {
+      relayLogLine('[relay] Client arrived before the endpoint credential was published; refusing')
+      socket.destroy()
+      return
+    }
     setupDaemonHandshake(socket, {
       launchVersion: this.launchVersion,
       endpointCredential: this.endpointCredential,
-      adoptRotatedCredential: (presented) => this.adoptRotatedCredential(presented),
       onAccepted: (acceptedSocket, leftover) => this.attachAcceptedSocket(acceptedSocket, leftover)
     })
     socket.on('end', () => {
@@ -123,22 +131,6 @@ export class RelayReconnectListener {
       this.callbacks.cancelGrace('socket client data')
       this.dispatcher.feedClient(clientId, chunk)
     })
-  }
-
-  // Why: a client-side launch that lost the bind may already have rotated the file. Adopting an
-  // owner-only file that matches what the client presented heals that instead of refusing every
-  // client until someone signals this daemon by hand.
-  private adoptRotatedCredential(presented: string | undefined): boolean {
-    if (this.endpointCredential === undefined) {
-      return false
-    }
-    const rotated = readRotatedRelayEndpointCredential(this.credentialFile, presented)
-    if (rotated === undefined) {
-      return false
-    }
-    relayLogLine('[relay] Endpoint credential rotated on disk; adopting the published value')
-    this.endpointCredential = rotated
-    return true
   }
 
   private handleSocketClose(socket: Socket): void {

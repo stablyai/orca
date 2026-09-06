@@ -55,8 +55,6 @@ export type DaemonHandshakeCallbacks = {
   onAccepted: (sock: Socket, leftover: Buffer) => void
   launchVersion: string
   endpointCredential?: string
-  /** Given the credential a client presented, adopt it from disk if legitimate; true when accepted. */
-  adoptRotatedCredential?: (presented: string | undefined) => boolean
 }
 
 // Why: read one handshake frame before attaching the dispatcher; version mismatch closes the socket so the bridge exits 42.
@@ -142,11 +140,7 @@ function handleDaemonHandshakeFrame(
     return false
   }
   const presented = 'endpointCredential' in msg ? msg.endpointCredential : undefined
-  if (
-    endpointCredential !== undefined &&
-    presented !== endpointCredential &&
-    !cb.adoptRotatedCredential?.(presented)
-  ) {
+  if (endpointCredential !== undefined && presented !== endpointCredential) {
     relayLogLine('[relay] Endpoint credential mismatch; closing socket')
     try {
       sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-credential-mismatch' }))
