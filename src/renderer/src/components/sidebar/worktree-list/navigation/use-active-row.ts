@@ -100,9 +100,18 @@ export function usePrimaryActiveWorktreeRow(args: {
 
   const handleImmediateWorktreeRowActivate = useCallback(
     (worktreeId: string, rowKey: string | undefined): void => {
-      const ref = rowsRef.current
-        .map(getActiveSurfaceRowRef)
-        .find((candidate) => candidate?.worktreeId === worktreeId && candidate.rowKey === rowKey)
+      // Why the loop and not map().find(): this runs on every sidebar card
+      // click, where the codebase already hand-optimizes to keep the pointer
+      // path free of avoidable work. Short-circuit instead of resolving a ref
+      // for every row.
+      let ref: ReturnType<typeof getActiveSurfaceRowRef> = null
+      for (const row of rowsRef.current) {
+        const candidate = getActiveSurfaceRowRef(row)
+        if (candidate?.worktreeId === worktreeId && candidate.rowKey === rowKey) {
+          ref = candidate
+          break
+        }
+      }
       setPrimaryActiveWorktreeRow(
         rowKey && ref ? { worktreeIdentity: ref.worktreeIdentity, rowKey } : null
       )
