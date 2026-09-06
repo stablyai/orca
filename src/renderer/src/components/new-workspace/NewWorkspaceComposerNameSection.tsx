@@ -16,6 +16,7 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'onSmartGitHubItemSelect'
   | 'onSmartGitLabItemSelect'
   | 'onSmartBranchSelect'
+  | 'onSmartKaneoTaskSelect'
   | 'onSmartLinearIssueSelect'
   | 'onSmartJiraIssueSelect'
   | 'onOpenJiraSettings'
@@ -49,6 +50,7 @@ export function NewWorkspaceComposerNameSection({
   onSmartGitHubItemSelect,
   onSmartGitLabItemSelect,
   onSmartBranchSelect,
+  onSmartKaneoTaskSelect,
   onSmartLinearIssueSelect,
   onSmartJiraIssueSelect,
   onOpenJiraSettings,
@@ -93,6 +95,7 @@ export function NewWorkspaceComposerNameSection({
         onGitHubItemSelect={onSmartGitHubItemSelect}
         onGitLabItemSelect={onSmartGitLabItemSelect}
         onBranchSelect={onSmartBranchSelect}
+        onKaneoTaskSelect={onSmartKaneoTaskSelect}
         onLinearIssueSelect={onSmartLinearIssueSelect}
         onJiraIssueSelect={onSmartJiraIssueSelect}
         onOpenJiraSettings={onOpenJiraSettings}

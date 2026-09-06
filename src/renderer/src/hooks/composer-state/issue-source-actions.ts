@@ -32,6 +32,7 @@ type IssueSourceActionsInput = Pick<
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { KaneoTask } from '../../../../shared/kaneo-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
 import {
   toLinearLinkedWorkItem,
@@ -154,9 +155,8 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     ]
   )
 
-  const handleSmartJiraIssueSelect = useCallback(
-    (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
-      const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
+  const handleTaskSourceSelect = useCallback(
+    (linkedItem: LinkedWorkItemSummary, sourceContext: TaskSourceContext | null): void => {
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
@@ -203,6 +203,33 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setName,
       setPushTarget
     ]
+  )
+
+  const handleSmartJiraIssueSelect = useCallback(
+    (issue: JiraIssue, sourceContext: TaskSourceContext) => {
+      handleTaskSourceSelect(buildJiraWorkspaceSource(issue), sourceContext)
+    },
+    [handleTaskSourceSelect]
+  )
+  const handleSmartKaneoTaskSelect = useCallback(
+    (task: KaneoTask) => {
+      handleTaskSourceSelect(
+        {
+          provider: 'kaneo',
+          type: 'issue',
+          number: task.number,
+          title: task.title,
+          url: task.url,
+          linkedContext: {
+            provider: 'kaneo',
+            version: 1,
+            renderedText: `${task.title}\n${task.url}\n\n${task.description}`
+          }
+        },
+        null
+      )
+    },
+    [handleTaskSourceSelect]
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
@@ -270,6 +297,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
   return {
     handleSmartLinearIssueSelect,
     handleSmartJiraIssueSelect,
+    handleSmartKaneoTaskSelect,
     handleClearSmartNameSelection,
     smartNameSelection
   }

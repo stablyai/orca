@@ -17653,5 +17653,29 @@
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
     "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+  },
+  "kaneo": {
+    "loadingTask": "Loading Kaneo task…",
+    "taskReady": "Select the Kaneo task to link it to this workspace.",
+    "retry": "Retry",
+    "openSettings": "Open settings",
+    "integration": {
+      "searchTitle": "Kaneo Integration",
+      "description": "Paste a Kaneo task URL to start a workspace with linked task context."
+    },
+    "connected": "Connected",
+    "disconnected": "Not connected",
+    "configure": "Configure",
+    "connect": "Connect Kaneo",
+    "disconnect": "Disconnect",
+    "instanceUrl": "Instance URL",
+    "apiKey": "API key",
+    "keyHelp": "Create an API key in Kaneo under Settings → Account → Developer Settings.",
+    "remoteCredential": "Credentials are stored on the selected remote runtime using its credential storage.",
+    "localCredential": "Credentials are stored locally, encrypted when system credential storage is available.",
+    "connecting": "Connecting…",
+    "saveConnection": "Save connection",
+    "cancel": "Cancel",
+    "apiKeyHelp": "API key help"
   }
 }

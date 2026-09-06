@@ -42,6 +42,7 @@ export function useSmartWorkspaceNameFieldActions(
     onGitHubItemSelect,
     onGitLabItemSelect,
     onJiraIssueSelect,
+    onKaneoTaskSelect,
     onLinearIssueSelect,
     onValueChange,
     setOpen,
@@ -79,6 +80,8 @@ export function useSmartWorkspaceNameFieldActions(
         onGitLabItemSelect?.(row.item)
       } else if (row.kind === 'branch') {
         onBranchSelect(row.refName, row.localBranchName)
+      } else if (row.kind === 'kaneo') {
+        onKaneoTaskSelect?.(row.task)
       } else if (row.kind === 'jira') {
         const sites = jiraConnectionStatus?.sites ?? []
         const site =
@@ -112,6 +115,7 @@ export function useSmartWorkspaceNameFieldActions(
       onGitHubItemSelect,
       onGitLabItemSelect,
       onJiraIssueSelect,
+      onKaneoTaskSelect,
       onLinearIssueSelect,
       onValueChange,
       setOpen,

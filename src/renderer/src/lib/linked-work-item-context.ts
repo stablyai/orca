@@ -1,7 +1,8 @@
-import type { TaskProvider } from '../../../shared/task-providers'
+import type { WorkspaceLinkedItem } from '../../../shared/worktree/types'
+type LinkedWorkItemProvider = WorkspaceLinkedItem['provider']
 
 export type LinkedWorkItemContext = {
-  provider: TaskProvider
+  provider: LinkedWorkItemProvider
   version: 1
   renderedText: string
 }
@@ -59,7 +60,7 @@ function formatDraftContextBlock(value: string): string {
 }
 
 export type LinearLaunchContextArgs = {
-  provider?: TaskProvider
+  provider?: LinkedWorkItemProvider
   identifier: string | undefined
   title?: string
   url?: string
@@ -68,7 +69,7 @@ export type LinearLaunchContextArgs = {
 function isLinearWorkItemReference(
   args:
     | {
-        provider?: TaskProvider
+        provider?: LinkedWorkItemProvider
         linearIdentifier?: string
         linkedContext?: LinkedWorkItemContext
       }
@@ -153,7 +154,12 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
 export function getLinkedWorkItemPromptContext(
   linkedWorkItem:
     | (Pick<
-        { provider?: TaskProvider; url: string; title?: string; linearIdentifier?: string },
+        {
+          provider?: LinkedWorkItemProvider
+          url: string
+          title?: string
+          linearIdentifier?: string
+        },
         'provider' | 'url' | 'title' | 'linearIdentifier'
       > & { linkedContext?: LinkedWorkItemContext })
     | null
@@ -170,6 +176,10 @@ export function getLinkedWorkItemPromptContext(
       ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
       : { linkedUrls: [], linkedContextBlocks: [] }
   }
+  if (linkedWorkItem?.provider === 'kaneo') {
+    const block = buildContainedLinkedContextBlock(linkedWorkItem.linkedContext)
+    return { linkedUrls: [linkedWorkItem.url], linkedContextBlocks: block ? [block] : [] }
+  }
   const linkedUrl = linkedWorkItem?.url?.trim()
   return linkedUrl
     ? { linkedUrls: [linkedUrl], linkedContextBlocks: [] }
@@ -177,7 +187,7 @@ export function getLinkedWorkItemPromptContext(
 }
 
 export function getLaunchableWorkItemDraftContent(args: {
-  provider?: TaskProvider
+  provider?: LinkedWorkItemProvider
   pasteContent?: string
   url: string
   title?: string
@@ -203,7 +213,7 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
   linkedWorkItem:
     | (Pick<
         {
-          provider?: TaskProvider
+          provider?: LinkedWorkItemProvider
           number: number
           url: string
           title?: string
@@ -225,6 +235,13 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       })
     : null
   const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
+  if (linkedWorkItem?.provider === 'kaneo') {
+    const block = buildContainedLinkedContextBlock(linkedWorkItem.linkedContext)
+    return {
+      prompt: '',
+      draftPrompt: [trimmedNote, linkedWorkItem.url, block].filter(Boolean).join('\n\n')
+    }
+  }
   const linkedUrl = linkedWorkItem?.url?.trim() || null
   const draftPrompt = linearDraft
     ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')

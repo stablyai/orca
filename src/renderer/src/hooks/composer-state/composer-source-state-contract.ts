@@ -39,6 +39,7 @@ export type ComposerSourceState = {
   >
   issueSourceActions: Pick<
     ComposerModel,
+    | 'handleSmartKaneoTaskSelect'
     | 'handleSmartLinearIssueSelect'
     | 'handleSmartJiraIssueSelect'
     | 'handleClearSmartNameSelection'

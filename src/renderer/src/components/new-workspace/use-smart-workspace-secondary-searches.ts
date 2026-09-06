@@ -30,6 +30,7 @@ export function useSmartWorkspaceSecondarySearches({
   const {
     disabled,
     jiraSource,
+    kaneoSource,
     branchesEnabled,
     repoBackedSourcesDisabled,
     textOnly,
@@ -75,7 +76,8 @@ export function useSmartWorkspaceSecondarySearches({
   const branchSearchRequest = useMemo(
     () =>
       getBranchSearchRequest({
-        disabled: disabled || jiraSource.intent || linearUrlIntentOwnsInput,
+        disabled:
+          disabled || jiraSource.intent || Boolean(kaneoSource.intent) || linearUrlIntentOwnsInput,
         branchesEnabled: branchesEnabled && !repoBackedSourcesDisabled,
         textOnly,
         mode,
@@ -88,6 +90,7 @@ export function useSmartWorkspaceSecondarySearches({
       debouncedQuery,
       disabled,
       jiraSource.intent,
+      kaneoSource.intent,
       linearUrlIntentOwnsInput,
       mode,
       repoBackedSourcesDisabled,
