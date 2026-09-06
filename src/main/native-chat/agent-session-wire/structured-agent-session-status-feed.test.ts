@@ -32,7 +32,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-async function openJournal(sessionId = SESSION) {
+async function openJournal(sessionId = SESSION, now?: () => number) {
   return journals.open({
     identity: {
       sessionId,
@@ -41,6 +41,7 @@ async function openJournal(sessionId = SESSION) {
       agent: 'codex',
       providerHandle: { kind: 'codex', threadId: 'thread-1' }
     },
+    now,
     journalDir: join(root, sessionId)
   })
 }
@@ -130,6 +131,37 @@ describe('StructuredAgentSessionStatusFeed', () => {
       session: expect.objectContaining({ sessionId: SESSION, status: 'idle' })
     })
     expect(events).toHaveLength(3)
+  })
+
+  it('preserves the completion tombstone time when the journal and host reopen', async () => {
+    let now = 100
+    const journal = await openJournal(SESSION, () => now)
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1 }
+    )
+    await journal.appendItem(
+      TURN_IDENTITY,
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
+      { fence: 1 }
+    )
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
+    now = 200
+    await journal.appendTombstone(TURN_IDENTITY, { fence: 1 })
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({
+      type: 'status',
+      session: { status: 'idle', updatedAt: 200 }
+    })
+    await journal.close()
+    now = 900
+    const reopened = await openJournal(SESSION, () => now)
+    const restored = feedFor(new Map([[SESSION, { journal: reopened }]]))
+    expect(restored.events[0]).toMatchObject({
+      type: 'snapshot',
+      sessions: [{ status: 'idle', updatedAt: 200 }]
+    })
   })
 
   it('reports a pending approval as attention', async () => {

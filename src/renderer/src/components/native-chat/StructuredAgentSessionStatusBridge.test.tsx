@@ -6,6 +6,8 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session-wire'
+import { resolveAttention } from '../sidebar/smart-attention'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
@@ -43,11 +45,11 @@ vi.mock('@/store', async () => {
     },
     setAgentStatus: (...args) => {
       mocks.setAgentStatus(...args)
-      const [paneKey, payload, terminalTitle, , routing, metadata] = args as [
+      const [paneKey, payload, terminalTitle, timing, routing, metadata] = args as [
         string,
         Record<string, unknown>,
         string,
-        unknown,
+        Record<string, unknown>,
         Record<string, unknown>,
         Record<string, unknown>
       ]
@@ -62,6 +64,7 @@ vi.mock('@/store', async () => {
             terminalTitle,
             updatedAt: Date.now(),
             stateStartedAt: Date.now(),
+            ...timing,
             stateHistory: []
           }
         }
@@ -218,7 +221,9 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(statuses()).toEqual([expect.objectContaining({ state: 'working' })])
 
     act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 2 }) }))
-    expect(statuses()).toEqual([expect.objectContaining({ state: 'done', sessionBoundary: true })])
+    expect(statuses()).toEqual([
+      expect.objectContaining({ state: 'done', sessionBoundary: false, stateStartedAt: 2 })
+    ])
 
     act(() =>
       feed().emit({ type: 'status', session: summary({ status: 'attention', updatedAt: 3 }) })
@@ -244,14 +249,52 @@ describe('StructuredAgentSessionStatusBridge', () => {
     const before = mocks.store?.getState().agentStatusByPaneKey
 
     act(() => {
-      for (let updatedAt = 2; updatedAt <= 12; updatedAt += 1) {
-        feed().emit({ type: 'status', session: summary({ updatedAt }) })
+      for (let repeat = 0; repeat < 10; repeat += 1) {
+        feed().emit({ type: 'status', session: summary() })
       }
     })
 
     expect(mocks.setAgentStatus).toHaveBeenCalledOnce()
     expect(mocks.store?.getState().agentStatusByPaneKey).toBe(before)
   })
+
+  it.each(['claude', 'codex'] as const)(
+    'sorts restored %s completions by host time and advances identical turns',
+    async (agent) => {
+      const now = Date.now()
+      mocks.store?.setState({
+        unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, agentSessionAgent: agent }] }
+      })
+      render(<StructuredAgentSessionStatusBridge />)
+      await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+      act(() =>
+        feed().emit({
+          type: 'snapshot',
+          sessions: [summary({ status: 'idle', updatedAt: now - 100 })]
+        })
+      )
+      expect(statuses()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          sessionBoundary: false,
+          stateStartedAt: now - 100,
+          updatedAt: now - 100
+        })
+      ])
+      act(() =>
+        feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: now - 50 }) })
+      )
+      expect(statuses()).toEqual([
+        expect.objectContaining({ stateStartedAt: now - 50, updatedAt: now - 50 })
+      ])
+      expect(
+        resolveAttention(
+          [{ kind: 'hook', entry: statuses()[0] as AgentStatusEntry, hasLivePty: false }],
+          now
+        )
+      ).toEqual({ cls: 2, attentionTimestamp: now - 50 })
+    }
+  )
 
   it('drops the status and the feed when the last structured tab closes', async () => {
     render(<StructuredAgentSessionStatusBridge />)
