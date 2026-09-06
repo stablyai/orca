@@ -90,8 +90,8 @@ export class DesktopScriptRuntimeHost {
     this.idleShutdownMs = options.idleShutdownMs ?? IDLE_SHUTDOWN_MS
     this.availability = new RuntimeHostAvailability(
       options.cooldownMs ?? START_FAILURE_COOLDOWN_MS,
-      options.now ?? Date.now,
-      (message) => (options.warn ?? reportComputerDiagnostic)(message)
+      (message) => (options.warn ?? reportComputerDiagnostic)(message),
+      options.now
     )
   }
 

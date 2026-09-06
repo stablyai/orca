@@ -117,6 +117,12 @@ async function settle(): Promise<void> {
   }
 }
 
+/** The wait the host reported, read back out of its refusal message. */
+function remainingCooldownMs(error: Error | null): number {
+  const match = /retrying the runtime host in (\d+)ms/.exec(error?.message ?? '')
+  return match ? Number(match[1]) : Number.NaN
+}
+
 /** Kill each helper the host starts, until it stops starting them. */
 async function failEveryStart(children: FakeRuntimeChild[], stderr: string): Promise<void> {
   for (let index = 0; index < 8; index++) {
@@ -131,6 +137,7 @@ async function failEveryStart(children: FakeRuntimeChild[], stderr: string): Pro
 describe('DesktopScriptRuntimeHost', () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('starts one helper for many operations and never writes an operation file', async () => {
@@ -668,6 +675,51 @@ describe('DesktopScriptRuntimeHost', () => {
     await expect(recovered).resolves.toMatchObject({ ok: true })
 
     expect(warnings.at(-1)).toMatch(/recovered/)
+    host.dispose()
+  })
+
+  // Both of these deliberately leave `now` unset: the bug was in the default the
+  // host picks, so a test that injects a clock cannot see it.
+  it('does not stretch the cooldown when the wall clock steps backwards', async () => {
+    const wallClock = vi.spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
+    const { host, children } = createHost({ cooldownMs: 60_000 })
+
+    const failed = host.request({ tool: 'handshake' })
+    await settle()
+    await failEveryStart(children, 'The term is not recognized')
+    await expect(failed).rejects.toSatisfy(isRuntimeHostUnavailable)
+
+    // An NTP correction, a VM snapshot restore, a user changing the clock.
+    wallClock.mockReturnValue(2_000_000_000_000 - 3_600_000)
+
+    const refused = await host.request({ tool: 'handshake' }).then(
+      () => null,
+      (error: Error) => error
+    )
+    expect(refused?.message).toMatch(/retrying the runtime host in/)
+    expect(remainingCooldownMs(refused)).toBeLessThanOrEqual(60_000)
+    host.dispose()
+  })
+
+  it('serves from the persistent helper again after a backwards clock step', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000_000_000_000)
+    const { host, children } = createHost({ cooldownMs: 25 })
+
+    const failed = host.request({ tool: 'handshake' })
+    await settle()
+    await failEveryStart(children, 'The term is not recognized')
+    await expect(failed).rejects.toSatisfy(isRuntimeHostUnavailable)
+    const attempts = children.length
+
+    vi.mocked(Date.now).mockReturnValue(2_000_000_000_000 - 3_600_000)
+    // Real elapsed time, because the clock under test is the real monotonic one.
+    await new Promise((resolve) => setTimeout(resolve, 60))
+
+    const recovered = host.request({ tool: 'handshake' })
+    await settle()
+    expect(children).toHaveLength(attempts + 1)
+    children[attempts].respond({ ok: true, capabilities: {} })
+    await expect(recovered).resolves.toMatchObject({ ok: true })
     host.dispose()
   })
 })

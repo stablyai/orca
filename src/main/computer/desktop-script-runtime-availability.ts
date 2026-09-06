@@ -18,6 +18,17 @@ export const MAX_START_ATTEMPTS = 3
 export const START_FAILURE_COOLDOWN_MS = 60_000
 
 /**
+ * Why not `Date.now`: an NTP correction, a VM snapshot restore or a user changing
+ * the clock steps the wall clock backwards, which extended the cooldown by the
+ * size of the step. Nothing shortens it from there — only `recordSuccess` clears
+ * it, and no request can reach a helper to succeed while it holds — so a one-hour
+ * step disabled the persistent helper for the life of the sidecar, silently
+ * restoring the per-click process burst. Elapsed monotonic time cannot go
+ * backwards.
+ */
+const monotonicNowMs = (): number => performance.now()
+
+/**
  * Whether the persistent helper is currently believed usable, and the execution
  * policy it should be started under.
  *
@@ -30,13 +41,15 @@ export class RuntimeHostAvailability {
   private retryUnderFallbackPolicy = false
   private consecutiveFailures = 0
   private consecutiveSuccesses = 0
-  private cooldownUntil = 0
+  /** Null, not 0, for "no cooldown": `performance.now()` legitimately returns 0. */
+  private cooldownStartedAtMs: number | null = null
 
   constructor(
     private readonly cooldownMs: number,
-    private readonly now: () => number,
     /** Public so the host can report its own start attempts to the same sink. */
-    readonly warn: (message: string) => void
+    readonly warn: (message: string) => void,
+    /** Overridden only by tests; the default must stay monotonic. */
+    private readonly now: () => number = monotonicNowMs
   ) {}
 
   get executionPolicy(): WindowsExecutionPolicy {
@@ -53,7 +66,12 @@ export class RuntimeHostAvailability {
 
   /** Milliseconds left before the host may try a helper again; 0 when it may. */
   remainingCooldown(): number {
-    return Math.max(0, this.cooldownUntil - this.now())
+    if (this.cooldownStartedAtMs === null) {
+      return 0
+    }
+    // Elapsed since the cooldown began, never a stored deadline: a deadline is
+    // only as trustworthy as the clock it was computed against.
+    return Math.max(0, Math.ceil(this.cooldownMs - (this.now() - this.cooldownStartedAtMs)))
   }
 
   requestPolicyRetry(): void {
@@ -89,16 +107,16 @@ export class RuntimeHostAvailability {
     if (this.consecutiveSuccesses >= MAX_START_ATTEMPTS) {
       this.consecutiveFailures = 0
     }
-    if (this.cooldownUntil === 0) {
+    if (this.cooldownStartedAtMs === null) {
       return
     }
-    this.cooldownUntil = 0
+    this.cooldownStartedAtMs = null
     this.warn('runtime host recovered; operations are served by the persistent helper again')
   }
 
   enterCooldown(): void {
     const failures = this.consecutiveFailures
-    this.cooldownUntil = this.now() + this.cooldownMs
+    this.cooldownStartedAtMs = this.now()
     // The wait is the penalty; leaving the count at the limit would charge twice
     // and let the first death after recovery re-enter a full cooldown, so an
     // interleaved workload would spend its life on the one-shot bridge.
@@ -110,6 +128,6 @@ export class RuntimeHostAvailability {
   }
 
   clearCooldown(): void {
-    this.cooldownUntil = 0
+    this.cooldownStartedAtMs = null
   }
 }
