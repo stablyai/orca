@@ -102,6 +102,11 @@ const STRUCTURED_CALLS: {
     result: { current: { model: 'gpt-live' } }
   },
   {
+    method: 'agentSession.commands',
+    hostMethod: 'readCommands',
+    result: { commands: [{ name: 'clear', kind: 'command' }] }
+  },
+  {
     method: 'agentSession.reveal',
     hostMethod: 'revealSession',
     result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
@@ -339,6 +344,7 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
     requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
+    readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     subscribe: vi.fn(() => () => undefined),
     subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
