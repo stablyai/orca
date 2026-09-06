@@ -147,7 +147,8 @@ export function RowLabel({
     return (
       <span className="min-w-0 truncate">
         <span className="font-medium text-foreground">
-          Kaneo{row.task.number ? ` #${row.task.number}` : ''}
+          {translate('kaneo.name', 'Kaneo')}
+          {row.task.number ? ` #${row.task.number}` : ''}
         </span>{' '}
         {row.task.title}
       </span>

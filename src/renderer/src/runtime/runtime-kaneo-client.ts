@@ -1,6 +1,5 @@
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import type { KaneoTask } from '../../../shared/kaneo-types'
-import type { KaneoApi } from '../../../shared/kaneo-types'
+import type { KaneoApi, KaneoTask } from '../../../shared/kaneo-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'
 

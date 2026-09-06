@@ -17676,6 +17676,14 @@
     "connecting": "Connecting…",
     "saveConnection": "Save connection",
     "cancel": "Cancel",
-    "apiKeyHelp": "API key help"
+    "apiKeyHelp": "API key help",
+    "name": "Kaneo",
+    "search": {
+      "name": "kaneo",
+      "task": "task",
+      "apiKey": "api key",
+      "selfHosted": "self-hosted"
+    },
+    "instanceUrlPlaceholder": "https://kaneo.example.com"
   }
 }

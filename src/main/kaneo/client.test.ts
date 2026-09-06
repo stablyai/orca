@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connectKaneo, getKaneoTask } from './client'
 import { getKaneoStatus, readKaneoCredential, saveKaneoCredential } from './credential-store'
+import { setMainHttpClient } from '../network/http-client'
 
 vi.mock('./credential-store', () => ({
   getKaneoStatus: vi.fn(),
@@ -29,9 +30,20 @@ beforeEach(() => {
     Response.json(String(input).includes('/task/') ? task : [project])
   )
 })
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  setMainHttpClient(null)
+})
 
 describe('Kaneo task lookup', () => {
+  it('uses the host HTTP client so desktop requests follow the configured proxy', async () => {
+    const desktopFetch = vi.fn(async () => Response.json([]))
+    setMainHttpClient({ fetch: desktopFetch, proxySession: () => null })
+    await connectKaneo({ siteUrl, apiKey: 'test-secret' })
+    expect(desktopFetch).toHaveBeenCalledOnce()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('returns a validated task and sends bearer credentials only to the configured origin', async () => {
     expect(await getKaneoTask(url)).toMatchObject({
       title: task.title,
@@ -86,6 +98,15 @@ describe('Kaneo task lookup', () => {
       )
     )
     await expect(getKaneoTask(url)).rejects.toThrow('does not match')
+  })
+
+  it('does not expose response contents when successful HTTP responses contain invalid JSON', async () => {
+    fetchMock.mockImplementation(async () => new Response('private server data test-secret'))
+    await expect(getKaneoTask(url)).rejects.toThrow('Kaneo returned an invalid JSON response.')
+    await expect(connectKaneo({ siteUrl, apiKey: 'test-secret' })).rejects.toThrow(
+      'Kaneo returned an invalid JSON response.'
+    )
+    expect(saveKaneoCredential).not.toHaveBeenCalled()
   })
 
   it('bounds streamed responses and cancels an oversized body', async () => {

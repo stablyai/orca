@@ -109,7 +109,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
 
   const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
 
-  // Why: a pasted Jira URL is not a workspace name yet — block create until it resolves to an issue.
+  // Why: a pasted task URL is not a workspace name until its task resolves.
   const sourceIntentBlocksCreate =
     !linkedWorkItem &&
     (isBlockingJiraUrlIntent(smartNameMode, name) ||

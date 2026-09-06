@@ -1,6 +1,7 @@
 import { KanbanSquare } from 'lucide-react'
 import type { WorkspaceLinkedItem } from '../../../../shared/worktree/types'
 import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 
 export function KaneoTaskDetails({
   item
@@ -12,7 +13,10 @@ export function KaneoTaskDetails({
   }
   return (
     <div className="space-y-1">
-      <p className="text-xs text-muted-foreground">Kaneo{item.number ? ` #${item.number}` : ''}</p>
+      <p className="text-xs text-muted-foreground">
+        {translate('kaneo.name', 'Kaneo')}
+        {item.number ? ` #${item.number}` : ''}
+      </p>
       <Button
         type="button"
         variant="link"

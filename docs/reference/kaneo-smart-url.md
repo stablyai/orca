@@ -38,6 +38,9 @@ fallback for a failed remote request. SSH-backed worktrees use the existing
 execution routing independently of task lookup. Folder workspaces retain the same
 Kaneo link and launch-context behavior.
 
+Requests use Orca's host HTTP client: the desktop follows its Chromium proxy
+settings, while a remote Node runtime uses its own network environment.
+
 Orca stores the credential in an encrypted envelope using its existing secret
 store, with owner-only plaintext storage when encryption is unavailable. The
 instance origin is bound to the key inside that envelope. Status checks read only
