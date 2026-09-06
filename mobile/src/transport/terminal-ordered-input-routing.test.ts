@@ -75,7 +75,11 @@ describe.each(['direct', 'relay'] as const)('%s ordered input routing', (path) =
     expect(await registry.sendTerminalStreamInput('t', '\r')).toBe(false)
   })
 
-  it('preserves old-host fallback without sending the new opcode', async () => {
+  it.each([
+    undefined,
+    { orderedInput: { ...TERMINAL_ORDERED_INPUT_CAPABILITY, version: 2 } },
+    { orderedInput: { ...TERMINAL_ORDERED_INPUT_CAPABILITY, maxPendingFrames: 0 } }
+  ])('preserves fallback for an unsupported host echo: %j', async (capabilities) => {
     const { registry, sent, binary } = setup()
     const dispose = registry.subscribe('terminal.subscribe', { terminal: 't' }, vi.fn())
     await vi.waitFor(() => expect(sent).toHaveLength(1))
@@ -83,7 +87,7 @@ describe.each(['direct', 'relay'] as const)('%s ordered input routing', (path) =
       id: sent[0]!.id,
       ok: true,
       streaming: true,
-      result: { type: 'subscribed', streamId: 7 },
+      result: { type: 'subscribed', streamId: 7, capabilities },
       _meta: { runtimeId: 'r' }
     })
     expect(registry.sendTerminalStreamInput('t', 'a')).toBe(null)
@@ -93,7 +97,7 @@ describe.each(['direct', 'relay'] as const)('%s ordered input routing', (path) =
   })
 
   it('settles admitted input on physical connection loss', async () => {
-    const { registry, sent } = setup()
+    const { registry, sent, binary } = setup()
     registry.subscribe('terminal.subscribe', { terminal: 't' }, vi.fn())
     await vi.waitFor(() => expect(sent).toHaveLength(1))
     registry.handleResponse({
@@ -116,5 +120,21 @@ describe.each(['direct', 'relay'] as const)('%s ordered input routing', (path) =
     expect(await input).toBe(false)
     expect(registry.supportsTerminalStreamInput('t')).toBe(true)
     expect(await registry.sendTerminalStreamInput('t', '\r')).toBe(false)
+    const subscribed = vi.fn()
+    const dispose = registry.subscribe('terminal.subscribe', { terminal: 't' }, subscribed)
+    await vi.waitFor(() => expect(sent).toHaveLength(2))
+    registry.handleResponse({
+      id: sent[1]!.id,
+      ok: true,
+      streaming: true,
+      result: { type: 'subscribed', streamId: 9 },
+      _meta: { runtimeId: 'older-host' }
+    })
+    expect(subscribed.mock.calls[0]?.[0]).toMatchObject({ type: 'subscribed', streamId: 9 })
+    expect(registry.supportsTerminalStreamInput('t')).toBe(true)
+    expect(await registry.sendTerminalStreamInput('t', '\r')).toBe(false)
+    expect(registry.recoverTerminalStreamInput('t')).toBe(false)
+    expect(binary).toHaveBeenCalledOnce()
+    dispose()
   })
 })
