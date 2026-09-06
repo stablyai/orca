@@ -1,3 +1,4 @@
+import { SessionSearchRefreshLane } from './session-search-refresh-lane'
 import { recordSearchDiscovered } from './session-search-discovered-counts'
 import { withCursorChatMetaScan } from '../ai-vault/session-scanner-cursor-chat-meta'
 import { mkdirSync } from 'node:fs'
@@ -56,6 +57,7 @@ export class SessionSearchService {
   private policy: AiVaultSearchSettings
   private store: SessionSearchStore | null = null
   private backfillRun: Promise<void> | null = null
+  private readonly refreshLane = new SessionSearchRefreshLane()
   private searchesInFlight = 0
   private releaseBackfill: (() => void) | null = null
   private backfillController: AbortController | null = null
@@ -87,8 +89,14 @@ export class SessionSearchService {
     this.searchesInFlight += 1
     try {
       if (args.refresh !== false) {
-        await this.refreshRecent(roots, signal)
-        await this.reindexStale(signal)
+        await this.refreshLane.run(
+          roots,
+          async (sharedSignal) => {
+            await this.refreshRecent(roots, sharedSignal)
+            await this.reindexStale(sharedSignal)
+          },
+          signal
+        )
       }
       void backfill
       return store.search(args)
@@ -232,6 +240,7 @@ export class SessionSearchService {
   }
 
   private closeStore(): void {
+    this.refreshLane.cancel()
     const store = this.store
     this.store = null
     if (!store) {
@@ -287,9 +296,7 @@ export class SessionSearchService {
     store.setBackfillState('running')
     try {
       const cutoff = aiVaultSearchHistoryCutoffMs(this.policy.historyDays)
-      if (cutoff !== null) {
-        await store.purgeOlderThan(cutoff)
-      }
+      await store.purgeOlderThan(cutoff, signal)
       await ensureSessionParseCacheLoaded()
       const issues: AiVaultScanIssue[] = []
       const options: AiVaultScanOptions = { ...roots, signal }

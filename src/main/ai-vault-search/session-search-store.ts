@@ -1,3 +1,4 @@
+import { deleteExpiredSearchFiles } from './session-search-retention-delete'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { aiVaultSearchHistoryCutoffMs } from '../../shared/ai-vault-search-settings'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
@@ -140,33 +141,31 @@ export class SessionSearchStore implements SessionSearchIndexSink {
     }
   }
 
-  /**
-   * Drops every file last modified before the cutoff, one transaction per file
-   * so searches interleave, then hands the freed pages back so the index file
-   * shrinks (a full VACUUM on a multi-GB index takes half a minute).
-   */
-  async purgeOlderThan(cutoffMs: number): Promise<void> {
-    let paths: string[]
+  /** Hides expired sessions immediately, then removes their rows in resumable batches. */
+  async purgeOlderThan(cutoffMs: number | null, signal?: AbortSignal): Promise<void> {
     try {
-      paths = this.writer.filesOlderThan(cutoffMs)
-    } catch (error) {
-      this.onError(error)
-      return
-    }
-    for (const path of paths) {
-      if (this.closed) {
-        return
+      await deleteExpiredSearchFiles(
+        this.db,
+        cutoffMs,
+        () => this.closed || signal?.aborted === true,
+        () => {
+          this.providerCounts = null
+        }
+      )
+      if (!this.closed && !signal?.aborted) {
+        await this.compact(signal)
       }
-      this.removeFile(path)
-      await yieldToEventLoop()
+    } catch (error) {
+      if (!this.closed) {
+        this.onError(error)
+      }
     }
-    await this.compact()
   }
 
-  private async compact(): Promise<void> {
+  private async compact(signal?: AbortSignal): Promise<void> {
     try {
       let freed = Number(this.db.pragma('freelist_count', { simple: true }))
-      while (!this.closed && freed > 0) {
+      while (!this.closed && !signal?.aborted && freed > 0) {
         this.db.pragma(`incremental_vacuum(${COMPACT_PAGES_PER_STEP})`)
         const remaining = Number(this.db.pragma('freelist_count', { simple: true }))
         // Why: without auto_vacuum the step is a no-op; never spin on it.
@@ -242,6 +241,7 @@ export class SessionSearchStore implements SessionSearchIndexSink {
       .prepare(
         `SELECT s.agent AS agent, COUNT(DISTINCT s.id) AS sessions, COUNT(m.id) AS messages
          FROM sessions s LEFT JOIN messages m ON m.session_row_id = s.id
+         WHERE s.id NOT IN (SELECT session_row_id FROM search_pending_deletes)
          GROUP BY s.agent ORDER BY s.agent`
       )
       .all() as { agent: AiVaultAgent; sessions: number; messages: number }[])

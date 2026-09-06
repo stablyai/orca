@@ -79,12 +79,17 @@ export function useAiVaultSessionSearchResults(input: {
     }
   }, [agents, enabled, newestFirst, query, scopePaths, supportedHost])
 
-  const { error, loading, result, updating } = useAiVaultSessionSearchRequest(args, flushSignal)
+  const { error, loading, result, updating } = useAiVaultSessionSearchRequest(
+    args,
+    flushSignal,
+    executionHostScope
+  )
   // With an empty box no search runs, so the panel reads coverage directly to
   // report what is already searchable while the backfill is still going.
   const polledCoverage = useAiVaultSearchCoveragePoll(
     enabled && supportedHost,
-    result?.coverage ?? null
+    result?.coverage ?? null,
+    executionHostScope
   )
   // Desktop search always reads this machine's index; a paired web client's
   // reads its runtime host, which is the scope it is pinned to.

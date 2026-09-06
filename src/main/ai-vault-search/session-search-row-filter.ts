@@ -19,7 +19,10 @@ export function sessionRowFilter(
   args: AiVaultSearchArgs,
   split: AiVaultSearchQuerySplit
 ): SessionRowFilter {
-  const filter: SessionRowFilter = { conditions: [], values: [] }
+  const filter: SessionRowFilter = {
+    conditions: ['id NOT IN (SELECT session_row_id FROM search_pending_deletes)'],
+    values: []
+  }
   if (args.agents && args.agents.length > 0) {
     filter.conditions.push(`agent IN (${args.agents.map(() => '?').join(',')})`)
     filter.values.push(...args.agents)

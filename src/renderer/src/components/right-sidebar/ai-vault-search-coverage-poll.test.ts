@@ -104,3 +104,25 @@ describe('useAiVaultSearchCoveragePoll', () => {
     expect(result.current).toBeNull()
   })
 })
+
+it('drops coverage from the previous runtime immediately and polls the new owner', async () => {
+  const { result, rerender } = renderHook(
+    ({ host }) => useAiVaultSearchCoveragePoll(true, null, host),
+    { initialProps: { host: 'runtime:a' }, wrapper }
+  )
+  await act(async () => {})
+  expect(result.current?.sessionsIndexed).toBe(5)
+  let release!: (value: AiVaultSearchCoverage) => void
+  searchCoverage.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        release = resolve
+      })
+  )
+  rerender({ host: 'runtime:b' })
+  expect(result.current).toBeNull()
+  await act(async () => {
+    release({ ...coverage('complete'), sessionsIndexed: 9 })
+  })
+  expect(result.current?.sessionsIndexed).toBe(9)
+})

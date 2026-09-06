@@ -1,10 +1,11 @@
 import type { Dirent } from 'node:fs'
+import { SessionNewestFiles } from './session-newest-files'
 import { extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue } from './session-scan-issues'
-import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
+import type { SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
 export async function discoverFiles(args: {
@@ -18,18 +19,42 @@ export async function discoverFiles(args: {
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
 }): Promise<SessionFileDiscovery> {
-  let paths: string[]
+  const files = new SessionNewestFiles(args.limit)
   try {
-    paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
+    await walkSessionFiles(args.rootDir, args.agent, args.issues, {
       extensions: new Set(args.extensions),
       signal: args.signal,
       filePredicate: args.filePredicate,
-      directoryPredicate: args.directoryPredicate
+      directoryPredicate: args.directoryPredicate,
+      onFile: async (path) => {
+        args.signal?.throwIfAborted()
+        try {
+          const fileStat = await wslGatedStat(path, 'scan')
+          const dependencyStat = await optionalContentDependencyStat(
+            await args.contentDependencyPath?.(path)
+          )
+          args.signal?.throwIfAborted()
+          const mtimeMs = Math.max(fileStat.mtimeMs, dependencyStat?.mtimeMs ?? 0)
+          files.add({
+            path,
+            mtimeMs,
+            modifiedAt: new Date(mtimeMs).toISOString(),
+            sizeBytes: fileStat.size + (dependencyStat?.size ?? 0),
+            dev: fileStat.dev,
+            ino: fileStat.ino,
+            nlink: fileStat.nlink
+          })
+        } catch (err) {
+          args.signal?.throwIfAborted()
+          recordSessionScanIssue(args.issues, {
+            agent: args.agent,
+            path,
+            message: errorMessage(err)
+          })
+        }
+      }
     })
   } catch (err) {
-    // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
-    // stalled distro would otherwise reject the whole vault scan — including
-    // every healthy local agent. Contain it to this root.
     if (!(err instanceof WslTranscriptFsError)) {
       throw err
     }
@@ -40,39 +65,7 @@ export async function discoverFiles(args: {
     })
     return { agent: args.agent, rootDir: args.rootDir, files: [] }
   }
-  const files: FileWithMtime[] = []
-  for (const path of paths) {
-    args.signal?.throwIfAborted()
-    try {
-      const fileStat = await wslGatedStat(path, 'scan')
-      const dependencyStat = await optionalContentDependencyStat(
-        await args.contentDependencyPath?.(path)
-      )
-      args.signal?.throwIfAborted()
-      const mtimeMs = Math.max(fileStat.mtimeMs, dependencyStat?.mtimeMs ?? 0)
-      files.push({
-        path,
-        mtimeMs,
-        modifiedAt: new Date(mtimeMs).toISOString(),
-        sizeBytes: fileStat.size + (dependencyStat?.size ?? 0),
-        dev: fileStat.dev,
-        ino: fileStat.ino,
-        nlink: fileStat.nlink
-      })
-    } catch (err) {
-      args.signal?.throwIfAborted()
-      recordSessionScanIssue(args.issues, {
-        agent: args.agent,
-        path,
-        message: errorMessage(err)
-      })
-    }
-  }
-  return {
-    agent: args.agent,
-    rootDir: args.rootDir,
-    files: files.sort((left, right) => right.mtimeMs - left.mtimeMs).slice(0, args.limit)
-  }
+  return { agent: args.agent, rootDir: args.rootDir, files: files.newest() }
 }
 
 async function optionalContentDependencyStat(
@@ -104,6 +97,7 @@ export async function walkSessionFiles(
     directoryPredicate?: (name: string, depth: number) => boolean
     readDirectory?: (dirPath: string) => Promise<Dirent[]>
     signal?: AbortSignal
+    onFile?: (path: string) => Promise<void>
   },
   depth = 0
 ): Promise<string[]> {
@@ -140,7 +134,11 @@ export async function walkSessionFiles(
       options.extensions.has(extname(entry.name).toLowerCase()) &&
       (options.filePredicate?.(fullPath) ?? true)
     ) {
-      files.push(fullPath)
+      if (options.onFile) {
+        await options.onFile(fullPath)
+      } else {
+        files.push(fullPath)
+      }
     }
   }
   return files

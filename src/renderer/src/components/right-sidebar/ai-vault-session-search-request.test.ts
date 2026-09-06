@@ -214,3 +214,38 @@ describe('useAiVaultSessionSearchRequest', () => {
     expect(searchSessions.mock.calls[0]?.[0]).toMatchObject({ query: 'alpha', tier: 'full' })
   })
 })
+
+it('retires retained and in-flight results when the execution host changes with the same query', async () => {
+  const resolvers: ((result: AiVaultSearchResult) => void)[] = []
+  searchSessions.mockImplementation(
+    () => new Promise<AiVaultSearchResult>((resolve) => resolvers.push(resolve))
+  )
+  const { rerender, result } = renderHook(
+    ({ host }: { host: string }) => useAiVaultSessionSearchRequest(argsFor('alpha'), 0, host),
+    { initialProps: { host: 'runtime:a' }, wrapper }
+  )
+  act(() => {
+    vi.advanceTimersByTime(AI_VAULT_SEARCH_TYPING_DELAY_MS)
+  })
+  await act(async () => {
+    resolvers[0](searchResult('host-a'))
+  })
+  expect(result.current.result?.repairedTerms).toEqual(['host-a'])
+  act(() => {
+    vi.advanceTimersByTime(AI_VAULT_SEARCH_SETTLED_DELAY_MS)
+  })
+  rerender({ host: 'runtime:b' })
+  expect(result.current.result).toBeNull()
+  await act(async () => {
+    resolvers[1](searchResult('late-host-a'))
+  })
+  expect(result.current.result).toBeNull()
+  act(() => {
+    vi.advanceTimersByTime(AI_VAULT_SEARCH_SETTLED_DELAY_MS)
+  })
+  await act(async () => {
+    resolvers.at(-1)!(searchResult('host-b'))
+  })
+  expect(result.current.result?.repairedTerms).toEqual(['host-b'])
+  expect(searchSessions).toHaveBeenCalledTimes(4)
+})

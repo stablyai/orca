@@ -19,6 +19,7 @@ export type AiVaultSearchRequestState = {
 }
 
 type SettledSearch = {
+  ownerKey: string
   full: boolean
   key: string
   result: AiVaultSearchResult | null
@@ -40,7 +41,8 @@ type SettledSearch = {
 export function useAiVaultSessionSearchRequest(
   args: AiVaultSearchArgs | null,
   /** Bumped on Enter: runs the full tier now instead of waiting out the debounce. */
-  flushSignal = 0
+  flushSignal = 0,
+  ownerKey = ''
 ): AiVaultSearchRequestState {
   const [settled, setSettled] = useState<SettledSearch | null>(null)
   const sequenceRef = useRef(0)
@@ -48,31 +50,35 @@ export function useAiVaultSessionSearchRequest(
   // restart the debounce on every parent render.
   const argsKey = args ? JSON.stringify(args) : ''
 
-  const issue = useCallback((key: string, overrides: Partial<AiVaultSearchArgs>): void => {
-    if (!key) {
-      return
-    }
-    const requestArgs = JSON.parse(key) as AiVaultSearchArgs
-    sequenceRef.current += 1
-    const sequence = sequenceRef.current
-    void window.api.aiVault
-      .searchSessions({ ...requestArgs, ...overrides })
-      .then((result) => {
-        if (sequenceRef.current === sequence) {
-          setSettled({ key, result, error: null, full: overrides.tier === 'full' })
-        }
-      })
-      .catch((error: unknown) => {
-        if (sequenceRef.current === sequence) {
-          setSettled({
-            key,
-            full: true,
-            result: null,
-            error: error instanceof Error ? error.message : String(error)
-          })
-        }
-      })
-  }, [])
+  const issue = useCallback(
+    (key: string, overrides: Partial<AiVaultSearchArgs>): void => {
+      if (!key) {
+        return
+      }
+      const requestArgs = JSON.parse(key) as AiVaultSearchArgs
+      sequenceRef.current += 1
+      const sequence = sequenceRef.current
+      void window.api.aiVault
+        .searchSessions({ ...requestArgs, ...overrides })
+        .then((result) => {
+          if (sequenceRef.current === sequence) {
+            setSettled({ ownerKey, key, result, error: null, full: overrides.tier === 'full' })
+          }
+        })
+        .catch((error: unknown) => {
+          if (sequenceRef.current === sequence) {
+            setSettled({
+              ownerKey,
+              key,
+              full: true,
+              result: null,
+              error: error instanceof Error ? error.message : String(error)
+            })
+          }
+        })
+    },
+    [ownerKey]
+  )
 
   // Why: a flush has to cancel the debounce the args effect armed, and the two
   // effects cannot share locals, so the args effect publishes its cancel.
@@ -114,8 +120,9 @@ export function useAiVaultSessionSearchRequest(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flushSignal, issue])
 
-  const current = settled?.key === argsKey ? settled : null
-  const previous = current === null && argsKey !== '' ? (settled?.result ?? null) : null
+  const owned = settled?.ownerKey === ownerKey ? settled : null
+  const current = owned?.key === argsKey ? owned : null
+  const previous = current === null && argsKey !== '' ? (owned?.result ?? null) : null
   return {
     result: current?.result ?? previous,
     loading: argsKey !== '' && current === null && previous === null,

@@ -13,9 +13,11 @@ export const AI_VAULT_SEARCH_COVERAGE_POLL_MS = 4_000
  */
 export function useAiVaultSearchCoveragePoll(
   enabled: boolean,
-  latest: AiVaultSearchCoverage | null = null
+  latest: AiVaultSearchCoverage | null = null,
+  ownerKey = ''
 ): AiVaultSearchCoverage | null {
   const [snapshot, setSnapshot] = useState<{
+    ownerKey: string
     source: AiVaultSearchCoverage | null
     value: AiVaultSearchCoverage
   } | null>(null)
@@ -41,7 +43,7 @@ export function useAiVaultSearchCoveragePoll(
           if (stopped || issued !== generation) {
             return
           }
-          setSnapshot({ source: latest, value: next })
+          setSnapshot({ ownerKey, source: latest, value: next })
         })
         .catch(() => undefined)
     }
@@ -50,7 +52,11 @@ export function useAiVaultSearchCoveragePoll(
       stopped = true
       clearInterval(interval)
     }
-  }, [enabled, latest])
+  }, [enabled, latest, ownerKey])
 
-  return enabled ? (snapshot?.source === latest ? snapshot.value : latest) : null
+  return enabled
+    ? snapshot?.ownerKey === ownerKey && snapshot.source === latest
+      ? snapshot.value
+      : latest
+    : null
 }

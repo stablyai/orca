@@ -2,7 +2,7 @@ import { rmSync } from 'node:fs'
 import SyncDatabase from '../sqlite/sync-database'
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 7
+export const SESSION_SEARCH_SCHEMA_VERSION = 8
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -42,6 +42,10 @@ CREATE TABLE IF NOT EXISTS files(
   mtime_ms REAL NOT NULL,
   size_bytes INTEGER,
   session_row_id INTEGER
+);
+CREATE TABLE IF NOT EXISTS search_pending_deletes(
+  path TEXT PRIMARY KEY,
+  session_row_id INTEGER NOT NULL UNIQUE
 );
 CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
