@@ -38,23 +38,9 @@ jobs:
           xfwm4
           xvfb
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          node-version-file: package.json
-
-      - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
-
-      - name: Use external node-gyp to avoid pnpm bundled copy
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          native-runtime: electron
 
       - name: Build Electron app for E2E
         run: pnpm exec electron-vite build --mode e2e

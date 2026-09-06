@@ -27,6 +27,10 @@ on:
         description: Ref to check out (defaults to the workflow ref)
         required: false
         type: string
+      test_files:
+        description: JSON array of specs to run; empty runs the full suite
+        required: false
+        type: string
   schedule:
     # Why: GitHub cron uses UTC; these slots map to 10am and 3pm
     # America/Phoenix for the default-branch E2E run.
@@ -146,7 +150,7 @@ jobs:
       # Native cache misses need the compiler, Electron needs Xvfb, and paired
       # Quick Open needs ripgrep. Install them in one apt transaction per shard.
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep xvfb zsh openbox x11-utils
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -167,7 +171,7 @@ jobs:
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -201,7 +205,7 @@ jobs:
         # unbounded inventory fallback; the paired fixture exercises that real boundary.
         # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
         # lane now receives those specs from pr.yml's SSH source mapping.
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -241,7 +245,7 @@ jobs:
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
             E2E_PROJECT_ARGS+=(--project=electron-headful)
           fi
-          xvfb-run --auto-servernum env "${E2E_ENV[@]}" \
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
             pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
 
       - name: Upload Playwright traces
@@ -278,7 +282,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -293,7 +297,7 @@ jobs:
       # Why: this is the release-path proof that the deployed Linux relay keeps
       # its PTY and explorer live across a real watcher SIGSEGV.
       - name: Run Docker SSH watcher isolation E2E
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
 
       # Why: Playwright empties test-results/ when it starts, so each step here used to
       # destroy the previous step's traces. Only the last lane's failure was ever
@@ -310,7 +314,7 @@ jobs:
       # readiness across live SSH, headed paired, and headless serve topologies.
       - name: Run Docker SSH terminal parking + startup readiness E2E
         if: always()
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
 
       - name: Keep terminal-parking traces
         if: always()
@@ -326,7 +330,7 @@ jobs:
       # legible as an SSH-named failure.
       - name: Run remaining Docker SSH E2E
         if: always()
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker
 
       - name: Keep remaining-ssh-docker traces
         if: always()

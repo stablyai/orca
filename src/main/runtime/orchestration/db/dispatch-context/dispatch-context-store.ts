@@ -7,6 +7,7 @@ import { paneKeyMatchSuffix } from '../pane-key-match'
 import { claimDispatchContextRow } from '../dispatch-row-writer'
 import type { DispatchCreator } from '../dispatch-depth'
 import type { OrchestrationDb } from '../orchestration-db'
+import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
 
 export function createDispatchContext(
   this: OrchestrationDb,
@@ -26,10 +27,14 @@ export function createDispatchContext(
   const depth = this.resolveChildDispatchDepth(params.creator, params.maxDepth)
   const task = this.getTask(taskId)
   if (!task) {
-    throw new Error(`Task not found: ${taskId}`)
+    throw taskNotFoundError(`Task not found: ${taskId}`, { taskId })
   }
   if (task.status !== 'ready') {
-    throw new Error(`Task ${taskId} is ${task.status}; only ready tasks can be dispatched`)
+    throw taskNotStartableError(
+      this,
+      `Task ${taskId} is ${task.status}; only ready tasks can be dispatched`,
+      task
+    )
   }
 
   // Why: lock on pane identity too, so a reminted handle can't open a second concurrent dispatch on the same pane.
@@ -72,9 +77,12 @@ export function createDispatchContext(
           `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
         )
       }
-      throw new Error(
-        `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
-      )
+      // Why: the atomic claim lost to a concurrent status change; report it with the same
+      // typed receipt as the precheck so the loser can recover instead of reading runtime_error.
+      const message = `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
+      throw current
+        ? taskNotStartableError(this, message, current)
+        : taskNotFoundError(message, { taskId })
     }
     this.db.prepare("UPDATE tasks SET status = 'dispatched' WHERE id = ?").run(taskId)
     const dispatch = this.db

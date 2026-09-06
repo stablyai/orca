@@ -5,7 +5,8 @@ export type NativeChatDiffLine = {
   text: string
 }
 
-const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace', 'apply_patch'])
+/** Tools whose call carries the edit itself, so its row is a file change. */
+export const EDIT_TOOL_NAMES = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace', 'apply_patch'])
 const MAX_DIFF_CHARS = 32_000
 const DEFAULT_MAX_DIFF_LINES = 120
 const DIFF_TRUNCATED_LINE: NativeChatDiffLine = {

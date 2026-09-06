@@ -1,3 +1,4 @@
+import { normalizePromptField } from './agent-status-field-normalization'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
@@ -160,6 +161,34 @@ export function projectStructuredAgentSessionStatus(
     return 'attention'
   }
   return activeStructuredAgentSessionTurnId(items) ? 'working' : 'idle'
+}
+
+/** The newest user prompt, as the sidebar quotes it. */
+export function latestStructuredAgentSessionPrompt(
+  items: readonly AgentJournalRenderItem[]
+): string {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const body = items[index]?.body
+    if (body?.kind === 'message' && body.role === 'user') {
+      return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
+    }
+  }
+  return ''
+}
+
+/** One projection shared by host and client: null status means "no turn yet", not idle.
+ *  The prompt is bounded to the same preview every other agent-status row carries — a send
+ *  admits 256 KB, and one status frame carries every retained session at once. */
+export function projectStructuredAgentSessionStatusSummary(
+  items: readonly AgentJournalRenderItem[]
+): { status: StructuredAgentSessionProjectedStatus | null; latestPrompt: string } {
+  if (!hasPersistedStructuredAgentSessionTurn(items)) {
+    return { status: null, latestPrompt: '' }
+  }
+  return {
+    status: projectStructuredAgentSessionStatus(items),
+    latestPrompt: normalizePromptField(latestStructuredAgentSessionPrompt(items))
+  }
 }
 
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {

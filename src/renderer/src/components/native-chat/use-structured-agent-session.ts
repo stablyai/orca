@@ -245,12 +245,14 @@ export function useStructuredAgentSession(args: {
     isWorking: turnId !== null,
     isMonitoringBackgroundTasks,
     backgroundTasks: state.backgroundTasks?.tasks ?? [],
+    supportsBackgroundTaskStop: state.backgroundTasks?.supportsTaskStop === true,
     turnId,
     cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
-    stopBackgroundTasks: () =>
+    stopBackgroundTask: (taskId?: string) =>
       mutate('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
-        scope: 'background-tasks'
+        scope: 'background-tasks',
+        ...(taskId ? { taskId } : {})
       }),
     respond: (item: StructuredPromptItem, optionId: string) =>
       mutate<AgentSessionPromptResult>(
