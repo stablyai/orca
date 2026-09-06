@@ -13,18 +13,18 @@
  */
 export function omitRecordKeys<T>(
   record: Record<string, T> | undefined,
-  keys: Iterable<string>,
+  keys: Iterable<string>
 ): Record<string, T> {
   if (!record) {
-    return {};
+    return {}
   }
-  let next: Record<string, T> | null = null;
+  let next: Record<string, T> | null = null
   for (const key of keys) {
     if (!(key in record)) {
-      continue;
+      continue
     }
-    next ??= { ...record };
-    delete next[key];
+    next ??= { ...record }
+    delete next[key]
   }
-  return next ?? record;
+  return next ?? record
 }
