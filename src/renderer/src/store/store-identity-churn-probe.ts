@@ -9,8 +9,13 @@
  * no data change to show for it.
  *
  * Cost when disarmed: one boolean field load per write, matching
- * react-commit-cascade-write-probe. Comparison work only happens while armed,
- * so this never sits on the keystroke path in a shipped build.
+ * react-commit-cascade-write-probe. Comparison work only happens while armed.
+ * Nothing in the app arms it, so store/index.ts installs it only in dev and
+ * store-exposing builds; a shipped build never runs the wrapper at all.
+ *
+ * The wrapper never resolves a functional updater itself: zustand keeps sole
+ * ownership of when and with what argument an updater runs, so the probe cannot
+ * double-invoke it or hand it a stale state.
  */
 import type { StateCreator } from 'zustand'
 
@@ -87,18 +92,16 @@ export function armStoreIdentityChurnProbe(options?: { captureSites?: boolean })
 }
 
 // Why the first non-probe, non-zustand frame: the caller that built the partial is
-// the code to fix; the frames above it are the shared write plumbing.
+// the code to fix; the frames above it are the shared write plumbing. Every store
+// write middleware is named *-probe.ts, so a sibling wrapper's frame is skipped too.
 const SOURCE_FRAME = /:\d+:\d+\)?$/
+const PROBE_FRAME = /-probe\.[cm]?[jt]s\b/
 
 function callingSite(): string {
   const stack = new Error('store identity churn site').stack?.split('\n') ?? []
   for (const line of stack.slice(2)) {
     const frame = line.trim()
-    if (
-      SOURCE_FRAME.test(frame) &&
-      !frame.includes('store-identity-churn-probe.ts') &&
-      !frame.includes('node_modules')
-    ) {
+    if (SOURCE_FRAME.test(frame) && !PROBE_FRAME.test(frame) && !frame.includes('node_modules')) {
       return frame
     }
   }
@@ -134,10 +137,10 @@ function recordSite(field: string): void {
 }
 
 /**
- * `fields` is the write's own keys, not the whole state: `set(partial)` merges, so
- * no field outside the partial can have changed. Scanning the full post-write state
- * would make the armed cost scale with the store's field count instead of the
- * write's size.
+ * `fields` is the write's own keys when they are knowable: `set(partial)` merges,
+ * so no field outside the partial can have changed. A functional updater or a
+ * replace write falls back to every field; the extra cost there is one Object.is
+ * per untouched field, since the deep compare only runs on replaced references.
  */
 function recordWrite(
   previous: Record<string, unknown>,
@@ -180,21 +183,18 @@ export function withStoreIdentityChurnProbe<TState>(
         return
       }
       const previous = get() as Record<string, unknown>
-      // Why resolve the updater here: zustand would otherwise compute the partial
-      // internally and the probe could only recover the changed fields by scanning
-      // the whole state. Same function, same argument, called once.
-      const resolved =
-        typeof partial === 'function'
-          ? (partial as (state: Record<string, unknown>) => unknown)(previous)
-          : partial
-      ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(resolved, replace)
+      // Why the write is passed through untouched: zustand owns when and how an
+      // updater runs. The probe only compares the states on either side of it.
+      ;(set as (nextPartial: unknown, nextReplace?: unknown) => void)(partial, replace)
       try {
         const next = get() as Record<string, unknown>
-        // A replace write drops absent fields, so every field is in play.
+        if (next === previous) {
+          return
+        }
         const fields =
-          replace === true || resolved === null || typeof resolved !== 'object'
-            ? Object.keys(next)
-            : Object.keys(resolved as Record<string, unknown>)
+          replace !== true && partial !== null && typeof partial === 'object'
+            ? Object.keys(partial)
+            : Object.keys(next)
         recordWrite(previous, next, fields)
       } catch {
         // A diagnostic on the app's universal write path must never break writes.

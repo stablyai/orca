@@ -8,6 +8,19 @@ const ALLOCATING_METHODS = new Set([
   'toSpliced',
   'with'
 ])
+const ALLOCATING_OBJECT_STATICS = new Set([
+  'assign',
+  'create',
+  'entries',
+  'fromEntries',
+  'keys',
+  'values'
+])
+const FUNCTION_NODES = new Set([
+  'ArrowFunctionExpression',
+  'FunctionDeclaration',
+  'FunctionExpression'
+])
 
 function identifierName(node) {
   return node?.type === 'Identifier' ? node.name : null
@@ -25,8 +38,12 @@ function propertyName(node) {
     : null
 }
 
+function functionNode(node) {
+  return FUNCTION_NODES.has(node?.type) ? node : null
+}
+
 function returnedExpressions(selector) {
-  if (selector?.type !== 'ArrowFunctionExpression' && selector?.type !== 'FunctionExpression') {
+  if (!functionNode(selector)) {
     return []
   }
   if (selector.body.type !== 'BlockStatement') {
@@ -37,10 +54,7 @@ function returnedExpressions(selector) {
     if (!node || typeof node !== 'object') {
       return
     }
-    if (
-      node !== selector.body &&
-      ['ArrowFunctionExpression', 'FunctionDeclaration', 'FunctionExpression'].includes(node.type)
-    ) {
+    if (node !== selector.body && FUNCTION_NODES.has(node.type)) {
       return
     }
     if (node.type === 'ReturnStatement') {
@@ -76,10 +90,7 @@ function unwrapShallowSelector(selector, shallowHooks) {
 }
 
 function isIdentitySelector(selector) {
-  if (selector?.type !== 'ArrowFunctionExpression' && selector?.type !== 'FunctionExpression') {
-    return false
-  }
-  const parameter = selector.params[0]
+  const parameter = functionNode(selector)?.params[0]
   if (parameter?.type !== 'Identifier') {
     return false
   }
@@ -88,14 +99,23 @@ function isIdentitySelector(selector) {
   )
 }
 
-function isAllocatingExpression(expression) {
-  if (expression?.type === 'ConditionalExpression') {
-    return (
-      isAllocatingExpression(expression.consequent) || isAllocatingExpression(expression.alternate)
-    )
-  }
-  if (expression?.type === 'LogicalExpression') {
-    return isAllocatingExpression(expression.left) || isAllocatingExpression(expression.right)
+/**
+ * `everyBranch` decides how a conditional counts. An inline selector is flagged
+ * when ANY branch allocates; a helper the selector delegates to must allocate on
+ * EVERY branch, so the `cache.get(k) ?? build(state)` identity-caching shape is
+ * not a false positive.
+ */
+function allocates(expression, everyBranch) {
+  const branches =
+    expression?.type === 'ConditionalExpression'
+      ? [expression.consequent, expression.alternate]
+      : expression?.type === 'LogicalExpression'
+        ? [expression.left, expression.right]
+        : null
+  if (branches) {
+    return everyBranch
+      ? branches.every((branch) => allocates(branch, true))
+      : branches.some((branch) => allocates(branch, false))
   }
   if (
     expression?.type === 'ArrayExpression' ||
@@ -107,23 +127,16 @@ function isAllocatingExpression(expression) {
   if (expression?.type !== 'CallExpression') {
     return false
   }
-  const method = propertyName(expression.callee)
-  if (method && ALLOCATING_METHODS.has(method)) {
-    return true
-  }
   const callee = expression.callee
+  const method = propertyName(callee)
   return (
-    callee.type === 'MemberExpression' &&
-    identifierName(callee.object) === 'Object' &&
-    ['assign', 'create', 'entries', 'fromEntries', 'keys', 'values'].includes(propertyName(callee))
+    ALLOCATING_METHODS.has(method) ||
+    (identifierName(callee.object) === 'Object' && ALLOCATING_OBJECT_STATICS.has(method))
   )
 }
 
-function importedLocalName(specifier, importedName) {
-  if (specifier.type !== 'ImportSpecifier' || identifierName(specifier.imported) !== importedName) {
-    return null
-  }
-  return identifierName(specifier.local)
+function isAllocatingExpression(expression) {
+  return allocates(expression, false)
 }
 
 // Project-local zustand hooks follow the use<Name>Store convention; React's
@@ -135,29 +148,27 @@ function isLocalModuleSource(source) {
   return typeof source === 'string' && (source.startsWith('.') || source.startsWith('@/'))
 }
 
-function isStoreHookName(name) {
-  return typeof name === 'string' && STORE_HOOK_NAME.test(name) && !NON_STORE_HOOKS.has(name)
-}
-
-function selectorFunction(node) {
-  return node?.type === 'ArrowFunctionExpression' || node?.type === 'FunctionExpression'
-    ? node
-    : null
+/** Module scope only: a component-local helper must not shadow a same-named import. */
+function isModuleScope(node) {
+  const parent = node.parent
+  return (
+    parent?.type === 'Program' ||
+    (parent?.type === 'ExportNamedDeclaration' && parent.parent?.type === 'Program')
+  )
 }
 
 /** Records module-scope `const selectX = (state) => ...` so identifier selectors resolve. */
 function recordNamedSelector(node, state) {
-  if (node.type === 'FunctionDeclaration') {
-    const name = identifierName(node.id)
-    if (name) {
-      state.namedSelectors.set(name, node)
-    }
+  if (!isModuleScope(node)) {
     return
   }
-  for (const declarator of node.declarations ?? []) {
-    const name = identifierName(declarator.id)
-    const initializer = selectorFunction(declarator.init)
-    if (name && initializer) {
+  const declared =
+    node.type === 'FunctionDeclaration'
+      ? [[node.id, node]]
+      : node.declarations.map((declarator) => [declarator.id, declarator.init])
+  for (const [id, initializer] of declared) {
+    const name = identifierName(id)
+    if (name && functionNode(initializer)) {
       state.namedSelectors.set(name, initializer)
     }
   }
@@ -165,51 +176,23 @@ function recordNamedSelector(node, state) {
 
 /** Inline function, or a module-scope selector referenced by name. */
 function resolveSelector(argument, state) {
-  const inline = selectorFunction(argument)
-  if (inline) {
-    return inline
-  }
-  const name = identifierName(argument)
-  return name ? (state.namedSelectors.get(name) ?? null) : null
-}
-
-/**
- * Allocation that happens on EVERY call, used when following a selector into a
- * helper. Deliberately stricter than isAllocatingExpression: a helper that returns
- * a cached reference on one branch and builds a fresh one on another is the normal
- * identity-caching shape, and flagging it would be a false positive.
- */
-function alwaysAllocates(expression) {
-  if (expression?.type === 'ConditionalExpression') {
-    return alwaysAllocates(expression.consequent) && alwaysAllocates(expression.alternate)
-  }
-  if (expression?.type === 'LogicalExpression') {
-    return alwaysAllocates(expression.left) && alwaysAllocates(expression.right)
-  }
-  return (
-    expression?.type === 'ArrayExpression' ||
-    expression?.type === 'ObjectExpression' ||
-    expression?.type === 'NewExpression' ||
-    (expression?.type === 'CallExpression' &&
-      ALLOCATING_METHODS.has(propertyName(expression.callee) ?? ''))
-  )
+  return functionNode(argument) ?? state.namedSelectors.get(identifierName(argument)) ?? null
 }
 
 /**
  * One hop: a selector that delegates to a module-scope helper is the idiomatic
  * shape here, and neither the inline-body check nor a reviewer reading the call
- * site can see what that helper returns.
+ * site can see what that helper returns. An unresolvable helper is left alone.
  */
 function expandThroughNamedHelper(expression, state) {
-  if (expression?.type !== 'CallExpression') {
-    return [expression]
-  }
-  const helper = state.namedSelectors.get(identifierName(expression.callee) ?? '')
-  if (!helper) {
-    return [expression]
-  }
-  const returned = returnedExpressions(helper)
-  return returned.length > 0 && returned.every(alwaysAllocates) ? returned : [expression]
+  const helper =
+    expression?.type === 'CallExpression'
+      ? state.namedSelectors.get(identifierName(expression.callee))
+      : undefined
+  const returned = helper ? returnedExpressions(helper) : []
+  return returned.length > 0 && returned.every((entry) => allocates(entry, true))
+    ? returned
+    : [expression]
 }
 
 function createRuleState() {
@@ -222,32 +205,27 @@ function createRuleState() {
 }
 
 function recordImports(node, state) {
-  if (node.source?.value === 'zustand/react/shallow') {
-    for (const specifier of node.specifiers) {
-      const localName = importedLocalName(specifier, 'useShallow')
-      if (localName) {
-        state.shallowHooks.add(localName)
-      }
-    }
-  }
-  for (const specifier of node.specifiers) {
-    const localName = importedLocalName(specifier, 'useAppStore')
-    if (localName) {
-      state.appStoreHooks.add(localName)
-    }
-  }
-  if (!isLocalModuleSource(node.source?.value)) {
-    return
-  }
+  const source = node.source?.value
   for (const specifier of node.specifiers) {
     if (specifier.type !== 'ImportSpecifier') {
       continue
     }
-    if (isStoreHookName(identifierName(specifier.imported))) {
-      const localName = identifierName(specifier.local)
-      if (localName) {
-        state.appStoreHooks.add(localName)
-      }
+    const imported = identifierName(specifier.imported)
+    const localName = identifierName(specifier.local)
+    if (!imported || !localName) {
+      continue
+    }
+    if (source === 'zustand/react/shallow' && imported === 'useShallow') {
+      state.shallowHooks.add(localName)
+    }
+    // useAppStore is the app store wherever it is re-exported from; sibling
+    // stores are trusted by naming convention only when they come from this codebase.
+    if (
+      STORE_HOOK_NAME.test(imported) &&
+      !NON_STORE_HOOKS.has(imported) &&
+      (imported === 'useAppStore' || isLocalModuleSource(source))
+    ) {
+      state.appStoreHooks.add(localName)
     }
   }
 }
@@ -307,9 +285,7 @@ function deferredSelectorRule(inspect) {
         )
         const report = inspect({
           selector: resolveSelector(argument, state),
-          argument,
           shallow,
-          node,
           state
         })
         if (report) {

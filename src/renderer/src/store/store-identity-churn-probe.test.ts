@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { create } from 'zustand'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { create, type StoreApi } from 'zustand'
+import { withReactCommitCascadeWriteProbe } from './react-commit-cascade-write-probe'
 import {
   armStoreIdentityChurnProbe,
   disarmStoreIdentityChurnProbe,
@@ -97,20 +98,86 @@ describe('store identity churn probe', () => {
     expect(row.sites[0].site).toContain('store-identity-churn-probe.test')
   })
 
-  it('runs a functional update exactly once', () => {
-    // The probe resolves the updater itself before handing the object to zustand;
-    // calling it twice would double any work a slice does inside its updater.
+  it('leaves a functional updater to zustand: called once, with the live state', () => {
     const store = createProbeStore()
-    let calls = 0
+    const seen: unknown[] = []
     armStoreIdentityChurnProbe()
 
     store.setState((state) => {
-      calls += 1
+      seen.push(state)
       return { counter: state.counter + 1 }
     })
+    store.setState((state) => {
+      seen.push(state)
+      return { rows: [{ ...state.rows[0] }] }
+    })
 
-    expect(calls).toBe(1)
+    expect(seen).toHaveLength(2)
+    expect(seen[1]).toMatchObject({ counter: 1 })
     expect(store.getState().counter).toBe(1)
+    expect(churnFor('rows')).toBe(1)
+  })
+
+  it('ignores a write zustand itself drops as identical', () => {
+    const store = createProbeStore()
+    armStoreIdentityChurnProbe()
+
+    store.setState((state) => state)
+
+    expect(readStoreIdentityChurnReport()).toEqual([])
+  })
+
+  it('passes disarmed writes straight through without reading state', () => {
+    const innerSet = vi.fn()
+    const innerGet = vi.fn(() => ({ counter: 0 }))
+    const api = { setState: innerSet, getState: innerGet } as unknown as StoreApi<{
+      counter: number
+    }>
+    const creator = withStoreIdentityChurnProbe<{ counter: number }>(() => ({ counter: 0 }))
+    creator(innerSet, innerGet, api)
+    const updater = (state: { counter: number }) => ({ counter: state.counter + 1 })
+
+    api.setState(updater, true)
+
+    // The disarmed path forwards the exact arguments and never calls get().
+    expect(innerSet).toHaveBeenCalledTimes(1)
+    expect(innerSet.mock.calls[0]).toEqual([updater, true])
+    expect(innerGet).not.toHaveBeenCalled()
+  })
+
+  it('composes with the cascade probe without dropping or doubling a write', () => {
+    // Mirrors store/index.ts: churn probe outermost, cascade probe inside it.
+    const store = create<ProbeState>()(
+      withStoreIdentityChurnProbe(
+        withReactCommitCascadeWriteProbe((set) => ({
+          rows: [{ id: 'a', label: 'A' }],
+          entries: { a: { status: 'idle' } },
+          counter: 0,
+          refresh: (rows) => set({ rows }),
+          touch: (id, status) =>
+            set((state) => ({ entries: { ...state.entries, [id]: { status } } })),
+          bump: () => set((state) => ({ counter: state.counter + 1 }))
+        }))
+      )
+    )
+    let updaterCalls = 0
+    armStoreIdentityChurnProbe({ captureSites: true })
+
+    store.getState().bump()
+    store.setState((state) => {
+      updaterCalls += 1
+      return { counter: state.counter + 10 }
+    })
+    store.getState().refresh([{ id: 'a', label: 'A' }])
+    store.setState({ ...store.getState(), counter: 100 }, true)
+
+    expect(updaterCalls).toBe(1)
+    expect(store.getState().counter).toBe(100)
+    expect(store.getState().rows).toEqual([{ id: 'a', label: 'A' }])
+    // The named site is this test, not the sibling probe's wrapper frame.
+    const [row] = readStoreIdentityChurnReport()
+    expect(row).toMatchObject({ field: 'rows', churnedWrites: 1 })
+    expect(row.sites[0].site).toContain('store-identity-churn-probe.test')
   })
 
   it('still sees churn on a replace write', () => {

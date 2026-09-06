@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create, type StateCreator } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
 import { createSparsePresetsSlice } from './slices/sparse-presets'
@@ -60,8 +60,16 @@ import {
 } from '@/lib/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 
+// Why dev-only: nothing in the app arms the churn probe, so a shipped build would
+// pay its wrapper frame on every write for a diagnostic it can never read. The
+// cascade probe stays unconditional because crash telemetry arms it in the field.
+const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>) =>
+  import.meta.env.DEV || e2eConfig.exposeStore
+    ? withStoreIdentityChurnProbe(createState)
+    : createState
+
 export const useAppStore = create<AppState>()(
-  withStoreIdentityChurnProbe(
+  withDevelopmentStoreProbes(
     withReactCommitCascadeWriteProbe((...a) => {
       // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
       installStoreListenerCensus(a[2])

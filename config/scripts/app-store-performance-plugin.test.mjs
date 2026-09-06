@@ -68,6 +68,20 @@ describe('app store performance Oxlint plugin', () => {
     ])
   })
 
+  it('does not let a component-local helper resolve a same-named imported selector', () => {
+    const diagnostics = lintSource(`
+      import { useAppStore } from '@/store'
+      import { selectRows } from './selectors'
+      const Other = () => {
+        const selectRows = (state) => state.rows.map((row) => row.id)
+        return selectRows
+      }
+      const Imported = () => useAppStore(selectRows)
+    `)
+
+    expect(diagnostics).toEqual([])
+  })
+
   it('covers sibling store hooks but not useSyncExternalStore', () => {
     const diagnostics = lintSource(`
       import { usePluginPanelsStore } from '@/store/plugin-panels'
