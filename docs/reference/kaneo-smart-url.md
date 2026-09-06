@@ -14,14 +14,16 @@ User-written instructions and names remain separate from the imported task.
    the API key. Save the connection.
 4. Paste a task URL into **Smart**, then select the resolved task.
 
-The supported URL shape is:
+Supported URLs include the full task page and a task opened in the board's panel:
 
 ```text
 https://tasks.example.com/dashboard/workspace/<workspace-id>/project/<project-id>/task/<task-id>
+https://tasks.example.com/dashboard/workspace/<workspace-id>/project/<project-id>/board?taskId=<task-id>
 ```
 
 Trailing slashes, query strings and fragments are accepted and removed from the
-stored task link. Ordinary text and other providers' links retain their existing
+stored task link. Board panel links are normalized to the full task-page URL.
+Ordinary text and other providers' links retain their existing
 behavior. An unresolved Kaneo URL blocks creation in Smart mode; choose Name mode
 to deliberately use literal text instead.
 

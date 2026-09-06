@@ -1,7 +1,8 @@
 import { isSmartWorkspaceSourceQueryWithinLimit } from './new-workspace/smart-workspace-source-query'
 import type { KaneoTaskLink } from './kaneo-types'
 
-const TASK_PATH = /^\/dashboard\/workspace\/([\w-]+)\/project\/([\w-]+)\/task\/([\w-]+)\/?$/
+const TASK_PATH =
+  /^\/dashboard\/workspace\/([\w-]+)\/project\/([\w-]+)\/(?:task\/([\w-]+)|board)\/?$/
 
 export function normalizeKaneoSiteUrl(input: string): string {
   const url = new URL(input.trim())
@@ -31,7 +32,12 @@ export function parseKaneoTaskUrl(input: string): KaneoTaskLink | null {
     if (!match) {
       return null
     }
-    const [, workspaceId, projectId, taskId] = match
+    const [, workspaceId, projectId, pathTaskId] = match
+    const queryTaskIds = url.searchParams.getAll('taskId')
+    const taskId = pathTaskId ?? (queryTaskIds.length === 1 ? queryTaskIds[0] : null)
+    if (!taskId || !/^[\w-]+$/.test(taskId)) {
+      return null
+    }
     return {
       siteUrl: url.origin,
       workspaceId,

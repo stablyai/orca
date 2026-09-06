@@ -109,14 +109,14 @@ afterEach(() => {
 
 const url = 'https://tasks.example.com/dashboard/workspace/ws/project/proj/task/task'
 const task = { url, title: 'Fix booking', number: 42 } as KaneoTask
-function renderKaneoField(onKaneoTaskSelect = vi.fn(), onPlainEnter = vi.fn()) {
+function renderKaneoField(onKaneoTaskSelect = vi.fn(), onPlainEnter = vi.fn(), value = url) {
   act(() =>
     root.render(
       <SmartWorkspaceNameField
         repos={[]}
         repoId="repo"
         onRepoChange={vi.fn()}
-        value={url}
+        value={value}
         onValueChange={vi.fn()}
         onGitHubItemSelect={vi.fn()}
         onBranchSelect={vi.fn()}
@@ -132,36 +132,44 @@ function renderKaneoField(onKaneoTaskSelect = vi.fn(), onPlainEnter = vi.fn()) {
 }
 
 describe('Kaneo Smart input interaction', () => {
-  it('blocks Enter while the URL is unresolved and selects the loaded task', async () => {
-    vi.useFakeTimers()
-    let resolve!: (task: KaneoTask) => void
-    vi.mocked(lookupKaneoTask).mockImplementationOnce(
-      () =>
-        new Promise((done) => {
-          resolve = done
-        })
-    )
-    const select = vi.fn()
-    const submit = vi.fn()
-    const input = renderKaneoField(select, submit)
-    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
-    act(() => input.dispatchEvent(event))
-    expect(event.defaultPrevented).toBe(true)
-    expect(submit).not.toHaveBeenCalled()
-    expect(input.getAttribute('aria-busy')).toBe('true')
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(250)
-    })
-    await act(async () => resolve(task))
-    expect(container.textContent).toContain('Fix booking')
-    expect(input.getAttribute('aria-busy')).toBe('false')
-    const taskRow = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('Fix booking')
-    )!
-    act(() => taskRow.click())
-    expect(select).toHaveBeenCalledWith(task)
-    expect(submit).not.toHaveBeenCalled()
-  })
+  it.each([url, 'https://tasks.example.com/dashboard/workspace/ws/project/proj/board?taskId=task'])(
+    'blocks Enter until the task resolves and selects it from %s',
+    async (inputUrl) => {
+      vi.useFakeTimers()
+      let resolve!: (task: KaneoTask) => void
+      vi.mocked(lookupKaneoTask).mockImplementationOnce(
+        () =>
+          new Promise((done) => {
+            resolve = done
+          })
+      )
+      const select = vi.fn()
+      const submit = vi.fn()
+      const input = renderKaneoField(select, submit, inputUrl)
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+      act(() => input.dispatchEvent(event))
+      expect(event.defaultPrevented).toBe(true)
+      expect(submit).not.toHaveBeenCalled()
+      expect(input.getAttribute('aria-busy')).toBe('true')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(250)
+      })
+      expect(lookupKaneoTask).toHaveBeenCalledWith(
+        { activeRuntimeEnvironmentId: undefined },
+        url,
+        expect.any(AbortSignal)
+      )
+      await act(async () => resolve(task))
+      expect(container.textContent).toContain('Fix booking')
+      expect(input.getAttribute('aria-busy')).toBe('false')
+      const taskRow = Array.from(container.querySelectorAll('button')).find((button) =>
+        button.textContent?.includes('Fix booking')
+      )!
+      act(() => taskRow.click())
+      expect(select).toHaveBeenCalledWith(task)
+      expect(submit).not.toHaveBeenCalled()
+    }
+  )
 
   it('shows an actionable error and never submits the failed URL as a workspace name', async () => {
     vi.useFakeTimers()

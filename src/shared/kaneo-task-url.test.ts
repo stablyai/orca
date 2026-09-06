@@ -23,6 +23,34 @@ describe('Kaneo task URLs', () => {
     }
   })
 
+  it('resolves board task panels to the same canonical task as the full task page', () => {
+    for (const site of ['https://cloud.kaneo.app', 'https://tasks.example.com:8443']) {
+      for (const suffix of ['?taskId=task-3', '/?filter=mine&taskId=task%2D3#comment']) {
+        const boardUrl = `${site}/dashboard/workspace/ws-1/project/proj_2/board${suffix}`
+        expect(parseKaneoTaskUrl(boardUrl)).toEqual(parseKaneoTaskUrl(site + path))
+        expect(isWorkItemLookupText(boardUrl)).toBe(true)
+      }
+    }
+  })
+
+  it.each([
+    '',
+    '?taskId=',
+    '?taskId=one&taskId=two',
+    '?taskId=one&taskId=one',
+    '?taskId=..',
+    '?taskId=a%2Fb',
+    '?taskId=a%5Cb',
+    '?taskId=%20task-3',
+    '?taskId=task-3%0A'
+  ])('rejects a board URL without one valid task identifier: %s', (suffix) => {
+    expect(
+      parseKaneoTaskUrl(
+        `https://tasks.example.com/dashboard/workspace/ws/project/proj/board${suffix}`
+      )
+    ).toBeNull()
+  })
+
   it.each([
     'task-3',
     'https://example.com/dashboard/workspace/ws/project/proj',
@@ -32,6 +60,9 @@ describe('Kaneo task URLs', () => {
     `https://example.com${path}/extra`,
     'https://example.com/dashboard/workspace/a/project/b/task/%2e%2e',
     'https://example.com/dashboard/workspace/a/project/b/task/a%2fb',
+    'https://example.com/dashboard/workspace/a/project/b/settings?taskId=task-3',
+    'https://user:secret@example.com/dashboard/workspace/a/project/b/board?taskId=task-3',
+    'http://example.com/dashboard/workspace/a/project/b/board?taskId=task-3',
     `https://example.com${path}?${'a'.repeat(2048)}`,
     'https://linear.app/acme/issue/ENG-123',
     'https://gitlab.com/a/b/-/issues/123'
