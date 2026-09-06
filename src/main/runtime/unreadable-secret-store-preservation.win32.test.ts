@@ -61,9 +61,6 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
 
   afterAll(() => {
     // Reset first: the tree is not removable while its files grant only Administrators.
-    for (const name of ['e2ee-keypair.json', 'devices.json', 'secrets.json.enc']) {
-      icacls(join(root, name), '/reset', '/q')
-    }
     icacls(root, '/reset', '/t', '/q')
     removeTreeSync(root)
   })
@@ -141,6 +138,83 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
 
     expect(store.set('added', 'value')).toEqual({ ok: false, error: expect.any(String) })
     store.delete('existing')
+
+    icacls(filePath, '/reset', '/q')
+    expect(readFileSync(filePath, 'utf8')).toBe(original)
+    vi.doUnmock('electron')
+  })
+  it('does not blank the plugin KV store on write', async () => {
+    const { PluginKvStore } = await import('./../plugins/plugin-storage-store')
+    const dir = join(root, 'plugin-kv')
+    mkdirSync(dir, { recursive: true })
+    const store = new PluginKvStore(dir, 'publisher.plugin', 'storage.json')
+    const filePath = (store as unknown as { filePath: string }).filePath
+    mkdirSync(join(filePath, '..'), { recursive: true })
+    const original = JSON.stringify({ keep: 'me' })
+    writeFileSync(filePath, original)
+    makeUnreadable(filePath)
+
+    expect(store.set('added', 'value')).toEqual({ ok: false, error: expect.any(String) })
+    store.delete('keep')
+
+    icacls(filePath, '/reset', '/q')
+    expect(readFileSync(filePath, 'utf8')).toBe(original)
+  })
+
+  it('does not drop pending relay revocations', async () => {
+    const { RelayRevokeOutbox } = await import('./relay/relay-revoke-outbox')
+    const dir = join(root, 'relay')
+    mkdirSync(dir, { recursive: true })
+    const filePath = join(dir, 'mobile-relay-revoke-outbox.json')
+    const original = JSON.stringify([
+      {
+        relayHostId: 'host-1',
+        relayDeviceId: 'device-1',
+        ownerIdentityKey: 'owner-1',
+        reqId: 'req-1',
+        createdAt: 1
+      }
+    ])
+    writeFileSync(filePath, original)
+    makeUnreadable(filePath)
+
+    const outbox = new RelayRevokeOutbox(dir)
+    expect(() =>
+      outbox.enqueue({
+        relayHostId: 'host-2',
+        relayDeviceId: 'device-2',
+        ownerIdentityKey: 'owner-2'
+      })
+    ).toThrow(/permission denied/i)
+
+    icacls(filePath, '/reset', '/q')
+    expect(readFileSync(filePath, 'utf8')).toBe(original)
+  })
+
+  /**
+   * The one site that *deletes* rather than overwrites: a refresh failure plus an unreadable
+   * session used to fall past the `status === 'found'` guard into `clearOrcaCloudSession`.
+   */
+  it('does not delete the account session it could not read', async () => {
+    vi.doMock('electron', () => ({
+      safeStorage: {
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(value),
+        decryptString: (buffer: Buffer) => buffer.toString()
+      }
+    }))
+    const { readOrcaCloudSession, getOrcaCloudSessionPath } =
+      await import('./../orca-profiles/profile-cloud-session-store')
+    const dir = join(root, 'profiles')
+    mkdirSync(dir, { recursive: true })
+    const filePath = getOrcaCloudSessionPath('profile-1', dir)
+    mkdirSync(join(filePath, '..'), { recursive: true })
+    const original = JSON.stringify({ version: 1, format: 'dev-plaintext-v1', savedAt: 1 })
+    writeFileSync(filePath, original)
+    makeUnreadable(filePath)
+
+    // The status the delete path keys off: `unreadable`, never `decrypt-failed`.
+    expect(readOrcaCloudSession('profile-1', dir).status).toBe('unreadable')
 
     icacls(filePath, '/reset', '/q')
     expect(readFileSync(filePath, 'utf8')).toBe(original)
