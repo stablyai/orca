@@ -1,5 +1,5 @@
 import { deleteExpiredSearchFiles } from './session-search-retention-delete'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, AiVaultSession } from '../../shared/ai-vault-types'
 import { aiVaultSearchHistoryCutoffMs } from '../../shared/ai-vault-search-settings'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type SyncDatabase from '../sqlite/sync-database'
@@ -9,7 +9,6 @@ import type {
   AiVaultSearchProviderCoverage,
   AiVaultSearchResult
 } from '../../shared/ai-vault-search-types'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
   SessionSearchFileIdentity,
   SessionSearchIndexedFile,
