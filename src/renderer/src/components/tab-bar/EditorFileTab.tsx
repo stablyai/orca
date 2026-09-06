@@ -171,8 +171,8 @@ export default function EditorFileTab({
       if (!input) {
         return
       }
-      // Why: Radix closes the context menu after onSelect; defer focus so its
-      // teardown cannot steal focus back or blur-commit the newly mounted input.
+      // Why: the tab re-lays out around the input; focus on the next frame so
+      // that swap has settled before selecting text.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
         if (renameInputRef.current !== input) {
