@@ -41,4 +41,17 @@ describe('orchestration worker-start command spec', () => {
     expect(notes).not.toMatch(/structured chat session/)
     expect(notes).toContain('Drive every worker the same way')
   })
+
+  it('does not promise uniformity it cannot deliver', () => {
+    // The note used to promise "the same verbs, the same handle, and the same worker-read
+    // sources". All three clauses were false for a worker with no terminal: `orca terminal` verbs
+    // refuse its handle and `--source terminal` has nothing to serve. A spec agents read must not
+    // carry a false promise — but it also must not name the worker kind, or a coordinator starts
+    // branching on something no verb it runs behaves differently for. So it states the limitation
+    // and the always-working alternative, without naming a mode.
+    const notes = startSpec?.notes?.join('\n') ?? ''
+    expect(notes).not.toContain('the same worker-read sources')
+    expect(notes).toContain('Not every worker has a terminal')
+    expect(notes).toContain('--source transcript')
+  })
 })
