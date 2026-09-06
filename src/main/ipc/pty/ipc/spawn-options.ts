@@ -19,6 +19,7 @@ import {
 import { ptySizes } from '../delivery/visibility-state'
 import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { shouldScopeTerminalHistoryByWorktree } from '../../../terminal-history-scope-policy'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function buildPtyIpcSpawnOptions(
@@ -57,7 +58,10 @@ export async function buildPtyIpcSpawnOptions(
       ? { prevalidatedCwd: ctx.prevalidatedCwd }
       : {}),
     env: ctx.spawnEnv,
-    historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
+    historyIsolationEnabled: shouldScopeTerminalHistoryByWorktree(
+      ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
+      args.worktreeId
+    ),
     ...(ctx.isMintedSessionId ? { isNewSession: true } : {})
   }
   if (!args.connectionId && !ctx.isDaemonHostSpawn) {

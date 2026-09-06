@@ -10,8 +10,10 @@ import {
 } from './terminal-history-paths'
 import { hashWorktreeId } from './terminal-history-id'
 import { deleteWslFishHistoryFile } from './wsl-fish-history-cleanup'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../shared/constants'
 
 const pendingHistoryTreeRemovals = new Map<string, Promise<void>>()
+const FLOATING_TERMINAL_HISTORY_HASH = hashWorktreeId(FLOATING_TERMINAL_WORKTREE_ID)
 export const MAX_PENDING_HISTORY_TREE_REMOVALS = 64
 // Why: a tombstone that fails once (Windows EBUSY under AV) would otherwise sit on disk for the whole
 // desktop session — only the next launch re-queues it. Bounded so a genuinely stuck tree stops retrying.
@@ -32,6 +34,13 @@ function getPendingDeleteRoot(historyRoot: string): string {
 
 function historyRootForTombstone(dir: string): string {
   return dirname(dirname(dir))
+}
+
+function isFloatingTerminalHistoryTree(dir: string): boolean {
+  const name = basename(dir)
+  return (
+    name === FLOATING_TERMINAL_HISTORY_HASH || name.startsWith(`${FLOATING_TERMINAL_HISTORY_HASH}.`)
+  )
 }
 
 /** Move a history tree to a pending-delete tombstone (metadata-only) so the critical path never walks it. */
@@ -139,6 +148,9 @@ function scheduleHistoryTreeRemoval(dir: string, wslDistro?: string): void {
 /** Tombstone one history tree and queue its recursive removal off the caller's critical path.
  *  Returns false when the rename failed, leaving the tree for a later GC pass to reclaim. */
 export function scheduleWorktreeHistoryTreeDeletion(dir: string, historyRoot: string): boolean {
+  if (isFloatingTerminalHistoryTree(dir)) {
+    return false
+  }
   // Why first: fish keeps its history in the user's fish data dir, outside this tree,
   // so the meta.json naming the session must still be readable when we look it up.
   const meta = readHistoryMeta(dir)
@@ -167,7 +179,12 @@ export function schedulePendingHistoryTreeRemovals(historyRoot: string): void {
   }
   try {
     for (const entry of readdirSync(pendingRoot)) {
-      scheduleHistoryTreeRemoval(join(pendingRoot, entry), wslDistroForHistoryRoot(historyRoot))
+      const tombstone = join(pendingRoot, entry)
+      // Tombstones retain the original hash prefix even if a failed removal already lost meta.json.
+      if (isFloatingTerminalHistoryTree(tombstone)) {
+        continue
+      }
+      scheduleHistoryTreeRemoval(tombstone, wslDistroForHistoryRoot(historyRoot))
     }
   } catch {
     // Non-fatal.

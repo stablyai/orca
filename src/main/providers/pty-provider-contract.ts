@@ -57,8 +57,7 @@ export type PtySpawnOptions = {
   startupCommandDelivery?: StartupCommandDelivery
   /** Minimal allowlisted launch ownership preserved by daemon reattach. */
   launchAgent?: TuiAgent
-  /** Orca worktree identity. When present, the local provider scopes shell
-   *  history to this worktree so ArrowUp only surfaces local commands. */
+  /** Orca workspace identity used for persistence and optional history scoping. */
   worktreeId?: string
   /** Stable terminal pane identity. Remote providers use this as PTY metadata
    *  even when it must not be exported into the spawned shell environment. */

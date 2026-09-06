@@ -13,6 +13,7 @@ import {
 import { readHistoryMetaAsync } from './terminal-history'
 import { resolveFishHistoryDir, sweepOrphanedFishHistoryFiles } from './fish-history-session'
 import { hashWorktreeId } from './terminal-history-id'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../shared/constants'
 import { forEachWithConcurrency } from '../shared/map-with-concurrency'
 import { yieldToEventLoop } from '../shared/event-loop-yield'
 
@@ -160,7 +161,10 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
       console.log('[pty:history:gc] Skipped: live worktree set is empty')
       return
     }
-    const main = await gcScanRoot(getHistoryRoot(), liveWorktreeIds, signal)
+    const protectedHistoryOwnerIds = new Set(liveWorktreeIds)
+    // Floating is synthetic and absent from the workspace catalog; retain its legacy scoped data.
+    protectedHistoryOwnerIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    const main = await gcScanRoot(getHistoryRoot(), protectedHistoryOwnerIds, signal)
 
     // Also scan WSL history directories (each distro has its own subdirectory).
     const wslTotals = { totalDirs: 0, orphaned: 0, pruned: 0 }
@@ -170,7 +174,7 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
         break
       }
       schedulePendingHistoryTreeRemovals(distroRoot)
-      const r = await gcScanRoot(distroRoot, liveWorktreeIds, signal)
+      const r = await gcScanRoot(distroRoot, protectedHistoryOwnerIds, signal)
       wslTotals.totalDirs += r.totalDirs
       wslTotals.orphaned += r.orphaned
       wslTotals.pruned += r.pruned
@@ -194,7 +198,7 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
       fishDirs.add(dir)
     }
     const fishOrphans = sweepOrphanedFishHistoryFiles(
-      new Set([...liveWorktreeIds].map(hashWorktreeId)),
+      new Set([...protectedHistoryOwnerIds].map(hashWorktreeId)),
       fishDirs,
       GC_MIN_AGE_MS
     )

@@ -60,20 +60,20 @@ export function finalizeLocalPtySpawnEnvironment(args: {
 
   // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
   const worktreeId = spawn.worktreeId
-  const historyEnabled = worktreeId && (getOptions().isHistoryEnabled?.() ?? true)
+  const historyEnabled =
+    spawn.historyIsolationEnabled !== false && (getOptions().isHistoryEnabled?.() ?? true)
   // Effective shell for history injection: WSL's outer exe is wsl.exe but the inner login shell is bash.
   const isWslTerminal =
     Boolean(plan.wslInfo || plan.worktreeWslContext || plan.preferredWslContext) ||
     pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
   const effectiveShellPath = isWslTerminal ? 'bash' : plan.shellPath
   let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
-  if (historyEnabled) {
+  if (worktreeId && historyEnabled) {
     historyResult = injectHistoryEnv(env, worktreeId, effectiveShellPath, plan.cwd, {
       wslDistro: plan.launchWslDistro
     })
     if (isWslTerminal && plan.launchWslDistro) {
       injectWslFishHistoryEnv(env, worktreeId, plan.launchWslDistro)
-      addWslEnvKeys(env, ['HISTFILE', 'fish_history'])
     }
     logHistoryInjection(worktreeId, historyResult)
   } else {
@@ -86,6 +86,12 @@ export function finalizeLocalPtySpawnEnvironment(args: {
     // And for an exported HISTFILE: history off means the shell's own default,
     // not the history file of the worktree this Orca was launched from.
     dropInheritedOrcaHistFile(env)
+  }
+  if (isWslTerminal) {
+    const historyKeys = ['HISTFILE', 'fish_history'].filter((key) => env[key] !== undefined)
+    if (historyKeys.length > 0) {
+      addWslEnvKeys(env, historyKeys)
+    }
   }
 
   if (!plan.wslInfo && process.platform !== 'win32') {
