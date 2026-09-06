@@ -105,6 +105,8 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const copyPathShortcut = useOptionalShortcutLabel('editor.copyPath')
+  const copyRelativePathShortcut = useOptionalShortcutLabel('editor.copyRelativePath')
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -220,6 +222,9 @@ export function EditorFileTabContextMenu({
         >
           <Copy className="size-3.5" />
           {translate('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
+          {copyPathShortcut ? (
+            <DropdownMenuShortcut>{copyPathShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
@@ -231,6 +236,9 @@ export function EditorFileTabContextMenu({
             'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
             'Copy Relative Path'
           )}
+          {copyRelativePathShortcut ? (
+            <DropdownMenuShortcut>{copyRelativePathShortcut}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

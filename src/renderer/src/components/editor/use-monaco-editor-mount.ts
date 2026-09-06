@@ -131,6 +131,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
 
       const { disposeInputBindings } = installMonacoEditorInputBindings({
         editorInstance,
+        filePath,
         worktreeId,
         editorContainerRef,
         propsRef,

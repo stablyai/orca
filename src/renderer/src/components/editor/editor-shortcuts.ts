@@ -46,6 +46,42 @@ export function installEditorFindShortcut(target: HTMLElement, onFind: () => voi
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
+/**
+ * Editor-scoped Copy Path / Copy Relative Path, the same two actions the editor
+ * tab's context menu offers, made bindable so they work without the mouse.
+ *
+ * @param target The editor DOM node the chords are scoped to.
+ * @param getPaths Reads the active file's paths at press time, so the handler
+ * survives the tab switching under it.
+ * @returns A disposer that removes the listener.
+ */
+export function installEditorCopyPathShortcuts(
+  target: HTMLElement,
+  getPaths: () => { filePath: string; relativePath: string }
+): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    const relative = editorShortcutMatches('editor.copyRelativePath', event)
+    if (!relative && !editorShortcutMatches('editor.copyPath', event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    // Consume matched repeats but copy once per press, like the find shortcut.
+    if (event.repeat) {
+      return
+    }
+    const paths = getPaths()
+    const value = relative ? paths.relativePath : paths.filePath
+    if (!value) {
+      return
+    }
+    void window.api.ui.writeClipboardText(value)
+  }
+
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
 type MonacoDiffNavigationEditor = {
   getContainerDomNode: () => HTMLElement
   goToDiff: (target: 'next' | 'previous') => void
