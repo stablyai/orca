@@ -9,10 +9,11 @@ const rewritten = new WeakMap<object, AnySchema>()
  * Rewrites a shell-authored payload schema so an additive change in a newer APK degrades instead of
  * bricking an older page. The shell (APK) and the page (served by the desktop) ship from different
  * releases, and a page parse failure is permanent: `invalid_message` is not retryable and nothing
- * re-subscribes. Three relaxations, each the forward-compatible reading of a closed shape: unknown
+ * re-subscribes. Four relaxations, each the forward-compatible reading of a closed shape: unknown
  * object keys are stripped rather than rejected, a member an array-of-unions cannot classify is
- * dropped rather than failing the whole array, and an unknown value for an optional/nullable closed
- * set collapses to absent rather than failing its parent.
+ * dropped rather than failing the whole array, an unknown value for an optional/nullable closed
+ * set collapses to absent rather than failing its parent, and an optional/nullable discriminated
+ * union the page cannot classify collapses the same way.
  *
  * Only the shell->page direction. Page->shell request schemas stay `.strict()`: there the shell is
  * the authority and a loud `invalid_request` is the security fence.
@@ -121,11 +122,47 @@ function rebuiltArray(schema: AnySchema, def: SchemaDef): AnySchema {
 
 /** An unknown member of a closed set reads as "absent" so it cannot fail the payload around it. */
 function rebuiltClosedSetWrapper(schema: AnySchema, def: SchemaDef): AnySchema {
-  const wrapper = cloned(schema, { ...def, innerType: loosen(def.innerType as AnySchema) })
-  if (!isClosedSet(def.innerType as AnySchema)) {
-    return wrapper
+  const inner = def.innerType as AnySchema
+  const absent = (def.type === 'nullable' ? null : undefined) as never
+  const loosened = loosen(inner)
+  if (isClosedSet(inner)) {
+    return cloned(schema, { ...def, innerType: loosened }).catch(absent)
   }
-  return wrapper.catch((def.type === 'nullable' ? null : undefined) as never)
+  const unclassified = unclassifiedMemberOf(loosened, absent)
+  return cloned(schema, {
+    ...def,
+    innerType: unclassified ? z.union([loosened, unclassified]) : loosened
+  })
+}
+
+/**
+ * A discriminated union is a closed set one level in, so a member named by a discriminant this build
+ * has never heard of is the same forward-compatible shape as an unknown enum value and reads as
+ * absent. `init.resumeRoute` is the case that made this load-bearing: a page that failed the whole
+ * envelope over a route it could have ignored lost every grant with it. Scoped to an unrecognized
+ * discriminant on purpose -- a member the page CAN name but whose fields break their bounds is a
+ * sender bug, not version skew, and still fails loudly.
+ */
+function unclassifiedMemberOf(schema: AnySchema, absent: never): AnySchema | null {
+  const def = definitionOf(schema)
+  if (def.type !== 'union' || typeof def.discriminator !== 'string') {
+    return null
+  }
+  const discriminator = def.discriminator
+  const known = (schema as unknown as { _zod: { propValues?: Record<string, Set<unknown>> } })._zod
+    .propValues?.[discriminator]
+  if (!known || known.size === 0) {
+    return null
+  }
+  return z
+    .unknown()
+    .refine(
+      (value) =>
+        typeof value === 'object' &&
+        value !== null &&
+        !known.has((value as Record<string, unknown>)[discriminator])
+    )
+    .transform(() => absent) as unknown as AnySchema
 }
 
 function isUnion(schema: AnySchema): boolean {

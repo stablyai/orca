@@ -394,6 +394,48 @@ describe('mobile web bridge shell contract', () => {
     }
   )
 
+  it('keeps a route the shell cannot name out of its resume memory', () => {
+    // Why: page->shell stays strict, so the shell only ever remembers a kind it can replay.
+    expect(
+      MobileWebBridgePageMessageSchema.safeParse({
+        version: MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
+        type: 'routeState',
+        shellSessionId: SHELL_SESSION_ID,
+        buildId: BUILD_ID,
+        route: { kind: 'someFutureKind', workspaceId: 'opaque-workspace' }
+      }).success
+    ).toBe(false)
+  })
+
+  it('degrades a resume route kind a newer shell added instead of failing the whole init', () => {
+    const base = {
+      version: MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
+      type: 'init',
+      shellSessionId: SHELL_SESSION_ID,
+      buildId: BUILD_ID,
+      connection: 'connected',
+      grants: [operationGrant(), operationGrant({ capability: 'terminal', operation: 'input' })]
+    }
+    const raw = JSON.stringify({
+      ...base,
+      resumeRoute: { kind: 'someFutureKind', workspaceId: 'opaque-workspace' }
+    })
+
+    // Why: init is the page's only grant delivery, so a route it cannot name must cost the route.
+    for (const parsed of [
+      parseMobileWebBridgeShellMessage(raw, CONTEXT),
+      parseMobileWebBridgeInitialMessage(raw)
+    ]) {
+      expect(parsed.ok).toBe(true)
+      const value = (parsed as Extract<typeof parsed, { ok: true }>).value as {
+        resumeRoute?: unknown
+        grants: unknown[]
+      }
+      expect(value.resumeRoute).toBeUndefined()
+      expect(value.grants).toHaveLength(2)
+    }
+  })
+
   it('rejects unbounded resume routes and strips host-shaped ones', () => {
     const base = {
       version: MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
