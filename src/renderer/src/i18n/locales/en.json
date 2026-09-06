@@ -18082,6 +18082,7 @@
     "retry": "Retry"
   },
   "kaneo": {
+    "taskProvidersDescription": "Connect issue trackers to start workspaces with linked task context.",
     "loadingTask": "Loading Kaneo task…",
     "taskReady": "Select the Kaneo task to link it to this workspace.",
     "retry": "Retry",

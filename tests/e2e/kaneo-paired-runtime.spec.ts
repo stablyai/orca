@@ -6,6 +6,10 @@ import {
 } from './helpers/paired-electron-client'
 import { waitForSessionReady } from './helpers/store'
 
+test.afterEach(async ({ orcaPage }) => {
+  await orcaPage.evaluate(() => window.api.kaneo.disconnect())
+})
+
 test('Kaneo connection and Smart lookup belong to the selected paired runtime', async ({
   electronApp,
   orcaPage

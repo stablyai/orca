@@ -177,15 +177,17 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 
-  it.each(['jira', 'kaneo'] as const)(
+  it.each([
+    ['jira', 'worktree.linked-work-item-context.v1'],
+    ['kaneo', 'kaneo.task-link.v1'],
+    ['kaneo', 'worktree.linked-work-item-context.v1']
+  ] as const)(
     'blocks %s linking when the paired runtime lacks metadata support',
-    async (provider) => {
+    async (provider, missingCapability) => {
       const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
       if (oldRuntimeStatus.ok) {
         oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
-          (capability) =>
-            capability !==
-            (provider === 'kaneo' ? 'kaneo.task-link.v1' : 'worktree.linked-work-item-context.v1')
+          (capability) => capability !== missingCapability
         )
       }
       runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>

@@ -208,6 +208,7 @@ function KaneoConnectionForm({
                 onClick={() => {
                   setEditing(false)
                   setApiKey('')
+                  setSiteUrl(status?.siteUrl ?? '')
                 }}
               >
                 {translate('kaneo.cancel', 'Cancel')}

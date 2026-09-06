@@ -126,13 +126,46 @@ describe('Kaneo task lookup', () => {
     expect(cancel).toHaveBeenCalled()
   })
 
-  it('propagates cancellation to both requests', async () => {
+  it('propagates in-flight cancellation to both pending requests', async () => {
+    fetchMock.mockImplementation(
+      (_input, init) =>
+        new Promise((_resolve, reject) => {
+          init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), {
+            once: true
+          })
+        })
+    )
     const controller = new AbortController()
-    await getKaneoTask(url, controller.signal)
+    const lookup = getKaneoTask(url, controller.signal)
+    const rejected = expect(lookup).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls.every(([, init]) => !init!.signal!.aborted)).toBe(true)
     controller.abort()
-    for (const [, init] of fetchMock.mock.calls) {
-      expect(init?.signal?.aborted).toBe(true)
-    }
+    await rejected
+    expect(fetchMock.mock.calls.every(([, init]) => init!.signal!.aborted)).toBe(true)
+  })
+
+  it.each(['task', 'project'])('aborts the companion when the %s request fails', async (failed) => {
+    const cancelled = vi.fn()
+    fetchMock.mockImplementation(async (input, init) => {
+      const kind = String(input).includes('/task/') ? 'task' : 'project'
+      if (kind === failed) {
+        return new Response('', { status: 429 })
+      }
+      return new Promise((_resolve, reject) => {
+        init!.signal!.addEventListener(
+          'abort',
+          () => {
+            cancelled()
+            reject(init!.signal!.reason)
+          },
+          { once: true }
+        )
+      })
+    })
+    await expect(getKaneoTask(url)).rejects.toThrow('rate limiting')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(cancelled).toHaveBeenCalledOnce()
   })
 
   it('verifies a connection before storing it and keeps existing credentials on failure', async () => {

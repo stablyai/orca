@@ -44,8 +44,8 @@ export function IntegrationsPane(): React.JSX.Element {
           </h3>
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.settings.IntegrationsPane.3ba07f933b',
-              'Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.'
+              'kaneo.taskProvidersDescription',
+              'Connect issue trackers to start workspaces with linked task context.'
             )}
           </p>
         </div>
