@@ -7,6 +7,7 @@ import type {
 } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
 import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
+import { PendingOperationDrain } from './structured-agent-session-task-queue'
 import {
   isStructuredAgentSessionRecoveryTicketCurrent,
   settleUnexpectedStructuredAgentSessionExit
@@ -14,7 +15,7 @@ import {
 
 export class StructuredAgentSessionEventRecovery {
   private readonly sinkFailures = new Set<string>()
-  private readonly pendingSinkRecoveries = new Set<Promise<void>>()
+  private readonly sinkRecoveries = new PendingOperationDrain()
 
   constructor(
     private readonly context: {
@@ -36,44 +37,38 @@ export class StructuredAgentSessionEventRecovery {
       return
     }
     this.sinkFailures.add(sessionId)
-    const recovery = this.context
-      .serialize(sessionId, async () => {
-        const session = this.context.sessions.get(sessionId)
-        const stop =
-          this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
-        if (!session?.hasProviderChild || !stop) {
-          return null
-        }
-        const fence = session.fence
-        const acquisitionGeneration = session.acquisitionGeneration
-        const stopped = await stop(sessionId)
-        if (!stopped || !acquisitionGeneration) {
-          return null
-        }
-        return {
-          type: 'ended',
-          sessionId,
-          reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
-          cause: 'unexpected-exit',
-          fence,
-          acquisitionGeneration
-        } as const
-      })
-      .then((event) => (event ? this.handle(event) : undefined))
-      .catch((recoveryError) => this.context.onBarrierError(sessionId, recoveryError))
-      .finally(() => this.sinkFailures.delete(sessionId))
-      .then(() => undefined)
-    this.pendingSinkRecoveries.add(recovery)
-    void recovery.then(
-      () => this.pendingSinkRecoveries.delete(recovery),
-      () => this.pendingSinkRecoveries.delete(recovery)
+    this.sinkRecoveries.track(
+      this.context
+        .serialize(sessionId, async () => {
+          const session = this.context.sessions.get(sessionId)
+          const stop =
+            this.context.deps.adapter.forceCloseSession ?? this.context.deps.adapter.closeSession
+          if (!session?.hasProviderChild || !stop) {
+            return null
+          }
+          const fence = session.fence
+          const acquisitionGeneration = session.acquisitionGeneration
+          const stopped = await stop(sessionId)
+          if (!stopped || !acquisitionGeneration) {
+            return null
+          }
+          return {
+            type: 'ended',
+            sessionId,
+            reason: `journal sink failure: ${error instanceof Error ? error.message : String(error)}`,
+            cause: 'unexpected-exit',
+            fence,
+            acquisitionGeneration
+          } as const
+        })
+        .then((event) => (event ? this.handle(event) : undefined))
+        .catch((recoveryError) => this.context.onBarrierError(sessionId, recoveryError))
+        .finally(() => this.sinkFailures.delete(sessionId))
     )
   }
 
-  async drainSinkRecoveries(): Promise<void> {
-    while (this.pendingSinkRecoveries.size > 0) {
-      await Promise.allSettled(this.pendingSinkRecoveries)
-    }
+  drainSinkRecoveries(): Promise<void> {
+    return this.sinkRecoveries.drain()
   }
 
   async handle(event: StructuredAgentSessionLifecycleEvent): Promise<void> {

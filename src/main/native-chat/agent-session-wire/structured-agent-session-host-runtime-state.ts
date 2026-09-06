@@ -81,9 +81,16 @@ export class StructuredAgentSessionHostRuntimeState {
   }
 
   async flushAllEventSinks(): Promise<void> {
-    await Promise.all(
+    // Every sink settles before this throws. `Promise.all` short-circuited on the first failure,
+    // leaving a still-draining sink to raise its recovery after teardown had already drained them.
+    const settled = await Promise.allSettled(
       [...this.eventSinks.values()].map((sink) => this.requireSuccessfulBarrier(sink.drained()))
     )
+    for (const result of settled) {
+      if (result.status === 'rejected') {
+        throw result.reason
+      }
+    }
   }
 
   private async requireSuccessfulBarrier(
