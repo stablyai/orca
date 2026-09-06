@@ -247,7 +247,7 @@ async function settleUnsupportedReservation(
       operationId: input.params.envelope.clientOperationId,
       outcome: {
         status: 'failed',
-        code: 'agent_session_operation_invalid',
+        code: 'structured_agent_session_unsupported',
         message: 'Structured session support changed before the provider could start.'
       },
       exitProof: 'processless',

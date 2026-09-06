@@ -4,6 +4,7 @@ import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-a
 import { agentSessionOwnerBindingsEqual } from '../../shared/claimed-agent-pty-owner-snapshot'
 import { resolvePinnedCodexRolloutProof } from '../codex/codex-tui-rollout-proof'
 import { supportsCodexStructuredLocation } from '../codex/codex-structured-location-support'
+import { probeWindowsProcessStartTimeAvailability } from '../windows/windows-process-table'
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { resolveStructuredAgentSessionCreateSupport } from '../native-chat/structured-agent-session-create-support'
@@ -55,13 +56,23 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     agent: 'claude' | 'codex'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
+    const windowsProcessStartTimeAvailable =
+      process.platform === 'win32' &&
+      location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+      location.wslDistro === null
+        ? await probeWindowsProcessStartTimeAvailability()
+        : undefined
+    const hasWindowsProcessStartTimeProof =
+      windowsProcessStartTimeAvailable === undefined
+        ? undefined
+        : () => windowsProcessStartTimeAvailable
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
       adapterSupportsCreate:
         agent === 'claude'
-          ? supportsClaudeStructuredLocation(location)
-          : supportsCodexStructuredLocation(location),
+          ? supportsClaudeStructuredLocation(location, hasWindowsProcessStartTimeProof)
+          : supportsCodexStructuredLocation(location, hasWindowsProcessStartTimeProof),
       getSettings: () => this.requireStore().getSettings()
     })
   }
@@ -213,6 +224,9 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
     if (!this.hasPersistedStructuredAgentSessionStore()) {
       return
+    }
+    if (process.platform === 'win32') {
+      await probeWindowsProcessStartTimeAvailability()
     }
     // Durable agent records must exist before daemon inventory can be reconciled against them.
     await this.ensureStructuredAgentSessionHost()

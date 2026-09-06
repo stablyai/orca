@@ -33,13 +33,13 @@ beforeEach(() => {
 })
 
 describe('runtime status Windows process start-time proof', () => {
-  it('fails closed when a Windows host cannot read process creation time', () => {
+  it('keeps the structured RPC surface available when current Windows eligibility is false', () => {
     setPlatform('win32')
     isWindowsProcessStartTimeAvailable.mockReturnValue(false)
 
     const status = new OrcaRuntimeService().getStatus()
 
-    expect(status.capabilities).not.toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+    expect(status.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     expect(status).not.toHaveProperty('windowsProcessStartTimeAvailable')
   })
 

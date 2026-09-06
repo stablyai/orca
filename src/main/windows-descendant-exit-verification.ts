@@ -1,6 +1,6 @@
 import type { DescendantTreeVerdict } from './pty-descendant-exit-verification'
 import { windowsDescendantsFromRows } from './providers/windows-foreground-process-rows'
-import { readWindowsProcessTableFresh } from './windows/windows-process-table'
+import { readWindowsProcessIdentityTableFresh } from './windows/windows-process-table'
 import { terminateWindowsProcessTree } from './windows-process-tree-kill'
 
 export const WINDOWS_DESCENDANT_KILL_VERIFY_MS = 3_500
@@ -41,7 +41,7 @@ export async function verifyWindowsProcessIdentity(
   if (!Number.isInteger(target.pid) || target.pid <= 0 || !Number.isFinite(target.creationTimeMs)) {
     return false
   }
-  const table = await (deps.readTable ?? readWindowsProcessTableFresh)().catch(() => null)
+  const table = await (deps.readTable ?? readWindowsProcessIdentityTableFresh)().catch(() => null)
   const current = table?.filter((row) => row.pid === target.pid) ?? []
   return current.length === 1 && current[0]?.creationTimeMs === target.creationTimeMs
 }
@@ -68,7 +68,7 @@ export async function captureWindowsDescendantSnapshot(
   const capturedAtMs = (deps.now ?? Date.now)()
   // One table read, not a walk plus an identity read: each is bounded in
   // seconds, and this runs inside the close ladder's budget.
-  const table = await (deps.readTable ?? readWindowsProcessTableFresh)().catch(() => null)
+  const table = await (deps.readTable ?? readWindowsProcessIdentityTableFresh)().catch(() => null)
   const descendants = table && windowsDescendantsFromRows(table, rootPid)
   const root = table?.find((row) => row.pid === rootPid)
   if (!descendants || typeof root?.creationTimeMs !== 'number') {
@@ -131,7 +131,7 @@ export async function verifyWindowsDescendantSnapshotExit(
     return proven
   }
   const now = deps.now ?? Date.now
-  const readTable = deps.readTable ?? readWindowsProcessTableFresh
+  const readTable = deps.readTable ?? readWindowsProcessIdentityTableFresh
   const deadline = now() + (deps.verifyMs ?? WINDOWS_DESCENDANT_KILL_VERIFY_MS)
   let verdict: DescendantTreeVerdict = 'unverifiable'
   do {

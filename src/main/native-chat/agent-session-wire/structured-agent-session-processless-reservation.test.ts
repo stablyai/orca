@@ -164,26 +164,27 @@ describe('processless structured session reservation', () => {
       .fn<NonNullable<StructuredAgentSessionAdapter['supportsCreate']>>()
       .mockReturnValueOnce(true)
       .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(true)
     const acquire = vi.fn<StructuredAgentSessionAdapter['acquire']>()
     const adapter = { supportsCreate, acquire } as unknown as StructuredAgentSessionAdapter
+    const input = {
+      store,
+      adapter,
+      journalRoot: root,
+      authority: {
+        spawnToken: 'spawn-drift',
+        claimKeyId: 'key-1',
+        handoffOperationId: OPERATION,
+        probe: { outcome: 'reservation-unused' as const }
+      },
+      callerKey: 'client-1',
+      params: attachParams(),
+      now: () => NOW,
+      onAttached: () => {}
+    }
 
-    await expect(
-      performAttach({
-        store,
-        adapter,
-        journalRoot: root,
-        authority: {
-          spawnToken: 'spawn-drift',
-          claimKeyId: 'key-1',
-          handoffOperationId: OPERATION,
-          probe: { outcome: 'reservation-unused' }
-        },
-        callerKey: 'client-1',
-        params: attachParams(),
-        now: () => NOW,
-        onAttached: () => {}
-      })
-    ).resolves.toMatchObject({
+    await expect(performAttach(input)).resolves.toMatchObject({
       ok: false,
       refusal: { code: 'structured_agent_session_unsupported' }
     })
@@ -197,7 +198,15 @@ describe('processless structured session reservation', () => {
       runtimeFence: 2,
       deathEvidence: { kind: 'pid-absent', detail: 'reservation failed before spawn' }
     })
-    expect(store.listOperationRows()[0]?.outcome).toMatchObject({ status: 'failed' })
+    expect(store.listOperationRows()[0]?.outcome).toMatchObject({
+      status: 'failed',
+      code: 'structured_agent_session_unsupported'
+    })
+    await expect(performAttach(input)).resolves.toMatchObject({
+      ok: false,
+      refusal: { code: 'structured_agent_session_unsupported' }
+    })
+    expect(acquire).not.toHaveBeenCalled()
   })
 
   it('settles a pre-spawn failure and its processless evidence in one durable transaction', async () => {

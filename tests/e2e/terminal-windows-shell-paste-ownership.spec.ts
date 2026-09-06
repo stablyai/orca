@@ -221,7 +221,8 @@ test.describe('Windows terminal shell paste ownership', () => {
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
     const scriptPath = path.join(testRepoPath, `.orca-paste-powershell-shell-${runId}.mjs`)
-    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, payload))
+    const expectedText = payload.replace(/\r?\n/g, '\r')
+    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
     let scriptStarted = false
 
     try {
@@ -237,7 +238,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       await waitForTerminalOutput(orcaPage, `PASTE_COMPLETE_${runId}:MATCH`, 10_000, 12_000)
 
       const writes = (await readTerminalPtyWrites(electronApp)).join('')
-      expect(countOccurrences(writes, payload), 'PowerShell payload PTY write count').toBe(1)
+      expect(countOccurrences(writes, expectedText), 'PowerShell payload PTY write count').toBe(1)
     } finally {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
@@ -271,7 +272,8 @@ test.describe('Windows terminal shell paste ownership', () => {
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
     const scriptPath = path.join(testRepoPath, `.orca-paste-cmd-shell-${runId}.mjs`)
-    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, payload))
+    const expectedText = payload.replace(/\r?\n/g, '\r')
+    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
     let scriptStarted = false
 
     try {
@@ -287,7 +289,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       await waitForTerminalOutput(orcaPage, `PASTE_COMPLETE_${runId}:MATCH`, 10_000, 12_000)
 
       const writes = (await readTerminalPtyWrites(electronApp)).join('')
-      expect(countOccurrences(writes, payload), 'cmd.exe payload PTY write count').toBe(1)
+      expect(countOccurrences(writes, expectedText), 'cmd.exe payload PTY write count').toBe(1)
     } finally {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
@@ -322,7 +324,8 @@ test.describe('Windows terminal shell paste ownership', () => {
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
     const scriptPath = path.join(testRepoPath, `.orca-paste-git-bash-shell-${runId}.mjs`)
-    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, payload))
+    const expectedText = payload.replace(/\r?\n/g, '\r')
+    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
     let scriptStarted = false
 
     try {
@@ -338,7 +341,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       await waitForTerminalOutput(orcaPage, `PASTE_COMPLETE_${runId}:MATCH`, 10_000, 12_000)
 
       const writes = (await readTerminalPtyWrites(electronApp)).join('')
-      expect(countOccurrences(writes, payload), 'Git Bash payload PTY write count').toBe(1)
+      expect(countOccurrences(writes, expectedText), 'Git Bash payload PTY write count').toBe(1)
     } finally {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
@@ -376,7 +379,8 @@ test.describe('Windows terminal shell paste ownership', () => {
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
     const scriptPath = path.join(testRepoPath, `.orca-paste-wsl-shell-${runId}.mjs`)
-    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, payload))
+    const expectedText = payload.replace(/\r?\n/g, '\r')
+    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
     let scriptStarted = false
 
     try {
@@ -396,7 +400,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       await waitForTerminalOutput(orcaPage, `PASTE_COMPLETE_${runId}:MATCH`, 10_000, 12_000)
 
       const writes = (await readTerminalPtyWrites(electronApp)).join('')
-      expect(countOccurrences(writes, payload), 'WSL payload PTY write count').toBe(1)
+      expect(countOccurrences(writes, expectedText), 'WSL payload PTY write count').toBe(1)
     } finally {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
@@ -437,7 +441,8 @@ test.describe('Windows terminal shell paste ownership', () => {
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
     const scriptPath = path.join(testRepoPath, `.orca-paste-wsl-retention-${runId}.mjs`)
-    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, payload))
+    const expectedText = payload.replace(/\r?\n/g, '\r')
+    writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
     let scriptStarted = false
 
     try {
@@ -457,7 +462,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       await waitForTerminalOutput(orcaPage, `PASTE_COMPLETE_${runId}:MATCH`, 10_000, 12_000)
 
       const writes = (await readTerminalPtyWrites(electronApp)).join('')
-      expect(countOccurrences(writes, payload), 'retained WSL payload PTY write count').toBe(1)
+      expect(countOccurrences(writes, expectedText), 'retained WSL payload PTY write count').toBe(1)
     } finally {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)

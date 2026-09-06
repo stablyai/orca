@@ -13,6 +13,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
 import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
+import { probeWindowsProcessStartTimeAvailability } from '../../../windows/windows-process-table'
 
 /**
  * In-process callers are the same build as the host, so they carry no negotiated
@@ -37,13 +38,20 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
   return host
 }
 
-/** Attach is the only way a session comes into being, so it is the only call
- *  that builds the host. Every other method addresses a session that must
- *  already be attached, and correctly reports absent when none is. */
+/** Builds the host for the calls that address a session by durable record rather than by live
+ *  state: attach, which is the only way a session comes into being, plus hold and reveal, which
+ *  each reach for a record on disk this process may not have opened yet. Every other method
+ *  addresses a session that must already be attached, and correctly reports absent when none is. */
 export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<void> {
   // Gated first: a client that cannot read structured sessions must not be able
   // to make the host exist, which is an observable side effect of the surface.
-  if (!supportsStructuredSessions(ctx) || getStructuredAgentSessionHost()) {
+  if (!supportsStructuredSessions(ctx)) {
+    return
+  }
+  if (process.platform === 'win32') {
+    await probeWindowsProcessStartTimeAvailability()
+  }
+  if (getStructuredAgentSessionHost()) {
     return
   }
   await ctx.runtime.ensureStructuredAgentSessionHost()

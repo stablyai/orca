@@ -101,6 +101,11 @@ const STRUCTURED_CALLS: {
     hostMethod: 'readOptions',
     result: { current: { model: 'gpt-live' } }
   },
+  {
+    method: 'agentSession.reveal',
+    hostMethod: 'revealSession',
+    result: { ok: true, sessionId: SESSION, workspaceId: WORKSPACE, agent: 'codex', readable: true }
+  },
   { method: 'agentSession.hold', hostMethod: 'hold', result: { held: true } },
   { method: 'agentSession.release', hostMethod: 'release', result: { released: true } },
   {
@@ -321,6 +326,12 @@ function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
+    revealSession: vi.fn(async () => ({
+      sessionId: SESSION,
+      workspaceId: WORKSPACE,
+      agent: 'codex' as const,
+      readable: true
+    })),
     hold: vi.fn(async () => undefined),
     release: vi.fn(() => undefined),
     respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
