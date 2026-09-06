@@ -2,10 +2,10 @@ import type { UsageProvider } from '../usage/usage-provider-contract'
 import { scanCodexUsageFiles } from './scanner'
 import type { CodexUsageDailyAggregate, CodexUsagePersistedFile, CodexUsageSession } from './types'
 
-// Why: v5 keys Codex ownership on raw token_count identity without session id
-// so forks that rewrite session_meta still match. Older caches used session-
-// scoped keys and can double-count after fork/resume (#8006).
-export const CODEX_USAGE_SCHEMA_VERSION = 5
+// Why: v6 keys Codex event ownership on root thread identity + token usage tuples
+// without raw timestamp. Codex rewrites copied token_count timestamps to the fork
+// creation time, so timestamp-based keys bypassed deduplication on session forks (#19139).
+export const CODEX_USAGE_SCHEMA_VERSION = 6
 
 export const codexUsageProvider = {
   id: 'codex',

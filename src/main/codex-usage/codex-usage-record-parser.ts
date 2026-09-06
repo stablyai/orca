@@ -148,7 +148,7 @@ export function parseCodexUsageRecord(
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
-    eventKey: buildCodexUsageEventKey(parsed.timestamp, totalUsage, lastUsage),
+    eventKey: buildCodexUsageEventKey(totalUsage, lastUsage),
     cwd: context.currentCwd ?? context.sessionCwd,
     model: resolvedModel,
     hasInferredPricing,
