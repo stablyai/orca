@@ -3,6 +3,12 @@
 const READY_MARKER = 'GOLDEN_STUB_AGENT_READY'
 const EXIT_MARKER = 'GOLDEN_STUB_AGENT_EXITED'
 
+// The interactive fixture does not implement Codex's JSONL app-server API.
+if (process.argv[2] === 'app-server') {
+  process.stderr.write("error: unrecognized subcommand 'app-server'\n")
+  process.exit(2)
+}
+
 const ESC = '\x1b'
 const keyboardProtocolMode = process.argv.includes('--keyboard-protocol')
 // Both match the bytes after ESC, so the control character stays out of the
