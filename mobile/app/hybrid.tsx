@@ -4,6 +4,7 @@ import * as ExpoCrypto from 'expo-crypto'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
+  MOBILE_WEB_SHELL_FEATURES,
   parseMobileWebBridgePageMessage,
   type MobileWebBridgeShellMessage,
   type MobileWebResumeRoute
@@ -257,7 +258,8 @@ export default function HybridScreen() {
       reconnectAttempts: reconnects,
       lastConnectedAt: lastConnected,
       resumeRoute: resumeRoute.current(),
-      grants: [...MOBILE_WEB_PRODUCTION_GRANTS]
+      grants: [...MOBILE_WEB_PRODUCTION_GRANTS],
+      shellFeatures: [...MOBILE_WEB_SHELL_FEATURES]
     })
   }, [hostName, lastConnected, onHealthTimeout, postToWeb, reconnects, resumeRoute, session, state])
   useEffect(() => {

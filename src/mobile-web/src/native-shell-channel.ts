@@ -137,6 +137,7 @@ function useMobileWebNativeShellChannel(): MobileWebNativeShellState {
         client = new MobileWebBridgeClient({
           context,
           grants: init.grants,
+          shellFeatures: init.shellFeatures,
           postMessage: postPageMessage
         })
         setState({

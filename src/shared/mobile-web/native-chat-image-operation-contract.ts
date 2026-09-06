@@ -49,7 +49,9 @@ export const MobileWebNativeChatPasteImagesPayloadSchema = z
       .min(1)
       .max(MOBILE_WEB_NATIVE_CHAT_IMAGE_LIMIT),
     // Why: a paste followed by typed text needs a trailing separator so the text cannot glue onto
-    // the path. Optional and only sent when true, so an older strict shell never sees it.
+    // the path. Optional is not enough on a strict page->shell schema — a shell that predates the
+    // field rejects the whole request — so the page sends it only when the shell advertises
+    // MOBILE_WEB_SHELL_NATIVE_CHAT_PASTE_FOLLOWED_BY_TEXT_FEATURE in `init`.
     followedByText: z.boolean().optional()
   })
   .strict()

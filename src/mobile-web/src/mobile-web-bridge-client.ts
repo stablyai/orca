@@ -2,7 +2,8 @@ import {
   MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
   type MobileWebBridgeMessageContext,
   type MobileWebBridgePageMessage,
-  type MobileWebBridgeShellMessage
+  type MobileWebBridgeShellMessage,
+  type MobileWebShellFeature
 } from '../../shared/mobile-web/bridge-contract'
 import {
   MobileWebHapticSelectionResultSchema,
@@ -63,6 +64,7 @@ export { MobileWebBridgeClientError } from './mobile-web-bridge-client-error'
 
 export class MobileWebBridgeClient {
   private readonly grants = new Map<string, OperationGrant>()
+  private readonly shellFeatures: ReadonlySet<string>
   private readonly requests: MobileWebOneShotRequestClient
   readonly fileList!: MobileWebFileRequestClient['list']
   readonly fileSearch!: MobileWebFileRequestClient['search']
@@ -155,6 +157,7 @@ export class MobileWebBridgeClient {
     private readonly options: {
       context: MobileWebBridgeMessageContext
       grants: InitMessage['grants']
+      shellFeatures?: readonly string[] | undefined
       postMessage: (message: MobileWebBridgePageMessage) => boolean
       createRequestId?: () => string
       requestTimeoutMs?: number
@@ -163,6 +166,7 @@ export class MobileWebBridgeClient {
     for (const grant of options.grants) {
       this.grants.set(mobileWebBridgeOperationKey(grant.capability, grant.operation), grant)
     }
+    this.shellFeatures = new Set(options.shellFeatures ?? [])
     const envelope = () =>
       ({
         version: MOBILE_WEB_BRIDGE_PROTOCOL_VERSION,
@@ -214,6 +218,13 @@ export class MobileWebBridgeClient {
     this.agentHistory = new MobileWebAgentHistoryRequestClient(this.requests)
     this.speech = new MobileWebSpeechRequestClient(this.requests, this.subscriptions)
     this.task = new MobileWebTaskRequestClient(this.requests)
+  }
+
+  /** Whether this shell understands a payload field the page would otherwise have to withhold.
+   *  Page->shell schemas are strict, so an unadvertised field is `invalid_request`, not an
+   *  ignored key. */
+  supportsShellFeature(feature: MobileWebShellFeature): boolean {
+    return this.shellFeatures.has(feature)
   }
 
   workspaceSubscribe(
