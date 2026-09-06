@@ -26,8 +26,14 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
  */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
-/** Grants only the local Administrators group, which an unelevated token holds deny-only. */
-const FOREIGN_SID = 'S-1-5-32-544'
+/**
+ * BUILTIN\Guests: a real, always-resolvable group that no interactive token is a member of.
+ * `S-1-5-32-544` looks foreign only until the suite meets a host that is elevated AND logged
+ * in as the built-in Administrator -- a CI runner -- where it grants the reader full control
+ * and every assertion below goes vacuous. An unresolvable SID is not an option: icacls
+ * rejects one with ERROR_NONE_MAPPED (1332).
+ */
+const FOREIGN_SID = 'S-1-5-32-546'
 
 function icacls(...args: string[]): number | null {
   return runProcessSync({
