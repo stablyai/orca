@@ -87,11 +87,13 @@ describe('orca CLI skill guidance', () => {
   })
 
   // The always-loaded guide keeps the boundaries; the reconstructible command catalogs move
-  // behind `skills get orca-cli --full` so they are not charged to every turn.
+  // behind `skills get orca-cli --reference` so they are not charged to every turn, with
+  // `--full` only as the fallback for a CLI that predates the per-reference selector.
   it('gates the reconstructible command catalogs behind bundled references', () => {
     const skill = readSkill()
 
-    expect(skill).toContain('ORCA skills get orca-cli --full')
+    expect(skill).toContain('ORCA skills get orca-cli --reference references/<file>.md')
+    expect(skill).toContain('If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full`')
     for (const reference of [
       'references/browser.md',
       'references/automations.md',

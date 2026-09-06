@@ -237,7 +237,7 @@ The commands, snapshot and ref rules, page affinity, and `browser_*` recoveries 
 
 ## Conditional references
 
-This guide covers worktrees, terminals, and handoffs on its own. At a gate below, run `ORCA skills get orca-cli --full` once and read only the named reference. It returns this guide plus every reference from the same CLI build. If `--full` is rejected, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
+This guide covers worktrees, terminals, and handoffs on its own. At a gate below, run `ORCA skills get orca-cli --reference references/<file>.md` and read only that document; `--references` lists the names. If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full` once instead: it returns this guide plus every reference from the same CLI build, so read only the named one. If `--full` is rejected too, the CLI predates bundled references: use `ORCA <command> --help`, keep the rules above, and do not guess flags.
 
 | Action gate | Reference |
 |---|---|

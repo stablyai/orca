@@ -370,10 +370,11 @@ the self-test tears nothing down and you must clean up by hand.
 ## Conditional references
 
 This guide covers the interview, the phase order, and the doctor loop on its own. At a gate below,
-run `ORCA skills get orca-per-workspace-env --full` once and read only the named reference. It
-returns this guide plus every reference from the same CLI build. Read the reference at the gate, not
-before. If `--full` is rejected, keep these rules, use the command's `--help`, and do not guess
-flags.
+run `ORCA skills get orca-per-workspace-env --reference references/<file>.md` and read only that
+document; `--references` lists the names. Read the reference at the gate, not before. If the CLI
+rejects `--reference`, run `ORCA skills get orca-per-workspace-env --full` once instead: it returns
+this guide plus every reference from the same CLI build, so read only the named one. If `--full` is
+rejected too, keep these rules, use the command's `--help`, and do not guess flags.
 
 | Action gate | Bundled reference |
 | --- | --- |
