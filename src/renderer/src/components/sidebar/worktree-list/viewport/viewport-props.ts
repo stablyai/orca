@@ -52,6 +52,12 @@ export type VirtualizedWorktreeViewportProps = {
   focusedProjectGroupId: string | null
   handleFocusProjectGroup: (groupId: string) => void
   handleClearFocusedProjectGroup: () => void
+  handleCreateNestedClient: (parentGroupId: string, hostId?: ExecutionHostId) => void
+  handleMoveClientInto: (
+    groupId: string,
+    parentGroupId: string | null,
+    hostId?: ExecutionHostId
+  ) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
   activeModal: string
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null

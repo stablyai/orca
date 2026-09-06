@@ -4,9 +4,14 @@ import {
   createProjectGroup,
   getEffectiveProjectGroupManualRank,
   getNextProjectGroupOrder,
+  getNextProjectGroupSiblingTabOrder,
+  getProjectGroupDepth,
   getProjectGroupSubtreeIds,
+  listProjectGroupReparentTargets,
   normalizeProjectGroupName,
-  normalizeProjectGroups
+  normalizeProjectGroups,
+  resolveProjectGroupParentGroupId,
+  wouldCreateProjectGroupCycle
 } from './project-groups'
 import type { Repo } from './repo-types'
 
@@ -154,5 +159,52 @@ describe('project-groups', () => {
     expect(subtreeIds.size).toBe(130_001)
     expect(subtreeIds.has('root')).toBe(true)
     expect(subtreeIds.has('child-129999')).toBe(true)
+  })
+
+  it('detects reparent cycles and resolves valid parents', () => {
+    const groups = [
+      { id: 'root', parentGroupId: null },
+      { id: 'child', parentGroupId: 'root' },
+      { id: 'sibling', parentGroupId: null }
+    ]
+
+    expect(wouldCreateProjectGroupCycle(groups, 'root', 'child')).toBe(true)
+    expect(wouldCreateProjectGroupCycle(groups, 'child', 'sibling')).toBe(false)
+    expect(resolveProjectGroupParentGroupId(groups, 'child', 'sibling')).toEqual({
+      ok: true,
+      parentGroupId: 'sibling'
+    })
+    expect(resolveProjectGroupParentGroupId(groups, 'root', 'child')).toEqual({ ok: false })
+    expect(resolveProjectGroupParentGroupId(groups, 'child', null)).toEqual({
+      ok: true,
+      parentGroupId: null
+    })
+  })
+
+  it('computes sibling tab order and depth for nested clients', () => {
+    const root = createProjectGroup({ name: 'Akira', createdFrom: 'manual', tabOrder: 0 })
+    const childA = createProjectGroup({
+      name: 'A',
+      createdFrom: 'manual',
+      tabOrder: 2,
+      parentGroupId: root.id
+    })
+    const childB = createProjectGroup({
+      name: 'B',
+      createdFrom: 'manual',
+      tabOrder: 5,
+      parentGroupId: root.id
+    })
+    const groups = [root, childA, childB]
+    const byId = new Map(groups.map((group) => [group.id, group]))
+
+    expect(getNextProjectGroupSiblingTabOrder(groups, root.id)).toBe(6)
+    expect(getNextProjectGroupSiblingTabOrder(groups, null)).toBe(1)
+    expect(getProjectGroupDepth(byId, root.id)).toBe(0)
+    expect(getProjectGroupDepth(byId, childB.id)).toBe(1)
+    expect(listProjectGroupReparentTargets(groups, childA.id).map((group) => group.id)).toEqual([
+      root.id,
+      childB.id
+    ])
   })
 })

@@ -48,12 +48,18 @@ export function SidebarClientScopeSwitcher(): React.JSX.Element {
 
   const handleCreateClient = useCallback(
     async (name: string) => {
-      const group = await createProjectGroup(name)
+      const group = await createProjectGroup(
+        name,
+        resolvedFocusId ? { parentGroupId: resolvedFocusId } : undefined
+      )
       if (group) {
-        setFocusedProjectGroupId(group.id)
+        // Why: keep focus on the outer client so the new nested folder appears in-scope.
+        if (!resolvedFocusId) {
+          setFocusedProjectGroupId(group.id)
+        }
       }
     },
-    [createProjectGroup, setFocusedProjectGroupId]
+    [createProjectGroup, resolvedFocusId, setFocusedProjectGroupId]
   )
 
   return (
@@ -120,23 +126,44 @@ export function SidebarClientScopeSwitcher(): React.JSX.Element {
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setCreateOpen(true)}>
             <Plus className="size-3.5" strokeWidth={2.25} />
-            {translate(
-              'auto.components.sidebar.SidebarClientScopeSwitcher.newClient',
-              'New client…'
-            )}
+            {resolvedFocusId
+              ? translate(
+                  'auto.components.sidebar.SidebarClientScopeSwitcher.newClientInside',
+                  'New client inside…'
+                )
+              : translate(
+                  'auto.components.sidebar.SidebarClientScopeSwitcher.newClient',
+                  'New client…'
+                )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <ProjectGroupNameDialog
         open={createOpen}
-        title={translate(
-          'auto.components.sidebar.SidebarClientScopeSwitcher.createTitle',
-          'New client'
-        )}
-        description={translate(
-          'auto.components.sidebar.SidebarClientScopeSwitcher.createDescription',
-          'Create a client folder, then move projects into it from each project menu.'
-        )}
+        title={
+          focusedGroup
+            ? translate(
+                'auto.components.sidebar.SidebarClientScopeSwitcher.createInsideTitle',
+                'New client inside {{value0}}',
+                { value0: focusedGroup.name }
+              )
+            : translate(
+                'auto.components.sidebar.SidebarClientScopeSwitcher.createTitle',
+                'New client'
+              )
+        }
+        description={
+          focusedGroup
+            ? translate(
+                'auto.components.sidebar.SidebarClientScopeSwitcher.createInsideDescription',
+                'Create a client nested under {{value0}}, then move projects into it from each project menu.',
+                { value0: focusedGroup.name }
+              )
+            : translate(
+                'auto.components.sidebar.SidebarClientScopeSwitcher.createDescription',
+                'Create a client folder, then move projects into it from each project menu.'
+              )
+        }
         initialName=""
         confirmLabel={translate(
           'auto.components.sidebar.SidebarClientScopeSwitcher.createConfirm',

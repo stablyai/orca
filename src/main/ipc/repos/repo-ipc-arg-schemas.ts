@@ -20,7 +20,9 @@ export const ProjectGroupUpdateArgs = z.object({
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
     tabOrder: z.number().finite().optional(),
-    color: z.string().nullable().optional()
+    color: z.string().nullable().optional(),
+    // Why: optional so mixed-version peers that predate nesting still accept updates.
+    parentGroupId: z.string().nullable().optional()
   })
 })
 

@@ -30,20 +30,31 @@ export function createProjectGroupMutationActions(
   | 'moveProjectToGroup'
 > {
   return {
-    createProjectGroup: async (name) => {
+    createProjectGroup: async (name, options) => {
       try {
-        const target = getActiveRuntimeTarget(get().settings)
+        const parentGroupId = options?.parentGroupId ?? null
+        // Why: nested clients must be created on the parent group's host, not whichever host has focus.
+        const target = getActiveRuntimeTarget(
+          parentGroupId
+            ? settingsForProjectGroupOwner(get(), parentGroupId, options?.hostId)
+            : get().settings
+        )
         const group =
           target.kind === 'local'
             ? await window.api.projectGroups.create({
                 name,
-                createdFrom: 'manual'
+                createdFrom: 'manual',
+                ...(parentGroupId ? { parentGroupId } : {})
               })
             : (
                 await callRuntimeRpc<{ group: ProjectGroup }>(
                   target,
                   'projectGroup.create',
-                  { name, createdFrom: 'manual' },
+                  {
+                    name,
+                    createdFrom: 'manual',
+                    ...(parentGroupId ? { parentGroupId } : {})
+                  },
                   { timeoutMs: 15_000 }
                 )
               ).group
