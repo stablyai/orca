@@ -164,6 +164,10 @@ export function installGlobalSessionTabsSubscriptions({
           },
           {
             onResponse: (response) => {
+              const diagnostic = globalThis as typeof globalThis & { __pairedTabRawTrace?: unknown[] }
+              const trace = (diagnostic.__pairedTabRawTrace ??= [])
+              trace.push({ current: isCurrent(), revision: getRuntimeEnvironmentRevision(environmentId), expectedRevision: expectedEnvironmentPairingRevision, response })
+              if (trace.length > 80) trace.shift()
               if (
                 !isCurrent() ||
                 getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision

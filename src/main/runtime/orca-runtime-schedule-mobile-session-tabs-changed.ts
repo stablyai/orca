@@ -34,6 +34,8 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
   }
 
   protected notifyMobileSessionTabsChangedNow(worktreeId: string, changeSequence: number): void {
+    const diagnosticSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    console.info('[paired-host-tab-delivery] ' + JSON.stringify({ phase: 'notify', worktreeId, changeSequence, listeners: this.mobileSessionTabListeners.size, epoch: diagnosticSnapshot?.publicationEpoch, version: diagnosticSnapshot?.snapshotVersion, tabs: diagnosticSnapshot?.tabs.map(tab => tab.id) }))
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }

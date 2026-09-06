@@ -211,6 +211,7 @@ export async function subscribeSessionTabsInventory(
   }
   const unsubscribe = runtime.onMobileSessionTabsChanged((runtimeSnapshot, changeSequence) => {
     const snapshot = runtimeSnapshot as SessionTabsChange
+    console.info('[paired-host-tab-delivery] ' + JSON.stringify({ phase: 'listener', subscriptionId, initialized, closed, changeSequence, censusChangeSequence, delivered: deliveredChangeSequenceByWorktree.get(snapshot.worktree), epoch: snapshot.publicationEpoch, version: snapshot.snapshotVersion, tabs: snapshot.tabs.map(tab => tab.id) }))
     if (!initialized) {
       bufferChange(snapshot, changeSequence)
       return
@@ -226,6 +227,7 @@ export async function subscribeSessionTabsInventory(
   runtime.registerSubscriptionCleanup(
     subscriptionId,
     () => {
+      console.info('[paired-host-tab-delivery] ' + JSON.stringify({ phase: 'cleanup', subscriptionId, initialized }))
       closed = true
       inventoryController.abort()
       unsubscribe()
@@ -273,6 +275,7 @@ export async function subscribeSessionTabsInventory(
   }
   const { inventory, changeSequence } = collected
   censusChangeSequence = changeSequence
+  console.info('[paired-host-tab-delivery] ' + JSON.stringify({ phase: 'census', subscriptionId, changeSequence }))
   emit({ type: 'snapshots', ...inventory })
   for (const snapshot of inventory.snapshots) {
     publishedSnapshotsByWorktree.set(snapshot.worktree, withoutNavigationIntent(snapshot))
