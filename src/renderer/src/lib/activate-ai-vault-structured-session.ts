@@ -75,8 +75,13 @@ const defaultDeps: StructuredSessionActivationDeps = {
   }
 }
 
+/**
+ * @param session anything carrying the row's structured pointer — an Agent Session History row or
+ * the drag payload built from one. Only `structuredSession` is read, and both surfaces must reach
+ * the same reveal, or the same row answers a click and a drop differently.
+ */
 export async function activateAiVaultStructuredSession(
-  session: AiVaultSession,
+  session: Pick<AiVaultSession, 'structuredSession'>,
   deps: StructuredSessionActivationDeps = defaultDeps
 ): Promise<boolean> {
   const structured = session.structuredSession

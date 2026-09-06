@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
@@ -127,5 +129,22 @@ describe('activateAiVaultStructuredSession', () => {
     await expect(activateAiVaultStructuredSession({} as AiVaultSession, parts)).resolves.toBe(false)
 
     expect(parts.reveal).not.toHaveBeenCalled()
+  })
+})
+
+describe('every Agent Session History entry point reaches the same reveal', () => {
+  // A source ratchet rather than a mounted drag harness: what regresses here is a call site
+  // quietly going back to bare activation, which cannot reach a chat whose tab is closed. Both
+  // surfaces act on the identical row, so answering a click and a drop differently is the bug.
+  const entryPoints = [
+    'components/tab-group/AiVaultSessionDropLayer.tsx',
+    'components/right-sidebar/ai-vault-session-launch-actions.ts'
+  ]
+
+  it.each(entryPoints)('%s routes its structured branch through the reveal path', (relative) => {
+    const source = readFileSync(join(__dirname, '..', relative), 'utf8')
+
+    expect(source).toContain('activateAiVaultStructuredSession(')
+    expect(source).not.toContain('activateStructuredAgentSessionById')
   })
 })
