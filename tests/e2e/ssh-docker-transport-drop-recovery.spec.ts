@@ -236,7 +236,11 @@ test.describe('SSH transport drop recovery', () => {
             cols: pane.terminal?.cols, rows: pane.terminal?.rows
           }))
         })))
-        console.info('[flood-producer-diagnostic] ' + JSON.stringify({ producer, panes, originalPtyId: ptyId }))
+        const delivery = await orcaPage.evaluate(async (id) => {
+          const snapshot = await window.api.pty.getMainBufferSnapshot(id, { scrollbackRows: 200 })
+          return { snapshot: snapshot ? { ...snapshot, data: snapshot.data.slice(-5000) } : null, debug: await window.api.pty.getRendererDeliveryDebugSnapshot() }
+        }, ptyId)
+        console.info('[flood-producer-diagnostic] ' + JSON.stringify({ producer, panes, delivery, originalPtyId: ptyId }))
       }
 
       // And the session must still be usable, not merely alive.
