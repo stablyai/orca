@@ -227,6 +227,7 @@ jobs:
           mapfile -t TEST_FILES < <(jq -r '.[] | select(
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
             . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
+            . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
             . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
           )' <<<"$TEST_FILES_JSON")
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
