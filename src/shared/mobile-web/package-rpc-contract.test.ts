@@ -1,6 +1,10 @@
+import { randomBytes } from 'node:crypto'
+import { gzipSync } from 'node:zlib'
 import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_PACKAGE_CHUNK_BASE64_CHARS,
+  MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES,
+  MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES,
   MobileWebPackageAssetChunkSchema,
   MobileWebPackageAssetParamsSchema,
   MobileWebPackageGzipAssetChunkSchema
@@ -44,6 +48,18 @@ describe('mobile web package RPC contract', () => {
         encoding: 'gzip'
       }).success
     ).toBe(true)
+  })
+
+  // The gzip ceiling used to be a flat +64, which zlib exceeds on incompressible input at every
+  // level; a full-range PNG read then failed the response schema and aborted the download.
+  it('covers what zlib really emits for a full incompressible range', () => {
+    const source = randomBytes(MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES)
+
+    for (const level of [0, 6, 9] as const) {
+      const compressed = gzipSync(source, { level })
+      expect(compressed.byteLength).toBeGreaterThan(MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES)
+      expect(compressed.byteLength).toBeLessThanOrEqual(MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES)
+    }
   })
 
   it.each(['../secret', '/index.html', 'assets//app.js', 'assets\\app.js', 'a%2Fb.js'])(

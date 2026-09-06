@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,6 +6,7 @@ import { gunzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MOBILE_WEB_BRIDGE_PROTOCOL_VERSION } from '../../../shared/mobile-web/bridge-contract'
 import {
+  MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES,
   MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES,
   MobileWebPackageAssetParamsSchema
 } from '../../../shared/mobile-web/package-rpc-contract'
@@ -147,6 +148,29 @@ describe('mobile web package ranged gzip reads', () => {
     ).rejects.toThrow('mobile_web_package_offset_invalid')
   })
 
+  // An incompressible asset (PNG, woff2, wasm) is the case a flat gzip headroom got wrong: level 6
+  // expands it, the response failed its own schema, and the whole download aborted.
+  it('answers a full incompressible range inside the declared gzip ceiling', async () => {
+    const scriptBytes = randomBytes(RANGE_FIXTURE_ASSET_BYTES)
+    const fixture = await createRangeFixture(scriptBytes)
+    const assets = new MobileWebPackageAssets({ resolveRoot: () => fixture.root })
+    const script = fixture.manifest.assets.find((asset) => asset.role === 'script')!
+
+    const chunk = await assets.getAssetGzipChunk({
+      buildId: fixture.manifest.buildId,
+      path: script.path,
+      offset: 0,
+      length: MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES
+    })
+
+    expect(chunk.sourceByteLength).toBe(MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES)
+    expect(chunk.byteLength).toBeGreaterThan(MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES)
+    expect(chunk.byteLength).toBeLessThanOrEqual(MOBILE_WEB_PACKAGE_GZIP_CHUNK_BYTES)
+    expect(gunzipSync(Buffer.from(chunk.dataBase64, 'base64'))).toEqual(
+      scriptBytes.subarray(0, MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES)
+    )
+  })
+
   it('only accepts chunk-aligned range lengths within the cap', async () => {
     const address = { buildId: '0'.repeat(64), path: 'index.html', offset: 0 }
 
@@ -175,17 +199,18 @@ describe('mobile web package ranged gzip reads', () => {
   })
 })
 
-async function createRangeFixture(): Promise<{
+const RANGE_FIXTURE_ASSET_BYTES =
+  MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES + MOBILE_WEB_PACKAGE_CHUNK_BYTES + 23
+
+async function createRangeFixture(
+  scriptBytes: Buffer = Buffer.alloc(RANGE_FIXTURE_ASSET_BYTES, 0x61)
+): Promise<{
   root: string
   manifest: MobileWebManifest
   scriptBytes: Buffer
 }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-mobile-web-range-'))
   temporaryRoots.push(root)
-  const scriptBytes = Buffer.alloc(
-    MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES + MOBILE_WEB_PACKAGE_CHUNK_BYTES + 23,
-    0x61
-  )
   const documentBytes = Buffer.from('<!doctype html><title>Orca</title>', 'utf8')
   const scriptHash = sha256(scriptBytes)
   const assets = [
