@@ -30,14 +30,12 @@ type BrowserTabPageIdSource = {
 }
 
 // Why: a stable identity keeps the disabled branch from re-running downstream shallow compares.
-const NO_BROWSER_PAGE_IDS: string[] = []
+const NO_BROWSER_PAGE_IDS: readonly string[] = []
 
 export function collectBrowserPageIds(
   tabs: readonly BrowserTabPageIdSource[] | null | undefined
-): string[] {
-  // Why the early return: a worktree with no browser tabs is the common case, and it
-  // ran on every store write through useWorktreeBrowserPageIds. The constant is the
-  // same one the disabled branch below already uses.
+): readonly string[] {
+  // Why the early return: no browser tabs is the common case, and this runs on every store write.
   if (!tabs || tabs.length === 0) {
     return NO_BROWSER_PAGE_IDS
   }
@@ -47,7 +45,7 @@ export function collectBrowserPageIds(
 }
 const NO_BROWSER_TABS_BY_WORKTREE: Record<string, BrowserTabPageIdSource[]> = {}
 
-export function useWorktreeBrowserPageIds(worktreeId: string): string[] {
+export function useWorktreeBrowserPageIds(worktreeId: string): readonly string[] {
   return useAppStore(
     useShallow((state) => collectBrowserPageIds(state.browserTabsByWorktree[worktreeId]))
   )
