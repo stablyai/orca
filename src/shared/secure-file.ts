@@ -192,18 +192,31 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
 }
 
 /**
- * Whether a failure means "you may not read this", as opposed to "this is not valid".
+ * Errors that mean the contents were never seen, so they say nothing about what the file holds.
  *
- * Why it matters here: a secure file whose DACL grants a SID this process does not hold reads as
- * `EPERM`/`EACCES`, and a reader that treats every failure as corruption regenerates it. The
- * regeneration succeeds — `renameSync` over an unreadable file needs `FILE_DELETE_CHILD` on the
- * parent, not `DELETE` on the file — so the original is destroyed by the very code meant to heal
- * it. The state is reachable through a relocated user-data path, a share or roaming profile, a
- * restored backup under a new local SID, or a half-applied harden.
+ * `ENOENT` is deliberately absent: "there is no file" genuinely licenses creating one. So is a
+ * parse failure, which means the bytes WERE read and were garbage - the self-heal these stores
+ * were built for. The distinction is "could not read it" versus "read it and it was garbage".
+ *
+ * Why it matters: a reader that treats every failure as corruption regenerates the file, and the
+ * regeneration succeeds - `renameSync` over an unreadable file needs `FILE_DELETE_CHILD` on the
+ * parent, not `DELETE` on the file - so the original is destroyed by the code meant to heal it.
+ * `EPERM`/`EACCES` is the hardened-DACL case: a file granting a SID this process does not hold,
+ * reachable through a relocated user-data path, a share or roaming profile, a restored backup
+ * under a new local SID, or a half-applied harden. The rest are transient and, on Windows, more
+ * likely than that: `EBUSY` is what antivirus produces by holding a file open at the moment of a
+ * read, which for a credential read on the startup path is an ordinary Tuesday.
  */
-export function isPermissionDeniedError(error: unknown): boolean {
+export function isUnreadableError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
-  return code === 'EPERM' || code === 'EACCES'
+  return (
+    code === 'EPERM' ||
+    code === 'EACCES' ||
+    code === 'EBUSY' ||
+    code === 'EMFILE' ||
+    code === 'ENFILE' ||
+    code === 'EIO'
+  )
 }
 
 export function hardenExistingSecureFile(targetPath: string): void {

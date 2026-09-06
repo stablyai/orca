@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { safeStorage } from 'electron'
-import { isPermissionDeniedError, writeSecureFile } from '../../shared/secure-file'
+import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
   PLUGIN_STORAGE_TOTAL_MAX_BYTES
@@ -63,7 +63,7 @@ export class PluginSecretsStore {
       // Being denied the read is not evidence the vault is corrupt. Returning `empty` here would
       // make the next set() write a vault containing only that one key, silently dropping every
       // secret the file still holds — and the write would succeed.
-      if (isPermissionDeniedError(error)) {
+      if (isUnreadableError(error)) {
         return null
       }
       // Corrupt vaults read as empty; set() rewrites a valid file.

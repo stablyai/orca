@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { safeStorage } from 'electron'
-import { isPermissionDeniedError, writeSecureJsonFile } from '../../shared/secure-file'
+import { isUnreadableError, writeSecureJsonFile } from '../../shared/secure-file'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -221,11 +221,11 @@ export function readOrcaCloudSession(
     }
     return { status: 'decrypt-failed', persistence: 'none', error: 'Unsafe session format.' }
   } catch (error) {
-    if (isPermissionDeniedError(error)) {
+    if (isUnreadableError(error)) {
       return {
         status: 'unreadable',
         persistence: 'none',
-        error: 'Cannot read the saved Orca account session: permission denied.'
+        error: 'Cannot read the saved Orca account session: the read failed.'
       }
     }
     return {

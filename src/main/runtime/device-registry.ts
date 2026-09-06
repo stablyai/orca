@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   hardenExistingSecureFile,
-  isPermissionDeniedError,
+  isUnreadableError,
   writeSecureJsonFile
 } from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
@@ -303,7 +303,7 @@ export class DeviceRegistry {
     } catch (error) {
       // "Cannot read" is not "is empty". Saving an empty list over a registry we were merely
       // denied would erase every paired device's bearer token, and the write would succeed.
-      this.registryUnreadable = isPermissionDeniedError(error)
+      this.registryUnreadable = isUnreadableError(error)
       this.devices = []
     }
   }
@@ -311,7 +311,7 @@ export class DeviceRegistry {
   private save(devices: DeviceEntry[]): void {
     if (this.registryUnreadable) {
       throw new Error(
-        `Cannot read the device registry at ${this.registryPath}: permission denied. Refusing to overwrite it, which would revoke every paired device.`
+        `Cannot read the device registry at ${this.registryPath}: the read failed. Refusing to overwrite it, which would revoke every paired device.`
       )
     }
     writeSecureJsonFile(this.registryPath, devices)

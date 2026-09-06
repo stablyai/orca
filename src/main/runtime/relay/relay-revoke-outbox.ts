@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   hardenExistingSecureFile,
-  isPermissionDeniedError,
+  isUnreadableError,
   writeSecureJsonFile
 } from '../../../shared/secure-file'
 
@@ -92,7 +92,7 @@ export class RelayRevokeOutbox {
     } catch (error) {
       // An outbox we were denied is not an empty outbox. Saving [] over it would drop
       // revocations that have not reached the relay, so a revoked device stays live.
-      this.outboxUnreadable = isPermissionDeniedError(error)
+      this.outboxUnreadable = isUnreadableError(error)
       return []
     }
   }
@@ -100,7 +100,7 @@ export class RelayRevokeOutbox {
   private save(items: readonly RelayRevokeOutboxItem[]): void {
     if (this.outboxUnreadable) {
       throw new Error(
-        `Cannot read the relay revoke outbox at ${this.path}: permission denied. Refusing to overwrite it, which would drop pending revocations.`
+        `Cannot read the relay revoke outbox at ${this.path}: the read failed. Refusing to overwrite it, which would drop pending revocations.`
       )
     }
     writeSecureJsonFile(this.path, items)

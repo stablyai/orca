@@ -45,7 +45,11 @@ function icacls(...args: string[]): number | null {
 
 /** The on-disk state a successful harden leaves for a SID this process does not hold. */
 function makeUnreadable(filePath: string): void {
-  expect(icacls(filePath, '/inheritance:r', '/grant:r', `*${FOREIGN_SID}:(F)`, '/q')).toBe(0)
+  // Two invocations: the combined `/inheritance:r /grant:r` form keeps %TEMP%'s inherited
+  // [SYSTEM, Administrators, user] as *explicit* ACEs on Windows Server, which left the file
+  // readable and every assertion below vacuous. Remove inheritance first, then grant.
+  expect(icacls(filePath, '/inheritance:r', '/q')).toBe(0)
+  expect(icacls(filePath, '/grant:r', `*${FOREIGN_SID}:(F)`, '/q')).toBe(0)
   let code: string | undefined
   try {
     readFileSync(filePath, 'utf8')
@@ -85,7 +89,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     writeFileSync(filePath, original)
     makeUnreadable(filePath)
 
-    expect(() => loadOrCreateE2EEKeypair(dir)).toThrow(/permission denied/i)
+    expect(() => loadOrCreateE2EEKeypair(dir)).toThrow(/Refusing to (regenerate|overwrite)/)
 
     // The point: the secret key is still the one every paired phone derived its shared secret from.
     icacls(filePath, '/reset', '/q')
@@ -113,7 +117,9 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
 
     const registry = new DeviceRegistry(dir)
     // Any mutator reaches save(); it must refuse rather than write the empty list it loaded.
-    expect(() => registry.addDevice('Another phone', 'mobile')).toThrow(/permission denied/i)
+    expect(() => registry.addDevice('Another phone', 'mobile')).toThrow(
+      /Refusing to (regenerate|overwrite)/
+    )
 
     icacls(filePath, '/reset', '/q')
     expect(readFileSync(filePath, 'utf8')).toBe(original)
@@ -191,7 +197,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
         relayDeviceId: 'device-2',
         ownerIdentityKey: 'owner-2'
       })
-    ).toThrow(/permission denied/i)
+    ).toThrow(/Refusing to (regenerate|overwrite)/)
 
     icacls(filePath, '/reset', '/q')
     expect(readFileSync(filePath, 'utf8')).toBe(original)

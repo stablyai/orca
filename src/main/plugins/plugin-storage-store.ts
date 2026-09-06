@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { isPermissionDeniedError, writeSecureFile } from '../../shared/secure-file'
+import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
 import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
@@ -54,7 +54,7 @@ export class PluginKvStore {
     } catch (error) {
       // Being denied the read is not evidence of corruption. Returning `{}` here would make
       // the next set()/delete() write a file holding only that one key, dropping the rest.
-      if (isPermissionDeniedError(error)) {
+      if (isUnreadableError(error)) {
         return null
       }
       // Corrupt files reset to empty rather than wedging the plugin.

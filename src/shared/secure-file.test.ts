@@ -10,6 +10,7 @@ import {
   __resetSecureFileWindowsUserSidForTests,
   hardenExistingSecureFile,
   hardenSecurePath,
+  isUnreadableError,
   writeSecureFile
 } from './secure-file'
 
@@ -821,3 +822,37 @@ async function waitForFileTimestampTick(): Promise<void> {
 function statMode(path: string): number {
   return statSync(path).mode & 0o777
 }
+
+describe('isUnreadableError', () => {
+  const withCode = (code: string): NodeJS.ErrnoException => Object.assign(new Error(code), { code })
+
+  // The hardened-DACL case this predicate was written for.
+  it('reports a denied read', () => {
+    expect(isUnreadableError(withCode('EPERM'))).toBe(true)
+    expect(isUnreadableError(withCode('EACCES'))).toBe(true)
+  })
+
+  /**
+   * The likelier half on Windows: antivirus holding a credential open during startup yields
+   * EBUSY, and fd exhaustion yields EMFILE. Neither says the bytes were read, so neither may
+   * license a regenerate-and-overwrite.
+   */
+  it('reports a read that never reached the contents for any other reason', () => {
+    expect(isUnreadableError(withCode('EBUSY'))).toBe(true)
+    expect(isUnreadableError(withCode('EMFILE'))).toBe(true)
+    expect(isUnreadableError(withCode('ENFILE'))).toBe(true)
+    expect(isUnreadableError(withCode('EIO'))).toBe(true)
+  })
+
+  /**
+   * The other side of the distinction, and the reason this is an allow list rather than
+   * "everything except ENOENT": a missing file licenses creating one, and bytes that were read
+   * and did not parse are the self-heal these stores exist to perform.
+   */
+  it('does not report a missing file or a parse failure', () => {
+    expect(isUnreadableError(withCode('ENOENT'))).toBe(false)
+    expect(isUnreadableError(new SyntaxError('Unexpected end of JSON input'))).toBe(false)
+    expect(isUnreadableError(withCode('EISDIR'))).toBe(false)
+    expect(isUnreadableError(undefined)).toBe(false)
+  })
+})
