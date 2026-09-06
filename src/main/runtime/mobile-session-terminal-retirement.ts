@@ -5,6 +5,10 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import {
+  collectRecentTabIdsFromGroups,
+  pickNextTabAfterClose
+} from '../../shared/session-tab-close-successor'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type {
   TerminalLayoutSnapshot,
@@ -116,7 +120,10 @@ function chooseGroupActiveTab(
     return group.activeTabId
   }
   const recent = (group.recentTabIds ?? []).toReversed().find((tabId) => retainedTabIds.has(tabId))
-  return recent ?? group.tabOrder.find((tabId) => retainedTabIds.has(tabId)) ?? null
+  // Why: no previous visit → most recently added remaining tab, not the leftmost.
+  return (
+    recent ?? [...group.tabOrder].toReversed().find((tabId) => retainedTabIds.has(tabId)) ?? null
+  )
 }
 
 export function repairMobileSessionTabGroupsAfterRetirement(
@@ -168,8 +175,12 @@ function chooseActiveSurface(
         tabs.find((tab) => topLevelTabId(tab) === activeTopLevelId))
       : undefined) ??
     tabs.find((tab) => tab.isActive) ??
-    tabs[0] ??
-    null
+    pickNextTabAfterClose(
+      tabs,
+      previousActiveId ?? '',
+      collectRecentTabIdsFromGroups(groups),
+      topLevelTabId
+    )
   )
 }
 
