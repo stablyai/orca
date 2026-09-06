@@ -3,7 +3,13 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
-export function AutomationPromptDisclosure({ prompt }: { prompt: string }): React.JSX.Element {
+export function AutomationPromptDisclosure({
+  prompt,
+  label = translate('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')
+}: {
+  prompt: string
+  label?: string
+}): React.JSX.Element {
   const contentId = useId()
   const expandedRef = useRef(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
@@ -50,7 +56,7 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
     <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
       <div className="flex items-center justify-between gap-3 border-b border-border/50 px-3 py-2">
         <div className="text-sm font-medium">
-          {translate('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
+          {label}
         </div>
         {overflows || expanded ? (
           <Button

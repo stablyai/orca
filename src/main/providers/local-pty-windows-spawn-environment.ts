@@ -1,5 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { AUTOMATION_SHELL_COMMAND_ENV } from '../../shared/automation-shell-startup'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
 import { parseWslPath } from '../wsl'
@@ -54,6 +55,9 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
     if (env.CLAUDE_CONFIG_DIR) {
       // Why: managed WSL Claude passes a Linux CLAUDE_CONFIG_DIR through wsl.exe; non-default vars need WSLENV import.
       addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
+    }
+    if (env[AUTOMATION_SHELL_COMMAND_ENV] !== undefined) {
+      addWslEnvKeys(env, [AUTOMATION_SHELL_COMMAND_ENV])
     }
     if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
       // Why: wsl.exe drops custom Windows env vars; the startup wrapper needs this imported inside WSL.

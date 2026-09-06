@@ -90,6 +90,19 @@ describe('headless automation workspace create args', () => {
     })
   })
 
+  it('does not auto-select an agent for a blank-terminal run', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, agentId: null, prompt: 'echo ready' },
+      run: { id: 'run-1', title: 'Shell check', scheduledFor: 1 },
+      repo
+    })
+
+    expect(args.createdWithAgent).toBeUndefined()
+    expect(args.startupAgent).toBeUndefined()
+    expect(args.startupPrompt).toBeUndefined()
+    expect(args.automationProvenance?.automationId).toBe(automation.id)
+  })
+
   it('falls back to skip for legacy automations without a saved setup decision', () => {
     const args = buildHeadlessAutomationWorktreeCreateArgs({
       automation: { ...automation, setupDecision: undefined },

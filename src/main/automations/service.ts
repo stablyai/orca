@@ -108,7 +108,9 @@ export class AutomationService {
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
     }, this.tickMs)
-    this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
+    this.completionWatcher?.reconcileRetainedRuns(
+      this.store.listAutomationRuns().filter((run) => this.isAgentRun(run))
+    )
     // Why: headless serve never gets a renderer-ready IPC, but due runs still
     // need the same startup catch-up pass desktop gets after renderer attach.
     if (this.rendererReady || this.headlessDispatcher) {
@@ -191,7 +193,7 @@ export class AutomationService {
     const run = this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
-      if (run.status === 'dispatched') {
+      if (run.status === 'dispatched' && this.isAgentRun(run)) {
         this.completionWatcher?.watch(run)
       }
       return run
@@ -223,6 +225,13 @@ export class AutomationService {
       usage,
       error: run.error
     })
+  }
+
+  private isAgentRun(run: AutomationRun): boolean {
+    return (
+      this.store.listAutomations().find((automation) => automation.id === run.automationId)
+        ?.agentId !== null
+    )
   }
 
   private async evaluateDueRuns(): Promise<void> {
@@ -315,7 +324,11 @@ export class AutomationService {
           runs: this.runs,
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),
-          watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
+          watchRun: (dispatched) => {
+            if (this.isAgentRun(dispatched)) {
+              this.completionWatcher?.watch(dispatched)
+            }
+          }
         })
       }
       return this.runs.updateRun({

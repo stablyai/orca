@@ -7,10 +7,11 @@ import {
   toRuntimeAutomationCreateInput,
   updateAutomationForTarget
 } from './automation-host-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn()
+  callRuntimeRpc: vi.fn(),
+  assertRuntimeEnvironmentCapability: vi.fn()
 }))
 
 const mockApi = {
@@ -155,6 +156,19 @@ describe('automation host client', () => {
     expect(
       toRuntimeAutomationCreateInput({ ...input, workspaceMode: 'new_per_run', workspaceId: null })
     ).toMatchObject({ repo: 'id:repo-1', workspace: undefined })
+  })
+
+  it('does not send a blank-terminal update to an older host or fall back to local creation', async () => {
+    vi.mocked(assertRuntimeEnvironmentCapability).mockRejectedValueOnce(
+      new Error('Update the host')
+    )
+
+    await expect(updateAutomationForTarget(makeAutomation(), { agentId: null })).rejects.toThrow(
+      'Update the host'
+    )
+
+    expect(callRuntimeRpc).not.toHaveBeenCalled()
+    expect(mockApi.automations.update).not.toHaveBeenCalled()
   })
 
   it('updates and manually runs SSH-host automations through the remote server that listed them', async () => {

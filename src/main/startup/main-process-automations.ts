@@ -22,11 +22,11 @@ export function initializeMainProcessAutomations(): AutomationService {
     headlessDispatcher: state.isServeMode
       ? async ({ automation, run, target }) => {
           const terminalSnapshotLimit = 2_000
-          let terminalHandle: string
+          let terminalHandle = ''
           let terminalSessionId: string | null = null
           let terminalPaneKey: string | null = null
           let terminalPtyId: string | null = null
-          let workspaceId: string
+          let workspaceId = automation.workspaceId ?? ''
           let workspaceDisplayName: string | null = null
           if (automation.workspaceMode === 'new_per_run') {
             const created = await runtime.createManagedWorktree(
@@ -38,17 +38,18 @@ export function initializeMainProcessAutomations(): AutomationService {
             terminalPtyId = created.startupTerminal?.ptyId ?? null
             workspaceId = created.worktree.id
             workspaceDisplayName = created.worktree.displayName ?? null
-            if (!terminalHandle) {
+            if (automation.agentId !== null && !terminalHandle) {
               throw new Error(
                 created.warning ||
                   'Automation workspace was created, but no agent terminal started.'
               )
             }
-          } else {
-            if (!automation.workspaceId) {
+          }
+          if (automation.workspaceMode === 'existing' || automation.agentId === null) {
+            if (!workspaceId) {
               throw new Error('The target workspace is no longer available.')
             }
-            const terminal = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
+            const terminal = await runtime.launchAgentTerminal(`id:${workspaceId}`, {
               agent: automation.agentId,
               prompt: automation.prompt,
               title: run.title
@@ -62,13 +63,15 @@ export function initializeMainProcessAutomations(): AutomationService {
             workspaceDisplayName = worktree.displayName ?? null
           }
           const completion = (async () => {
-            const wait = await runtime.waitForTerminal(terminalHandle, { condition: 'tui-idle' })
+            const wait = await runtime.waitForTerminal(terminalHandle, {
+              condition: automation.agentId === null ? 'exit' : 'tui-idle'
+            })
             const read = await runtime.readTerminal(terminalHandle, {
               limit: terminalSnapshotLimit
             })
             const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
             snapshotBuffer.append(read.tail.join('\n'))
-            if (wait.satisfied) {
+            if (wait.satisfied && (automation.agentId !== null || wait.exitCode === 0)) {
               return {
                 status: 'completed' as const,
                 outputSnapshot: snapshotBuffer.snapshot(),
@@ -78,9 +81,14 @@ export function initializeMainProcessAutomations(): AutomationService {
             return {
               status: 'dispatch_failed' as const,
               outputSnapshot: snapshotBuffer.snapshot(),
-              error: wait.blockedReason
-                ? `Automation agent is blocked: ${wait.blockedReason}.`
-                : 'Automation agent did not report completion.'
+              error:
+                automation.agentId === null
+                  ? wait.exitCode !== null
+                    ? `Automation process exited with code ${wait.exitCode}.`
+                    : 'Automation process did not report completion.'
+                  : wait.blockedReason
+                    ? `Automation agent is blocked: ${wait.blockedReason}.`
+                    : 'Automation agent did not report completion.'
             }
           })()
           return {

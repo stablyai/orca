@@ -380,6 +380,7 @@ describe('createPtySubprocess', () => {
         env: {
           ORCA_TERMINAL_HANDLE: 'term_wsl',
           ORCA_HERMES_STARTUP_QUERY: 'line one\nline two',
+          ORCA_AUTOMATION_COMMAND: 'echo first\necho second',
           WSLENV: 'FOO/u'
         }
       })
@@ -410,6 +411,7 @@ describe('createPtySubprocess', () => {
         'FOO/u',
         'ORCA_TERMINAL_HANDLE/u',
         'ORCA_HERMES_STARTUP_QUERY',
+        'ORCA_AUTOMATION_COMMAND',
         POWERLEVEL10K_WIZARD_DISABLE_ENV
       ])
     )

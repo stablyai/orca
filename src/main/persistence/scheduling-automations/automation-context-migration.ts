@@ -100,7 +100,10 @@ export function normalizeAutomationSessionReuse(automation: Automation): Automat
     ...automation,
     precheck: normalizeAutomationPrecheck(automation.precheck),
     setupDecision,
-    reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
+    reuseSession:
+      automation.agentId !== null &&
+      automation.workspaceMode === 'existing' &&
+      automation.reuseSession === true
   }
 }
 

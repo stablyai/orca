@@ -1,6 +1,9 @@
-import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+  AUTOMATION_SHELL_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
-import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { defineMethod, InvalidArgumentError, type RpcContext, type RpcMethod } from '../core'
 import {
   AutomationCreate,
   AutomationId,
@@ -25,41 +28,79 @@ function mutationOwner(
   return context.runtime.automationOwnerPrecondition(id) ?? undefined
 }
 
+function supportsShellAutomations(context: RpcContext): boolean {
+  return (
+    context.clientKind === undefined ||
+    context.clientCapabilities?.includes(AUTOMATION_SHELL_RUNTIME_CAPABILITY) === true
+  )
+}
+
+function assertShellAutomationSupport(context: RpcContext): void {
+  if (!supportsShellAutomations(context)) {
+    throw new InvalidArgumentError('Blank-terminal automations require a newer Orca client.')
+  }
+}
+
 export const AUTOMATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'automation.list',
     params: AutomationList,
-    // The projection retains `automations`, so old clients ignore the added owner metadata.
-    handler: (params, { runtime }) => runtime.listAutomationsForScope(params)
+    handler: (params, context) => {
+      const result = context.runtime.listAutomationsForScope(params)
+      if (supportsShellAutomations(context)) {
+        return result
+      }
+      const automations = result.automations.filter((automation) => automation.agentId !== null)
+      const visibleIds = new Set(automations.map((automation) => automation.id))
+      return {
+        ...result,
+        automations,
+        items: result.items.filter((item) => visibleIds.has(item.automationId))
+      }
+    }
   }),
   defineMethod({
     name: 'automation.show',
     params: AutomationId,
-    // Why: the owner rides along so a client that cannot project one itself — the
-    // CLI — can echo it back on the mutation that follows. Optional: an older
-    // host omits it, and an older client ignores it.
-    handler: (params, { runtime }) => {
-      const automation = runtime.showAutomation(params.id, params.expectedOwner)
-      const owner = runtime.automationOwnerPrecondition(params.id)
+    // The CLI echoes the authority's owner metadata on subsequent mutations.
+    handler: (params, context) => {
+      const automation = context.runtime.showAutomation(params.id, params.expectedOwner)
+      if (automation.agentId === null) {
+        assertShellAutomationSupport(context)
+      }
+      const owner = context.runtime.automationOwnerPrecondition(params.id)
       return owner ? { automation, owner } : { automation }
     }
   }),
   defineMethod({
     name: 'automation.create',
     params: AutomationCreate,
-    handler: async (params, { runtime }) => ({
-      automation: await runtime.createAutomation(params)
-    })
+    handler: async (params, context) => {
+      if (params.agentId === null) {
+        assertShellAutomationSupport(context)
+      }
+      return { automation: await context.runtime.createAutomation(params) }
+    }
   }),
   defineMethod({
     name: 'automation.update',
     params: AutomationUpdate,
-    handler: async (params, context) => ({
-      automation: await context.runtime.updateAutomation(params.id, params.updates, {
-        expectedOwner: mutationOwner(params.id, params.expectedOwner, context),
-        destination: params.destination
-      })
-    })
+    handler: async (params, context) => {
+      const expectedOwner = mutationOwner(params.id, params.expectedOwner, context)
+      if (
+        !supportsShellAutomations(context) &&
+        (params.updates.agentId === null ||
+          context.runtime.showAutomation(params.id, expectedOwner).agentId === null)
+      ) {
+        assertShellAutomationSupport(context)
+      }
+      return {
+        automation: await context.runtime.updateAutomation(params.id, params.updates, {
+          expectedOwner,
+          destination: params.destination
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'automation.delete',

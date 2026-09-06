@@ -57,11 +57,12 @@ export function useAutomationsPageStoreState() {
   )
   const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
   const defaultAgent =
-    settings?.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
-      ? settings.defaultTuiAgent
-      : (enabledAgents[0] ?? AGENTS[0])
+    settings?.defaultTuiAgent === 'blank'
+      ? null
+      : settings?.defaultTuiAgent &&
+          isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
+        ? settings.defaultTuiAgent
+        : (enabledAgents[0] ?? AGENTS[0])
 
   return {
     repos,

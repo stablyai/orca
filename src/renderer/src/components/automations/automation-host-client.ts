@@ -1,4 +1,5 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { AUTOMATION_SHELL_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type {
   Automation,
   AutomationCreateInput,
@@ -152,6 +153,16 @@ export async function updateAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
+  if (
+    target.kind === 'environment' &&
+    (updates.agentId === null || automation.agentId === null)
+  ) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      AUTOMATION_SHELL_RUNTIME_CAPABILITY,
+      'Blank-terminal automations require a newer Orca server. Update the host and try again.'
+    )
+  }
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',
