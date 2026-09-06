@@ -1,0 +1,34 @@
+name: MSYS job regression diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, patched]
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Restore baseline native patch
+        if: matrix.variant == 'baseline'
+        shell: bash
+        run: |
+          python - <<'PYCODE'
+          import subprocess
+          from pathlib import Path
+          for file in ['config/patches/node-pty@1.1.0.patch', 'pnpm-lock.yaml']:
+              Path(file).write_bytes(subprocess.check_output(['git', 'show', 'adcc30be3bc2a0bae7bc0f6cdd1bf55c7815f407:' + file]))
+          PYCODE
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          persist-native-cache: 'false'
+      - name: Native MSYS membership and existing job contracts
+        run: pnpm exec vitest run --config config/vitest.config.ts src/main/windows/windows-msys-job.win32.test.ts src/main/windows/windows-pty-job.win32.test.ts src/main/windows/windows-host-job.win32.test.ts --maxWorkers=1
