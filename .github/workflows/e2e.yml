@@ -233,7 +233,7 @@ jobs:
             echo "Changed specs are all owned by dedicated lanes."
             exit 0
           fi
-          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
+          E2E_ENV=(ORCA_E2E_DISABLE_PAIRED_TERMINAL_PARKING=1 SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
           # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
           # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
           # The first clause stays because that spec needs Docker without referencing the variable.
