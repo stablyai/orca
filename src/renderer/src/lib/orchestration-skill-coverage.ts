@@ -1,9 +1,9 @@
-import type { AgentType } from '../../../shared/agent-status-types'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../shared/skills'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { TUI_AGENT_AUTO_PICK_ORDER } from '../../../shared/tui-agent-selection'
+import { isSkillSourceVisibleToAgent } from '../../../shared/skill-install-providers'
 
 export type OrchestrationSkillAgentStatus = {
   agent: TuiAgent
@@ -30,20 +30,12 @@ function isOrchestrationSkill(skill: DiscoveredSkill): boolean {
   )
 }
 
-// Why: `native-chat-agent-profiles.ts` carries the same rule as `skillSourceOwner`;
-// keep the two in step when an agent starts reading another agent's roots.
-function getSkillSourceOwnerForAgent(agent: TuiAgent): AgentType {
-  // Why: both launch Claude Code and therefore consume Claude-owned skill roots.
-  return agent === 'claude-agent-teams' || agent === 'openclaude' ? 'claude' : agent
-}
-
 /** `skills` and `sources` must come from the same discovery scan. */
 export function agentHasOrchestrationSkill(
   agent: TuiAgent,
   skills: readonly DiscoveredSkill[],
   sources: readonly SkillDiscoverySource[]
 ): boolean {
-  const owner = getSkillSourceOwnerForAgent(agent)
   return skills.some((skill) => {
     if (!isOrchestrationSkill(skill)) {
       return false
@@ -58,7 +50,7 @@ export function agentHasOrchestrationSkill(
         (source) =>
           source.path === rootPath &&
           source.sourceKind !== 'repo' &&
-          (source.owner === null || source.owner === owner)
+          isSkillSourceVisibleToAgent(agent, source)
       )
     )
   })
