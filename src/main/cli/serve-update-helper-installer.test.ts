@@ -31,6 +31,23 @@ describe('serve update helper installer', () => {
     expect(script).toContain('orca ALL=(root) NOPASSWD')
   })
 
+  it('probes jq and flock before publishing any install artifact', () => {
+    const script = buildServeUpdateHelperInstallScript({
+      spoolDir: '/var/lib/orca-server-update',
+      unitName: 'orca-serve.service',
+      appImageTargetPath: '/opt/orca/orca-linux.AppImage',
+      versionRecordPath: '/opt/orca/VERSION',
+      serviceUser: 'orca'
+    })
+    const jqProbe = script.indexOf('command -v jq')
+    const flockProbe = script.indexOf('command -v flock')
+    const firstWrite = script.indexOf('cat >')
+    expect(jqProbe).toBeGreaterThan(-1)
+    expect(flockProbe).toBeGreaterThan(jqProbe)
+    // Nothing is written until both dependencies are confirmed present.
+    expect(firstWrite).toBeGreaterThan(flockProbe)
+  })
+
   it('emits a helper.json that is valid JSON when the install script runs', () => {
     const script = buildServeUpdateHelperInstallScript({
       spoolDir: '/var/lib/orca-server-update',
