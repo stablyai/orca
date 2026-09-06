@@ -252,16 +252,23 @@ export async function createWebRuntimeSessionTerminalResult(
       expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
       // Why: the publication can beat the RPC response; replay it once after caller intent exists.
       acceptCurrentSnapshot:
-        Boolean(createdTabId) && (args.activate !== false || Boolean(args.targetGroupId)),
+        Boolean(createdTabId) &&
+        (args.activate !== false || Boolean(args.targetGroupId || args.afterTabId)),
       // Why: a placement record needs a post-create list; a deduped in-flight one can predate it.
-      ...(args.targetGroupId && createdTabId ? { afterCurrentInFlight: true } : {})
+      ...((args.targetGroupId || args.afterTabId) && createdTabId
+        ? { afterCurrentInFlight: true }
+        : {})
     })
-    if (args.targetGroupId && createdTabId) {
+    if ((args.targetGroupId || args.afterTabId) && createdTabId) {
       await settleWebRuntimeTerminalPlacement(
         environmentId,
         args.worktreeId,
         webTerminalPlacementParentTabId(createdTabId),
-        { groupId: args.targetGroupId, activate: args.activate !== false }
+        {
+          groupId: args.targetGroupId,
+          afterTabId: args.afterTabId,
+          activate: args.activate !== false
+        }
       )
     }
     return {
