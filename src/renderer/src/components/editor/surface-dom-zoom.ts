@@ -1,29 +1,29 @@
 import type { CSSProperties, Dispatch, SetStateAction } from 'react'
 import { flushSync } from 'react-dom'
 import {
-  type ImageViewerImageDimensions,
-  type ImageViewerSurfaceSize,
-  type ImageViewerZoomAnchor,
-  clampImageViewerZoom,
-  getAnchoredImageViewerScrollOffset,
-  getNextWheelImageViewerZoom,
-  shouldHandleImageZoomWheel
-} from './image-viewer-zoom'
+  type SurfaceContentDimensions,
+  type SurfaceSize,
+  type SurfaceZoomAnchor,
+  clampSurfaceZoom,
+  getAnchoredSurfaceScrollOffset,
+  getNextWheelSurfaceZoom,
+  shouldHandleSurfaceZoomWheel
+} from './surface-zoom'
 
-export type ApplyImageViewerZoomChange = (
+export type ApplySurfaceZoomChange = (
   getNextZoom: (currentZoom: number) => number,
-  anchor?: ImageViewerZoomAnchor | null
+  anchor?: SurfaceZoomAnchor | null
 ) => void
 
-export function getElementSurfaceSize(element: HTMLElement): ImageViewerSurfaceSize {
+export function getElementSurfaceSize(element: HTMLElement): SurfaceSize {
   return {
     width: element.clientWidth,
     height: element.clientHeight
   }
 }
 
-export function getImageLayoutStyle(
-  size: ImageViewerImageDimensions | null
+export function getSurfaceLayoutStyle(
+  size: SurfaceContentDimensions | null
 ): CSSProperties | undefined {
   if (!size) {
     return undefined
@@ -35,11 +35,11 @@ export function getImageLayoutStyle(
   }
 }
 
-export function applyAnchoredImageViewerZoomChange(
+export function applyAnchoredSurfaceZoomChange(
   surface: HTMLDivElement | null,
   setZoom: Dispatch<SetStateAction<number>>,
   getNextZoom: (currentZoom: number) => number,
-  anchor?: ImageViewerZoomAnchor | null
+  anchor?: SurfaceZoomAnchor | null
 ): void {
   const resolvedAnchor = surface
     ? (anchor ?? { x: surface.clientWidth / 2, y: surface.clientHeight / 2 })
@@ -52,7 +52,7 @@ export function applyAnchoredImageViewerZoomChange(
   flushSync(() => {
     setZoom((current) => {
       currentZoom = current
-      nextZoom = clampImageViewerZoom(getNextZoom(current))
+      nextZoom = clampSurfaceZoom(getNextZoom(current))
       return nextZoom
     })
   })
@@ -61,13 +61,13 @@ export function applyAnchoredImageViewerZoomChange(
     return
   }
 
-  surface.scrollLeft = getAnchoredImageViewerScrollOffset({
+  surface.scrollLeft = getAnchoredSurfaceScrollOffset({
     scrollOffset: scrollLeft,
     anchorOffset: resolvedAnchor.x,
     currentZoom,
     nextZoom
   })
-  surface.scrollTop = getAnchoredImageViewerScrollOffset({
+  surface.scrollTop = getAnchoredSurfaceScrollOffset({
     scrollOffset: scrollTop,
     anchorOffset: resolvedAnchor.y,
     currentZoom,
@@ -75,11 +75,11 @@ export function applyAnchoredImageViewerZoomChange(
   })
 }
 
-export function applyImageSurfaceWheel(
+export function applySurfaceWheel(
   event: WheelEvent,
-  applyZoomChange: ApplyImageViewerZoomChange
+  applyZoomChange: ApplySurfaceZoomChange
 ): void {
-  if (!shouldHandleImageZoomWheel(event)) {
+  if (!shouldHandleSurfaceZoomWheel(event)) {
     return
   }
 
@@ -88,7 +88,7 @@ export function applyImageSurfaceWheel(
   const surface = event.currentTarget instanceof HTMLDivElement ? event.currentTarget : null
   const rect = surface?.getBoundingClientRect()
   applyZoomChange(
-    (currentZoom) => getNextWheelImageViewerZoom(currentZoom, event.deltaY, event.deltaMode),
+    (currentZoom) => getNextWheelSurfaceZoom(currentZoom, event.deltaY, event.deltaMode),
     rect ? { x: event.clientX - rect.left, y: event.clientY - rect.top } : null
   )
 }
