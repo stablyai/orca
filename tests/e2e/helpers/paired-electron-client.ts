@@ -224,13 +224,13 @@ export async function launchPairedElectronClient(
       replacementOffer: RuntimeDesktopPairingOffer
     ): Promise<SameIdPairingReplacement> =>
       replaceRuntimePairingInPlace({
-        environmentId,
+        environmentId: client.environmentId,
         page,
         pairingUrl: replacementOffer.pairingUrl,
         userDataDir
       })
 
-    return {
+    const client: PairedElectronClient = {
       app,
       page,
       environmentId,
@@ -249,6 +249,7 @@ export async function launchPairedElectronClient(
       replacePairingInPlace,
       userDataDir
     }
+    return client
   } catch (error) {
     await closeElectronAppForE2E(app)
     await cleanupE2EDaemons(userDataDir)
