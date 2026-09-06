@@ -49,6 +49,8 @@ export function renderSmartWorkspaceNameInput(
     resolvedCommandValue,
     handleSelect,
     jiraSource,
+    kaneoSource,
+    kaneoStatusId,
     placeholder,
     jiraStatusId,
     linearStatusId,
@@ -295,9 +297,19 @@ export function renderSmartWorkspaceNameInput(
         }}
         placeholder={placeholder}
         disabled={disabled}
-        aria-busy={(jiraSource.intent && jiraSource.loading) || unresolvedLinearUrlIntent}
+        aria-busy={
+          kaneoSource.loading ||
+          (jiraSource.intent && jiraSource.loading) ||
+          unresolvedLinearUrlIntent
+        }
         aria-describedby={
-          jiraSource.intent ? jiraStatusId : unresolvedLinearUrlIntent ? linearStatusId : undefined
+          kaneoSource.intent
+            ? kaneoStatusId
+            : jiraSource.intent
+              ? jiraStatusId
+              : unresolvedLinearUrlIntent
+                ? linearStatusId
+                : undefined
         }
         // Why: match adjacent comboboxes' solid background in light mode.
         className="h-9 bg-background pl-8 text-sm"

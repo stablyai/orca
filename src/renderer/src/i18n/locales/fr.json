@@ -7072,7 +7072,6 @@
           "a565377c38": "not-installed",
           "15cf990798": "Non authentifié",
           "f7eb5f0b24": "Non installé",
-          "3ba07f933b": "Connectez les trackers d'issues qu'Orca peut utiliser pour parcourir les tâches et démarrer des espaces de travail avec le contexte associé.",
           "70e885705b": "Fournisseurs de tâches",
           "1683acbac4": "Connectez les hébergeurs de code qu'Orca peut utiliser pour les pull requests, merge requests, checks et statuts de revue.",
           "298c65ecac": "Fournisseurs de revue"

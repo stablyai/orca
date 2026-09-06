@@ -1,3 +1,4 @@
+import type { KaneoTask } from '../../../../shared/kaneo-types'
 import type RepoCombobox from '@/components/repo/RepoCombobox'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type {
@@ -71,6 +72,7 @@ export type NewWorkspaceComposerCardProps = {
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void
   onSmartNameModeChange?: (mode: SmartNameMode) => void
+  onSmartKaneoTaskSelect?: (task: KaneoTask) => void
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void

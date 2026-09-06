@@ -1,3 +1,4 @@
+import type { KaneoTask } from '../../../../shared/kaneo-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
@@ -55,6 +56,7 @@ export type ComposerSourceModel = {
   handleSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   handleSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   handleSmartJiraIssueSelect: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  handleSmartKaneoTaskSelect: (task: KaneoTask) => void
   handleSmartLinearIssueSelect: (issue: LinearIssue) => void
   handleSparseSelectPreset: (preset: SparsePreset | null) => void
   insertComposerFolderPaths: (folderPaths: string[]) => void

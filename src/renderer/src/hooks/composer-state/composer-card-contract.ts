@@ -71,6 +71,7 @@ export type ComposerCardActionProps = {
   onSmartGitLabItemSelect: ComposerModel['handleSmartGitLabItemSelect']
   onSmartBranchSelect: ComposerModel['handleSmartBranchSelect']
   onSmartNameModeChange?: ComposerModel['setSmartNameMode']
+  onSmartKaneoTaskSelect: ComposerModel['handleSmartKaneoTaskSelect']
   onSmartLinearIssueSelect: ComposerModel['handleSmartLinearIssueSelect']
   onSmartJiraIssueSelect: ComposerModel['handleSmartJiraIssueSelect']
   onOpenJiraSettings: ComposerModel['handleOpenJiraSettings']

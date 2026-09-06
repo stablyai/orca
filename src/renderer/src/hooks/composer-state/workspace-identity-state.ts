@@ -1,3 +1,4 @@
+import { parseKaneoTaskUrl } from '../../../../shared/kaneo-task-url'
 import type { ComposerModel } from './composer-model'
 
 type WorkspaceIdentityStateInput = Pick<
@@ -108,8 +109,11 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
 
   const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
 
-  // Why: a pasted Jira URL is not a workspace name yet — block create until it resolves to an issue.
-  const sourceIntentBlocksCreate = !linkedWorkItem && isBlockingJiraUrlIntent(smartNameMode, name)
+  // Why: a pasted task URL is not a workspace name until its task resolves.
+  const sourceIntentBlocksCreate =
+    !linkedWorkItem &&
+    (isBlockingJiraUrlIntent(smartNameMode, name) ||
+      (smartNameMode === 'smart' && parseKaneoTaskUrl(name) !== null))
 
   // Why (#5181): reuseEligibleBranch = local branch name eligible for checkout-reuse (null if none); reuseSelectedBranch = the checkbox that enacts it.
   const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)

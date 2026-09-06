@@ -72,6 +72,7 @@ export function useSmartWorkspaceNameFieldController({
     sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
     !foundation.jiraSource.intent &&
+    !foundation.kaneoSource.intent &&
     !linearUrlIntentOwnsInput &&
     !textOnly &&
     foundation.repoBackedSearchTargets.length > 0 &&
@@ -79,11 +80,15 @@ export function useSmartWorkspaceNameFieldController({
   const shouldQueryLinear =
     linearQueryWithinLimit &&
     !foundation.jiraSource.intent &&
+    !foundation.kaneoSource.intent &&
     !textOnly &&
     foundation.linearAvailable &&
     (foundation.mode === 'smart' || foundation.mode === 'linear')
   const jiraSearchJql =
-    foundation.mode === 'jira' && !foundation.jiraSource.intent && sourceQueryWithinLimit
+    foundation.mode === 'jira' &&
+    !foundation.jiraSource.intent &&
+    !foundation.kaneoSource.intent &&
+    sourceQueryWithinLimit
       ? buildJiraIssueSearchJql(foundation.debouncedQuery)
       : null
   const shouldQueryJira =
@@ -111,6 +116,7 @@ export function useSmartWorkspaceNameFieldController({
     sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
     !foundation.jiraSource.intent &&
+    !foundation.kaneoSource.intent &&
     !linearUrlIntentOwnsInput &&
     !textOnly &&
     foundation.gitlabSourceAvailable &&

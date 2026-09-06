@@ -1,3 +1,4 @@
+import { KaneoSourceStatus } from './KaneoSourceStatus'
 import React from 'react'
 import { Button } from '@/components/ui/button'
 import { Command } from '@/components/ui/command'
@@ -148,7 +149,13 @@ export function renderSmartWorkspaceNameField(
         </div>
       )}
       <Popover
-        open={!disabled && open && mode !== 'text' && selectedSource === null}
+        open={
+          !disabled &&
+          open &&
+          mode !== 'text' &&
+          selectedSource === null &&
+          (!controller.kaneoSource.intent || controller.kaneoSource.task !== null)
+        }
         onOpenChange={handleSourcePopoverOpenChange}
       >
         <Command
@@ -208,6 +215,7 @@ export function renderSmartWorkspaceNameField(
           )}
         </div>
       ) : null}
+      <KaneoSourceStatus source={controller.kaneoSource} id={controller.kaneoStatusId} />
       <WorkspaceEmojiSuggestionPopover
         anchorRef={localInputRef}
         open={emojiMenuOpen}
