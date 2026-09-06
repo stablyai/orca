@@ -12,6 +12,7 @@ import type { EmulatorSessionInfo } from '../emulator/emulator-types'
 import type { SimulatorDevice } from '../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../emulator/backends/emulator-backend'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { EmulatorButtonOptions, EmulatorPosture } from '../../shared/emulator-device-controls'
 
 // Settings slice the emulator surface needs; keeps the host contract honest (no widening cast).
 type EmulatorHostSettings = Pick<
@@ -29,6 +30,13 @@ export type RuntimeEmulatorCommandHost = {
 }
 
 type EmulatorTargetParams = { device?: string; emulator?: string; worktree?: string }
+type EmulatorGestureParams = EmulatorTargetParams & { points: EmulatorGesturePoint[] }
+type EmulatorTypeParams = EmulatorTargetParams & { text: string }
+type EmulatorButtonParams = EmulatorTargetParams & { name: string; longPress?: boolean }
+type EmulatorPostureParams = EmulatorTargetParams & { posture: EmulatorPosture }
+type EmulatorRotateParams = EmulatorTargetParams & { orientation: string }
+type EmulatorExecParams = EmulatorTargetParams & { command: string }
+type EmulatorShutdownParams = EmulatorTargetParams & { managedOnly?: boolean }
 
 export class RuntimeEmulatorCommands {
   constructor(private readonly host: RuntimeEmulatorCommandHost) {}
@@ -56,48 +64,45 @@ export class RuntimeEmulatorCommands {
     return RuntimeEmulatorCommands.OK
   }
 
-  async emulatorGesture(params: {
-    points: EmulatorGesturePoint[]
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<{ ok: true }> {
+  async emulatorGesture(params: EmulatorGestureParams): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.gesture(params.points, { device: params.device ?? params.emulator, worktreeId })
     return RuntimeEmulatorCommands.OK
   }
 
-  async emulatorType(params: {
-    text: string
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<{ ok: true }> {
+  async emulatorType(params: EmulatorTypeParams): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.type(params.text, { device: params.device ?? params.emulator, worktreeId })
     return RuntimeEmulatorCommands.OK
   }
 
-  async emulatorButton(params: {
-    name: string
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<{ ok: true }> {
+  async emulatorButton(params: EmulatorButtonParams): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
-    await bridge.button(params.name, { device: params.device ?? params.emulator, worktreeId })
+    const options: EmulatorButtonOptions | undefined = params.longPress
+      ? { longPress: true }
+      : undefined
+    await bridge.button(
+      params.name,
+      { device: params.device ?? params.emulator, worktreeId },
+      options
+    )
     return RuntimeEmulatorCommands.OK
   }
 
-  async emulatorRotate(params: {
-    orientation: string
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<{ ok: true }> {
+  async emulatorPosture(params: EmulatorPostureParams): Promise<{ ok: true }> {
+    const bridge = this.requireEmulatorBridge()
+    const worktreeId = await this.resolveWorktreeId(params.worktree)
+    await bridge.setPosture(params.posture, {
+      device: params.device ?? params.emulator,
+      worktreeId
+    })
+    return RuntimeEmulatorCommands.OK
+  }
+
+  async emulatorRotate(params: EmulatorRotateParams): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.rotate(params.orientation, {
@@ -107,12 +112,7 @@ export class RuntimeEmulatorCommands {
     return RuntimeEmulatorCommands.OK
   }
 
-  async emulatorExec(params: {
-    command: string
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<unknown> {
+  async emulatorExec(params: EmulatorExecParams): Promise<unknown> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     return bridge.exec(params.command, {
@@ -294,23 +294,16 @@ export class RuntimeEmulatorCommands {
     )
   }
 
-  async emulatorKill(params: {
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<{ ok: true; deviceUdid: string }> {
+  async emulatorKill(params: EmulatorTargetParams): Promise<{ ok: true; deviceUdid: string }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveCleanupWorktreeId(params.worktree)
     const killedUdid = await bridge.kill(params.device ?? params.emulator, worktreeId)
     return { ok: true, deviceUdid: killedUdid }
   }
 
-  async emulatorShutdown(params: {
-    device?: string
-    emulator?: string
-    worktree?: string
-    managedOnly?: boolean
-  }): Promise<{ ok: true; deviceUdid?: string }> {
+  async emulatorShutdown(
+    params: EmulatorShutdownParams
+  ): Promise<{ ok: true; deviceUdid?: string }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveCleanupWorktreeId(params.worktree)
     if (params.managedOnly && worktreeId && !params.device && !params.emulator) {
@@ -340,12 +333,7 @@ export class RuntimeEmulatorCommands {
   }
 
   // Raw for extensibility.
-  async emulatorExecRaw(params: {
-    command: string
-    device?: string
-    emulator?: string
-    worktree?: string
-  }): Promise<unknown> {
+  async emulatorExecRaw(params: EmulatorExecParams): Promise<unknown> {
     return this.emulatorExec(params)
   }
 }

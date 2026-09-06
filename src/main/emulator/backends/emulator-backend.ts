@@ -4,6 +4,11 @@ import type {
   EmulatorSessionInfo,
   EmulatorStreamCodec
 } from '../emulator-types'
+import type {
+  EmulatorButtonOptions,
+  EmulatorDeviceControlCapabilities,
+  EmulatorPosture
+} from '../../../shared/emulator-device-controls'
 
 export type { EmulatorBackendKind, EmulatorStreamCodec }
 
@@ -16,6 +21,7 @@ export type EmulatorDevice = {
   state: 'shutdown' | 'booting' | 'booted'
   detail?: string
   isAvailable: boolean
+  controlCapabilities?: EmulatorDeviceControlCapabilities
 }
 
 // Which optional verbs a backend supports. The router uses these to reject
@@ -76,8 +82,9 @@ export type EmulatorBackend = {
   // and drive their own control socket keyed by deviceId.
   gesture(deviceId: string, points: EmulatorGesturePoint[], wsUrl: string | null): Promise<void>
   type(deviceId: string, text: string): Promise<void>
-  button(deviceId: string, name: string): Promise<void>
+  button(deviceId: string, name: string, options?: EmulatorButtonOptions): Promise<void>
   rotate(deviceId: string, orientation: string): Promise<void>
+  setPosture?(deviceId: string, posture: EmulatorPosture): Promise<void>
   exec(deviceId: string, command: string): Promise<unknown>
 
   // Capability-gated verbs. The router checks `capabilities`

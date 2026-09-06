@@ -68,6 +68,7 @@ function session(deviceUdid: string): EmulatorSessionInfo {
     wsUrl: `ws://127.0.0.1:3100/${deviceUdid}`,
     axUrl: `http://127.0.0.1:3100/${deviceUdid}/ax`,
     helperPid: 1234,
+    backend: 'ios',
     // iOS serve-sim sessions round-trip through the registry as mjpeg.
     streamCodec: 'mjpeg'
   }

@@ -88,7 +88,16 @@ describe('AndroidEmulatorBackend', () => {
         name: 'Pixel_7',
         state: 'booted',
         detail: 'emulator',
-        isAvailable: true
+        isAvailable: true,
+        controlCapabilities: {
+          shutdown: true,
+          power: true,
+          volume: true,
+          overview: true,
+          foldable: false,
+          wearButton1: false,
+          wearButton2: false
+        }
       },
       {
         backend: 'android',
@@ -127,6 +136,41 @@ describe('AndroidEmulatorBackend', () => {
       'tap',
       '540',
       '1200'
+    ])
+  })
+
+  it('refreshes the cached screen size after a successful posture change', async () => {
+    const discoveryRunner = defaultRunner() as unknown as AndroidCommandRunner
+    let screenSize = 'Physical size: 100x200'
+    const statefulRunner = vi.fn(async (binary: string, args: readonly string[]) => {
+      const a = args.join(' ')
+      if (binary === SDK.adb && a === '-s emulator-5554 shell wm size') {
+        return ok(screenSize)
+      }
+      if (binary === SDK.adb && a === '-s emulator-5554 emu fold') {
+        screenSize = 'Physical size: 200x100'
+        return ok('')
+      }
+      return discoveryRunner(binary, args)
+    })
+    const android = backend(statefulRunner)
+
+    await android.tap('emulator-5554', 0.5, 0.5)
+    await android.setPosture('emulator-5554', 'folded')
+    await android.tap('emulator-5554', 0.5, 0.5)
+
+    expect(statefulRunner).toHaveBeenCalledWith(SDK.adb, ['-s', 'emulator-5554', 'emu', 'fold'])
+    const wmSizeCalls = statefulRunner.mock.calls.filter(
+      ([binary, args]) => binary === SDK.adb && args.join(' ') === '-s emulator-5554 shell wm size'
+    )
+    expect(wmSizeCalls).toHaveLength(2)
+    const tapCalls = statefulRunner.mock.calls.filter(
+      ([binary, args]) =>
+        binary === SDK.adb && args.slice(0, 5).join(' ') === '-s emulator-5554 shell input tap'
+    )
+    expect(tapCalls.map(([, args]) => args)).toEqual([
+      ['-s', 'emulator-5554', 'shell', 'input', 'tap', '50', '100'],
+      ['-s', 'emulator-5554', 'shell', 'input', 'tap', '100', '50']
     ])
   })
 
