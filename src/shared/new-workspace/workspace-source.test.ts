@@ -116,6 +116,16 @@ describe('workspace source policy', () => {
       kind: 'gitlab-issue',
       label: '#7 Self hosted'
     })
+    expect(
+      buildWorkspaceSourceSelection({
+        linkedWorkItem: {
+          type: 'mr' as const,
+          number: 42,
+          title: 'Tighten the relay timeout',
+          url: 'https://gitlab.example.com/g/p/-/merge_requests/42'
+        }
+      })
+    ).toMatchObject({ kind: 'gitlab-mr', label: '!42 Tighten the relay timeout' })
     expect(shouldApplyWorkspaceSourceAutoName({ currentName: '#42', lastAutoName: 'old' })).toBe(
       true
     )

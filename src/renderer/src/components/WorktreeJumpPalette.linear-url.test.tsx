@@ -691,7 +691,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
 
     expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
     expect(useAppStore.getState().modalData).toMatchObject({
-      prefilledName: 'agent-terminals-disappearing-randomly',
+      prefilledName: '14198-agent-terminals-disappearing-randomly',
       initialRepoId: 'repo-1',
       telemetrySource: 'command_palette',
       linkedWorkItem: {
