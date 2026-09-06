@@ -11,6 +11,14 @@ import { buildFontFamily } from '@/components/terminal-pane/layout-serialization
  */
 export const PIERRE_DIFF_THEMES: ThemesType = { light: 'light-plus', dark: 'dark-plus' }
 
+/**
+ * Pierre pushes its gutter "+" right with `margin-right: calc(-1lh + 1ch)`,
+ * which overlaps the line-number column by ~14px. There is no CSS variable for
+ * it, so this is the narrow, data-attribute-only override Pierre's styling docs
+ * sanction — keeping the add-note affordance in the glyph margin like Monaco's.
+ */
+const PIERRE_GUTTER_BUTTON_CSS = '[data-utility-button] { margin-right: 0; }'
+
 /** Every field is optional: callers pass partial settings while the store hydrates. */
 export type PierreDiffSettings = Partial<
   Pick<
@@ -54,6 +62,7 @@ export function buildPierreDiffOptions<LAnnotation>({
     // from here — without it Pierre asks Shiki for its unregistered default
     // `pierre-dark` and the render throws instead of painting.
     theme: PIERRE_DIFF_THEMES,
+    unsafeCSS: PIERRE_GUTTER_BUTTON_CSS,
     themeType: settings?.theme ?? 'system',
     overflow: settings?.diffWordWrap ? 'wrap' : 'scroll',
     parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace),

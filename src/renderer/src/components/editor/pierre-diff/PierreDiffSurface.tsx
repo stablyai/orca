@@ -180,7 +180,7 @@ export function PierreDiffSurface({
           editorOptions={editorOptions}
           lineAnnotations={lineAnnotations}
           renderAnnotation={renderAnnotation}
-          />
+        />
       </RecoverableRenderErrorBoundary>
     </div>
   )
