@@ -68,13 +68,17 @@ test.describe('five SSH panes under simultaneous output', () => {
     const identity = await readPaneIdentitySnapshot(orcaPage)
     expect(identity?.panes).toHaveLength(5)
     const tabId = identity!.tabId
+    const visibleTerminals = orcaPage.locator('.xterm:visible')
+    await expect(visibleTerminals).toHaveCount(5)
 
     for (let round = 0; round < 2; round++) {
       await orcaPage.evaluate(() => window.__store!.getState().setActiveView('tasks'))
       await expect
         .poll(() => orcaPage.evaluate(() => window.__store!.getState().activeView))
         .toBe('tasks')
+      await expect(visibleTerminals).toHaveCount(0)
       await orcaPage.evaluate(() => window.__store!.getState().setActiveView('terminal'))
+      await expect(visibleTerminals).toHaveCount(5)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       for (const [index, owner] of owners.entries()) {
         await orcaPage.evaluate(
