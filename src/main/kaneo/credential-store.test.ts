@@ -92,14 +92,21 @@ describe('Kaneo credential storage', () => {
         saveKaneoCredential(credential)
       }
       const fs = await vi.importActual<typeof Fs>('node:fs')
-      vi.mocked(renameSync)
-        .mockImplementationOnce(fs.renameSync)
-        .mockImplementationOnce(() => {
+      const replacement = { siteUrl: 'https://other.example', apiKey: 'new-key' }
+      let publishedBeforeFailure: typeof credential | null = null
+      vi.mocked(renameSync).mockImplementation((source, destination) => {
+        if (destination === join(home.path, '.orca', 'kaneo.json')) {
+          publishedBeforeFailure = readKaneoCredential()
           throw new Error('rename denied')
-        })
-      expect(() =>
-        saveKaneoCredential({ siteUrl: 'https://other.example', apiKey: 'new-key' })
-      ).toThrow('rename denied')
+        }
+        fs.renameSync(source, destination)
+      })
+      try {
+        expect(() => saveKaneoCredential(replacement)).toThrow('rename denied')
+        expect(publishedBeforeFailure).toEqual(replacement)
+      } finally {
+        vi.mocked(renameSync).mockImplementation(fs.renameSync)
+      }
       expect(readKaneoCredential()).toEqual(existing ? credential : null)
       expect(getKaneoStatus()).toEqual(
         existing
