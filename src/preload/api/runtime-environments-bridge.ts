@@ -9,6 +9,7 @@ import {
   subscribeRuntimeEnvironmentFromPreload,
   type RuntimeEnvironmentSubscriptionHandle
 } from '../runtime-environment-subscriptions'
+import type { PreloadApi } from '../api-types'
 
 export const runtimeEnvironmentsApi = {
   list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
@@ -90,4 +91,4 @@ export const runtimeEnvironmentsApi = {
     }
   ): Promise<RuntimeEnvironmentSubscriptionHandle> =>
     subscribeRuntimeEnvironmentFromPreload(ipcRenderer, args, callbacks)
-}
+} satisfies PreloadApi['runtimeEnvironments']

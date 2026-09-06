@@ -39,6 +39,9 @@ type GitStatusEntries = AppStoreState['gitStatusByWorktree'][string]
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntries = []
 const EMPTY_AGENT_CMD_OVERRIDES: Partial<Record<TuiAgent, string>> = {}
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+const EMPTY_PROJECTS: AppStoreState['projects'] = []
+const EMPTY_REPOS: AppStoreState['repos'] = []
+const EMPTY_WORKTREES_BY_REPO: AppStoreState['worktreesByRepo'] = {}
 
 export function getProjectRuntimeShellMenuMode(
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -123,10 +126,7 @@ export function useTabBarRuntimeModel({
   )
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const projects = useAppStore((s) => s.projects)
-  const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   // Why: use the worktree's owning host so offered Windows shells match the host that actually runs the terminal.
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
@@ -188,8 +188,17 @@ export function useTabBarRuntimeModel({
     isWindowsClient: isWindows,
     worktreeHasRemoteConnection: Boolean(worktreeConnectionId)
   })
+  // Why: `projects`/`repos`/`worktreesByRepo` feed nothing but the local runtime context below, and
+  // `worktreesByRepo` churns on every worktree write; ungated, each write re-renders every tab strip.
+  const needsLocalProjectRuntime =
+    showWindowsShellMenu && !activeRuntimeEnvironmentId?.trim() && !worktreeConnectionId
+  const projects = useAppStore((s) => (needsLocalProjectRuntime ? s.projects : EMPTY_PROJECTS))
+  const repos = useAppStore((s) => (needsLocalProjectRuntime ? s.repos : EMPTY_REPOS))
+  const worktreesByRepo = useAppStore((s) =>
+    needsLocalProjectRuntime ? s.worktreesByRepo : EMPTY_WORKTREES_BY_REPO
+  )
   const localProjectRuntime = useMemo(() => {
-    if (!showWindowsShellMenu || activeRuntimeEnvironmentId?.trim() || worktreeConnectionId) {
+    if (!needsLocalProjectRuntime) {
       return undefined
     }
     return getLocalProjectExecutionRuntimeContext(
@@ -207,13 +216,11 @@ export function useTabBarRuntimeModel({
     )
   }, [
     activeRepoId,
-    activeRuntimeEnvironmentId,
     activeWorktreeId,
+    needsLocalProjectRuntime,
     projects,
     repos,
     settings,
-    showWindowsShellMenu,
-    worktreeConnectionId,
     windowsTerminalCapabilities.isLoading,
     windowsTerminalCapabilities.wslAvailable,
     windowsTerminalCapabilities.wslDistros,

@@ -74,7 +74,7 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
         this.userInitiatedCheck = false
         this.finishActiveUpdateCheckAttempt()
         this.recordCompletedUpdateCheck()
-        this.sendStatus({ state: 'not-available', userInitiated: true })
+        this.sendSettledCheckStatus({ state: 'not-available', userInitiated: true })
         return false
       }
       return launch()

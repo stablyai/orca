@@ -6,7 +6,8 @@ import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/works
 import CloseTerminalDialog from './CloseTerminalDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
-import { TerminalErrorToast } from './TerminalErrorToast'
+import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
+import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
@@ -31,6 +32,8 @@ export function TerminalPaneSurface({
   const {
     activePane,
     activePaneCanContinueInNewSession,
+    activePaneCanToggleChat,
+    activePaneIsChatLeaf,
     activatePaneTitleInteraction,
     agentSessionContinuation,
     agentSessionFork,
@@ -38,6 +41,8 @@ export function TerminalPaneSurface({
     closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
+    contextMenuCanToggleChat,
+    contextMenuIsChatView,
     cwd,
     daemonActions,
     dismissTerminalError,
@@ -45,6 +50,7 @@ export function TerminalPaneSurface({
     expandedPaneId,
     handleCancelClose,
     handleConfirmClose,
+    handleContextMenuToggleNativeChat,
     handlePrimarySelectionAuxClick,
     handlePrimarySelectionMiddleMouseDown,
     handleRemoveTitle,
@@ -53,11 +59,13 @@ export function TerminalPaneSurface({
     handleRenameSubmit,
     handleRequestClosePane,
     handleStartRename,
+    handleToggleNativeChat,
     hiddenStartupStyle,
     isActive,
     keybindings,
     managedPanes,
     managerRef,
+    menuAgentSessionId,
     menuPaneHasCustomTitle,
     openDiskSpaceAnalyzer,
     openQuickCommandEditor,
@@ -157,6 +165,25 @@ export function TerminalPaneSurface({
               error={visibleTerminalError}
               onDismiss={dismissTerminalError}
               onRestartDaemon={() => daemonActions.setPending('restart')}
+              onRetry={
+                isPaneOwnerUnverifiedError(visibleTerminalError)
+                  ? () => {
+                      const ptyId = activePane
+                        ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+                        : null
+                      return requestTerminalPaneRecovery({
+                        tabId,
+                        ptyId,
+                        reason: 'reattach-unverifiable'
+                      }).then((recovered) => {
+                        if (recovered) {
+                          dismissTerminalError()
+                        }
+                        return recovered
+                      })
+                    }
+                  : undefined
+              }
             />,
             activePane.container,
             `terminal-error-${activePane.id}`
@@ -210,6 +237,9 @@ export function TerminalPaneSurface({
         canContinueAgentSessionInNewSession={contextMenuCanContinueInNewSession}
         onContinueAgentSessionInNewSession={contextMenu.onContinueAgentSessionInNewSession}
         onForkAgentSession={() => void contextMenu.onForkAgentSession()}
+        canToggleNativeChat={contextMenuCanToggleChat}
+        isNativeChatView={contextMenuIsChatView}
+        onToggleNativeChat={handleContextMenuToggleNativeChat}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
         quickCommandHosts={visibleQuickCommandHosts}
         quickCommandHostLoadFailed={quickCommandHostLoadFailed}
@@ -227,6 +257,8 @@ export function TerminalPaneSurface({
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
+        canCopyAgentSessionId={menuAgentSessionId !== null}
+        onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
       />
       <TerminalLinkActionPopover
         request={terminalLinkActionRequest}
@@ -280,6 +312,9 @@ export function TerminalPaneSurface({
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
+        canToggleNativeChat={activePaneCanToggleChat}
+        isChatViewMode={activePaneIsChatLeaf}
+        onToggleNativeChat={handleToggleNativeChat}
         canContinueAgentSessionInNewSession={activePaneCanContinueInNewSession}
         onContinueAgentSessionInNewSession={(pane) =>
           contextMenu.runForPane(pane.id, contextMenu.onContinueAgentSessionInNewSession)

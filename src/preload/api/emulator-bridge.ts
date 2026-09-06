@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const emulatorApi = {
   startFrameStream: (args: {
@@ -95,4 +96,4 @@ export const emulatorApi = {
     ipcRenderer.on('ui:emulatorAutoAttach', listener)
     return () => ipcRenderer.removeListener('ui:emulatorAutoAttach', listener)
   }
-}
+} satisfies PreloadApi['emulator']

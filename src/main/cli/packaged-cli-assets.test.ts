@@ -305,6 +305,63 @@ node -e 'console.log(JSON.stringify({
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  itRunsUnixShell('keeps Linux serve on the CLI entrypoint in node mode', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-serve-'))
+    try {
+      const appDir = join(root, 'Orca')
+      const resourcesDir = join(appDir, 'resources')
+      const launcherDir = join(resourcesDir, 'bin')
+      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+      const launcherPath = join(launcherDir, 'orca-ide')
+      const appRunPath = join(appDir, 'AppRun')
+      const electronPath = join(appDir, 'orca-ide')
+      const cliPath = join(cliDir, 'index.js')
+      const statePath = join(root, 'launch-state.json')
+
+      await mkdir(launcherDir, { recursive: true })
+      await mkdir(cliDir, { recursive: true })
+      await copyFile(linuxLauncherAsset, launcherPath)
+      await writeFile(cliPath, '', 'utf8')
+      // An accidental AppRun handoff would skip CLI validation and fail this contract.
+      await writeFile(
+        appRunPath,
+        `#!/usr/bin/env bash
+printf 'unexpected AppRun handoff\n' >&2
+exit 97
+`,
+        { encoding: 'utf8', mode: 0o755 }
+      )
+      await writeFile(
+        electronPath,
+        `#!/usr/bin/env node
+require('node:fs').writeFileSync(process.env.ORCA_TEST_LAUNCH_STATE, JSON.stringify({
+  argv: process.argv.slice(2),
+  runAsNode: process.env.ELECTRON_RUN_AS_NODE ?? null
+}))
+`,
+        { encoding: 'utf8', mode: 0o755 }
+      )
+
+      await execFileAsync(launcherPath, ['serve', '--recipe-json', '--project-root', '/tmp/repo'], {
+        env: { ...process.env, ORCA_TEST_LAUNCH_STATE: statePath }
+      })
+      const payload = JSON.parse(await readFile(statePath, 'utf8')) as {
+        argv: string[]
+        runAsNode: string | null
+      }
+      expect(payload.argv).toEqual([
+        cliPath,
+        'serve',
+        '--recipe-json',
+        '--project-root',
+        '/tmp/repo'
+      ])
+      expect(payload.runAsNode).toBe('1')
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })
 
 async function waitForListenerState(path: string): Promise<{ pid: number; port: number }> {

@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const starNagApi = {
   onShow: (
@@ -27,4 +28,4 @@ export const starNagApi = {
     ipcRenderer.invoke('star-nag:agentValueMoment'),
   showAgentValueMoment: (): Promise<void> => ipcRenderer.invoke('star-nag:showAgentValueMoment'),
   onboardingCompleted: (): Promise<void> => ipcRenderer.invoke('star-nag:onboardingCompleted')
-}
+} satisfies PreloadApi['starNag']

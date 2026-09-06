@@ -271,12 +271,13 @@ it('rejects completion inspection instead of borrowing the fallback provider', a
   await expect(provider.inspectProcess('unmapped-session')).rejects.toThrow('terminal_gone')
 })
 
-it('preserves unavailable inspection from an owning daemon', async () => {
+it('preserves client-only unverifiable inspection from an owning daemon', async () => {
   const daemon = createDaemonAdapter('daemon', ['daemon-session'])
   vi.mocked(daemon.inspectProcess).mockResolvedValue({
     foregroundProcess: null,
-    hasChildProcesses: true,
-    unavailable: true
+    hasChildProcesses: false,
+    verdict: 'unverifiable',
+    reason: 'old_host'
   })
   const provider = new DegradedDaemonPtyProvider({
     current: daemon,
@@ -287,8 +288,9 @@ it('preserves unavailable inspection from an owning daemon', async () => {
 
   await expect(provider.inspectProcess('daemon-session')).resolves.toEqual({
     foregroundProcess: null,
-    hasChildProcesses: true,
-    unavailable: true
+    hasChildProcesses: false,
+    verdict: 'unverifiable',
+    reason: 'old_host'
   })
 })
 

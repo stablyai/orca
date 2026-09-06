@@ -12,7 +12,7 @@ import type {
   RemoteServerUpdaterSnapshot,
   RemoteServerUpdateSupport
 } from '../../shared/remote-server-update'
-import { getLinuxRootPackageType } from '../linux-update-package-type'
+import { getLinuxPackageType } from '../linux-update-package-type'
 import { createUpdaterDiagnosticLogger } from '../linux-package-install-diagnostic'
 import { registerAutoUpdaterHandlers } from '../updater-events'
 import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
@@ -143,9 +143,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       autoUpdater.disableDifferentialDownload = false
     }
     // Why: supervised serve installs require an explicit handoff; ordinary service quits must never install implicitly.
-    // Root Linux packages also opt out: an implicit quit-time escalation would fail after the UI is gone, leaving no recovery surface.
+    // Only an explicit AppImage/non-root marker may opt into electron-updater's implicit quit install.
     autoUpdater.autoInstallOnAppQuit =
-      this.updateInstallMode === 'interactive' && getLinuxRootPackageType() === null
+      this.updateInstallMode === 'interactive' && getLinuxPackageType() === 'non-root'
     // Why: MacUpdater ignores quitAndInstall arguments; the surviving CLI supervisor must be the only serve relaunch owner.
     autoUpdater.autoRunAppAfterInstall = this.updateInstallMode === 'interactive'
     // Why: our only on-machine window into electron-updater; otherwise an unexpected update-not-available or failed fetch is invisible.

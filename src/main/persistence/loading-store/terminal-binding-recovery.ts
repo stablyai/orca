@@ -1,12 +1,28 @@
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { toRelaySshPtyId } from '../../providers/ssh-pty-id'
+import { toComparableRelaySshPtyId, toRelaySshPtyId } from '../../providers/ssh-pty-id'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 
 import type { StoreRuntimeState } from './store-runtime-state'
 
 type TerminalBindingRecoveryOperationsRuntime = Pick<StoreRuntimeState, 'state'>
+
+/**
+ * `terminated` is the only lease state that withdraws a pane binding. It is the operator-close
+ * state, and the one written after a host-acknowledged stop.
+ *
+ * `expired` is deliberately not death: every writer of it records that the CLIENT lost its route —
+ * a superseded sibling, a recycled relay id, a persistPtyBinding refusal, a failed reattach, a
+ * relay reset — and `docs/reference/ssh-execution-boundary.md` grades all of those `unverifiable`.
+ * Refusing the binding there strands a remote shell that is still running behind a pane that can no
+ * longer reach it. Keeping it authorizes a reattach ATTEMPT, never a respawn: when the shell really
+ * is gone, `attachStablePaneOwner` retires the binding on the relay's own absence answer and falls
+ * through to a fresh spawn.
+ */
+function sshRemotePtyLeaseWithdrawsBinding(lease: SshRemotePtyLease): boolean {
+  return lease.state === 'terminated'
+}
 
 export class TerminalBindingRecoveryOperations {
   constructor(private readonly runtime: TerminalBindingRecoveryOperationsRuntime) {}
@@ -40,15 +56,11 @@ export class TerminalBindingRecoveryOperations {
     const leases = this.runtime.state.sshRemotePtyLeases?.filter((entry) =>
       this.sshRemotePtyLeaseMatchesBinding(entry, binding)
     )
-    return !leases?.some((lease) => lease.state === 'terminated' || lease.state === 'expired')
+    return !leases?.some(sshRemotePtyLeaseWithdrawsBinding)
   }
 
   getRelayPtyIdForSshLeaseComparison(targetId: string, ptyId: string): string {
-    try {
-      return toRelaySshPtyId(targetId, ptyId)
-    } catch {
-      return ptyId
-    }
+    return toComparableRelaySshPtyId(targetId, ptyId)
   }
 
   getRelayPtyIdForSshLeaseStorage(targetId: string, ptyId: string): string {
@@ -91,8 +103,7 @@ export class TerminalBindingRecoveryOperations {
       this.runtime.state.sshRemotePtyLeases?.some(
         (lease) =>
           this.sshRemotePtyLeaseMatchesBinding(lease, binding) &&
-          lease.state !== 'terminated' &&
-          lease.state !== 'expired'
+          !sshRemotePtyLeaseWithdrawsBinding(lease)
       ) ?? false
     )
   }

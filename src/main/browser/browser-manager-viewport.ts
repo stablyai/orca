@@ -30,7 +30,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
     return true
   }
 
-  // Why: emulate viewport via CDP; never detach the debugger here or per-guest overrides (addScriptToEvaluateOnNewDocument) are cleared.
+  // Why: emulate viewport via CDP; never detach the debugger here or the agent bridge's per-guest state is cleared.
   async setViewportOverride(
     browserTabId: string,
     override: BrowserViewportOverride | null

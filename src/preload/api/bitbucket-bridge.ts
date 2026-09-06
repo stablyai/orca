@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const bitbucketApi = {
   connect: (args: {
@@ -12,5 +13,5 @@ export const bitbucketApi = {
 
   disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
 
-  status: (): Promise<unknown> => ipcRenderer.invoke('bitbucket:status')
-}
+  status: () => ipcRenderer.invoke('bitbucket:status')
+} satisfies PreloadApi['bitbucket']

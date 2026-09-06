@@ -2,7 +2,6 @@ import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../pty/codex-shell-launch-preflight'
 import { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from '../bash-prompt-command-composition'
 import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
-import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
 export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
@@ -56,10 +55,6 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\\033]133;A\\007"
-  # Why: emit the shell-ready marker here (not a trailing PROMPT_COMMAND entry)
-  # so a framework that must be last in PROMPT_COMMAND — bash-preexec — is not
-  # displaced by one of Orca's own hooks.
-  [[ -n "$__orca_ready_marker" ]] && printf "${SHELL_READY_MARKER}"
   return "$exit_code"
 }
 __orca_osc133_preexec() {
@@ -117,6 +112,11 @@ __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
+  # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
+  if [[ -n "$__orca_ready_marker" ]]; then
+    PS1="\${PS1-}"'\\[\\e]777;orca-shell-ready\\a\\]'
+    __orca_ready_marker=""
+  fi
 }
 ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
 __orca_prepend_prompt_command "__orca_osc133_precmd"

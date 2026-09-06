@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const minimaxCredentialsApi = {
   getStatus: (): Promise<{ configured: boolean }> =>
@@ -7,4 +8,4 @@ export const minimaxCredentialsApi = {
     ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
   clearCookie: (): Promise<{ configured: boolean }> =>
     ipcRenderer.invoke('minimaxCredentials:clearCookie')
-}
+} satisfies PreloadApi['minimaxCredentials']

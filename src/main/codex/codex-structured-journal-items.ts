@@ -2,7 +2,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
-import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-lifecycle-capacity'
+import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
 import {
   codexItemIdentity,
   codexJournalItem,
@@ -126,19 +126,13 @@ export class CodexJournalItems {
       return CODEX_JOURNAL_ADMITTED
     }
     if (method === 'item/completed') {
-      const admission = appendCodexLifecycleItem(
-        this.deps.sink,
-        identity,
-        translated.body,
-        translated.blobs
-      )
+      const admission = appendCodexLifecycleItem(this.deps.sink, identity, translated.body)
       return admission.accepted ? publishCodexLifecycle(this.deps.sink) : admission
     }
     const options = requiresTerminalSettlement(translated.body) ? { lifecycle: true } : {}
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, translated.blobs, options)
-      : (this.deps.sink.appendItem(identity, translated.body, translated.blobs),
-        CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, options)
+      : (this.deps.sink.appendItem(identity, translated.body), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       return admission
     }

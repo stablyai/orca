@@ -11,6 +11,7 @@ import type { RendererHeapStatistics } from '../../shared/renderer-heap-statisti
 import type { RendererProcessMemory } from '../../shared/renderer-process-memory'
 import { readRendererHeapStatistics } from '../renderer-heap-statistics-reader'
 import { readRendererProcessMemory } from '../renderer-process-memory-reader'
+import type { PreloadApi } from '../api-types'
 
 export const crashReportsApi = {
   getLatestPending: () => ipcRenderer.invoke('crashReports:getLatestPending'),
@@ -28,4 +29,4 @@ export const crashReportsApi = {
     ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
   readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics(),
   readProcessMemory: (): Promise<RendererProcessMemory | null> => readRendererProcessMemory()
-}
+} satisfies PreloadApi['crashReports']

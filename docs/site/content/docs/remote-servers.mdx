@@ -126,6 +126,14 @@ Use `orca serve` when the host should run without the desktop window—for examp
 
 Install Orca and its bundled CLI on the server, then run:
 
+<Callout title="On Linux, start it with orca-ide serve">
+  The Linux CLI is named `orca-ide`, because GNOME Orca's screen reader already owns
+  `/usr/bin/orca`. A packaged `orca serve` does write a bare `orca` into `~/.local/bin`, but only
+  while it is starting, so that shim can never be the command that starts the server. Read
+  `orca serve` as `orca-ide serve` throughout this page when the host is Linux. See
+  [Install → Linux](/docs/install#linux).
+</Callout>
+
 ```bash
 orca serve --pairing-address <server-tailscale-ip-or-hostname>
 ```

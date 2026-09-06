@@ -370,6 +370,56 @@ describe('CliInstaller', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'removes a legacy AppImage wrapper only when it names the current AppImage',
+    async () => {
+      const fixture = await makeFixture()
+      const homePath = join(fixture.root, 'home')
+      const commandDir = join(homePath, '.local', 'bin')
+      const legacyCommandPath = join(commandDir, 'orca')
+      const appImagePath = join(fixture.root, 'Orca.AppImage')
+      const foreignAppImagePath = join(fixture.root, 'Other.AppImage')
+      const cacheRootPath = join(fixture.root, 'cache')
+      await mkdir(commandDir, { recursive: true })
+      await writeFile(appImagePath, '#!/usr/bin/env bash\n', {
+        encoding: 'utf8',
+        mode: 0o755
+      })
+      await writeFile(foreignAppImagePath, '#!/usr/bin/env bash\n', {
+        encoding: 'utf8',
+        mode: 0o755
+      })
+      await writeFile(legacyCommandPath, buildLegacyAppImageCliWrapper(appImagePath), {
+        encoding: 'utf8',
+        mode: 0o755
+      })
+
+      const installer = new CliInstaller({
+        platform: 'linux',
+        isPackaged: true,
+        userDataPath: fixture.userDataPath,
+        appPath: fixture.appPath,
+        appImagePath,
+        appImageCacheRootPath: cacheRootPath,
+        appImageExtractRunner: fakeAppImageExtractRunner,
+        homePath,
+        processPathEnv: commandDir
+      })
+
+      await installer.install()
+      await expect(lstat(legacyCommandPath)).rejects.toMatchObject({ code: 'ENOENT' })
+
+      await writeFile(legacyCommandPath, buildLegacyAppImageCliWrapper(foreignAppImagePath), {
+        encoding: 'utf8',
+        mode: 0o755
+      })
+      await installer.remove()
+      await expect(readFile(legacyCommandPath, 'utf8')).resolves.toBe(
+        buildLegacyAppImageCliWrapper(foreignAppImagePath)
+      )
+    }
+  )
+
   // Why: the privilegedRunner is injectable so the EACCES→osascript path can be
   // exercised in integration without spawning osascript in unit tests.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(

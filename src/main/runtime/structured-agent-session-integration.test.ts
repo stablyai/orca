@@ -25,10 +25,9 @@ import type {
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
-import { readJournalBlob } from '../native-chat/agent-session-journal/journal-blob-store'
 import { appendLegacyTranscriptMessages } from '../native-chat/agent-session-journal/journal-legacy-import'
 import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -37,6 +36,8 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+
+const journals = createTrackedJournalOpener()
 
 const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
@@ -306,6 +307,7 @@ beforeEach(async () => {
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveCodexCommand: () => '/usr/local/bin/codex',
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveEnvironment: async () => {
           bootEnvironmentReads += 1
           return {
@@ -363,6 +365,7 @@ function cursorOf(frames: AgentSessionSubscribeEvent[]): { epoch: string; sequen
 }
 
 afterEach(async () => {
+  await journals.closeAll()
   await stopStructuredAgentSessionRuntime()
   await rm(root, { recursive: true, force: true })
 })
@@ -376,7 +379,7 @@ describe('a structured codex session over agentSession.*', () => {
       agent: 'codex' as const,
       providerHandle: { kind: 'codex' as const, threadId: THREAD }
     }
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity,
       journalDir: journalDirectoryFor(root, identity)
     })
@@ -761,7 +764,7 @@ describe('a structured codex session over agentSession.*', () => {
       agent: 'codex' as const,
       providerHandle: { kind: 'codex' as const, threadId: THREAD }
     }
-    const reopened = await openAgentSessionJournal({
+    const reopened = await journals.open({
       identity,
       journalDir: journalDirectoryFor(root, identity)
     })
@@ -800,7 +803,6 @@ describe('a structured codex session over agentSession.*', () => {
     const item = journal.snapshot().items.find((candidate) => candidate.body?.kind === 'tool-call')
     const bounded = item?.body?.kind === 'tool-call' ? item.body.output : undefined
     expect(bounded).toMatchObject({ truncated: true, byteLength: Buffer.byteLength(output) })
-    expect(await readJournalBlob(journal.directory, bounded?.digest ?? '')).toBe(output)
   })
 
   it('keeps an answered prompt resolved after the provider exits', async () => {

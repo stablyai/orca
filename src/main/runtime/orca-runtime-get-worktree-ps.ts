@@ -1,7 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner } from './orca-runtime-structured-agent-session-recover-tui-owner'
 import { DEFAULT_WORKTREE_PS_LIMIT } from './orca-runtime-postlude'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
+import type { RuntimeWorktreePsResult } from '../../shared/runtime-types'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import { buildRuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import {
@@ -10,19 +10,23 @@ import {
 } from './runtime-worktree-ps-activity'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { Repo } from '../../shared/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { buildWorktreeListingPage } from './worktree-listing-host-scope'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { hostname } from 'node:os'
+import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 
@@ -30,11 +34,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true
-  ): Promise<{
-    worktrees: RuntimeWorktreePsSummary[]
-    totalCount: number
-    truncated: boolean
-  }> {
+  ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
@@ -111,11 +111,9 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
-    return {
-      worktrees: sorted.slice(0, limit),
-      totalCount: sorted.length,
-      truncated: sorted.length > limit
-    }
+    // Why: the same cap starvation as worktree.list — a host whose rows all sort last gets no
+    // page at all, which is indistinguishable from it having no workspaces (#18104).
+    return buildWorktreeListingPage(sorted, limit, this.listKnownExecutionHostIds())
   }
 
   listRepos(): Repo[] {
@@ -149,11 +147,45 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       // in a plain folder lands in the folder rather than failing to resolve.
       resolveWorkspacePath: async (workspaceId) =>
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
-      resolveLaunchArgs: () => this.resolveConfiguredCodexStructuredArgs(),
+      resolveLaunchArgs: (provider) => this.resolveConfiguredStructuredLaunchArgs(provider),
       resolveLaunchEnvOverlay: () =>
         resolveTuiAgentLaunchEnv('codex', this.requireStore().getSettings().agentDefaultEnv),
+      resolveClaudeLaunchEnv: () =>
+        resolveTuiAgentLaunchEnv('claude', this.requireStore().getSettings().agentDefaultEnv),
+      resolveClaudeAuthPolicy: () =>
+        claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
+      // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
+      getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
+  }
+
+  // Why the provider is honoured rather than assumed: Codex app-server flags are not
+  // Claude CLI flags, and prepending them to `claude` makes it exit on an unknown option.
+  protected resolveConfiguredStructuredLaunchArgs(
+    provider: AgentSessionRecord['provider']
+  ): string[] {
+    if (provider === 'claude') {
+      return this.resolveConfiguredClaudeStructuredArgs()
+    }
+    return this.resolveConfiguredCodexStructuredArgs()
+  }
+
+  protected resolveConfiguredClaudeStructuredArgs(): string[] {
+    const settings = this.requireStore().getSettings()
+    const shell = resolveStartupShell(
+      process.platform,
+      resolveLocalWindowsAgentStartupShell({
+        platform: process.platform,
+        isRemote: false,
+        terminalWindowsShell: settings.terminalWindowsShell
+      })
+    )
+    const tokenized = tokenizeStartupCommand(
+      resolveTuiAgentLaunchArgs('claude', settings.agentDefaultArgs),
+      shell
+    )
+    return tokenized.ok ? tokenized.tokens : []
   }
 
   protected resolveConfiguredCodexStructuredArgs(): string[] {
@@ -200,7 +232,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       tuiStatus: (owner) => this.structuredTuiStatus(owner),
       closeTuiOwner: (owner) => this.closeStructuredTuiOwner(owner),
       revealNativeSession: async ({ workspaceId, sessionId, agent = 'codex', adoptedTerminal }) => {
-        if (adoptedTerminal || agent !== 'codex') {
+        if (adoptedTerminal || (agent !== 'codex' && agent !== 'claude')) {
           return
         }
         await this.publishStructuredAgentSessionTab({

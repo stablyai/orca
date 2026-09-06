@@ -1,6 +1,5 @@
 import type { BrowserWindow } from 'electron'
 import type { ElectronAutoUpdater } from '../electron-updater-loader'
-import type { LinuxPackageInstallDiagnostic } from '../linux-package-install-diagnostic'
 import type { LocalBuildFeed } from '../local-builds/local-build-feed-server'
 import type { UpdateSource, UpdateStatus } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
@@ -54,9 +53,6 @@ export abstract class UpdaterState {
   protected nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallInProgress = false
-  // Why: the pre-install digest re-proof streams the whole package, so a second install request can
-  // arrive while it runs — after the quit timer was cleared but before the handoff owns the process.
-  protected linuxPackageRevalidationInFlight = false
   protected updateInstallMode: UpdateInstallMode = 'interactive'
   protected lastInstallDeferralVersion = {
     download: null as string | null,
@@ -66,8 +62,6 @@ export abstract class UpdaterState {
   protected updateInstallCommitted = false
   // Why: recovery must only run after the native quitAndInstall call; pre-native errors must not clear quittingForUpdate or look like install recovery.
   protected quitAndInstallNativeInvoked = false
-  // Why: a synchronous throw out of quitAndInstall ends diagnostic capture before the catch runs, so stash the redacted text for it.
-  protected lastInstallAttemptDiagnostic: LinuxPackageInstallDiagnostic | null = null
   protected persistLastUpdateCheckAt: ((timestamp: number) => void) | null = null
   protected _getLastUpdateCheckAt: (() => number | null) | null = null
   protected backgroundCheckLaunchPending = false

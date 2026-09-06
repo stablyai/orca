@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { ExternalAutomationManagerResult } from '../api-types'
+import type { ExternalAutomationManagerResult, PreloadApi } from '../api-types'
 import type {
   AutomationDispatchRequest,
   AutomationDispatchResult,
@@ -56,4 +56,4 @@ export const automationsApi = {
     ipcRenderer.on('automations:changed', listener)
     return () => ipcRenderer.removeListener('automations:changed', listener)
   }
-}
+} satisfies PreloadApi['automations']

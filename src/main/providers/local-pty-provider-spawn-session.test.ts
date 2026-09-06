@@ -172,8 +172,12 @@ describe('LocalPtyProvider', () => {
 
       expect(second).toEqual({
         id: 'serve-session-1',
+        incarnationId: first.incarnationId,
         pid: 12345,
-        isReattach: true
+        isReattach: true,
+        // Why published: this attach really moved the PTY, unlike daemon/relay attach, so main
+        // must record 120x40 rather than preserving the size it held for the session.
+        attachedGrid: { cols: 120, rows: 40 }
       })
       expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
       expect(spawnMock).not.toHaveBeenCalled()
@@ -217,7 +221,11 @@ describe('LocalPtyProvider', () => {
         attachOnly: true
       })
 
-      expect(result).toMatchObject({ id: first.id, isReattach: true })
+      expect(result).toMatchObject({
+        id: first.id,
+        incarnationId: first.incarnationId,
+        isReattach: true
+      })
       expect(spawnMock).not.toHaveBeenCalled()
     })
 

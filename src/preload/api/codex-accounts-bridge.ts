@@ -1,20 +1,18 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const codexAccountsApi = {
-  list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
-  add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
+  list: () => ipcRenderer.invoke('codexAccounts:list'),
+  add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }) =>
     ipcRenderer.invoke('codexAccounts:add', args),
-  reauthenticate: (args: {
-    accountId: string
-    activateIfSelectionWasEmpty?: boolean
-  }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:reauthenticate', args),
-  remove: (args: { accountId: string }): Promise<unknown> =>
-    ipcRenderer.invoke('codexAccounts:remove', args),
+  reauthenticate: (args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
+    ipcRenderer.invoke('codexAccounts:reauthenticate', args),
+  remove: (args: { accountId: string }) => ipcRenderer.invoke('codexAccounts:remove', args),
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
-  }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:select', args),
+  }) => ipcRenderer.invoke('codexAccounts:select', args),
   listStalePanes: (args: {
     ptyIds: string[]
   }): Promise<
@@ -29,4 +27,4 @@ export const codexAccountsApi = {
     ipcRenderer.invoke('codexAccounts:listRecordedPaneLanes', args),
   forgetStalePanes: (args: { ptyIds: string[] }): Promise<void> =>
     ipcRenderer.invoke('codexAccounts:forgetStalePanes', args)
-}
+} satisfies PreloadApi['codexAccounts']

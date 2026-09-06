@@ -20,10 +20,8 @@ import {
 } from './cli-command-filesystem-transaction'
 import { DEV_LAUNCHER_DIR, LEGACY_LINUX_COMMAND_NAME } from './cli-install-constants'
 import { buildWindowsForwarder } from './cli-dev-launcher'
-import { isMissingError, isPermissionError } from './cli-install-errors'
+import { isPermissionError } from './cli-install-errors'
 import { isPathInsideOrEqual } from './cli-install-path-format'
-
-const STABLE_LEGACY_INSPECTION_ATTEMPTS = 3
 
 export class CliCommandInstallation extends CliCommandInspection {
   protected async installSymlink(status: CliInstallStatus): Promise<void> {
@@ -35,7 +33,9 @@ export class CliCommandInstallation extends CliCommandInspection {
 
     const inspected = await this.inspectStableSymlink(commandPath, launcherPath)
     if (inspected.status.state === 'conflict') {
-      throw new Error(`Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`)
+      throw new Error(
+        `Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`
+      )
     }
     if (inspected.status.state === 'installed') {
       return
@@ -54,7 +54,9 @@ export class CliCommandInstallation extends CliCommandInspection {
 
     if (!(await capturedExpectedEntry(quarantine, inspected))) {
       await this.restoreQuarantinedCommand(quarantine, commandPath)
-      throw new Error(`Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`)
+      throw new Error(
+        `Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`
+      )
     }
 
     try {
@@ -194,34 +196,25 @@ export class CliCommandInstallation extends CliCommandInspection {
       })
     | null
   > {
-    for (let attempt = 0; attempt < STABLE_LEGACY_INSPECTION_ATTEMPTS; attempt += 1) {
-      const before = await readEntrySnapshot(commandPath)
-      if (!before) {
-        return null
-      }
-      let target: string | null = null
-      try {
-        target = before.isSymbolicLink ? await readlink(commandPath) : null
-      } catch (error) {
-        if (isMissingError(error)) {
-          continue
-        }
-        throw error
-      }
-      const after = await readEntrySnapshot(commandPath)
-      if (after && hasSameSnapshot(before, after)) {
-        const resolvedTarget = target ? resolve(dirname(commandPath), target) : null
-        return {
-          fileSha256: null,
-          rawSymlinkTarget: target,
-          snapshot: after,
-          managed: Boolean(
-            resolvedTarget && this.isManagedLegacyLinuxTarget(resolvedTarget, launcherPath)
-          )
-        }
-      }
+    const inspected = await inspectStableCommand(commandPath, () =>
+      this.inspectSymlink(commandPath, launcherPath)
+    )
+    if (!inspected.snapshot) {
+      return null
     }
-    throw new Error(`The command at ${commandPath} changed while Orca inspected it.`)
+    const resolvedTarget = inspected.rawSymlinkTarget
+      ? resolve(dirname(commandPath), inspected.rawSymlinkTarget)
+      : inspected.status.currentTarget
+    return {
+      fileSha256: inspected.fileSha256,
+      rawSymlinkTarget: inspected.rawSymlinkTarget,
+      snapshot: inspected.snapshot,
+      managed: Boolean(
+        resolvedTarget &&
+        (this.isManagedLegacyLinuxTarget(resolvedTarget, launcherPath) ||
+          (this.appImagePath && resolve(resolvedTarget) === resolve(this.appImagePath)))
+      )
+    }
   }
 
   private async restoreQuarantinedCommand(

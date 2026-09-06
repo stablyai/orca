@@ -1,9 +1,5 @@
-import type {
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import {
-  VISIBILITY_INVENTORY_REMOVAL_EPOCH,
   latestReceivedSessionTabsInventoryFrameByEnvironment,
   latestReceivedSessionTabsSnapshotByWorktree,
   latestSessionTabsRemovalFenceByWorktree,
@@ -237,18 +233,6 @@ export function shouldApplyRecoveredWebSessionTabsSnapshot(
   return snapshot.snapshotVersion >= latest.snapshotVersion
 }
 
-export function isTrackedWebSessionTabsOmissionCurrent(
-  environmentId: string,
-  trackedWorktree: TrackedWebSessionTabsWorktree
-): boolean {
-  const key = sessionTabsFreshnessKey(environmentId, trackedWorktree.worktree)
-  const current = latestSessionTabsSnapshotByWorktree.get(key)
-  return (
-    current?.publicationEpoch === trackedWorktree.freshness.publicationEpoch &&
-    current.snapshotVersion === trackedWorktree.freshness.snapshotVersion
-  )
-}
-
 export function recordAcceptedWebSessionTabsEnvironment(
   environmentId: string,
   snapshot: RuntimeMobileSessionTabsResult
@@ -274,48 +258,6 @@ export function removeWebSessionTabsEnvironment(environmentId: string, worktreeI
   } else {
     sessionTabsEnvironmentsByWorktree.delete(worktreeId)
   }
-}
-
-// Why: a tombstone empties the whole worktree mirror — including tabs a still-live sibling environment publishes — so it is a
-// visibility fact, never evidence that the host closed anything.
-export function isWebSessionTabsWorktreeRemovalFrame(
-  snapshot: RuntimeMobileSessionTabsResult
-): boolean {
-  return (
-    (snapshot as { removed?: unknown }).removed === true ||
-    snapshot.publicationEpoch === VISIBILITY_INVENTORY_REMOVAL_EPOCH
-  )
-}
-
-// Why: omission means removal only because `listAllMobileSessionTabs` publishes every worktree it knows unfiltered; if a host ever
-// scopes that map, this turns live worktrees into tombstones, so the fence below is deliberately short-lived.
-export function buildMissingWebSessionTabsRemovals(
-  environmentId: string,
-  trackedWorktrees: readonly TrackedWebSessionTabsWorktree[],
-  publishedWorktrees: ReadonlySet<string>
-): {
-  trackedWorktree: TrackedWebSessionTabsWorktree
-  snapshot: RuntimeMobileSessionTabsRemovedResult
-}[] {
-  return trackedWorktrees
-    .filter(
-      (trackedWorktree) =>
-        !publishedWorktrees.has(trackedWorktree.worktree) &&
-        isTrackedWebSessionTabsOmissionCurrent(environmentId, trackedWorktree)
-    )
-    .map((trackedWorktree) => ({
-      trackedWorktree,
-      snapshot: {
-        worktree: trackedWorktree.worktree,
-        publicationEpoch: VISIBILITY_INVENTORY_REMOVAL_EPOCH,
-        snapshotVersion: 0,
-        removed: true,
-        activeGroupId: null,
-        activeTabId: null,
-        activeTabType: null,
-        tabs: []
-      }
-    }))
 }
 
 export function rememberHostTerminalTabCount(

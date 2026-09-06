@@ -9,33 +9,34 @@ import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../../shared/github/work-item-types'
 import type { GitHubCreateIssueResult } from '../../shared/issue-mutation-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { PreloadApi } from '../api-types'
 
 export const ghPullRequestsAndWorkItemsApi = {
-  viewer: (): Promise<unknown> => ipcRenderer.invoke('gh:viewer'),
-  repoSlug: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
+  viewer: () => ipcRenderer.invoke('gh:viewer'),
+  repoSlug: (args: { repoPath: string; repoId?: string }) =>
     ipcRenderer.invoke('gh:repoSlug', args),
-  repoUpstream: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
+  repoUpstream: (args: { repoPath: string; repoId?: string }) =>
     ipcRenderer.invoke('gh:repoUpstream', args),
   prForBranch: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     branch: string
     linkedPRNumber?: number | null
     fallbackPRNumber?: number | null
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
-  }): Promise<unknown> => ipcRenderer.invoke('gh:prForBranch', args),
-  refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }): Promise<unknown> =>
+  }) => ipcRenderer.invoke('gh:prForBranch', args),
+  refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) =>
     ipcRenderer.invoke('gh:refreshPRNow', args),
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate
     reason: GitHubPRRefreshReason
     priority?: number
-  }): Promise<unknown> => ipcRenderer.invoke('gh:enqueuePRRefresh', args),
+  }) => ipcRenderer.invoke('gh:enqueuePRRefresh', args),
   reportVisiblePRRefreshCandidates: (args: {
     candidates: GitHubPRRefreshCandidate[]
     generation: number
-  }): Promise<unknown> => ipcRenderer.invoke('gh:reportVisiblePRRefreshCandidates', args),
+  }) => ipcRenderer.invoke('gh:reportVisiblePRRefreshCandidates', args),
   onPRRefreshEvent: (callback: (event: GitHubPRRefreshEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, event: GitHubPRRefreshEvent): void =>
       callback(event)
@@ -44,42 +45,42 @@ export const ghPullRequestsAndWorkItemsApi = {
   },
   issue: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     number: number
-  }): Promise<unknown> => ipcRenderer.invoke('gh:issue', args),
+  }) => ipcRenderer.invoke('gh:issue', args),
   workItem: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     number: number
     type?: 'issue' | 'pr'
-  }): Promise<unknown> => ipcRenderer.invoke('gh:workItem', args),
+  }) => ipcRenderer.invoke('gh:workItem', args),
   workItemByOwnerRepo: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     owner: string
     repo: string
     host?: string
     number: number
     type: 'issue' | 'pr'
-  }): Promise<unknown> => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
+  }) => ipcRenderer.invoke('gh:workItemByOwnerRepo', args),
   workItemDetails: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     number: number
     type?: 'issue' | 'pr'
-  }): Promise<unknown> => ipcRenderer.invoke('gh:workItemDetails', args),
+  }) => ipcRenderer.invoke('gh:workItemDetails', args),
   notifyWorkItemMutated: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     type: 'issue' | 'pr'
     number: number
   }): Promise<boolean> => ipcRenderer.invoke('gh:notifyWorkItemMutated', args),
   prFileContents: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     prNumber: number
     prRepo?: GitHubOwnerRepo | null
@@ -88,12 +89,12 @@ export const ghPullRequestsAndWorkItemsApi = {
     status: string
     headSha: string
     baseSha: string
-  }): Promise<unknown> => ipcRenderer.invoke('gh:prFileContents', args),
-  listIssues: (args: { repoPath: string; repoId?: string; limit?: number }): Promise<unknown[]> =>
+  }) => ipcRenderer.invoke('gh:prFileContents', args),
+  listIssues: (args: { repoPath: string; repoId?: string; limit?: number }) =>
     ipcRenderer.invoke('gh:listIssues', args),
   createIssue: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     title: string
     body: string
@@ -104,7 +105,7 @@ export const ghPullRequestsAndWorkItemsApi = {
     ipcRenderer.invoke('gh:countWorkItems', args),
   listWorkItems: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     limit?: number
     query?: string
     page?: number
@@ -113,26 +114,26 @@ export const ghPullRequestsAndWorkItemsApi = {
     ipcRenderer.invoke('gh:listWorkItems', args),
   prChecks: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     prNumber: number
     headSha?: string
     prRepo?: GitHubOwnerRepo | null
     noCache?: boolean
-  }): Promise<unknown[]> => ipcRenderer.invoke('gh:prChecks', args),
+  }) => ipcRenderer.invoke('gh:prChecks', args),
   prCheckDetails: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     checkRunId?: number
     workflowRunId?: number
     checkName?: string
     url?: string | null
     prRepo?: GitHubOwnerRepo | null
-  }): Promise<unknown> => ipcRenderer.invoke('gh:prCheckDetails', args),
+  }) => ipcRenderer.invoke('gh:prCheckDetails', args),
   rerunPRChecks: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     prNumber: number
     headSha?: string
@@ -142,15 +143,15 @@ export const ghPullRequestsAndWorkItemsApi = {
     ipcRenderer.invoke('gh:rerunPRChecks', args),
   prComments: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     prNumber: number
     prRepo?: GitHubOwnerRepo | null
     noCache?: boolean
-  }): Promise<unknown[]> => ipcRenderer.invoke('gh:prComments', args),
+  }) => ipcRenderer.invoke('gh:prComments', args),
   setPRCommentReaction: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     reactionSubjectId: string
     content: GitHubReactionContent
@@ -159,7 +160,7 @@ export const ghPullRequestsAndWorkItemsApi = {
   }): Promise<boolean> => ipcRenderer.invoke('gh:setPRCommentReaction', args),
   resolveReviewThread: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     threadId: string
     resolve: boolean
@@ -167,7 +168,7 @@ export const ghPullRequestsAndWorkItemsApi = {
   }): Promise<boolean> => ipcRenderer.invoke('gh:resolveReviewThread', args),
   setPRFileViewed: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     prNumber: number
     prRepo?: GitHubOwnerRepo | null
@@ -177,17 +178,17 @@ export const ghPullRequestsAndWorkItemsApi = {
   }): Promise<boolean> => ipcRenderer.invoke('gh:setPRFileViewed', args),
   updatePRTitle: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     prNumber: number
     title: string
     prRepo?: GitHubOwnerRepo | null
   }): Promise<boolean> => ipcRenderer.invoke('gh:updatePRTitle', args),
   mergePR: (args: {
     repoPath: string
-    repoId?: string
+    repoId?: string | null
     sourceContext?: TaskSourceContext | null
     prNumber: number
     method?: 'merge' | 'squash' | 'rebase'
     prRepo?: GitHubOwnerRepo | null
   }): Promise<{ ok: true } | { ok: false; error: string }> => ipcRenderer.invoke('gh:mergePR', args)
-}
+} satisfies Partial<PreloadApi['gh']>

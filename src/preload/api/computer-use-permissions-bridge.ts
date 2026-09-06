@@ -1,8 +1,9 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const computerUsePermissionsApi = {
-  getStatus: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:getStatus'),
-  openSetup: (args?: { id?: string }): Promise<unknown> =>
+  getStatus: () => ipcRenderer.invoke('computerUsePermissions:getStatus'),
+  openSetup: (args?: { id?: string }) =>
     ipcRenderer.invoke('computerUsePermissions:openSetup', args),
-  reset: (): Promise<unknown> => ipcRenderer.invoke('computerUsePermissions:reset')
-}
+  reset: () => ipcRenderer.invoke('computerUsePermissions:reset')
+} satisfies PreloadApi['computerUsePermissions']

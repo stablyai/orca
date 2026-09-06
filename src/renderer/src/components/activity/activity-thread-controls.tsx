@@ -1,17 +1,11 @@
 import React from 'react'
-import { MoreVertical } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useNow } from '@/hooks/use-now'
+import { cn } from '@/lib/utils'
+import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { Repo } from '../../../../shared/repo-types'
 import {
@@ -22,78 +16,39 @@ import {
 } from './activity-thread-presentation'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
-export function EventTime({ timestamp }: { timestamp: number }): React.JSX.Element {
+export { ActivityThreadOptionsMenu } from './activity-thread-options-menu'
+
+export function EventTime({
+  timestamp,
+  compact = false
+}: {
+  timestamp: number
+  compact?: boolean
+}): React.JSX.Element {
+  // Why: rows reuse their identity across store writes, so this label can't rely on
+  // incidental re-renders to stay honest; the shared visibility-gated clock re-renders
+  // only this leaf (memo'd rows stay bailed out). 30s cadence matches WorktreeCardAgents.
+  const now = useNow(30_000)
   const absolute = formatAbsoluteDate(timestamp)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           type="button"
-          className="rounded px-1 py-0.5 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          className={cn(
+            'rounded text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+            compact ? 'px-0 py-0 text-[11px] tabular-nums' : 'px-1 py-0.5 text-xs'
+          )}
           aria-label={absolute}
           onClick={(event) => event.stopPropagation()}
         >
-          {formatRelativeTime(timestamp)}
+          {compact ? formatShortTimeAgo(timestamp, now) : formatRelativeTime(timestamp, now)}
         </button>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={6}>
         {absolute}
       </TooltipContent>
     </Tooltip>
-  )
-}
-
-export function ActivityThreadOptionsMenu({
-  compactMode,
-  hasUnreadThreads,
-  onCompactModeChange,
-  onMarkAllThreadsRead
-}: {
-  compactMode: boolean
-  hasUnreadThreads: boolean
-  onCompactModeChange: (compactMode: boolean) => void
-  onMarkAllThreadsRead: () => void
-}): React.JSX.Element {
-  return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          {/* Why: keep Tooltip and Dropdown from composing refs onto the same button (Radix setRef crash loop). */}
-          <span className="inline-flex shrink-0">
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="size-8 shrink-0 border-input bg-transparent p-0 text-muted-foreground shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent dark:hover:text-accent-foreground"
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-                  'Thread list options'
-                )}
-              >
-                <MoreVertical className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {translate('auto.components.activity.ActivityPrototypePage.a472a14700', 'More options')}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="end" sideOffset={6}>
-        <DropdownMenuCheckboxItem
-          checked={compactMode}
-          onCheckedChange={(checked) => onCompactModeChange(checked === true)}
-          onSelect={(event) => event.preventDefault()}
-        >
-          {translate('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onMarkAllThreadsRead} disabled={!hasUnreadThreads}>
-          {translate('auto.components.activity.ActivityPrototypePage.023ff75afe', 'Mark all read')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
 
@@ -150,21 +105,54 @@ export function ThreadAgentStateIndicator({
 }
 
 export function ActivityStatusGroupHeader({
-  group
+  group,
+  collapsed = false,
+  onToggle,
+  className
 }: {
   group: ActivityThreadGroup
+  collapsed?: boolean
+  onToggle?: () => void
+  className?: string
 }): React.JSX.Element {
+  const isInteractive = Boolean(onToggle)
   return (
-    <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-background/95 px-3 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      aria-expanded={isInteractive ? !collapsed : undefined}
+      onClick={onToggle}
+      onKeyDown={
+        isInteractive
+          ? (event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onToggle?.()
+              }
+            }
+          : undefined
+      }
+      className={cn(
+        'group flex h-7 select-none items-center gap-1.5 rounded-md px-1.5 py-1 text-muted-foreground transition-colors',
+        isInteractive && 'cursor-pointer hover:bg-accent/60 hover:text-foreground',
+        className
+      )}
+    >
+      <ChevronDown
+        className={cn(
+          'size-3 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:text-foreground',
+          collapsed && '-rotate-90'
+        )}
+      />
       {group.state ? (
         <span className="inline-flex size-4 shrink-0 items-center justify-center">
           <AgentStateDot state={group.state} size="sm" />
         </span>
       ) : null}
-      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+      <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-[0.05em] text-foreground/80 transition-colors group-hover:text-foreground">
         {group.label}
       </span>
-      <span className="rounded-full border border-border bg-accent px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
+      <span className="rounded-full border border-border/80 bg-muted/80 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums leading-none text-foreground/80 shadow-xs">
         {group.threads.length}
       </span>
     </div>

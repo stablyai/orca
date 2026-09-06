@@ -58,11 +58,12 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [proceedToNativeWindowClose, queueEditorCloseRequests])
 
-  const prevBrowserWebviewIdsRef = useRef<Set<string>>(
-    collectBrowserWebviewIds(
-      useAppStore.getState().browserTabsByWorktree,
-      useAppStore.getState().browserPagesByWorkspace
-    )
+  // Why lazy: a `useRef(expr)` argument re-runs on every render and is thrown away, and this
+  // walks every browser page and tab across all worktrees on a component that renders constantly.
+  const prevBrowserWebviewIdsRef = useRef<Set<string>>(undefined!)
+  prevBrowserWebviewIdsRef.current ??= collectBrowserWebviewIds(
+    useAppStore.getState().browserTabsByWorktree,
+    useAppStore.getState().browserPagesByWorkspace
   )
   useEffect(() => {
     let prevBrowserTabs = useAppStore.getState().browserTabsByWorktree

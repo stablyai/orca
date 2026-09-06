@@ -11,6 +11,7 @@ import type {
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
+import type { PreloadApi } from '../api-types'
 
 export const uiTerminalAndSessionTabsApi = {
   onCreateTerminal: (
@@ -211,4 +212,4 @@ export const uiTerminalAndSessionTabsApi = {
     ipcRenderer.on('ui:openFileFromMobile', listener)
     return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
   }
-}
+} satisfies Partial<PreloadApi['ui']>

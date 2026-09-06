@@ -1,11 +1,13 @@
 import { ipcRenderer } from 'electron'
 import type {
+  AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
+import type { PreloadApi } from '../api-types'
 
 export const agentStatusApi = {
   /** Listen for agent status updates forwarded from native hook receivers. */
@@ -65,6 +67,12 @@ export const agentStatusApi = {
   drop: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:drop', paneKey)
   },
+  dropPersisted: (identity: AgentStatusCacheIdentity): void => {
+    ipcRenderer.send('agentStatus:dropPersisted', identity)
+  },
+  dropPersistedBatch: (identities: readonly AgentStatusCacheIdentity[]): void => {
+    ipcRenderer.send('agentStatus:dropPersistedBatch', identities)
+  },
   reconcileEndedProcess: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
   },
@@ -85,4 +93,4 @@ export const agentStatusApi = {
   }): void => {
     ipcRenderer.send('agentStatus:transferPaneAuthority', args)
   }
-}
+} satisfies PreloadApi['agentStatus']

@@ -5,7 +5,7 @@ import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/comm
 import type { CommitMessageGenerationTarget } from '../../text-generation/commit-message-text-generation'
 import { resolve } from 'node:path'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
-import { listRepoWorktrees } from '../../repo-worktrees'
+import { listRepoWorktreeGraph } from '../../repo-worktrees'
 import { resolveAuthorizedPath } from '../filesystem-auth'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { splitWorktreeId } from '../../../shared/worktree/id'
@@ -77,7 +77,7 @@ async function localRepoOwnsWorktree(
     return true
   }
   try {
-    const worktrees = await listRepoWorktrees(repo)
+    const worktrees = await listRepoWorktreeGraph(repo)
     return worktrees.some((worktree) => candidatePaths.has(comparableLocalPath(worktree.path)))
   } catch {
     return false

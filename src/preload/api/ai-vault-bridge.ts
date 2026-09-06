@@ -10,19 +10,19 @@ import type {
 } from '../../shared/ai-vault-types'
 import type { AiVaultSessionTitlesArgs } from '../../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
+import type { PreloadApi } from '../api-types'
 
 export const aiVaultApi = {
-  listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
-    ipcRenderer.invoke('aiVault:listSessions', args),
-  resolveSessionTitles: (args: AiVaultSessionTitlesArgs): Promise<unknown> =>
+  listSessions: (args?: AiVaultListArgs) => ipcRenderer.invoke('aiVault:listSessions', args),
+  resolveSessionTitles: (args: AiVaultSessionTitlesArgs) =>
     ipcRenderer.invoke('aiVault:resolveSessionTitles', args),
   cancelListSessions: (args: { requestToken: string }): Promise<void> =>
     ipcRenderer.invoke('aiVault:cancelListSessions', args),
-  prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs): Promise<unknown> =>
+  prepareSessionResume: (args: AiVaultPrepareSessionResumeArgs) =>
     ipcRenderer.invoke('aiVault:prepareSessionResume', args),
-  listSubagentSessions: (args: AiVaultSubagentListArgs): Promise<unknown> =>
+  listSubagentSessions: (args: AiVaultSubagentListArgs) =>
     ipcRenderer.invoke('aiVault:listSubagentSessions', args),
-  getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs): Promise<unknown> =>
+  getFirstUserPrompt: (args: AiVaultFirstUserPromptArgs) =>
     ipcRenderer.invoke('aiVault:getFirstUserPrompt', args),
   deleteSession: (args: AiVaultDeleteSessionArgs): Promise<AiVaultDeleteSessionResult> =>
     ipcRenderer.invoke('aiVault:deleteSession', args),
@@ -31,4 +31,4 @@ export const aiVaultApi = {
     ipcRenderer.on('aiVault:windowFocused', listener)
     return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
   }
-}
+} satisfies PreloadApi['aiVault']

@@ -28,6 +28,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
+      mobile_dependencies: ${{ steps.filter.outputs.mobile_dependencies }}
       static_analysis: ${{ steps.filter.outputs.static_analysis }}
       typecheck: ${{ steps.filter.outputs.typecheck }}
       git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
@@ -40,6 +41,10 @@ jobs:
       managed_hook_node18: ${{ steps.filter.outputs.managed_hook_node18 }}
       package: ${{ steps.filter.outputs.package }}
       package_windows: ${{ steps.filter.outputs.package_windows }}
+      e2e_should_run: ${{ steps.e2e_filter.outputs.should_run }}
+      test_files: ${{ steps.e2e_filter.outputs.test_files }}
+      ssh_source_changed: ${{ steps.e2e_filter.outputs.ssh_source_changed }}
+      native_ime_source_changed: ${{ steps.e2e_filter.outputs.native_ime_source_changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -64,6 +69,37 @@ jobs:
           echo "Changed paths:"
           printf '%s\n' "$CHANGED"
           printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs | tee -a "$GITHUB_OUTPUT"
+
+      # Reuse the path-detector checkout instead of queuing another runner.
+      - name: Filter changed E2E specs
+        id: e2e_filter
+        if: github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
+          # Source routes are executable contracts so a test can prove exact
+          # authorities, exclusions, and sentinels without evaluating workflow shell.
+          TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
+          echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
+          # Why a separate signal: the Docker-SSH lane must trigger on SSH source, not on a
+          # spec name surviving in a route's list. Same routes, so the two cannot drift.
+          SSH_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --ssh-source)"
+          echo "ssh_source_changed=$SSH_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "SSH source changed: $SSH_SOURCE_CHANGED"
+          # Why its own signal: the real-IME lane is a whole ibus session, not a spec, so it must
+          # trigger on IME source rather than on a spec name in some route's list.
+          NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
+          echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
+          if [ "$TEST_FILES_JSON" != '[]' ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Changed E2E specs: $TEST_FILES_JSON"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "No changed E2E specs"
+          fi
 
   static_analysis:
     name: static analysis
@@ -94,6 +130,25 @@ jobs:
 
       - name: Enforce type-aware code-quality baseline
         run: pnpm run audit:code-quality:type-aware
+
+      # Why: the changed-code gate lints mobile files too, and its type-aware pass
+      # resolves types from mobile/node_modules. Mobile is a separate pnpm project,
+      # so the root install above leaves it empty and every mobile type degrades to
+      # an `error` type — reported as phantom findings against the changed lines.
+      # Why no --ignore-scripts, unlike the root install: mobile's postinstall generates
+      # the gitignored terminal/mermaid webview engine modules that tracked source imports,
+      # and skipping it degrades those very types the step exists to resolve. The drift
+      # guard mirrors the root install so a stale mobile lockfile fails by name — mobile's
+      # lockfile carries patchedDependencies that a silent rewrite would drop.
+      - name: Install mobile dependencies
+        if: needs.code_paths.outputs.mobile_dependencies == 'true'
+        working-directory: mobile
+        run: |
+          pnpm install --frozen-lockfile
+          if [ "$(git -C "$GITHUB_WORKSPACE" rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
+            git -C "$GITHUB_WORKSPACE" diff --exit-code -- \
+              mobile/package.json mobile/pnpm-lock.yaml mobile/pnpm-workspace.yaml
+          fi
 
       - name: Enforce changed-code quality
         run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
@@ -151,6 +206,12 @@ jobs:
 
       - name: Verify localization catalog
         run: pnpm run verify:localization-catalog
+
+      # Why: the renderer ships only the English entries i18next cannot rebuild
+      # from each call site's inline default, so the generated subset has to
+      # track en.json and those defaults.
+      - name: Verify runtime-required localization catalog
+        run: pnpm run verify:localization-runtime-catalog
 
       # Why: extraction writes sorted evidence to an isolated temporary path,
       # so feature PRs need one normalized AST pass rather than a three-OS matrix.
@@ -354,7 +415,7 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
 
       # Why: the check rebuilds every package in the manifest from a pinned upstream
-      # commit — @xterm/xterm and the two addons, each built twice (once unmodified to
+      # commit — @xterm/xterm and its three addons, each built twice (once unmodified to
       # prove the toolchain still reproduces the published bundles, once patched). Caching
       # the npm metadata and the shallow clone keeps the repeated cost to the builds
       # themselves; the key is the manifest, so a commit, package or toolchain bump
@@ -623,6 +684,8 @@ jobs:
     needs: [code_paths]
     if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
+    # Let the serial Docker gates reach their own deadlines and report cleanup failures.
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -678,13 +741,48 @@ jobs:
       - name: Build native components
         run: pnpm run build:native
 
+      - name: Install Linux package tooling
+        run: sudo apt-get update && sudo apt-get install -y cpio rpm
+
       - name: Package unpacked app
         env:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
-        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage --x64 --publish never
+        # PR artifacts are only inspected locally; gzip avoids release-size xz compression.
+        run: >-
+          pnpm exec electron-builder --config config/electron-builder.config.cjs
+          --linux AppImage deb rpm --x64 --publish never
+          --config.deb.compression=gz --config.rpm.compression=gzip
+
+      - name: Verify root-package marker payloads
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          deb="dist/orca-ide_${version}_amd64.deb"
+          rpm="dist/orca-ide-${version}.x86_64.rpm"
+          test -s "$deb"
+          test -s "$rpm"
+          deb_marker="$(dpkg-deb --fsys-tarfile "$deb" | tar -xOf - ./opt/Orca/resources/package-type)"
+          rpm_marker="$(rpm2cpio "$rpm" | cpio --quiet --extract --to-stdout ./opt/Orca/resources/package-type)"
+          [[ "$deb_marker" == deb ]] || { echo "Expected deb marker, got: $deb_marker"; exit 1; }
+          [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
       - name: Verify headless serve signal shutdown
         run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
+
+      - name: Verify extracted launcher serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint launcher
+
+      - name: Verify AppImage CLI registration and serve signal shutdown
+        run: >-
+          node config/scripts/run-headless-serve-shutdown-docker.mjs
+          --appimage dist/orca-linux.AppImage --entrypoint appimage
+          --signal-target serving-electron --int-delivery pid
+
+      # A default container reproduces the hostile AppImage launch environment.
+      - name: Verify Linux CLI launch contract
+        run: node config/scripts/run-linux-cli-launch-contract-docker.mjs --appimage dist/orca-linux.AppImage
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
@@ -746,8 +844,10 @@ jobs:
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/shared/child-process/windows-command-line.win32.test.ts
           src/main/agent-hooks/windows-hook-payload-delivery.test.ts
+          src/main/agent-hooks/windows-direct-cmd-hook-command.test.ts
           src/main/windows/windows-pty-job.win32.test.ts
           src/main/windows/windows-host-job.win32.test.ts
+          src/main/windows-live-tree-kill.win32.test.ts
           src/main/wsl/wsl-runner.test.ts
           src/main/wsl/wsl-guest-environment.test.ts
           src/main/wsl/wsl-invocation-boundary.test.ts
@@ -757,6 +857,7 @@ jobs:
           src/main/cli/wsl-cli-powershell-boundary.test.ts
           src/main/cursor/hook-service.test.ts
           src/main/orca-profiles/profile-index-store.test.ts
+          src/main/startup/windows-install-dir-acl-repair.win32.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
@@ -800,72 +901,20 @@ jobs:
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
 
-  # Why: PR E2E is advisory and only validates changed specs; scheduled and
-  # release runs retain full-suite coverage.
-  e2e-paths:
-    name: detect changed e2e specs
-    needs: [code_paths]
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.draft != true && needs.code_paths.outputs.should_run == 'true'
-    # Why: detector only needs to read the checkout; do not inherit repo defaults.
-    permissions:
-      contents: read
-    outputs:
-      should_run: ${{ steps.filter.outputs.should_run }}
-      test_files: ${{ steps.filter.outputs.test_files }}
-      ssh_source_changed: ${{ steps.filter.outputs.ssh_source_changed }}
-      native_ime_source_changed: ${{ steps.filter.outputs.native_ime_source_changed }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          # Why blob:none: full history is needed for the merge-base diff, but historical
-          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
-          # few this job actually reads on demand.
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-
-      - name: Filter changed E2E specs
-        id: filter
-        run: |
-          set -euo pipefail
-          BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.event.pull_request.head.sha }}"
-          CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
-          # Source routes are executable contracts so a test can prove exact
-          # authorities, exclusions, and sentinels without evaluating workflow shell.
-          TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
-          echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
-          # Why a separate signal: the Docker-SSH lane must trigger on SSH source, not on a
-          # spec name surviving in a route's list. Same routes, so the two cannot drift.
-          SSH_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --ssh-source)"
-          echo "ssh_source_changed=$SSH_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
-          echo "SSH source changed: $SSH_SOURCE_CHANGED"
-          # Why its own signal: the real-IME lane is a whole ibus session, not a spec, so it must
-          # trigger on IME source rather than on a spec name in some route's list.
-          NATIVE_IME_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --native-ime-source)"
-          echo "native_ime_source_changed=$NATIVE_IME_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
-          echo "Native IME source changed: $NATIVE_IME_SOURCE_CHANGED"
-          if [ "$TEST_FILES_JSON" != '[]' ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "Changed E2E specs: $TEST_FILES_JSON"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "No changed E2E specs"
-          fi
-
   e2e:
     name: e2e
-    needs: e2e-paths
-    if: needs.e2e-paths.outputs.should_run == 'true'
+    needs: code_paths
+    if: needs.code_paths.outputs.e2e_should_run == 'true'
     # Why: reusable e2e.yml only checkouts, builds, and uploads artifacts.
     permissions:
       contents: read
     uses: ./.github/workflows/e2e.yml
     with:
-      test_files: ${{ needs.e2e-paths.outputs.test_files }}
-      ssh_source_changed: ${{ needs.e2e-paths.outputs.ssh_source_changed }}
+      # The synthetic pull-request merge ref can disappear while this reusable
+      # workflow is queued. The head SHA is immutable and works for every PR.
+      ref: ${{ github.event.pull_request.head.sha }}
+      test_files: ${{ needs.code_paths.outputs.test_files }}
+      ssh_source_changed: ${{ needs.code_paths.outputs.ssh_source_changed }}
 
   # Why this is not in verify's needs: it is the first PR-gate run of a harness whose reliability
   # is only known from nightly main runs (20/20 green, 2026-08-09..2026-08-29, p50 3m25s). It
@@ -875,8 +924,8 @@ jobs:
   # require `success || skipped` outside the strict loop — see the note on `e2e`.
   terminal_ime_native:
     name: real IME
-    needs: e2e-paths
-    if: needs.e2e-paths.outputs.native_ime_source_changed == 'true'
+    needs: code_paths
+    if: needs.code_paths.outputs.native_ime_source_changed == 'true'
     # Why: the reusable workflow only checks out, builds, and uploads artifacts.
     permissions:
       contents: read

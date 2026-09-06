@@ -1,4 +1,4 @@
-import { useAppStore } from '../../store'
+import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import type { TerminalPaneCloseController } from './use-terminal-pane-close-actions'
 
@@ -72,6 +72,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     getTabWideAgentHintLeafIdRef,
     handlePaneProcessDied
   } = controller
+  const { consumeSuppressedPtyExit, isPtyShutdownPending } = useTerminalPaneStoreActions()
 
   useTerminalPaneLifecycle({
     tabId,
@@ -111,8 +112,8 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     onPaneProcessDied: handlePaneProcessDied,
     onPtyRecoveryStateRef,
     clearTabPtyId,
-    consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
-    isPtyShutdownPending: useAppStore((store) => store.isPtyShutdownPending),
+    consumeSuppressedPtyExit,
+    isPtyShutdownPending,
     updateTabTitle,
     setRuntimePaneTitle,
     clearRuntimePaneTitle,

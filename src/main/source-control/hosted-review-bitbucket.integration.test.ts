@@ -94,7 +94,11 @@ describe('Bitbucket hosted review integration', () => {
       })
 
       await expect(
-        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/bitbucket' })
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/bitbucket'
+        })
       ).resolves.toEqual({
         provider: 'bitbucket',
         number: 12,
@@ -176,12 +180,20 @@ describe('Bitbucket hosted review integration', () => {
       })
 
       await expect(
-        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/recovery' })
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/recovery'
+        })
       ).rejects.toThrow('HTTP 503')
 
       vi.advanceTimersByTime(60_001)
       await expect(
-        getHostedReviewForBranch({ repoPath, branch: 'refs/heads/feature/recovery' })
+        getHostedReviewForBranch({
+          executionHostId: 'local',
+          repoPath,
+          branch: 'refs/heads/feature/recovery'
+        })
       ).resolves.toMatchObject({
         provider: 'bitbucket',
         number: 13,

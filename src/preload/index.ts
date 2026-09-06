@@ -182,7 +182,7 @@ const api = {
   mobile: mobileApi,
   agentStatus: agentStatusApi,
   speech: speechApi
-}
+} satisfies PreloadApi
 
 if (process.contextIsolated) {
   try {
@@ -193,6 +193,5 @@ if (process.contextIsolated) {
   }
 } else {
   window.electron = electronAPI
-  // @ts-expect-error (define in dts)
   window.api = api
 }

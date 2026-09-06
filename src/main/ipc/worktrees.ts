@@ -17,7 +17,10 @@ import { registerSparseCheckoutCacheInvalidation } from './worktrees/listing/reg
 import { registerWorktreeMetadataHandlers } from './worktrees/metadata/register-worktree-metadata-handlers'
 import { registerWorktreeForgetHandlers } from './worktrees/removal/register-worktree-forget-handlers'
 import { registerWorktreeRemovalHandlers } from './worktrees/removal/register-worktree-removal-handlers'
-import type { WorktreeIpcContext } from './worktrees/worktree-ipc-context'
+import {
+  createWorktreeRemovalRegistry,
+  type WorktreeIpcContext
+} from './worktrees/worktree-ipc-context'
 
 registerDetectedWorktreeScanInvalidation()
 
@@ -66,7 +69,7 @@ export function registerWorktreeHandlers(
     runtime,
     ...(options ? { options } : {}),
     detectedWorktreeCancellations: createSenderScopedRequestCancellations(),
-    worktreeRemovalsInFlight: new Map()
+    worktreeRemovalsInFlight: createWorktreeRemovalRegistry()
   }
 
   // Remove all stale registrations before installing any replacement handler.

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   acknowledgeViewedAgentAttention,
   computeAutoAckTargets,
+  computeLapsedManualUnreadProtections,
   computeViewedAgentCompletionPaneKey,
   resolveAutoAckTabTargets,
   shouldClearViewedAgentWorktreeUnread
@@ -501,5 +502,49 @@ describe('floating workspace auto-ack against the attention dot', () => {
     runAutoAckScan(store, true)
 
     expect(selectFloatingWorkspaceHasUnread(store.getState())).toBe(false)
+  })
+})
+
+describe('computeLapsedManualUnreadProtections', () => {
+  const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+  const otherPaneKey = makePaneKey('tab-1', OTHER_LEAF_ID)
+
+  it('keeps an active pane whose status row has not arrived yet (startup race)', () => {
+    // Persisted UI (manual-unread stamps) hydrates before the agent-status snapshot; a focused
+    // scan in that window must not treat "no row yet" as "the agent moved on".
+    const lapsed = computeLapsedManualUnreadProtections(
+      {
+        agentStatusByPaneKey: {},
+        retainedAgentsByPaneKey: {},
+        manuallyUnreadTurnsByPaneKey: { [paneKey]: 1_000 }
+      },
+      new Set([paneKey])
+    )
+    expect(lapsed).toEqual([])
+  })
+
+  it('lapses a pane that is no longer active or whose agent took a new turn', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(paneKey, { state: 'done', prompt: 'p', agentType: 'claude' })
+    const turn = store.getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
+    const lapsed = computeLapsedManualUnreadProtections(
+      {
+        ...store.getState(),
+        manuallyUnreadTurnsByPaneKey: { [paneKey]: turn - 1, [otherPaneKey]: 5 }
+      },
+      new Set([paneKey])
+    )
+    expect(lapsed.sort()).toEqual([paneKey, otherPaneKey].sort())
+  })
+
+  it('keeps an active pane whose turn is unchanged', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(paneKey, { state: 'done', prompt: 'p', agentType: 'claude' })
+    const turn = store.getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
+    const lapsed = computeLapsedManualUnreadProtections(
+      { ...store.getState(), manuallyUnreadTurnsByPaneKey: { [paneKey]: turn } },
+      new Set([paneKey])
+    )
+    expect(lapsed).toEqual([])
   })
 })

@@ -37,6 +37,7 @@ import type {
   SkillUpdateRun,
   SkillUpdateStartResult
 } from '../../shared/skill-freshness'
+import type { PreloadApi } from '../api-types'
 
 export const skillsApi = {
   discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
@@ -126,4 +127,4 @@ export const skillsApi = {
     ipcRenderer.on('skills:updateRun', listener)
     return () => ipcRenderer.removeListener('skills:updateRun', listener)
   }
-}
+} satisfies PreloadApi['skills']

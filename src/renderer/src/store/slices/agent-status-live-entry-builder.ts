@@ -222,6 +222,11 @@ export function buildAgentStatusLiveEntry(
     workingMode: payload.workingMode,
     prompt: payload.prompt,
     updatedAt,
+    // Why: a writer that carries no observation clock (OSC bytes, launch seeds) is itself
+    // fresh evidence, so it must not inherit the previous row's older observation time.
+    ...(timing?.evidenceObservedAt !== undefined
+      ? { evidenceObservedAt: timing.evidenceObservedAt }
+      : {}),
     stateStartedAt,
     agentType: identity.agentType,
     model:

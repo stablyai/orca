@@ -404,6 +404,46 @@ describe('worktree base directory watcher', () => {
     expect(notifyWorktreesChanged).toHaveBeenCalledOnce()
   })
 
+  it('widens an overflowed local git-common watch to a structural refresh', async () => {
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    const onOverflow = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onOverflow
+
+    const request = {
+      worktreeId: `repo-1::${PROJECT_ROOT}`,
+      worktreePath: PROJECT_ROOT,
+      executionHostId: 'local',
+      branch: 'refs/heads/feature',
+      upstreamName: 'origin/feature'
+    }
+    const resolve = vi.fn(async () => 'refs/remotes/origin/feature')
+    await setWorktreeGitStatusRefWatch(request, resolve)
+
+    onOverflow?.()
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(notifyWorktreesChanged).toHaveBeenCalledWith(expect.anything(), 'repo-1')
+    // Overflow is definite proof of loss, not a possibly-transient error — it
+    // invalidates the cached ref resolution unconditionally.
+    await setWorktreeGitStatusRefWatch(request, resolve)
+    expect(resolve).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not throttle repeated overflow refreshes the way watcher-error refreshes are throttled', async () => {
+    await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
+    const onOverflow = pollerOptions.get(PROJECT_GIT_COMMON_DIR)?.onOverflow
+
+    onOverflow?.()
+    await vi.advanceTimersByTimeAsync(300)
+    onOverflow?.()
+    await vi.advanceTimersByTimeAsync(300)
+
+    // A watcher-error burst within the 60s cooldown window collapses to one
+    // refresh (see "throttles repeated structural refreshes from watcher
+    // failures" above); overflow must not inherit that gate, since a bulk op
+    // can legitimately overflow more than once before it settles.
+    expect(notifyWorktreesChanged).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps linked HEAD and lock metadata structural', async () => {
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
 

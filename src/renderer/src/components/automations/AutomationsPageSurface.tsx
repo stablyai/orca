@@ -1,17 +1,17 @@
 import React, { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
-import { AutomationDeleteDialog, ExternalAutomationDeleteDialog } from './AutomationDeleteDialogs'
 import { AutomationEditorDialog } from './AutomationEditorDialog'
-import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
-import { AutomationsListPanel } from './AutomationsListPanel'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
 import { getAutomationAuthorityTarget } from './automation-host-client'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import { AutomationsPageTopBar } from './AutomationsPageTopBar'
 import type { AutomationsPageController } from './use-automations-page-controller'
-
-/** Renders the page from controller state; host/query side effects stay in hooks. */
+import { AutomationRunsDashboardSurface } from './AutomationRunsDashboardSurface'
+import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import { AutomationsPageDeleteDialogs } from './AutomationsPageDeleteDialogs'
+import { AutomationsPageListPanel } from './AutomationsPageListPanel'
 export function AutomationsPageSurface({
   controller
 }: {
@@ -22,10 +22,10 @@ export function AutomationsPageSurface({
     local,
     list,
     destination,
+    runsDashboard,
     destinationForm,
     setup,
     runPage,
-    sourceAvailability,
     presentation,
     pageRefresh,
     draftEffects,
@@ -41,10 +41,9 @@ export function AutomationsPageSurface({
     repoMap,
     worktreeMap,
     settings,
-    sshConnectionStates,
-    runtimeStatusByEnvironmentId,
     repoForRow,
-    worktreeForRow
+    worktreeForRow,
+    setPendingAutomationRunNavigation
   } = store
   const {
     createOpen,
@@ -63,10 +62,6 @@ export function AutomationsPageSurface({
     externalDeleteTarget,
     externalDeleteConfirmButtonRef,
     setExternalDeleteTarget,
-    listSearchQuery,
-    setListSearchQuery,
-    listFilter,
-    setListFilter,
     relativeNow,
     externalActionKey,
     activePaneTab,
@@ -84,21 +79,14 @@ export function AutomationsPageSurface({
     setEditorNotice,
     editorNoticeHost,
     setEditorNoticeHost,
-    isLoading
+    isLoading,
+    pageView,
+    setPageView,
+    runPageOrigin,
+    setRunPageOrigin
   } = local
-  const {
-    hostCatalog,
-    hasListItems,
-    hasFilteredListItems,
-    isListSearchQueryTooLarge,
-    filteredRows,
-    filteredExternalAutomationEntries,
-    selected,
-    selectedRow,
-    selectedExternal,
-    searchCounts
-  } = list
-
+  const { hostCatalog, hasListItems, selected, selectedRow, selectedExternal } = list
+  const selectedAutomationRunPage = setup.selectedAutomationRunPage
   const selectedRunWorktreeMap = useMemo(() => {
     if (!selectedRow) {
       return worktreeMap
@@ -111,7 +99,6 @@ export function AutomationsPageSurface({
       })
     )
   }, [repoForRow, selectedRow, setup.selectedRuns, worktreeForRow, worktreeMap])
-
   const runSelectedRowAction = (action: (row: AutomationListRow) => void): void => {
     if (selectedRow) {
       action(selectedRow)
@@ -127,32 +114,43 @@ export function AutomationsPageSurface({
       void pageRefresh.refresh()
     }
   }
-  const onListFilterChange = (next: typeof listFilter): void => {
-    setListFilter(next)
-    if ((next.hostStableKeys?.length ?? 0) > 0 && hostCatalog.resolution.effective.kind !== 'all') {
-      // Host narrowing now lives in the Filters menu; clear the old single-host scope.
-      hostCatalog.selectHost({ kind: 'all' })
-    }
+  const openAutomationRunPage = (run: (typeof setup.selectedRuns)[number]): void => {
+    externalActions.openAutomationRunPage(run)
+    setRunPageOrigin('automation')
+    setPageView('run')
   }
-
+  const showAutomationsList = (): void => {
+    setPageView('automations')
+    setSelectedAutomationRunPageId(null)
+    setIsDetailOpen(false)
+    setActivePaneTab('overview')
+  }
+  const showRunsDashboard = (): void => {
+    setPageView('runs')
+    setSelectedAutomationRunPageId(null)
+    setIsDetailOpen(false)
+    setActivePaneTab('overview')
+  }
+  const showAutomationDetails = (): void => {
+    setPageView('automations')
+    setSelectedAutomationRunPageId(null)
+    setIsDetailOpen(true)
+    setActivePaneTab('runs')
+  }
   return (
     <main className="relative flex h-full min-h-0 flex-col bg-background pt-5 text-foreground md:pt-6">
-      <header
-        className="flex shrink-0 items-center px-3 pb-3 md:px-5"
-        style={{ paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))' }}
-      >
-        <h1 className="truncate text-base font-semibold leading-8">
-          {translate('auto.components.automations.AutomationsPage.77c2778945', 'Automations')}
-        </h1>
-      </header>
-
-      <AutomationOwnerConflictNotice
-        notice={ownerAction?.notice ?? null}
-        className="mx-4 mb-2"
-        onRecover={(action) => recoverOwnerAction(action)}
-        onDismiss={() => setOwnerAction(null)}
+      <AutomationsPageTopBar
+        pageView={pageView}
+        isDetailOpen={isDetailOpen}
+        selectedAutomationName={selected?.name}
+        runPageOrigin={runPageOrigin}
+        ownerNotice={ownerAction?.notice ?? null}
+        recoverOwnerAction={recoverOwnerAction}
+        dismissOwnerAction={() => setOwnerAction(null)}
+        showAutomationsList={showAutomationsList}
+        showRunsDashboard={showRunsDashboard}
+        showAutomationDetails={showAutomationDetails}
       />
-
       <AutomationEditorDialog
         open={createOpen}
         isEditing={editingAutomationId !== null}
@@ -210,45 +208,62 @@ export function AutomationsPageSurface({
         onApplyTemplate={draftEffects.applyTemplateToDraft}
         onSave={() => void saveAutomation()}
       />
-
-      <AutomationDeleteDialog
+      <AutomationsPageDeleteDialogs
         deleteTarget={deleteTarget?.automation ?? null}
         dontAskDeleteAgain={dontAskDeleteAgain}
-        confirmButtonRef={deleteConfirmButtonRef}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteTarget(null)
-            setDontAskDeleteAgain(false)
-          }
-        }}
-        onDontAskAgainToggle={() => setDontAskDeleteAgain((previous) => !previous)}
-        onCancel={() => {
-          setDeleteTarget(null)
-          setDontAskDeleteAgain(false)
-        }}
-        onConfirm={() => void managementActions.confirmDeleteAutomation()}
-      />
-
-      <ExternalAutomationDeleteDialog
+        deleteConfirmButtonRef={deleteConfirmButtonRef}
+        setDeleteTarget={setDeleteTarget}
+        setDontAskDeleteAgain={setDontAskDeleteAgain}
+        confirmDeleteAutomation={() => void managementActions.confirmDeleteAutomation()}
         externalDeleteTarget={externalDeleteTarget}
-        confirmButtonRef={externalDeleteConfirmButtonRef}
-        onOpenChange={(open) => {
-          if (!open) {
-            setExternalDeleteTarget(null)
-          }
-        }}
-        onCancel={() => setExternalDeleteTarget(null)}
-        onConfirm={() => void externalActions.confirmDeleteExternalAutomation()}
+        externalDeleteConfirmButtonRef={externalDeleteConfirmButtonRef}
+        setExternalDeleteTarget={setExternalDeleteTarget}
+        confirmDeleteExternalAutomation={() =>
+          void externalActions.confirmDeleteExternalAutomation()
+        }
       />
-
-      {isLoading && !hasListItems ? (
+      {pageView === 'runs' ? (
+        <AutomationRunsDashboardSurface
+          rows={list.visibleRows}
+          entries={runsDashboard.entries}
+          failures={runsDashboard.failures}
+          loading={runsDashboard.loading}
+          hasMore={runsDashboard.hasMore}
+          onLoadMore={runsDashboard.loadMore}
+          now={relativeNow}
+          onRefresh={() => setRunHistoryReloadToken((token) => token + 1)}
+          setPageView={setPageView}
+          setRunPageOrigin={setRunPageOrigin}
+          selectAutomationRow={list.selectAutomationRow}
+          setPendingAutomationRunNavigation={setPendingAutomationRunNavigation}
+          setIsDetailOpen={setIsDetailOpen}
+        />
+      ) : pageView === 'run' && selectedAutomationRunPage ? (
+        <AutomationRunDetailsPage
+          automation={selected}
+          run={selectedAutomationRunPage}
+          relativeNow={relativeNow}
+          workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
+          viewState={runPage.selectedAutomationRunPageViewState}
+          canRerun={runPage.canRerunSelectedAutomationRunPage}
+          isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
+          onRerun={() =>
+            runSelectedRowAction((row) =>
+              runActions.rerunAutomationRun(row, selectedAutomationRunPage)
+            )
+          }
+          onOpenWorkspace={() => openRunWorkspace(selectedAutomationRunPage)}
+          onBack={runPageOrigin === 'automation' ? showAutomationDetails : showRunsDashboard}
+        />
+      ) : pageView === 'run' ? (
+        <AutomationsPageSkeleton />
+      ) : isLoading && !hasListItems ? (
         <AutomationsPageSkeleton />
       ) : isDetailOpen && (selected || selectedExternal) ? (
         <AutomationsDetailPane
           selected={selected}
           selectedExternal={selectedExternal}
           selectedExternalRunPage={selectedExternalRunPage}
-          selectedAutomationRunPage={setup.selectedAutomationRunPage}
           selectedRuns={setup.selectedRuns}
           selectedRunsNotice={setup.selectedRunsNotice}
           selectedHostEntry={destination.rowRecoveryHost(selectedRow?.key ?? null)}
@@ -279,17 +294,10 @@ export function AutomationsPageSurface({
           }
           hostLabelById={presentation.hostLabelById}
           selectedRunNowAvailability={presentation.selectedRunNowAvailability}
-          selectedAutomationRunPageWorkspaceDisplay={
-            runPage.selectedAutomationRunPageWorkspaceDisplay
-          }
-          selectedAutomationRunPageViewState={runPage.selectedAutomationRunPageViewState}
-          canRerunSelectedAutomationRunPage={runPage.canRerunSelectedAutomationRunPage}
-          isSelectedAutomationRunPageRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
           worktreeMap={selectedRunWorktreeMap}
           fetchExternalAutomationRuns={externalActions.fetchExternalAutomationRuns}
           onActivePaneTabChange={setActivePaneTab}
           onClearExternalRunPage={() => setSelectedExternalRunPage(null)}
-          onClearAutomationRunPage={() => setSelectedAutomationRunPageId(null)}
           requestExternalAction={externalActions.requestExternalAction}
           openExternalRunPage={externalActions.openExternalRunPage}
           openEditExternalDialog={editorActions.openEditExternalDialog}
@@ -299,11 +307,7 @@ export function AutomationsPageSurface({
           requestDeleteAutomation={() =>
             runSelectedRowAction(managementActions.requestDeleteAutomation)
           }
-          rerunAutomationRun={(_automation, run) =>
-            runSelectedRowAction((row) => runActions.rerunAutomationRun(row, run))
-          }
-          openRunWorkspace={openRunWorkspace}
-          openAutomationRunPage={externalActions.openAutomationRunPage}
+          openAutomationRunPage={openAutomationRunPage}
           onBackToList={() => {
             setIsDetailOpen(false)
             setSelectedAutomationRunPageId(null)
@@ -312,64 +316,9 @@ export function AutomationsPageSurface({
           }}
         />
       ) : (
-        <AutomationsListPanel
-          hasListItems={hasListItems}
-          hasFilteredListItems={hasFilteredListItems}
-          listSearchQuery={listSearchQuery}
-          isListSearchQueryTooLarge={isListSearchQueryTooLarge}
-          onListSearchQueryChange={setListSearchQuery}
-          listFilter={listFilter}
-          onListFilterChange={onListFilterChange}
-          searchCounts={{
-            ...searchCounts,
-            hostRowCount: list.visibleRows.length + list.externalAutomationEntries.length
-          }}
-          hostCatalog={hostCatalog}
-          externalManagersUncheckedNotice={list.externalManagersUncheckedNotice}
-          onSelectHost={hostCatalog.selectHost}
-          onRecoverHost={(action, entry) => {
-            hostCatalog.recover(action, entry)
-            if (action === 'retry') {
-              void pageRefresh.refresh()
-            }
-          }}
-          filteredRows={filteredRows}
-          filteredExternalAutomationEntries={filteredExternalAutomationEntries}
-          selectedRowKey={selectedRow?.key ?? null}
-          selectedExternalKey={local.selectedExternalKey}
-          selectedExternal={selectedExternal}
-          relativeNow={relativeNow}
-          repoMap={repoMap}
-          worktreeMap={worktreeMap}
-          repoForRow={repoForRow}
-          worktreeForRow={worktreeForRow}
-          projectHostSetups={projectHostSetups}
-          sshConnectionStates={sshConnectionStates}
-          runtimeStatusByEnvironmentId={runtimeStatusByEnvironmentId}
-          hostTargetFor={destination.automationHostTargetFor}
-          automationSourceHostAvailabilityByRowKey={
-            sourceAvailability.automationSourceHostAvailabilityByRowKey
-          }
-          hostLabelById={presentation.hostLabelById}
-          isActionEnabled={destination.isAutomationRowActionEnabled}
-          externalActionKey={externalActionKey}
-          selectAutomationRow={list.selectAutomationRow}
-          selectExternalKey={local.selectExternalKey}
-          setActivePaneTab={setActivePaneTab}
-          runNow={(row) => void runActions.runNow(row)}
-          openEditDialog={(row) => void editorActions.openEditDialog(row)}
-          toggleAutomation={(row) => void managementActions.toggleAutomation(row)}
-          requestDeleteAutomation={managementActions.requestDeleteAutomation}
-          requestExternalAction={externalActions.requestExternalAction}
-          openEditExternalDialog={editorActions.openEditExternalDialog}
-          openCreateDialog={editorActions.openCreateDialog}
-          canCreateAutomation={destination.canCreateAutomation}
+        <AutomationsPageListPanel
+          controller={controller}
           onOpenDetail={() => setIsDetailOpen(true)}
-          onRefresh={() => {
-            hostCatalog.refreshHosts()
-            void pageRefresh.refresh()
-          }}
-          isRefreshing={isLoading}
         />
       )}
     </main>

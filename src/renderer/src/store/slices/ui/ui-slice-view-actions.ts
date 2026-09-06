@@ -4,9 +4,6 @@ import { rewindHistoryIndexPastView } from '../worktree-nav-history'
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     openActivityPage: () => {
-      if (get().settings?.experimentalActivity !== true) {
-        return
-      }
       set((state) => ({
         activeView: 'activity',
         previousViewBeforeActivity:

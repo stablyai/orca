@@ -96,6 +96,21 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
 
+  /** Single host writer for mobile session snapshots; versions are total-order stamps. */
+  protected storeMobileSessionSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const snapshotVersion = existing
+      ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
+      : snapshot.snapshotVersion
+    const stamped =
+      snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
+    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    return stamped
+  }
+
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
@@ -123,6 +138,20 @@ export class OrcaRuntimeWithRuntimeId {
       rendererVersion: number
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
+    }
+  >()
+
+  // Why: worktree ids are path-derived and get recreated, so a renderer frame
+  // that raced the delete must be rejected by the removed occupant's identity.
+  // Entries are cleared once a snapshot carrying the successor's instanceId
+  // is accepted; identity-less frames are fenced by renderer generation.
+  protected readonly removedMobileSessionWorktreeIds = new Map<
+    string,
+    {
+      removedPublicationEpoch?: string
+      // Why: a rejected frame is still "published" on the renderer side, so a
+      // later unchanged-list mention must not spiral into resync requests.
+      rejectedPublication?: boolean
     }
   >()
 

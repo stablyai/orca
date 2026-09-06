@@ -143,8 +143,11 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
 
     pendingRevealWorktree: null,
     pendingRevealSidebarRow: null,
+    // Why sidebarBody here: the worktree list (and its reveal consumer) is unmounted while the
+    // Agents body is showing, so a reveal that does not switch bodies silently no-ops.
     revealWorktreeInSidebar: (worktreeId, options) =>
       set({
+        sidebarBody: 'workspaces',
         pendingRevealWorktree: {
           worktreeId,
           ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
@@ -155,6 +158,7 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
       }),
     revealSidebarRow: (rowKey, options) =>
       set({
+        sidebarBody: 'workspaces',
         pendingRevealSidebarRow: {
           rowKey,
           behavior: options?.behavior ?? 'smooth',

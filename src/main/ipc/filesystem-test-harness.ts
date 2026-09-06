@@ -107,6 +107,7 @@ export const gitStatusModuleMock = {
 export const gitIgnoredPathsMock = { checkIgnoredPaths: checkIgnoredPathsMock }
 
 export const gitWorktreeMock = {
+  listWorktreeGraph: listWorktreesMock,
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock
 }

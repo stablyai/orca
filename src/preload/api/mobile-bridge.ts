@@ -3,6 +3,7 @@ import type { MobileRelayStatus } from '../../shared/mobile-relay-status'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
+import type { PreloadApi } from '../api-types'
 
 export const mobileApi = {
   listNetworkInterfaces: (): Promise<{
@@ -92,4 +93,4 @@ export const mobileApi = {
     ipcRenderer.on('mobile:unpairedDeviceAuthFailure', listener)
     return () => ipcRenderer.removeListener('mobile:unpairedDeviceAuthFailure', listener)
   }
-}
+} satisfies PreloadApi['mobile']

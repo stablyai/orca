@@ -4,6 +4,7 @@ import type {
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
+import type { PreloadApi } from '../api-types'
 
 export const shellApi = {
   openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
@@ -38,4 +39,4 @@ export const shellApi = {
 
   copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
     ipcRenderer.invoke('shell:copyFile', args)
-}
+} satisfies PreloadApi['shell']

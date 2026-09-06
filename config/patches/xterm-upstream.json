@@ -60,6 +60,33 @@
       ]
     },
     {
+      "name": "@xterm/addon-search",
+      "version": "0.17.0-beta.300",
+      "packageDir": "addons/addon-search",
+      "$note": "No versionStampFile: publish.js stamps the addon's package.json, which overlayBuildOutput never patches. The root `build` is required because the addon's own tsgo -p . has empty files/include and only project references, so it emits nothing on its own; `package` is the addon's webpack (CJS half) and the root `esbuild-package` emits the ESM half.",
+      "$upstream": "Submitted as https://github.com/xtermjs/xterm.js/pull/6149 (issue #6148). Once a release ships it, bump the addon and drop this entry.",
+      "sourcePatch": "config/patches/xterm-src/@xterm__addon-search@0.17.0-beta.300.src.patch",
+      "patch": "config/patches/@xterm__addon-search@0.17.0-beta.300.patch",
+      "generatedPaths": ["lib/"],
+      "build": [
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "build"]
+        },
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "package"]
+        },
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "esbuild-package"]
+        }
+      ]
+    },
+    {
       "name": "@xterm/addon-serialize",
       "version": "0.15.0-beta.300",
       "packageDir": "addons/addon-serialize",

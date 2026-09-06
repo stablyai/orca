@@ -655,6 +655,8 @@ describe('Electron runtime package contract', () => {
     expect(releaseWindowsRunStep.run).toContain(
       'pnpm run --if-present test:e2e:windows-fresh-startup-golden'
     )
+    expect(releaseWindowsRunStep.run).not.toContain('test:e2e:workspace-session-golden')
+    expect(releaseWindowsRunStep.run).not.toContain('test:e2e:source-control-golden')
     expect(releaseEvidenceJob['continue-on-error']).toBe(true)
     expect(
       releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()

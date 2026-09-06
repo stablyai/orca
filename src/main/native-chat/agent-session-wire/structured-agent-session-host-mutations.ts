@@ -74,7 +74,12 @@ export function sendStructuredAgentSessionTurn(
 export function cancelStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope; turnId: string }
+  params: {
+    envelope: AgentSessionMutationEnvelope
+    turnId: string
+    scope?: 'background-tasks'
+    taskId?: string
+  }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   return mutate(context, caller, params.envelope, cancelPlan(params))
 }

@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { JiraProjectStatusOrder } from '../../shared/jira-types'
+import type { PreloadApi } from '../api-types'
 
 export const jiraApi = {
   connect: (args: {
@@ -7,30 +8,21 @@ export const jiraApi = {
     email: string
     apiToken: string
     authType?: 'cloud' | 'server'
-  }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('jira:connect', args),
+  }) => ipcRenderer.invoke('jira:connect', args),
 
   disconnect: (args?: { siteId?: string }): Promise<void> =>
     ipcRenderer.invoke('jira:disconnect', args),
 
-  selectSite: (args: { siteId: string }): Promise<unknown> =>
-    ipcRenderer.invoke('jira:selectSite', args),
+  selectSite: (args: { siteId: string }) => ipcRenderer.invoke('jira:selectSite', args),
 
-  status: (): Promise<unknown> => ipcRenderer.invoke('jira:status'),
+  status: () => ipcRenderer.invoke('jira:status'),
 
-  readStatus: (): Promise<unknown> => ipcRenderer.invoke('jira:readStatus'),
+  readStatus: () => ipcRenderer.invoke('jira:readStatus'),
 
-  testConnection: (args?: {
-    siteId?: string
-  }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('jira:testConnection', args),
+  testConnection: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:testConnection', args),
 
-  searchIssues: (args: {
-    jql: string
-    limit?: number
-    siteId?: string
-    requestId?: string
-  }): Promise<unknown[]> => ipcRenderer.invoke('jira:searchIssues', args),
+  searchIssues: (args: { jql: string; limit?: number; siteId?: string; requestId?: string }) =>
+    ipcRenderer.invoke('jira:searchIssues', args),
   cancelSearchIssues: (args: { requestId: string }): Promise<void> =>
     ipcRenderer.invoke('jira:cancelSearchIssues', args),
 
@@ -38,16 +30,12 @@ export const jiraApi = {
     filter?: 'assigned' | 'reported' | 'all' | 'done'
     limit?: number
     siteId?: string
-  }): Promise<unknown[]> => ipcRenderer.invoke('jira:listIssues', args),
+  }) => ipcRenderer.invoke('jira:listIssues', args),
 
-  getIssue: (args: { key: string; siteId?: string }): Promise<unknown> =>
-    ipcRenderer.invoke('jira:getIssue', args),
+  getIssue: (args: { key: string; siteId?: string }) => ipcRenderer.invoke('jira:getIssue', args),
 
-  lookupIssueSummary: (args: {
-    key: string
-    siteId: string
-    requestId?: string
-  }): Promise<unknown> => ipcRenderer.invoke('jira:lookupIssueSummary', args),
+  lookupIssueSummary: (args: { key: string; siteId: string; requestId?: string }) =>
+    ipcRenderer.invoke('jira:lookupIssueSummary', args),
   cancelIssueSummary: (args: { requestId: string }): Promise<void> =>
     ipcRenderer.invoke('jira:cancelIssueSummary', args),
 
@@ -75,36 +63,28 @@ export const jiraApi = {
   }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('jira:addIssueComment', args),
 
-  issueComments: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
+  issueComments: (args: { key: string; siteId?: string }) =>
     ipcRenderer.invoke('jira:issueComments', args),
 
-  listProjects: (args?: { siteId?: string }): Promise<unknown[]> =>
-    ipcRenderer.invoke('jira:listProjects', args),
+  listProjects: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:listProjects', args),
 
-  listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }): Promise<unknown[]> =>
+  listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) =>
     ipcRenderer.invoke('jira:listIssueTypes', args),
 
-  listCreateFields: (args: {
-    projectIdOrKey: string
-    issueTypeId: string
-    siteId?: string
-  }): Promise<unknown[]> => ipcRenderer.invoke('jira:listCreateFields', args),
+  listCreateFields: (args: { projectIdOrKey: string; issueTypeId: string; siteId?: string }) =>
+    ipcRenderer.invoke('jira:listCreateFields', args),
 
-  listPriorities: (args?: { siteId?: string }): Promise<unknown[]> =>
-    ipcRenderer.invoke('jira:listPriorities', args),
+  listPriorities: (args?: { siteId?: string }) => ipcRenderer.invoke('jira:listPriorities', args),
 
-  listAssignableUsers: (args: {
-    key: string
-    query?: string
-    siteId?: string
-  }): Promise<unknown[]> => ipcRenderer.invoke('jira:listAssignableUsers', args),
-  searchUsers: (args?: { query?: string; siteId?: string }): Promise<unknown[]> =>
+  listAssignableUsers: (args: { key: string; query?: string; siteId?: string }) =>
+    ipcRenderer.invoke('jira:listAssignableUsers', args),
+  searchUsers: (args?: { query?: string; siteId?: string }) =>
     ipcRenderer.invoke('jira:searchUsers', args),
 
-  listTransitions: (args: { key: string; siteId?: string }): Promise<unknown[]> =>
+  listTransitions: (args: { key: string; siteId?: string }) =>
     ipcRenderer.invoke('jira:listTransitions', args),
   getProjectStatusOrder: (args: {
     projectKey: string
     siteId?: string
   }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
-}
+} satisfies PreloadApi['jira']
