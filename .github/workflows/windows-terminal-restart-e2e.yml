@@ -57,7 +57,7 @@ jobs:
         run: >-
           pnpm run test:e2e
           tests/e2e/golden-tab-bar-agent-launch.spec.ts
-          --grep "under cmd.exe"
+          --repeat-each=3
           --workers=1
 
       - name: Inspect remaining temporary repo handles
