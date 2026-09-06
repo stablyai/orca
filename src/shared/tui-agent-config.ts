@@ -15,6 +15,8 @@ export type DraftPasteReadySignal =
   | 'render-cursor-after-bracketed-paste'
   | 'grok-composer-prompt'
 
+export type AgentPostPasteSubmitInput = 'enter' | 'ctrl-enter'
+
 export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
 export type TuiAgentConfig = {
@@ -42,8 +44,10 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number
-  /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
+  /** Delay before one extra blind submit input, for agents that render their composer before submit is live (codex). */
   submitRetryDelayMs?: number
+  /** Submit input Orca sends after a post-ready paste; defaults to plain Enter. */
+  postPasteSubmitInput?: AgentPostPasteSubmitInput
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
   /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
@@ -101,7 +105,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt',
     draftPasteReadyTimeoutMs: 20_000,
-    submitRetryDelayMs: 1200
+    submitRetryDelayMs: 1200,
+    postPasteSubmitInput: 'ctrl-enter'
   },
   autohand: {
     detectCmd: 'autohand',

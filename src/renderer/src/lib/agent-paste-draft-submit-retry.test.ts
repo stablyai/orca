@@ -56,9 +56,11 @@ const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything
 const RENDER_QUIET_MS = 1500
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
+const ENTER_SUBMIT_INPUT = '\r'
+const CODEX_SUBMIT_INPUT = '\x1b[13;5u'
 const CODEX_SUBMIT_RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
 
-describe('post-paste submit retry Enter', () => {
+describe('post-paste submit retry input', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.stubGlobal('window', {
@@ -93,23 +95,27 @@ describe('post-paste submit retry Enter', () => {
     vi.useRealTimers()
   })
 
-  it('sends one retry Enter after the configured gap for agents that can eat the first Enter', async () => {
+  it('sends one retry submit input after the configured gap for agents that can eat the first submit', async () => {
     const promise = startCodexSubmit()
     await signalCodexComposerReady()
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
 
-    expect(enterWrites()).toHaveLength(1)
+    expect(submitWrites(CODEX_SUBMIT_INPUT)).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(CODEX_SUBMIT_RETRY_DELAY_MS - 1)
-    expect(enterWrites()).toHaveLength(1)
+    expect(submitWrites(CODEX_SUBMIT_INPUT)).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(1)
 
     await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(2)
-    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
+    expect(submitWrites(CODEX_SUBMIT_INPUT)).toHaveLength(2)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(
+      {},
+      'pty-1',
+      CODEX_SUBMIT_INPUT
+    )
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('sends exactly one Enter for agents without a submit retry delay', async () => {
+  it('sends exactly one Enter for agents without a configured submit input or retry delay', async () => {
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -123,11 +129,11 @@ describe('post-paste submit retry Enter', () => {
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
 
     await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(1)
+    expect(submitWrites(ENTER_SUBMIT_INPUT)).toHaveLength(1)
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('holds the PTY input transaction across the retry Enter', async () => {
+  it('holds the PTY input transaction across the retry submit input', async () => {
     const writes: string[] = []
     testState.sendRuntimePtyInputVerified.mockImplementation(
       async (_settings: unknown, _ptyId: string, data: string) => {
@@ -146,17 +152,17 @@ describe('post-paste submit retry Enter', () => {
       'y'.repeat(AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + 1)
     )
     await flushMicrotasks(10)
-    expect(writes).toEqual([PASTED_ISSUE_URL, '\r'])
+    expect(writes).toEqual([PASTED_ISSUE_URL, CODEX_SUBMIT_INPUT])
 
     await vi.advanceTimersByTimeAsync(CODEX_SUBMIT_RETRY_DELAY_MS)
     await expect(promise).resolves.toBe(true)
     await expect(competing).resolves.toBe(true)
 
-    expect(writes.slice(0, 3)).toEqual([PASTED_ISSUE_URL, '\r', '\r'])
+    expect(writes.slice(0, 3)).toEqual([PASTED_ISSUE_URL, CODEX_SUBMIT_INPUT, CODEX_SUBMIT_INPUT])
     expect(writes.at(3)).toBe('\x1b[200~')
   })
 
-  it('keeps a successful submit successful when the retry Enter is rejected', async () => {
+  it('keeps a successful submit successful when the retry input is rejected', async () => {
     testState.sendRuntimePtyInputVerified
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(true)
@@ -167,12 +173,12 @@ describe('post-paste submit retry Enter', () => {
     await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS + CODEX_SUBMIT_RETRY_DELAY_MS)
 
     await expect(promise).resolves.toBe(true)
-    expect(enterWrites()).toHaveLength(2)
+    expect(submitWrites(CODEX_SUBMIT_INPUT)).toHaveLength(2)
   })
 })
 
-function enterWrites(): unknown[][] {
-  return testState.sendRuntimePtyInputVerified.mock.calls.filter((call) => call[2] === '\r')
+function submitWrites(input: string): unknown[][] {
+  return testState.sendRuntimePtyInputVerified.mock.calls.filter((call) => call[2] === input)
 }
 
 function startCodexSubmit(): Promise<boolean> {
