@@ -1,5 +1,9 @@
 import { colors } from '../../theme/mobile-theme'
-import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'
+import {
+  TERMINAL_NERD_FONT_CSS,
+  XTERM_ENGINE_CSS,
+  XTERM_ENGINE_JS
+} from '../terminal-webview-engine.generated'
 
 export const TERMINAL_HTML_DOCUMENT_SHELL = `<!DOCTYPE html>
 <html>
@@ -15,6 +19,7 @@ window.onerror = function(msg) {
 };
 </script>
 <style>${XTERM_ENGINE_CSS}</style>
+<style>${TERMINAL_NERD_FONT_CSS}</style>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
