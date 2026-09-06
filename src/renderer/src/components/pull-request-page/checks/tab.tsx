@@ -21,7 +21,7 @@ import {
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control-ai'
 import type {

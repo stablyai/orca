@@ -1,7 +1,7 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AppState } from '@/store/types'
 import { getConnectionId } from '@/lib/connection-context'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {

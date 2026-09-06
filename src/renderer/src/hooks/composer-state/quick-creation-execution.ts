@@ -51,7 +51,7 @@ import {
   resolveAgentLaunchRoute
 } from '@/lib/agent-launch-routing'
 import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
