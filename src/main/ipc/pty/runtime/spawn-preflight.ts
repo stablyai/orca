@@ -39,6 +39,8 @@ import { resolveLocalWindowsTerminalRuntimeOptions } from '../../../../shared/lo
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../local-project-runtime-resolution'
 import { resolvePathEnvKey } from '../../../pty/windows-environment-path'
 import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
+import { classifyAgentEnvSecretReferences } from '../../../../shared/secret-reference'
+import { SecretReferenceResolutionError } from '../../../secret-references/resolve-agent-env-secret-references'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/codex-state-db-backfill-recovery'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import type { RuntimePtySpawnState } from './spawn-state'
@@ -47,6 +49,10 @@ export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
 ): Promise<PtySpawnResult | null> {
   const args = ctx.args
+  const secretReferences = classifyAgentEnvSecretReferences(args.env ?? {})
+  if (secretReferences.kind === 'invalid') {
+    throw new SecretReferenceResolutionError(secretReferences.keys[0], 'invalid-reference')
+  }
   if (!ctx.preAdoptedStablePane) {
     const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
     if (pathUsable) {

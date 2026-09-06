@@ -14,7 +14,24 @@ import { assertSpawnReplyWasLive } from '../pane/agent-session-owners'
 import { deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import type { PtySpawnOptions } from '../../../providers/types'
+import { resolveSecretReferencesIntoChildEnv } from '../../../secret-references/resolve-agent-env-secret-references'
 import type { PtyIpcSpawnState } from './spawn-state'
+
+async function resolveChildSpawnOptions(ctx: PtyIpcSpawnState): Promise<PtySpawnOptions> {
+  if (!ctx.spawnOptions.env) {
+    return ctx.spawnOptions
+  }
+  const childEnv = { ...ctx.spawnOptions.env }
+  await resolveSecretReferencesIntoChildEnv({
+    childEnv,
+    target: {
+      ssh: Boolean(ctx.args.connectionId),
+      wsl: ctx.expectedWslDistro !== null
+    }
+  })
+  return { ...ctx.spawnOptions, env: childEnv }
+}
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
@@ -46,13 +63,17 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
+    const spawnOptions =
+      ctx.preAdoptedStablePane || stablePaneOwnerCandidate
+        ? ctx.spawnOptions
+        : await resolveChildSpawnOptions(ctx)
     const stablePaneSpawn = ctx.preAdoptedStablePane
       ? ctx.preAdoptedStablePane
       : await spawnForStablePane({
           runtime: ctx.deps.runtime,
           store: ctx.deps.store,
           provider: ctx.provider,
-          spawnOptions: ctx.spawnOptions,
+          spawnOptions,
           owner: stablePaneOwnerCandidate,
           worktreeId: args.worktreeId,
           connectionId: args.connectionId,

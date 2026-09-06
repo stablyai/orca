@@ -32,6 +32,7 @@ import {
 import type { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import type { CodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import type { deliverCodexServerRequest } from './codex-structured-provider-events'
+import { resolveSecretReferencesIntoChildEnv } from '../secret-references/resolve-agent-env-secret-references'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -101,12 +102,23 @@ export async function acquireCodexStructuredSession(input: {
         throw new AgentSessionPreSpawnError(error)
       })
     acquisitions.assertCurrent(sessionId, attempt)
+    const childEnv = { ...launch.env }
+    await resolveSecretReferencesIntoChildEnv({
+      childEnv,
+      target: { ssh: false, wsl: false }
+    }).catch((error: unknown) => {
+      throw new AgentSessionPreSpawnError(error)
+    })
+    acquisitions.assertCurrent(sessionId, attempt)
     const connection = await open(
       {
         command: launch.command,
         args: launch.args,
         cwd: launch.cwd,
-        env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken)
+        env: buildCodexStructuredChildEnvironment(
+          { ...launch, env: childEnv },
+          acquireInput.spawnToken
+        )
       },
       {
         onNotification: (method, params) =>

@@ -3,6 +3,7 @@ import {
   resolveLocalWindowsTerminalRuntimeOptions
 } from '../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import { classifyAgentEnvSecretReferences } from '../../../../shared/secret-reference'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
 import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../../../claude-accounts/environment'
 import { mintPtySessionId } from '../../../daemon/pty-session-id'
@@ -18,9 +19,14 @@ import {
 } from '../host-env/fresh-spawn-routing'
 import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
 import type { PtyIpcSpawnState } from './spawn-state'
+import { SecretReferenceResolutionError } from '../../../secret-references/resolve-agent-env-secret-references'
 
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
+  const secretReferences = classifyAgentEnvSecretReferences(args.env ?? {})
+  if (secretReferences.kind === 'invalid') {
+    throw new SecretReferenceResolutionError(secretReferences.keys[0], 'invalid-reference')
+  }
   // Establish daemon identity before the first await so hidden delivery is gated before byte zero.
   ctx.provider = getProvider(args.connectionId)
   ctx.isDaemonHostSpawn =

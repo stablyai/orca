@@ -7,6 +7,7 @@ import {
   getTuiAgentDefaultArgs,
   getTuiAgentDefaultEnv
 } from '../../../shared/tui-agent-launch-defaults'
+import { classifyAgentEnvSecretReferences } from '../../../shared/secret-reference'
 import {
   decideInitialAgentTabViewMode,
   type NativeChatLaunchPromptDelivery
@@ -47,15 +48,36 @@ export function hasExplicitTuiLaunchCustomization(
   const configuredArgs = settings?.agentDefaultArgs?.[agent]
   const configuredEnv = settings?.agentDefaultEnv?.[agent]
   const defaultEnv = getTuiAgentDefaultEnv(agent)
-  const envIsCustomized =
-    configuredEnv !== undefined &&
-    (Object.keys(configuredEnv).length !== Object.keys(defaultEnv).length ||
-      Object.entries(configuredEnv).some(([key, value]) => defaultEnv[key] !== value))
+  const envIsCustomized = hasNonReferenceEnvironmentCustomization(configuredEnv, defaultEnv)
   return (
     Boolean(settings?.agentCmdOverrides?.[agent]?.trim()) ||
     hasExplicitTuiAgentArgs(agent, configuredArgs) ||
     envIsCustomized
   )
+}
+
+function hasNonReferenceEnvironmentCustomization(
+  configuredEnv: Readonly<Record<string, string>> | undefined,
+  defaultEnv: Readonly<Record<string, string>>
+): boolean {
+  if (configuredEnv === undefined) {
+    return false
+  }
+  const classification = classifyAgentEnvSecretReferences(configuredEnv)
+  if (classification.kind === 'invalid') {
+    throw new Error(`Invalid secret reference for ${classification.keys[0]}`)
+  }
+  const referenceKeys = new Set(
+    classification.kind === 'valid' ? classification.entries.map(({ key }) => key) : []
+  )
+  if (
+    Object.entries(configuredEnv).some(
+      ([key, value]) => defaultEnv[key] !== value && !referenceKeys.has(key)
+    )
+  ) {
+    return true
+  }
+  return Object.entries(defaultEnv).some(([key, value]) => configuredEnv[key] !== value)
 }
 
 export function hasSemanticallyNonEmptyAgentArgs(value: string | null | undefined): boolean {

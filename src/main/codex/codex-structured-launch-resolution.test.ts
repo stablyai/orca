@@ -165,4 +165,38 @@ describe('codex structured launch resolution', () => {
       })({ identity: IDENTITY })
     ).rejects.toThrow('workspace-1 is gone')
   })
+
+  it.each([
+    ['malformed', { POSTHOG_READ_ONLY: 'doppler-ref://lets-tango/dev_ops/POSTHOG_READ_ONLY?raw' }],
+    ['HOME', { HOME: 'doppler-ref://lets-tango/dev_ops/HOME' }],
+    ['CODEX_HOME', { CODEX_HOME: 'doppler-ref://lets-tango/dev_ops/CODEX_HOME' }]
+  ])('rejects %s secret references before command resolution', async (_name, environment) => {
+    const resolveCommand = vi.fn(() => '/usr/local/bin/codex')
+    const resolveLaunch = createCodexStructuredLaunchResolver({
+      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      resolveWorkspacePath: async () => '/repos/workspace-1',
+      resolveCommand,
+      resolveEnvironment: async () => environment
+    })
+
+    await expect(resolveLaunch({ identity: IDENTITY })).rejects.toMatchObject({
+      code: 'invalid-reference'
+    })
+    expect(resolveCommand).not.toHaveBeenCalled()
+  })
+
+  it('keeps valid reference strings in the launch record', async () => {
+    const reference = 'doppler-ref://lets-tango/dev_ops/POSTHOG_READ_ONLY'
+    const resolveLaunch = createCodexStructuredLaunchResolver({
+      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      resolveWorkspacePath: async () => '/repos/workspace-1',
+      resolveCommand: () => '/usr/local/bin/codex',
+      resolveEnvironment: async () => ({ PATH: '/usr/bin', POSTHOG_READ_ONLY: reference })
+    })
+
+    await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
+      env: { PATH: '/usr/bin', POSTHOG_READ_ONLY: reference },
+      codexHome: '/home/work/.codex'
+    })
+  })
 })

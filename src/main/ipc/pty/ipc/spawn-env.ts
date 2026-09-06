@@ -6,6 +6,7 @@ import {
 import { isRemoteAgentHooksEnabled } from '../../../../shared/agent-hook-relay'
 import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
+import { classifyAgentEnvSecretReferences } from '../../../../shared/secret-reference'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
 import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
@@ -20,9 +21,14 @@ import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
+import { SecretReferenceResolutionError } from '../../../secret-references/resolve-agent-env-secret-references'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
+  const secretReferences = classifyAgentEnvSecretReferences(args.env ?? {})
+  if (secretReferences.kind === 'invalid') {
+    throw new SecretReferenceResolutionError(secretReferences.keys[0], 'invalid-reference')
+  }
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }

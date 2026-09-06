@@ -181,6 +181,69 @@ describe('resolveAgentLaunchRoute', () => {
     ).toBe(false)
   })
 
+  it('keeps approved secret-reference-only environments structured-compatible', () => {
+    expect(
+      hasExplicitTuiLaunchCustomization(
+        {
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: {
+            codex: {
+              POSTHOG_READ_ONLY: 'doppler-ref://lets-tango/dev_ops/POSTHOG_READ_ONLY',
+              LINEAR_API_KEY: 'doppler-ref://lets-tango/dev_ops/LINEAR_API_KEY'
+            }
+          }
+        },
+        'codex'
+      )
+    ).toBe(false)
+  })
+
+  it('keeps other environment customization on the terminal-backed route', () => {
+    expect(
+      hasExplicitTuiLaunchCustomization(
+        {
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: {
+            codex: {
+              POSTHOG_READ_ONLY: 'doppler-ref://lets-tango/dev_ops/POSTHOG_READ_ONLY',
+              CODEX_PROFILE: 'review'
+            }
+          }
+        },
+        'codex'
+      )
+    ).toBe(true)
+  })
+
+  it('fails closed for malformed and mismatched reference candidates', () => {
+    expect(() =>
+      hasExplicitTuiLaunchCustomization(
+        {
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: {
+            codex: { POSTHOG_READ_ONLY: 'doppler-ref://lets-tango/dev_ops/POSTHOG_READ_ONLY?raw' }
+          }
+        },
+        'codex'
+      )
+    ).toThrow('Invalid secret reference for POSTHOG_READ_ONLY')
+    expect(() =>
+      hasExplicitTuiLaunchCustomization(
+        {
+          agentCmdOverrides: {},
+          agentDefaultArgs: {},
+          agentDefaultEnv: {
+            codex: { LINEAR_API_KEY: 'doppler-ref://lets-tango/dev_ops/POSTHOG_READ_ONLY' }
+          }
+        },
+        'codex'
+      )
+    ).toThrow('Invalid secret reference for LINEAR_API_KEY')
+  })
+
   it('does not classify the resolved default TUI args as customization', () => {
     expect(hasExplicitTuiAgentArgs('codex', '--dangerously-bypass-approvals-and-sandbox')).toBe(
       false

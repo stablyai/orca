@@ -9,9 +9,11 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { classifyAgentEnvSecretReferences } from '../../shared/secret-reference'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
+import { SecretReferenceResolutionError } from '../secret-references/resolve-agent-env-secret-references'
 import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
 
 export type CodexStructuredLaunchResolverDeps = {
@@ -50,8 +52,21 @@ export function createCodexStructuredLaunchResolver(
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
     const environment = await deps.resolveEnvironment?.()
-    const pathEnv = environment?.PATH ?? environment?.Path ?? null
-    const homePath = environment?.HOME ?? environment?.USERPROFILE
+    const definedEnvironment = environment
+      ? Object.fromEntries(
+          Object.entries(environment).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string'
+          )
+        )
+      : undefined
+    const referenceClassification = definedEnvironment
+      ? classifyAgentEnvSecretReferences(definedEnvironment)
+      : { kind: 'none' as const }
+    if (referenceClassification.kind === 'invalid') {
+      throw new SecretReferenceResolutionError(referenceClassification.keys[0], 'invalid-reference')
+    }
+    const pathEnv = definedEnvironment?.PATH ?? definedEnvironment?.Path ?? null
+    const homePath = definedEnvironment?.HOME ?? definedEnvironment?.USERPROFILE
     const command = (deps.resolveCommand ?? resolveCodexCommand)({
       pathEnv,
       ...(homePath ? { homePath } : {})
@@ -64,7 +79,7 @@ export function createCodexStructuredLaunchResolver(
       args,
       cwd: await deps.resolveWorkspacePath(location.workspaceId),
       codexHome: accountHome.path,
-      ...(environment ? { env: { ...environment } as Record<string, string> } : {}),
+      ...(definedEnvironment ? { env: definedEnvironment } : {}),
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId,

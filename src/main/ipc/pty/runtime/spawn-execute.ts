@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
 import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { tryGetProviderForAgentSessionOwner } from '../provider/registry'
@@ -17,6 +17,22 @@ import {
   isSshPtyIdentityMismatchError
 } from '../../../providers/ssh-pty-errors'
 import type { RuntimePtySpawnState } from './spawn-state'
+import { resolveSecretReferencesIntoChildEnv } from '../../../secret-references/resolve-agent-env-secret-references'
+
+async function resolveChildSpawnOptions(ctx: RuntimePtySpawnState): Promise<PtySpawnOptions> {
+  if (!ctx.spawnOptions.env) {
+    return ctx.spawnOptions
+  }
+  const childEnv = { ...ctx.spawnOptions.env }
+  await resolveSecretReferencesIntoChildEnv({
+    childEnv,
+    target: {
+      ssh: Boolean(ctx.args.connectionId),
+      wsl: ctx.expectedWslDistro !== null
+    }
+  })
+  return { ...ctx.spawnOptions, env: childEnv }
+}
 
 export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise<void> {
   const args = ctx.args
@@ -82,7 +98,8 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         surface: args.agentSessionEnsure.surface,
         spawn: async () => {
           assertClientStillConnected()
-          providerResult = await ctx.provider.spawn(ctx.spawnOptions)
+          const spawnOptions = await resolveChildSpawnOptions(ctx)
+          providerResult = await ctx.provider.spawn(spawnOptions)
           ctx.rejectedRegistrationCandidate = providerResult
           // Why: a successful lower-owner return proves physical work committed even if admission sees an early exit.
           ctx.reportPtySpawnCommitted()
@@ -127,13 +144,17 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
       ctx.result.agentSessionEnsure = ensured
     } else {
       assertClientStillConnected()
+      const spawnOptions =
+        ctx.preAdoptedStablePane || stablePaneOwnerCandidate
+          ? ctx.spawnOptions
+          : await resolveChildSpawnOptions(ctx)
       const stablePaneSpawn = ctx.preAdoptedStablePane
         ? ctx.preAdoptedStablePane
         : await spawnForStablePane({
             runtime: ctx.deps.runtime,
             store: ctx.deps.store,
             provider: ctx.provider,
-            spawnOptions: ctx.spawnOptions,
+            spawnOptions,
             owner: stablePaneOwnerCandidate,
             worktreeId: args.worktreeId,
             connectionId: args.connectionId,
