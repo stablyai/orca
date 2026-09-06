@@ -267,6 +267,9 @@ export async function rePairPairedElectronClient(
       if (!store) {
         throw new Error('Paired desktop store is unavailable')
       }
+      if (!(await store.getState().setActiveRuntimeEnvironmentPreference(null))) {
+        throw new Error('Paired desktop could not select local before replacing the HUB')
+      }
       await window.api.runtimeEnvironments.remove({ selector: currentEnvironmentId })
       const result = await window.api.runtimeEnvironments.addFromPairingCode({
         name,
