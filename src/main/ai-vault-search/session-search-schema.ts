@@ -2,11 +2,13 @@ import { rmSync } from 'node:fs'
 import SyncDatabase from '../sqlite/sync-database'
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 4
+export const SESSION_SEARCH_SCHEMA_VERSION = 5
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
-const TOKENIZER = `tokenize="unicode61 tokenchars '_.-/'"`
+// Why: `+` keeps `C++` a token of its own instead of the letter `c`; `#` is
+// left out so `#123` still answers a search for `123`.
+const TOKENIZER = `tokenize="unicode61 tokenchars '_.-/+'"`
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);

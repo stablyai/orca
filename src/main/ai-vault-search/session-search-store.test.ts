@@ -251,4 +251,22 @@ describe('SessionSearchStore', () => {
     expect(store.search({ query: 'cli.mjs' }).hits).toHaveLength(1)
     expect(store.search({ query: 'foo-bar' }).hits).toHaveLength(1)
   })
+
+  it('keeps C++ a token of its own, apart from the letter C', async () => {
+    const root = await makeTempDir()
+    const cpp = join(root, 'aaaaaaaa-0000-4000-8000-0000000000c1.jsonl')
+    const plainC = join(root, 'aaaaaaaa-0000-4000-8000-0000000000c2.jsonl')
+    await writeFile(
+      cpp,
+      `${userRecord(0, 'port the parser to C++ today', 'aaaaaaaa-0000-4000-8000-0000000000c1')}\n`
+    )
+    await writeFile(
+      plainC,
+      `${userRecord(0, 'port the parser to plain C today', 'aaaaaaaa-0000-4000-8000-0000000000c2')}\n`
+    )
+    await parse(cpp)
+    await parse(plainC)
+    const hits = store.search({ query: 'C++' }).hits
+    expect(hits.map((hit) => hit.sessionId)).toEqual(['aaaaaaaa-0000-4000-8000-0000000000c1'])
+  })
 })

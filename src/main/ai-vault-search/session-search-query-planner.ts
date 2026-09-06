@@ -1,7 +1,7 @@
 import { identifierShadowTerms } from './session-search-identifier-split'
 
-// Tokens exactly as the unicode61 tokenizer with `_ . - /` tokenchars emits them.
-const INDEX_TOKEN = /[A-Za-z0-9_./-]+/g
+// Tokens exactly as the unicode61 tokenizer with `_ . - / +` tokenchars emits them.
+const INDEX_TOKEN = /[A-Za-z0-9_./+-]+/g
 const STOP_WORDS = new Set(
   (
     'a an and are as at be but by for from how i if in into is it its of on or that the this to ' +
