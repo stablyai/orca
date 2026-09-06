@@ -71,6 +71,9 @@ async function findProjectSetups(
     return byId
   }
   const named = await findProjectsByName(client, projectSelector)
+  if (named === null) {
+    return legacyNameMatchedSetups(ready, projectSelector)
+  }
   if (named.length > 1) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -82,21 +85,37 @@ async function findProjectSetups(
     )
   }
   const matchedId = named[0]?.id
-  return ready.filter((candidate) =>
-    matchedId === undefined
-      ? matchesName(candidate.displayName, projectSelector)
-      : candidate.projectId === matchedId
-  )
+  return matchedId === undefined
+    ? []
+    : ready.filter((candidate) => candidate.projectId === matchedId)
 }
 
-async function findProjectsByName(client: RuntimeClient, selector: string): Promise<Project[]> {
+// Why: a server predating project.list still answers projectHostSetup.list, and those rows carry
+// a display name of their own. It is the repo's name rather than the project's, so this is the
+// weaker match — reachable only on that older server.
+function legacyNameMatchedSetups(
+  ready: readonly ProjectHostSetup[],
+  projectSelector: string
+): ProjectHostSetup[] {
+  return ready.filter((candidate) => matchesName(candidate.displayName, projectSelector))
+}
+
+/** Null when the server has no project.list at all, as opposed to no project by that name. */
+async function findProjectsByName(
+  client: RuntimeClient,
+  selector: string
+): Promise<Project[] | null> {
   try {
     const result = await client.call<{ projects: Project[] }>('project.list')
     return result.result.projects.filter((project) => matchesName(project.displayName, selector))
-  } catch {
-    // A server without project.list still answers projectHostSetup.list, and those rows carry a
-    // display name of their own — fall back to it rather than failing the whole command.
-    return []
+  } catch (error) {
+    // Why: only a version gap justifies the weaker fallback. Swallowing everything reported a
+    // network blip or a permission error as "no project by that name", which then surfaced as
+    // "Project is not set up on the selected host" for a project that exists and is set up.
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      return null
+    }
+    throw error
   }
 }
 
