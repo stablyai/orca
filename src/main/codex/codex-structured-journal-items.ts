@@ -60,7 +60,10 @@ export class CodexJournalItems {
     return this.details.get(codexStructuredItemKey(threadId, itemId)) ?? null
   }
 
-  handle(event: { threadId: string; method: string; params: unknown }): CodexItemTranslation {
+  handle(
+    event: { threadId: string; method: string; params: unknown },
+    source: 'live' | 'history' = 'live'
+  ): CodexItemTranslation {
     const params =
       typeof event.params === 'object' && event.params !== null
         ? (event.params as Record<string, unknown>)
@@ -71,6 +74,10 @@ export class CodexJournalItems {
     }
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
     const identity = this.identityFor(event.threadId, turnId, item)
+    // Count echoes for stable resume ordinals, but user bubbles come from submissions.
+    if (source === 'live' && item.type === 'userMessage') {
+      return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
+    }
     const translated = codexJournalItem(item)
     const command = readCodexJournalString(item, 'command')
     if (command) {

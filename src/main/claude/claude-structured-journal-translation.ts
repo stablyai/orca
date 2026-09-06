@@ -130,7 +130,15 @@ export function createClaudeJournalTranslator(
       return false
     }
     let changed = false
-    const body = claudeMessageBody(envelope)
+    // User bubbles belong to the submitted message; SDK user frames carry echoes and tool results.
+    const outputEnvelope =
+      envelope.role === 'user'
+        ? {
+            ...envelope,
+            content: envelope.content.filter((part) => claudeRecord(part)?.type === 'tool_result')
+          }
+        : envelope
+    const body = claudeMessageBody(outputEnvelope)
     // The final frame of a streamed block lands on the block's identity, not its own uuid.
     const identity =
       (body && envelope.role === 'assistant' ? streamedBlocks.reconcile(envelope) : null) ??
@@ -140,7 +148,7 @@ export function createClaudeJournalTranslator(
       deps.sink.appendItem(identity, body)
       changed = true
     }
-    for (const tool of claudeToolUses(envelope)) {
+    for (const tool of claudeToolUses(outputEnvelope)) {
       tools.set(tool.id, tool)
       deps.sink.appendItem(
         claudeToolIdentity(envelope.sessionId, tool.id),
@@ -162,7 +170,7 @@ export function createClaudeJournalTranslator(
       tools.delete(result.toolUseId)
       changed = true
     }
-    const thinking = claudeThinkingText(envelope)
+    const thinking = claudeThinkingText(outputEnvelope)
     if (thinking) {
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
         kind: 'status',
@@ -170,7 +178,7 @@ export function createClaudeJournalTranslator(
       })
       changed = true
     }
-    const unhandledContent = envelope.content.filter((part) => !isModeledClaudeContent(part))
+    const unhandledContent = outputEnvelope.content.filter((part) => !isModeledClaudeContent(part))
     for (const part of unhandledContent) {
       const partType = claudeText(claudeRecord(part)?.type) ?? 'unknown'
       providerFallback.append(

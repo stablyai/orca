@@ -190,7 +190,17 @@ function upsertItem(
   // so letting a revision advance it makes the row jump past everything that
   // landed in between — the provider's own echo of a send revises the submission
   // row, which relocated the user's bubble below later rows.
-  state.items.set(itemId, { ...next, sequence: existing.sequence, observedAt: existing.observedAt })
+  const submitted =
+    existing.body.kind === 'message' &&
+    existing.body.role === 'user' &&
+    parseAgentJournalItemKey(itemId)?.provider === 'orca'
+  state.items.set(itemId, {
+    ...next,
+    // Provider history may normalize text or omit local attachments from the original send.
+    body: submitted ? existing.body : next.body,
+    sequence: existing.sequence,
+    observedAt: existing.observedAt
+  })
   state.tombstones.delete(itemId)
 }
 
