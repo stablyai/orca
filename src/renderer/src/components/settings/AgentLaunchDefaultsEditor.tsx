@@ -4,6 +4,8 @@ import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { SettingsSegmentedControl } from './SettingsFormControls'
+import type { AgentPostPasteSubmitInput } from '../../../../shared/tui-agent-post-paste-submit'
 
 export function AgentCommandOverrideInput({
   defaultCmd,
@@ -211,6 +213,44 @@ export function AgentDefaultEnvInput({
           )}
         </p>
       )}
+    </div>
+  )
+}
+
+export function AgentPostPasteSubmitInputControl({
+  value,
+  onSave
+}: {
+  value: AgentPostPasteSubmitInput
+  onSave: (value: AgentPostPasteSubmitInput) => void
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs text-muted-foreground">
+        {translate('auto.components.settings.AgentsPane.postPasteSubmit', 'Paste-submit key')}
+      </span>
+      <SettingsSegmentedControl<AgentPostPasteSubmitInput>
+        value={value}
+        onChange={onSave}
+        ariaLabel={translate(
+          'auto.components.settings.AgentsPane.postPasteSubmit',
+          'Paste-submit key'
+        )}
+        size="sm"
+        options={[
+          {
+            value: 'enter',
+            label: translate('auto.components.settings.AgentsPane.postPasteSubmitEnter', 'Enter')
+          },
+          {
+            value: 'ctrl-enter',
+            label: translate(
+              'auto.components.settings.AgentsPane.postPasteSubmitCtrlEnter',
+              'Ctrl+Enter'
+            )
+          }
+        ]}
+      />
     </div>
   )
 }

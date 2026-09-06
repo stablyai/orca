@@ -2,6 +2,10 @@ import { useAppStore } from '@/store'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { bindPanePtyId, getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import {
+  registerPtyKittyKeyboardModeTracker,
+  unregisterPtyKittyKeyboardModeTracker
+} from '../terminal-pty-kitty-keyboard-flags'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status-types'
 import { isCtrlCKeyEvent, isPlainEscapeKeyEvent } from '../agent-interrupt-inference'
 import { createAgentCompletionCoordinator } from '../agent-completion-coordinator'
@@ -85,6 +89,11 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.visibleRemoteViewportClaimPtyId = null
   session.pendingVisibleRemoteViewportClaim = false
   session.setPanePtyFitBinding = (ptyId: string): void => {
+    const previousPtyId = session.activePanePtyBinding
+    if (previousPtyId && previousPtyId !== ptyId) {
+      unregisterPtyKittyKeyboardModeTracker(previousPtyId, session.kittyKeyboardModes)
+    }
+    registerPtyKittyKeyboardModeTracker(ptyId, session.kittyKeyboardModes)
     bindPanePtyId(session.pane.id, ptyId, session.deps.tabId)
     session.pane.container.dataset.ptyId = ptyId
     if (
@@ -163,6 +172,12 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
   session.clearPanePtyFitBinding = (): void => {
     // Why: fit bindings live in a module-level map, so pane teardown must
     // clear them explicitly instead of relying on DOM removal.
+    if (session.activePanePtyBinding) {
+      unregisterPtyKittyKeyboardModeTracker(
+        session.activePanePtyBinding,
+        session.kittyKeyboardModes
+      )
+    }
     bindPanePtyId(session.pane.id, null, session.deps.tabId)
     session.visibleRemoteViewportClaimPtyId = null
     session.pendingVisibleRemoteViewportClaim = false
