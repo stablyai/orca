@@ -22,6 +22,7 @@ import {
   supersedeLocalStructuredSessionGeneration
 } from './inventory-generation-fence'
 import { projectLocalStructuredSessionTabs } from './snapshot-projection'
+import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 
 export const LOCAL_STRUCTURED_SESSION_OWNER = 'local-structured-session'
 
@@ -71,6 +72,18 @@ export function applyLocalStructuredSessionTabSnapshots<
   for (const snapshot of snapshots) {
     // Why: the execution host owns its tabs; local inventory must not rewrite paired or SSH panes.
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
+      continue
+    }
+    // A frame that carries no publication is not a later publication to fence against. Recording
+    // its epoch retires the renderer's own — which is a module constant for the process lifetime,
+    // and nothing un-retires it — so every republication afterwards is dropped until a reload
+    // mints a new one. That is what made a revealed chat invisible: the click's own inventory
+    // refresh reads `none`/v0 for a worktree the host holds no entry for, and poisons the reveal
+    // that follows it. The mainstream session-tabs path clears its tracking here for the same
+    // reason; this one recorded the sentinel instead.
+    if (snapshot.removed === true || !hostSnapshotAffirmsWorktreeContents(snapshot)) {
+      localStructuredSessionVersionByWorktree.delete(snapshot.worktree)
+      localStructuredSessionEpochHistoryByWorktree.delete(snapshot.worktree)
       continue
     }
     const prior = localStructuredSessionVersionByWorktree.get(snapshot.worktree)
