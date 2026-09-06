@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
-import { isMobileNativeChatTranscriptReadable } from './mobile-native-chat-eligibility'
-import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
+import type { HostSessionNativeChatOperations } from './host-session-native-chat-operations'
 
-type RepoSummary = { id: string; connectionId?: string | null }
-type ReadabilityState = { client: RpcClient | null; worktreeId: string; readable: boolean }
+type ReadabilityState = {
+  operations: HostSessionNativeChatOperations | null
+  worktreeId: string
+  readable: boolean
+}
 
 export function useMobileNativeChatReadability(
-  client: RpcClient | null,
+  operations: HostSessionNativeChatOperations | null,
   worktreeId: string
 ): boolean {
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const [state, setState] = useState<ReadabilityState>({
-    client: null,
+    operations: null,
     worktreeId: '',
     readable: false
   })
@@ -23,40 +24,35 @@ export function useMobileNativeChatReadability(
       return
     }
     let active = true
-    if (!client) {
-      setState({ client, worktreeId, readable: false })
+    if (!operations) {
+      setState({ operations, worktreeId, readable: false })
       return
     }
-    void client
-      .sendRequest('repo.list')
-      .then((response) => {
+    void operations
+      .readability(worktreeId)
+      .then((readable) => {
         if (!active) {
           return
         }
-        const repos = response.ok
-          ? ((response.result as { repos?: RepoSummary[] }).repos ?? [])
-          : []
-        const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
-        const repo = repos.find((candidate) => candidate.id === repoId)
         setState({
-          client,
+          operations,
           worktreeId,
-          readable: repo ? isMobileNativeChatTranscriptReadable(repo.connectionId ?? null) : false
+          readable
         })
       })
       .catch(() => {
         if (active) {
-          setState({ client, worktreeId, readable: false })
+          setState({ operations, worktreeId, readable: false })
         }
       })
     return () => {
       active = false
     }
-  }, [client, isFloatingWorkspace, worktreeId])
+  }, [operations, isFloatingWorkspace, worktreeId])
   if (isFloatingWorkspace) {
     return true
   }
   // Why: route reuse renders before its new effect resolves; never expose the
   // previous repo's readability under a different client/worktree key.
-  return state.client === client && state.worktreeId === worktreeId ? state.readable : false
+  return state.operations === operations && state.worktreeId === worktreeId ? state.readable : false
 }

@@ -29,6 +29,7 @@ vi.mock('react-native-safe-area-context', () => ({
 vi.mock('react-native-gesture-handler', () => {
   const chain: Record<string, unknown> = {}
   for (const method of [
+    'enabled',
     'activeOffsetY',
     'simultaneousWithExternalGesture',
     'onBegin',

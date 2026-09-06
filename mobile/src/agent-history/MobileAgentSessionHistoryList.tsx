@@ -1,50 +1,64 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { recentSessionConversationTurns } from '../../../src/shared/ai-vault-session-display'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSessionDisplayTurn } from '../../../src/shared/ai-vault-session-display'
 import type { MobileAgentHistorySection } from './agent-history-sections'
 import type { MobileAgentHistoryCard } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 
-// Lazy-render at most this many preview turns when a card is tapped — the
-// scanner already bounds preview text, but rendering them only on tap keeps the
-// list cheap.
-const PREVIEW_TURN_LIMIT = 5
-
 type Props = {
   sections: MobileAgentHistorySection[]
-  sessionsById: ReadonlyMap<string, AiVaultSession>
   refreshing: boolean
   showCurrentWorktreeBadges: boolean
   resumeActionStateBySessionId?: ReadonlyMap<string, { disabled: boolean; loading: boolean }>
-  onResume?: (session: AiVaultSession) => void | Promise<void>
+  loadPreview: (sessionId: string) => Promise<AiVaultSessionDisplayTurn[]>
+  onResume?: (sessionId: string) => void | Promise<void>
   onRefresh: () => void
 }
 
 export function MobileAgentSessionHistoryList({
   sections,
-  sessionsById,
   refreshing,
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
+  loadPreview,
   onResume,
   onRefresh
 }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [previews, setPreviews] = useState<
+    ReadonlyMap<string, readonly AiVaultSessionDisplayTurn[]>
+  >(new Map())
 
-  const toggleExpanded = useCallback((id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id))
-  }, [])
+  const toggleExpanded = useCallback(
+    (id: string) => {
+      if (expandedId === id) {
+        setExpandedId(null)
+        return
+      }
+      setExpandedId(id)
+      if (previews.has(id)) {
+        return
+      }
+      void loadPreview(id)
+        .then((turns) => {
+          setPreviews((current) => new Map(current).set(id, turns))
+        })
+        .catch(() => {
+          setPreviews((current) => new Map(current).set(id, []))
+        })
+    },
+    [expandedId, loadPreview, previews]
+  )
 
   const renderItem = useCallback(
     ({ item }: { item: MobileAgentHistoryCard }) => (
       <AgentHistoryCardRow
         card={item}
         expanded={expandedId === item.id}
-        session={sessionsById.get(item.id) ?? null}
+        previewTurns={previews.get(item.id) ?? []}
         showCurrentWorktreeBadge={showCurrentWorktreeBadges}
         resumeActionState={resumeActionStateBySessionId?.get(item.id)}
         onResume={onResume}
@@ -54,8 +68,8 @@ export function MobileAgentSessionHistoryList({
     [
       expandedId,
       onResume,
+      previews,
       resumeActionStateBySessionId,
-      sessionsById,
       showCurrentWorktreeBadges,
       toggleExpanded
     ]
@@ -90,7 +104,7 @@ export function MobileAgentSessionHistoryList({
 function AgentHistoryCardRow({
   card,
   expanded,
-  session,
+  previewTurns,
   showCurrentWorktreeBadge,
   resumeActionState,
   onResume,
@@ -98,17 +112,12 @@ function AgentHistoryCardRow({
 }: {
   card: MobileAgentHistoryCard
   expanded: boolean
-  session: AiVaultSession | null
+  previewTurns: readonly AiVaultSessionDisplayTurn[]
   showCurrentWorktreeBadge: boolean
   resumeActionState?: { disabled: boolean; loading: boolean }
-  onResume?: (session: AiVaultSession) => void | Promise<void>
+  onResume?: (sessionId: string) => void | Promise<void>
   onPress: () => void
 }) {
-  const previewTurns = useMemo(
-    () => (expanded && session ? recentSessionConversationTurns(session, PREVIEW_TURN_LIMIT) : []),
-    [expanded, session]
-  )
-
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -136,7 +145,7 @@ function AgentHistoryCardRow({
             <Text style={styles.currentBadgeText}>current worktree</Text>
           </View>
         ) : null}
-        {session && onResume ? (
+        {onResume ? (
           <Pressable
             style={({ pressed }) => [
               styles.resumeButton,
@@ -146,7 +155,7 @@ function AgentHistoryCardRow({
             onPress={(event) => {
               event.stopPropagation()
               if (!resumeActionState?.disabled) {
-                void onResume(session)
+                void onResume(card.id)
               }
             }}
             disabled={resumeActionState?.disabled}

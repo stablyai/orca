@@ -24,11 +24,15 @@ class NeverOpeningWebSocket {
   readonly OPEN = 1
   readonly CLOSING = 2
   readonly CLOSED = 3
+  static latest: NeverOpeningWebSocket | null = null
   readyState = 0
   onopen: (() => void) | null = null
-  onclose: (() => void) | null = null
+  onclose: ((event: Record<string, unknown>) => void) | null = null
   onmessage: ((event: { data: unknown }) => void) | null = null
-  onerror: (() => void) | null = null
+  onerror: ((event: Record<string, unknown>) => void) | null = null
+  constructor(readonly url: string) {
+    NeverOpeningWebSocket.latest = this
+  }
   send(): void {}
   close(): void {
     this.readyState = 3
@@ -42,7 +46,7 @@ afterEach(() => {
 })
 
 describe('mobile rpc-client connection logs', () => {
-  it('never exposes endpoint query credentials', () => {
+  it('never exposes paired endpoint identity or query credentials', () => {
     globalThis.WebSocket = NeverOpeningWebSocket as unknown as typeof WebSocket
     const logs: ConnectionLogEntry[] = []
     const endpoint = 'wss://desktop.example:7443/runtime?token=super-secret&route=private'
@@ -52,10 +56,12 @@ describe('mobile rpc-client connection logs', () => {
     })
 
     expect(logs).toContainEqual(
-      expect.objectContaining({ message: 'Opening WebSocket', detail: 'desktop.example:7443' })
+      expect.objectContaining({ message: 'Opening WebSocket', detail: 'encrypted-websocket' })
     )
-    expect(JSON.stringify(logs)).not.toContain('super-secret')
-    expect(JSON.stringify(logs)).not.toContain('route=private')
+    const serialized = JSON.stringify(logs)
+    expect(serialized).not.toContain('desktop.example')
+    expect(serialized).not.toContain('super-secret')
+    expect(serialized).not.toContain('route=private')
     client.close()
   })
 
@@ -67,8 +73,70 @@ describe('mobile rpc-client connection logs', () => {
       onLog: (entry) => logs.push(entry)
     })
 
-    expect(logs[0]?.detail).toBe('desktop.example:7443')
-    expect(JSON.stringify(logs)).not.toContain('password')
+    expect(logs[0]?.detail).toBe('encrypted-websocket')
+    const serialized = JSON.stringify(logs)
+    expect(serialized).not.toContain('desktop.example')
+    expect(serialized).not.toContain('password')
     client.close()
+  })
+
+  it('does not serialize endpoint, auth, or socket-event values to console', () => {
+    globalThis.WebSocket = NeverOpeningWebSocket as unknown as typeof WebSocket
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const client = connect(
+      'wss://private-desktop.example/runtime?token=url-secret',
+      'device-secret',
+      'server-key'
+    )
+    const socket = NeverOpeningWebSocket.latest
+    if (!socket) {
+      throw new Error('WebSocket was not created')
+    }
+    socket.onerror?.({
+      endpoint: 'wss://private-desktop.example',
+      message: 'socket-secret /private/repository',
+      type: 'error'
+    })
+    socket.onclose?.({
+      code: 1006,
+      reason: 'close-secret /private/repository',
+      wasClean: false
+    })
+    client.close()
+
+    const authClient = connect(
+      'wss://private-desktop.example/runtime?token=url-secret',
+      'device-secret',
+      'server-key'
+    )
+    const authSocket = NeverOpeningWebSocket.latest
+    if (!authSocket) {
+      throw new Error('WebSocket was not created')
+    }
+    authSocket.onopen?.()
+    authSocket.onmessage?.({
+      data: JSON.stringify({
+        type: 'e2ee_error',
+        error: {
+          code: 'unauthorized',
+          message: 'credential-secret /private/repository'
+        }
+      })
+    })
+    authClient.close()
+
+    const consoleOutput = JSON.stringify(consoleLog.mock.calls)
+    expect(consoleOutput).toContain('encrypted-websocket')
+    for (const secret of [
+      'private-desktop.example',
+      'url-secret',
+      'device-secret',
+      'credential-secret',
+      'socket-secret',
+      'close-secret',
+      '/private/repository'
+    ]) {
+      expect(consoleOutput).not.toContain(secret)
+    }
   })
 })

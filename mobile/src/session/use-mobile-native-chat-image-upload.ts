@@ -2,6 +2,10 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../src/shared/clipboard-image'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import type {
+  HostSessionNativeChatOperations,
+  HostSessionNativeChatTarget
+} from './host-session-native-chat-operations'
 import {
   ImageLibraryPermissionError,
   pickMobileImages,
@@ -23,6 +27,9 @@ export function useMobileNativeChatImageUpload(args: {
   connState: ConnectionState
   scopeKey: string | null
   structuredNativeChat: boolean
+  /** Hosted page: uploads go through the desktop's native-chat adapter, not the RPC client. */
+  operations: HostSessionNativeChatOperations | null
+  targetRef: CurrentRef<HostSessionNativeChatTarget | null>
   showToast: ShowToast
   onImagesUploaded: (scope: string, images: UploadedNativeChatImage[]) => void
   onAttachSuccess?: () => void
@@ -39,9 +46,11 @@ export function useMobileNativeChatImageUpload(args: {
     onAttachSuccess,
     onError,
     onImagesUploaded,
+    operations,
     scopeKey,
     showToast,
-    structuredNativeChat
+    structuredNativeChat,
+    targetRef
   } = args
   const [isAttaching, setIsAttaching] = useState(false)
   const attachingCount = useRef(0)
@@ -53,29 +62,48 @@ export function useMobileNativeChatImageUpload(args: {
   const attachImage = useCallback(
     async (source: MobileImageSource): Promise<void> => {
       const scope = scopeKey
+      const target = targetRef.current
       if (
-        !client ||
         !scope ||
         connState !== 'connected' ||
-        (!activeHandleRef.current && !structuredNativeChat)
+        (!activeHandleRef.current && !structuredNativeChat) ||
+        (!client && (!operations?.attachImage || !target))
       ) {
         return
       }
       let started = false
       const uploadedImages: UploadedNativeChatImage[] = []
       let uploadError: unknown = null
+      const onUploadStart = (): void => {
+        started = true
+        attachingCount.current += 1
+        setIsAttaching(true)
+      }
       try {
-        await uploadMobileNativeChatImages(source, {
-          client,
-          getConnectionId: getActiveWorktreeConnectionId,
-          pickImages: pickMobileImages,
-          onImageUploaded: (image) => uploadedImages.push(image),
-          onUploadStart: () => {
-            started = true
-            attachingCount.current += 1
-            setIsAttaching(true)
+        if (client) {
+          await uploadMobileNativeChatImages(source, {
+            client,
+            getConnectionId: getActiveWorktreeConnectionId,
+            pickImages: pickMobileImages,
+            onImageUploaded: (image) => uploadedImages.push(image),
+            onUploadStart
+          })
+        } else {
+          onUploadStart()
+          const result = await operations!.attachImage!(target!, source)
+          if (result.status === 'permission-denied') {
+            throw new ImageLibraryPermissionError()
           }
-        })
+          if (result.status === 'too-large') {
+            throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
+          }
+          if (result.status === 'accepted') {
+            uploadedImages.push({
+              path: result.attachment.reference,
+              previewUri: result.attachment.previewUri
+            })
+          }
+        }
       } catch (error) {
         uploadError = error
       } finally {
@@ -116,9 +144,11 @@ export function useMobileNativeChatImageUpload(args: {
       onAttachSuccess,
       onError,
       onImagesUploaded,
+      operations,
       scopeKey,
       showToast,
-      structuredNativeChat
+      structuredNativeChat,
+      targetRef
     ]
   )
 

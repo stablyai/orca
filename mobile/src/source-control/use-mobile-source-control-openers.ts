@@ -2,7 +2,6 @@ import { useCallback, useRef, useState, type MutableRefObject } from 'react'
 import { useRouter } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
-import { triggerError, triggerSelection } from '../platform/haptics'
 import { buildMobileDiffLines } from '../session/mobile-diff-lines'
 import {
   highlightMobileDiffLines,
@@ -24,6 +23,7 @@ import type {
   MobileBranchCompareState,
   MobileBranchDiffPreviewState
 } from './mobile-source-control-screen-state'
+import type { HostSourceControlFeedback } from './host-source-control-binding'
 
 type Params = {
   client: RpcClient | null
@@ -43,6 +43,7 @@ type Params = {
   mountedRef: MutableRefObject<boolean>
   busyActionRef: MutableRefObject<string | null>
   setActionError: (message: string | null) => void
+  feedback: HostSourceControlFeedback
 }
 
 // Owns opening a changed file (diff or session replace) and previewing a
@@ -62,7 +63,8 @@ export function useMobileSourceControlOpeners(params: Params) {
     branchCompareState,
     mountedRef,
     busyActionRef,
-    setActionError
+    setActionError,
+    feedback
   } = params
   const router = useRouter()
   const [branchDiffPreview, setBranchDiffPreview] = useState<MobileBranchDiffPreviewState | null>(
@@ -95,7 +97,7 @@ export function useMobileSourceControlOpeners(params: Params) {
       try {
         setActionError(null)
         if (origin !== 'session') {
-          triggerSelection()
+          feedback.selection()
           router.push(
             buildMobileReviewFileRoute({
               hostId,
@@ -145,7 +147,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (revealResult === 'timeout') {
           throw new Error("The file opened, but its tab isn't ready yet. Try again.")
         }
-        triggerSelection()
+        feedback.selection()
         // Why: when launched from the session screen, opening a file dismisses
         // this surface back to the session. In embedded mode there is nothing
         // to pop (the panel docks beside the terminal), so close the dock
@@ -161,7 +163,7 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
-        triggerError()
+        feedback.error()
         setActionError(err instanceof Error ? err.message : 'Unable to open diff')
       } finally {
         if (openingPathRef.current === entry.path) {
@@ -177,6 +179,7 @@ export function useMobileSourceControlOpeners(params: Params) {
       client,
       connState,
       embedded,
+      feedback,
       hostId,
       mountedRef,
       name,
@@ -213,7 +216,7 @@ export function useMobileSourceControlOpeners(params: Params) {
       openingBranchPathRef.current = entry.path
       setOpeningBranchPath(entry.path)
       if (origin !== 'session') {
-        triggerSelection()
+        feedback.selection()
         router.push(
           buildMobileReviewFileRoute({
             hostId,
@@ -261,12 +264,12 @@ export function useMobileSourceControlOpeners(params: Params) {
           lines: highlightMobileDiffLines(diff.lines, syntaxLanguage),
           truncated: diff.truncated
         })
-        triggerSelection()
+        feedback.selection()
       } catch (err) {
         if (!mountedRef.current) {
           return
         }
-        triggerError()
+        feedback.error()
         setBranchDiffPreview({
           kind: 'error',
           entry,
@@ -286,6 +289,7 @@ export function useMobileSourceControlOpeners(params: Params) {
       busyActionRef,
       client,
       connState,
+      feedback,
       hostId,
       mountedRef,
       name,

@@ -3,6 +3,7 @@ import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import type { HostSessionTabOperations } from './host-session-tab-operations'
 import {
   MobileSessionTabsStreamHealth,
   type SessionTabsApplyOutcome,
@@ -16,6 +17,7 @@ import {
 
 type Params<Result, Tab> = {
   client: RpcClient | null
+  sessionTabOperations?: HostSessionTabOperations | null
   connState: ConnectionState
   worktreeId: string
   applySessionTabs: (result: Result) => SessionTabsApplyOutcome<Tab>
@@ -50,6 +52,7 @@ const RECONCILIATION_INTERVAL_MS = 2000
 
 export function useMobileSessionTabsReconciliation<Result, Tab>({
   client,
+  sessionTabOperations,
   connState,
   worktreeId,
   applySessionTabs,
@@ -97,38 +100,46 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
     pendingTerminalRecoveryBudget.observeContext(pendingTerminalRecoveryContextKey ?? null)
     onPendingTerminalRecoveryParkedRef.current?.(null)
   }, [pendingTerminalRecoveryBudget, pendingTerminalRecoveryContextKey])
-  const controller = useMemo(
-    () =>
-      client
-        ? new MobileSessionTabsStreamHealth<Result, Tab>({
-            client,
-            scope: `id:${worktreeId}`,
-            apply: applySessionTabs,
-            consumeAccepted: consumeAcceptedSessionTabs,
-            hasRecoveryNeed: combinedHasRecoveryNeed,
-            allowRecoveryPoll: getPendingTerminalRecoveryContextKey ? allowRecoveryPoll : undefined,
-            getApplicationRevision,
-            onFetchStarted,
-            onFetchSucceeded,
-            onFetchFailed: (failure) => onFetchFailed?.(failure.error.code),
-            onFetchErrored
-          })
-        : null,
-    [
-      applySessionTabs,
-      client,
-      consumeAcceptedSessionTabs,
+
+  const controller = useMemo(() => {
+    if (!sessionTabOperations && !client) {
+      return null
+    }
+    return new MobileSessionTabsStreamHealth<Result, Tab>({
+      ...(sessionTabOperations
+        ? {
+            requestSnapshot: () => sessionTabOperations.snapshot(worktreeId) as Promise<Result>,
+            getGeneration: () =>
+              (
+                client as (RpcClient & { getGeneration?: () => number }) | null
+              )?.getGeneration?.() ?? 0
+          }
+        : { client: client as RpcClient, scope: `id:${worktreeId}` }),
+      apply: applySessionTabs,
+      consumeAccepted: consumeAcceptedSessionTabs,
+      hasRecoveryNeed: combinedHasRecoveryNeed,
+      allowRecoveryPoll: getPendingTerminalRecoveryContextKey ? allowRecoveryPoll : undefined,
       getApplicationRevision,
-      allowRecoveryPoll,
-      combinedHasRecoveryNeed,
-      getPendingTerminalRecoveryContextKey,
-      onFetchErrored,
-      onFetchFailed,
       onFetchStarted,
       onFetchSucceeded,
-      worktreeId
-    ]
-  )
+      onFetchFailed: (failure) => onFetchFailed?.(failure.error.code),
+      onFetchErrored
+    })
+  }, [
+    applySessionTabs,
+    client,
+    consumeAcceptedSessionTabs,
+    getApplicationRevision,
+    allowRecoveryPoll,
+    combinedHasRecoveryNeed,
+    getPendingTerminalRecoveryContextKey,
+    onFetchErrored,
+    onFetchFailed,
+    onFetchStarted,
+    onFetchSucceeded,
+    sessionTabOperations,
+    worktreeId
+  ])
 
   const {
     activateTerminalInventoryRecovery,
@@ -154,12 +165,29 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
   )
 
   useEffect(() => {
-    if (!client || !controller || connState !== 'connected') {
+    if ((!sessionTabOperations && !client) || !controller || connState !== 'connected') {
       return
     }
     resetPendingTerminalRecovery()
     const subscription = controller.beginSubscription()
-    const unsubscribe = client.subscribe(
+    if (sessionTabOperations) {
+      let initialSnapshotPending = true
+      const unsubscribe = sessionTabOperations.subscribe(
+        worktreeId,
+        (snapshot) => {
+          const type = initialSnapshotPending ? 'snapshot' : 'updated'
+          initialSnapshotPending = false
+          subscription.listener({ ...snapshot, type } as Result)
+        },
+        () => subscription.listener({ type: 'error' } as Result)
+      )
+      return () => {
+        subscription.cancel()
+        unsubscribe()
+      }
+    }
+    const directClient = client as RpcClient
+    const unsubscribe = directClient.subscribe(
       'session.tabs.subscribe',
       { worktree: `id:${worktreeId}` },
       subscription.listener
@@ -168,7 +196,14 @@ export function useMobileSessionTabsReconciliation<Result, Tab>({
       subscription.cancel()
       unsubscribe()
     }
-  }, [client, connState, controller, resetPendingTerminalRecovery, worktreeId])
+  }, [
+    client,
+    connState,
+    controller,
+    resetPendingTerminalRecovery,
+    sessionTabOperations,
+    worktreeId
+  ])
 
   useFocusEffect(
     useCallback(() => {

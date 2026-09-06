@@ -93,6 +93,19 @@ jobs:
         id: release_metadata
         run: node -e 'const fs = require("node:fs"); const { expo } = require("./app.json"); fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${expo.version}\nbuild_number=${expo.ios.buildNumber}\n`)'
 
+      - name: Validate release tag version
+        if: github.ref_type == 'tag'
+        env:
+          TAG_VERSION: ${{ github.ref_name }}
+          APP_VERSION: ${{ steps.release_metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+          expected="${TAG_VERSION#mobile-ios-v}"
+          if [ "$expected" != "$APP_VERSION" ]; then
+            echo "::error::iOS release tag mobile-ios-v$expected does not match app.json version $APP_VERSION."
+            exit 1
+          fi
+
       - name: Expo prebuild
         run: npx expo prebuild --platform ios --no-install
 

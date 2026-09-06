@@ -6,15 +6,14 @@ import {
   generateKeyPair,
   publicKeyToBase64
 } from './e2ee'
+import { sendMobileTerminalBinaryFrame } from './mobile-terminal-binary-sender'
 import { isRpcResponse } from './rpc-response-shape'
+import { RpcClientSocketTimeouts } from './rpc-client-socket-timeouts'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
-import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
+import { describeSocketEvent, redactedWebSocketEndpoint } from './socket-event-debug'
+import type { TerminalStreamFrame } from './terminal-stream-protocol'
 import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
-
-const CONNECT_TIMEOUT_MS = 12_000
-const HANDSHAKE_TIMEOUT_MS = 5_000
-const WEBSOCKET_CONNECTING_STATE = 0
 
 type SocketSessionOptions = {
   endpoint: string
@@ -42,13 +41,31 @@ export class RpcClientSocketSession {
   private sharedKey: Uint8Array | null = null
   private authenticated = false
   private lastInboundAt: number | null = null
-  private connectTimer: ReturnType<typeof setTimeout> | null = null
-  private handshakeTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly timeouts: RpcClientSocketTimeouts
 
   constructor(private readonly options: SocketSessionOptions) {
     this.socket = new WebSocket(options.endpoint)
+    this.timeouts = new RpcClientSocketTimeouts({
+      emitLog: options.emitLog,
+      getReconnectAttempt: options.getReconnectAttempt,
+      expire: () => this.options.onForcedClose(this)
+    })
     this.attachHandlers()
-    this.armConnectTimeout()
+    this.timeouts.armConnect(
+      () => this.options.getCurrentSocket() === this.socket,
+      () => this.socket.readyState
+    )
+  }
+
+  // Why: the hosted bridge multiplexes terminal bytes over one binary channel.
+  sendTerminalBinaryFrame(frame: TerminalStreamFrame): boolean {
+    return sendMobileTerminalBinaryFrame({
+      frame,
+      socket: this.socket,
+      sharedKey: this.sharedKey,
+      isConnected: this.options.getState() === 'connected',
+      onSocketClosed: () => this.options.onForcedClose(this)
+    })
   }
 
   sendEncrypted(request: unknown): boolean {
@@ -87,14 +104,7 @@ export class RpcClientSocketSession {
   }
 
   clearTimers(): void {
-    if (this.connectTimer) {
-      clearTimeout(this.connectTimer)
-      this.connectTimer = null
-    }
-    if (this.handshakeTimer) {
-      clearTimeout(this.handshakeTimer)
-      this.handshakeTimer = null
-    }
+    this.timeouts.clearAll()
   }
 
   clearKey(): void {
@@ -107,7 +117,7 @@ export class RpcClientSocketSession {
         return
       }
       console.log('[net] ws.onopen', { attempt: this.options.getReconnectAttempt() })
-      this.clearConnectTimer()
+      this.timeouts.clearConnect()
       this.options.onHandshakeStarted()
       this.options.emitLog('success', 'WebSocket open', 'Starting E2EE handshake')
       const ephemeral = generateKeyPair()
@@ -123,7 +133,9 @@ export class RpcClientSocketSession {
       }
       this.options.emitLog('info', 'Sent e2ee_hello', 'Awaiting server e2ee_ready')
       this.sharedKey = deriveSharedKey(ephemeral.secretKey, this.options.serverPublicKey)
-      this.armHandshakeTimeout()
+      this.timeouts.armHandshake(
+        () => this.options.getCurrentSocket() === this.socket && !this.authenticated
+      )
     }
     this.socket.onmessage = (event) => {
       if (!this.isStale('message')) {
@@ -136,7 +148,7 @@ export class RpcClientSocketSession {
         state: this.options.getState(),
         attempt: this.options.getReconnectAttempt(),
         intentionallyClosed: this.options.isIntentionallyClosed(),
-        endpoint: redactSocketEndpoint(this.options.endpoint),
+        endpoint: redactedWebSocketEndpoint(this.options.endpoint),
         constructedAt: this.constructedAt,
         authenticated: this.authenticated,
         lastInboundAt: this.lastInboundAt
@@ -147,14 +159,10 @@ export class RpcClientSocketSession {
       if (this.isStale('error')) {
         return
       }
-      const error = event as { message?: string } | undefined
-      const description = describeSocketEvent(event)
       console.log('[net] ws.onerror', {
-        message: error?.message,
         state: this.options.getState(),
         attempt: this.options.getReconnectAttempt(),
-        eventKeys: description.keys,
-        eventStr: description.json
+        eventFields: describeSocketEvent(event).fields
       })
     }
   }
@@ -228,77 +236,22 @@ export class RpcClientSocketSession {
         error?: { code?: unknown }
       }
       if (message.type === 'e2ee_authenticated') {
-        this.clearHandshakeTimer()
+        this.timeouts.clearHandshake()
         this.authenticated = true
         this.options.onAuthenticated(this)
       } else if (
         message.type === 'e2ee_error' ||
         (message.ok === false && message.error?.code === 'unauthorized')
       ) {
+        // Why: the failure signal is loggable; the server error body is not.
         console.log('[net] e2ee auth FAILED', {
-          msgType: message.type,
-          error: message.error
+          signal: message.type === 'e2ee_error' ? 'e2ee_error' : 'unauthorized_response'
         })
-        this.clearHandshakeTimer()
+        this.timeouts.clearHandshake()
         this.options.onAuthRejected('Unauthorized — pairing may be revoked')
       }
     } catch {
       // Ignore malformed handshake payloads.
-    }
-  }
-
-  private armConnectTimeout(): void {
-    this.connectTimer = setTimeout(() => {
-      this.connectTimer = null
-      if (
-        this.options.getCurrentSocket() === this.socket &&
-        this.socket.readyState === WEBSOCKET_CONNECTING_STATE
-      ) {
-        console.log('[net] connect-timeout fired (onopen never arrived)', {
-          attempt: this.options.getReconnectAttempt(),
-          timeoutMs: CONNECT_TIMEOUT_MS
-        })
-        this.options.emitLog(
-          'error',
-          'WebSocket connect timeout',
-          `No TCP/WS handshake within ${CONNECT_TIMEOUT_MS / 1000}s — endpoint unreachable?`,
-          { code: 'connect-timeout' }
-        )
-        this.options.onForcedClose(this)
-      }
-    }, CONNECT_TIMEOUT_MS)
-  }
-
-  private armHandshakeTimeout(): void {
-    this.handshakeTimer = setTimeout(() => {
-      this.handshakeTimer = null
-      if (this.options.getCurrentSocket() !== this.socket || this.authenticated) {
-        return
-      }
-      console.log('[net] handshake-timeout fired (e2ee_authenticated never arrived)', {
-        timeoutMs: HANDSHAKE_TIMEOUT_MS
-      })
-      this.options.emitLog(
-        'error',
-        'Handshake timeout',
-        `No e2ee_ready/e2ee_authenticated within ${HANDSHAKE_TIMEOUT_MS / 1000}s`,
-        { code: 'handshake-timeout' }
-      )
-      this.options.onForcedClose(this)
-    }, HANDSHAKE_TIMEOUT_MS)
-  }
-
-  private clearConnectTimer(): void {
-    if (this.connectTimer) {
-      clearTimeout(this.connectTimer)
-      this.connectTimer = null
-    }
-  }
-
-  private clearHandshakeTimer(): void {
-    if (this.handshakeTimer) {
-      clearTimeout(this.handshakeTimer)
-      this.handshakeTimer = null
     }
   }
 

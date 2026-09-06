@@ -13,6 +13,10 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../shared/repo-types'
+import type {
+  HostedReviewSubmissionInput,
+  HostedReviewSubmissionResult
+} from '../../shared/hosted-review-submission'
 import {
   getPRForBranchOutcome,
   getRepoSlug,
@@ -32,6 +36,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
+import { submitHostedReview } from '../source-control/hosted-review-submission'
 
 type HostedReviewTargetArgs = { repoSelector: string; worktreeSelector?: string }
 
@@ -181,6 +186,20 @@ export class RuntimeHostedReviewCommands {
       this.deps.recordCreated(repo.id, result.number, result.url)
     }
     return result
+  }
+
+  async submitHostedReview(
+    args: HostedReviewSubmissionInput & { repoSelector: string }
+  ): Promise<HostedReviewSubmissionResult> {
+    const repo = await this.deps.resolveRepo(args.repoSelector)
+    const { repoSelector: _repoSelector, ...input } = args
+    return submitHostedReview(
+      repo.path,
+      input,
+      repo.issueSourcePreference,
+      repo.connectionId ?? null,
+      this.deps.getExecutionOptions(repo)
+    )
   }
 
   async createStackedHostedReview(

@@ -1,7 +1,7 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AppState, type Image, type View } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import { createMobileBrowserRpcClient } from './mobile-browser-rpc-client'
+import type { HostSessionBrowserOperations } from '../session/host-session-browser-operations'
 import type {
   BrowserScreencastFrame,
   BrowserScreencastFrameMetadata
@@ -22,6 +22,11 @@ import {
 } from './mobile-browser-frame-state'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
+import {
+  resolveMobileBrowserNavigationState,
+  type MobileBrowserNavigationRefinement,
+  type MobileBrowserNavigationState
+} from './mobile-browser-navigation-state'
 import { MobileBrowserPaneView } from './MobileBrowserPaneView'
 import { useMobileBrowserInteractions } from './use-mobile-browser-interactions'
 import { useMobileBrowserPaneLayers } from './use-mobile-browser-pane-layers'
@@ -41,7 +46,7 @@ export type MobileBrowserTab = {
 }
 
 type MobileBrowserPaneProps = {
-  client: RpcClient | null
+  operations: HostSessionBrowserOperations | null
   worktreeId: string
   tab: MobileBrowserTab
   screencastSupported: boolean | null
@@ -65,7 +70,7 @@ type BrowserDialogState = {
 const DEFAULT_ZOOM: BrowserZoomState = { scale: 1, offsetX: 0, offsetY: 0 }
 
 export function MobileBrowserPane({
-  client,
+  operations,
   worktreeId,
   tab,
   screencastSupported,
@@ -73,6 +78,10 @@ export function MobileBrowserPane({
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
+  const client = useMemo(
+    () => (operations ? createMobileBrowserRpcClient(operations) : null),
+    [operations]
+  )
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
@@ -80,6 +89,21 @@ export function MobileBrowserPane({
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
   const [addressValue, setAddressValue] = useState(displayBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
+  // A host `navigation` event refines the tab's navigability until the tab itself republishes;
+  // an older host that never emits it leaves the tab props in charge. Derived in render so a tab
+  // update never lags one commit behind.
+  const [navigationRefinement, setNavigationRefinement] =
+    useState<MobileBrowserNavigationRefinement | null>(null)
+  const navigationState = resolveMobileBrowserNavigationState(tab, navigationRefinement)
+  const setNavigationState = useCallback(
+    (next: MobileBrowserNavigationState) => {
+      setNavigationRefinement({
+        ...next,
+        base: { canGoBack: tab.canGoBack, canGoForward: tab.canGoForward }
+      })
+    },
+    [tab.canGoBack, tab.canGoForward]
+  )
   const [addressSyncState, setAddressSyncState] = useState({
     focused: false,
     url: tab.url
@@ -169,14 +193,15 @@ export function MobileBrowserPane({
     focused: addressFocused,
     url: tab.url
   })
-  if (addressSync.nextState !== addressSyncState) {
+  useEffect(() => {
+    if (addressSync.nextState === addressSyncState) {
+      return
+    }
     setAddressSyncState(addressSync.nextState)
     if (addressSync.shouldSyncValue) {
-      // Why: keep browser stream/goto address updates intact, but avoid a
-      // stale post-blur paint when the tab URL is the source of truth.
       setAddressValue(displayBrowserUrl(tab.url))
     }
-  }
+  }, [addressSync, addressSyncState, tab.url])
 
   useLayoutEffect(() => {
     // Why: gesture and stream handlers need committed values before passive
@@ -223,6 +248,7 @@ export function MobileBrowserPane({
     setError,
     setFrameMetadata,
     setFrameUri,
+    setNavigationState,
     setZoom,
     streamGenerationRef,
     tab,
@@ -291,17 +317,17 @@ export function MobileBrowserPane({
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
   const goBack = useCallback(() => {
-    if (controlsDisabled || !tab.canGoBack) {
+    if (controlsDisabled || !navigationState.canGoBack) {
       return
     }
     void sendBrowserRequest('browser.back', {}, { suppressError: true })
-  }, [controlsDisabled, sendBrowserRequest, tab.canGoBack])
+  }, [controlsDisabled, navigationState.canGoBack, sendBrowserRequest])
   const goForward = useCallback(() => {
-    if (controlsDisabled || !tab.canGoForward) {
+    if (controlsDisabled || !navigationState.canGoForward) {
       return
     }
     void sendBrowserRequest('browser.forward', {}, { suppressError: true })
-  }, [controlsDisabled, sendBrowserRequest, tab.canGoForward])
+  }, [controlsDisabled, navigationState.canGoForward, sendBrowserRequest])
   const reloadPage = useCallback(() => {
     if (controlsDisabled) {
       return
@@ -333,6 +359,8 @@ export function MobileBrowserPane({
       browserLayerRef={browserLayerRef}
       browserViewMode={browserViewMode}
       busy={busy}
+      canGoBack={navigationState.canGoBack}
+      canGoForward={navigationState.canGoForward}
       controlsDisabled={controlsDisabled}
       dialog={dialog}
       error={error}
@@ -360,7 +388,6 @@ export function MobileBrowserPane({
       setKeyboardValue={setKeyboardValue}
       setLayout={setLayout}
       setRootViewRef={setRootViewRef}
-      tab={tab}
       togglePointerModifier={togglePointerModifier}
       zoom={zoom}
     />

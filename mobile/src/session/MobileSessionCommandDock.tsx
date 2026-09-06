@@ -8,7 +8,6 @@ import {
   Plus,
   Smartphone
 } from 'lucide-react-native'
-import { triggerMediumImpact } from '../platform/haptics'
 import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
 import {
   getTerminalCommandKeyboardType,
@@ -67,7 +66,8 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeMarkdownTab,
     activeFileTab,
     activeBrowserTab,
-    keyboardLift
+    keyboardLift,
+    triggerMediumImpact
   } = controller
   return (
     !activeMarkdownTab &&
@@ -196,9 +196,9 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   if (!key.repeatable) {
                     return
                   }
-                  const input = createTerminalLiveAccessoryInput(key)
-                  void handleAccessoryKey(input)
-                  startAccessoryRepeat(input)
+                  // startAccessoryRepeat owns the press-time send; sending here too
+                  // emits the key twice per tap.
+                  startAccessoryRepeat(createTerminalLiveAccessoryInput(key))
                 }}
                 onPressOut={() => {
                   if (key.repeatable) {

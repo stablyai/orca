@@ -1,14 +1,12 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { loadHosts } from '../transport/host-store'
-import { loadTerminalAccessoryLayout } from '../terminal/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
 } from '../terminal/terminal-foreground-recovery'
-import { loadCustomKeys } from '../components/CustomKeyModal'
 import type { MobileSessionTabReconciliationModel } from './use-mobile-session-tab-reconciliation'
+import { loadSessionNativeHostProfile } from './session-native-host-profile'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
   const {
@@ -23,7 +21,8 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     activeHandleRef,
     scheduleDelayedAction,
     unsubscribeTerminal,
-    subscribeToTerminal
+    subscribeToTerminal,
+    sessionDeviceOperations
   } = scope
   // Why: the shared client owns authenticated identity; this host read only supplies connection-hint metadata.
   useEffect(() => {
@@ -31,11 +30,10 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       return
     }
     let stale = false
-    void loadHosts().then((hosts) => {
+    void loadSessionNativeHostProfile(hostId).then((host) => {
       if (stale) {
         return
       }
-      const host = hosts.find((h) => h.id === hostId)
       if (host) {
         setHostEndpoint(host.endpoint)
       }
@@ -45,30 +43,28 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     }
   }, [hostId])
 
-  useEffect(() => {
-    void loadCustomKeys().then(setCustomKeys)
-  }, [])
-
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadTerminalAccessoryLayout().then((layout) => {
+      void sessionDeviceOperations?.loadTerminalAccessoryPreferences().then((preferences) => {
         if (!stale) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+          setCustomKeys(preferences.customKeys)
+          setVisibleBuiltInIds(preferences.visibleBuiltInIds)
         }
       })
       return () => {
         stale = true
       }
-    }, [])
+    }, [sessionDeviceOperations])
   )
 
   useEffect(() => {
     let mounted = true
     const refresh = () => {
-      void loadTerminalAccessoryLayout().then((layout) => {
+      void sessionDeviceOperations?.loadTerminalAccessoryPreferences().then((preferences) => {
         if (mounted) {
-          setVisibleBuiltInIds(layout.visibleBuiltInIds)
+          setCustomKeys(preferences.customKeys)
+          setVisibleBuiltInIds(preferences.visibleBuiltInIds)
         }
       })
     }
@@ -81,7 +77,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       mounted = false
       sub.remove()
     }
-  }, [])
+  }, [sessionDeviceOperations])
 
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {

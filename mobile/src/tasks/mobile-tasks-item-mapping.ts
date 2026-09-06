@@ -1,9 +1,4 @@
-import {
-  type RpcSuccess,
-  type TaskProvider,
-  type GitHubOwnerRepo,
-  colors
-} from './mobile-tasks-dependencies'
+import { type TaskProvider, colors } from './mobile-tasks-dependencies'
 import type {
   GitHubPreset,
   GitHubProjectRow,
@@ -18,10 +13,6 @@ import type {
   LinearIssue,
   RepoSummary
 } from './mobile-tasks-provider-detail-types'
-
-export function isSuccess(response: unknown): response is RpcSuccess {
-  return Boolean(response && typeof response === 'object' && (response as RpcSuccess).ok)
-}
 
 export function taskTime(value: string): number {
   const time = Date.parse(value)
@@ -111,14 +102,6 @@ export function canCreateWorkspaceFromProjectRow(row: GitHubProjectRow): boolean
 export function splitRepositorySlug(slug: string | null): { owner: string; repo: string } | null {
   const [owner, repo] = slug?.split('/') ?? []
   return owner && repo ? { owner, repo } : null
-}
-
-export function projectRowGitHubRepository(
-  row: GitHubProjectRow,
-  host: string
-): GitHubOwnerRepo | null {
-  const slug = splitRepositorySlug(row.content.repository)
-  return slug ? { ...slug, host } : null
 }
 
 export const GITHUB_PROJECT_OPTION_COLORS: Record<string, string> = {

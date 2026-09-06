@@ -46,3 +46,20 @@ export function sourceKeyForPreview(source: MobileFilePreviewSource | null): str
   }
   return JSON.stringify(key)
 }
+
+export function sourceRevisionForPreview(source: MobileFilePreviewSource | null): string | null {
+  if (!source) {
+    return null
+  }
+  return source.source === 'terminalArtifact'
+    ? JSON.stringify([
+        'terminal',
+        source.worktreeId,
+        source.absolutePath,
+        source.grantId,
+        source.terminalHandle ?? '',
+        source.pathText ?? '',
+        source.cwd ?? ''
+      ])
+    : JSON.stringify(['worktree', source.worktreeId, source.relativePath])
+}

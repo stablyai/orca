@@ -45,7 +45,7 @@ describe('terminal-stream-protocol', () => {
     })
   })
 
-  it('round-trips terminal input and resize frames', () => {
+  it('round-trips terminal input, query-reply, and resize frames', () => {
     const input = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Input,
@@ -54,17 +54,27 @@ describe('terminal-stream-protocol', () => {
         payload: encodeTerminalStreamText('a')
       })
     )
+    const queryReply = decodeTerminalStreamFrame(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.QueryReply,
+        streamId: 11,
+        seq: 2,
+        payload: encodeTerminalStreamText('\x1b[0n')
+      })
+    )
     const resize = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Resize,
         streamId: 11,
-        seq: 2,
+        seq: 3,
         payload: encodeTerminalStreamJson({ cols: 120, rows: 40 })
       })
     )
 
     expect(input?.opcode).toBe(TerminalStreamOpcode.Input)
     expect(input ? decodeTerminalStreamText(input.payload) : '').toBe('a')
+    expect(queryReply?.opcode).toBe(TerminalStreamOpcode.QueryReply)
+    expect(queryReply ? decodeTerminalStreamText(queryReply.payload) : '').toBe('\x1b[0n')
     expect(resize?.opcode).toBe(TerminalStreamOpcode.Resize)
     expect(resize && decodeTerminalStreamJson(resize.payload)).toEqual({ cols: 120, rows: 40 })
   })

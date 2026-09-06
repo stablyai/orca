@@ -1,5 +1,6 @@
 import { Fragment, memo, useMemo, type ReactNode } from 'react'
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
+import { normalizeMobileWebExternalUrl } from '../../../src/shared/mobile-web/native-operation-contract'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { styles } from './mobile-markdown-styles'
 import {
@@ -26,7 +27,8 @@ type Props = {
    *  and invoke this with the path text (worktree-relative or absolute, with an
    *  optional :line(:col) suffix). Omitted on screens with no file viewer, where
    *  paths render as plain text (no behavior change). */
-  onOpenFile?: (pathText: string) => void
+  onOpenFile?: (relativePath: string) => void
+  onOpenLink?: (url: string) => void
 }
 
 const MAX_TABLE_ROWS = 40
@@ -34,16 +36,19 @@ const MAX_TABLE_COLUMNS = 8
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
 
-// Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
-// scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
-function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
-  const route = routeMarkdownHref(href)
-  if (route.kind === 'web') {
-    void Linking.openURL(route.url).catch(() => {})
+function openMarkdownUrl(
+  url: string,
+  onOpenFile?: (pathText: string) => void,
+  onOpenLink?: (url: string) => void
+): void {
+  const route = routeMarkdownHref(url)
+  if (route.kind === 'file') {
+    onOpenFile?.(route.pathText)
     return
   }
-  if (route.kind === 'file' && onOpenFile) {
-    onOpenFile(route.pathText)
+  const externalUrl = route.kind === 'web' ? normalizeMobileWebExternalUrl(route.url) : null
+  if (externalUrl) {
+    onOpenLink?.(externalUrl)
   }
 }
 
@@ -77,7 +82,11 @@ function renderTextRun(
   })
 }
 
-function renderInline(text: string, onOpenFile?: (pathText: string) => void): ReactNode[] {
+function renderInline(
+  text: string,
+  onOpenFile?: (relativePath: string) => void,
+  onOpenLink?: (url: string) => void
+): ReactNode[] {
   const parts: ReactNode[] = []
   const pattern =
     /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
@@ -105,20 +114,32 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)}>
+        <Text
+          key={key}
+          style={styles.link}
+          onPress={() => openMarkdownUrl(image[2]!, onOpenFile, onOpenLink)}
+        >
           {image[1] || 'image'}
         </Text>
       )
     } else if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)}>
+        <Text
+          key={key}
+          style={styles.link}
+          onPress={() => openMarkdownUrl(link[2]!, onOpenFile, onOpenLink)}
+        >
           {link[1]}
         </Text>
       )
     } else if (/^https?:\/\//i.test(token)) {
       const { url, trailing } = trimAutolinkTrailingPunctuation(token)
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)}>
+        <Text
+          key={key}
+          style={styles.link}
+          onPress={() => openMarkdownUrl(url, onOpenFile, onOpenLink)}
+        >
           {url}
         </Text>
       )
@@ -171,7 +192,13 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
   return parts
 }
 
-function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile }: Props) {
+function MobileMarkdownInner({
+  content,
+  fallback = '',
+  textScale = 1,
+  onOpenFile,
+  onOpenLink
+}: Props) {
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
@@ -195,7 +222,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
               selectable
               style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
             >
-              {renderInline(block.text, onOpenFile)}
+              {renderInline(block.text, onOpenFile, onOpenLink)}
             </Text>
           )
         }
@@ -203,7 +230,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return (
             <View key={index} style={styles.quote}>
               <Text selectable style={styles.quoteText}>
-                {renderInline(block.text, onOpenFile)}
+                {renderInline(block.text, onOpenFile, onOpenLink)}
               </Text>
             </View>
           )
@@ -237,7 +264,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
             <Pressable
               key={index}
               style={styles.imageFrame}
-              onPress={() => openMarkdownHref(block.url, onOpenFile)}
+              onPress={() => openMarkdownUrl(block.url, onOpenFile, onOpenLink)}
             >
               <Text style={styles.link}>{block.alt || 'Open image'}</Text>
               <Text style={styles.imageCaption} numberOfLines={1}>
@@ -257,7 +284,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                 <View style={styles.tableRow}>
                   {visibleHeaders.map((header, cellIndex) => (
                     <Text key={cellIndex} selectable style={[styles.tableCell, styles.tableHeader]}>
-                      {renderInline(header, onOpenFile)}
+                      {renderInline(header, onOpenFile, onOpenLink)}
                     </Text>
                   ))}
                 </View>
@@ -265,7 +292,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                   <View key={rowIndex} style={styles.tableRow}>
                     {visibleHeaders.map((_, cellIndex) => (
                       <Text key={cellIndex} selectable style={styles.tableCell}>
-                        {renderInline(row[cellIndex] ?? '', onOpenFile)}
+                        {renderInline(row[cellIndex] ?? '', onOpenFile, onOpenLink)}
                       </Text>
                     ))}
                   </View>
@@ -296,7 +323,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                         : '[ ]'}
                   </Text>
                   <Text selectable style={[styles.listText, listScale]}>
-                    {renderInline(item.text, onOpenFile)}
+                    {renderInline(item.text, onOpenFile, onOpenLink)}
                   </Text>
                 </View>
               ))}
@@ -311,7 +338,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
             {block.text.split('\n').map((line, lineIndex) => (
               <Fragment key={lineIndex}>
                 {lineIndex > 0 ? '\n' : null}
-                {renderInline(line, onOpenFile)}
+                {renderInline(line, onOpenFile, onOpenLink)}
               </Fragment>
             ))}
           </Text>

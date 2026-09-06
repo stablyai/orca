@@ -1,5 +1,4 @@
 import { useRef, useCallback } from 'react'
-import { Linking } from 'react-native'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 import { resolveMobileNativeChatFileSessionId } from './mobile-native-chat-eligibility'
 import { activateOpenedSourceControlDiffTab } from './opened-mobile-session-tab'
@@ -12,7 +11,6 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     worktreeId,
     routeWorktreeName,
     isFloatingWorkspaceRoute,
-    client,
     sessionTabsRef,
     terminalLinkOpenMode,
     activeSessionTabIdRef,
@@ -24,11 +22,13 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     handleCreateBrowserRef,
     scheduleDelayedAction,
     nativeChatSendError,
-    fetchSessionTabs
+    fetchSessionTabs,
+    sessionDeviceOperations,
+    sessionTerminalFileOperations
   } = scope
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
-    client,
+    operations: sessionTerminalFileOperations,
     hostId,
     worktreeId,
     worktreeName: routeWorktreeName,
@@ -92,12 +92,12 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
       // Why: browser.tabCreate resolves a real worktree, which the floating
       // sentinel doesn't have — open taps in the phone browser instead.
       if (terminalLinkOpenMode === 'phone-browser' || isFloatingWorkspaceRoute) {
-        void Linking.openURL(url).catch(() => {})
+        void sessionDeviceOperations?.openExternalUrl(url).catch(() => {})
         return
       }
       void handleCreateBrowserRef.current?.(url)
     },
-    [terminalLinkOpenMode, isFloatingWorkspaceRoute]
+    [terminalLinkOpenMode, isFloatingWorkspaceRoute, sessionDeviceOperations]
   )
   return {
     handleFileTap,

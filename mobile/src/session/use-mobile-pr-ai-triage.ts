@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useMobilePrShellOperations } from '../platform/mobile-pr-shell-operations'
 import { createTerminalAndSendPrompt } from './pr-ai-triage-launch'
 
 // Launches an agent for the PR triage actions ("Fix checks with AI" / "Resolve
@@ -17,6 +17,7 @@ type Input = {
 
 export function useMobilePrAiTriage(input: Input) {
   const { client, connState, worktreeId } = input
+  const shell = useMobilePrShellOperations()
   const [busyKey, setBusyKey] = useState<PrAiTriageKey | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Synchronous lock: setBusyKey commits async, so a fast double-tap could pass the
@@ -32,7 +33,7 @@ export function useMobilePrAiTriage(input: Input) {
       }
       if (!client || connState !== 'connected') {
         setError('Waiting for desktop…')
-        triggerError()
+        shell.error()
         return false
       }
       inFlightRef.current = true
@@ -40,10 +41,10 @@ export function useMobilePrAiTriage(input: Input) {
       setError(null)
       try {
         await createTerminalAndSendPrompt(client, worktreeId, buildPrompt())
-        triggerSuccess()
+        shell.success()
         return true
       } catch (err) {
-        triggerError()
+        shell.error()
         setError(err instanceof Error ? err.message : 'Failed to launch agent')
         return false
       } finally {
@@ -51,7 +52,7 @@ export function useMobilePrAiTriage(input: Input) {
         setBusyKey(null)
       }
     },
-    [busyKey, client, connState, worktreeId]
+    [busyKey, client, connState, shell, worktreeId]
   )
 
   return {

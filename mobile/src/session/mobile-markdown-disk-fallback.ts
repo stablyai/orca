@@ -2,6 +2,8 @@ import type { RpcFailure } from '../transport/types'
 
 const RENDERER_UNAVAILABLE = 'renderer_unavailable'
 
+export const MARKDOWN_TOO_LARGE_READ_ONLY_REASON = 'File too large for mobile preview'
+
 export function shouldReadMarkdownFromDiskAfterReadTabFailure(response: RpcFailure): boolean {
   return (
     response.error.code === RENDERER_UNAVAILABLE ||
@@ -15,7 +17,7 @@ export function buildMarkdownDiskFallbackDoc(args: {
   tabIsDirty: boolean
 }) {
   const readOnlyReason = args.truncated
-    ? 'File too large for mobile preview'
+    ? MARKDOWN_TOO_LARGE_READ_ONLY_REASON
     : args.tabIsDirty
       ? 'Desktop has unsaved changes. Showing disk content.'
       : 'Editing needs Orca desktop running.'

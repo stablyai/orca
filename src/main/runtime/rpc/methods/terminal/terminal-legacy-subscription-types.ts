@@ -19,9 +19,13 @@ export type TerminalSubscriptionArgs = {
   signal: RpcContext['signal']
   emit: TerminalSubscriptionEmit
   ptyId: string
+  /** Client-declared id from `params.client`; never an authenticated identity. */
   clientId: string | undefined
+  /** Authenticated device token carried by the transport; undefined for in-process/desktop callers. */
+  connectionClientId: string | undefined
   isMobile: boolean
   supportsDesktopViewportClaims: boolean
+  supportsQueryReply: boolean
   supportsWriteUnavailable: boolean
   missingHeadlessStateBeforeMobileFit: boolean
   rendererMountRequestedBeforePty: boolean

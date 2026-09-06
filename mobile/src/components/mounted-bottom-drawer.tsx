@@ -6,8 +6,7 @@ import {
   ScrollView,
   Keyboard,
   BackHandler,
-  Modal,
-  Platform
+  Modal
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -23,11 +22,12 @@ import Animated, {
 } from 'react-native-reanimated'
 import { spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
-import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
+import { useBottomDrawerKeyboardLift } from './bottom-drawer-keyboard-lift'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { useMobileKeyboardInset } from '../hooks/use-mobile-keyboard-inset'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -43,6 +43,7 @@ export type MountedBottomDrawerProps = {
   onClose: () => void
   onHidden: () => void
   children: ReactNode
+  dismissible?: boolean
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
   fillAvailable?: boolean
@@ -57,6 +58,7 @@ export function MountedBottomDrawer({
   onClose,
   onHidden,
   children,
+  dismissible = true,
   dragContentToDismiss = true,
   contentScrollable = true,
   fillAvailable = false,
@@ -80,6 +82,7 @@ export function MountedBottomDrawer({
   // transforms below) is unchanged, so phone behavior stays identical.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useInsideBottomDrawerModalHost()
+  const mobileKeyboardInset = useMobileKeyboardInset()
   const fillHeight = fillAvailable
     ? resolveBottomDrawerFillHeight({
         screenHeight,
@@ -127,62 +130,17 @@ export function MountedBottomDrawer({
     }
   }, [onHidden, visible])
 
-  // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable
-  // inside Modal (iOS ignores KAV; Android needs adjustNothing for
-  // useAnimatedKeyboard). Keyboard event listeners work on both platforms
-  // and give us the exact height to shift the drawer by.
-  useEffect(() => {
-    // Pinned-under sheets stay visible for size but must not ride the keyboard —
-    // only the top interactive sheet owns inset/lift.
-    if (!visible || !interactive) {
-      keyboardOffset.value = 0
-      setKeyboardInset(0)
-      return
-    }
-
-    function applyKeyboardHeight(keyboardHeight: number, duration = 0): void {
-      const inset = resolveBottomDrawerKeyboardInset({
-        keyboardHeight,
-        bottomInset: insets.bottom,
-        fillAvailable,
-        platform: Platform.OS
-      })
-      setKeyboardInset(inset)
-      if (duration > 0) {
-        keyboardOffset.value = withTiming(inset, { duration })
-      } else {
-        keyboardOffset.value = inset
-      }
-    }
-
-    // Why: fill sheets dock to the true keyboard top; autoFocus can raise the
-    // keyboard before listeners attach. Seed only in fill mode so content-sized
-    // outer sheets do not inherit a stale metrics height after an inner dismiss.
-    if (fillAvailable) {
-      const existing = Keyboard.metrics()
-      if (existing != null && existing.height > 0) {
-        applyKeyboardHeight(existing.height)
-      }
-    }
-
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-
-    const onShow = Keyboard.addListener(showEvent, (e) => {
-      applyKeyboardHeight(e.endCoordinates.height, e.duration || 250)
-    })
-    const onHide = Keyboard.addListener(hideEvent, (e) => {
-      setKeyboardInset(0)
-      keyboardOffset.value = withTiming(0, { duration: e.duration || 250 })
-    })
-
-    return () => {
-      onShow.remove()
-      onHide.remove()
-      keyboardOffset.value = 0
-      setKeyboardInset(0)
-    }
-  }, [visible, interactive, insets.bottom, fillAvailable])
+  // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable inside Modal
+  // (iOS ignores KAV; Android needs adjustNothing for useAnimatedKeyboard), so the shared
+  // keyboard-inset hook owns the listeners and the lift hook owns the animation.
+  useBottomDrawerKeyboardLift({
+    ridesKeyboard: visible && interactive,
+    bottomInset: insets.bottom,
+    fillAvailable,
+    keyboard: mobileKeyboardInset,
+    keyboardOffset,
+    setKeyboardInset
+  })
 
   const dismiss = useCallback(() => {
     Keyboard.dismiss()
@@ -199,11 +157,13 @@ export function MountedBottomDrawer({
     }
 
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      dismiss()
+      if (dismissible) {
+        dismiss()
+      }
       return true
     })
     return () => sub.remove()
-  }, [visible, interactive, dismiss])
+  }, [visible, interactive, dismissible, dismiss])
 
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
@@ -211,6 +171,7 @@ export function MountedBottomDrawer({
 
   const scrollGesture = Gesture.Native()
   const handlePanGesture = Gesture.Pan()
+    .enabled(dismissible)
     .activeOffsetY([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
     .onUpdate((e) => {
@@ -234,6 +195,7 @@ export function MountedBottomDrawer({
       }
     })
   const contentPanGesture = Gesture.Pan()
+    .enabled(dismissible)
     .activeOffsetY([-8, 8])
     .simultaneousWithExternalGesture(scrollGesture)
     .onBegin(() => {
@@ -315,8 +277,8 @@ export function MountedBottomDrawer({
     <GestureDetector gesture={handlePanGesture}>
       <Animated.View
         style={styles.handleHitArea}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss drawer"
+        accessibilityRole={dismissible ? 'button' : undefined}
+        accessibilityLabel={dismissible ? 'Dismiss drawer' : undefined}
       >
         <View style={styles.handle} />
       </Animated.View>
@@ -375,7 +337,9 @@ export function MountedBottomDrawer({
           // their backdrop so only the top interactive drawer dims the canvas.
           style={[styles.backdrop, interactive ? backdropStyle : { opacity: 0 }]}
         >
-          {interactive ? <Pressable style={styles.backdropPressable} onPress={dismiss} /> : null}
+          {interactive && dismissible ? (
+            <Pressable style={styles.backdropPressable} onPress={dismiss} />
+          ) : null}
         </Animated.View>
 
         <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
@@ -417,7 +381,13 @@ export function MountedBottomDrawer({
   }
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={dismissible ? dismiss : () => {}}
+    >
       {overlay}
     </Modal>
   )

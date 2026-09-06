@@ -4,6 +4,7 @@ import {
 } from './mobile-dictation-session-state'
 import type { MobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
 import type { RpcClient } from '../transport/rpc-client'
+import { mobileLogErrorKind } from '../diagnostics/mobile-log-error-kind'
 
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient
@@ -99,7 +100,9 @@ export async function startMobileDictationDesktopSession(
     const budgetTimer = setTimeout(resolve, MOBILE_DICTATION_KEEP_AWAKE_STARTUP_BUDGET_MS)
     keepAwakeOwner
       .acquire(dictationId)
-      .catch((err: unknown) => console.error('Keep-awake activation failed', err))
+      .catch((err: unknown) =>
+        console.error('Keep-awake activation failed', { kind: mobileLogErrorKind(err) })
+      )
       .finally(() => {
         clearTimeout(budgetTimer)
         resolve()

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import { readRetiredNameRegistryForRepo } from '../../../src/shared/worktree/retired-name-cache'
 import {
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
@@ -11,30 +11,44 @@ import {
   useRetiredWorktreeNames
 } from './use-retired-worktree-names'
 
-type Pending = { resolve: (response: unknown) => void; reject: (err: Error) => void }
+type Pending = {
+  repoId: string
+  resolve: (registry: RetiredNameRegistry) => void
+  reject: (err: Error) => void
+}
 
 /** Renders the hook against a deferred RPC client so a test decides exactly when each
  *  `worktree.listRetiredNames` lands, and for which repo. */
 function mountNames() {
   const pending: Pending[] = []
-  const requests: { method: string; params: unknown }[] = []
+  const requests: string[] = []
   let latest: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
 
-  const client = {
-    sendRequest: (method: string, params: unknown) => {
-      requests.push({ method, params })
-      return new Promise<unknown>((resolve, reject) => pending.push({ resolve, reject }))
-    }
-  } as unknown as RpcClient
+  const readRetiredNames = (repoId: string) => {
+    requests.push(repoId)
+    return new Promise<RetiredNameRegistry>((resolve, reject) =>
+      pending.push({ repoId, resolve, reject })
+    )
+  }
 
-  function Probe({ repoId, refreshKey }: { repoId: string | null; refreshKey: string }) {
-    latest = useRetiredWorktreeNames(client, repoId, refreshKey)
+  function Probe({
+    repoId,
+    refreshKey,
+    readNames
+  }: {
+    repoId: string | null
+    refreshKey: string
+    readNames: (repoId: string) => Promise<RetiredNameRegistry>
+  }) {
+    latest = useRetiredWorktreeNames(readNames, repoId, refreshKey)
     return null
   }
 
   let renderer!: ReturnType<typeof create>
   act(() => {
-    renderer = create(createElement(Probe, { repoId: 'repo-1', refreshKey: 'a' }))
+    renderer = create(
+      createElement(Probe, { repoId: 'repo-1', refreshKey: 'a', readNames: readRetiredNames })
+    )
   })
   return {
     get registry(): RetiredNameRegistry {
@@ -46,7 +60,7 @@ function mountNames() {
     requests,
     rerender(props: { repoId: string | null; refreshKey: string }) {
       act(() => {
-        renderer.update(createElement(Probe, props))
+        renderer.update(createElement(Probe, { ...props, readNames: readRetiredNames }))
       })
     },
     async settle(
@@ -55,7 +69,13 @@ function mountNames() {
       retiredNameTiersByRepo: Record<string, unknown> = {}
     ) {
       await act(async () => {
-        pending[index]!.resolve({ result: { retiredNamesByRepo, retiredNameTiersByRepo } })
+        const request = pending[index]!
+        request.resolve(
+          readRetiredNameRegistryForRepo(
+            { retiredNamesByRepo, retiredNameTiersByRepo },
+            request.repoId
+          )
+        )
         await Promise.resolve()
       })
     },
@@ -87,10 +107,7 @@ describe('useRetiredWorktreeNames', () => {
 
   it('reads the selected repo out of the response envelope', async () => {
     const probe = mountNames()
-    expect(probe.requests[0]).toEqual({
-      method: 'worktree.listRetiredNames',
-      params: { repo: 'id:repo-1' }
-    })
+    expect(probe.requests[0]).toBe('repo-1')
     await probe.settle(0, { 'repo-1': ['nautilus'], 'repo-2': ['seahorse'] })
     expect(probe.names).toEqual(['nautilus'])
   })

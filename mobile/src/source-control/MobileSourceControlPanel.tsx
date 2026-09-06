@@ -18,7 +18,7 @@ import { isMobileConflictAborting } from './mobile-source-control-conflict-abort
 import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
 import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
 import { MobilePrViewPanelBody } from '../components/pr-sidebar/MobilePrViewPanel'
-import { openMobilePrUrl } from '../components/mobile-pr-url'
+import type { HostSourceControlBinding } from './host-source-control-binding'
 
 export type MobileSourceControlPanelProps = {
   hostId: string
@@ -32,6 +32,7 @@ export type MobileSourceControlPanelProps = {
   onRequestClose?: () => void
   onFileOpenStart?: () => void
   onOpenedFileDiff?: (relativePath: string) => void
+  binding?: HostSourceControlBinding
 }
 
 export function MobileSourceControlPanel({
@@ -43,7 +44,8 @@ export function MobileSourceControlPanel({
   initialTab = 'changes',
   onRequestClose,
   onFileOpenStart,
-  onOpenedFileDiff
+  onOpenedFileDiff,
+  binding
 }: MobileSourceControlPanelProps) {
   const [activeTab, setActiveTab] = useState<SourceControlHubTab>(initialTab)
   // Track first visit so Changes/History stay mounted (keep scroll) after first open; PR still unmounts when inactive.
@@ -88,13 +90,15 @@ export function MobileSourceControlPanel({
     onRequestClose,
     onFileOpenStart,
     onOpenedFileDiff,
-    onOpenHistory: openHistoryTab
+    onOpenHistory: openHistoryTab,
+    binding
   })
   const actionSheetActions = useMobileSourceControlActionSheet(state)
   const {
     client,
     connState,
     forceReconnect,
+    prShellOperations,
     insets,
     router,
     setRootRef,
@@ -232,7 +236,9 @@ export function MobileSourceControlPanel({
       ioBusy={ioBusy}
       onBack={onBack}
       onRefresh={onRefresh}
-      onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
+      onOpenPrWeb={
+        prWebUrl ? () => void prShellOperations.openExternal(prWebUrl).catch(() => {}) : undefined
+      }
       prNumber={prWebNumber}
     />
   )
@@ -326,6 +332,7 @@ export function MobileSourceControlPanel({
             // Gate on the probe too: isGithubRepo=false mid-probe must render loading, not flash "unavailable".
             branchContextLoaded={ready && prController.prSidebarRepoProbeLoaded}
             controller={prController}
+            shellOperations={prShellOperations}
           />
         </View>
       ) : activeTab === 'pr' ? (
@@ -341,11 +348,16 @@ export function MobileSourceControlPanel({
             hostId={hostId}
             bottomInset={insets.bottom}
             refreshNonce={historyRefreshNonce}
+            onReconnect={binding?.reconnect}
           />
         </View>
       ) : null}
 
-      <MobileSourceControlModals state={state} actionSheetActions={actionSheetActions} />
+      <MobileSourceControlModals
+        state={state}
+        actionSheetActions={actionSheetActions}
+        openExternal={prShellOperations.openExternal}
+      />
     </View>
   )
 }

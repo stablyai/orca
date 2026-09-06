@@ -15,6 +15,11 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   'github.updatePRState',
   'gitlab.updateIssue',
   'gitlab.updateMR',
+  // Production asset requests will also pass through the native package
+  // downloader rather than literal feature call sites.
+  'mobileWeb.package.asset',
+  'mobileWeb.package.asset.gzip',
+  'mobileWeb.package.manifest',
   // PR-sidebar reads/mutations: the mobile github-pr-rpc/mutations wrappers pass
   // the method name as a positional arg to sendGithubPrRead/sendMutation, so the
   // literal sendRequest('...') scan below cannot see them. List them here so the
@@ -46,12 +51,10 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
 ]
 
 const MOBILE_STREAMING_CLEANUP_RPC_METHODS = [
-  // Why: shared-control unsubscribe methods are sent from generated cleanup
-  // paths, so literal mobile source scanning cannot discover every one.
-  'accounts.unsubscribe',
-  'browser.screencast.unsubscribe',
+  // Why: these cleanups are sent from generated paths that literal mobile source
+  // scanning cannot discover, and they are not in the server-subscription map
+  // derived below (that map's pairs are asserted from the client's own source).
   'notifications.unsubscribe',
-  'runtime.clientEvents.unsubscribe',
   'session.tabs.unsubscribe',
   'session.tabs.unsubscribeAll',
   'terminal.unsubscribe'
@@ -67,7 +70,10 @@ function listSourceFiles(root: string): string[] {
       files.push(...listSourceFiles(path))
       continue
     }
-    if (!/\.[cm]?[jt]sx?$/.test(entry) || /\.test\.[cm]?[jt]sx?$/.test(entry)) {
+    if (
+      !/\.[cm]?[jt]sx?$/.test(entry) ||
+      /(\.test|-test-fakes|-test-fixtures?|\.test-support)\.[cm]?[jt]sx?$/.test(entry)
+    ) {
       continue
     }
     files.push(path)
@@ -112,6 +118,25 @@ function mobileRpcAllowlist(): Set<string> {
   return new Set([...allowlist[1]!.matchAll(/'([^']+)'/g)].map((match) => match[1]!))
 }
 
+/** Subscribe -> unsubscribe pairs read from the client's own teardown map. */
+function serverSubscriptionUnsubscribePairs(): [string, string][] {
+  const source = readFileSync(
+    join(process.cwd(), 'mobile/src/transport/rpc-client-server-subscription.ts'),
+    'utf8'
+  )
+  const map = source.match(/const unsubscribeMethod = \{([\s\S]*?)\}\[method\]/)
+  if (!map) {
+    throw new Error('buildServerSubscriptionUnsubscribe map not found')
+  }
+  const pairs = [...map[1]!.matchAll(/'([^']+)':\s*'([^']+)'/g)].map(
+    (match) => [match[1]!, match[2]!] as [string, string]
+  )
+  if (pairs.length === 0) {
+    throw new Error('buildServerSubscriptionUnsubscribe map is empty')
+  }
+  return pairs
+}
+
 function registeredRuntimeMethods(): Set<string> {
   return new Set(ALL_RPC_METHODS.map((method) => method.name))
 }
@@ -138,6 +163,19 @@ describe('mobile RPC allowlist', () => {
   it('allows every cleanup RPC for mobile streaming subscriptions', () => {
     const allowed = mobileRpcAllowlist()
     const missing = MOBILE_STREAMING_CLEANUP_RPC_METHODS.filter((method) => !allowed.has(method))
+
+    expect(missing).toEqual([])
+  })
+
+  it('allows the unsubscribe for every allowlisted server subscription', () => {
+    // Why: allowlisting a subscribe without its unsubscribe leaks the host-side
+    // subscription for the socket's life, and the client's cancel swallows the
+    // forbidden reply. Derive the pairs so the gap class cannot recur.
+    const allowed = mobileRpcAllowlist()
+    const registered = registeredRuntimeMethods()
+    const missing = serverSubscriptionUnsubscribePairs()
+      .filter(([subscribe]) => allowed.has(subscribe))
+      .filter(([, unsubscribe]) => !allowed.has(unsubscribe) || !registered.has(unsubscribe))
 
     expect(missing).toEqual([])
   })

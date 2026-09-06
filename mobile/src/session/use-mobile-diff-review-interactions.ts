@@ -2,7 +2,6 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import type { FlatList } from 'react-native'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { triggerSelection } from '../platform/haptics'
 import { findNextMobileDiffHunkIndex, findPreviousMobileDiffHunkIndex } from './mobile-diff-hunks'
 import type {
   MobileDiffReviewQueueFilter,
@@ -18,6 +17,7 @@ import type {
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
+import type { HostDiffReviewDeviceOperations } from './host-diff-review-binding'
 
 type InteractionInput = {
   client: RpcClient | null
@@ -48,6 +48,7 @@ type InteractionInput = {
   loadReviewData: () => Promise<void>
   onOpenSession: () => void
   onReconnect: (hostId: string) => void | Promise<void>
+  device: HostDiffReviewDeviceOperations
 }
 
 export function useMobileDiffReviewInteractions(input: InteractionInput) {
@@ -79,7 +80,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     setShowCompletion,
     loadReviewData,
     onOpenSession,
-    onReconnect
+    onReconnect,
+    device
   } = input
 
   const {
@@ -108,7 +110,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     setComposer,
     setComposerBody,
     setActionError,
-    setShowCompletion
+    setShowCompletion,
+    device
   })
 
   const { runGitMutation, stageReviewedFiles } = useMobileDiffReviewGitActions({
@@ -118,7 +121,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     queue,
     setActionError,
     setBusyAction,
-    loadReviewData
+    loadReviewData,
+    device
   })
 
   const { clearSentNotes, copyNotes, createTerminalAndSend, openSendSheet, sendPromptToTerminal } =
@@ -129,7 +133,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       screenState,
       setActionError,
       setSendSheet,
-      saveCommentsAndReviewState
+      saveCommentsAndReviewState,
+      device
     })
 
   return {
@@ -158,7 +163,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
         animated: true,
         viewPosition: 0.16
       })
-      triggerSelection()
+      device.selection()
     },
     markReviewed,
     markUnreviewed,

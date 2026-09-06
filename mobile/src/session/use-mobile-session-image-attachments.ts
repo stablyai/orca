@@ -2,6 +2,11 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type {
+  HostSessionNativeChatOperations,
+  HostSessionNativeChatTarget
+} from './host-session-native-chat-operations'
+import type { HostSessionTerminalOperations } from './host-session-terminal-operations'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
 import {
   useMobileNativeChatImageAttachments,
@@ -21,6 +26,8 @@ type Args = {
    *  are scoped per tab so a switch can't ride an image into another terminal. */
   readonly nativeChatScopeKey: string | null
   readonly nativeChatInputLeaseReady: boolean
+  readonly nativeChatOperations: HostSessionNativeChatOperations | null
+  readonly nativeChatTargetRef: CurrentRef<HostSessionNativeChatTarget | null>
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
   readonly beforeTerminalSend: (terminal: string) => Promise<boolean>
   /** Outcome-preserving so an ambiguous ('unknown') delivery after an image
@@ -46,6 +53,7 @@ type Args = {
   readonly onNativeChatSendError: (message: string) => void
   readonly onSuccess: () => void
   readonly onError: () => void
+  readonly terminalOperations: HostSessionTerminalOperations | null
 }
 
 /** A session exposes image attachment on two surfaces that share one upload
@@ -61,6 +69,8 @@ export function useMobileSessionImageAttachments({
   deviceTokenRef,
   nativeChatScopeKey,
   nativeChatInputLeaseReady,
+  nativeChatOperations,
+  nativeChatTargetRef,
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
   nativeChatBaseSend,
@@ -69,7 +79,8 @@ export function useMobileSessionImageAttachments({
   showToast,
   onNativeChatSendError,
   onSuccess,
-  onError
+  onError,
+  terminalOperations
 }: Args): {
   attachImage: (source: MobileImageSource) => Promise<void>
   isAttaching: boolean
@@ -85,7 +96,8 @@ export function useMobileSessionImageAttachments({
     getActiveWorktreeConnectionId,
     showToast,
     onSuccess,
-    onError
+    onError,
+    terminalOperations
   })
   const nativeChatImages = useMobileNativeChatImageAttachments({
     client,
@@ -96,6 +108,8 @@ export function useMobileSessionImageAttachments({
     scopeKey: nativeChatScopeKey,
     enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
     structuredNativeChat,
+    operations: nativeChatOperations,
+    targetRef: nativeChatTargetRef,
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,

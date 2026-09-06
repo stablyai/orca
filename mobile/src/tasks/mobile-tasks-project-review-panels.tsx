@@ -7,7 +7,7 @@ import {
   projectRowType,
   isFailedGitHubCheck,
   GitHubPrFileDiff
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import {
   View,
   Text,
@@ -16,13 +16,13 @@ import {
   Pressable,
   Check,
   TextInput,
-  Linking,
   ExternalLink
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     addProjectGitHubFileReviewComment,
     expandedPrFilePath,
     prFileCommentDrafts,
@@ -166,7 +166,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                 disabled={!check.url}
                 onPress={() => {
                   if (check.url) {
-                    void Linking.openURL(check.url)
+                    void deviceOperations.openExternalUrl(check.url)
                   }
                 }}
               >
@@ -219,7 +219,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                   ) : prFileContents[file.path] ? (
                     <GitHubPrFileDiff
                       filePath={file.path}
-                      contents={prFileContents[file.path]}
+                      contents={prFileContents[file.path]!}
                       commentDrafts={prFileCommentDrafts}
                       disabled={projectMutating}
                       onCommentDraftChange={(draftKey, next) =>

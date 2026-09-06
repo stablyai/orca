@@ -24,7 +24,13 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     terminalFrameHeightRef,
     nativeChatInputLeaseReadyRef,
     clearNativeChatInputLease,
-    showNativeChatRef
+    showNativeChatRef,
+    deviceTokenRef,
+    sessionTerminalOperations,
+    showToast,
+    triggerError,
+    triggerSuccess,
+    pendingQuickCommandInputRef
   } = scope
   const getTerminalRef = useCallback((handle: string | null) => {
     return handle ? terminalRefs.current.get(handle) : undefined
@@ -78,11 +84,36 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     subscribeSeqRef.current.clear()
     layoutSeqRef.current.clear()
     terminalCwdRef.current.clear()
+    pendingQuickCommandInputRef.current.clear()
     setTerminalKeyboardMetrics(new Map())
     for (const term of terminalRefs.current.values()) {
       term.clear()
     }
   }, [clearNativeChatInputLease])
+
+  const deliverPendingQuickCommandInput = useCallback(
+    async (handle: string) => {
+      const pending = pendingQuickCommandInputRef.current.get(handle)
+      if (!pending || !sessionTerminalOperations) {
+        return
+      }
+      pendingQuickCommandInputRef.current.delete(handle)
+      const accepted = await sessionTerminalOperations.sendInput(
+        handle,
+        pending.text,
+        pending.enter,
+        deviceTokenRef.current
+      )
+      if (accepted) {
+        triggerSuccess()
+        showToast(pending.successToast)
+      } else {
+        triggerError()
+        showToast("Couldn't insert quick command", 1800)
+      }
+    },
+    [sessionTerminalOperations, showToast, triggerError, triggerSuccess]
+  )
 
   // Why: measure the phone viewport once from the first TerminalWebView; dims ride every subscribe so the server auto-fits without a separate RPC.
   const measureViewportOnce = useCallback(
@@ -106,7 +137,8 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     unsubscribeTerminal,
     unsubscribeTerminalRef,
     clearTerminalCache,
-    measureViewportOnce
+    measureViewportOnce,
+    deliverPendingQuickCommandInput
   }
 }
 

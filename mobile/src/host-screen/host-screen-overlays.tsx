@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Check, Moon } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
@@ -5,6 +6,8 @@ import { ActionSheetContent } from '../components/ActionSheetModal'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
+import { defaultHostWorkspaceCreationOperations } from '../worktree/default-host-workspace-creation-operations'
+import { useDefaultHostScreenShellOperations } from '../worktree/default-host-screen-shell-operations'
 import { PickerModal } from '../components/PickerModal'
 import { colors } from '../theme/mobile-theme'
 import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
@@ -15,9 +18,9 @@ import {
 } from '../worktree/workspace-list-picker-options'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import type { HostScreenController } from './use-host-screen-controller'
+import type { HybridHostScreenController } from './use-hybrid-host-screen-controller'
 
-export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
+export function HostScreenOverlays({ controller }: { controller: HybridHostScreenController }) {
   const {
     actions,
     catalog,
@@ -29,6 +32,17 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     showNewWorktree,
     state
   } = controller
+  const defaultShellOperations = useDefaultHostScreenShellOperations({
+    hostId,
+    embedded: controller.embedded
+  })
+  const shellOperations = controller.shellOperations ?? defaultShellOperations
+  const workspaceCreationOperations = useMemo(
+    () =>
+      controller.creationOperations ??
+      (client ? defaultHostWorkspaceCreationOperations(client) : null),
+    [client, controller.creationOperations]
+  )
   const actionTarget = state.actionTarget
 
   return (
@@ -165,10 +179,13 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       label: 'Sleep',
                       icon: Moon,
                       onPress: () => {
-                        if (client) {
+                        if (actions.sleepWorktree) {
                           state.setSleptIds((prev) =>
                             new Set(prev).add(getWorktreeRowIdentity(actionTarget))
                           )
+                          // Why: an unhandled rejection here would surface as a redbox on a fire-and-forget sleep.
+                          void actions.sleepWorktree(actionTarget.worktreeId).catch(() => null)
+                        } else if (client) {
                           void client
                             .sendRequest('worktree.sleep', {
                               worktree: `id:${actionTarget.worktreeId}`
@@ -211,10 +228,11 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       <NewWorktreeModalController
         ref={state.newWorktreeModalRef}
         routeVisible={showNewWorktree}
-        client={client}
+        operations={workspaceCreationOperations}
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
+        openExternalUrl={shellOperations.openExternalUrl}
         onVisibleChange={(visible) => {
           state.newWorktreeModalVisibleRef.current = visible
         }}

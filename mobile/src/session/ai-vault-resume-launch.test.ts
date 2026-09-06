@@ -312,6 +312,26 @@ describe('resumeAiVaultSessionInTerminal', () => {
     ).rejects.toThrow('no terminal')
   })
 
+  it('reauthorizes before sending the resume command', async () => {
+    let current = true
+    const sendRequest = vi.fn().mockImplementation(async () => {
+      current = false
+      return {
+        ok: true,
+        result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
+      }
+    })
+
+    await expect(
+      resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' }, () => {
+        if (!current) {
+          throw new Error('revoked')
+        }
+      })
+    ).rejects.toThrow('revoked')
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+  })
+
   it('throws when the created terminal response is malformed', async () => {
     const sendRequest = vi.fn().mockResolvedValueOnce({ ok: true, result: { tab: { id: 'x' } } })
     await expect(

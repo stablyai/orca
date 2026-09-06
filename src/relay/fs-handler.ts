@@ -28,10 +28,12 @@ import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { resolveQuickOpenResultLimit } from '../shared/quick-open-listing-limits'
 import { maybeStreamRpcResponse, type GitResponseStreamRegistry } from './git-response-stream'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
+import { readRelayFileChunk } from './fs-handler-file-chunk'
 import { readRelayFileRange } from './fs-handler-file-range'
 import { FileRangeReadRequestError } from '../shared/file-range-read'
 import {
   readVerifiedTerminalArtifact,
+  readVerifiedTerminalArtifactChunk,
   writeVerifiedTerminalArtifact
 } from './fs-handler-terminal-artifact'
 import { RelayStreamRegistry } from './fs-stream-registry'
@@ -80,12 +82,16 @@ export class FsHandler {
   private registerHandlers(): void {
     this.dispatcher.onRequest('fs.readDir', (p) => readRelayDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
+    this.dispatcher.onRequest('fs.readFileChunk', (p) => this.readFileChunk(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
     this.dispatcher.onRequest('fs.readFileRange', (p) => this.readFileRange(p))
     this.dispatcher.onRequest('fs.readDocPreview', (p) =>
       readAuthorizedDocPreviewFile(p as DocPreviewFileAccessRequest)
     )
     this.dispatcher.onRequest('fs.readTerminalArtifact', (p) => this.readTerminalArtifact(p))
+    this.dispatcher.onRequest('fs.readTerminalArtifactChunk', (p) =>
+      this.readTerminalArtifactChunk(p)
+    )
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => writeRelayFile(p))
     this.dispatcher.onRequest('fs.writeTerminalArtifact', (p) => this.writeTerminalArtifact(p))
@@ -128,6 +134,14 @@ export class FsHandler {
     return readRelayFileContent(filePath)
   }
 
+  private async readFileChunk(params: Record<string, unknown>) {
+    return readRelayFileChunk({
+      filePath: expandTilde(params.filePath as string),
+      offset: params.offset as number,
+      length: params.length as number
+    })
+  }
+
   // Why hand-checked: relay params arrive as raw casts with no schema. The
   // offsets are validated inside readRelayFileRange, next to the read syscall.
   private async readFileRange(params: Record<string, unknown>) {
@@ -139,6 +153,13 @@ export class FsHandler {
 
   private async readTerminalArtifact(params: Record<string, unknown>) {
     return readVerifiedTerminalArtifact({
+      ...params,
+      filePath: expandTilde(params.filePath as string)
+    })
+  }
+
+  private async readTerminalArtifactChunk(params: Record<string, unknown>) {
+    return readVerifiedTerminalArtifactChunk({
       ...params,
       filePath: expandTilde(params.filePath as string)
     })

@@ -10,7 +10,6 @@ import {
   TextInput,
   ActivityIndicator,
   PickerModal,
-  Linking,
   ExternalLink,
   Lock
 } from './mobile-tasks-dependencies'
@@ -22,7 +21,7 @@ import {
   issueSourceSlug,
   type LinearTeam,
   TASK_SECONDARY_DRAWER_Z_INDEX
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel) {
   const {
@@ -225,6 +224,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
 
 export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     connectLinearAccount,
     linearApiKeyDraft,
     linearConnectError,
@@ -279,7 +279,9 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
         ) : null}
         <Pressable
           style={styles.inlineTextLink}
-          onPress={() => void Linking.openURL('https://linear.app/settings/account/security')}
+          onPress={() =>
+            void deviceOperations.openExternalUrl('https://linear.app/settings/account/security')
+          }
         >
           <ExternalLink size={13} color={colors.textSecondary} />
           <Text style={styles.inlineTextLinkText}>Linear Settings / Security / New API key</Text>

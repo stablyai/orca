@@ -41,39 +41,35 @@ function userTurn(id: string, text: string): NativeChatMessage {
 }
 
 describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
-  const KEY = 'host\0worktree\0tab\0session'
   // Multi-line text distinguishes raw trim from reconciliation normalization.
   const MULTILINE = 'first line of the prompt\nsecond line of the prompt'
 
   it('gives a repeated multi-line send the next ordinal', () => {
     const baseline = [userTurn('m1', 'unrelated')]
     const first = appendMobileNativeChatPending(
-      {},
-      KEY,
+      [],
       'p1',
       sendOrigin(MULTILINE, baseline),
       MULTILINE
     )
     const both = appendMobileNativeChatPending(
       first,
-      KEY,
       'p2',
       sendOrigin(MULTILINE, baseline),
       MULTILINE
     )
 
-    expect(both[KEY]?.map((item) => item.expectedOccurrence)).toEqual([1, 2])
+    expect(both.map((item) => item.expectedOccurrence)).toEqual([1, 2])
   })
 
   it('retires only the first echo when the first of two identical rows lands', () => {
     const baseline = [userTurn('m1', 'unrelated')]
     const pending = appendMobileNativeChatPending(
-      appendMobileNativeChatPending({}, KEY, 'p1', sendOrigin(MULTILINE, baseline), MULTILINE),
-      KEY,
+      appendMobileNativeChatPending([], 'p1', sendOrigin(MULTILINE, baseline), MULTILINE),
       'p2',
       sendOrigin(MULTILINE, baseline),
       MULTILINE
-    )[KEY]!
+    )
     const landedOnce = [...baseline, userTurn('m2', MULTILINE)]
 
     expect(
@@ -86,20 +82,17 @@ describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
   it('still counts a single-line repeat, which never regressed', () => {
     const baseline = [userTurn('m1', 'unrelated')]
     const both = appendMobileNativeChatPending(
-      appendMobileNativeChatPending({}, KEY, 'p1', sendOrigin('ping', baseline), 'ping'),
-      KEY,
+      appendMobileNativeChatPending([], 'p1', sendOrigin('ping', baseline), 'ping'),
       'p2',
       sendOrigin('ping', baseline),
       'ping'
     )
 
-    expect(both[KEY]?.map((item) => item.expectedOccurrence)).toEqual([1, 2])
+    expect(both.map((item) => item.expectedOccurrence)).toEqual([1, 2])
   })
 })
 
 describe('mobile pending echoes whose text normalizes to nothing', () => {
-  const KEY = 'host\0worktree\0tab\0session'
-
   // KNOWN GAP: marker-only rows render empty; suppressing their echo would hide the send.
   it('cannot retire an echo whose row normalizes away', () => {
     const stranded = [
@@ -118,26 +111,25 @@ describe('mobile pending echoes whose text normalizes to nothing', () => {
 
   it('gives a caption-less photo its own ordinal after a marker-only caption', () => {
     const first = appendMobileNativeChatPending(
-      {},
-      KEY,
+      [],
       'p1',
       sendOrigin('[Image #1]', []),
       '[Image #1]',
       ['file:///a.jpg']
     )
-    const both = appendMobileNativeChatPending(first, KEY, 'p2', sendOrigin('', []), '', [
+    const both = appendMobileNativeChatPending(first, 'p2', sendOrigin('', []), '', [
       'file:///b.jpg'
     ])
 
-    expect(both[KEY]?.map((item) => item.expectedOccurrence)).toEqual([1, 2])
+    expect(both.map((item) => item.expectedOccurrence)).toEqual([1, 2])
   })
 
   it('records an image echo, whose text is empty by design', () => {
-    const pending = appendMobileNativeChatPending({}, KEY, 'p1', sendOrigin('', []), '', [
+    const pending = appendMobileNativeChatPending([], 'p1', sendOrigin('', []), '', [
       'file:///photo.jpg'
     ])
 
-    expect(pending[KEY]).toHaveLength(1)
-    expect(pending[KEY]?.[0]?.expectedOccurrence).toBe(1)
+    expect(pending).toHaveLength(1)
+    expect(pending[0]?.expectedOccurrence).toBe(1)
   })
 })

@@ -68,6 +68,8 @@ function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): Hook
     connState: 'connected',
     scopeKey: SCOPE_A,
     enabled: true,
+    operations: null,
+    targetRef: { current: null },
     showToast: vi.fn(),
     onSendError: vi.fn(),
     baseSend: vi.fn().mockResolvedValue('accepted'),

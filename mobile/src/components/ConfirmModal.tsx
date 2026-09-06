@@ -7,10 +7,12 @@ type Props = {
   title: string
   message?: string
   confirmLabel?: string
-  cancelLabel?: string
+  cancelLabel?: string | null
   destructive?: boolean
+  dismissible?: boolean
   onConfirm: () => void
   onCancel: () => void
+  onDismiss?: () => void
 }
 
 export function ConfirmModal({
@@ -20,22 +22,26 @@ export function ConfirmModal({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   destructive = false,
+  dismissible = true,
   onConfirm,
-  onCancel
+  onCancel,
+  onDismiss = onCancel
 }: Props) {
   return (
-    <BottomDrawer visible={visible} onClose={onCancel}>
+    <BottomDrawer visible={visible} dismissible={dismissible} onClose={onDismiss}>
       <View style={styles.content}>
         <Text style={styles.title}>{title}</Text>
         {message ? <Text style={styles.message}>{message}</Text> : null}
       </View>
       <View style={styles.buttons}>
-        <Pressable
-          style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
-          onPress={onCancel}
-        >
-          <Text style={styles.cancelText}>{cancelLabel}</Text>
-        </Pressable>
+        {cancelLabel ? (
+          <Pressable
+            style={({ pressed }) => [styles.button, styles.cancelButton, pressed && styles.pressed]}
+            onPress={onCancel}
+          >
+            <Text style={styles.cancelText}>{cancelLabel}</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={({ pressed }) => [
             styles.button,

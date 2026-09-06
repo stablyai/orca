@@ -1,16 +1,16 @@
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PickerModal } from '../components/PickerModal'
-import { openMobilePrUrl } from '../components/mobile-pr-url'
 import { MobileBranchDiffPreviewDrawer } from './MobileBranchDiffPreviewDrawer'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
 type Props = {
   state: MobileSourceControlState
   actionSheetActions: ActionSheetAction[]
+  openExternal(url: string): Promise<void>
 }
 
-export function MobileSourceControlModals({ state, actionSheetActions }: Props) {
+export function MobileSourceControlModals({ state, actionSheetActions, openExternal }: Props) {
   const {
     branchDiffPreview,
     setBranchDiffPreview,
@@ -97,7 +97,7 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
         confirmLabel="Open"
         onConfirm={() => {
           if (createdPrUrl) {
-            openMobilePrUrl(createdPrUrl)
+            void openExternal(createdPrUrl).catch(() => {})
           }
           setCreatedPrUrl(null)
           setCreatedPrWarning(null)

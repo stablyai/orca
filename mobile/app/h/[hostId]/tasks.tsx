@@ -1,3 +1,5 @@
+import type { MobileTasksScreenProps } from '../../../src/tasks/mobile-tasks-screen-props'
+import { useMobileTasksHostOperations } from '../../../src/tasks/use-mobile-tasks-host-operations'
 import { useMobileTasksRouteAndItemState } from '../../../src/tasks/use-mobile-tasks-route-and-item-state'
 import { useMobileTasksWorkspaceAndProjectState } from '../../../src/tasks/use-mobile-tasks-workspace-and-project-state'
 import { useMobileTasksProjectProjection } from '../../../src/tasks/use-mobile-tasks-project-projection'
@@ -36,8 +38,9 @@ import { useMobileTasksProviderViewProjection } from '../../../src/tasks/use-mob
 import { useMobileTasksConnectionPresentation } from '../../../src/tasks/use-mobile-tasks-connection-presentation'
 import { MobileTasksLegacySurface } from '../../../src/tasks/MobileTasksLegacySurface'
 
-export default function MobileTasksScreen() {
-  const stage1 = useMobileTasksRouteAndItemState()
+export default function MobileTasksScreen(props: MobileTasksScreenProps = {}) {
+  const hostOperations = useMobileTasksHostOperations(props)
+  const stage1 = useMobileTasksRouteAndItemState(hostOperations)
   const stage2 = useMobileTasksWorkspaceAndProjectState(stage1)
   const stage3 = useMobileTasksProjectProjection(stage2)
   const stage4 = useMobileTasksProjectRepositoryResolution(stage3)

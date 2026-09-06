@@ -16,13 +16,13 @@ import { StatusDot } from '../components/StatusDot'
 import { classifyConnection, type ConnectionVerdict } from '../transport/connection-health'
 import { colors } from '../theme/mobile-theme'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import type { HostScreenController } from './use-host-screen-controller'
+import type { HybridHostScreenController } from './use-hybrid-host-screen-controller'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
   return v.kind === 'warning' || v.kind === 'unreachable' || v.kind === 'auth-failed'
 }
 
-export function HostScreenHeader({ controller }: { controller: HostScreenController }) {
+export function HostScreenHeader({ controller }: { controller: HybridHostScreenController }) {
   const {
     actions,
     connState,
@@ -77,7 +77,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                   return (
                     <Pressable
                       style={styles.reconnectButton}
-                      onPress={() => void forceReconnectHost(hostId!)}
+                      onPress={() => void forceReconnectHost()}
                       hitSlop={8}
                     >
                       <Text style={styles.reconnectButtonText}>Reconnect</Text>

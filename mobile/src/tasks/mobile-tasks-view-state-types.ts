@@ -1,10 +1,5 @@
 import type { DetailComment } from './mobile-tasks-provider-detail-types'
-import type {
-  TuiAgent,
-  TaskProvider,
-  GitHubProjectSettings,
-  GitHubProjectRef
-} from './mobile-tasks-dependencies'
+import type { GitHubProjectRef, HostTaskBootstrap } from './mobile-tasks-dependencies'
 import type { GitHubProjectSortDirection } from '../../../src/shared/github/project-types'
 
 export type GitHubTaskKind = 'issues' | 'prs'
@@ -39,39 +34,11 @@ export type DetailCommentGroup =
   | { kind: 'standalone'; comment: DetailComment }
   | { kind: 'thread'; threadId: string; root: DetailComment; replies: DetailComment[] }
 
-export type TaskResumeState = {
-  githubMode?: 'items' | 'project'
-  githubItemsPreset?: GitHubPreset | 'all' | null
-  githubItemsQuery?: string
-  githubProjectHiddenFieldIdsByView?: Record<string, string[]>
-  linearPreset?: LinearFilter
-  linearQuery?: string
-}
+export type TaskResumeState = HostTaskBootstrap['taskResumeState']
 
-export type RuntimeTaskSettings = {
-  defaultTuiAgent?: TuiAgent | 'blank' | null
-  disabledTuiAgents?: TuiAgent[]
-  agentCmdOverrides?: Record<string, string>
-  defaultTaskSource?: TaskProvider
-  defaultTaskViewPreset?: GitHubPreset | 'all'
-  visibleTaskProviders?: TaskProvider[]
-  defaultRepoSelection?: string[] | null
-  defaultLinearTeamSelection?: string[] | null
-  githubProjects?: GitHubProjectSettings
-}
+export type RuntimeTaskSettings = HostTaskBootstrap['settings']
 
-export type LinearWorkspace = {
-  id: string
-  organizationName?: string
-  displayName?: string
-}
-
-export type LinearStatusResponse = {
-  connected?: boolean
-  workspaces?: LinearWorkspace[]
-  selectedWorkspaceId?: string | 'all' | null
-  activeWorkspaceId?: string | null
-}
+export type LinearWorkspace = HostTaskBootstrap['linearStatus']['workspaces'][number]
 
 export type GitHubIssueType = {
   id: string
@@ -138,6 +105,7 @@ export type GitHubProjectFieldMutationValue =
 
 export type GitHubProjectRow = {
   id: string
+  targetId?: string
   itemType: 'ISSUE' | 'PULL_REQUEST' | 'DRAFT_ISSUE' | 'REDACTED'
   content: {
     number: number | null

@@ -8,14 +8,15 @@ import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useDefaultHostScreenShellOperations } from '../worktree/default-host-screen-shell-operations'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import { HostWorkspaceListStates } from '../worktree/host-workspace-list-states'
 import { getWorktreeStatus } from '../worktree/workspace-list-sections'
 import { repoColor } from '../worktree/repo-color'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import type { HostScreenController } from './use-host-screen-controller'
+import type { HybridHostScreenController } from './use-hybrid-host-screen-controller'
 
-export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
+export function HostWorkspaceList({ controller }: { controller: HybridHostScreenController }) {
   const {
     actions,
     activeWorktreeScroll,
@@ -34,13 +35,15 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     reconnectAttempts,
     relayRecovery,
     routeNotice,
-    router,
     sectionsResult,
     setDismissedNotice,
     settings,
     state
   } = controller
   const { rawSections, sections, uniqueRepoColors } = sectionsResult
+  const defaultShellOperations = useDefaultHostScreenShellOperations({ hostId, embedded })
+  // Re-pair and diagnostics are shell screens; the hosted page has neither route nor transport log.
+  const shellOperations = controller.shellOperations ?? defaultShellOperations
 
   return (
     <>
@@ -48,8 +51,8 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
           canRetry={!!hostId}
-          onRetry={() => hostId && void forceReconnectHost(hostId)}
-          onRepair={() => router.push('/pair-scan')}
+          onRetry={() => hostId && void forceReconnectHost()}
+          onRepair={() => shellOperations.repairPairing()}
           onRemove={() => state.setConfirmRemoveHost(true)}
         />
       )}
@@ -58,11 +61,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       !relayRecovery.pairingRejected &&
       reconnectAttempts >= 3 &&
       hostId ? (
-        <HostDiagnosticsLink
-          onPress={() =>
-            router.push({ pathname: '/connection-log', params: { hostId: String(hostId) } })
-          }
-        />
+        <HostDiagnosticsLink onPress={() => shellOperations.openConnectionDiagnostics()} />
       ) : null}
 
       {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}

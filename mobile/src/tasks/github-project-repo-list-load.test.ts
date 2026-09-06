@@ -42,7 +42,7 @@ function loadTasksBody(): string {
   return block(
     taskListSource,
     'const loadTasks = useCallback(',
-    '  return Object.assign(model, { loadTasks })'
+    '\n  return Object.assign(model, {'
   )
 }
 
@@ -133,7 +133,11 @@ describe('mobile GitHub Project readiness and refresh', () => {
   // Regression: Expo reuses this screen for the next host, so an effect-based
   // reset runs a render too late and the previous host's rows show through.
   it('clears the other client-scoped caches during render', () => {
-    const body = block(clientSettingsSource, 'if (boundClient !== client) {', '\n  }')
+    const body = block(
+      clientSettingsSource,
+      'if (boundReadOperations !== taskReadOperations) {',
+      '\n  }'
+    )
     expect(body).toContain('setItems([])')
     expect(body).toContain('setGithubRepoSlugCache({})')
     expect(body, 'a ref write here would leak from an abandoned render').not.toContain('.current =')
@@ -141,8 +145,8 @@ describe('mobile GitHub Project readiness and refresh', () => {
 
   // ...and the ref half belongs in the commit phase, for the same reason.
   it('resets the selection-hydration ref in the commit phase', () => {
-    expect(block(clientSettingsSource, 'clientRef.current = client', '}, [client])')).toContain(
-      'repoSelectionHydratedRef.current = false'
-    )
+    expect(
+      block(clientSettingsSource, 'useLayoutEffect(() => {', '}, [taskReadOperations])')
+    ).toContain('repoSelectionHydratedRef.current = false')
   })
 })

@@ -5,7 +5,6 @@ import {
   Plus,
   colors,
   Text,
-  Linking,
   ExternalLink,
   Copy,
   RefreshCw,
@@ -18,10 +17,11 @@ import {
   type TaskItem,
   taskStatusActionLabel,
   isGitHubPrMergeBlocked
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function renderMobileTasksItemActions(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     actionItem,
     copiedLinkKey,
     copyTaskLink,
@@ -60,7 +60,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
       <View style={styles.actionSeparator} />
       <Pressable
         style={styles.actionRow}
-        onPress={() => void Linking.openURL(actionItem.source.url)}
+        onPress={() => void deviceOperations.openExternalUrl(actionItem.source.url)}
       >
         <ExternalLink size={16} color={colors.textPrimary} />
         <Text style={styles.actionText}>{taskExternalOpenLabel(actionItem)}</Text>

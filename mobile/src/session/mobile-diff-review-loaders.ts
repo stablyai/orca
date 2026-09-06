@@ -148,7 +148,10 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
   if (result.kind === 'too-large') {
     return { kind: 'too-large', itemKey: item.key, byteLength: result.byteLength }
   }
-  const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+  const diff =
+    result.kind === 'rows'
+      ? { lines: result.rows, truncated: result.truncated }
+      : buildMobileDiffLines(result.originalContent, result.modifiedContent)
   const language = resolveMobileSyntaxLanguage(item.filePath)
   return {
     kind: 'ready',

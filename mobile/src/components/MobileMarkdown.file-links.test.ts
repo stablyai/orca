@@ -49,7 +49,7 @@ describe('MobileMarkdown file links', () => {
 
   function render(content: string): ReactTestRenderer {
     act(() => {
-      renderer = create(createElement(MobileMarkdown, { content, onOpenFile }))
+      renderer = create(createElement(MobileMarkdown, { content, onOpenFile, onOpenLink: openURL }))
     })
     return renderer!
   }

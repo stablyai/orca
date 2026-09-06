@@ -11,6 +11,95 @@
   },
   "gates": [
     {
+      "id": "mobile-hybrid.lifecycle-and-file-integrity",
+      "title": "Mobile page replacement and concurrent saves preserve ownership and content",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "mobile-runtime",
+      "layer": "rpc-and-react-contract",
+      "surfaces": [
+        "conditional file saves",
+        "hosted document reload",
+        "session tab activation",
+        "relay subscription cancellation"
+      ],
+      "platforms": ["ios", "android", "macos", "linux", "windows"],
+      "providers": ["local", "ssh", "cloud-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "cloud-relay"],
+      "coverageNotes": "Real RPC dispatcher and temporary disk files, React hooks with controlled completion, and injected relay transport. No physical phone or live SSH host was exercised.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/13386"],
+      "invariant": "Concurrent conditional saves cannot consume one revision twice; UTF-8 bytes survive editing; a replaced page or workspace cannot retain subscriptions or apply another workspace's delayed activation.",
+      "oracle": "Dispatch competing saves against one revision and require one success and one conflict. Verify BOM bytes on disk and a subsequent save. Batch native loading/loaded events across two replacements and count broker retirement. Resolve activation after host/workspace/operation change or unmount and require no state publication. Cancel relay streams before and after ready and require the correct cleanup RPC with no late callback.",
+      "commands": [
+        "pnpm test src/main/runtime/rpc/methods/mobile-file-write-if-unchanged.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/mobile-web/mobile-web-document-replacement.test.tsx mobile/src/session/session-tab-activation-source-race.test.ts mobile/src/transport/mobile-relay-subscription-cleanup.test.ts"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/methods/mobile-file-write-if-unchanged.test.ts",
+        "mobile/src/mobile-web/mobile-web-document-replacement.test.tsx",
+        "mobile/src/session/session-tab-activation-source-race.test.ts",
+        "mobile/src/transport/mobile-relay-subscription-cleanup.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/methods/mobile-file-write-if-unchanged.test.ts",
+          "assertions": [
+            "allows only one concurrent save to consume a revision",
+            "preserves a UTF-8 BOM on disk and returns a revision usable by the next save"
+          ]
+        },
+        {
+          "file": "mobile/src/mobile-web/mobile-web-document-replacement.test.tsx",
+          "assertions": [
+            "retires every replacement when native loading and loaded events are batched"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-04",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/main/runtime/rpc/methods/mobile-file-write-if-unchanged.test.ts",
+          "result": "passed",
+          "durationSeconds": 15.96,
+          "summary": "Six conditional write tests passed, including competing revisions, queue recovery, and exact disk bytes."
+        },
+        {
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/mobile-web/mobile-web-document-replacement.test.tsx mobile/src/session/session-tab-activation-source-race.test.ts mobile/src/transport/mobile-relay-subscription-cleanup.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.84,
+          "summary": "Three files and 14 lifecycle, delayed activation, and subscription cleanup tests passed. The cleanup file narrowed to files.watch and accounts.subscribe when main's mobile-relay-rpc-stream-cancellation.test.ts took over the other routes."
+        }
+      ],
+      "runtimeBudget": { "p95Seconds": 30, "scope": "focused deterministic contract suites" },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local focused runs pass; CI soak history is unavailable."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Before the fixes, competing saves both succeeded, disk writes dropped the BOM, a batched load erased replacement state, and four delayed activation scenarios published into retired scopes. The same behavioral assertions pass after the fixes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Existing keyed promise queue serializes conditional saves per runtime and execution host and releases settled tails. Document replacement creates exactly one broker; cancellation emits one cleanup. No new polling or subprocesses."
+      },
+      "promotionCriteria": [
+        "Collect 100 CI passes or 14 days of soak.",
+        "Exercise physical iOS/Android reload, relay reconnect, and concurrent editing against a live SSH host."
+      ],
+      "knownGaps": [
+        "RPC serialization does not lock arbitrary external filesystem writers or a different runtime process.",
+        "No physical phone lifecycle, headed/headless pairing, or live SSH validation was performed."
+      ],
+      "demotionRule": "Keep experimental if ownership races recur, subscriptions survive replacement, conditional writes report two successes for one revision, or focused tests flake."
+    },
+    {
       "id": "ssh.localhost-terminal-agent-hooks",
       "title": "Localhost SSH terminal and agent hooks reach the owning pane",
       "maturity": "experimental",

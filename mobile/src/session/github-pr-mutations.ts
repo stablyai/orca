@@ -7,7 +7,9 @@ import { buildGithubPrParams, githubPrRepoSlugParam, type GitHubPrRepoSlug } fro
 // return a host-status outcome (the host mutations all return
 // `{ ok: true } | { ok: false; error: string }`).
 
-export type GitHubPrMutationOutcome = { ok: true } | { ok: false; error: string }
+// `comment` is the server-created entry when the host publishes one; callers that echo the
+// comment optimistically need its real id, not a locally minted stub.
+export type GitHubPrMutationOutcome = { ok: true; comment?: unknown } | { ok: false; error: string }
 
 // Sends a request whose host result is a bare boolean (not the `{ ok }` envelope),
 // normalizing a transport throw into a failure so the raw-boolean callers below
@@ -52,18 +54,22 @@ function extractMutationError(error: unknown, method: string): string {
 async function sendGithubPrMutation(
   client: Pick<RpcClient, 'sendRequest'>,
   method: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  options?: { timeoutMs?: number }
 ): Promise<GitHubPrMutationOutcome> {
   try {
-    const response = await client.sendRequest(method, params)
+    // Keep the two-argument call shape when no timeout is requested.
+    const response = options
+      ? await client.sendRequest(method, params, options)
+      : await client.sendRequest(method, params)
     if (!response.ok) {
       return { ok: false, error: response.error?.message || `Request failed: ${method}` }
     }
     const result = response.result
     if (result && typeof result === 'object' && 'ok' in result) {
-      const r = result as { ok: boolean; error?: unknown }
+      const r = result as { ok: boolean; error?: unknown; comment?: unknown }
       if (r.ok === true) {
-        return { ok: true }
+        return { ok: true, comment: r.comment }
       }
       return { ok: false, error: extractMutationError(r.error, method) }
     }
@@ -79,7 +85,8 @@ async function sendGithubPrMutation(
 export async function fetchMergePR(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,
-  args: { prNumber: number; method?: GitHubPRMergeMethod; prRepo?: GitHubPrRepoSlug | null }
+  args: { prNumber: number; method?: GitHubPRMergeMethod; prRepo?: GitHubPrRepoSlug | null },
+  options?: { timeoutMs?: number }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = { prNumber: args.prNumber }
   if (args.method) {
@@ -88,7 +95,8 @@ export async function fetchMergePR(
   return sendGithubPrMutation(
     client,
     'github.mergePR',
-    buildGithubPrParams('github.mergePR', worktreeId, params, { prRepo: args.prRepo })
+    buildGithubPrParams('github.mergePR', worktreeId, params, { prRepo: args.prRepo }),
+    options
   )
 }
 
@@ -228,16 +236,23 @@ export async function fetchAddPRReviewCommentReply(
   )
 }
 
-// Add a root conversation comment to the PR. Host returns GitHubCommentResult.
+// Add a root conversation comment to a PR or an issue. Host returns GitHubCommentResult.
 export async function fetchAddIssueComment(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,
-  args: { prNumber: number; body: string; prRepo?: GitHubPrRepoSlug | null }
+  args: {
+    prNumber: number
+    body: string
+    prRepo?: GitHubPrRepoSlug | null
+    // Why: the host addresses the comment by this; an issue row sent as 'pr' targets the
+    // wrong conversation. PR call sites omit it.
+    type?: 'issue' | 'pr'
+  }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = {
     number: args.prNumber,
     body: args.body,
-    type: 'pr'
+    type: args.type ?? 'pr'
   }
   return sendGithubPrMutation(
     client,
@@ -312,7 +327,8 @@ export async function fetchRerunPRChecks(
     headSha?: string | null
     failedOnly?: boolean
     prRepo?: GitHubPrRepoSlug | null
-  }
+  },
+  options?: { timeoutMs?: number }
 ): Promise<GitHubPrMutationOutcome> {
   const params: Record<string, unknown> = { prNumber: args.prNumber }
   if (args.failedOnly !== undefined) {
@@ -324,6 +340,7 @@ export async function fetchRerunPRChecks(
   return sendGithubPrMutation(
     client,
     'github.rerunPRChecks',
-    buildGithubPrParams('github.rerunPRChecks', worktreeId, params, { prRepo: args.prRepo })
+    buildGithubPrParams('github.rerunPRChecks', worktreeId, params, { prRepo: args.prRepo }),
+    options
   )
 }

@@ -11,7 +11,7 @@ import {
   fetchUpdateIssueComment,
   type GitHubPrMutationOutcome
 } from './github-pr-mutations'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useMobilePrShellOperations } from '../platform/mobile-pr-shell-operations'
 import {
   buildAddRootCommentParams,
   buildDeleteCommentParams,
@@ -103,6 +103,7 @@ const ROOT_KEY = 'root'
 // in-flight keys + a single error message, fires haptics, and refetches on success.
 export function useMobilePrCommentActions(input: PrCommentActionsInput) {
   const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
+  const shell = useMobilePrShellOperations()
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [error, setError] = useState<string | null>(null)
   // Guard against overlapping fires of the same key (double-tap before refetch).
@@ -137,17 +138,17 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       try {
         const outcome = await mutate()
         if (outcome.ok) {
-          triggerSuccess()
+          shell.success()
           await refetch()
           return true
         }
-        triggerError()
+        shell.error()
         setError(outcome.error)
         return false
       } catch (err) {
         // Why: if a mutation (or the refetch) throws, still honor the boolean
         // contract — error haptic + message, return false — rather than rejecting.
-        triggerError()
+        shell.error()
         setError(err instanceof Error ? err.message : 'Comment action failed')
         return false
       } finally {
@@ -155,7 +156,7 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
         setBusy(key, false)
       }
     },
-    [ready, refetch, setBusy]
+    [ready, refetch, setBusy, shell]
   )
 
   const reply = useCallback(

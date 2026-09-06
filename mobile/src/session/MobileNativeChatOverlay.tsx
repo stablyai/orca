@@ -24,6 +24,8 @@ type Props = {
   sendErrorMessage: string | null
   /** Drops that failure once a later send succeeds. */
   onClearSendError: () => void
+  onOpenLink: (url: string) => void
+  onCopyText: (text: string) => Promise<unknown>
   /** Stable host/worktree/tab identity for accepted-send completion fencing. */
   sendSurfaceId: string
   /** Reads the retained route's focus generation for accepted-send fencing. */
@@ -47,6 +49,8 @@ export function MobileNativeChatOverlay({
   inputLockReason,
   sendErrorMessage,
   onClearSendError,
+  onOpenLink,
+  onCopyText,
   sendSurfaceId,
   getSendCompletionGeneration,
   keyboardInset
@@ -84,6 +88,8 @@ export function MobileNativeChatOverlay({
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
         onOpenFile={onOpenFile}
+        onOpenLink={onOpenLink}
+        onCopyText={onCopyText}
         hasMore={session.hasMore}
         loadingEarlier={session.loadingEarlier}
         onLoadEarlier={session.loadEarlier}

@@ -11,16 +11,12 @@ import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-re
 import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
-import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
-
-const RELAY_PROBE_TIMEOUT_MS = 4_000
-const RELAY_MISSED_PROBE_LIMIT = 2
-const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
-let relayRpcSessionSequence = 0
+import { encodeTerminalStreamFrame } from './terminal-stream-protocol'
+import { createMobileRelayLivenessWatchdog } from './mobile-relay-liveness-watchdog'
 
 export type MobileRelayRpcSession = RpcClient &
   RelayDialStageSource & {
@@ -54,8 +50,6 @@ export function connectMobileRelayRpcSession(args: {
   let resumeConfirmation: DeviceResumeConfirmed | null = null
   let failure: Error | null = null
   let closed = false
-  let logSequence = 0
-  const logSessionId = `${Date.now().toString(36)}-${(++relayRpcSessionSequence).toString(36)}`
   const livenessIdentity = {}
   const dialStage = new RelayDialStageTracker()
   const streams = new MobileRelayRpcStreams({
@@ -115,6 +109,9 @@ export function connectMobileRelayRpcSession(args: {
     updateTerminalSubscriptionViewport(terminal, viewport) {
       streams.updateTerminalViewport(terminal, viewport)
     },
+    sendTerminalBinaryFrame(frame) {
+      return link.sendBinary(encodeTerminalStreamFrame(frame))
+    },
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => lastConnectedAt,
@@ -146,26 +143,11 @@ export function connectMobileRelayRpcSession(args: {
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure
   }
-  const livenessWatchdog = new RpcSessionLivenessWatchdog({
-    transport: 'relay',
-    idleProbeMs: null,
-    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
-    missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
-    voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
+  const livenessWatchdog = createMobileRelayLivenessWatchdog({
+    onLog: args.onLog,
     sendProbe: () =>
       state === 'connected' &&
       sendFrame({ id: pending.nextId(), method: 'status.get', params: undefined }),
-    onTimeout: (evidence) => {
-      args.onLog?.({
-        id: `relay-liveness-${logSessionId}-${++logSequence}`,
-        ts: Date.now(),
-        level: 'error',
-        code: 'liveness-timeout',
-        path: 'relay',
-        message: 'Relay health check failed',
-        detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`
-      })
-    },
     terminate: () => fail(new Error('relay session liveness timeout'))
   })
   return client

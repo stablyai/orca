@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
+import { nativeHostSessionTerminalFileOperations } from './native-host-session-terminal-file-operations'
 
 const push = vi.fn()
 
@@ -30,7 +31,7 @@ describe('useMobileFileTapHandlers', () => {
 
   function createOptions(sendRequest: ReturnType<typeof vi.fn>) {
     return {
-      client: { sendRequest },
+      operations: nativeHostSessionTerminalFileOperations({ sendRequest } as never),
       hostId: 'host-1',
       worktreeId: 'wt-1',
       worktreeName: 'Orca',
@@ -77,7 +78,12 @@ describe('useMobileFileTapHandlers', () => {
     act(() => {
       renderer!.update(
         createElement(Harness, {
-          options: { ...firstOptions, client: { sendRequest: latestSendRequest } }
+          options: {
+            ...firstOptions,
+            operations: nativeHostSessionTerminalFileOperations({
+              sendRequest: latestSendRequest
+            } as never)
+          }
         })
       )
     })

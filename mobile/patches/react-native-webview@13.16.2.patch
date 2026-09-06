@@ -1,3 +1,37 @@
+diff --git a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+index f83033b3597a425da159555233bacce250ccfce0..4dda472003fcc465b6146154c5fdb071fd5ac298 100644
+--- a/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
++++ b/android/src/main/java/com/reactnativecommunity/webview/RNCWebViewManagerImpl.kt
+@@ -2,6 +2,7 @@ package com.reactnativecommunity.webview
+ 
+ import android.app.DownloadManager
+ import android.content.pm.ActivityInfo
++import android.content.pm.ApplicationInfo
+ import android.graphics.Bitmap
+ import android.graphics.Color
+ import android.net.Uri
+@@ -88,7 +89,9 @@ class RNCWebViewManagerImpl(private val newArch: Boolean = false) {
+             ViewGroup.LayoutParams.MATCH_PARENT,
+             ViewGroup.LayoutParams.MATCH_PARENT
+         )
+-        if (ReactBuildConfig.DEBUG) {
++        val isDebuggable =
++            webView.context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
++        if (ReactBuildConfig.DEBUG && isDebuggable) {
+             WebView.setWebContentsDebuggingEnabled(true)
+         }
+         webView.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimetype, contentLength ->
+@@ -712,7 +715,9 @@ class RNCWebViewManagerImpl(private val newArch: Boolean = false) {
+     }
+ 
+     fun setWebviewDebuggingEnabled(viewWrapper: RNCWebViewWrapper, enabled: Boolean) {
+-        RNCWebView.setWebContentsDebuggingEnabled(enabled)
++        val isDebuggable =
++            viewWrapper.webView.context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
++        RNCWebView.setWebContentsDebuggingEnabled(enabled && isDebuggable)
+     }
+ 
+     fun setPaymentRequestEnabled(viewWrapper: RNCWebViewWrapper, enabled: Boolean) {
 diff --git a/index.d.ts b/index.d.ts
 index 10b9c145b920a6a2ba1fb09bd72150328fafe211..626a67a3d6aca587ee9e74a52b799a2c50b4c52b 100644
 --- a/index.d.ts

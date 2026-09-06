@@ -1,8 +1,7 @@
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
-import { triggerError } from '../platform/haptics'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
-import { sendTerminalLiveAccessoryRawBytes } from '../terminal/terminal-live-accessory-raw-send'
+import { getTerminalLiveAccessoryRawSendTarget } from '../terminal/terminal-live-accessory-raw-send-target'
 import {
   clearTerminalLiveInputFocusTimer,
   isTerminalLiveInputWithinByteLimit
@@ -18,6 +17,7 @@ import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismiss
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionTabActionSheetOpener } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
+import type { RpcClient } from '../transport/rpc-client'
 
 export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminalWebviewModel) {
   const {
@@ -31,7 +31,6 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     setAgentSessionActionTarget,
     keyboardHeight,
     deviceTokenRef,
-    clientRef,
     connStateRef,
     liveInputRef,
     commandInputRef,
@@ -47,7 +46,11 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     handleLiveInputAccessoryBytes,
     canSend,
     scheduleDelayedAction,
-    showToast
+    showToast,
+    sessionTerminalOperations,
+    sessionTerminalOperationsProp,
+    sessionTerminalOperationsRef,
+    triggerError
   } = scope
   const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
@@ -65,8 +68,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
   )
 
   async function handleSend() {
-    // Why: the return key still submits while offline; hold the composed text instead of firing a doomed RPC (#6713).
-    if (!client || !activeHandle || sendingRef.current || !canSend) {
+    if (!sessionTerminalOperations || !activeHandle || !canSend || sendingRef.current) {
       return
     }
     sendingRef.current = true
@@ -86,18 +88,37 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)
 
     try {
-      // Why: fail now and restore the text — a send parked across a reconnect would execute long after the tap.
-      const response = await client.sendRequest(
-        'terminal.send',
-        buildTerminalSendParams({
-          terminal: activeHandle,
+      let response: Awaited<ReturnType<RpcClient['sendRequest']>> | null = null
+      if (client && !sessionTerminalOperationsProp) {
+        const sendThroughClient = async () => {
+          const response = await client.sendRequest(
+            'terminal.send',
+            buildTerminalSendParams({
+              terminal: activeHandle,
+              text,
+              enter: true,
+              deviceToken: deviceTokenRef.current
+            }),
+            TERMINAL_INPUT_SEND_OPTIONS
+          )
+          return response
+        }
+        response = await sendThroughClient()
+      }
+      let accepted = false
+      if (response) {
+        accepted = (() => {
+          const accepted = isTerminalSendRpcAccepted(response)
+          return accepted
+        })()
+      } else {
+        accepted = await sessionTerminalOperations.sendInput(
+          activeHandle,
           text,
-          enter: true,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
-      const accepted = isTerminalSendRpcAccepted(response)
+          true,
+          deviceTokenRef.current
+        )
+      }
       if (!accepted) {
         restoreRejectedDraft()
       }
@@ -112,24 +133,37 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     }
   }
 
-  async function handleAccessoryKey(input: ReturnType<typeof createTerminalLiveAccessoryInput>) {
-    if (!client || !activeHandle || !canSend) {
-      return
+  async function handleAccessoryKey(
+    input: ReturnType<typeof createTerminalLiveAccessoryInput>,
+    targetHandle = activeHandleRef.current,
+    isDeliveryTargetCurrent: () => boolean = () => targetHandle === activeHandleRef.current
+  ): Promise<boolean> {
+    if (
+      !sessionTerminalOperationsRef.current ||
+      !targetHandle ||
+      !isDeliveryTargetCurrent() ||
+      !canSend
+    ) {
+      return false
     }
-    const targetHandle = activeHandle
     const accessoryCommit = await handleLiveInputAccessoryBytes(input)
-    if (accessoryCommit.kind !== 'allow-raw') {
-      return
+    if (!isDeliveryTargetCurrent()) {
+      return false
     }
-    await sendTerminalLiveAccessoryRawBytes({
-      client: clientRef.current,
+    if (accessoryCommit.kind !== 'allow-raw') {
+      return accessoryCommit.kind === 'handled'
+    }
+    const currentOperations = sessionTerminalOperationsRef.current
+    // Why: async IME flushing can outlive the original terminal selection.
+    const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
       targetHandle,
       activeHandle: activeHandleRef.current,
-      activeSessionTabType: activeSessionTabTypeRef.current,
-      connState: connStateRef.current,
-      bytes: input.bytes,
-      deviceToken: deviceTokenRef.current
+      activeSessionTabType: activeSessionTabTypeRef.current
     })
+    if (!currentOperations || !rawSendTarget || connStateRef.current !== 'connected') {
+      return false
+    }
+    return currentOperations.sendInput(rawSendTarget, input.bytes, false, deviceTokenRef.current)
   }
 
   const sendLiveTerminalInput = useCallback(
@@ -143,30 +177,17 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         showToast('Input too large (max 256 KiB)', 1500)
         return false
       }
-      const rpc = clientRef.current
+      const operations = sessionTerminalOperationsRef.current
       // Why: callers suppress follow-up controls/toasts when this live send is stale.
       if (
-        !rpc ||
+        !operations ||
         connStateRef.current !== 'connected' ||
         handle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal'
       ) {
         return false
       }
-      // Why: live-mirror deltas queued behind a dying send drain into the connect
-      // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
-      return rpc
-        .sendRequest(
-          'terminal.send',
-          buildTerminalSendParams({
-            terminal: handle,
-            text,
-            enter: false,
-            deviceToken: deviceTokenRef.current
-          }),
-          TERMINAL_INPUT_SEND_OPTIONS
-        )
-        .then(isTerminalSendRpcAccepted, () => false)
+      return operations.sendInput(handle, text, false, deviceTokenRef.current)
     },
     [showToast]
   )

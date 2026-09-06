@@ -3,9 +3,9 @@ import type { LayoutChangeEvent } from 'react-native'
 import { Bot } from 'lucide-react-native'
 import {
   type ActivePanel,
+  panelRouteHref,
   resolvePanelAction,
-  shouldShowSessionHeaderChecksAction,
-  panelRouteDescriptor
+  shouldShowSessionHeaderChecksAction
 } from './session-panel-host'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
@@ -139,19 +139,13 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       setActivePanel(action.next)
       return
     }
-    const descriptor = panelRouteDescriptor(action.panel)
-    router.push({
-      pathname: descriptor.pathname,
-      params: {
+    router.push(
+      panelRouteHref(action.panel, {
         hostId,
         worktreeId,
-        name: worktreeName || '',
-        // SC + PR both land on the source-control hub with origin:'session' for post-diff-open dismissal (U2); Files opts out.
-        ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
-        // The PR panel routes into the hub's Pull Request segment via descriptor params.
-        ...descriptor.params
-      }
-    })
+        worktreeName: worktreeName || ''
+      })
+    )
   }
 
   const openAgentSessionHistory = () => {
@@ -179,6 +173,3 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     createTabBusy
   }
 }
-
-export type MobileSessionPanelRouteActionsModel = MobileSessionPresentationModel &
-  ReturnType<typeof useMobileSessionPanelRouteActions>

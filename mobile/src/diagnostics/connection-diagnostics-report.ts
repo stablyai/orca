@@ -1,13 +1,13 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import type { MobileWebDiagnosticsSnapshot } from '../mobile-web/mobile-web-diagnostics-store'
 import type {
   ConnectionLogEntry,
   ConnectionState,
   MobileConnectionDiagnosticPath
 } from '../transport/types'
 import { normalizeHostAppVersion } from '../transport/host-app-version-store'
-import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
-import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
+import { redactConnectionLogEntry } from './connection-log-redaction'
 
 const MAX_EVENT_LINE_BYTES = 2 * 1024
 const EVENT_TRUNCATION_MARKER = ' … [truncated]'
@@ -16,7 +16,6 @@ const EVENT_TRUNCATION_MARKER = ' … [truncated]'
 // ask reporters one message at a time (endpoint type, state, attempt count,
 // last-connected, versions, and the reconnect lifecycle log).
 export function buildConnectionDiagnosticsReport(args: {
-  hostName: string
   endpoint: string
   state: ConnectionState
   reconnectAttempts: number
@@ -25,6 +24,7 @@ export function buildConnectionDiagnosticsReport(args: {
   appVersion: string
   desktopAppVersion?: string | null
   entries: readonly ConnectionLogEntry[]
+  mobileWeb?: MobileWebDiagnosticsSnapshot
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
   nowMs?: number
@@ -44,10 +44,8 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push(`App: Orca Mobile ${args.appVersion} · ${args.platform}`)
   const desktopAppVersion = normalizeHostAppVersion(args.desktopAppVersion)
   lines.push(`Host Orca version: ${desktopAppVersion ?? 'unknown'}`)
-  lines.push(`Host: ${redactConnectionLogText(args.hostName)}`)
-  lines.push(
-    `Endpoint: ${formatEndpoint(args.endpoint)}${isTailscaleEndpoint(args.endpoint) ? ' (Tailscale)' : ''}`
-  )
+  lines.push('Host: selected paired desktop')
+  lines.push(`Connection path: ${isTailscaleEndpoint(args.endpoint) ? 'Tailscale' : 'Standard'}`)
   lines.push(`State: ${args.state} (reconnect attempts: ${args.reconnectAttempts})`)
   if (args.activePath) {
     lines.push(
@@ -59,6 +57,27 @@ export function buildConnectionDiagnosticsReport(args: {
       ? 'Last connected: never this session'
       : `Last connected: ${new Date(args.lastConnectedAt).toISOString()} (${formatAgo(now - args.lastConnectedAt)} ago)`
   )
+  if (args.mobileWeb) {
+    const diagnostics = args.mobileWeb
+    lines.push('')
+    lines.push('Hosted workspace interface')
+    lines.push(`Bridge: ${diagnostics.bridgeVersion}`)
+    lines.push(`Package: ${diagnostics.packageStatus} (${diagnostics.packageSource})`)
+    lines.push(`Build: ${diagnostics.buildId?.slice(0, 12) ?? 'none'}`)
+    lines.push(`Activation: ${formatDuration(diagnostics.activationMs)}`)
+    lines.push(`Refresh: ${formatDuration(diagnostics.refreshMs)}`)
+    lines.push(`Health: ${diagnostics.healthStatus}`)
+    lines.push(`Recoveries: ${diagnostics.recoveryCount}`)
+    lines.push(
+      `Terminal resyncs: ${diagnostics.terminalResyncCount} (last: ${diagnostics.terminalLastResyncReason ?? 'none'})`
+    )
+    lines.push(`Terminal flow overflows: ${diagnostics.terminalOverflowCount}`)
+    lines.push(`Terminal max ACK lag: ${formatDuration(diagnostics.terminalAckLagMaxMs)}`)
+    lines.push(
+      `Terminal outstanding high water: ${diagnostics.terminalOutstandingBytesHighWater} bytes`
+    )
+    lines.push(`Last failure: ${diagnostics.lastFailureCode ?? 'none'}`)
+  }
   lines.push('')
   lines.push(`Likely cause: ${diagnosis.likelyCause}`)
   lines.push(`Next step: ${diagnosis.nextStep}`)
@@ -68,11 +87,10 @@ export function buildConnectionDiagnosticsReport(args: {
   } else {
     lines.push(`Recent connection history (${entries.length} events, oldest first):`)
     for (const entry of entries) {
-      const detail = entry.detail ? ` — ${entry.detail}` : ''
       const evidence = [entry.code, entry.path].filter(Boolean).join(' · ')
       lines.push(
         truncateUtf8WithMarker(
-          `${new Date(entry.ts).toISOString()} [${entry.level}]${evidence ? ` [${evidence}]` : ''} ${entry.message}${detail}`,
+          `${new Date(entry.ts).toISOString()} [${entry.level}]${evidence ? ` [${evidence}]` : ''} ${entry.message}`,
           MAX_EVENT_LINE_BYTES,
           EVENT_TRUNCATION_MARKER
         )
@@ -80,6 +98,10 @@ export function buildConnectionDiagnosticsReport(args: {
     }
   }
   return lines.join('\n')
+}
+
+function formatDuration(durationMs: number | null): string {
+  return durationMs === null ? 'not measured' : `${durationMs} ms`
 }
 
 function truncateUtf8WithMarker(value: string, maxBytes: number, marker: string): string {

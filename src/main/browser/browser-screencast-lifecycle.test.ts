@@ -7,6 +7,12 @@ import { startBrowserScreencast } from './browser-screencast-stream'
 
 function createWebContents() {
   let attached = false
+  const webContents = new EventEmitter() as EventEmitter & {
+    isDestroyed: ReturnType<typeof vi.fn>
+    getURL: ReturnType<typeof vi.fn>
+    getTitle: ReturnType<typeof vi.fn>
+    debugger: typeof debuggerApi
+  }
   const debuggerApi = new EventEmitter() as EventEmitter & {
     isAttached: ReturnType<typeof vi.fn>
     attach: ReturnType<typeof vi.fn>
@@ -21,7 +27,11 @@ function createWebContents() {
     attached = false
   })
   debuggerApi.sendCommand = vi.fn(async () => ({}))
-  return { isDestroyed: vi.fn(() => false), debugger: debuggerApi }
+  webContents.isDestroyed = vi.fn(() => false)
+  webContents.getURL = vi.fn(() => 'https://example.test/')
+  webContents.getTitle = vi.fn(() => 'Example')
+  webContents.debugger = debuggerApi
+  return webContents
 }
 
 describe('browser screencast lifecycle', () => {

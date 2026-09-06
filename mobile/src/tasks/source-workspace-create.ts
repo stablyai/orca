@@ -28,8 +28,9 @@ export type CreateWorkspaceFromComposerArgs = {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
-  nameIsAutoManaged?: boolean
   note: string | undefined
+  sparseCheckout?: { directories: string[]; presetId?: string }
+  nameIsAutoManaged?: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }
 
@@ -91,8 +92,9 @@ async function createWorkItemWorkspace(args: {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
-  nameIsAutoManaged?: boolean
   note: string | undefined
+  sparseCheckout?: { directories: string[]; presetId?: string }
+  nameIsAutoManaged?: boolean
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
@@ -130,6 +132,7 @@ async function createWorkItemWorkspace(args: {
     compareBaseRef,
     branchNameOverride,
     pushTarget,
+    sparseCheckout: args.sparseCheckout,
     nameIsAutoManaged: args.nameIsAutoManaged
   })
   // buildTaskWorkspaceCreateParams computes the name; reuse it as the retry base

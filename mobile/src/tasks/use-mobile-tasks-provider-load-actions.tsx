@@ -4,32 +4,29 @@ import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
   PER_REPO_FETCH_LIMIT,
-  type RpcClient,
   extractGitHubIssueSourceError,
   extractGitHubIssueSourceFallback,
   isGitHubWorkItemsSshRemoteRequiredError,
+  mobileLogErrorKind,
   useCallback
 } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   type GitHubRepoSources,
   type GitHubWorkItem,
-  type LinearStatusResponse,
   type LinearTeam,
   type RepoSummary,
   type TaskItem,
   createGitHubTask,
-  isSuccess,
   mapWithConcurrency,
   reconcileTeamSelection,
   scopeGitHubTaskSearch,
   taskTime
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) {
   const {
     appliedQuery,
-    client,
     connState,
     defaultLinearTeamSelectionRef,
     githubKind,
@@ -38,62 +35,50 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     setLinearWorkspaces,
     setSelectedLinearTeamIds,
     setSelectedLinearWorkspaceId,
+    taskListOperations,
+    taskPreferenceOperations,
+    taskReadOperations,
     taskUiReady,
     tasksSupported
   } = model
   const loadLinearContext = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported) {
+    if (!taskReadOperations || connState !== 'connected' || !tasksSupported) {
       return
     }
-    const statusResponse = await client.sendRequest('linear.status')
-    if (!isSuccess(statusResponse)) {
-      throw new Error(statusResponse.error.message)
-    }
-    const status = statusResponse.result as LinearStatusResponse
-    setLinearConnected(status.connected === true)
-    if (status.connected !== true) {
+    const context = await taskReadOperations.loadLinearContext()
+    setLinearConnected(context.status.connected)
+    if (!context.status.connected) {
       setLinearWorkspaces([])
       setLinearTeams([])
       setSelectedLinearTeamIds(new Set())
       setSelectedLinearWorkspaceId(null)
       return
     }
-    const workspaces = status.workspaces ?? []
-    const workspaceId =
-      status.selectedWorkspaceId ?? status.activeWorkspaceId ?? workspaces[0]?.id ?? null
+    const workspaces = context.status.workspaces
+    const workspaceId = context.status.selectedWorkspaceId
     setLinearWorkspaces(workspaces)
     setSelectedLinearWorkspaceId(workspaceId)
-
-    const teamsResponse = await client.sendRequest('linear.listTeams', {
-      workspaceId: workspaceId ?? undefined
-    })
-    if (!isSuccess(teamsResponse)) {
-      throw new Error(teamsResponse.error.message)
-    }
-    const teams = teamsResponse.result as LinearTeam[]
+    const teams = context.teams
     setLinearTeams(teams)
     setSelectedLinearTeamIds(reconcileTeamSelection(teams, defaultLinearTeamSelectionRef.current))
-  }, [client, connState, tasksSupported])
-
+  }, [connState, taskReadOperations, tasksSupported])
   const persistLinearTeamSelection = useCallback(
     (teamIds: Set<string>, allTeams: LinearTeam[]) => {
-      if (!client || !taskUiReady) {
+      if (!taskPreferenceOperations || !taskUiReady) {
         return
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
-      void client
-        .sendRequest('settings.update', { defaultLinearTeamSelection: selection })
+      void taskPreferenceOperations
+        .updateSettings({ defaultLinearTeamSelection: selection })
         .catch(() => {
           // Best-effort preference persistence; the local picker state already changed.
         })
     },
-    [client, taskUiReady]
+    [taskPreferenceOperations, taskUiReady]
   )
-
   const fetchGitHubItemsPage = useCallback(
     async (
-      requestClient: RpcClient,
       queriedRepos: RepoSummary[],
       before?: string
     ): Promise<{
@@ -108,24 +93,26 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest('github.listWorkItems', {
-              repo: `id:${repo.id}`,
+            if (!taskListOperations) {
+              throw new Error('Task list operations are unavailable')
+            }
+            const envelope = await taskListOperations.listGitHub({
+              repoId: repo.id,
               limit: PER_REPO_FETCH_LIMIT,
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
               before
             })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            const envelope = response.result as {
-              items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
-              sources?: GitHubRepoSources
-              errors?: { issues?: { message: string } }
-              issueSourceFellBack?: true
-            }
             return {
-              items: envelope.items.map((item) => createGitHubTask(repo, item)),
-              sources: envelope.sources,
+              items: envelope.items.map((item) =>
+                createGitHubTask(repo, item as Omit<GitHubWorkItem, 'repoId' | 'repoName'>)
+              ),
+              sources: envelope.sources
+                ? {
+                    issues: envelope.sources.issues,
+                    prs: envelope.sources.prs ?? null,
+                    upstreamCandidate: envelope.sources.upstreamCandidate ?? null
+                  }
+                : undefined,
               sourceError: extractGitHubIssueSourceError(repo, envelope),
               sourceFallback: extractGitHubIssueSourceFallback(repo, envelope),
               repoId: repo.id
@@ -133,11 +120,10 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
             const logWorkItemFetchFailure = isExpectedSshSkip ? console.log : console.warn
-            logWorkItemFetchFailure(
-              '[mobile tasks] failed to fetch github work items',
-              repo.id,
-              isExpectedSshSkip && err instanceof Error ? err.message : err
-            )
+            logWorkItemFetchFailure('[mobile tasks] failed to fetch github work items', {
+              expected: isExpectedSshSkip,
+              kind: mobileLogErrorKind(err)
+            })
             return {
               items: [] as Array<Extract<TaskItem, { provider: 'github' }>>,
               repoId: repo.id,
@@ -173,49 +159,42 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
         sourceFallbacks
       }
     },
-    [appliedQuery, githubKind]
+    [appliedQuery, githubKind, taskListOperations]
   )
-
   const countGitHubItems = useCallback(
-    async (requestClient: RpcClient, queriedRepos: RepoSummary[]): Promise<number> => {
+    async (queriedRepos: RepoSummary[]): Promise<number> => {
       const counts = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest(
-              'github.countWorkItems',
-              {
-                repo: `id:${repo.id}`,
-                query: scopeGitHubTaskSearch(appliedQuery, githubKind)
-              },
-              { timeoutMs: 30_000 }
-            )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
+            if (!taskListOperations) {
+              return 0
             }
-            return typeof response.result === 'number' ? response.result : 0
+            return taskListOperations.countGitHub({
+              repoId: repo.id,
+              query: scopeGitHubTaskSearch(appliedQuery, githubKind)
+            })
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
             const logWorkItemCountFailure = isExpectedSshSkip ? console.log : console.warn
-            logWorkItemCountFailure(
-              '[mobile tasks] failed to count github work items',
-              repo.id,
-              isExpectedSshSkip && err instanceof Error ? err.message : err
-            )
+            logWorkItemCountFailure('[mobile tasks] failed to count github work items', {
+              expected: isExpectedSshSkip,
+              kind: mobileLogErrorKind(err)
+            })
             return 0
           }
         }
       )
       return counts.reduce((sum, count) => sum + count, 0)
     },
-    [appliedQuery, githubKind]
+    [appliedQuery, githubKind, taskListOperations]
   )
   return Object.assign(model, {
-    loadLinearContext,
-    persistLinearTeamSelection,
+    countGitHubItems,
     fetchGitHubItemsPage,
-    countGitHubItems
+    loadLinearContext,
+    persistLinearTeamSelection
   })
 }
 

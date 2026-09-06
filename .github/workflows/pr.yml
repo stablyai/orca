@@ -297,6 +297,8 @@ jobs:
 
       - run: pnpm run typecheck
 
+      - run: pnpm run typecheck:mobile-web
+
   git_compatibility:
     name: Git compatibility
     needs: [code_paths]
@@ -728,7 +730,7 @@ jobs:
           status=0
           pnpm run build:cli || status=1
 
-          scripts=(build:relay build:electron-vite:parallel)
+          scripts=(build:relay build:electron-vite:parallel build:mobile-web)
           pids=()
           for script in "${scripts[@]}"; do
             pnpm run "$script" &

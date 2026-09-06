@@ -3,7 +3,6 @@ import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
-import type { RpcClient } from '../transport/rpc-client'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
   getQuickCommandPreview,
@@ -11,6 +10,7 @@ import {
   quickCommandMatchesRepo
 } from '../terminal/quick-commands'
 import { useQuickCommands } from './use-quick-commands'
+import type { HostSessionQuickCommandOperations } from './host-session-quick-command-operations'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
 import {
@@ -23,10 +23,11 @@ import {
 type Props = {
   visible: boolean
   onClose: () => void
-  client: RpcClient | null
-  repoId: string | null
+  operations: HostSessionQuickCommandOperations | null
+  workspaceId: string
   repoName: string | null
   onLaunch: (command: TerminalQuickCommand) => boolean
+  onCopy?: (text: string) => Promise<unknown>
 }
 
 type SheetView = 'list' | 'editor' | 'agent'
@@ -34,13 +35,15 @@ type SheetView = 'list' | 'editor' | 'agent'
 export function QuickCommandsSheet({
   visible,
   onClose,
-  client,
-  repoId,
+  operations,
+  workspaceId,
   repoName,
-  onLaunch
+  onLaunch,
+  onCopy
 }: Props) {
-  const { commands, loading, ready, error, persist } = useQuickCommands({
-    client,
+  const { commands, loading, ready, error, totalCount, repoId, persist } = useQuickCommands({
+    operations,
+    workspaceId,
     enabled: visible
   })
   const [view, setView] = useState<SheetView>('list')
@@ -83,7 +86,7 @@ export function QuickCommandsSheet({
   const openEditor = (command?: TerminalQuickCommand) => {
     // Why: the host rejects full-list updates above this cap; existing rows
     // must remain editable/deletable when creation is no longer possible.
-    if (!command && commands.length >= MAX_QUICK_COMMANDS) {
+    if (!command && totalCount >= MAX_QUICK_COMMANDS) {
       return
     }
     setDraft(
@@ -185,12 +188,13 @@ export function QuickCommandsSheet({
           query={query}
           loading={loading}
           disabled={!ready}
-          canAdd={commands.length < MAX_QUICK_COMMANDS}
+          canAdd={totalCount < MAX_QUICK_COMMANDS}
           error={error}
           onQueryChange={setQuery}
           onLaunch={handleLaunch}
           onEdit={openEditor}
           onDelete={handleDelete}
+          onCopy={onCopy}
           onAdd={() => openEditor()}
         />
       ) : null}

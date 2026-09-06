@@ -18,6 +18,7 @@ export type {
 // ─── Filesystem Provider ────────────────────────────────────────────
 
 export type {
+  FileChunkReadResult,
   FileRangeReadResult,
   FileReadLimits,
   FileReadResult,

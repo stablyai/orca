@@ -73,3 +73,21 @@ export function panelRouteDescriptor(panel: Exclude<ActivePanel, null>): {
       return { pathname: '/h/[hostId]/source-control/[worktreeId]', params: { tab: 'pr' } }
   }
 }
+
+export function panelRouteHref(
+  panel: Exclude<ActivePanel, null>,
+  args: { hostId: string; worktreeId: string; worktreeName: string }
+): string {
+  const descriptor = panelRouteDescriptor(panel)
+  const pathname = descriptor.pathname
+    .replace('[hostId]', encodeURIComponent(args.hostId))
+    .replace('[worktreeId]', encodeURIComponent(args.worktreeId))
+  const params = new URLSearchParams({ name: args.worktreeName })
+  if (panel === 'sourceControl' || panel === 'pr') {
+    params.set('origin', 'session')
+  }
+  for (const [key, value] of Object.entries(descriptor.params ?? {})) {
+    params.set(key, value)
+  }
+  return `${pathname}?${params.toString()}`
+}

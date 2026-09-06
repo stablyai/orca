@@ -45,6 +45,8 @@ import { UPDATER_METHODS } from './updater'
 import { AGENT_SESSION_METHODS } from './agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { ARTIFACT_METHODS } from './artifacts'
+import { MOBILE_WEB_PACKAGE_METHODS } from './mobile-web-package'
+import { MOBILE_FILE_WRITE_METHODS } from './mobile-file-write-if-unchanged'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 
 // Why: a flat manifest keeps registration order explicit and provides one
@@ -78,6 +80,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...SESSION_TAB_METHODS,
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
+  ...MOBILE_FILE_WRITE_METHODS,
   ...GIT_METHODS,
   ...GITHUB_METHODS,
   ...GITLAB_METHODS,
@@ -97,5 +100,6 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...CLIENT_UI_METHODS,
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
-  ...UPDATER_METHODS
+  ...UPDATER_METHODS,
+  ...MOBILE_WEB_PACKAGE_METHODS
 ]

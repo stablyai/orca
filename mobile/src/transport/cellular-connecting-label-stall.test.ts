@@ -49,6 +49,8 @@ class CarrierWebSocket {
   static OPEN = 1
   static CLOSED = 3
   readonly CONNECTING = 0
+  readonly OPEN = 1
+  readonly bufferedAmount = 0
   readyState = 0
   onopen: (() => void) | null = null
   onclose: ((event?: unknown) => void) | null = null
@@ -233,17 +235,17 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     expect(after.every((s) => s.label === "Can't reach desktop")).toBe(true)
   })
 
-  it('resets the failure counter only once a handshake actually completes', () => {
+  it('resets the failure counter only once a handshake actually completes', async () => {
     carrier = { kind: 'slow-handshake', readyAfterMs: 6_000 }
     const client = connect('ws://192.168.0.56:6769', 'device-token', 'server-public-key')
 
-    vi.advanceTimersByTime(40_000)
+    await vi.advanceTimersByTimeAsync(40_000)
     expect(client.getState()).not.toBe('connected')
     expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(3)
 
     // The link heals: the same desktop now answers inside the budget.
     carrier = { kind: 'slow-handshake', readyAfterMs: 50 }
-    vi.advanceTimersByTime(20_000)
+    await vi.advanceTimersByTimeAsync(20_000)
     expect(client.getState()).toBe('connected')
     expect(client.getReconnectAttempt()).toBe(0)
 

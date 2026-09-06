@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, RefreshCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { recentSessionConversationTurns } from '../../../src/shared/ai-vault-session-display'
 import { useHostClient } from '../transport/client-context'
 import type { RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -22,12 +19,15 @@ import {
   RESUME_RPC_TIMEOUT_MS
 } from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
-import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { useNow } from '../hooks/use-now'
+import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
-import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
-import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import {
+  MobileAgentSessionHistoryPresentation,
+  type MobileAgentHistoryPresentationState
+} from './MobileAgentSessionHistoryPresentation'
 import {
   resolveMobileAiVaultSessionResumeTarget,
   type MobileAiVaultResumeFolderWorkspace,
@@ -35,20 +35,12 @@ import {
   type MobileAiVaultResumeRepo
 } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
-import { styles } from './agent-history-styles'
-import { useNow } from '../hooks/use-now'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
   worktreeId: string
   name?: string
 }
-
-const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
-  { scope: 'workspace', label: 'Workspace' },
-  { scope: 'project', label: 'Project' },
-  { scope: 'all', label: 'All' }
-]
 
 export function MobileAgentSessionHistoryPanel({
   hostId,
@@ -241,118 +233,44 @@ export function MobileAgentSessionHistoryPanel({
     ]
   )
 
-  return (
-    <View style={styles.container}>
-      <SafeAreaView style={styles.header} edges={['top']}>
-        <View style={styles.topBar}>
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-            onPress={() => router.back()}
-            hitSlop={8}
-            accessibilityLabel="Back"
-          >
-            <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
-              Agent Session History
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {worktreeLabel}
-            </Text>
-          </View>
-          <Pressable
-            style={({ pressed }) => [styles.refreshButton, pressed && styles.refreshButtonPressed]}
-            onPress={() => void onRefresh()}
-            hitSlop={8}
-            accessibilityLabel="Refresh agent sessions"
-          >
-            <RefreshCw size={18} color={colors.textSecondary} strokeWidth={2.1} />
-          </Pressable>
-        </View>
-      </SafeAreaView>
+  const presentationState: MobileAgentHistoryPresentationState =
+    screenState.kind === 'ready'
+      ? { kind: 'ready', sections, skippedTranscriptCount: issues.length }
+      : screenState
+  const loadPreview = useCallback(
+    async (sessionId: string) => {
+      const session = sessionsById.get(sessionId)
+      return session ? recentSessionConversationTurns(session, 5) : []
+    },
+    [sessionsById]
+  )
+  const resumeSessionById = useCallback(
+    async (sessionId: string) => {
+      const session = sessionsById.get(sessionId)
+      if (session) {
+        await onResumeSession(session)
+      }
+    },
+    [onResumeSession, sessionsById]
+  )
 
-      {screenState.kind === 'loading' ? (
-        <View style={styles.state}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
-      ) : screenState.kind === 'unsupported' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>Agent Session History Unavailable</Text>
-          <Text style={styles.stateText}>
-            Update Orca on this host to browse agent session history.
-          </Text>
-        </View>
-      ) : screenState.kind === 'error' ? (
-        <View style={styles.state}>
-          <Text style={styles.stateTitle}>Unable to Load</Text>
-          <Text style={styles.stateText}>{screenState.message}</Text>
-          <Pressable style={styles.retryButton} onPress={retry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <>
-          <View style={styles.scopeTabs}>
-            {SCOPE_TABS.map((tab) => {
-              const active = scope === tab.scope
-              return (
-                <Pressable
-                  key={tab.scope}
-                  style={[styles.scopeTab, active && styles.scopeTabActive]}
-                  onPress={() => onSelectScope(tab.scope)}
-                >
-                  <Text style={[styles.scopeTabText, active && styles.scopeTabTextActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              )
-            })}
-          </View>
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search sessions, repo:, path:"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-          {issues.length > 0 ? (
-            <View style={styles.noticeBanner}>
-              <Text style={styles.noticeText}>
-                {issues.length} {issues.length === 1 ? 'transcript' : 'transcripts'} skipped
-              </Text>
-            </View>
-          ) : null}
-          {resumeMessage ? (
-            <View style={styles.resumeBanner}>
-              <Text style={styles.resumeBannerText}>{resumeMessage}</Text>
-            </View>
-          ) : null}
-          {sections.length === 0 ? (
-            <View style={styles.state}>
-              <Text style={styles.stateTitle}>No agent sessions</Text>
-              <Text style={styles.stateText}>
-                {query ? 'No sessions match your search.' : 'No past agent sessions in this scope.'}
-              </Text>
-            </View>
-          ) : (
-            <MobileAgentSessionHistoryList
-              sections={sections}
-              sessionsById={sessionsById}
-              refreshing={refreshing}
-              showCurrentWorktreeBadges={shouldShowMobileCurrentWorktreeBadge(scope)}
-              resumeActionStateBySessionId={resumeActionStateBySessionId}
-              onResume={onResumeSession}
-              onRefresh={() => void onRefresh()}
-            />
-          )}
-        </>
-      )}
-    </View>
+  return (
+    <MobileAgentSessionHistoryPresentation
+      worktreeLabel={worktreeLabel}
+      scope={scope}
+      state={presentationState}
+      refreshing={refreshing}
+      query={query}
+      resumeMessage={resumeMessage}
+      resumeActionStateBySessionId={resumeActionStateBySessionId}
+      onBack={() => router.back()}
+      onRefresh={() => void onRefresh()}
+      onRetry={retry}
+      onSelectScope={onSelectScope}
+      onChangeQuery={setQuery}
+      loadPreview={loadPreview}
+      onResume={resumeSessionById}
+    />
   )
 }
 

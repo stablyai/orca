@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
+import { nativeHostSessionNativeChatOperations } from './native-host-session-native-chat-operations'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
 describe('useMobileNativeChatStop', () => {
@@ -36,10 +37,20 @@ describe('useMobileNativeChatStop', () => {
     streamIdentity: string
   }): null {
     stop = useMobileNativeChatStop({
-      client: { sendRequest } as unknown as RpcClient,
+      operations: nativeHostSessionNativeChatOperations({
+        sendRequest
+      } as unknown as RpcClient),
       enabled,
-      handleRef: { current: 'terminal-1' },
-      deviceTokenRef: { current: 'mobile-1' },
+      targetRef: {
+        current: {
+          workspaceId: 'worktree',
+          agent: 'claude',
+          sessionId: 'session',
+          transcriptPath: null,
+          terminalId: 'terminal-1',
+          clientId: 'mobile-1'
+        }
+      },
       streamIdentity,
       cancelPending: vi.fn(),
       onSendError

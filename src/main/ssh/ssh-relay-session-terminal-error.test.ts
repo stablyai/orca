@@ -91,6 +91,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+const { unregisterSshPtyProvider } = await import('../ipc/pty')
 
 function createMockDeps(): {
   mockConn: SshConnection
@@ -197,6 +198,28 @@ describe('SshRelaySession terminal relay error (RelayVersionMismatchError)', () 
     await expect(session.establish(mockConn)).rejects.toThrow('boom')
     expect(onTerminal).not.toHaveBeenCalled()
     expect(session.getState()).toBe('idle')
+  })
+
+  it('publishes relay unavailability after detaching its providers', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const runtime = { notifySshRelayUnavailable: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+    await session.establish(mockConn)
+    vi.clearAllMocks()
+
+    session.detach()
+
+    expect(unregisterSshPtyProvider).toHaveBeenCalledWith('target-1')
+    expect(runtime.notifySshRelayUnavailable).toHaveBeenCalledWith('target-1')
+    expect(vi.mocked(unregisterSshPtyProvider).mock.invocationCallOrder[0]).toBeLessThan(
+      runtime.notifySshRelayUnavailable.mock.invocationCallOrder[0]
+    )
   })
 
   it('routes RelayEndpointUnresponsiveError on reconnect() to onRelayLost, not the terminal path', async () => {

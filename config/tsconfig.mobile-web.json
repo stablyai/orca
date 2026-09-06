@@ -1,0 +1,22 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": [
+    "../src/mobile-web/src/**/*",
+    "../src/shared/agent-status-limits.ts",
+    "../src/shared/clipboard-text.ts",
+    "../src/shared/event-loop-yield.ts",
+    "../src/shared/file-link-location.ts",
+    "../src/shared/is-record.ts",
+    "../src/shared/mobile-markdown-document.ts",
+    "../src/shared/mobile-web/**/*",
+    "../src/shared/terminal-quick-command-limits.ts",
+    "../src/shared/terminal-query-reply.ts",
+    "../src/shared/utf8-byte-limits.ts"
+  ],
+  "exclude": ["../src/shared/mobile-web/**/*.test.ts"],
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "types": []
+  }
+}

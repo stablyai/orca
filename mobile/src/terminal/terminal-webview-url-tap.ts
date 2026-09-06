@@ -14,6 +14,12 @@ export const TERMINAL_FILE_URL_REGEX_SOURCE =
   String.raw`()<>]`
 export const TERMINAL_HTTP_URL_MAX_LENGTH = 2048
 
+export type TerminalUrlMatch = {
+  url: string
+  startIndex: number
+  endIndex: number
+}
+
 export function findUrlAtColumn(lineText: string, col: number): string | null {
   return findTerminalUrlAtColumn(lineText, col, TERMINAL_HTTP_URL_REGEX_SOURCE)
 }
@@ -22,26 +28,43 @@ export function findFileUrlAtColumn(lineText: string, col: number): string | nul
   return findTerminalUrlAtColumn(lineText, col, TERMINAL_FILE_URL_REGEX_SOURCE)
 }
 
+export function findTerminalHttpUrls(lineText: string): TerminalUrlMatch[] {
+  return findTerminalUrls(lineText, TERMINAL_HTTP_URL_REGEX_SOURCE)
+}
+
+export function findTerminalFileUrls(lineText: string): TerminalUrlMatch[] {
+  return findTerminalUrls(lineText, TERMINAL_FILE_URL_REGEX_SOURCE)
+}
+
 function findTerminalUrlAtColumn(lineText: string, col: number, source: string): string | null {
+  return (
+    findTerminalUrls(lineText, source).find(
+      (match) => col >= match.startIndex && col < match.endIndex
+    )?.url ?? null
+  )
+}
+
+function findTerminalUrls(lineText: string, source: string): TerminalUrlMatch[] {
   if (typeof lineText !== 'string' || lineText.length === 0) {
-    return null
+    return []
   }
   const re = new RegExp(source, 'gi')
+  const matches: TerminalUrlMatch[] = []
   let match: RegExpExecArray | null
   while ((match = re.exec(lineText)) !== null) {
     const start = match.index
     const end = start + match[0].length
     // Why: desktop rejects overlong terminal URL candidates before opening;
     // mobile taps should preserve the same safety bound.
-    if (match[0].length <= TERMINAL_HTTP_URL_MAX_LENGTH && col >= start && col < end) {
-      return match[0]
+    if (match[0].length <= TERMINAL_HTTP_URL_MAX_LENGTH) {
+      matches.push({ url: match[0], startIndex: start, endIndex: end })
     }
     // Why: protect the injected loop if the regex ever changes to allow empties.
     if (match[0].length === 0) {
       re.lastIndex++
     }
   }
-  return null
+  return matches
 }
 
 export const URL_TAP_WEBVIEW_JS = `

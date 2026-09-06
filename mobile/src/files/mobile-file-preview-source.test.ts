@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { previewSourceFromRoute, sourceKeyForPreview } from './mobile-file-preview-source'
+import {
+  previewSourceFromRoute,
+  sourceKeyForPreview,
+  sourceRevisionForPreview
+} from './mobile-file-preview-source'
 
 describe('mobile-file-preview-source', () => {
   it('uses structured preview keys so colons in paths cannot collide', () => {
@@ -24,6 +28,19 @@ describe('mobile-file-preview-source', () => {
     expect(
       sourceKeyForPreview({ source: 'worktree', worktreeId: 'wt:1', relativePath: 'a:b.ts' })
     ).toBe(JSON.stringify(['worktree', 'wt:1', 'a:b.ts']))
+  })
+
+  it('tracks refreshed terminal capabilities separately from file identity', () => {
+    const original = {
+      source: 'terminalArtifact' as const,
+      worktreeId: 'wt:1',
+      absolutePath: '/tmp/result.json',
+      grantId: 'grant-1'
+    }
+    const refreshed = { ...original, grantId: 'grant-2' }
+
+    expect(sourceKeyForPreview(original)).toBe(sourceKeyForPreview(refreshed))
+    expect(sourceRevisionForPreview(original)).not.toBe(sourceRevisionForPreview(refreshed))
   })
 
   it('makes native-chat artifact previews read-only', () => {

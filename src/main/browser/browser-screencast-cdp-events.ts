@@ -17,6 +17,7 @@ type BrowserScreencastMessageHandlerDeps = {
   queueFrame: (frame: PendingScreencastFrame) => void
   ackScreencastFrame: (sessionId: number | undefined) => void
   scheduleNavigationFrameCapture: () => void
+  emitNavigationState?: () => void
   clearNavigationCaptureTimer: () => void
   bumpSnapshotGeneration: () => void
 }
@@ -25,8 +26,12 @@ export function createBrowserScreencastMessageHandler(
   deps: BrowserScreencastMessageHandlerDeps
 ): (event: unknown, method: string, params: unknown) => void {
   const { dbg, options, isClosed, isStopping, queueFrame, ackScreencastFrame } = deps
-  const { scheduleNavigationFrameCapture, clearNavigationCaptureTimer, bumpSnapshotGeneration } =
-    deps
+  const {
+    scheduleNavigationFrameCapture,
+    emitNavigationState,
+    clearNavigationCaptureTimer,
+    bumpSnapshotGeneration
+  } = deps
 
   return (_event: unknown, method: string, params: unknown): void => {
     if (isClosed()) {
@@ -54,11 +59,13 @@ export function createBrowserScreencastMessageHandler(
         params && typeof params === 'object' ? (params as Record<string, unknown>) : {}
       const frame = payload.frame && typeof payload.frame === 'object' ? payload.frame : null
       if (!frame || !('parentId' in frame)) {
+        emitNavigationState?.()
         scheduleNavigationFrameCapture()
       }
       return
     }
     if (method === 'Page.loadEventFired') {
+      emitNavigationState?.()
       scheduleNavigationFrameCapture()
       return
     }

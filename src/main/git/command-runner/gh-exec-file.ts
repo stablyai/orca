@@ -130,7 +130,8 @@ export async function ghExecFileAsync(
           // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
           timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
           env: nonInteractiveGhEnv(options.env),
-          signal: options.signal
+          signal: options.signal,
+          stdin: options.stdin
         },
         resolved.termination
       )

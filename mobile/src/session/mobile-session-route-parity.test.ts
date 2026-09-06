@@ -48,7 +48,11 @@ const SURFACE_EXPANSION_NAMES = new Set([
   'MobileSessionCommandDock',
   'MobileSessionSheets'
 ])
-const CONTENT_COMPONENT_NAMES = ['MarkdownReader', 'DiffLineRow', 'FileReader'] as const
+const CONTENT_COMPONENT_NAMES = [
+  'MobileMarkdownReader',
+  'MobileDiffCommentLineRow',
+  'MobileSessionFileReader'
+] as const
 const HOST_COMPONENT_NAMES = new Set([
   'ActivityIndicator',
   'Animated.View',
@@ -62,32 +66,40 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '10071240ef9edafc2b9c8bed73be83dceaf7828e3b29f17dab55da020a7697a6'
-const HEAD_HOOK_BINDING_SHA256 = '1dadb8c3dc0573ea20659ce7251629669e618dd0effaeac3a4536b29c2e865a1'
+// Activation source fencing adds two hooks; session-tab-activation-source-race tests the behavior.
+const HEAD_MAIN_HOOK_SHA256 = '8a65c402639980ffda9132ce3dba84da8d85998f5c6b933a8c8eb09817a04783'
+const HEAD_HOOK_BINDING_SHA256 = 'e43ab1ae9e6fd0eb126558207868f1da6322ba50bdeb4a6f7132e6a1f29a9474'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
-  '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
-const HEAD_CALLBACK_BODY_SHA256 = '22103ba85a86e3a3fcb80a7509c7a455d79863010cde3af02db6565b55e3ebe9'
-const HEAD_EFFECT_SHA256 = 'd9ebfaabc1e79773cdada7ab370b20459ed972f1f8edce1652199f4d0391cd13'
-const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+  '3ad3c833aa99bbfd3a4038bae70a0247192f51fb938a2fe3df86626dcfa3386e'
+const HEAD_CALLBACK_BODY_SHA256 = '596f85a60076e49fb198028f8fede0e122fe18c5cc7aaad09562a514cc7c2e29'
+const HEAD_EFFECT_SHA256 = 'f81ef4b4794875643dd429e9dfb6cffab037feb68a334e260c0045a258c07d51'
+const HEAD_CONTENT_HOOK_SHA256 = 'd74431115b27c22dd38c29a510604554ca767cdd2585beaa73ec2e2dae0c5de4'
+// Re-frozen when main's structured Claude chat (#18741) generalized the bare-launch gate
+// from an `agent === 'codex'` literal to isAgentSessionHandleProvider.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '536c72b233c813bb0cea164b090bdce5406ceb965bbc5b83c1f89b89b46f3821'
+  'b2473556b97f3b8f41fbce728e1a0e5a2bb3808e17a9e022515af1fa7dd97ecc'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
-  'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
+  '482c1b9df56a02236e8efcc56fab41de0ea525aa5a03785dc5ac4af8f694c457'
 const HEAD_NATIVE_REMOVAL_SHA256 =
-  '4c994574675a2a0f9c607b3ea89ab7a2ed5a83f7c72fa42342ddcb5f00fc3f4f'
+  'b9fac2ec79984976e7d9b37312f0895b978ce10590261755d96272173a6bfb23'
 const HEAD_TIMER_CREATION_SHA256 =
-  '1a31b625e2174c3db77272249843196d2b6b06ab1e654a96d8f7858e3082e66b'
-const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
+  '688342d48a1b4a46cdffbf0d8953bac245fb6d3c4fe1b5698a1ea6e1e1929bed'
+const HEAD_TIMER_CLEANUP_SHA256 = '8a45ae3c8a01a639a40ffaf3c0fc89a2e0b610623306818c86bad4ef9195b824'
+// Re-frozen when main's structured Claude chat (#18741) dropped the 'codex' literal
+// from the bare-launch gate: one fewer runtime string, same JSX.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '31951b0b83be01ebfa659c4b94df9ad7eaff6404df5338fbade89eb7473a3cb4'
-const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
-const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
+  '12405d53b411f1849d183e018f027a5ffe0150ecc01a069d96a3e6973d922a37'
+// Re-frozen when the repeatable accessory key's press handler dropped its duplicate
+// handleAccessoryKey call: startAccessoryRepeat already sends at press time, so every
+// tap emitted the key twice. Same element count, one attribute body changed.
+const HEAD_HOST_JSX_SHA256 = '5b6acbcb34eaa59aa0020f7d6337ccbeb40b3195ff0d798911d9c035d49042fa'
+const HEAD_LEAF_JSX_SHA256 = '7551bacf163f59c150cc8a9150c443df9804a882365f459053d3ab73ac557f42'
 const HEAD_STYLE_REFERENCE_SHA256 =
-  '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
+  '3e4f57e5c8691d443187ffe306eae28506d5505276ea3de7a4f2f1df1cfa3885'
 const HEAD_IDENTITY_FIELD_SHA256 =
-  '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
-const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
-const HEAD_CAPABILITY_SHA256 = 'ca219f7909a091717110b823d5b94a20770ad3ae51894e0fa765e8628309392d'
+  '99e107d872923359c754013141583941e84075f9823269a7f1f841204748f69c'
+const HEAD_NAVIGATION_SHA256 = '12aba3574cb12b65e545f19e641e4ee07f90fa9d7ed98d24359a359d2c764aa4'
+const HEAD_CAPABILITY_SHA256 = '9eee249038b387931e648d3422d4c39c3a686aa07b90193098fe9ee9f747cee8'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -281,7 +293,7 @@ function readNativeAndTimerFacts(definitions: ReadonlyMap<string, Definition>): 
       }
     }
   }
-  visitLogicalFunction('FileReader', definitions, collect)
+  visitLogicalFunction('MobileSessionFileReader', definitions, collect)
   visitLogicalFunction('SessionScreen', definitions, collect)
   return { cleanups, creations, registrations, removals }
 }
@@ -456,7 +468,7 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
         : ''
     const callText = canonical(node, sourceFile)
     if (
-      ['startRuntimeCapabilityProbe', 'supportsMobileQuickCommands'].includes(callName) ||
+      ['startRuntimeCapabilityRead', 'runtimeCapabilities'].includes(callName) ||
       (callName === 'includes' && callText.includes('capabilities.includes'))
     ) {
       capabilities.push(callText)
@@ -472,59 +484,59 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(266)
+    expect(main.hooks).toHaveLength(290)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
-    expect(main.callbacks).toHaveLength(77)
+    expect(main.callbacks).toHaveLength(84)
     expect(hash(main.callbacks)).toBe(HEAD_CALLBACK_IDENTITY_SHA256)
     expect(hash(main.callbackBodies)).toBe(HEAD_CALLBACK_BODY_SHA256)
     expect(main.effects).toHaveLength(24)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
-    expect(contentBindings).toHaveLength(14)
+    expect(contentBindings).toHaveLength(15)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
-    expect(nestedFunctions).toHaveLength(12)
+    expect(nestedFunctions).toHaveLength(11)
     expect(hash(nestedFunctions)).toBe(HEAD_NESTED_FUNCTION_SHA256)
   })
 
   it('preserves native listeners, timers, identity payloads, and compatibility gates', () => {
     const definitions = readDefinitions()
     const native = readNativeAndTimerFacts(definitions)
-    expect(native.registrations).toHaveLength(7)
+    expect(native.registrations).toHaveLength(5)
     expect(hash(native.registrations)).toBe(HEAD_NATIVE_REGISTRATION_SHA256)
-    expect(native.removals).toHaveLength(9)
+    expect(native.removals).toHaveLength(7)
     expect(hash(native.removals)).toBe(HEAD_NATIVE_REMOVAL_SHA256)
-    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(7)
-    expect(native.creations.filter((fact) => fact.startsWith('setInterval'))).toHaveLength(1)
+    expect(native.creations.filter((fact) => fact.startsWith('setTimeout'))).toHaveLength(6)
+    expect(native.creations.filter((fact) => fact.startsWith('setInterval'))).toHaveLength(0)
     expect(
       native.creations.filter((fact) => fact.startsWith('requestAnimationFrame'))
     ).toHaveLength(1)
     expect(hash(native.creations)).toBe(HEAD_TIMER_CREATION_SHA256)
-    expect(native.cleanups.filter((fact) => fact.startsWith('clearTimeout'))).toHaveLength(11)
-    expect(native.cleanups.filter((fact) => fact.startsWith('clearInterval'))).toHaveLength(1)
+    expect(native.cleanups.filter((fact) => fact.startsWith('clearTimeout'))).toHaveLength(10)
+    expect(native.cleanups.filter((fact) => fact.startsWith('clearInterval'))).toHaveLength(0)
     expect(native.cleanups.filter((fact) => fact.startsWith('cancelAnimationFrame'))).toHaveLength(
       1
     )
     expect(hash(native.cleanups)).toBe(HEAD_TIMER_CLEANUP_SHA256)
     const compatibility = readCompatibilityFacts(definitions)
-    expect(compatibility.identityFields).toHaveLength(14)
+    expect(compatibility.identityFields).toHaveLength(4)
     expect(hash(compatibility.identityFields)).toBe(HEAD_IDENTITY_FIELD_SHA256)
-    expect(compatibility.navigation).toHaveLength(6)
+    expect(compatibility.navigation).toHaveLength(5)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
-    expect(compatibility.capabilities).toHaveLength(5)
+    expect(compatibility.capabilities).toHaveLength(2)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(546)
+    expect(strings).toHaveLength(475)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
-    expect(jsx.host).toHaveLength(124)
+    expect(jsx.host).toHaveLength(126)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
-    expect(jsx.leaf).toHaveLength(61)
+    expect(jsx.leaf).toHaveLength(63)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
-    expect(jsx.styleReferences).toHaveLength(172)
+    expect(jsx.styleReferences).toHaveLength(176)
     expect(hash(jsx.styleReferences)).toBe(HEAD_STYLE_REFERENCE_SHA256)
   })
 })

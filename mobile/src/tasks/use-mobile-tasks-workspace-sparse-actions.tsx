@@ -1,16 +1,10 @@
 import type { WorkspaceSourceEffectsModel } from './use-mobile-tasks-workspace-source-effects'
-import {
-  type SparsePreset,
-  type SshConnectionState,
-  useCallback,
-  useEffect
-} from './mobile-tasks-dependencies'
-import { isSuccess, sortSparsePresetsByName } from './mobile-tasks-legacy-foundation'
+import { type SparsePreset, useCallback, useEffect } from './mobile-tasks-dependencies'
+import { sortSparsePresetsByName } from './mobile-tasks-model'
 
 export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffectsModel) {
   const {
     canSaveWorkspaceSparseDraft,
-    client,
     setShowWorkspaceSparsePicker,
     setWorkspaceSparseDraft,
     setWorkspaceSparsePresetId,
@@ -20,6 +14,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     setWorkspaceSparseSaving,
     setWorkspaceSshConnecting,
     setWorkspaceSshState,
+    taskWorkspaceCreationOperations,
     tasksSupported,
     workspaceCreateDraft,
     workspaceCreateTargetConnectionId,
@@ -47,7 +42,6 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     workspaceSparsePresetsLoaded,
     workspaceSparsePresetsLoading
   ])
-
   const startEditWorkspaceSparsePreset = useCallback(
     (preset: SparsePreset) => {
       if (
@@ -67,10 +61,9 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     },
     [workspaceSparseCheckoutAvailable, workspaceSparsePresetsLoaded, workspaceSparsePresetsLoading]
   )
-
   const saveWorkspaceSparsePreset = useCallback(async (): Promise<void> => {
     if (
-      !client ||
+      !taskWorkspaceCreationOperations ||
       !tasksSupported ||
       !workspaceCreateTargetRepo ||
       !workspaceSparseDraft ||
@@ -82,19 +75,14 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     setWorkspaceSparseSaving(true)
     setWorkspaceSparsePresetsError('')
     try {
-      const response = await client.sendRequest('repo.saveSparsePreset', {
-        repo: `id:${workspaceCreateTargetRepo.id}`,
-        ...(workspaceSparseDraft.presetId ? { id: workspaceSparseDraft.presetId } : {}),
-        name: workspaceSparseDraftName,
-        directories: workspaceSparseDraftParsed.directories
-      })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const saved = (response.result as { preset?: SparsePreset }).preset
-      if (!saved) {
-        throw new Error('Failed to save sparse preset.')
-      }
+      const saved = await taskWorkspaceCreationOperations.saveSparsePreset(
+        workspaceCreateTargetRepo.id,
+        {
+          ...(workspaceSparseDraft.presetId ? { id: workspaceSparseDraft.presetId } : {}),
+          name: workspaceSparseDraftName,
+          directories: workspaceSparseDraftParsed.directories
+        }
+      )
       setWorkspaceSparsePresets((current) => {
         const withoutSaved = current.filter((preset) => preset.id !== saved.id)
         return sortSparsePresetsByName([...withoutSaved, saved])
@@ -113,7 +101,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     }
   }, [
     canSaveWorkspaceSparseDraft,
-    client,
+    taskWorkspaceCreationOperations,
     tasksSupported,
     workspaceCreateTargetRepo,
     workspaceSparseDraft,
@@ -121,33 +109,26 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     workspaceSparseDraftParsed,
     workspaceSparsePresetId
   ])
-
   useEffect(() => {
-    if (!tasksSupported || !client || !workspaceCreateDraft || !workspaceCreateTargetConnectionId) {
+    if (
+      !tasksSupported ||
+      !taskWorkspaceCreationOperations ||
+      !workspaceCreateDraft ||
+      !workspaceCreateTargetConnectionId
+    ) {
       setWorkspaceSshState(null)
       setWorkspaceSshConnecting(false)
       return
     }
 
     let stale = false
-    void client
-      .sendRequest('ssh.getState', { targetId: workspaceCreateTargetConnectionId })
-      .then((response) => {
+    void taskWorkspaceCreationOperations
+      .readSshState(workspaceCreateTargetConnectionId)
+      .then((state) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const state = (response.result as { state?: SshConnectionState | null }).state ?? null
-        setWorkspaceSshState(
-          state ?? {
-            targetId: workspaceCreateTargetConnectionId,
-            status: 'disconnected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        )
+        setWorkspaceSshState(state)
       })
       .catch((err) => {
         if (!stale) {
@@ -163,11 +144,16 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     return () => {
       stale = true
     }
-  }, [client, tasksSupported, workspaceCreateDraft, workspaceCreateTargetConnectionId])
+  }, [
+    taskWorkspaceCreationOperations,
+    tasksSupported,
+    workspaceCreateDraft,
+    workspaceCreateTargetConnectionId
+  ])
   return Object.assign(model, {
-    startNewWorkspaceSparsePreset,
+    saveWorkspaceSparsePreset,
     startEditWorkspaceSparsePreset,
-    saveWorkspaceSparsePreset
+    startNewWorkspaceSparsePreset
   })
 }
 

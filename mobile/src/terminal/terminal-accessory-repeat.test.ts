@@ -46,6 +46,37 @@ describe('terminal accessory repeat', () => {
     expect(sent).toEqual(['down', 'down', 'down'])
   })
 
+  it('emits one keystroke per tap and holds at the iOS 400ms/45ms cadence', async () => {
+    vi.useFakeTimers()
+    const sent: number[] = []
+    const start = Date.now()
+    const send = vi.fn(async () => {
+      sent.push(Date.now() - start)
+      return true
+    })
+    const repeat = createTerminalAccessoryRepeatController<string>()
+
+    // A tap: press and release before the repeat delay elapses.
+    repeat.start('down', send)
+    await vi.advanceTimersByTimeAsync(0)
+    repeat.stop()
+    await vi.runAllTimersAsync()
+    expect(sent).toEqual([0])
+
+    // A hold: first send at press time, then 400ms, then every 45ms.
+    sent.length = 0
+    const holdStart = Date.now()
+    repeat.start('down', send)
+    await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_DELAY_MS)
+    await vi.advanceTimersByTimeAsync(TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS)
+    repeat.stop()
+    expect(sent.map((at) => at - (holdStart - start))).toEqual([
+      0,
+      TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
+      TERMINAL_ACCESSORY_REPEAT_DELAY_MS + TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS
+    ])
+  })
+
   it('does not schedule another repeat after release while a send is pending', async () => {
     vi.useFakeTimers()
     const pending = deferred()

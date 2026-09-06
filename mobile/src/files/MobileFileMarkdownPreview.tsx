@@ -15,6 +15,7 @@ type Props = {
   truncated: boolean
   byteLength: number
   initialLine?: number
+  onOpenLink: (url: string) => void
 }
 
 export function MobileFileMarkdownPreview({
@@ -22,7 +23,8 @@ export function MobileFileMarkdownPreview({
   content,
   truncated,
   byteLength,
-  initialLine
+  initialLine,
+  onOpenLink
 }: Props) {
   const [mode, setMode] = useState<'preview' | 'source'>(() => (initialLine ? 'source' : 'preview'))
   const [previousRelativePath, setPreviousRelativePath] = useState(relativePath)
@@ -70,7 +72,7 @@ export function MobileFileMarkdownPreview({
       {mode === 'preview' ? (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
           {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
-          <MobileMarkdown content={content} />
+          <MobileMarkdown content={content} onOpenLink={onOpenLink} />
         </ScrollView>
       ) : (
         <MobileFilePreviewSourceText

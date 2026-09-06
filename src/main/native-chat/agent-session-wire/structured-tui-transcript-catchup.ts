@@ -9,8 +9,8 @@ import {
 } from '../agent-session-journal/journal-legacy-import'
 import { resolveSessionFilePath } from '../session-file-resolver'
 import {
-  readIncrementalTranscriptMessages,
-  type IncrementalTranscriptState
+  createIncrementalTranscriptState,
+  readIncrementalTranscriptMessages
 } from '../transcript-incremental-reader'
 import { nativeChatLineDecoderForAgent } from '../transcript-tail-reader'
 import {
@@ -161,13 +161,9 @@ export class StructuredTuiTranscriptCatchup {
       throw error
     }
     const start = offset <= size ? offset : 0
-    const incremental: IncrementalTranscriptState = {
-      offset: start,
-      pendingChunks: [],
-      pendingStart: start,
-      pendingBytes: 0,
-      droppingOversizedRecord: false
-    }
+    const incremental = createIncrementalTranscriptState()
+    incremental.offset = start
+    incremental.pendingStart = start
     const decode = nativeChatLineDecoderForAgent(state.agent)
     if (!decode) {
       throw new Error('Transcript unavailable')

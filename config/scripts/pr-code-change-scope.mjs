@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
@@ -179,8 +178,32 @@ const SHARED_PACKAGE_PREFIXES = [
   ...NATIVE_RUNTIME_PREFIXES
 ]
 
+// The hosted mobile UI is packaged and served by the desktop runtime; changes
+// here must keep desktop typecheck/package jobs enabled even though most RN
+// sources remain mobile-only.
+const DESKTOP_RELEVANT_MOBILE_PREFIXES = [
+  'mobile/app/h/',
+  // Why: mobile/host-web-app and mobile/app/h import broadly across mobile/src, so a
+  // mobile/src edit changes out/mobile-web-rnw, which ships in every desktop installer.
+  'mobile/src/',
+  'mobile/package.json',
+  'mobile/pnpm-lock.yaml',
+  'mobile/pnpm-workspace.yaml',
+  'mobile/patches/',
+  'mobile/host-web-app/',
+  'mobile/packages/expo-mobile-web-shell/',
+  'src/mobile-web/',
+  'src/shared/mobile-web/',
+  'mobile/scripts/export-host-mobile-web.mjs',
+  'mobile/scripts/build-terminal-webview-engine.mjs',
+  'mobile/scripts/build-mermaid-webview-engine.mjs',
+  'config/scripts/package-mobile-web-rnw.mjs',
+  'config/scripts/verify-mobile-web-rnw-build.mjs'
+]
+
 const LINUX_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  ...DESKTOP_RELEVANT_MOBILE_PREFIXES,
   'config/docker/cli-launch-contract/',
   'config/docker/headless-pairing/',
   'config/docker/headless-serve-shutdown/',
@@ -194,6 +217,7 @@ const LINUX_PACKAGE_PREFIXES = [
 
 const WINDOWS_PACKAGE_PREFIXES = [
   ...SHARED_PACKAGE_PREFIXES,
+  ...DESKTOP_RELEVANT_MOBILE_PREFIXES,
   'native/windows-cli-launcher/',
   'native/computer-use-windows/',
   'resources/win32/',
@@ -349,7 +373,14 @@ function isTestFile(file) {
 }
 
 function isDesktopIrrelevantPath(file) {
-  return matchesPrefix(file, DESKTOP_IRRELEVANT_PREFIXES)
+  return matchesPrefix(file, DESKTOP_IRRELEVANT_PREFIXES) && !isDesktopRelevantMobilePath(file)
+}
+
+// Why: a mobile test file cannot reach out/mobile-web-rnw, so keep test-only mobile diffs
+// desktop-irrelevant — otherwise the mobile/src carve-out drags the full desktop matrix
+// onto every mobile PR.
+function isDesktopRelevantMobilePath(file) {
+  return !isTestFile(file) && matchesPrefix(file, DESKTOP_RELEVANT_MOBILE_PREFIXES)
 }
 
 function isNativeCacheInputPath(file) {
@@ -364,8 +395,16 @@ function matchesPrefix(file, prefixes) {
   return prefixes.some((prefix) => file === prefix || file.startsWith(prefix))
 }
 
+export async function readChangedPaths(stream) {
+  let input = ''
+  for await (const chunk of stream) {
+    input += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
+  }
+  return input.split('\n').filter(Boolean)
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const files = readFileSync(0, 'utf8').split('\n').filter(Boolean)
+  const files = await readChangedPaths(process.stdin)
   const classification = classifyPrJobs(files)
   for (const [name, value] of Object.entries(classification)) {
     process.stdout.write(`${name}=${value ? 'true' : 'false'}\n`)

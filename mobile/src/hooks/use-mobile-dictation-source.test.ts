@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./use-mobile-dictation.ts', import.meta.url), 'utf8')
+const source = readFileSync(new URL('./use-native-mobile-dictation.ts', import.meta.url), 'utf8')
 const audioChunkSource = readFileSync(
   new URL('./mobile-dictation-audio-chunk.ts', import.meta.url),
   'utf8'

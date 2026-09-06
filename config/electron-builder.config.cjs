@@ -6,6 +6,7 @@ const {
   assertPackagedDaemonEntryExists,
   verifyPackagedDaemonEntryBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
+const { verifyPackagedMobileWeb } = require('./scripts/verify-packaged-mobile-web.cjs')
 const {
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
@@ -87,6 +88,10 @@ const bundledPluginResources = {
   from: 'resources/plugins/launch',
   to: 'plugins/launch'
 }
+const mobileWebExtraResource = {
+  from: 'out/mobile-web-rnw',
+  to: 'mobile-web'
+}
 // Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
@@ -101,6 +106,7 @@ const emojiShortcodeDatasetResource = {
 const commonExtraResources = [
   relayExtraResource,
   bundledPluginResources,
+  mobileWebExtraResource,
   skillFreshnessResources,
   emojiShortcodeDatasetResource
 ]
@@ -200,6 +206,12 @@ module.exports = {
     // Why: out/electron-dev caches `pnpm dev`'s per-branch Electron.app copies (~270MB each).
     // CI never creates it, but packaging on a machine that has run dev would pack them all.
     '!out/electron-dev{,/**/*}',
+    // Why: the hosted mobile-web bundle ships through mobileWebExtraResource to
+    // Resources/mobile-web, which is the only copy resolveMobileWebPackageRoot reads when
+    // packaged. Packing it here duplicated it, and -export is the pre-hardening Metro
+    // artifact that still carries the eval/new Function forms the packager strips.
+    '!out/mobile-web-rnw{,/**/*}',
+    '!out/mobile-web-rnw-export{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
@@ -327,6 +339,7 @@ module.exports = {
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
+    verifyPackagedMobileWeb(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
     // require()s the native (N-API) node-pty for the TARGET arch, which the host

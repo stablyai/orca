@@ -1,9 +1,5 @@
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
-import {
-  extractLinearIssueReadItems,
-  isHostedTaskRepo,
-  useCallback
-} from './mobile-tasks-dependencies'
+import { isHostedTaskRepo, mobileLogErrorKind, useCallback } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
@@ -16,16 +12,13 @@ import {
   createGitLabTask,
   createGitLabTodoTask,
   createLinearTask,
-  isSuccess,
   mapWithConcurrency,
   taskTime
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   const {
     appliedQuery,
-    client,
-    clientRef,
     connState,
     countGitHubItems,
     fetchGitHubItemsPage,
@@ -52,19 +45,27 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     setItems,
     setLoading,
     setRefreshing,
+    taskListOperations,
+    taskListOperationsRef,
     taskStateHydrated,
     tasksSupported
   } = model
   const loadTasks = useCallback(
     async (options: { silent?: boolean } = {}): Promise<void> => {
-      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+      if (
+        !taskListOperations ||
+        connState !== 'connected' ||
+        !tasksSupported ||
+        !taskStateHydrated
+      ) {
         return
       }
       const generation = loadGenerationRef.current + 1
       loadGenerationRef.current = generation
-      const requestClient = client
+      const requestOperations = taskListOperations
       const isCurrent = () =>
-        loadGenerationRef.current === generation && clientRef.current === requestClient
+        loadGenerationRef.current === generation &&
+        taskListOperationsRef.current === requestOperations
       setError('')
       if (options.silent) {
         setRefreshing(true)
@@ -88,7 +89,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           return
         }
         // Why: project mode fetches no work items, but its rows are matched against
-        // the repo list, so it must not return before loadRepos() has run.
+        // the repo list, so it must not return before that request settles.
         if (provider === 'github' && githubMode === 'project') {
           setItems([])
           return
@@ -108,7 +109,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             return
           }
           if (provider === 'github') {
-            const page = await fetchGitHubItemsPage(requestClient, queriedRepos)
+            const page = await fetchGitHubItemsPage(queriedRepos)
             if (!isCurrent()) {
               return
             }
@@ -122,7 +123,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             setGithubCurrentPage(0)
             setItems(page.items)
             if (selectedRepoIds.size > 0) {
-              void countGitHubItems(requestClient, queriedRepos).then((count) => {
+              void countGitHubItems(queriedRepos).then((count) => {
                 if (isCurrent()) {
                   setGithubTotalCount(count)
                 }
@@ -140,17 +141,12 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             return
           }
           if (provider === 'gitlab' && gitlabView === 'todos') {
-            const response = await requestClient.sendRequest('gitlab.todos', {
-              repo: `id:${queriedRepos[0]!.id}`
-            })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
+            const todos = await taskListOperations.listGitLabTodos(queriedRepos[0]!.id)
             if (!isCurrent()) {
               return
             }
             setItems(
-              ((response.result as GitLabTodo[]) ?? [])
+              (todos as GitLabTodo[])
                 .map(createGitLabTodoTask)
                 .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
             )
@@ -161,26 +157,25 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             GITHUB_REPO_CONCURRENCY,
             async (repo) => {
               try {
-                const response = await requestClient.sendRequest('gitlab.listWorkItems', {
-                  repo: `id:${repo.id}`,
+                const envelope = await taskListOperations.listGitLab({
+                  repoId: repo.id,
                   state: gitlabFilter,
                   page: 1,
                   perPage: GITLAB_PER_PAGE,
                   query: appliedQuery.trim() || undefined
                 })
-                if (!isSuccess(response)) {
-                  throw new Error(response.error.message)
-                }
-                const envelope = response.result as {
-                  items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
-                  error?: { type?: string; message: string }
-                }
                 if (envelope.error?.type && envelope.error.type !== 'not_found') {
                   return { items: [], error: envelope.error.message }
                 }
-                return { items: envelope.items.map((item) => createGitLabTask(repo, item)) }
+                return {
+                  items: envelope.items.map((item) =>
+                    createGitLabTask(repo, item as Omit<GitLabWorkItem, 'repoId' | 'repoName'>)
+                  )
+                }
               } catch (err) {
-                console.warn(`[mobile tasks] failed to fetch ${provider} work items`, repo.id, err)
+                console.warn(`[mobile tasks] failed to fetch ${provider} work items`, {
+                  kind: mobileLogErrorKind(err)
+                })
                 return {
                   items: [] as TaskItem[],
                   error: err instanceof Error ? err.message : 'Failed to load GitLab tasks'
@@ -209,21 +204,11 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           }
         } else {
           const normalizedQuery = appliedQuery.trim()
-          const response = normalizedQuery
-            ? await requestClient.sendRequest('linear.searchIssues', {
-                query: normalizedQuery,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-            : await requestClient.sendRequest('linear.listIssues', {
-                filter: linearFilter,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          const issues = extractLinearIssueReadItems(response.result)
+          const issues = await taskListOperations.listLinear({
+            ...(normalizedQuery ? { query: normalizedQuery } : { filter: linearFilter }),
+            limit: LINEAR_LIMIT,
+            workspaceId: selectedLinearWorkspaceId ?? undefined
+          })
           const filtered =
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))
@@ -250,7 +235,6 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     },
     [
       appliedQuery,
-      client,
       connState,
       countGitHubItems,
       fetchGitHubItemsPage,
@@ -268,10 +252,13 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       selectedLinearWorkspaceId,
       selectedRepoIds,
       taskStateHydrated,
+      taskListOperations,
       tasksSupported
     ]
   )
-  return Object.assign(model, { loadTasks })
+  return Object.assign(model, {
+    loadTasks
+  })
 }
 
 export type TaskListLoadingModel = ReturnType<typeof useMobileTasksTaskListLoading>

@@ -1,9 +1,10 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { Pressable, Text, View, Linking, ExternalLink, colors } from './mobile-tasks-dependencies'
+import { Pressable, Text, View, ExternalLink, colors } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksGitHubViewControls(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     activeGitHubProjectView,
     activeProjectLabel,
     githubIssueSourceLabel,
@@ -142,7 +143,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
                   if (!taskUiReady) {
                     return
                   }
-                  void Linking.openURL(selectedGitHubProjectViewUrl)
+                  void deviceOperations.openExternalUrl(selectedGitHubProjectViewUrl)
                 }}
               >
                 <ExternalLink size={14} color={colors.textSecondary} />

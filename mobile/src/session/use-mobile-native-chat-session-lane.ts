@@ -1,5 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { HostSessionNativeChatOperations } from './host-session-native-chat-operations'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -7,18 +7,26 @@ import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-s
  *  Both hooks always run (hook order is fixed); the inactive lane is starved of
  *  its identity inputs rather than unmounted, so a lane flip keeps its cache. */
 export function useMobileNativeChatSessionLane({
+  operations,
   client,
+  workspaceId,
   structured,
   agent,
   resolvedAgent,
   transcriptPath,
   sessionId,
+  terminalId,
+  clientId,
   sourceIdentity,
   enabled,
-  connState,
+  connected,
   onSendError
 }: {
+  /** Bridge lane transport; the hosted page routes it through the shell. */
+  operations: HostSessionNativeChatOperations | null
+  /** Structured lane speaks the agent-session RPC family directly. */
   client: RpcClient | null
+  workspaceId: string
   structured: boolean
   /** Agent id for the structured provider session. */
   agent: string | null
@@ -26,20 +34,25 @@ export function useMobileNativeChatSessionLane({
   resolvedAgent: string | null
   transcriptPath: string | null
   sessionId: string | null
-  sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
+  terminalId: string | null
+  clientId: string | null
+  sourceIdentity: Parameters<typeof useMobileStructuredAgentSession>[0]['sourceIdentity']
   enabled: boolean
-  connState: ConnectionState
+  /** Live transport only; gates the connection-scoped structured hold. */
+  connected: boolean
   onSendError: (message: string) => void
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
 } {
   const bridgeSession = useMobileNativeChatSession({
-    client,
-    sourceIdentity,
+    operations,
+    workspaceId,
     agent: structured ? null : resolvedAgent,
     sessionId: structured ? null : sessionId,
-    transcriptPath: structured ? null : transcriptPath
+    transcriptPath: structured ? null : transcriptPath,
+    terminalId,
+    clientId
   })
   const structuredSession = useMobileStructuredAgentSession({
     client,
@@ -48,7 +61,7 @@ export function useMobileNativeChatSessionLane({
     enabled,
     // Holds are connection-scoped; dropping this on transport loss lets the hook
     // reacquire the provider without clearing the cached transcript.
-    connected: connState === 'connected',
+    connected,
     agent: structured ? agent : null,
     onSendError
   })

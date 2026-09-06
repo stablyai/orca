@@ -22,10 +22,11 @@ import {
   commentDate,
   renderCommentReactions,
   projectRowType
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function renderMobileTasksProjectComments(model: ConnectionPresentationModel) {
   const {
+    handleOpenExternalUrl,
     addProjectRowComment,
     deleteProjectRowComment,
     expandedResolvedCommentGroups,
@@ -147,7 +148,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                   </>
                 ) : (
                   <>
-                    <MobileMarkdown content={comment.body} />
+                    <MobileMarkdown content={comment.body} onOpenLink={handleOpenExternalUrl} />
                     {renderCommentReactions(comment)}
                     {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
                       <View style={styles.inlineActionRow}>

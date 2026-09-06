@@ -28,7 +28,6 @@ import type {
   BrowserZoomState
 } from './browser-touch-geometry'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
-import type { MobileBrowserTab } from './MobileBrowserPane'
 
 type MobileBrowserPaneViewProps = {
   addressFocused: boolean
@@ -37,6 +36,8 @@ type MobileBrowserPaneViewProps = {
   browserLayerRef: (layer: FrameLayer) => (view: View | null) => void
   browserViewMode: MobileBrowserViewMode
   busy: boolean
+  canGoBack: boolean
+  canGoForward: boolean
   controlsDisabled: boolean
   dialog: { dialogType: string; message: string } | null
   error: string | null
@@ -64,7 +65,6 @@ type MobileBrowserPaneViewProps = {
   setKeyboardValue: Dispatch<SetStateAction<string>>
   setLayout: Dispatch<SetStateAction<BrowserTouchLayout | null>>
   setRootViewRef: (view: View | null) => void
-  tab: MobileBrowserTab
   togglePointerModifier: (modifier: BrowserPointerModifier) => void
   zoom: BrowserZoomState
 }
@@ -77,6 +77,8 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     browserLayerRef,
     browserViewMode,
     busy,
+    canGoBack,
+    canGoForward,
     controlsDisabled,
     dialog,
     error,
@@ -104,7 +106,6 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     setKeyboardValue,
     setLayout,
     setRootViewRef,
-    tab,
     togglePointerModifier,
     zoom
   } = props
@@ -112,18 +113,18 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
         <MobileBrowserToolbarIconButton
-          disabled={controlsDisabled || !tab.canGoBack}
+          disabled={controlsDisabled || !canGoBack}
           label="Back"
           onPress={goBack}
         >
-          <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
+          <ChevronLeft size={15} color={buttonColor(!controlsDisabled && canGoBack)} />
         </MobileBrowserToolbarIconButton>
         <MobileBrowserToolbarIconButton
-          disabled={controlsDisabled || !tab.canGoForward}
+          disabled={controlsDisabled || !canGoForward}
           label="Forward"
           onPress={goForward}
         >
-          <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
+          <ChevronRight size={15} color={buttonColor(!controlsDisabled && canGoForward)} />
         </MobileBrowserToolbarIconButton>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled}

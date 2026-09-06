@@ -1,4 +1,5 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { MobileWebTerminalTextScale } from '../../../src/shared/mobile-web/native-operation-contract'
 import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
 
@@ -60,7 +61,7 @@ export type TerminalSelectionEvents = {
   onOpenUrl?: (url: string) => void
   // Why: pinch-to-zoom in the terminal snaps to a text-size preset and reports it
   // here so the app persists it and keeps Settings + other panes in sync.
-  onTextScaleChange?: (scale: number) => void
+  onTextScaleChange?: (scale: MobileWebTerminalTextScale) => void
 }
 
 export type TerminalWebViewProps = {
@@ -77,13 +78,14 @@ export type TerminalWebViewHandle = {
   // Why: iOS can preserve the native view while discarding its JS/backing-store
   // state; foreground recovery must wait for the document to answer before replay.
   prepareForForegroundRecovery: () => void
-  write: (data: string) => void
+  write: (data: string | Uint8Array, onParsed?: () => void) => void
   init: (
     cols: number,
     rows: number,
-    initialData?: string,
+    initialData?: string | Uint8Array,
     preserveScroll?: boolean,
-    oscLinks?: TerminalOscLinkRange[]
+    oscLinks?: TerminalOscLinkRange[],
+    onParsed?: () => void
   ) => void
   resize: (cols: number, rows: number) => void
   // Why: reflow the local xterm buffer (scrollback included) to a new width

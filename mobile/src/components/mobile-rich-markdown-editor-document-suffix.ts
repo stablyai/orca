@@ -1,3 +1,5 @@
+import { MOBILE_RICH_MARKDOWN_EDITOR_HOST_MESSAGE_SCRIPT } from './mobile-rich-markdown-editor-frame-script'
+
 export const MOBILE_RICH_MARKDOWN_EDITOR_AFTER_KEYBOARD_DISMISS = [
   '',
   '      function runCommand(command) {',
@@ -18,14 +20,15 @@ export const MOBILE_RICH_MARKDOWN_EDITOR_AFTER_KEYBOARD_DISMISS = [
   '        else if (command === \'taskList\') document.execCommand(\'insertHTML\', false, \'<ul data-type="taskList"><li data-checked="false"><label contenteditable="false"><input type="checkbox" /></label><div><p>Task</p></div></li></ul>\');',
   "        else if (command === 'link') {",
   "          var href = window.prompt('Link URL');",
-  "          if (href && isSafeUrl(href)) document.execCommand('createLink', false, href);",
+  "          if (href && isSafeUrl(href, false)) document.execCommand('createLink', false, href);",
   "        } else if (command === 'image') {",
   "          var src = window.prompt('Image URL');",
-  "          if (src && isSafeUrl(src)) document.execCommand('insertImage', false, src);",
+  "          if (src && isSafeUrl(src, true)) document.execCommand('insertImage', false, src);",
   '        }',
   '        syncTaskCheckboxesDisabled();',
   '        emitChange();',
   '      }',
+  MOBILE_RICH_MARKDOWN_EDITOR_HOST_MESSAGE_SCRIPT,
   '',
   "      editor.addEventListener('input', function () {",
   '        selectionDroppedOnBlur = false;',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
-import { Stack, useRouter } from 'expo-router'
+import { Stack, useGlobalSearchParams, usePathname, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
@@ -8,9 +8,29 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
-import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
-import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
-import { loadHostCatalog } from '../src/transport/host-store'
+import {
+  LatestNotificationNavigationResolver,
+  notificationCredentialRecoveryRoute
+} from '../src/notifications/notification-routing'
+import {
+  MOBILE_WEB_NAVIGATION_INTENTS,
+  mobileWebIntentTargetForNotification
+} from '../src/mobile-web/mobile-web-navigation-intent-buffer'
+import { useOpenMobileHostTarget } from '../src/mobile-web/use-open-mobile-host-target'
+import {
+  loadMobileWebColdResumeRoute,
+  mobileWebColdResumeStartupPath
+} from '../src/mobile-web/mobile-web-cold-resume-route'
+import {
+  isRetiredNativeWorkspaceRoute,
+  retiredNativeWorkspaceHostId
+} from '../src/mobile-web/mobile-web-production-route'
+import {
+  MOBILE_HYBRID_ROUTE_RETIRED,
+  MOBILE_NATIVE_BASELINE_MODE
+} from '../src/mobile-web/mobile-native-baseline-mode'
+import { mobileHostWorkspaceEntry } from '../src/mobile-web/mobile-web-home-navigation'
+import { loadHostCatalog, loadHosts } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 
@@ -35,8 +55,37 @@ Notifications.setNotificationHandler({
 
 export default function RootLayout() {
   const router = useRouter()
-  const openNotificationRoute = useOpenNotificationRoute()
+  const openMobileHostTarget = useOpenMobileHostTarget()
+  const pathname = usePathname()
+  const { hostId, notice } = useGlobalSearchParams<{ hostId?: string; notice?: string }>()
+  const pathnameRef = useRef(pathname)
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
+  const notificationNavigationResolverRef = useRef<LatestNotificationNavigationResolver | null>(
+    null
+  )
+  notificationNavigationResolverRef.current ??= new LatestNotificationNavigationResolver()
+
+  useEffect(() => {
+    pathnameRef.current = pathname
+  }, [pathname])
+
+  useEffect(() => {
+    if (MOBILE_HYBRID_ROUTE_RETIRED && pathname === '/hybrid') {
+      router.replace(hostId ? mobileHostWorkspaceEntry(hostId, true) : '/')
+      return
+    }
+    if (isRetiredNativeWorkspaceRoute(pathname, MOBILE_NATIVE_BASELINE_MODE)) {
+      const hostId = retiredNativeWorkspaceHostId(pathname)
+      if (hostId && notice === 'worktree-missing') {
+        MOBILE_WEB_NAVIGATION_INTENTS.publishHostTarget(
+          hostId,
+          { kind: 'workspaceList', notice },
+          'home'
+        )
+      }
+      router.replace(hostId ? mobileHostWorkspaceEntry(hostId, false) : '/hybrid')
+    }
+  }, [hostId, notice, pathname, router])
 
   useEffect(() => {
     // Why: pairing publication is journaled across process death; startup must
@@ -50,24 +99,51 @@ export default function RootLayout() {
   // covers cold-start (link tapped while app was closed); the listener
   // covers warm-start (link tapped while app is in memory).
   useEffect(() => {
-    function handleUrl(url: string) {
+    let disposed = false
+    let startupNavigationClaimed = false
+    function handleUrl(url: string): boolean {
       const code = extractPairingCodeFromUrl(url)
       if (code) {
+        startupNavigationClaimed = true
         // Why: Android camera launches can leave Expo Router's unmatched
         // `orca://pair` route underneath this screen; replacing keeps cancel
         // and edge-back from revealing the router error page.
         router.replace({ pathname: '/pair-confirm', params: { code } })
+        return true
       }
+      return false
     }
 
-    void Linking.getInitialURL().then((url) => {
-      if (url) {
-        handleUrl(url)
+    void Linking.getInitialURL().then(async (url) => {
+      if (disposed || (url && handleUrl(url))) {
+        return
+      }
+      const startup = await Promise.all([loadMobileWebColdResumeRoute(), loadHosts()]).catch(
+        () => null
+      )
+      if (!startup) {
+        return
+      }
+      const [route, hosts] = startup
+      if (disposed || startupNavigationClaimed) {
+        return
+      }
+      const destination = mobileWebColdResumeStartupPath(
+        route,
+        hosts,
+        pathnameRef.current,
+        MOBILE_NATIVE_BASELINE_MODE
+      )
+      if (destination) {
+        router.replace(destination)
       }
     })
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
-    return () => sub.remove()
+    return () => {
+      disposed = true
+      sub.remove()
+    }
   }, [router])
 
   // ─── Notification tap routing ───
@@ -94,14 +170,8 @@ export default function RootLayout() {
       }
     }
 
-    async function getNavigationTarget(data: unknown) {
-      const hosts = await loadHostCatalog().catch(() => null)
-      return getNotificationNavigationTarget(data, {
-        knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined,
-        credentialStatusByHostId: hosts
-          ? new Map(hosts.map((host) => [host.id, host.credentialStatus]))
-          : undefined
-      })
+    async function getNavigation(data: unknown) {
+      return notificationNavigationResolverRef.current!.resolve(data, loadHostCatalog)
     }
 
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
@@ -124,13 +194,27 @@ export default function RootLayout() {
         }
       }
 
-      const target = await getNavigationTarget(response.notification.request.content.data)
+      const navigation = await getNavigation(response.notification.request.content.data)
       clearLastNotificationResponse()
       if (disposed) {
         return
       }
-      if (target) {
-        openNotificationRoute(target)
+      if (navigation) {
+        const recoveryRoute = notificationCredentialRecoveryRoute(navigation.target)
+        if (recoveryRoute) {
+          router.push(recoveryRoute)
+          return
+        }
+        // Why: the hybrid page is already mounted here — publishing is the whole navigation.
+        if (pathnameRef.current === '/hybrid') {
+          MOBILE_WEB_NAVIGATION_INTENTS.publish(navigation.target)
+          return
+        }
+        openMobileHostTarget(
+          navigation.target.hostId,
+          mobileWebIntentTargetForNotification(navigation.target),
+          'notification'
+        )
       }
     }
 
@@ -146,7 +230,7 @@ export default function RootLayout() {
       disposed = true
       sub.remove()
     }
-  }, [openNotificationRoute])
+  }, [openMobileHostTarget, router])
   // ─── End notification tap routing ───
 
   // Why: hide the native splash only once the navigation Stack has been laid
@@ -190,6 +274,7 @@ export default function RootLayout() {
             options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
           />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="hybrid" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
           <Stack.Screen name="native-chat-settings" options={{ headerShown: false }} />
           <Stack.Screen name="browser-settings" options={{ headerShown: false }} />

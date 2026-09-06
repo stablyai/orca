@@ -23,6 +23,12 @@ export function enqueueMobileDictationAudioChunk(
   const raw = event.data
   const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
   const byteLength = bytes.byteLength
+  const sampleRate =
+    typeof event.sampleRate === 'number' &&
+    Number.isFinite(event.sampleRate) &&
+    event.sampleRate > 0
+      ? event.sampleRate
+      : MOBILE_DICTATION_PCM_SAMPLE_RATE
   if (!queue.pendingAudioBudget.tryReserve(byteLength)) {
     queue.failActiveDictation(
       dictationId,
@@ -34,7 +40,7 @@ export function enqueueMobileDictationAudioChunk(
     .sendRequest('speech.dictation.chunk', {
       dictationId,
       audioBase64: bytesToBase64(bytes),
-      sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE
+      sampleRate
     })
     .then((response) => {
       if (!response.ok) {

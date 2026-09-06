@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
   buildMobileRichMarkdownEditorHtml,
-  escapeInjectedJavaScriptString
+  escapeInjectedJavaScriptString,
+  MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_CSP_HASH
 } from './mobile-rich-markdown-editor-html'
 
 function editorScript(): string {
@@ -208,6 +210,73 @@ describe('mobile rich markdown editor HTML', () => {
     const script = editorScript()
 
     expect(() => new Function(script)).not.toThrow()
+  })
+
+  it('isolates the hosted editor document and authenticates its frame messages', () => {
+    const nativeHtml = buildMobileRichMarkdownEditorHtml()
+    const hostedHtml = buildMobileRichMarkdownEditorHtml({ isolatedFrame: true })
+    const hostedScript = hostedHtml.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? ''
+    const scriptHash = `'sha256-${createHash('sha256').update(hostedScript).digest('base64')}'`
+
+    expect(nativeHtml).toContain("default-src 'none'")
+    expect(nativeHtml).toContain("connect-src 'none'")
+    expect(hostedHtml).toContain("default-src 'none'")
+    expect(hostedHtml).toContain('img-src data: https:')
+    expect(hostedHtml).toContain("frame-src 'none'")
+    expect(MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_CSP_HASH).toBe(scriptHash)
+    expect(hostedHtml).toContain(`script-src ${scriptHash}`)
+    expect(hostedScript).toContain("direction: 'editor-to-host'")
+    expect(hostedScript).toContain("var frameToken = window.parent === window ? '' : window.name")
+    expect(hostedScript).toContain('message.frameToken !== frameToken')
+    expect(hostedScript).not.toContain('event.source !== window.parent')
+    expect(hostedScript).toContain("message.direction !== 'host-to-editor'")
+    expect(hostedScript).toContain('Number.isSafeInteger(payload.generation)')
+    expect(() => new Function(hostedScript)).not.toThrow()
+  })
+
+  it('renders the Markdown XSS corpus as inert content and rejects active URL schemes', () => {
+    const html = runtimeMarkdownToHtml(
+      [
+        '<script>globalThis.pwned = true</script>',
+        '<img src=x onerror="globalThis.pwned = true">',
+        '<svg onload="globalThis.pwned = true"><foreignObject>bad</foreignObject></svg>',
+        '[javascript](javascript:alert(1))',
+        '[data](data:text/html,<script>alert(1)</script>)',
+        '[vbscript](vbscript:msgbox(1))',
+        '![svg](data:image/svg+xml,<svg onload=alert(1)></svg>)',
+        '[safe](https://example.com/path)',
+        '![raster](data:image/png;base64,iVBORw0KGgo=)'
+      ].join('\n\n'),
+      false
+    )
+
+    expect(html).not.toMatch(/<(?:script|svg|foreignObject)\b/i)
+    expect(html).not.toMatch(/<[^>]+\son(?:error|load)=/i)
+    expect(html).not.toMatch(/(?:href|src)="(?:javascript|data:text\/html|vbscript):/i)
+    expect(html).not.toMatch(/(?:href|src)="data:image\/svg/i)
+    expect(html).toContain('<a href="https://example.com/path">safe</a>')
+    expect(html).toContain('<img src="data:image/png;base64,iVBORw0KGgo=" alt="raster" />')
+  })
+
+  it('renders https images the frame policy admits and leaves plaintext http blocked', () => {
+    const html = runtimeMarkdownToHtml(
+      [
+        '![remote](https://example.com/image.png)',
+        '![plaintext](http://example.com/image.png)'
+      ].join('\n\n'),
+      false
+    )
+    const policy =
+      buildMobileRichMarkdownEditorHtml().match(
+        /Content-Security-Policy" content="([^"]+)"/
+      )?.[1] ?? ''
+    const imgSrc = policy.match(/img-src ([^;]+)/)?.[1] ?? ''
+
+    expect(html).toContain('<img src="https://example.com/image.png" alt="remote" />')
+    expect(html).toContain('<img src="http://example.com/image.png" alt="plaintext" />')
+    expect(imgSrc.split(' ')).toEqual(['data:', 'https:'])
+    expect(policy).not.toContain("connect-src 'self'")
+    expect(policy).toContain("frame-src 'none'")
   })
 
   it('escapes injected markdown without reopening script tags', () => {

@@ -1,8 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import {
-  SHOW_MOBILE_PROJECT_METADATA_EDITORS,
-  projectRowType
-} from './mobile-tasks-legacy-foundation'
+import { SHOW_MOBILE_PROJECT_METADATA_EDITORS, projectRowType } from './mobile-tasks-model'
 import {
   View,
   Text,
@@ -170,6 +167,7 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
 
 export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentationModel) {
   const {
+    handleOpenExternalUrl,
     mutateProjectRowIssueOrPr,
     projectBodyDraft,
     projectMutating,
@@ -233,7 +231,11 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
         >
           <Text style={styles.inlineSaveText}>Save description</Text>
         </Pressable>
-        <MobileMarkdown content={projectBodyDraft} fallback="No description." />
+        <MobileMarkdown
+          content={projectBodyDraft}
+          fallback="No description."
+          onOpenLink={handleOpenExternalUrl}
+        />
       </View>
     </>
   ) : (
@@ -244,7 +246,11 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
       </View>
       <View style={styles.detailSection}>
         <Text style={styles.detailSectionTitle}>Description</Text>
-        <MobileMarkdown content={projectBodyDraft} fallback="No description." />
+        <MobileMarkdown
+          content={projectBodyDraft}
+          fallback="No description."
+          onOpenLink={handleOpenExternalUrl}
+        />
       </View>
     </>
   )

@@ -56,7 +56,7 @@ describe('quick-commands tab stability', () => {
     )
     expect(style?.initializer?.getText(sourceFile)).toBe('{styles.tabBar}')
     expect(tabSource).toContain('if (quickCommandsSupported === true)')
-    expect(tabSource).toContain('setShowQuickCommands(true)')
+    expect(tabSource).toContain('setQuickCommandsOpenFor(sessionTabOperations)')
     expect(tabSource).toContain('Desktop update required for quick commands')
     expect(tabSource).toContain('Checking desktop capabilities — try again in a moment')
   })

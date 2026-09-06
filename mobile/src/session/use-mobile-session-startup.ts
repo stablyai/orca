@@ -42,7 +42,10 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     showToast,
     clearTerminalCache,
     fetchTerminals,
-    ensureSessionTabs
+    ensureSessionTabs,
+    fileDocLifecycleRef,
+    markdownDocLifecycleRef,
+    setWorkspaceTransportState
   } = scope
   useEffect(() => {
     // Why: Expo reuses this screen across worktrees; reset route state so it can't open stale UI or reject the next snapshot.
@@ -61,6 +64,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     terminalDiagnosticsRef.current.resetRoute()
     appliedSnapshotMarkerRef.current = { epoch: null, version: -1 }
     closedTabTombstonesRef.current.clear()
+    markdownDocLifecycleRef.current.reset()
+    fileDocLifecycleRef.current.reset()
     bufferedTerminalDraftState.resetDrafts()
     for (const queued of terminalGestureInputQueuesRef.current.values()) {
       if (queued.timer) {
@@ -73,6 +78,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setTerminals([])
     terminalsRef.current = []
     setSessionTabs([])
+    setWorkspaceTransportState('available')
     setActiveSessionTabId(null)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
@@ -81,6 +87,8 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     return () => {
       sessionTabActionSheetRequestSeqRef.current += 1
       sessionTabActionSheetKeyboardHideSubRef.current?.remove()
+      markdownDocLifecycleRef.current.reset()
+      fileDocLifecycleRef.current.reset()
       bufferedTerminalDraftState.clearPendingRestorations()
       clearPendingLiveInputCommit()
       clearDelayedActionTimers()

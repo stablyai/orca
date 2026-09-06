@@ -1,11 +1,22 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { getNotificationNavigationTarget } from './notification-routing'
+import {
+  getNotificationNavigationTarget,
+  notificationCredentialRecoveryRoute
+} from './notification-routing'
 import {
   hostStackHostRoute,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
+import {
+  mobileWebIntentTargetForNotification,
+  MOBILE_WEB_NAVIGATION_INTENTS
+} from '../mobile-web/mobile-web-navigation-intent-buffer'
+import {
+  mobileHomeHostStackTarget,
+  navigateFromMobileHome
+} from '../mobile-web/mobile-web-home-navigation'
 
 const rootLayoutSource = readFileSync(new URL('../../app/_layout.tsx', import.meta.url), 'utf8')
 
@@ -38,11 +49,50 @@ function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNaviga
 }
 
 describe('notification route coordination', () => {
+  it('keeps host-only and workspace notification intents distinct', () => {
+    expect(getNotificationNavigationTarget({ hostId: 'host-1' })).toEqual({
+      kind: 'host',
+      hostId: 'host-1'
+    })
+    expect(
+      getNotificationNavigationTarget({ hostId: 'host-1', worktreeId: 'repo::/tmp/worktree' })
+    ).toEqual({
+      kind: 'session',
+      hostId: 'host-1',
+      hostWorkspaceId: 'repo::/tmp/worktree'
+    })
+  })
+
+  it('routes unavailable notification hosts through native recovery', () => {
+    expect(
+      notificationCredentialRecoveryRoute(
+        getNotificationNavigationTarget(
+          { hostId: 'host-1' },
+          {
+            credentialStatusByHostId: new Map([['host-1', 'temporarily-unavailable']])
+          }
+        )!
+      )
+    ).toBe('/')
+    expect(
+      notificationCredentialRecoveryRoute(
+        getNotificationNavigationTarget(
+          { hostId: 'host-1' },
+          { credentialStatusByHostId: new Map([['host-1', 'missing']]) }
+        )!
+      )
+    ).toBe('/pair-scan')
+  })
+
   it('mounts the host before replacing it with the notification session, from a cold navigator', () => {
     const target = getNotificationNavigationTarget({
       hostId: 'host/one',
       worktreeId: 'repo::/Users/me/orca/workspaces/feature'
-    })
+    })!
+    const sessionTarget = mobileHomeHostStackTarget(
+      target.hostId,
+      mobileWebIntentTargetForNotification(target)
+    )!
     // Cold start: the tap is handled before the root navigator has committed any state.
     const harness = navigationHarness(undefined)
     const push = vi.fn()
@@ -50,8 +100,8 @@ describe('notification route coordination', () => {
     navigateToHostStackRoute(
       harness.navigation,
       { push, replace: vi.fn() },
-      target!.hostId,
-      target!.sessionTarget!
+      target.hostId,
+      sessionTarget
     )
 
     expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
@@ -93,25 +143,68 @@ describe('notification route coordination', () => {
       type: 'REPLACE',
       target: '/h',
       source: 'host-index',
-      payload: target!.sessionTarget
+      payload: sessionTarget
     })
   })
 
   it('leaves a host-only notification as a shallow push with nothing to coordinate', () => {
-    expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
+    const target = getNotificationNavigationTarget({ hostId: 'host-1' })!
+    expect(
+      mobileHomeHostStackTarget(target.hostId, mobileWebIntentTargetForNotification(target))
+    ).toBeNull()
   })
 
-  it('routes notification taps through the coordinated transition, not a bare push', () => {
+  it('routes a native notification tap through the coordinator, not a bare push', () => {
+    const target = getNotificationNavigationTarget({
+      hostId: 'host-1',
+      worktreeId: 'repo::/tmp/worktree'
+    })!
+    const router = { push: vi.fn() }
+    const openHostStackRoute = vi.fn()
+
+    navigateFromMobileHome({
+      router,
+      openHostStackRoute,
+      hostId: target.hostId,
+      target: mobileWebIntentTargetForNotification(target),
+      source: 'notification',
+      nativeBaselineEnabled: true
+    })
+
+    expect(router.push).not.toHaveBeenCalled()
+    expect(openHostStackRoute).toHaveBeenCalledWith('host-1', {
+      name: '[hostId]/session/[worktreeId]',
+      params: { hostId: 'host-1', worktreeId: 'repo::/tmp/worktree' }
+    })
+    // The hybrid page still gets its intent even though the native stack did the navigating.
+    expect(MOBILE_WEB_NAVIGATION_INTENTS.isCurrent(0)).toBe(true)
+  })
+
+  it('publishes the validated intent before entering the hybrid route', () => {
     const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
     const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
 
-    // Assert the markers first: a renamed banner would otherwise slice garbage and report a
-    // missing call instead of the real cause.
     expect(start).toBeGreaterThanOrEqual(0)
     expect(end).toBeGreaterThan(start)
 
     const notificationEffect = rootLayoutSource.slice(start, end)
-    expect(notificationEffect).toContain('openNotificationRoute(target)')
-    expect(notificationEffect).not.toContain('router.push(')
+    // Already on the hybrid page: publishing the intent *is* the navigation.
+    expect(notificationEffect).toContain('MOBILE_WEB_NAVIGATION_INTENTS.publish(navigation.target)')
+    expect(notificationEffect).toContain(
+      'openMobileHostTarget(\n          navigation.target.hostId,\n          mobileWebIntentTargetForNotification(navigation.target),\n'
+    )
+    // A bare push into the nested host route lands on a blank host screen (#12001).
+    expect(notificationEffect).not.toContain('mobileHomeDestination(')
+  })
+
+  it('validates the tap against the full host catalog, not just token-backed hosts', () => {
+    const start = rootLayoutSource.indexOf('// ─── Notification tap routing ───')
+    const end = rootLayoutSource.indexOf('// ─── End notification tap routing ───', start)
+    const notificationEffect = rootLayoutSource.slice(start, end)
+
+    // loadHosts() omits any host whose keychain read failed, which both kills the tap
+    // (unknown host id) and hides the credential-recovery status.
+    expect(notificationEffect).toContain('resolve(data, loadHostCatalog)')
+    expect(notificationEffect).not.toContain('resolve(data, loadHosts)')
   })
 })

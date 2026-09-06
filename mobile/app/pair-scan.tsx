@@ -25,6 +25,7 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
+import { mobileLogErrorKind } from '../src/diagnostics/mobile-log-error-kind'
 import { pairScanStyles as styles } from '../src/pair-scan-styles'
 
 // Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
@@ -173,7 +174,7 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      console.warn('[pair] connect failed', err)
+      console.warn('[pair] connect failed', { kind: mobileLogErrorKind(err) })
       setStatus('error')
       setErrorMessage(
         timedOut

@@ -1,24 +1,13 @@
 import type {
-  ProviderCheckSummary,
   GitHubOwnerRepo,
-  RpcClient,
-  HostedReviewDecision,
-  LinearMobileIssue
+  HostTaskLinearContext,
+  HostTaskReadOperations,
+  HostTaskRepository,
+  LinearMobileIssue,
+  ProviderCheckSummary
 } from './mobile-tasks-dependencies'
 
-export type RepoSummary = {
-  id: string
-  displayName: string
-  path: string
-  badgeColor?: string
-  kind?: 'git' | 'folder'
-  connectionId?: string | null
-  issueSourcePreference?: IssueSourcePreference
-  /** Fork parent resolved by the host; drives upstream Project row matching. */
-  upstream?: { owner: string; repo: string; host?: string } | null
-}
-
-export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
+export type RepoSummary = HostTaskRepository
 
 export type GitHubWorkItem = {
   id: string
@@ -44,6 +33,7 @@ export type GitHubWorkItem = {
   checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
+  targetId?: string
 }
 
 export type GitHubAssignableUser = {
@@ -73,14 +63,10 @@ export type GitHubRepoSources = {
   upstreamCandidate: GitHubOwnerRepo | null
 }
 
-export type TaskRuntimeStatus = {
-  capabilities?: string[]
-}
-
 export type TasksSupportState =
-  | { kind: 'unknown'; client: RpcClient | null }
-  | { kind: 'supported'; client: RpcClient }
-  | { kind: 'unsupported'; client: RpcClient }
+  | { kind: 'unknown'; operations: HostTaskReadOperations | null }
+  | { kind: 'supported'; operations: HostTaskReadOperations }
+  | { kind: 'unsupported'; operations: HostTaskReadOperations }
 
 export type GitLabWorkItem = {
   id: string
@@ -96,12 +82,13 @@ export type GitLabWorkItem = {
   baseRefName?: string
   isCrossRepository?: boolean
   projectRef?: { host: string; path: string }
-  checksSummary?: ProviderCheckSummary
-  mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
-  reviewDecision?: HostedReviewDecision
-  reviewerCount?: number
+  targetId?: string
   repoId: string
   repoName: string
+  reviewDecision?: string | null
+  checksSummary?: ProviderCheckSummary
+  mergeable?: GitHubPRMergeableState
+  reviewerCount?: number
 }
 
 export type GitLabTodo = {
@@ -115,12 +102,6 @@ export type GitLabTodo = {
   authorUsername: string
   updatedAt: string
   state: 'pending' | 'done'
-}
-
-export type GitPushTarget = {
-  remoteName: string
-  branchName: string
-  remoteUrl?: string
 }
 
 export type SetupDecision = 'inherit' | 'run' | 'skip'
@@ -146,6 +127,7 @@ export type LinearProject = {
 
 export type LinearIssueChild = {
   id: string
+  targetId?: string
   identifier: string
   title: string
   url: string
@@ -160,13 +142,7 @@ export type LinearState = {
   color?: string
 }
 
-export type LinearTeam = {
-  id: string
-  workspaceId?: string
-  workspaceName?: string
-  name: string
-  key: string
-}
+export type LinearTeam = HostTaskLinearContext['teams'][number]
 
 export type DetailComment = {
   id: string | number

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
@@ -11,8 +11,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
-import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
+import type { ConnectionState } from '../../../src/transport/types'
 import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { styles } from '../../../src/accounts/mobile-accounts-screen-styles'
 import { useNow } from '../../../src/hooks/use-now'
@@ -20,7 +20,6 @@ import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
   type ProviderKey,
-  decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
@@ -34,14 +33,38 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+import type { HostAccountsOperations } from '../../../src/accounts/host-accounts-operations'
+import { defaultHostAccountsOperations } from '../../../src/accounts/default-host-accounts-operations'
 
-export default function AccountsScreen() {
+type AccountsScreenProps = {
+  hostId?: string
+  operations?: HostAccountsOperations
+  connectionState?: ConnectionState
+  nativeHostBinding?: boolean
+}
+
+export function AccountsScreen({
+  hostId: hostIdProp,
+  operations: operationsProp,
+  connectionState,
+  nativeHostBinding = true
+}: AccountsScreenProps = {}) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const params = useLocalSearchParams<{ hostId: string }>()
+  const hostId = hostIdProp ?? params.hostId
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
-  const { client, state: connState } = useHostClient(hostId)
+  const nativeHost = useHostClient(nativeHostBinding ? hostId : undefined)
+  const operations = useMemo(
+    () =>
+      operationsProp ??
+      (nativeHost.client && hostId
+        ? defaultHostAccountsOperations(nativeHost.client, hostId)
+        : null),
+    [hostId, nativeHost.client, operationsProp]
+  )
+  const connState = connectionState ?? nativeHost.state
   const [hostName, setHostName] = useState<string>('')
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -66,9 +89,8 @@ export default function AccountsScreen() {
     scopeLabel: resetScopeLabel,
     confirmReset: confirmCodexReset
   } = useCodexResetCreditAction({
-    client,
+    operations,
     connected: connState === 'connected',
-    hostId,
     snapshot,
     accountMutationBusy: busyAccountId !== null,
     onSnapshot: acceptSnapshot
@@ -88,58 +110,39 @@ export default function AccountsScreen() {
       return
     }
     let stale = false
-    void loadHosts().then((hosts) => {
+    void operations?.loadHostName(hostId).then((name) => {
       if (stale) {
         return
       }
-      const host = hosts.find((h) => h.id === hostId)
-      if (!host) {
+      if (!name) {
         setError('Host not found')
         return
       }
-      setHostName(host.name)
+      setHostName(name)
     })
     return () => {
       stale = true
     }
-  }, [hostId])
+  }, [hostId, operations])
 
   // Why: subscribe to streaming snapshot updates so usage bars refresh in
   // place when the desktop's rate-limit poll completes (every 5 min) or
   // when the user switches accounts. Falls back to a one-shot accounts.list
   // if the subscription stream errors.
   useEffect(() => {
-    if (!client || connState !== 'connected') {
+    if (!operations || connState !== 'connected') {
       return
     }
-    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const evt = payload as { type?: string; snapshot?: unknown }
-      if (evt.type === 'ready' || evt.type === 'snapshot') {
-        try {
-          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
-        } catch {
-          rejectInvalidSnapshot()
-        }
-      }
-    })
-    return unsubscribe
-  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
+    return operations.subscribe(acceptSnapshot, rejectInvalidSnapshot)
+  }, [acceptSnapshot, connState, operations, rejectInvalidSnapshot])
 
   const refresh = useCallback(async () => {
-    if (!client) {
+    if (!operations) {
       return
     }
     setRefreshing(true)
     try {
-      const res = await client.sendRequest('accounts.list')
-      if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result))
-      } else {
-        setError(res.error.message)
-      }
+      acceptSnapshot(await operations.snapshot())
     } catch (e) {
       if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
         rejectInvalidSnapshot()
@@ -149,11 +152,11 @@ export default function AccountsScreen() {
     } finally {
       setRefreshing(false)
     }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot])
+  }, [acceptSnapshot, operations, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
-      if (!client) {
+      if (!operations) {
         return
       }
       const codexTarget = provider === 'codex' ? snapshot?.rateLimits.codexTarget : null
@@ -161,33 +164,19 @@ export default function AccountsScreen() {
         return
       }
       setBusyAccountId(accountId ?? `${provider}:default`)
-      const method =
-        provider === 'claude'
-          ? 'accounts.selectClaude'
-          : codexTarget?.runtime === 'wsl'
-            ? 'accounts.selectCodexForTarget'
-            : 'accounts.selectCodex'
       try {
-        // Why: old hosts silently strip unknown target fields. Use the distinct
-        // targeted RPC for WSL so version skew fails before mutating host state.
-        const params =
-          codexTarget?.runtime === 'wsl' ? { accountId, target: codexTarget } : { accountId }
-        const res = await client.sendRequest(method, params)
-        if (!res.ok) {
-          Alert.alert('Could not switch account', res.error.message)
-        } else {
-          // Why: optimistic refresh — the streaming subscription will also
-          // emit, but a one-shot keeps the UI responsive even if the stream
-          // is temporarily disconnected.
-          await refresh()
-        }
+        await operations.select(provider, accountId, codexTarget)
+        // Why: optimistic refresh — the streaming subscription will also
+        // emit, but a one-shot keeps the UI responsive even if the stream
+        // is temporarily disconnected.
+        await refresh()
       } catch (e) {
         Alert.alert('Could not switch account', e instanceof Error ? e.message : String(e))
       } finally {
         setBusyAccountId(null)
       }
     },
-    [client, refresh, snapshot]
+    [operations, refresh, snapshot]
   )
 
   const renderProviderSection = (provider: ProviderKey, title: string) => {
@@ -343,7 +332,7 @@ export default function AccountsScreen() {
         <Pressable
           style={styles.iconButton}
           onPress={refresh}
-          disabled={!client || refreshing || connState !== 'connected'}
+          disabled={!operations || refreshing || connState !== 'connected'}
         >
           {refreshing ? (
             <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -392,4 +381,8 @@ export default function AccountsScreen() {
       </ScrollView>
     </SafeAreaView>
   )
+}
+
+export default function NativeAccountsScreen() {
+  return <AccountsScreen />
 }

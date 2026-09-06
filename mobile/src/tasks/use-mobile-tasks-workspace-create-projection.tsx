@@ -20,7 +20,7 @@ import {
   type RepoSummary,
   taskWorkspaceSuggestedName,
   workspaceAgentIconId
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLoadingModel) {
   const {
@@ -80,7 +80,6 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     },
     [repos, workspaceRepos]
   )
-
   const workspaceCreateTargetRepo = useMemo(
     () =>
       workspaceCreateDraft
@@ -135,7 +134,6 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     !workspaceSparseSaving &&
     !workspaceSparseDraftError &&
     workspaceSparseDraftParsed !== null
-
   const workspaceAgentOptions = useMemo<PickerOption<WorkspaceAgentChoice>[]>(() => {
     const enabledAgents = filterWorkspaceAgents(
       MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
@@ -198,7 +196,6 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     setShowWorkspaceSparsePicker(false)
     setError('')
   }, [])
-
   const handleWorkspaceNameDraftChange = useCallback(
     (nextName: string): void => {
       if (!nextName.trim()) {
@@ -219,7 +216,6 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       workspaceNameDraft
     ]
   )
-
   const selectWorkspaceBaseBranch = useCallback(
     (branch: BaseRefSearchResult): void => {
       const selection = resolveComposerBranchSelection({
@@ -239,7 +235,6 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     },
     [workspaceLastAutoName, workspaceNameDraft]
   )
-
   const clearWorkspaceBaseBranch = useCallback((): void => {
     setWorkspaceBaseBranch(null)
     setWorkspaceBranchAutoName('')
@@ -247,26 +242,26 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     setShowWorkspaceBaseBranchPicker(false)
   }, [])
   return Object.assign(model, {
+    canSaveWorkspaceSparseDraft,
+    clearWorkspaceBaseBranch,
     getWorkspaceTargetRepo,
-    workspaceCreateTargetRepo,
-    workspaceCreateTargetConnectionId,
-    workspaceCreateSshGate,
-    workspaceCreateSshStatus,
+    handleWorkspaceNameDraftChange,
+    openWorkspaceCreate,
+    selectWorkspaceBaseBranch,
+    workspaceAgentOptions,
+    workspaceCreateCanPickRepo,
     workspaceCreateRequiresSshConnection,
     workspaceCreateSshConnectInProgress,
     workspaceCreateSshError,
-    workspaceCreateCanPickRepo,
+    workspaceCreateSshGate,
+    workspaceCreateSshStatus,
+    workspaceCreateTargetConnectionId,
+    workspaceCreateTargetRepo,
     workspaceSparseCheckoutAvailable,
-    workspaceSparseDraftParsed,
+    workspaceSparseDraftError,
     workspaceSparseDraftName,
     workspaceSparseDraftNameCollision,
-    workspaceSparseDraftError,
-    canSaveWorkspaceSparseDraft,
-    workspaceAgentOptions,
-    openWorkspaceCreate,
-    handleWorkspaceNameDraftChange,
-    selectWorkspaceBaseBranch,
-    clearWorkspaceBaseBranch
+    workspaceSparseDraftParsed
   })
 }
 

@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { HostFilePreviewOperations } from './host-file-preview-operations'
+import type { MobileFilePreviewRouteState } from './mobile-file-preview-route'
+import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
 import { sourceKeyForPreview } from './mobile-file-preview-source'
 import {
   hasUnsavedMobileTerminalArtifactDraft,
@@ -6,7 +11,71 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 
+vi.mock('react-native', () => ({
+  Alert: { alert: vi.fn() },
+  BackHandler: { addEventListener: () => ({ remove: vi.fn() }) },
+  Pressable: 'Pressable',
+  Text: 'Text',
+  View: 'View',
+  useWindowDimensions: () => ({ width: 390, height: 844 })
+}))
+
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView'
+}))
+
+vi.mock('expo-router', () => ({
+  useRouter: () => ({ back: vi.fn() })
+}))
+
+vi.mock('lucide-react-native', () => ({
+  ChevronLeft: 'ChevronLeft',
+  Save: 'Save'
+}))
+
+vi.mock('../transport/client-context', () => ({
+  useForceReconnect: () => vi.fn(),
+  useHostClient: () => ({ client: null, state: 'disconnected' })
+}))
+
+vi.mock('../theme/mobile-theme', () => ({
+  colors: { textPrimary: '#fff', textSecondary: '#999' },
+  spacing: { md: 16 }
+}))
+
+vi.mock('./mobile-file-preview-styles', () => ({
+  filePreviewStyles: {}
+}))
+
+vi.mock('./MobileFilePreviewBody', () => ({
+  MobileFilePreviewBody: 'MobileFilePreviewBody'
+}))
+
+vi.mock('./default-host-file-preview-operations', () => ({
+  defaultHostFilePreviewOperations: vi.fn()
+}))
+
+function suppressReactTestRendererDeprecationWarning(): () => void {
+  const originalConsoleError = console.error
+  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+    const firstArg = args[0]
+    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
+      return
+    }
+    originalConsoleError(...args)
+  })
+  return () => consoleErrorSpy.mockRestore()
+}
+
 describe('MobileFilePreviewScreen', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    renderer?.unmount()
+    renderer = null
+    vi.restoreAllMocks()
+  })
+
   it('treats empty terminal artifact text previews as editable', () => {
     expect(isEditableMobileTerminalArtifactPreview({ status: 'empty', kind: 'text' })).toBe(true)
     expect(
@@ -95,5 +164,56 @@ describe('MobileFilePreviewScreen', () => {
         reconnect: false
       })
     ).toBe(false)
+  })
+
+  it('does not reload when an equivalent route object is rendered', async () => {
+    const route: MobileFilePreviewRouteState = {
+      ok: true,
+      params: {
+        hostId: 'host-1',
+        worktreeId: 'worktree-1',
+        relativePath: 'Casks/orca.rb',
+        source: 'worktree'
+      }
+    }
+    const operations: HostFilePreviewOperations = {
+      load: vi.fn(async () => ({
+        status: 'ready',
+        kind: 'text',
+        content: 'cask "orca" do',
+        truncated: false,
+        byteLength: 14
+      })),
+      saveTerminalArtifact: vi.fn(),
+      reconnect: vi.fn(),
+      openExternalUrl: vi.fn()
+    }
+    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(MobileFilePreviewScreen, {
+            route,
+            operations,
+            connectionState: 'connected',
+            nativeHostBinding: false
+          })
+        )
+      })
+      await act(async () => {
+        renderer!.update(
+          createElement(MobileFilePreviewScreen, {
+            route: { ok: true, params: { ...route.params } },
+            operations,
+            connectionState: 'connected',
+            nativeHostBinding: false
+          })
+        )
+      })
+    } finally {
+      restoreConsoleError()
+    }
+
+    expect(operations.load).toHaveBeenCalledTimes(1)
   })
 })

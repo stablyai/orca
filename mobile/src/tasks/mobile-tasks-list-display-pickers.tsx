@@ -15,7 +15,7 @@ import {
   LINEAR_ORDER_OPTIONS,
   LINEAR_DISPLAY_OPTIONS,
   SORT_OPTIONS
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function renderMobileTasksLinearViewPicker(model: ConnectionPresentationModel) {
   const {

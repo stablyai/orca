@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
 
 const acceptSend = vi.fn()
 const captureSendOrigin = vi.fn()
@@ -155,7 +154,7 @@ import {
   useMobileNativeChatController,
   type MobileNativeChatController
 } from './use-mobile-native-chat-controller'
-import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import { nativeHostSessionNativeChatOperations } from './native-host-session-native-chat-operations'
 
 const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
 
@@ -179,22 +178,27 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   const clientStub = { sendRequest: vi.fn() }
 
   function Harness({
-    connState = 'connected',
+    connected = true,
     tab = null,
     activeHandle = 'term-1',
     inputLeaseReady = true
   }: {
-    connState?: ConnectionState
+    connected?: boolean
     tab?: unknown
     activeHandle?: string | null
     inputLeaseReady?: boolean
   }): null {
     controller = useMobileNativeChatController({
+      operations: nativeHostSessionNativeChatOperations(clientStub as unknown as RpcClient),
       client: clientStub as unknown as RpcClient,
-      connState,
+      connected,
       hostId: 'h',
       worktreeId: 'w',
-      activeSessionTab: tab as never,
+      activeSessionTab: (tab ?? {
+        type: 'terminal',
+        launchAgent: 'codex',
+        nativeChatSessionId: 'session-1'
+      }) as never,
       activeSessionTabId: (tab as { id?: string } | null)?.id ?? 'tab-1',
       activeHandleRef: { current: activeHandle },
       deviceTokenRef: { current: null },
@@ -208,12 +212,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    clientStub.sendRequest.mockResolvedValue({
-      id: 'send',
-      ok: true,
-      result: { send: { accepted: true } },
-      _meta: { runtimeId: 'r' }
-    })
     resetMobileNativeChatStaleInputForTests()
     captureSendOrigin.mockReturnValue(ORIGIN)
     structuredSendWithOutcome.mockResolvedValue('accepted')
@@ -243,10 +241,12 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       accepted = await controller!.handleNativeChatSend('answer')
     })
     expect(accepted).toBe(true)
-    expect(clientStub.sendRequest).toHaveBeenCalledTimes(2)
-    for (const call of clientStub.sendRequest.mock.calls) {
-      expect(call[1]).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
-    }
+    expect(clientStub.sendRequest).toHaveBeenCalledTimes(1)
+    expect(clientStub.sendRequest.mock.calls[0]?.[1]).toMatchObject({
+      terminal: 'term-1',
+      text: '\x15',
+      enter: false
+    })
     expect(isMobileNativeChatInputStale('term-1')).toBe(false)
   })
 
@@ -386,7 +386,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(structuredSetOption).toHaveBeenCalledWith('model', 'gpt-fast')
   })
 
-  it('pre-clears separately for a text-only send but never for an image send', async () => {
+  it('pre-clears the input line for a text-only send but never for an image send', async () => {
     // The image path pastes the image behind its OWN leading Ctrl+U and then calls
     // this send; a second clear here wipes the image off the input line and the
     // agent receives text alone while the echo bubble still shows the thumbnail.
@@ -395,23 +395,16 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     await act(async () => {
       await controller!.handleNativeChatSend('answer')
     })
-    expect(clientStub.sendRequest).toHaveBeenCalledWith(
-      'terminal.send',
-      expect.objectContaining({ text: '\x15', enter: false }),
-      expect.any(Object)
-    )
     expect(sendWithOutcome).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ clearInputFirst: expect.anything() })
+      expect.objectContaining({ text: 'answer', clearInputFirst: true })
     )
-
-    clientStub.sendRequest.mockClear()
 
     await act(async () => {
       await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
     })
-    expect(clientStub.sendRequest).not.toHaveBeenCalled()
-    expect(sendWithOutcome).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'look' }))
-    expect(sendWithOutcome.mock.calls.at(-1)?.[0]).not.toHaveProperty('clearInputFirst')
+    expect(sendWithOutcome).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: 'look', clearInputFirst: false })
+    )
   })
 
   it('holds an unknown-outcome send without posting the optimistic echo', async () => {
@@ -441,11 +434,11 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
   })
 
   it('fails a send fast while the socket is down, before spending the heal budget', async () => {
-    // The lease collapses a render after connState, so a question-card answer could
+    // The lease collapses a render after transport state, so a question-card answer could
     // otherwise sit in `sending` for the whole 15s heal+send budget.
     markMobileNativeChatInputStale('term-1')
     await act(async () => {
-      renderer?.update(createElement(Harness, { connState: 'connecting' }))
+      renderer?.update(createElement(Harness, { connected: false }))
     })
     let accepted = true
     await act(async () => {
@@ -862,9 +855,7 @@ describe('useMobileNativeChatController streaming scope', () => {
     launchAgent: 'claude',
     agentStatus: {
       state: 'working',
-      workingMode: undefined as 'monitoring' | undefined,
       agentType: 'claude',
-      lastAssistantMessage: 'Partial reply',
       providerSession: { id: 'session-1' }
     },
     isActive: true
@@ -890,7 +881,6 @@ describe('useMobileNativeChatController streaming scope', () => {
 
   beforeEach(() => {
     viewMode.isTabChatView = () => true
-    workingTab.agentStatus.workingMode = undefined
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -905,7 +895,6 @@ describe('useMobileNativeChatController streaming scope', () => {
 
   it('holds the stream scope and liveness while the user peeks at the terminal', () => {
     expect(controller?.showNativeChat).toBe(true)
-    expect(controller?.nativeChatAgentWorking).toBe(true)
     const scopeKey = controller?.nativeChatStreamScopeKey
     expect(scopeKey).toContain('session-1')
     expect(controller?.nativeChatStreamLive).toBe(true)
@@ -917,16 +906,6 @@ describe('useMobileNativeChatController streaming scope', () => {
     expect(controller?.nativeChatAgentWorking).toBe(false)
     expect(controller?.nativeChatStreamScopeKey).toBe(scopeKey)
     expect(controller?.nativeChatStreamLive).toBe(true)
-  })
-
-  it('treats passive monitoring as outside the foreground turn', () => {
-    workingTab.agentStatus.workingMode = 'monitoring'
-    act(() => renderer?.update(createElement(Harness)))
-
-    expect(controller?.nativeChatAgentWorking).toBe(false)
-    expect(controller?.nativeChatStreamLive).toBe(false)
-    expect(controller?.nativeChatStreamingText).toBeUndefined()
-    expect(controller?.nativeChatSessionOptions?.isWorking).toBe(false)
   })
 
   it('keeps the delayed-send route guard view-gated, unlike the stream scope', () => {

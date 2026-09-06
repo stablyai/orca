@@ -1,140 +1,206 @@
-import { useMemo, useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Keyboard } from 'react-native'
-import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
+import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
+import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
+import { useRetiredWorktreeNames } from '../worktree/use-retired-worktree-names'
+import { repoColor } from '../worktree/repo-color'
+import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
-import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
+import {
+  NEW_WORKTREE_AGENT_OPTIONS as AGENT_OPTIONS,
+  NEW_WORKTREE_BLANK_AGENT as BLANK_TERMINAL,
+  resolveNewWorktreeAgentSelection,
+  type NewWorktreeAgentOption as AgentOption
+} from './new-worktree-agent-selection'
+import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
+import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
-import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
-import {
-  buildRetiredWorktreeNamesRefreshKey,
-  useRetiredWorktreeNames
-} from '../worktree/use-retired-worktree-names'
-import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
-import {
-  getMobileWorkspaceRepoBadgeColor,
-  type MobileWorkspaceRepo,
-  type NewWorktreeModalProps
-} from './new-worktree-modal-types'
+import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
+import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
+import { useNewWorkspaceRepositories } from './use-new-workspace-repositories'
+import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-context'
+import { useNewWorkspaceExecutionTarget } from './use-new-workspace-execution-target'
+import { useNewWorkspaceSetupScript } from './use-new-workspace-setup-script'
+import { useNewWorkspaceCreation } from './use-new-workspace-creation'
+import type {
+  HostWorkspaceCreationOperations,
+  NewWorkspaceRepository
+} from '../worktree/host-workspace-creation-operations'
+import type { HostScreenShellOperations } from '../worktree/host-screen-shell-operations'
+import { NewWorktreeFormSheet } from './NewWorktreeFormSheet'
+import { NewWorktreeModalDrawers } from './NewWorktreeModalDrawers'
 import {
   buildNewWorkspaceProjectOptions,
   buildNewWorkspaceRunTargetOptions,
   getNewWorkspaceRunTarget
 } from './new-workspace-project-targets'
-import { NewWorktreeFormSheet } from './NewWorktreeFormSheet'
-import { NewWorktreeModalDrawers } from './NewWorktreeModalDrawers'
-import { useNewWorkspaceAgentSelection } from './use-new-workspace-agent-selection'
-import { useNewWorkspaceCreateSubmit } from './use-new-workspace-create-submit'
-import { useNewWorkspaceExecutionTarget } from './use-new-workspace-execution-target'
-import { useNewWorkspaceRepositories } from './use-new-workspace-repositories'
-import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-context'
-import { useNewWorkspaceSetupScript } from './use-new-workspace-setup-script'
-import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
 
-export function NewWorktreeModal(props: NewWorktreeModalProps) {
+type Repo = NewWorkspaceRepository
+
+function repoBadgeColor(repo: Repo | null): string {
+  return repo?.badgeColor || repoColor(repo?.displayName ?? 'repository')
+}
+
+// ── Main modal ──────────────────────────────────────────────────────
+
+type Props = {
+  visible: boolean
+  operations: HostWorkspaceCreationOperations | null
+  hostId?: string
+  // Why: existing worktree paths from the host so we can pick a unique
+  // marine-creature default when the user leaves the name blank, matching
+  // the desktop UI's behavior. The "already exists locally" collision is
+  // on the on-disk directory basename, so paths (not displayNames) are
+  // what the suggestion logic must dedupe against.
+  existingWorktreePaths?: readonly string[]
+  existingWorktrees?: readonly { repoId: string; branch: string }[]
+  openExternalUrl: HostScreenShellOperations['openExternalUrl']
+  onCreated: (worktreeId: string, name: string) => void
+  onClose: () => void
+}
+
+export function NewWorktreeModal({
+  visible,
+  operations,
+  hostId,
+  existingWorktreePaths,
+  existingWorktrees,
+  openExternalUrl,
+  onCreated,
+  onClose
+}: Props) {
   // Why: each drawer opening is a fresh form session; remounting resets local
   // form state before paint instead of clearing it in a visible-prop Effect.
-  // State, not a ref: react-native-screens freezes a blurred screen by suspending
-  // this subtree, and a counter bumped during a render React then throws away
-  // would restart the session for an opening that never committed.
-  const [session, setSession] = useState({ openEpoch: 0, visible: props.visible })
-  if (session.visible !== props.visible) {
+  const [session, setSession] = useState({ openEpoch: 0, visible })
+  if (session.visible !== visible) {
     setSession({
-      openEpoch: props.visible ? session.openEpoch + 1 : session.openEpoch,
-      visible: props.visible
+      openEpoch: visible ? session.openEpoch + 1 : session.openEpoch,
+      visible
     })
   }
 
-  // Why: key the session on the HOST, never on the RpcClient object. A reconnect,
-  // forceReconnect, or foreground revival swaps that object for the same host
-  // (see useHostClient), and keying on it silently remounted this form mid-edit
-  // and threw away the picked source. Every client-scoped hook below already
-  // drops responses from a superseded client, so no remount is needed for that.
-  return <NewWorktreeModalContent key={`${session.openEpoch}:${props.hostId}`} {...props} />
+  return (
+    <NewWorktreeModalContent
+      key={`${session.openEpoch}:${hostId}`}
+      visible={visible}
+      operations={operations}
+      hostId={hostId}
+      existingWorktreePaths={existingWorktreePaths}
+      existingWorktrees={existingWorktrees}
+      openExternalUrl={openExternalUrl}
+      onCreated={onCreated}
+      onClose={onClose}
+    />
+  )
 }
 
-function NewWorktreeModalContent(props: NewWorktreeModalProps) {
-  const { visible, client, hostId, existingWorktreePaths, existingWorktrees, onCreated, onClose } =
-    props
+function NewWorktreeModalContent({
+  visible,
+  operations,
+  hostId,
+  existingWorktreePaths,
+  existingWorktrees,
+  openExternalUrl,
+  onCreated,
+  onClose
+}: Props) {
   const { repos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
-    client,
+    operations,
     hostId,
     visible
   })
-  const navigation = useNewWorktreeDrawerNavigation(visible)
-  const [note, setNote] = useState('')
-  const [error, setError] = useState('')
-  const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId)
-  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
-    useNewWorktreeRuntimeCapabilities(client, visible)
+  // Why: a deleted workspace's directory can still hold agent conversation state keyed by cwd, so
+  // its name must never be suggested again. Fetched per selected repo while the sheet is open.
+  // Keyed on the path set rather than the array so a poll that changes nothing does not refetch.
+  const retiredNamesRefreshKey = useMemo(
+    () => [...(existingWorktreePaths ?? [])].sort().join('\0'),
+    [existingWorktreePaths]
+  )
+  const readRetiredWorktreeNames = useMemo(
+    () => (operations ? (repoId: string) => operations.readRetiredWorktreeNames(repoId) : null),
+    [operations]
+  )
+  const retiredWorktreeNames = useRetiredWorktreeNames(
+    readRetiredWorktreeNames,
+    selectedRepo?.id,
+    retiredNamesRefreshKey
+  )
+  const { drawerView, formSheetVisible, formSheetInteractive, transitionDrawer, openSourceDrawer } =
+    useNewWorktreeDrawerNavigation(visible)
+  const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
+  const {
+    runtimeSettings,
+    setRuntimeSettings,
+    trustedOrcaHooks,
+    setTrustedOrcaHooks,
+    availableProviders
+  } = useNewWorkspaceRuntimeContext(operations, visible)
+  const [agentOverriddenState, setAgentOverridden] = useState(false)
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
-  const executionTarget = useNewWorkspaceExecutionTarget({
-    client,
+  const {
+    sshGate,
+    detectedAgentIds,
+    connect: connectSelectedSshRepo
+  } = useNewWorkspaceExecutionTarget({
+    operations,
     connectionId: selectedRepoConnectionId,
     visible
   })
-  const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
+  const [note, setNote] = useState('')
+  const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
+    useNewWorktreeRuntimeCapabilities(operations, visible)
+  const {
+    setupCommand,
+    setupSource,
+    setupTrust,
+    setupRunPolicy,
+    setupDecisionChoice,
+    setSetupDecisionChoice,
+    runSetup,
+    setRunSetup,
+    showAdvanced,
+    setShowAdvanced
+  } = useNewWorkspaceSetupScript({ operations, selectedRepo })
+  const [error, setError] = useState('')
   const selectedRepoWorktreeBranches = useMemo(
     () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
     [existingWorktrees, selectedRepo]
   )
+
   const composer = useMobileComposerSource({
-    client,
+    operations,
     selectedRepoId: selectedRepo?.id ?? null,
     worktreeBranches: selectedRepoWorktreeBranches,
     onError: setError
   })
-  const agentSelection = useNewWorkspaceAgentSelection({
+
+  const selectedAgentResolution = resolveNewWorktreeAgentSelection({
     visible,
-    runtimeSettings: runtime.runtimeSettings,
-    detectedAgentIds: executionTarget.detectedAgentIds
+    selectedAgent: selectedAgentState,
+    agentOverridden: agentOverriddenState,
+    runtimeSettings,
+    detectedAgentIds
   })
-  const retiredNamesRefreshKey = useMemo(
-    () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
-    [existingWorktreePaths]
-  )
-  const retiredWorktreeNames = useRetiredWorktreeNames(
-    client,
-    selectedRepo?.id,
-    retiredNamesRefreshKey
-  )
-  const createSubmit = useNewWorkspaceCreateSubmit({
-    client,
-    selectedRepo,
-    selectedAgent: agentSelection.selectedAgent,
-    setSelectedAgent: agentSelection.setSelectedAgent,
-    setAgentOverridden: agentSelection.setAgentOverridden,
-    runtimeSettings: runtime.runtimeSettings,
-    setRuntimeSettings: runtime.setRuntimeSettings,
-    detectedAgentIds: executionTarget.detectedAgentIds,
-    sshGate: executionTarget.sshGate,
-    composer,
-    note,
-    existingWorktreePaths,
-    retiredWorktreeNames,
-    setupCommand: setupScript.setupCommand,
-    setupTrust: setupScript.setupTrust,
-    setupRunPolicy: setupScript.setupRunPolicy,
-    setupDecisionChoice: setupScript.setupDecisionChoice,
-    runSetup: setupScript.runSetup,
-    trustedOrcaHooks: runtime.trustedOrcaHooks,
-    setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
-    getWorktreeCreateCutoverSupport,
-    transitionDrawer: navigation.transitionDrawer,
-    setError,
-    onCreated,
-    onClose
-  })
+  // Why: agent preference repair is pure render dataflow; doing it here
+  // avoids a stale selected-agent commit while preserving user overrides.
+  if (
+    selectedAgentState.id !== selectedAgentResolution.selectedAgent.id ||
+    agentOverriddenState !== selectedAgentResolution.agentOverridden
+  ) {
+    setSelectedAgent(selectedAgentResolution.selectedAgent)
+    setAgentOverridden(selectedAgentResolution.agentOverridden)
+  }
+  const selectedAgent = selectedAgentResolution.selectedAgent
 
   const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
   const sourceAvailability: SmartModeAvailabilityInput = {
     textOnly: selectedRepo != null && !selectedRepoIsGit,
     tasksSupported,
     hasRepo: selectedRepo != null,
-    githubAvailable: runtime.availableProviders.includes('github'),
-    gitlabAvailable: runtime.availableProviders.includes('gitlab'),
-    linearAvailable: runtime.availableProviders.includes('linear')
+    githubAvailable: availableProviders.includes('github'),
+    gitlabAvailable: availableProviders.includes('gitlab'),
+    linearAvailable: availableProviders.includes('linear')
   }
   const pasteRepos = useMemo<PasteRepoCandidate[]>(
     () =>
@@ -145,8 +211,67 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [repos]
   )
+
+  const creation = useNewWorkspaceCreation({
+    operations,
+    selectedRepo,
+    sshRequiresConnection: sshGate.requiresConnection,
+    runtimeSettings,
+    setRuntimeSettings,
+    selectedAgent,
+    detectedAgentIds,
+    setSelectedAgent,
+    setAgentOverridden,
+    composer,
+    existingWorktreePaths,
+    retiredWorktreeNames,
+    setupCommand,
+    setupRunPolicy,
+    setupDecisionChoice,
+    runSetup,
+    setupTrust,
+    trustedOrcaHooks,
+    setTrustedOrcaHooks,
+    transitionDrawer: (view) => transitionDrawer(view),
+    getWorktreeCreateCutoverSupport,
+    note,
+    onClose,
+    onCreated,
+    setError
+  })
+  const {
+    creating,
+    setupTrustPrompt,
+    handleCreate,
+    approveSetupTrust,
+    closeSetupTrust,
+    skipSetupTrust
+  } = creation
+
+  const needsSetupChoice = Boolean(setupCommand) && setupRunPolicy === 'ask'
+  const canCreate =
+    selectedRepo != null &&
+    !creating &&
+    !sshGate.requiresConnection &&
+    (!needsSetupChoice || setupDecisionChoice != null)
+  const visibleAgentOptions =
+    detectedAgentIds === null
+      ? AGENT_OPTIONS.filter(
+          (agent) =>
+            agent.id !== '__blank__' &&
+            isMobileTuiAgentEnabled(agent.id, runtimeSettings?.disabledTuiAgents)
+        )
+      : AGENT_OPTIONS.filter(
+          (agent) =>
+            agent.id !== '__blank__' &&
+            detectedAgentIds.has(agent.id) &&
+            isMobileTuiAgentEnabled(agent.id, runtimeSettings?.disabledTuiAgents)
+        )
+  const pickerAgentOptions = [...visibleAgentOptions, BLANK_TERMINAL]
   const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos])
-  const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
+  const selectedProjectId = selectedRepo
+    ? (selectedRepo.projectId ?? getProjectIdentityKey(selectedRepo))
+    : null
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
@@ -156,107 +281,116 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const selectedRunTarget = selectedRepo
     ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform)
     : null
-  const needsSetupChoice = Boolean(setupScript.setupCommand) && setupScript.setupRunPolicy === 'ask'
-  const canCreate =
-    selectedRepo != null &&
-    !createSubmit.creating &&
-    !executionTarget.sshGate.requiresConnection &&
-    (!needsSetupChoice || setupScript.setupDecisionChoice != null)
 
-  function openPicker(view: 'project' | 'runTarget' | 'agent'): void {
+  function prepareSelectionPickerOpen(): void {
+    // Why: picker taps can beat an open soft keyboard; dismissing it prevents the
+    // keyboard from reopening under the picker drawer.
     Keyboard.dismiss()
-    navigation.transitionDrawer(view)
   }
 
-  function selectRepo(repo: MobileWorkspaceRepo, clearRepoScopedSource: boolean): void {
+  function handleRepoSelected(repo: Repo): void {
     const repoChanged = repo.id !== selectedRepo?.id
     setSelectedRepo(repo)
-    if (
-      clearRepoScopedSource &&
-      repoChanged &&
-      !shouldPreserveWorkspaceSourceOnRepoChange(composer.linkedWorkItem)
-    ) {
+    // Branch and provider-backed sources are repo-scoped; Linear/Jira are global
+    // work context and survive choosing a different implementation repo.
+    if (repoChanged && !shouldPreserveWorkspaceSourceOnRepoChange(composer.linkedWorkItem)) {
       composer.handleClearSmartNameSelection()
     }
   }
 
-  function requestClose(): void {
-    if (navigation.drawerView === 'form') {
-      onClose()
-    } else if (navigation.drawerView === 'trust') {
-      createSubmit.closeSetupTrust()
-    } else {
-      navigation.transitionDrawer('form')
-    }
-  }
-
   return (
-    <BottomDrawerModalHost visible={visible} onRequestClose={requestClose}>
+    // Why: hosting the form and every picker in one persistent native Modal makes
+    // form → repo/agent transitions in-window view swaps, avoiding the iOS
+    // dismiss-then-present race that left the dropdowns unresponsive. Native back
+    // closes the flow from the form, routes the trust prompt through its in-flight
+    // guard, and otherwise returns to the form from a picker.
+    <BottomDrawerModalHost
+      visible={visible}
+      onRequestClose={() => {
+        if (drawerView === 'form') {
+          onClose()
+        } else if (drawerView === 'trust') {
+          closeSetupTrust()
+        } else {
+          transitionDrawer('form')
+        }
+      }}
+    >
       <NewWorktreeFormSheet
-        visible={navigation.formSheetVisible}
-        interactive={navigation.formSheetInteractive}
+        visible={formSheetVisible}
+        interactive={formSheetInteractive}
         loading={loading}
         hasRepos={repos.length > 0}
         project={selectedProject}
         runTarget={selectedRunTarget}
-        projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}
+        projectBadgeColor={selectedRepo ? repoBadgeColor(selectedRepo) : null}
         selectedRepoIsGit={selectedRepoIsGit}
         selectedRepoConnectionId={selectedRepoConnectionId}
         selectedRepoName={selectedRepo?.displayName ?? 'Remote repository'}
-        sshGate={executionTarget.sshGate}
+        sshGate={sshGate}
         composer={composer}
-        selectedAgent={agentSelection.selectedAgent}
-        showAdvanced={setupScript.showAdvanced}
+        selectedAgent={selectedAgent}
+        showAdvanced={showAdvanced}
         note={note}
-        setupCommand={setupScript.setupCommand}
-        setupSource={setupScript.setupSource}
-        setupRunPolicy={setupScript.setupRunPolicy}
-        setupDecisionChoice={setupScript.setupDecisionChoice}
-        runSetup={setupScript.runSetup}
+        setupCommand={setupCommand}
+        setupSource={setupSource}
+        setupRunPolicy={setupRunPolicy}
+        setupDecisionChoice={setupDecisionChoice}
+        runSetup={runSetup}
         error={error}
-        creating={createSubmit.creating}
+        creating={creating}
         canCreate={canCreate}
         onClose={onClose}
-        onOpenProject={() => openPicker('project')}
-        onOpenRunTarget={() => openPicker('runTarget')}
-        onOpenSource={navigation.openSourceDrawer}
+        onOpenExternalUrl={openExternalUrl}
+        onOpenProject={() => {
+          prepareSelectionPickerOpen()
+          transitionDrawer('project')
+        }}
+        onOpenRunTarget={() => {
+          prepareSelectionPickerOpen()
+          transitionDrawer('runTarget')
+        }}
+        onOpenSource={openSourceDrawer}
         onClearError={() => setError('')}
-        onConnect={() => void executionTarget.connect()}
-        onOpenAgent={() => openPicker('agent')}
-        onShowAdvancedChange={setupScript.setShowAdvanced}
+        onConnect={() => void connectSelectedSshRepo()}
+        onOpenAgent={() => {
+          prepareSelectionPickerOpen()
+          transitionDrawer('agent')
+        }}
+        onShowAdvancedChange={setShowAdvanced}
         onNoteChange={setNote}
-        onSetupDecisionChange={setupScript.setSetupDecisionChoice}
-        onRunSetupChange={setupScript.setRunSetup}
-        onCreate={() => void createSubmit.create()}
+        onSetupDecisionChange={setSetupDecisionChoice}
+        onRunSetupChange={setRunSetup}
+        onCreate={() => void handleCreate()}
       />
 
       <NewWorktreeModalDrawers
         visible={visible}
-        drawerView={navigation.drawerView}
-        client={client}
+        drawerView={drawerView}
+        operations={operations}
         composer={composer}
         sourceAvailability={sourceAvailability}
         selectedRepo={selectedRepo}
         repos={repos}
         pasteRepos={pasteRepos}
-        sshReady={!executionTarget.sshGate.requiresConnection}
+        sshReady={!sshGate.requiresConnection}
         projectPickerItems={projectPickerItems}
         selectedProjectId={selectedProjectId}
         runTargetPickerItems={runTargetPickerItems}
-        pickerAgentOptions={agentSelection.pickerAgentOptions}
-        selectedAgent={agentSelection.selectedAgent}
-        setupTrustPrompt={createSubmit.setupTrustPrompt}
-        creating={createSubmit.creating}
-        onSourceRepoChange={(repo) => selectRepo(repo, false)}
-        onRepoChange={(repo) => selectRepo(repo, true)}
+        pickerAgentOptions={pickerAgentOptions}
+        selectedAgent={selectedAgent}
+        setupTrustPrompt={setupTrustPrompt}
+        creating={creating}
+        onSourceRepoChange={setSelectedRepo}
+        onRepoChange={handleRepoSelected}
         onAgentChange={(agent) => {
-          agentSelection.setAgentOverridden(true)
-          agentSelection.setSelectedAgent(agent)
+          setAgentOverridden(true)
+          setSelectedAgent(agent)
         }}
-        onTransitionToForm={() => navigation.transitionDrawer('form')}
-        onApproveSetupTrust={(alwaysTrust) => void createSubmit.approveSetupTrust(alwaysTrust)}
-        onSkipSetupTrust={createSubmit.skipSetupTrust}
-        onCloseSetupTrust={createSubmit.closeSetupTrust}
+        onTransitionToForm={() => transitionDrawer('form')}
+        onApproveSetupTrust={(alwaysTrust) => void approveSetupTrust(alwaysTrust)}
+        onSkipSetupTrust={skipSetupTrust}
+        onCloseSetupTrust={closeSetupTrust}
       />
     </BottomDrawerModalHost>
   )

@@ -84,7 +84,8 @@ describe('MobileFileMarkdownPreview', () => {
       relativePath: 'notes/first.md',
       content: '# First',
       truncated: false,
-      byteLength: 7
+      byteLength: 7,
+      onOpenLink: vi.fn()
     }
     renderer = await renderPreview(baseProps)
 

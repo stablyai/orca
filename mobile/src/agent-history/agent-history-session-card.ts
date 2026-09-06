@@ -13,6 +13,7 @@ export type MobileAgentHistoryCard = {
   messageCount: number
   timeAgo: string
   isCurrentWorktree: boolean
+  resumeAvailable: boolean
 }
 
 export type MobileAgentHistoryResumeActionState = {
@@ -48,7 +49,8 @@ export function buildMobileAgentHistoryCard(
     lastMessage: latestTurn?.text.trim() ?? '',
     messageCount: session.messageCount,
     timeAgo: Number.isFinite(updatedAtMs) ? formatTimeAgo(updatedAtMs, now) : '',
-    isCurrentWorktree: isSessionInActiveWorktree(session, activeWorktreePath)
+    isCurrentWorktree: isSessionInActiveWorktree(session, activeWorktreePath),
+    resumeAvailable: session.sessionId.trim().length > 0
   }
 }
 

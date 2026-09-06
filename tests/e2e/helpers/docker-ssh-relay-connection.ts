@@ -1,5 +1,5 @@
 import { connectSshTestTarget } from './ssh-test-target-connection'
-import { expect, type Page } from '@stablyai/playwright-test'
+import type { Page } from '@stablyai/playwright-test'
 
 import {
   DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH,
@@ -14,6 +14,7 @@ export type ConnectedDockerSshRelayTarget = {
 }
 
 type DockerSshRelayConnectionOptions = {
+  connectTimeoutMs?: number
   relayGracePeriodSeconds?: number
   remotePath?: string
   viaProxyJump?: boolean
@@ -50,7 +51,8 @@ export async function connectDockerSshRelayTarget(
         options.remotePath ??
         (viaProxyJump ? DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH : DOCKER_SSH_RELAY_REMOTE_REPO_PATH),
       displayName: viaProxyJump ? 'Docker SSH ProxyJump E2E' : 'Docker SSH Relay E2E',
-      seedInitialTab: options.seedInitialTab
+      seedInitialTab: options.seedInitialTab,
+      connectTimeoutMs: options.connectTimeoutMs
     }
   )
 }
@@ -65,69 +67,4 @@ export async function resetDockerSshRelayTarget(page: Page, targetId: string): P
   await page.evaluate(async (targetId) => {
     await window.api.ssh.resetRelay({ targetId })
   }, targetId)
-}
-
-async function performDockerSshRelayReconnect(
-  page: Page,
-  targetId: string,
-  disconnectFirst: boolean
-): Promise<void> {
-  await page.evaluate(
-    async ({ targetId, disconnectFirst }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Store unavailable')
-      }
-      if (disconnectFirst) {
-        await window.api.ssh.disconnect({ targetId })
-      }
-      const state = await window.api.ssh.connect({ targetId })
-      if (!state || state.status !== 'connected') {
-        throw new Error(`SSH target did not reconnect: ${JSON.stringify(state)}`)
-      }
-      store.getState().setSshConnectionState(targetId, state)
-    },
-    { targetId, disconnectFirst }
-  )
-}
-
-export async function reconnectDockerSshRelayTarget(page: Page, targetId: string): Promise<void> {
-  return performDockerSshRelayReconnect(page, targetId, true)
-}
-
-export async function reconnectDisconnectedDockerSshRelayTarget(
-  page: Page,
-  targetId: string
-): Promise<void> {
-  return performDockerSshRelayReconnect(page, targetId, false)
-}
-
-export async function recoverDockerSshRelayAfterFault(
-  page: Page,
-  targetId: string,
-  injectFault: () => void | Promise<void>
-): Promise<void> {
-  const readAuthority = () =>
-    page.evaluate((id) => window.__store?.getState().sshConnectionStates.get(id), targetId)
-  const before = await readAuthority()
-  expect(before).toMatchObject({
-    status: 'connected',
-    providerEpoch: expect.any(String),
-    connectionGeneration: expect.any(Number)
-  })
-  await injectFault()
-  // The pre-fault connected publication can remain visible until the next IPC event.
-  await expect
-    .poll(
-      async () => {
-        const after = await readAuthority()
-        return (
-          after?.status === 'connected' &&
-          (after.providerEpoch !== before?.providerEpoch ||
-            after.connectionGeneration !== before?.connectionGeneration)
-        )
-      },
-      { timeout: 120_000, message: 'SSH authority did not recover after the injected fault' }
-    )
-    .toBe(true)
 }

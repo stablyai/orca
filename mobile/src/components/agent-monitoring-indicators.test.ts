@@ -30,6 +30,7 @@ vi.mock('react-native', () => ({
     timing: animationTiming
   },
   Easing: { linear: 'linear' },
+  Platform: { OS: 'ios' },
   StyleSheet: { create: <T>(styles: T) => styles },
   View: 'View'
 }))

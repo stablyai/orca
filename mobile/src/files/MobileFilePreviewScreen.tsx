@@ -6,10 +6,9 @@ import { ChevronLeft, Save } from 'lucide-react-native'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
+import type { ConnectionState } from '../transport/types'
 import {
-  loadMobileFilePreview,
   previewError,
-  saveMobileTerminalArtifactPreview,
   type MobileFilePreviewSource,
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
@@ -26,16 +25,52 @@ import {
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import type { HostFilePreviewOperations } from './host-file-preview-operations'
+import { defaultHostFilePreviewOperations } from './default-host-file-preview-operations'
 
 type Props = {
   route: MobileFilePreviewRouteState
+  operations?: HostFilePreviewOperations
+  connectionState?: ConnectionState
+  nativeHostBinding?: boolean
 }
 
-export function MobileFilePreviewScreen({ route }: Props) {
+export function MobileFilePreviewScreen({
+  route,
+  operations: operationsProp,
+  connectionState,
+  nativeHostBinding = true
+}: Props) {
   const router = useRouter()
   const previewParams = route.ok ? route.params : null
-  const { client, state: connState } = useHostClient(previewParams?.hostId)
+  const previewHostId = previewParams?.hostId
+  const nativeHost = useHostClient(nativeHostBinding ? previewHostId : undefined)
   const forceReconnect = useForceReconnect()
+  const operations = useMemo(
+    () =>
+      operationsProp ??
+      (nativeHost.client && previewHostId
+        ? defaultHostFilePreviewOperations(nativeHost.client, () => forceReconnect(previewHostId))
+        : null),
+    [forceReconnect, nativeHost.client, operationsProp, previewHostId]
+  )
+  // Why: `operations` is null in exactly the disconnected state Retry exists for.
+  const reconnect = useCallback(
+    () =>
+      operations
+        ? operations.reconnect()
+        : previewHostId
+          ? forceReconnect(previewHostId)
+          : Promise.resolve(),
+    [forceReconnect, operations, previewHostId]
+  )
+  const connState = connectionState ?? nativeHost.state
+  const handleOpenExternalUrl = useCallback(
+    (url: string) => {
+      void operations?.openExternalUrl(url).catch(() => {})
+    },
+    [operations]
+  )
   const [preview, setPreview] = useState<MobileFilePreviewResult>(() =>
     route.ok ? { status: 'loading', message: 'Loading preview...' } : previewError(route.message)
   )
@@ -47,9 +82,40 @@ export function MobileFilePreviewScreen({ route }: Props) {
   const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
   const { width, height } = useWindowDimensions()
+  const routeWorktreeId = previewParams?.worktreeId
+  const routeSource = previewParams?.source
+  const routeRelativePath = previewParams?.relativePath
+  const routeAbsolutePath = previewParams?.absolutePath
+  const routeGrantId = previewParams?.grantId
+  const routeTerminal = previewParams?.terminal
+  const routePathText = previewParams?.pathText
+  const routeCwd = previewParams?.cwd
   const routePreviewSource = useMemo(
-    () => (previewParams ? previewSourceFromRoute(previewParams) : null),
-    [previewParams]
+    () =>
+      previewHostId && routeWorktreeId
+        ? previewSourceFromRoute({
+            hostId: previewHostId,
+            worktreeId: routeWorktreeId,
+            source: routeSource,
+            relativePath: routeRelativePath,
+            absolutePath: routeAbsolutePath,
+            grantId: routeGrantId,
+            terminal: routeTerminal,
+            pathText: routePathText,
+            cwd: routeCwd
+          })
+        : null,
+    [
+      previewHostId,
+      routeAbsolutePath,
+      routeCwd,
+      routeGrantId,
+      routePathText,
+      routeRelativePath,
+      routeSource,
+      routeTerminal,
+      routeWorktreeId
+    ]
   )
   const [previewSource, setPreviewSource] = useState<MobileFilePreviewSource | null>(
     routePreviewSource
@@ -59,6 +125,8 @@ export function MobileFilePreviewScreen({ route }: Props) {
     () => sourceKeyForPreview(routePreviewSource),
     [routePreviewSource]
   )
+  const hasPreviewParams = previewParams !== null
+  const routeErrorMessage = route.ok ? null : route.message
   const previewSourceKeyRef = useRef(previewSourceKey)
   const lineColumn = useMemo(
     () =>
@@ -87,14 +155,14 @@ export function MobileFilePreviewScreen({ route }: Props) {
 
   const loadPreview = useCallback(async () => {
     const loadSourceKey = previewSourceKey
-    if (!previewParams || !previewSource || loadSourceKey !== routePreviewSourceKey) {
-      setPreview(previewError(route.ok ? 'Unable to load preview' : route.message))
+    if (!hasPreviewParams || !previewSource || loadSourceKey !== routePreviewSourceKey) {
+      setPreview(previewError(routeErrorMessage ?? 'Unable to load preview'))
       return
     }
     const preserveDirtyDraft =
       draftSourceKeyRef.current === previewSourceKey &&
       draftContentRef.current !== savedContentRef.current
-    if (!client || connState !== 'connected') {
+    if (!operations || connState !== 'connected') {
       if (preserveDirtyDraft) {
         setSaveError('Waiting for desktop...')
         return
@@ -107,9 +175,8 @@ export function MobileFilePreviewScreen({ route }: Props) {
     }
     setSaveError('')
     try {
-      const result = await loadMobileFilePreview(client, previewSource, undefined, {
-        onTerminalArtifactSourceRefreshed: setPreviewSource,
-        refreshGrant: true
+      const result = await operations.load(previewSource, {
+        onTerminalArtifactSourceRefreshed: setPreviewSource
       })
       if (previewSourceKeyRef.current !== loadSourceKey) {
         return
@@ -141,12 +208,12 @@ export function MobileFilePreviewScreen({ route }: Props) {
       setPreview(previewError(message))
     }
   }, [
-    client,
     connState,
-    previewParams,
+    hasPreviewParams,
+    operations,
     previewSource,
     previewSourceKey,
-    route,
+    routeErrorMessage,
     routePreviewSourceKey
   ])
 
@@ -164,11 +231,11 @@ export function MobileFilePreviewScreen({ route }: Props) {
       (preview.status === 'error' && preview.reconnect) ||
       connState !== 'connected'
     ) {
-      await forceReconnect(previewParams.hostId)
+      await reconnect()
       return
     }
     void loadPreview()
-  }, [connState, forceReconnect, loadPreview, preview, previewParams])
+  }, [connState, loadPreview, preview, previewParams, reconnect])
 
   const displayPath =
     previewParams?.source === 'terminalArtifact'
@@ -196,13 +263,13 @@ export function MobileFilePreviewScreen({ route }: Props) {
   })
 
   const saveArtifact = useCallback(async () => {
-    if (!client || previewSource?.source !== 'terminalArtifact' || !canSaveArtifact || saving) {
+    if (!operations || previewSource?.source !== 'terminalArtifact' || !canSaveArtifact || saving) {
       return
     }
     setSaving(true)
     setSaveError('')
     try {
-      const result = await saveMobileTerminalArtifactPreview(client, previewSource, draftContent, {
+      const result = await operations.saveTerminalArtifact(previewSource, draftContent, {
         baseContent: savedContent,
         onTerminalArtifactSourceRefreshed: setPreviewSource
       })
@@ -217,7 +284,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
     } finally {
       setSaving(false)
     }
-  }, [canSaveArtifact, client, draftContent, previewSource, savedContent, saving])
+  }, [canSaveArtifact, draftContent, operations, previewSource, savedContent, saving])
 
   const requestBack = useCallback(() => {
     if (!hasUnsavedTerminalArtifactDraft) {
@@ -282,6 +349,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
         onImageError={() =>
           setPreview({ status: 'error', message: 'Unable to load preview', reconnect: false })
         }
+        onOpenLink={handleOpenExternalUrl}
         onRetry={retry}
       />
     </View>

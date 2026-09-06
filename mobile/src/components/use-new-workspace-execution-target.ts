@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import { deriveWorkspaceSshGate, type WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 
 type DetectedAgentIdsState = {
   connectionId: string | null
@@ -18,7 +17,7 @@ function fallbackSshState(
 }
 
 export function useNewWorkspaceExecutionTarget(args: {
-  client: RpcClient | null
+  operations: HostWorkspaceCreationOperations | null
   connectionId: string | null
   visible: boolean
 }): {
@@ -26,7 +25,7 @@ export function useNewWorkspaceExecutionTarget(args: {
   detectedAgentIds: Set<string> | null
   connect: () => Promise<void>
 } {
-  const { client, connectionId, visible } = args
+  const { operations, connectionId, visible } = args
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
   const [connectingTargetId, setConnectingTargetId] = useState<string | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
@@ -44,21 +43,16 @@ export function useNewWorkspaceExecutionTarget(args: {
       : null
 
   useEffect(() => {
-    if (!visible || !client || !connectionId) {
+    if (!visible || !operations || !connectionId) {
       return
     }
     let stale = false
-    void client
-      .sendRequest('ssh.getState', { targetId: connectionId })
-      .then((response) => {
-        if (stale) {
-          return
+    void operations
+      .readSshState(connectionId)
+      .then((state) => {
+        if (!stale) {
+          setSshState(state)
         }
-        if (!response.ok) {
-          throw new Error(response.error.message)
-        }
-        const state = (response as RpcSuccess).result as { state?: SshConnectionState | null }
-        setSshState(state.state ?? fallbackSshState(connectionId, 'disconnected', null))
       })
       .catch((error) => {
         if (!stale) {
@@ -74,22 +68,20 @@ export function useNewWorkspaceExecutionTarget(args: {
     return () => {
       stale = true
     }
-  }, [client, connectionId, visible])
+  }, [operations, connectionId, visible])
 
   useEffect(() => {
-    if (!visible || !client || (connectionId && sshGate.status !== 'connected')) {
+    if (!visible || !operations || (connectionId && sshGate.status !== 'connected')) {
       return
     }
     let stale = false
     void (async () => {
       try {
-        const response = connectionId
-          ? await client.sendRequest('preflight.detectRemoteAgents', { connectionId })
-          : await client.sendRequest('preflight.detectAgents')
+        const agentIds = await operations.detectAgents(connectionId)
         if (!stale) {
           setDetectedAgentIdsState({
             connectionId,
-            ids: response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
+            ids: new Set(agentIds)
           })
         }
       } catch {
@@ -101,25 +93,16 @@ export function useNewWorkspaceExecutionTarget(args: {
     return () => {
       stale = true
     }
-  }, [client, connectionId, sshGate.status, visible])
+  }, [operations, connectionId, sshGate.status, visible])
 
   async function connect(): Promise<void> {
-    if (!client || !connectionId) {
+    if (!operations || !connectionId) {
       return
     }
     setConnectingTargetId(connectionId)
     setSshState(fallbackSshState(connectionId, 'connecting', null))
     try {
-      const response = await client.sendRequest(
-        'ssh.connect',
-        { targetId: connectionId },
-        { timeoutMs: 120_000 }
-      )
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-      const result = (response as RpcSuccess).result as { state?: SshConnectionState | null }
-      setSshState(result.state ?? fallbackSshState(connectionId, 'connected', null))
+      setSshState(await operations.connectSsh(connectionId))
     } catch (error) {
       setSshState(
         fallbackSshState(

@@ -30,7 +30,10 @@ async function attemptInstall(
   signal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription | null> {
   const filePath =
-    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+    args.filePath ??
+    (args.fileSource
+      ? null
+      : await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
   signal?.throwIfAborted()
   if (!filePath) {
     return null

@@ -9,6 +9,7 @@ type RuntimeFileCommandName =
   | 'readMobileFile'
   | 'resolveTerminalPath'
   | 'readTerminalArtifactFile'
+  | 'readTerminalArtifactChunk'
   | 'readTerminalArtifactPreview'
   | 'writeTerminalArtifactFile'
   | 'revokeTerminalFileGrantsForClient'
@@ -47,6 +48,7 @@ export function installRuntimeFileCommandSurface(
     readMobileFile: commands.readMobileFile.bind(commands),
     resolveTerminalPath: commands.resolveTerminalPath.bind(commands),
     readTerminalArtifactFile: commands.readTerminalArtifactFile.bind(commands),
+    readTerminalArtifactChunk: commands.readTerminalArtifactChunk.bind(commands),
     readTerminalArtifactPreview: commands.readTerminalArtifactPreview.bind(commands),
     writeTerminalArtifactFile: commands.writeTerminalArtifactFile.bind(commands),
     revokeTerminalFileGrantsForClient: commands.revokeTerminalFileGrantsForClient.bind(commands),

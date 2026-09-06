@@ -1,0 +1,30 @@
+import { capabilityGrants, grantLimits } from './mobile-web-production-grant-table'
+
+export const MOBILE_WEB_PRODUCTION_WORKSPACE_CREATION_GRANTS = capabilityGrants('workspace', {
+  creationRepositories: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationRetiredNames: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationSettings: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationTrustedHooks: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationGitLabAvailability: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationLinearAvailability: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationSshState: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationSshConnect: grantLimits(1 * 1024, 128 * 1024, 1, 3, 0.25),
+  creationDetectAgents: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationRepoHooks: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationRuntimeCapabilities: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationSparsePresets: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationSaveSparsePreset: grantLimits(64 * 1024, 128 * 1024, 1, 8, 2),
+  creationPersistTrust: grantLimits(128 * 1024, 128 * 1024, 1, 4, 0.5),
+  creationSearchGitHub: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationSearchGitLab: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationSearchLinear: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationSearchBranches: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationResolveRepoSlug: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationLookupGitHub: grantLimits(1 * 1024, 128 * 1024, 2, 8, 2),
+  creationLookupGitHubRepo: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationLookupGitLab: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationResolvePrBase: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationResolveMrBase: grantLimits(4 * 1024, 128 * 1024, 2, 8, 2),
+  creationCreateBlank: grantLimits(64 * 1024, 2 * 1024, 1, 2, 0.1),
+  creationCreateFromSource: grantLimits(64 * 1024, 2 * 1024, 1, 2, 0.1)
+})

@@ -7,7 +7,7 @@ import {
   resolvePasteIntent,
   type PasteRepoCandidate
 } from './smart-source-paste-intent'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 
 describe('resolvePasteIntent', () => {
   it('classifies a GitHub issue/PR URL as a github-link', () => {
@@ -99,62 +99,63 @@ describe('findRepoMatchingSlug', () => {
 
   it('falls back to the host-aware repo slug RPC for SSH and enterprise repos', async () => {
     const calls: string[] = []
-    const client = {
-      sendRequest: async (_method: string, params: unknown) => {
-        const repo = (params as { repo: string }).repo
-        calls.push(repo)
+    const operations = {
+      resolveGitHubRepoSlug: async (repoId: string) => {
+        calls.push(repoId)
         return {
-          ok: true,
-          result:
-            repo === 'id:b'
+          supported: true,
+          slug:
+            repoId === 'b'
               ? { owner: 'enterprise', repo: 'widgets', host: 'github.corp.example' }
               : null
         }
       }
-    } as unknown as RpcClient
+    } as unknown as HostWorkspaceCreationOperations
     await expect(
       findRepoMatchingSlugForPaste(
-        client,
+        operations,
         repos,
         { owner: 'enterprise', repo: 'widgets', host: 'github.corp.example' },
         new Map()
       )
     ).resolves.toMatchObject({ id: 'b' })
-    expect(calls).toEqual(['id:a', 'id:b'])
+    expect(calls).toEqual(['a', 'b'])
   })
 
   it('keeps local matching usable when an older desktop lacks the repo slug RPC', async () => {
     let calls = 0
-    const client = {
-      sendRequest: async () => {
+    const operations = {
+      resolveGitHubRepoSlug: async () => {
         calls += 1
-        return {
-          ok: false,
-          error: { code: 'method_not_found', message: 'Unknown method: github.repoSlug' }
-        }
+        return { supported: false, slug: null }
       }
-    } as unknown as RpcClient
+    } as unknown as HostWorkspaceCreationOperations
     const cache = new Map<string, { owner: string; repo: string } | null>()
 
     await expect(
-      findRepoMatchingSlugForPaste(client, repos, { owner: 'enterprise', repo: 'widgets' }, cache)
+      findRepoMatchingSlugForPaste(
+        operations,
+        repos,
+        { owner: 'enterprise', repo: 'widgets' },
+        cache
+      )
     ).resolves.toBeNull()
     await expect(
-      findRepoMatchingSlugForPaste(client, repos, { owner: 'enterprise', repo: 'other' }, cache)
+      findRepoMatchingSlugForPaste(operations, repos, { owner: 'enterprise', repo: 'other' }, cache)
     ).resolves.toBeNull()
     expect(calls).toBe(1)
   })
 
   it('keeps local matching usable when the optional repo slug lookup rejects', async () => {
-    const client = {
-      sendRequest: async () => {
+    const operations = {
+      resolveGitHubRepoSlug: async () => {
         throw new Error('connection closed')
       }
-    } as unknown as RpcClient
+    } as unknown as HostWorkspaceCreationOperations
 
     await expect(
       findRepoMatchingSlugForPaste(
-        client,
+        operations,
         repos,
         { owner: 'enterprise', repo: 'widgets' },
         new Map()
@@ -163,22 +164,22 @@ describe('findRepoMatchingSlug', () => {
   })
 
   it('sends the pasted host through the exact owner/repo lookup RPC', async () => {
-    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: null })
-    const client = { sendRequest } as unknown as RpcClient
+    const lookup = vi.fn().mockResolvedValue(null)
+    const operations = {
+      lookupGitHubItemByOwnerRepo: lookup
+    } as unknown as HostWorkspaceCreationOperations
 
     await lookupGitHubItemByOwnerRepo(
-      client,
+      operations,
       'repo-1',
       { owner: 'acme', repo: 'widgets', host: 'github.corp.example' },
       7,
       'pr'
     )
 
-    expect(sendRequest).toHaveBeenCalledWith('github.workItemByOwnerRepo', {
-      repo: 'id:repo-1',
-      owner: 'acme',
-      ownerRepo: 'widgets',
-      host: 'github.corp.example',
+    expect(lookup).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      slug: { owner: 'acme', repo: 'widgets', host: 'github.corp.example' },
       number: 7,
       type: 'pr'
     })

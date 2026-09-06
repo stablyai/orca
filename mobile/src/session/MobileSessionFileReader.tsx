@@ -1,26 +1,27 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import {
+  ActivityIndicator,
   FlatList,
   Image,
-  View,
-  Text,
-  ScrollView,
-  Pressable,
   Platform,
-  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
+import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
+import { colors } from '../theme/mobile-theme'
 import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
-import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
-import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
+import { MobileDiffCommentLineRow } from './MobileDiffCommentLineRow'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type {
   DiffCommentActions,
@@ -29,20 +30,21 @@ import type {
   FileSyntaxState,
   RenderableDiffLine
 } from './mobile-session-route-types'
-import { DiffLineRow } from './MobileSessionDiffLineRow'
 
-export function FileReader({
+export function MobileSessionFileReader({
   doc,
   title,
   relativePath,
   language,
-  diffCommentActions
+  diffCommentActions,
+  onOpenExternalUrl
 }: {
   doc: FileDocState | undefined
   title: string
   relativePath: string
   language?: string
   diffCommentActions?: DiffCommentActions
+  onOpenExternalUrl?: (url: string) => void
 }) {
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
@@ -106,7 +108,7 @@ export function FileReader({
 
   const renderDiffLine: ListRenderItem<RenderableDiffLine> = useCallback(
     ({ item, index }) => (
-      <DiffLineRow
+      <MobileDiffCommentLineRow
         line={item}
         title={title}
         index={index}
@@ -293,7 +295,11 @@ export function FileReader({
   if (doc.kind === 'html') {
     return (
       <View style={styles.markdownEditor}>
-        <MobileHtmlPreview html={doc.content} renderSource={() => renderSourceText(doc.content)} />
+        <MobileHtmlPreview
+          html={doc.content}
+          onOpenLink={onOpenExternalUrl}
+          renderSource={() => renderSourceText(doc.content)}
+        />
       </View>
     )
   }

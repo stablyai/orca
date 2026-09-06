@@ -4,7 +4,7 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { MobileBrowserRpcClient } from './mobile-browser-rpc-client'
 import {
   createPinchGesture,
   MAX_ZOOM,
@@ -38,7 +38,7 @@ type SendBrowserRequest = (
 
 type MobileBrowserInteractionArgs = {
   clearLongPressTimer: () => void
-  client: RpcClient | null
+  client: MobileBrowserRpcClient | null
   dialogRef: { current: { dialogType: string; message: string } | null }
   frameGeometry: BrowserFrameGeometry | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }

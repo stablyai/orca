@@ -3,11 +3,6 @@ import {
   clearTerminalLiveInputFocusTimer,
   scheduleTerminalLiveInputFocus
 } from '../terminal/terminal-live-input'
-import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
-import {
-  buildTerminalSendParams,
-  TERMINAL_INPUT_SEND_OPTIONS
-} from '../terminal/terminal-send-request'
 import { countTerminalGestureInputSequences } from '../terminal/terminal-gesture-input'
 import {
   isGestureMouseTrackingMode,
@@ -22,7 +17,6 @@ import type { MobileSessionFileActionsModel } from './use-mobile-session-file-ac
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
   const {
-    client,
     connState,
     toggleTerminalLiveInput,
     activeHandle,
@@ -31,17 +25,17 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     terminalGestureInputQueuesRef,
     terminalGestureInputInFlightRef,
     deviceTokenRef,
-    clientRef,
     connStateRef,
     liveInputRef,
     liveInputFocusTimerRef,
-    terminalUnsubsRef,
     activeHandleRef,
     activeSessionTabTypeRef,
     clearPendingLiveInputCommit,
     showToast,
     getTerminalRef,
-    hostQueryReplyInputSupportedRef
+    hostQueryReplyInputSupportedRef,
+    sessionTerminalOperations,
+    sessionTerminalOperationsRef
   } = scope
   const toggleLiveInput = useCallback(() => {
     if (!activeHandle) {
@@ -102,24 +96,14 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     const isActive =
       handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
     const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
-    const rpc = clientRef.current
-    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
+    const operations = sessionTerminalOperationsRef.current
+    if (!operations || connStateRef.current !== 'connected' || !isActive || !isFresh) {
       return
     }
 
     terminalGestureInputInFlightRef.current.add(handle)
     try {
-      // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
-      await rpc.sendRequest(
-        'terminal.send',
-        buildTerminalSendParams({
-          terminal: handle,
-          text: queued.bytes,
-          enter: false,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
+      await operations.sendInput(handle, queued.bytes, false, deviceTokenRef.current)
     } catch {
       // Transient failure
     } finally {
@@ -188,7 +172,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
 
   const handleTerminalInput = useCallback(
     async (handle: string, bytes: string) => {
-      if (!client || connState !== 'connected' || bytes.length === 0) {
+      if (!sessionTerminalOperations || connState !== 'connected' || bytes.length === 0) {
         return
       }
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
@@ -208,30 +192,31 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       }
       enqueueTerminalGestureInput(handle, bytes, sequenceCount)
     },
-    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
+    [allowTerminalGestureInput, connState, enqueueTerminalGestureInput, sessionTerminalOperations]
   )
 
   const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {
-    void sendMobileTerminalQueryReply({
-      bytes,
-      client: clientRef.current,
-      clientId: deviceTokenRef.current,
-      connected: connStateRef.current === 'connected',
+    if (connStateRef.current !== 'connected') {
+      return
+    }
+    void sessionTerminalOperationsRef.current?.sendQueryReply(
       handle,
-      hostSupportsQueryReplyInput: hostQueryReplyInputSupportedRef.current,
-      subscribedTerminals: terminalUnsubsRef.current
-    })
+      bytes,
+      deviceTokenRef.current,
+      hostQueryReplyInputSupportedRef.current
+    )
   }, [])
 
   async function handleClearTerminal(target: Terminal) {
-    if (!client) {
+    if (!sessionTerminalOperations) {
       return
     }
     getTerminalRef(target.handle)?.clear()
     try {
-      await client.sendRequest('terminal.clearBuffer', {
-        terminal: target.handle
-      })
+      const cleared = await sessionTerminalOperations.clear(target.handle)
+      if (!cleared) {
+        throw new Error('terminal_clear_failed')
+      }
       showToast('Terminal cleared')
     } catch {
       showToast("Couldn't clear terminal", 1500)

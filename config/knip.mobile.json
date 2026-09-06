@@ -1,0 +1,28 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "include": ["files"],
+  "entry": [
+    "app/**/*.{js,jsx,ts,tsx}",
+    "host-web-app/**/*.{js,jsx,ts,tsx}",
+    "src/**/*.test.{ts,tsx}",
+    "src/**/*.{ios,android,native,web}.{js,jsx,ts,tsx}",
+    "src/mobile-web/disabled-page-async-storage.ts",
+    "src/mobile-web/disabled-page-client-context.tsx",
+    "src/mobile-web/disabled-page-host-store.ts",
+    "packages/*/src/index.ts",
+    "packages/*/src/**/*.{ios,android,native,web}.{js,jsx,ts,tsx}",
+    "plugins/*.js",
+    "metro.config.js",
+    "scripts/prepare-android-release.mjs",
+    "scripts/test-subscribe.ts",
+    "scripts/repro-terminal-colors.ts",
+    "scripts/repro-worktree-startup-stream.ts"
+  ],
+  "project": [
+    "{app,host-web-app,src,scripts,plugins}/**/*.{js,jsx,mjs,cjs,ts,tsx}",
+    "packages/*/src/**/*.{js,jsx,ts,tsx}",
+    "*.{js,ts}"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "includeEntryExports": false
+}

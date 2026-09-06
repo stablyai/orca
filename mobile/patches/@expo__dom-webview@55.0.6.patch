@@ -1,0 +1,23 @@
+diff --git a/android/src/main/java/expo/modules/webview/DomWebView.kt b/android/src/main/java/expo/modules/webview/DomWebView.kt
+index 6e504788e2b585f7fb26fe73ae5c88e25e634b8a..4e14d518d22f84dbf7202b5f2e85a169543236df 100644
+--- a/android/src/main/java/expo/modules/webview/DomWebView.kt
++++ b/android/src/main/java/expo/modules/webview/DomWebView.kt
+@@ -5,6 +5,7 @@ package expo.modules.webview
+ import android.animation.ObjectAnimator
+ import android.annotation.SuppressLint
+ import android.content.Context
++import android.content.pm.ApplicationInfo
+ import android.graphics.Bitmap
+ import android.graphics.Color
+ import android.view.MotionEvent
+@@ -47,7 +48,9 @@ internal class DomWebView(context: Context, appContext: AppContext) : ExpoView(c
+   // region Public methods
+ 
+   fun reload() {
+-    WebView.setWebContentsDebuggingEnabled(webviewDebuggingEnabled)
++    val isDebuggable =
++      context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
++    WebView.setWebContentsDebuggingEnabled(webviewDebuggingEnabled && isDebuggable)
+ 
+     source?.uri?.let {
+       if (it != webView.url) {

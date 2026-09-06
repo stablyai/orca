@@ -8,6 +8,11 @@ describe('classifyMobileArtifact', () => {
     }
   })
 
+  it('recognizes extensions after Windows path separators', () => {
+    expect(classifyMobileArtifact(String.raw`assets\icons\ORCA.PNG`)).toBe('image')
+    expect(classifyMobileArtifact(String.raw`docs\index.HTML`)).toBe('html')
+  })
+
   it('treats svg as other (RN Image cannot decode svg data URIs; render as source)', () => {
     expect(classifyMobileArtifact('logo.svg')).toBe('other')
   })
@@ -27,5 +32,6 @@ describe('classifyMobileArtifact', () => {
     expect(classifyMobileArtifact('.gitignore')).toBe('other')
     expect(classifyMobileArtifact('Makefile')).toBe('other')
     expect(classifyMobileArtifact('dir/.env')).toBe('other')
+    expect(classifyMobileArtifact(String.raw`C:\repo\.env`)).toBe('other')
   })
 })

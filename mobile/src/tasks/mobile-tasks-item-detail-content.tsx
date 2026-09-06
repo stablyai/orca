@@ -5,7 +5,6 @@ import {
   colors,
   Text,
   Pressable,
-  Linking,
   ExternalLink,
   TextInput
 } from './mobile-tasks-dependencies'
@@ -18,7 +17,7 @@ import {
   formatDurationSeconds,
   SHOW_MOBILE_LINEAR_DETAIL_TOOLS,
   discussionSummary
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import {
   renderMobileTasksItemBodyEditor,
   renderMobileTasksItemReviewPanel,
@@ -28,6 +27,7 @@ import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-edi
 
 export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     actionItem,
     addHostedItemComment,
     addLinearComment,
@@ -150,7 +150,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                 disabled={!check.url}
                 onPress={() => {
                   if (check.url) {
-                    void Linking.openURL(check.url)
+                    void deviceOperations.openExternalUrl(check.url)
                   }
                 }}
               >
@@ -191,7 +191,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                   disabled={!job.webUrl}
                   onPress={() => {
                     if (job.webUrl) {
-                      void Linking.openURL(job.webUrl)
+                      void deviceOperations.openExternalUrl(job.webUrl)
                     }
                   }}
                 >

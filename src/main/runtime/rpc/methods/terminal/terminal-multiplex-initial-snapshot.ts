@@ -60,10 +60,13 @@ export async function publishMultiplexInitialSnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode,
     seq: layoutSeq,
-    ...((stream.ackOutputSourceRanges || stream.supportsOutputPause) && {
+    ...((stream.ackOutputSourceRanges ||
+      stream.supportsOutputPause ||
+      stream.supportsQueryReply) && {
       capabilities: {
         ...(stream.ackOutputSourceRanges ? { ackOutputSourceRanges: 1 as const } : {}),
-        ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {})
+        ...(stream.supportsOutputPause ? { outputPause: 1 as const } : {}),
+        ...(stream.supportsQueryReply ? { queryReply: 1 as const } : {})
       }
     }),
     ...(stream.ackOutputSourceRanges ? { streamGeneration: stream.streamGeneration } : {}),

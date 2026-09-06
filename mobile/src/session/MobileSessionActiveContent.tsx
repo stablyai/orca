@@ -1,13 +1,12 @@
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import { FileReader } from './MobileSessionFileReader'
-import { MarkdownReader } from './MobileSessionMarkdownReader'
+import { MobileSessionFileReader } from './MobileSessionFileReader'
+import { MobileMarkdownReader } from './MobileMarkdownReader'
 
 export function MobileSessionActiveContent({
   controller
@@ -18,7 +17,6 @@ export function MobileSessionActiveContent({
     worktreeId,
     insets,
     connState,
-    client,
     terminals,
     terminalTextScale,
     setTerminalTextScale,
@@ -79,7 +77,10 @@ export function MobileSessionActiveContent({
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
-    createTabBusy
+    createTabBusy,
+    copyTextToDevice,
+    sessionBrowserOperations,
+    sessionDeviceOperations
   } = controller
   return showLoadingState ? (
     <View style={styles.emptyState}>
@@ -109,7 +110,7 @@ export function MobileSessionActiveContent({
     </View>
   ) : activeMarkdownTab ? (
     <View style={styles.markdownFrame}>
-      <MarkdownReader
+      <MobileMarkdownReader
         documentId={activeMarkdownTab.id}
         doc={markdownDocs.get(activeMarkdownTab.id)}
         onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
@@ -117,6 +118,9 @@ export function MobileSessionActiveContent({
         onSave={() => void saveMarkdownTab(activeMarkdownTab)}
         onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
         onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
+        onOpenLink={(url) => {
+          void sessionDeviceOperations?.openExternalUrl(url).catch(() => {})
+        }}
         keyboardLift={keyboardLift}
       />
       {toastMessage && (
@@ -127,11 +131,15 @@ export function MobileSessionActiveContent({
     </View>
   ) : activeFileTab ? (
     <View style={styles.markdownFrame}>
-      <FileReader
+      {/* MobileSessionFileReader forwards onOpenLink={onOpenExternalUrl}. */}
+      <MobileSessionFileReader
         doc={fileDocs.get(activeFileTab.id)}
         title={activeFileTab.title || 'File'}
         relativePath={activeFileTab.relativePath}
         language={activeFileTab.language}
+        onOpenExternalUrl={(url) => {
+          void sessionDeviceOperations?.openExternalUrl(url).catch(() => {})
+        }}
         diffCommentActions={
           activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'
             ? {
@@ -156,7 +164,7 @@ export function MobileSessionActiveContent({
       {/* Why: pane owns imperative frame refs; don't render a stale frame while the old stream effect cleans up. */}
       <MobileBrowserPane
         key={activeBrowserTab.browserPageId ?? activeBrowserTab.id}
-        client={client}
+        operations={sessionBrowserOperations}
         worktreeId={worktreeId}
         tab={activeBrowserTab}
         screencastSupported={browserScreencastSupported}
@@ -214,7 +222,7 @@ export function MobileSessionActiveContent({
           onTextScaleChange={(scale) => {
             // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
             setTerminalTextScale(scale)
-            void saveTerminalTextScale(scale)
+            void sessionDeviceOperations?.saveTerminalTextScale(scale)
           }}
           onRef={setTerminalWebViewRef}
           onWebReady={handleTerminalWebReady}
@@ -243,6 +251,10 @@ export function MobileSessionActiveContent({
         inputLockReason={nativeChatOverlayInputLockReason}
         sendErrorMessage={nativeChatSendError.message}
         onClearSendError={nativeChatSendError.clear}
+        onOpenLink={(url) => {
+          void sessionDeviceOperations?.openExternalUrl(url).catch(() => {})
+        }}
+        onCopyText={copyTextToDevice}
         sendSurfaceId={controller.nativeChatScopeKey ?? ''}
         getSendCompletionGeneration={controller.getSendCompletionGeneration}
         keyboardInset={keyboardLift}

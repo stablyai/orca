@@ -2,6 +2,7 @@ import ExpoTwoWayAudioModule from './ExpoTwoWayAudioModule'
 
 export interface MicrophoneDataEvent {
   data: Uint8Array
+  sampleRate?: number
 }
 
 export interface VolumeLevelEvent {

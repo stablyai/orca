@@ -1712,6 +1712,7 @@ export class SshRelaySession {
     }
     this.pendingPtyReattaches.clear()
     this.ptyRecoveryRetention.clear()
+    this.runtime?.notifySshRelayUnavailable?.(this.targetId)
   }
 
   // Why: back-compat for old relays that gate FS ops on registered roots; removable post-cutover (docs/relay-fs-allowlist-removal.md).

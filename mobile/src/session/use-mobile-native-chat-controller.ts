@@ -1,25 +1,24 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
-import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
+import type { HostSessionNativeChatOperations } from './host-session-native-chat-operations'
+import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
-import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
-import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
-import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
+import { useMobileNativeChatTerminalWrites } from './use-mobile-native-chat-terminal-writes'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
-import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
+import { useMobileNativeChatTarget } from './use-mobile-native-chat-target'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
+import { isMobileNativeChatAgentWorking } from './mobile-native-chat-working-state'
+import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
+import type { HostSessionChatDraftOperations } from './host-session-chat-draft-operations'
+import type { HostSessionChatPendingDeliveryOperations } from './host-session-chat-pending-delivery-operations'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
-import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
-
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
 const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
@@ -27,7 +26,13 @@ const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
 /** Owns mobile native-chat state and teardown outside the already dense session
  *  route. The route remains responsible only for choosing and rendering the view. */
 export function useMobileNativeChatController(args: {
-  client: RpcClient | null
+  operations: HostSessionNativeChatOperations | null
+  /** Structured agent sessions speak the agent-session RPC family directly; the
+   *  hosted page has no client and so never resolves a structured tab. */
+  client?: RpcClient | null
+  draftOperations?: HostSessionChatDraftOperations | null
+  pendingDeliveryOperations?: HostSessionChatPendingDeliveryOperations | null
+  connected: boolean
   hostId: string
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
@@ -36,15 +41,17 @@ export function useMobileNativeChatController(args: {
   deviceTokenRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
   nativeChatInputLeaseReady: boolean
-  /** Live socket state; the lease collapses on disconnect but one render later. */
-  connState: ConnectionState
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
   onSendResolved: () => void
 }): MobileNativeChatController {
   const {
-    client,
+    operations,
+    client = null,
+    draftOperations = null,
+    pendingDeliveryOperations = null,
+    connected,
     hostId,
     worktreeId,
     activeSessionTab,
@@ -53,7 +60,6 @@ export function useMobileNativeChatController(args: {
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
-    connState,
     onSendError,
     onSendResolved
   } = args
@@ -63,9 +69,7 @@ export function useMobileNativeChatController(args: {
     activeChatResolution,
     activeChatSessionId,
     activeChatStructured,
-    activeTabAgentWorking,
     isTabChatView,
-    nativeChatStatus,
     showNativeChat,
     showNativeChatRef,
     sourceIdentity,
@@ -78,20 +82,33 @@ export function useMobileNativeChatController(args: {
     activeSessionTab,
     activeSessionTabId,
     activeHandleRef,
+    connected,
     nativeChatTranscriptIsLocalReadable
   })
 
+  const { target: nativeChatTarget, targetRef: nativeChatTargetRef } = useMobileNativeChatTarget({
+    workspaceId: worktreeId,
+    agent: activeChatAgent,
+    sessionId: activeChatSessionId,
+    transcriptPath: activeChatResolution?.transcriptPath ?? null,
+    terminalId: activeHandleRef.current,
+    clientId: deviceTokenRef.current
+  })
   const { structuredSession: structuredNativeChat, session: nativeChatSession } =
     useMobileNativeChatSessionLane({
+      operations,
       client,
+      workspaceId: worktreeId,
       structured: activeChatStructured,
       agent: activeChatAgent,
-      resolvedAgent: activeChatResolution?.agent ?? null,
+      resolvedAgent: activeChatAgent,
       transcriptPath: activeChatResolution?.transcriptPath ?? null,
       sessionId: activeChatSessionId,
+      terminalId: nativeChatTarget?.terminalId ?? null,
+      clientId: nativeChatTarget?.clientId ?? null,
       sourceIdentity,
       enabled: showNativeChat,
-      connState,
+      connected,
       onSendError
     })
   const {
@@ -120,17 +137,19 @@ export function useMobileNativeChatController(args: {
     // terminal view would permanently decline the prefill.
     chatActive: showNativeChat,
     transcriptLoading: nativeChatSession.transcriptLoading,
+    persistence: draftOperations,
+    pendingPersistence: pendingDeliveryOperations,
     transcriptSettled: nativeChatSession.status === 'ready'
   })
 
+  const nativeChatStatus =
+    activeChatResolution && !activeChatStructured ? activeSessionTab?.agentStatus : null
   const nativeChatAgentWorking = activeChatStructured
     ? structuredNativeChat.isWorking
-    : activeChatResolution != null && activeTabAgentWorking
-  // Deliberately not gated on the chat view being visible: the streaming gate
-  // has to tell "hidden mid-turn" from "the turn ended".
+    : isMobileNativeChatAgentWorking(nativeChatStatus, nativeChatSession.lifecycle)
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
-    : activeTabAgentWorking
+    : activeSessionTab?.agentStatus?.state === 'working'
   // Throttle the streaming bubble: OpenCode emits a status frame per streamed
   // part, and each one re-renders and re-parses the whole accumulated markdown.
   const nativeChatStreamingText = useThrottledLatestValue(
@@ -166,82 +185,33 @@ export function useMobileNativeChatController(args: {
     observing: showNativeChat && (nativeChatDetectedAsk != null || nativeChatTranscriptSettled)
   })
 
-  // Every chat write gates on both: the lease proves the input floor is ours, and
-  // `connState` collapses a render before the lease does on disconnect.
+  // The explicit transport state collapses before the input lease on disconnect.
   const inputSendable = activeChatStructured
-    ? client != null && activeChatSessionId != null && connState === 'connected'
-    : nativeChatInputLeaseReady && connState === 'connected'
-
-  const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
-    useMobileNativeChatAnswerSend({
-      client,
-      enabled: inputSendable && !activeChatStructured,
-      handleRef: activeHandleRef,
-      deviceTokenRef,
-      agentRef: activeChatAgentRef,
-      sessionId: activeChatSessionId,
-      streamIdentity,
-      onSendError
-    })
-
-  const handleNativeChatCancelAsk = useMobileNativeChatCancelAsk({
-    client,
-    enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
-    cancelPending: cancelNativeChatAnswer,
-    onSendError
-  })
-
-  const legacyHandleNativeChatRespondPermission = useMobileNativeChatPermissionSend({
-    client,
-    enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
-    onSendError
-  })
-
-  const handleNativeChatStop = useMobileNativeChatStop({
-    client,
-    enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
-    streamIdentity,
-    cancelPending: cancelNativeChatAnswer,
-    onSendError
-  })
-
-  const { nativeChatFilePaths, loadNativeChatFiles } = useMobileNativeChatFileSearch({
-    client,
-    worktreeId
-  })
+    ? client != null && activeChatSessionId != null && connected
+    : nativeChatInputLeaseReady && connected
 
   // Why: the send seam reports outgoing catalog commands to session-option
   // tracking, but the options hook needs the seam's dispatcher — a ref breaks
   // the cycle without re-creating the send callbacks per snapshot.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
-
-  const {
-    send: handleNativeChatSend,
-    sendWithOutcome: handleNativeChatSendWithOutcome,
-    answerQuestion: legacyHandleNativeChatQuestionAnswer,
-    dispatchCommand: handleNativeChatDispatchCommand
-  } = useMobileNativeChatMessageSend({
-    client,
+  const terminalWrites = useMobileNativeChatTerminalWrites({
+    operations,
     enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
+    targetRef: nativeChatTargetRef,
     agentRef: activeChatAgentRef,
+    sessionId: activeChatSessionId,
+    streamIdentity,
     commandSendRef: recordSessionOptionCommandRef,
-    captureSendOrigin,
-    readSeededLaunchDraftSeed,
-    clearDraftForSend,
-    restoreRejectedDraft,
-    acceptSend,
-    holdUnconfirmedSend,
+    drafts: {
+      captureSendOrigin,
+      readSeededLaunchDraftSeed,
+      clearDraftForSend,
+      restoreRejectedDraft,
+      acceptSend,
+      holdUnconfirmedSend
+    },
     onSendError
   })
-
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
@@ -252,12 +222,16 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
+  const { nativeChatFilePaths, loadNativeChatFiles } = useMobileNativeChatFileSearch({
+    operations,
+    target: nativeChatTarget
+  })
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
       activeChatStructured,
       activeSessionTabId,
-      agent: activeChatResolution?.agent ?? null,
-      dispatchCommand: handleNativeChatDispatchCommand,
+      agent: activeChatAgent,
+      dispatchCommand: terminalWrites.dispatchCommand,
       hostId,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
@@ -275,19 +249,21 @@ export function useMobileNativeChatController(args: {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
   }, [recordNativeChatSessionOptionCommand])
   // Card actions retire the route's held failure banner too, not just sends.
-  const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
-  const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
-  const handleNativeChatRespondPermission = activeChatStructured
-    ? structuredNativeChat.respondPermission
-    : legacyHandleNativeChatRespondPermission
-  const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
+  const answerAsk = useNativeChatAcceptedAction(terminalWrites.answerAsk, onSendResolved)
+  const cancelAsk = useNativeChatAcceptedAction(terminalWrites.cancelAsk, onSendResolved)
+  const respond = useNativeChatAcceptedAction(
+    activeChatStructured
+      ? structuredNativeChat.respondPermission
+      : terminalWrites.respondPermission,
+    onSendResolved
+  )
 
   return {
     isTabChatView,
     toggleTabChatView,
     showNativeChat,
     showNativeChatRef,
-    nativeChatAgent: activeChatResolution?.agent ?? null,
+    nativeChatAgent: activeChatAgent,
     chatComposerText,
     setChatComposerText,
     getChatComposerEditGeneration,
@@ -297,6 +273,7 @@ export function useMobileNativeChatController(args: {
     /** Structured lane: drives the per-turn status row and live tool progress. */
     nativeChatStructured: activeChatStructured,
     nativeChatAgentWorking,
+    nativeChatTargetRef,
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,
@@ -312,18 +289,18 @@ export function useMobileNativeChatController(args: {
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,
     handleNativeChatRespondPermission: respond,
-    handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
+    handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalWrites.stop,
     nativeChatFilePaths,
     loadNativeChatFiles,
     handleNativeChatQuestionAnswer: activeChatStructured
       ? structuredNativeChat.respondQuestion
-      : legacyHandleNativeChatQuestionAnswer,
+      : terminalWrites.answerQuestion,
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send
-      : handleNativeChatSend,
+      : terminalWrites.send,
     handleNativeChatSendWithOutcome: activeChatStructured
       ? structuredNativeChatSend.sendWithOutcome
-      : handleNativeChatSendWithOutcome,
+      : terminalWrites.sendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions
   }

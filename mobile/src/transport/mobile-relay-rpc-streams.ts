@@ -8,8 +8,12 @@ import {
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
-import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
+import {
+  buildReadyStreamUnsubscribe,
+  buildServerSubscriptionUnsubscribe
+} from './rpc-client-server-subscription'
 import type { RpcClient } from './rpc-client'
+import { routeTerminalMultiplexFrame } from './rpc-client-terminal-multiplex'
 import type { RpcResponse, RpcSuccess } from './types'
 
 type StreamRecord = {
@@ -21,6 +25,9 @@ type StreamRecord = {
     | undefined
     ? Listener
     : never
+  onTerminalBinaryFrame?: NonNullable<
+    Parameters<RpcClient['subscribe']>[3]
+  >['onTerminalBinaryFrame']
   streamIds: Set<number>
   subscriptionId?: string
   cancelled: boolean
@@ -58,6 +65,7 @@ export class MobileRelayRpcStreams {
   private readonly terminalListeners = new Map<number, (result: unknown) => void>()
   private readonly terminalSnapshots = new Map<number, TerminalSnapshotState>()
   private activeBrowserStream: StreamRecord | null = null
+  private activeTerminalMultiplexStream: StreamRecord | null = null
 
   constructor(private readonly options: StreamManagerOptions) {}
 
@@ -73,6 +81,7 @@ export class MobileRelayRpcStreams {
       params,
       listener,
       onBinaryFrame: subscribeOptions?.onBinaryFrame,
+      onTerminalBinaryFrame: subscribeOptions?.onTerminalBinaryFrame,
       streamIds: new Set(),
       cancelled: false,
       sent: false
@@ -148,6 +157,9 @@ export class MobileRelayRpcStreams {
       if (stream.method === 'browser.screencast') {
         this.activeBrowserStream = stream
       }
+      if (stream.method === 'terminal.multiplex') {
+        this.activeTerminalMultiplexStream = stream
+      }
       if (metadata.type === 'end') {
         stream.listener(result)
         this.remove(response.id)
@@ -166,6 +178,12 @@ export class MobileRelayRpcStreams {
       this.activeBrowserStream.onBinaryFrame(browserFrame)
       return
     }
+    if (
+      this.activeTerminalMultiplexStream &&
+      routeTerminalMultiplexFrame(bytes, [this.activeTerminalMultiplexStream])
+    ) {
+      return
+    }
     handleTerminalBinaryFrame(bytes, {
       terminalSnapshots: this.terminalSnapshots,
       getListener: (streamId) => this.terminalListeners.get(streamId)
@@ -181,6 +199,7 @@ export class MobileRelayRpcStreams {
     this.terminalListeners.clear()
     this.terminalSnapshots.clear()
     this.activeBrowserStream = null
+    this.activeTerminalMultiplexStream = null
   }
 
   private cancel(id: string): void {
@@ -204,10 +223,7 @@ export class MobileRelayRpcStreams {
           this.cancelledSubscriptions.set(id, { method: stream.method, unsubscribe: byParams })
         } else if (unsubscribe || byParams) {
           this.sendUnsubscribe((unsubscribe ?? byParams)!)
-        } else if (
-          stream.method === 'browser.screencast' ||
-          stream.method === 'runtime.clientEvents.subscribe'
-        ) {
+        } else if (buildServerSubscriptionUnsubscribe(stream.method, 'pending')) {
           // Keep only the cleanup route while the server assigns its subscription ID.
           this.cancelledSubscriptions.set(id, { method: stream.method })
         } else if (stream.subscriptionId) {
@@ -255,6 +271,9 @@ export class MobileRelayRpcStreams {
     }
     if (this.activeBrowserStream === stream) {
       this.activeBrowserStream = null
+    }
+    if (this.activeTerminalMultiplexStream === stream) {
+      this.activeTerminalMultiplexStream = null
     }
     this.streams.delete(id)
   }

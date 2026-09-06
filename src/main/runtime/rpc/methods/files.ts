@@ -277,7 +277,15 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.unwatch',
     params: FileUnwatch,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, connectionId }) => {
+      if (connectionId) {
+        return {
+          unsubscribed: await runtime.cleanupSubscriptionIfOwnedByConnectionAndWait(
+            params.subscriptionId,
+            connectionId
+          )
+        }
+      }
       await runtime.cleanupSubscriptionAndWait(params.subscriptionId)
       return { unsubscribed: true }
     }

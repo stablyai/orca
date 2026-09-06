@@ -4,18 +4,16 @@ import {
   type DetailComment,
   type GitHubProjectRow,
   commentAuthor,
-  isSuccess,
-  projectRowGitHubRepository,
-  projectRowType,
-  splitRepositorySlug
-} from './mobile-tasks-legacy-foundation'
+  projectRowIdentityTarget,
+  projectRowMutationTarget,
+  projectRowSlugTarget
+} from './mobile-tasks-model'
 
 export function useMobileTasksProjectThreadReplyActions(
   model: ProjectWorkspaceCommentActionsModel
 ) {
   const {
     activeGitHubProjectHost,
-    client,
     findProjectRowRepo,
     itemReplyDrafts,
     projectEditingCommentId,
@@ -25,46 +23,25 @@ export function useMobileTasksProjectThreadReplyActions(
     setProjectEditingCommentId,
     setProjectMutating,
     setProjectRowDetail,
-    setProjectRowDetailError
+    setProjectRowDetailError,
+    taskProjectMutationOperations
   } = model
   const deleteProjectRowComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
-      if (!client || projectMutating) {
+      if (!taskProjectMutationOperations || projectMutating) {
         return
       }
-      const slug = splitRepositorySlug(row.content.repository)
+      // Why: `deleteIssueCommentBySlug` addresses by repository and comment id only.
+      const target = projectRowSlugTarget(row, activeGitHubProjectHost)
       const commentId = Number(comment.id)
-      if (!slug || !Number.isInteger(commentId) || commentId <= 0) {
+      if (!target || !Number.isInteger(commentId) || commentId <= 0) {
         setProjectRowDetailError('This project comment cannot be deleted from mobile.')
         return
       }
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.project.deleteIssueCommentBySlug',
-          {
-            owner: slug.owner,
-            repo: slug.repo,
-            host: activeGitHubProjectHost,
-            commentId
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          error?: string | { message?: string }
-        }
-        if (result.ok === false) {
-          throw new Error(
-            typeof result.error === 'string'
-              ? result.error
-              : (result.error?.message ?? 'Failed to delete comment')
-          )
-        }
+        await taskProjectMutationOperations.deleteComment(target, commentId)
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? {
@@ -83,14 +60,21 @@ export function useMobileTasksProjectThreadReplyActions(
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, projectEditingCommentId, projectMutating]
+    [
+      activeGitHubProjectHost,
+      projectEditingCommentId,
+      projectMutating,
+      taskProjectMutationOperations
+    ]
   )
-
   const toggleProjectGitHubReviewThread = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
       const repo = findProjectRowRepo(row)
+      // Why: `resolveReviewThread` addresses by repo id and thread id; the slug, number and kind
+      // are decoration the host treats as optional.
+      const target = projectRowIdentityTarget(row, activeGitHubProjectHost)
       if (
-        !client ||
+        !taskProjectMutationOperations ||
         projectMutating ||
         row.itemType !== 'PULL_REQUEST' ||
         !repo ||
@@ -102,22 +86,12 @@ export function useMobileTasksProjectThreadReplyActions(
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.resolveReviewThread',
-          {
-            repo: `id:${repo.id}`,
-            prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-            threadId: comment.threadId,
-            resolve
-          },
-          { timeoutMs: 30_000 }
+        await taskProjectMutationOperations.resolveReviewThread(
+          target,
+          repo.id,
+          comment.threadId,
+          resolve
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (response.result !== true) {
-          throw new Error(resolve ? 'Failed to resolve thread' : 'Failed to reopen thread')
-        }
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? {
@@ -138,13 +112,13 @@ export function useMobileTasksProjectThreadReplyActions(
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, findProjectRowRepo, projectMutating]
+    [activeGitHubProjectHost, findProjectRowRepo, projectMutating, taskProjectMutationOperations]
   )
-
   const replyToProjectGitHubComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
       const repo = findProjectRowRepo(row)
-      if (!client || projectMutating || !repo || !row.content.number) {
+      const target = projectRowMutationTarget(row, activeGitHubProjectHost)
+      if (!taskProjectMutationOperations || projectMutating || !repo || !target) {
         return
       }
       const key = String(comment.id)
@@ -160,44 +134,22 @@ export function useMobileTasksProjectThreadReplyActions(
           comment.path &&
           typeof comment.line === 'number' &&
           typeof comment.id === 'number'
-        const response = canUseReviewReply
-          ? await client.sendRequest(
-              'github.addPRReviewCommentReply',
-              {
-                repo: `id:${repo.id}`,
-                prNumber: row.content.number,
-                prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-                commentId: comment.id,
-                body,
-                threadId: comment.threadId,
-                path: comment.path,
-                line: comment.line
-              },
-              { timeoutMs: 30_000 }
-            )
-          : await client.sendRequest(
-              'github.addIssueComment',
-              {
-                repo: `id:${repo.id}`,
-                number: row.content.number,
-                prRepo: projectRowGitHubRepository(row, activeGitHubProjectHost),
-                body: `@${commentAuthor(comment)} ${body}`,
-                type: projectRowType(row) ?? 'issue'
-              },
-              { timeoutMs: 30_000 }
-            )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to reply')
-        }
-        const reply: DetailComment = result.comment ?? {
+        const posted = await (canUseReviewReply
+          ? taskProjectMutationOperations.replyReviewComment(target, repo.id, {
+              commentId: comment.id as number,
+              body,
+              ...(comment.threadId ? { threadId: comment.threadId } : {}),
+              path: comment.path as string,
+              line: comment.line as number
+            })
+          : taskProjectMutationOperations.addConversationComment(
+              target,
+              repo.id,
+              `@${commentAuthor(comment)} ${body}`
+            ))
+        // Why: only the server entry carries the numeric id a follow-up reply needs to stay on
+        // this thread; the stub is the fallback for hosts that publish no comment.
+        const reply: DetailComment = posted ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
@@ -222,12 +174,18 @@ export function useMobileTasksProjectThreadReplyActions(
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, findProjectRowRepo, itemReplyDrafts, projectMutating]
+    [
+      activeGitHubProjectHost,
+      findProjectRowRepo,
+      itemReplyDrafts,
+      projectMutating,
+      taskProjectMutationOperations
+    ]
   )
   return Object.assign(model, {
     deleteProjectRowComment,
-    toggleProjectGitHubReviewThread,
-    replyToProjectGitHubComment
+    replyToProjectGitHubComment,
+    toggleProjectGitHubReviewThread
   })
 }
 

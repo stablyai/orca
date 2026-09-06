@@ -2,9 +2,9 @@ import type { Locator, Page } from '@stablyai/playwright-test'
 
 import {
   connectDockerSshRelayTarget,
-  disconnectDockerSshRelayTarget,
-  reconnectDisconnectedDockerSshRelayTarget
+  disconnectDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-connection'
+import { reconnectDisconnectedDockerSshRelayTarget } from './helpers/docker-ssh-relay-reconnect'
 import {
   isDockerSshRelayPidRunning,
   readDockerSshRelayArtifactState,

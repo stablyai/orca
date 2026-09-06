@@ -257,7 +257,12 @@ export default function TerminalSettingsScreen() {
   return (
     <GestureHandlerRootView style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable
+          accessibilityLabel="Back to hosted session"
+          accessibilityRole="button"
+          style={styles.backButton}
+          onPress={() => router.back()}
+        >
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
         <Text style={styles.heading}>Terminal</Text>

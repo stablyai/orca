@@ -5,6 +5,7 @@ import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import type { MobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
+import type { MobilePrShellOperations } from '../../platform/mobile-pr-shell-operations'
 import { MobilePRSidebar } from '../MobilePRSidebar'
 
 type Props = {
@@ -17,6 +18,7 @@ type Props = {
   isGithubRepo?: boolean
   branchContextLoaded?: boolean
   controller: MobilePrSidebarController
+  shellOperations: MobilePrShellOperations
 }
 
 // Chromeless PR sidebar body for the source-control hub's Pull Request segment.
@@ -31,7 +33,8 @@ export function MobilePrViewPanelBody({
   gitStatus,
   isGithubRepo = true,
   branchContextLoaded = true,
-  controller
+  controller,
+  shellOperations
 }: Props) {
   const insets = useSafeAreaInsets()
 
@@ -64,6 +67,7 @@ export function MobilePrViewPanelBody({
         bottomInset={insets.bottom}
         // Hub header already hosts open-on-web while this segment is active.
         showOpenOnWeb={false}
+        shellOperations={shellOperations}
       />
     </View>
   )

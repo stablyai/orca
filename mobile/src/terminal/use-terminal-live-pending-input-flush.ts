@@ -12,6 +12,7 @@ import {
   queueTerminalLiveMirrorSend,
   waitForTerminalLivePendingFlush
 } from './terminal-live-pending-flush-state'
+import { setTerminalLiveInputNativeText } from './terminal-live-input-native-text'
 
 type TerminalLivePendingInputFlushOptions<TTabType extends string> = {
   readonly activeHandleRef: RefObject<string | null>
@@ -79,7 +80,7 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
   const clearPendingLiveInputCommit = useCallback(() => {
     resetMirrorState()
     setLiveInputCapture('')
-    liveInputRef.current?.setNativeProps({ text: '' })
+    setTerminalLiveInputNativeText(liveInputRef.current, '')
   }, [liveInputRef, resetMirrorState, setLiveInputCapture])
 
   const waitForPendingLiveInputFlush = useCallback(async (): Promise<boolean> => {

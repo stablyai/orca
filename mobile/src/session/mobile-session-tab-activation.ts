@@ -25,44 +25,43 @@ async function retryIdempotentActivationAfterCutover(
   operation: 'terminal.focus' | 'session.tabs.activate',
   target: string
 ): Promise<RpcResponse> {
+  const terminal = operation === 'terminal.focus'
   const diagnosticTarget = shortenMobileTerminalDiagnosticId(target)
-  logMobileTerminalDiagnostic('activation-request', { operation, target: diagnosticTarget })
-  try {
-    const response = await request()
+  logMobileTerminalDiagnostic('activation-request', { terminal, target: diagnosticTarget })
+  const logResult = (response: RpcResponse) =>
     logMobileTerminalDiagnostic('activation-result', {
-      operation,
+      terminal,
       target: diagnosticTarget,
       ok: response.ok,
+      // Why: without the code a failed activation is indistinguishable from a rejected one.
       rpcCode: response.ok ? null : response.error.code
     })
+  try {
+    const response = await request()
+    logResult(response)
     return response
   } catch (error) {
     if (!(error instanceof LogicalClientCutoverError)) {
       logMobileTerminalDiagnostic('activation-error', {
-        operation,
+        terminal,
         target: diagnosticTarget,
         errorName: getMobileTerminalDiagnosticErrorName(error)
       })
       throw error
     }
     logMobileTerminalDiagnostic('activation-cutover-retry', {
-      operation,
+      terminal,
       target: diagnosticTarget
     })
     // Why: cutover rejects ambiguous in-flight work after the replacement is
     // active; these state-setting requests are idempotent and safe to repeat once.
     try {
       const response = await request()
-      logMobileTerminalDiagnostic('activation-result', {
-        operation,
-        target: diagnosticTarget,
-        ok: response.ok,
-        rpcCode: response.ok ? null : response.error.code
-      })
+      logResult(response)
       return response
     } catch (retryError) {
       logMobileTerminalDiagnostic('activation-error', {
-        operation,
+        terminal,
         target: diagnosticTarget,
         errorName: getMobileTerminalDiagnosticErrorName(retryError)
       })

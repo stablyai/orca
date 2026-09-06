@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc-client'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { useMobilePrShellOperations } from '../../platform/mobile-pr-shell-operations'
 import { parseGitHubPrReference } from '../../source-control/github-pr-link-parse'
 import { linkMobilePr } from '../../source-control/mobile-pr-link'
 
@@ -17,6 +17,7 @@ type Props = {
 // it can sit inline inside the PR sidebar's ScrollView, mirroring the compose
 // form fix — a BottomDrawer overlay nested in a ScrollView gets clipped.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
+  const shell = useMobilePrShellOperations()
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -32,16 +33,16 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
     try {
       const outcome = await linkMobilePr(client, worktreeId, parsed)
       if (outcome.ok) {
-        triggerSuccess()
+        shell.success()
         onLinked()
       } else {
-        triggerError()
+        shell.error()
         setError(outcome.error)
       }
     } finally {
       setSubmitting(false)
     }
-  }, [client, onLinked, parsed, submitting, worktreeId])
+  }, [client, onLinked, parsed, shell, submitting, worktreeId])
 
   return (
     <View>

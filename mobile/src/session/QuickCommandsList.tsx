@@ -27,6 +27,7 @@ type ListProps = {
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
+  onCopy?: (text: string) => Promise<unknown>
   onAdd: () => void
 }
 
@@ -43,6 +44,7 @@ export function QuickCommandsList({
   onLaunch,
   onEdit,
   onDelete,
+  onCopy,
   onAdd
 }: ListProps) {
   const hasVisible = repoCommands.length + globalCommands.length > 0
@@ -91,6 +93,7 @@ export function QuickCommandsList({
           onLaunch={onLaunch}
           onEdit={onEdit}
           onDelete={onDelete}
+          onCopy={onCopy}
           disabled={disabled}
         />
       ) : null}
@@ -102,6 +105,7 @@ export function QuickCommandsList({
           onLaunch={onLaunch}
           onEdit={onEdit}
           onDelete={onDelete}
+          onCopy={onCopy}
           disabled={disabled}
         />
       ) : null}
@@ -131,6 +135,7 @@ function QuickCommandGroup({
   onLaunch,
   onEdit,
   onDelete,
+  onCopy,
   disabled
 }: {
   label: string
@@ -138,6 +143,7 @@ function QuickCommandGroup({
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
+  onCopy?: (text: string) => Promise<unknown>
   disabled: boolean
 }) {
   return (
@@ -152,6 +158,7 @@ function QuickCommandGroup({
             onLaunch={onLaunch}
             onEdit={onEdit}
             onDelete={onDelete}
+            onCopy={onCopy}
             disabled={disabled}
           />
         ))}

@@ -9,6 +9,8 @@ on:
       - ready_for_review
     paths:
       - 'mobile/**'
+      - 'src/mobile-web/**'
+      - 'src/shared/mobile-web/**'
       # Why: the mobile terminal link parsers are conformance-tested against
       # these shared fixtures; desktop-side fixture edits must re-run this suite.
       - 'src/shared/terminal-file-link-conformance.ts'
@@ -80,6 +82,16 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      # Why advisory: package.json has defined this audit since the mobile knip
+      # config landed and no workflow ran it, so it starts at 101 unused files
+      # (88 under src/tasks). Blocking would wall off every mobile PR behind a
+      # cleanup nobody has scheduled; continue-on-error puts the count in the
+      # checks list instead. Flip it to blocking once the backlog is drained.
+      - name: Audit dead code (advisory)
+        continue-on-error: true
+        working-directory: .
+        run: pnpm run audit:dead-code:mobile
 
       - name: Check formatting
         run: pnpm format:check

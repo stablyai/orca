@@ -4,32 +4,22 @@ import {
   buildGitLabCheckSummary,
   useEffect
 } from './mobile-tasks-dependencies'
-import {
-  type DetailComment,
-  type GitHubAssignableUser,
-  type GitHubDetailCheck,
-  type GitHubDetailFile,
-  type GitHubPRReviewSummary,
-  type LinearIssue,
-  type TaskItem,
-  createLinearTask,
-  isSuccess
-} from './mobile-tasks-legacy-foundation'
+import { type TaskItem, createLinearTask } from './mobile-tasks-model'
 
 export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffectsModel) {
   const {
     actionItem,
-    client,
     detailRefreshSeq,
     setActionItem,
     setDetailError,
     setDetailLoading,
     setDetailPayload,
     setItems,
+    taskDetailOperations,
     tasksSupported
   } = model
   useEffect(() => {
-    if (!tasksSupported || !actionItem || !client) {
+    if (!tasksSupported || !actionItem || !taskDetailOperations) {
       setDetailPayload(null)
       setDetailLoading(false)
       setDetailError('')
@@ -43,106 +33,42 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
 
     const loadDetails = async (): Promise<void> => {
       if (actionItem.provider === 'github') {
-        const response = await client.sendRequest(
-          'github.workItemDetails',
-          {
-            repo: `id:${actionItem.source.repoId}`,
-            number: actionItem.source.number,
-            type: actionItem.source.type
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const details = response.result as {
-          body?: string
-          comments?: DetailComment[]
-          item?: {
-            labels?: string[]
-            reviewDecision?: string | null
-            reviewRequests?: GitHubAssignableUser[]
-            latestReviews?: GitHubPRReviewSummary[]
-          }
-          assignees?: string[]
-          headSha?: string
-          baseSha?: string
-          pullRequestId?: string
-          checks?: GitHubDetailCheck[]
-          files?: Array<{
-            path: string
-            oldPath?: string
-            status?: GitHubDetailFile['status']
-            additions?: number
-            deletions?: number
-            isBinary?: boolean
-            viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
-          }>
-        } | null
-        if (!details) {
-          throw new Error('Details not found')
-        }
+        const details = await taskDetailOperations.loadGitHub({
+          repoId: actionItem.source.repoId,
+          number: actionItem.source.number,
+          type: actionItem.source.type
+        })
         if (!stale) {
           setDetailPayload({
             provider: 'github',
-            body: details.body ?? '',
-            comments: details.comments ?? [],
-            labels: details.item?.labels ?? actionItem.source.labels,
-            assignees: details.assignees ?? [],
-            reviewDecision: details.item?.reviewDecision ?? actionItem.source.reviewDecision,
-            reviewRequests: details.item?.reviewRequests ?? actionItem.source.reviewRequests ?? [],
-            latestReviews: details.item?.latestReviews ?? actionItem.source.latestReviews ?? [],
+            ...details,
+            labels: details.labels ?? actionItem.source.labels,
+            reviewDecision: details.reviewDecision ?? actionItem.source.reviewDecision,
+            reviewRequests: details.reviewRequests ?? actionItem.source.reviewRequests ?? [],
+            latestReviews: details.latestReviews ?? actionItem.source.latestReviews ?? [],
             headSha: details.headSha,
             baseSha: details.baseSha,
             pullRequestId: details.pullRequestId,
-            checks: details.checks ?? [],
-            files: details.files ?? []
+            checks: details.checks,
+            files: details.files
           })
         }
         return
       }
 
       if (actionItem.provider === 'gitlab') {
-        const response = await client.sendRequest(
-          'gitlab.workItemDetails',
-          {
-            repo: `id:${actionItem.source.repoId}`,
-            iid: actionItem.source.number,
-            type: actionItem.source.type,
-            projectRef: actionItem.source.projectRef
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const details = response.result as {
-          body?: string
-          comments?: DetailComment[]
-          item?: { labels?: string[]; mergeable?: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN' }
-          assignees?: string[]
-          pipelineJobs?: Array<{
-            id?: number
-            name: string
-            stage: string
-            status: string
-            webUrl?: string | null
-            duration?: number | null
-          }>
-          reviewers?: unknown[]
-          approvalState?: { approvalsRequired: number | null; approvalsLeft: number | null }
-        } | null
-        if (!details) {
-          throw new Error('Details not found')
-        }
+        const details = await taskDetailOperations.loadGitLab({
+          repoId: actionItem.source.repoId,
+          number: actionItem.source.number,
+          type: actionItem.source.type,
+          projectRef: actionItem.source.projectRef,
+          targetId: actionItem.source.targetId
+        })
         if (!stale) {
           setDetailPayload({
             provider: 'gitlab',
-            body: details.body ?? '',
-            comments: details.comments ?? [],
-            labels: details.item?.labels ?? actionItem.source.labels,
-            assignees: details.assignees ?? [],
-            pipelineJobs: details.pipelineJobs ?? []
+            ...details,
+            labels: details.labels ?? actionItem.source.labels
           })
           const checksSummary = buildGitLabCheckSummary(details.pipelineJobs ?? [])
           const reviewDecision: Exclude<HostedReviewDecision, null> | undefined =
@@ -186,34 +112,11 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
         return
       }
 
-      const [issueResponse, commentsResponse] = await Promise.all([
-        client.sendRequest(
-          'linear.getIssue',
-          {
-            id: actionItem.source.id,
-            workspaceId: actionItem.source.workspaceId
-          },
-          { timeoutMs: 30_000 }
-        ),
-        client.sendRequest(
-          'linear.issueComments',
-          {
-            issueId: actionItem.source.id,
-            workspaceId: actionItem.source.workspaceId
-          },
-          { timeoutMs: 30_000 }
-        )
-      ])
-      if (!isSuccess(issueResponse)) {
-        throw new Error(issueResponse.error.message)
-      }
-      const issue = issueResponse.result as LinearIssue | null
-      const comments = isSuccess(commentsResponse)
-        ? ((commentsResponse.result as DetailComment[]) ?? [])
-        : []
-      if (!issue) {
-        throw new Error('Details not found')
-      }
+      const { issue, comments } = await taskDetailOperations.loadLinear({
+        issueId: actionItem.source.id,
+        workspaceId: actionItem.source.workspaceId,
+        targetId: actionItem.source.targetId
+      })
       if (!stale) {
         setDetailPayload({
           provider: 'linear',
@@ -256,8 +159,8 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
     return () => {
       stale = true
     }
-  }, [actionItem, client, detailRefreshSeq, tasksSupported])
-  return model
+  }, [actionItem, detailRefreshSeq, taskDetailOperations, tasksSupported])
+  return Object.assign(model, {})
 }
 
 export type ItemDetailLoadingModel = ReturnType<typeof useMobileTasksItemDetailLoading>

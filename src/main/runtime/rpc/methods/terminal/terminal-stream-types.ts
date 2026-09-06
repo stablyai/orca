@@ -68,6 +68,7 @@ export type TerminalMultiplexStream = {
   ackInFlightBytes: number
   ackWindowBytes: number
   supportsOutputPause: boolean
+  supportsQueryReply: boolean
   supportsWriteUnavailable: boolean
   outputPaused: boolean
   supportsDesktopViewportClaims: boolean

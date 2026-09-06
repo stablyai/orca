@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   canDockSessionPanel,
   nextActivePanel,
-  resolvePanelAction,
   panelRouteDescriptor,
+  panelRouteHref,
+  resolvePanelAction,
   shouldShowSessionHeaderChecksAction,
   type ActivePanel
 } from './session-panel-host'
@@ -132,5 +133,27 @@ describe('panelRouteDescriptor', () => {
       pathname: '/h/[hostId]/source-control/[worktreeId]',
       params: { tab: 'pr' }
     })
+  })
+})
+
+describe('panelRouteHref', () => {
+  it('builds an encoded Source Control SPA route', () => {
+    expect(
+      panelRouteHref('sourceControl', {
+        hostId: 'paired host',
+        worktreeId: 'workspace/id',
+        worktreeName: 'mobile rearch'
+      })
+    ).toBe('/h/paired%20host/source-control/workspace%2Fid?name=mobile+rearch&origin=session')
+  })
+
+  it('preserves Pull Request segment selection', () => {
+    expect(
+      panelRouteHref('pr', {
+        hostId: 'host',
+        worktreeId: 'workspace',
+        worktreeName: 'Orca'
+      })
+    ).toBe('/h/host/source-control/workspace?name=Orca&origin=session&tab=pr')
   })
 })

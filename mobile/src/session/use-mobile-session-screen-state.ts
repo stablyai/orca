@@ -25,13 +25,22 @@ import type {
 } from './mobile-session-route-types'
 import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
+import { useMobileKeyboardInset } from '../hooks/use-mobile-keyboard-inset'
+import type { HostSessionTabOperations } from './host-session-tab-operations'
+import { MobileSessionFileDocLifecycle } from './mobile-session-file-doc-lifecycle'
+import { MobileSessionMarkdownDocLifecycle } from './mobile-session-markdown-doc-lifecycle'
+import { TerminalSettingsModalHandoff } from './terminal-settings-modal-handoff'
+import { useMobileSessionMarkdownDrafts } from './use-mobile-session-markdown-drafts'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
-  const { worktreeId, hostId, initialCreateWarning } = scope
+  const { worktreeId, hostId, initialCreateWarning, sessionMarkdownOperations } = scope
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
   const sessionTabsRef = useRef<MobileSessionTab[]>([])
+  const [workspaceTransportState, setWorkspaceTransportState] = useState<
+    'available' | 'unavailable'
+  >('available')
   // Why: track the last applied (epoch, version) so a late older snapshot can't overwrite a newer one and resurrect closed tabs (session-tab-snapshot-gate).
   const appliedSnapshotMarkerRef = useRef<AppliedSnapshotMarker>({ epoch: null, version: -1 })
   const appliedSessionTabsRevisionRef = useRef(0)
@@ -69,7 +78,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const tabLayoutsRef = useRef<Map<string, { x: number; width: number }>>(new Map())
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
+  const markdownDocLifecycleRef = useRef(new MobileSessionMarkdownDocLifecycle())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
+  const fileDocLifecycleRef = useRef(new MobileSessionFileDocLifecycle())
   const [diffComments, setDiffComments] = useState<DiffComment[]>([])
   const diffCommentsRef = useRef<DiffComment[]>([])
   const [diffCommentBusy, setDiffCommentBusy] = useState(false)
@@ -78,6 +89,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [creating, setCreating] = useState(false)
   // Why: React state isn't a synchronous lock; this ref blocks a double-tap's second create in the same tick before `creating` re-renders.
   const creatingTerminalRef = useRef(false)
+  const pendingQuickCommandInputRef = useRef<
+    Map<string, { text: string; enter: false; successToast: string }>
+  >(new Map())
   const [creatingBrowser, setCreatingBrowser] = useState(false)
   const [creatingMarkdown, setCreatingMarkdown] = useState(false)
   const [createError, setCreateError] = useState('')
@@ -85,7 +99,9 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     createMobileSessionCreateWarningState(initialCreateWarning)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
-  const [showQuickCommands, setShowQuickCommands] = useState(false)
+  const [quickCommandsOpenFor, setQuickCommandsOpenFor] = useState<HostSessionTabOperations | null>(
+    null
+  )
   const [createTabAgentLoadState, setCreateTabAgentLoadState] =
     useState<MobileNewTabAgentLoadState>('idle')
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
@@ -97,19 +113,31 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     { type: 'markdown' }
   > | null>(null)
   const [leaveDrafts, setLeaveDrafts] = useState<DirtyMarkdownDraft[] | null>(null)
+  const {
+    markEdited: markMarkdownDraftEdited,
+    clearDraft: clearMarkdownDraft,
+    clearDrafts: clearMarkdownDrafts
+  } = useMobileSessionMarkdownDrafts({
+    workspaceId: worktreeId,
+    tabs: sessionTabs,
+    docs: markdownDocs,
+    setDocs: setMarkdownDocs,
+    operations: sessionMarkdownOperations
+  })
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
+  const terminalSettingsModalHandoffRef = useRef(new TerminalSettingsModalHandoff())
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<CustomKey | null>(null)
   const visibleBuiltInAccessoryKeys = useMemo(
     () => getVisibleTerminalAccessoryKeys(visibleBuiltInIds),
     [visibleBuiltInIds]
   )
   // Why: Expo SDK 55 edge-to-edge doesn't resize the window on IME open, so track keyboard height ourselves and lift the input without resizing the desktop PTY.
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
+  const keyboardHeight = useMobileKeyboardInset().height
   // Why: server-authoritative display mode per terminal, populated from subscribe responses.
   const [terminalModes, setTerminalModes] = useState<Map<string, MobileDisplayMode>>(new Map())
   const [terminalKeyboardMetrics, setTerminalKeyboardMetrics] = useState<
@@ -190,8 +218,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setCreateWarningState,
     showCreateTabDrawer,
     setShowCreateTabDrawer,
-    showQuickCommands,
-    setShowQuickCommands,
+    quickCommandsOpenFor,
+    setQuickCommandsOpenFor,
     createTabAgentLoadState,
     setCreateTabAgentLoadState,
     createTabAgentOptions,
@@ -217,7 +245,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setDeleteKeyTarget,
     visibleBuiltInAccessoryKeys,
     keyboardHeight,
-    setKeyboardHeight,
     terminalModes,
     setTerminalModes,
     terminalKeyboardMetrics,
@@ -234,7 +261,16 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setToastMessage,
     toastOpacityRef,
     toastHideTimerRef,
-    toastSeqRef
+    toastSeqRef,
+    workspaceTransportState,
+    setWorkspaceTransportState,
+    markdownDocLifecycleRef,
+    fileDocLifecycleRef,
+    pendingQuickCommandInputRef,
+    terminalSettingsModalHandoffRef,
+    markMarkdownDraftEdited,
+    clearMarkdownDraft,
+    clearMarkdownDrafts
   }
 }
 

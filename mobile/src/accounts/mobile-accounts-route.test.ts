@@ -7,11 +7,11 @@ import {
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
 
-const homeSource = readFileSync(new URL('../home/MobileHomeScreen.tsx', import.meta.url), 'utf8')
-const accountCardsSource = readFileSync(
-  new URL('../home/MobileHomeAccountUsageCards.tsx', import.meta.url),
-  'utf8'
-)
+const homeSource = [
+  readFileSync(new URL('../home/MobileHomeScreen.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('../home/MobileHomeListFooter.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('../home/MobileHomeAccountUsageCards.tsx', import.meta.url), 'utf8')
+].join('\n')
 
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
@@ -86,9 +86,17 @@ describe('mobile accounts route', () => {
     })
   })
 
-  it('opens the home account-usage card through the cold-navigator-safe transition', () => {
-    expect(homeSource).toContain('onOpenAccounts={openMobileAccounts}')
-    expect(accountCardsSource).toContain('props.onOpen(host.id)')
-    expect(accountCardsSource).not.toContain('/accounts`')
+  it('opens the home account-usage card through the coordinated host-target opener', () => {
+    const start = homeSource.indexOf('Account usage')
+
+    // Assert the marker first: a renamed banner would otherwise slice garbage and report a
+    // missing call instead of the real cause.
+    expect(start).toBeGreaterThanOrEqual(0)
+
+    expect(homeSource).toContain(
+      "import { useOpenMobileHostTarget } from '../mobile-web/use-open-mobile-host-target'"
+    )
+    expect(homeSource).toContain("openMobileHostTarget(hostId, { kind: 'accounts' })")
+    expect(homeSource).not.toContain('/accounts`')
   })
 })

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalRecordsByCurrentOrder,
@@ -18,6 +18,9 @@ import type { MobileSessionTerminalListModel } from './use-mobile-session-termin
 
 export function useMobileSessionTabApplication(scope: MobileSessionTerminalListModel) {
   const {
+    hostId,
+    worktreeId,
+    sessionTabOperations,
     setTerminals,
     terminalsRef,
     setSessionTabs,
@@ -43,8 +46,20 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     initialSessionAutoCreateRef,
     unsubscribeTerminal,
     subscribeToTerminal,
-    lastKnownTerminalCountRef
+    lastKnownTerminalCountRef,
+    setFileDocs,
+    setMarkdownDocs,
+    fileDocLifecycleRef,
+    markdownDocLifecycleRef,
+    setWorkspaceTransportState
   } = scope
+  const activationGenerationRef = useRef(0)
+  useLayoutEffect(() => {
+    activationGenerationRef.current += 1
+    return () => {
+      activationGenerationRef.current += 1
+    }
+  }, [hostId, worktreeId, sessionTabOperations])
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
@@ -53,6 +68,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
         return { accepted: false }
       }
       const applicationRevision = ++appliedSessionTabsRevisionRef.current
+      setWorkspaceTransportState(result.workspaceTransportState ?? 'available')
       let nextTabs = applyClosedTabTombstones(
         result.tabs,
         closedTabTombstonesRef.current,
@@ -78,6 +94,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       if (orphanedDraftTabs.length > 0) {
         nextTabs = [...orphanedDraftTabs, ...nextTabs]
       }
+      markdownDocLifecycleRef.current.reconcile(nextTabs, setMarkdownDocs)
+      fileDocLifecycleRef.current.reconcile(nextTabs, setFileDocs)
       reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
         retainMissingSurfaces: result.tabs.length === 0
       })
@@ -210,8 +228,25 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     },
     [defaultTerminalHandlesToLiveInput, subscribeToTerminal, unsubscribeTerminal]
   )
+  const activateSessionTab = useCallback(
+    async (tabId: string, leafId?: string) => {
+      if (!sessionTabOperations) {
+        return false
+      }
+      const generation = activationGenerationRef.current
+      const snapshot = await sessionTabOperations.activate(worktreeId, tabId, leafId)
+      // Expo reuses the route; an old activation cannot publish into its replacement workspace.
+      if (generation !== activationGenerationRef.current) {
+        return false
+      }
+      applySessionTabs(snapshot)
+      return true
+    },
+    [applySessionTabs, sessionTabOperations, worktreeId]
+  )
   return {
-    applySessionTabs
+    applySessionTabs,
+    activateSessionTab
   }
 }
 

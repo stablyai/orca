@@ -1,5 +1,6 @@
-import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
+import type { RpcStreamSubscribeOptions } from './rpc-client-stream-registry'
+import type { TerminalStreamFrame } from './terminal-stream-protocol'
 import type {
   ConnectionLogSink,
   ConnectionState,
@@ -15,10 +16,6 @@ export type SendRequestOptions = {
   failWhenDisconnected?: boolean
 }
 
-type SubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-}
-
 type StreamingListener = (result: unknown) => void
 
 export type RpcClient = {
@@ -31,12 +28,14 @@ export type RpcClient = {
     method: string,
     params: unknown,
     onData: StreamingListener,
-    options?: SubscribeOptions
+    options?: RpcStreamSubscribeOptions
   ) => () => void
   updateTerminalSubscriptionViewport: (
     terminal: string,
     viewport: { cols: number; rows: number }
   ) => void
+  // Why: the hosted bridge multiplexes terminal bytes over one binary channel.
+  sendTerminalBinaryFrame: (frame: TerminalStreamFrame) => boolean
   getState: () => ConnectionState
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null

@@ -5,26 +5,14 @@ import {
 } from './mobile-session-route-source-family.test-support'
 
 const source = readMobileSessionRouteSourceFamily()
-const startupSource = readMobileSessionRouteSource('./use-mobile-session-startup.ts')
-const tabReconciliationSource = readMobileSessionRouteSource(
-  './use-mobile-session-tab-reconciliation.ts'
-)
-const bulkCloseSource = readMobileSessionRouteSource('./use-mobile-session-bulk-close.ts')
-const presentationSource = readMobileSessionRouteSource('./use-mobile-session-presentation.ts')
-const tabSwitchingSource = readMobileSessionRouteSource('./use-mobile-session-tab-switching.ts')
-const sheetsSource = readMobileSessionRouteSource('./MobileSessionSheets.tsx')
 const reconciliationHookSource = readMobileSessionRouteSource(
   './use-mobile-session-tabs-reconciliation.ts'
 )
 const terminalInventoryRecoverySource = readMobileSessionRouteSource(
   './use-mobile-terminal-inventory-recovery.ts'
 )
-const terminalSubscriptionSource = readMobileSessionRouteSource(
-  './use-mobile-session-terminal-subscription.ts'
-)
-const terminalListSource = readMobileSessionRouteSource('./use-mobile-session-terminal-list.ts')
-const tabReconciliationOwnerSource = readMobileSessionRouteSource(
-  './use-mobile-session-tab-reconciliation.ts'
+const terminalStreamPresentationSource = readMobileSessionRouteSource(
+  './host-session-terminal-stream-presentation.ts'
 )
 const autoCreateHookSource = readMobileSessionRouteSource(
   './use-initial-session-terminal-autocreate.ts'
@@ -38,73 +26,50 @@ const terminalSubscriptionSourceForIdentity = readMobileSessionRouteSource(
 )
 const lifecycleSource = readMobileSessionRouteSource('./use-mobile-session-lifecycle.ts')
 
-function sliceBetween(startPattern: string, endPattern: string, targetSource = source): string {
-  const start = targetSource.indexOf(startPattern)
+function sliceBetween(startPattern: string, endPattern: string): string {
+  const start = source.indexOf(startPattern)
   expect(start).toBeGreaterThanOrEqual(0)
-  const end = targetSource.indexOf(endPattern, start)
+  const end = source.indexOf(endPattern, start)
   expect(end).toBeGreaterThan(start)
-  return targetSource.slice(start, end)
+  return source.slice(start, end)
 }
 
 describe('mobile session startup', () => {
-  it('auto-creates one terminal for a newly created empty session', () => {
-    expect(source).toContain('useWorktreeSessionTabsLoaded(worktreeId)')
+  it('auto-creates one terminal for an initially empty connected session', () => {
+    expect(source).toContain(
+      'const initialSessionAutoCreateRef = useRef(createInitialSessionAutoCreateState())'
+    )
     expect(source).toContain(
       'initialSessionAutoCreateRef.current = createInitialSessionAutoCreateState()'
     )
-
-    const autoCreateCall = sliceBetween(
-      'useInitialSessionTerminalAutoCreate({',
-      'const connectionVerdict =',
-      presentationSource
-    )
-    expect(autoCreateCall).toContain('stateRef: initialSessionAutoCreateRef')
-    expect(autoCreateCall).toContain(
-      'consumeCreationRoute: () => router.setParams({ created: undefined })'
-    )
-    expect(autoCreateCall).toContain("newlyCreatedWorkspace: created === '1'")
-    expect(autoCreateCall).toContain('visibleTabCount: visibleTabs.length')
-    expect(autoCreateCall).toContain('createTerminal: () => void handleCreateTerminal()')
-
-    expect(autoCreateHookSource).toContain('shouldAutoCreateInitialSessionTerminal({')
-    expect(autoCreateHookSource).toContain('stateRef.current.autoCreatedForWorktree === worktreeId')
+    expect(source).toContain('useInitialSessionTerminalAutoCreate({')
     expect(autoCreateHookSource).toContain('stateRef.current.autoCreatedForWorktree = worktreeId')
-    expect(autoCreateHookSource).toContain("connState === 'connected'")
-    expect(autoCreateHookSource).toContain('(visibleTabCount > 0 || activeHandle !== null)')
-    // Why: both callbacks are re-created every render, so the effect must reach them
-    // through useEffectEvent rather than deps or a render-time ref write.
-    expect(autoCreateHookSource).toContain('useEffectEvent(args.consumeCreationRoute)')
-    expect(autoCreateHookSource).toContain('useEffectEvent(args.createTerminal)')
-    expect(autoCreateHookSource).toContain('consumeCreationRoute()')
     expect(autoCreateHookSource).toContain('createTerminal()')
-  })
-
-  it('arms the auto-create only until the route has published a tab (#9717)', () => {
-    // Emptiness after a populated list is a close, not a cold hydrate.
+    expect(source).toContain("setCreateError('')")
+    expect(source).toContain('void handleCreateTerminal()')
     expect(source).toContain(
-      'initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0'
+      'const hostedAdapterCreate = !client && sessionTabOperations && !options'
     )
-
-    const autoCreateCall = sliceBetween(
-      'useInitialSessionTerminalAutoCreate({',
-      'const connectionVerdict =',
-      presentationSource
-    )
-    expect(autoCreateCall).toContain('stateRef: initialSessionAutoCreateRef')
-    expect(autoCreateHookSource).toContain('sawSessionTabs: stateRef.current.sawSessionTabs')
+    expect(source).toContain('sessionTabOperations.createAgent(worktreeId, agent)')
+    expect(source).toContain('sessionTabOperations.createBlank(worktreeId)')
   })
 
   it('delegates stream ownership while retaining degraded polling and a certified sweep', () => {
     expect(source).toContain('useMobileSessionTabsReconciliation<')
     expect(source).toContain('const applicationRevision = ++appliedSessionTabsRevisionRef.current')
     expect(source).toContain('getApplicationRevision: getSessionTabsApplicationRevision')
+    expect(source).toContain('sessionTabOperations,')
     expect(source).not.toContain("client.subscribe(\n      'session.tabs.subscribe'")
-    expect(reconciliationHookSource).toContain("client.subscribe(\n      'session.tabs.subscribe'")
-    expect(reconciliationHookSource).toContain("if (AppState.currentState !== 'active')")
-    expect(reconciliationHookSource).toContain('suspendTerminalInventoryRecovery(true)')
+    expect(reconciliationHookSource).toContain(
+      "directClient.subscribe(\n      'session.tabs.subscribe'"
+    )
+    expect(reconciliationHookSource).toContain('sessionTabOperations.snapshot(worktreeId)')
+    expect(reconciliationHookSource).toContain('sessionTabOperations.subscribe(')
+    expect(reconciliationHookSource).toContain(
+      "if (AppState.currentState !== 'active') {\n          suspendTerminalInventoryRecovery(true)"
+    )
     expect(reconciliationHookSource).toContain('controller.poll()')
-    expect(reconciliationHookSource).toContain('tabsRequest !== null')
-    expect(reconciliationHookSource).toContain('void refreshTerminalInventory()')
+    expect(reconciliationHookSource).toContain('refreshTerminalInventory()')
     expect(reconciliationHookSource).toContain("AppState.addEventListener('change'")
     expect(reconciliationHookSource).toContain('const interval = setInterval(')
     expect(reconciliationHookSource).toContain('RECONCILIATION_INTERVAL_MS = 2000')
@@ -115,30 +80,38 @@ describe('mobile session startup', () => {
   })
 
   it('binds terminal identity to the shared client before subscription effects run', () => {
-    expect(foundationSource).toContain('const { client, clientId, state: connState }')
+    // Why: the hosted page has no native client, so identity readiness is a flag rather than a non-null id.
+    expect(foundationSource).toContain(
+      'const clientId = nativeHostBinding ? nativeHost.clientId : null'
+    )
+    expect(foundationSource).toContain(
+      'const hostClientIdentityReady = !nativeHostBinding || clientId !== null'
+    )
     expect(foundationSource).toContain('    clientId,')
     expect(terminalRuntimeSource).toContain('useRef<string | null>(clientId)')
     expect(terminalRuntimeSource).toContain('deviceTokenRef.current = clientId')
-    expect(terminalRuntimeSource).toContain('inputGate.canSend && clientId !== null')
-    expect(terminalSubscriptionSourceForIdentity).toContain('if (clientId === null)')
+    expect(terminalRuntimeSource).toContain(
+      'inputGate.canSend && sessionTerminalOperations != null && hostClientIdentityReady'
+    )
+    expect(terminalSubscriptionSourceForIdentity).toContain('if (!hostClientIdentityReady)')
     expect(terminalSubscriptionSourceForIdentity).toContain(
-      "client: { id: clientId, type: 'mobile' as const }"
+      'terminalId: handle,\n          clientId,'
     )
     expect(lifecycleSource).not.toContain('deviceTokenRef.current = host.deviceToken')
   })
 
   it('confirms terminal stream teardown with a committed inventory-recovery bridge', () => {
-    expect(terminalSubscriptionSource).toContain(
+    expect(terminalStreamPresentationSource).toContain(
       "if (data.type === 'end' || data.type === 'error')"
     )
-    expect(terminalSubscriptionSource).toContain('signalTerminalInventoryRecovery()')
+    expect(source).toContain('signalTerminalInventoryRecovery()')
     expect(terminalInventoryRecoverySource).toContain('actionRef.current = recoveryAction')
     expect(terminalInventoryRecoverySource).toContain('pendingSignalScopeRef.current = scopeKey')
     expect(terminalInventoryRecoverySource).toContain(
       'committedScope !== null && committedScope !== scopeKey'
     )
-    expect(terminalListSource).toContain('return terminalInventoryRequest.activate()')
-    expect(terminalListSource).toContain('if (!isCurrent() || !response.ok)')
+    expect(source).toContain('return terminalInventoryRequest.activate()')
+    expect(source).toContain('if (!isCurrent() || !response.ok)')
     expect(terminalInventoryRecoverySource).toContain(
       'TERMINAL_INVENTORY_CONFIRMATION_DELAY_MS = 750'
     )
@@ -150,8 +123,7 @@ describe('mobile session startup', () => {
   it('loads session tabs without waiting for desktop activation', () => {
     const startupEffect = sliceBetween(
       'void (async () => {',
-      'return () => {\n      disposed = true',
-      startupSource
+      'return () => {\n      disposed = true'
     )
 
     expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
@@ -167,26 +139,24 @@ describe('mobile session startup', () => {
     expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
   })
 
-  it('fails runtime capability gates closed before probing a replacement client', () => {
+  it('fails runtime capability gates closed while probing a replacement client', () => {
     const capabilityEffect = sliceBetween(
-      'const hostQueryReplyInputSupportedRef = useRef(false)',
-      'return {\n    consumeAcceptedSessionTabs',
-      tabReconciliationSource
+      'const [runtimeCapabilitySnapshot, setRuntimeCapabilitySnapshot]',
+      '// Why: the shared client owns authenticated identity'
     )
-    const probeStart = capabilityEffect.indexOf('startRuntimeCapabilityProbe(client,')
+    const probeStart = capabilityEffect.indexOf('startRuntimeCapabilityRead(')
 
     expect(probeStart).toBeGreaterThanOrEqual(0)
-    for (const reset of [
-      'setBrowserScreencastSupported(null)',
-      'setAgentSessionHistorySupported(null)',
-      'setQuickCommandsSupported(null)',
-      'setShowQuickCommands(false)',
+    expect(capabilityEffect).toContain('sessionTabOperations.runtimeCapabilities()')
+    expect(capabilityEffect).toContain(
+      "connState === 'connected' && runtimeCapabilitySnapshot?.operations === sessionTabOperations"
+    )
+    expect(capabilityEffect).toContain('setRuntimeCapabilitySnapshot({')
+    const resetIndex = capabilityEffect.lastIndexOf(
       'hostQueryReplyInputSupportedRef.current = false'
-    ]) {
-      const resetIndex = capabilityEffect.lastIndexOf(reset)
-      expect(resetIndex).toBeGreaterThanOrEqual(0)
-      expect(resetIndex).toBeLessThan(probeStart)
-    }
+    )
+    expect(resetIndex).toBeGreaterThanOrEqual(0)
+    expect(resetIndex).toBeLessThan(probeStart)
   })
 
   it('activates an already-selected pending terminal tab after hydration', () => {
@@ -196,20 +166,14 @@ describe('mobile session startup', () => {
     expect(source).toContain('pendingTerminalActivationAttemptRef.current = null')
 
     const pendingActivationEffect = sliceBetween(
-      "if (!client || connState !== 'connected' || !activePendingTerminalTab) {",
-      'return {\n    bulkCloseActions',
-      bulkCloseSource
+      "if (!sessionTabOperations || connState !== 'connected' || !activePendingTerminalTab) {",
+      'const showLoadingState ='
     )
     expect(pendingActivationEffect).toContain(
       'pendingTerminalActivationAttemptRef.current === activationKey'
     )
-    expect(pendingActivationEffect).toContain('activateMobileSessionTab(client,')
-    expect(pendingActivationEffect).toContain('tabId: activePendingTerminalTab.id')
-    expect(pendingActivationEffect).toContain('leafId: activePendingTerminalTab.leafId')
-    expect(pendingActivationEffect).toContain('notifyClients: false')
-    expect(pendingActivationEffect).toContain("navigation: 'caller'")
     expect(pendingActivationEffect).toContain(
-      'applySessionTabs((response as RpcSuccess).result as SessionTabsResult)'
+      'activateSessionTab(activePendingTerminalTab.id, activePendingTerminalTab.leafId)'
     )
     expect(pendingActivationEffect).toContain('scheduleDelayedAction(() => void fetchSessionTabs()')
   })
@@ -217,32 +181,30 @@ describe('mobile session startup', () => {
   it('keeps ready terminal taps local while publishing caller selection', () => {
     const readyTerminalSwitch = sliceBetween(
       'const switchTab = useCallback(',
-      'const switchSessionTab = useCallback(',
-      tabSwitchingSource
+      'const switchSessionTab = useCallback('
     )
 
     expect(readyTerminalSwitch).not.toContain('focusMobileTerminal(client, handle)')
-    expect(readyTerminalSwitch).toContain('activateMobileSessionTab(client,')
-    expect(readyTerminalSwitch).toContain('notifyClients: false')
-    expect(readyTerminalSwitch).toContain("navigation: 'caller'")
+    expect(readyTerminalSwitch).toContain('activateSessionTab(matchingTab.id)')
   })
 
-  it('keeps background and pending session-tab activation local to the phone', () => {
-    const activationRequests = source.split('activateMobileSessionTab(client,').slice(1)
+  it('opens the unchanged setup sheet for synchronous dictation setup failures', () => {
+    const startDictation = sliceBetween(
+      'const startDictation = useCallback(',
+      'const cancelDictation = useCallback('
+    )
 
-    expect(activationRequests).toHaveLength(4)
-    for (const request of activationRequests) {
-      expect(request.slice(0, request.indexOf('})'))).toContain('notifyClients: false')
-      expect(request.slice(0, request.indexOf('})'))).toContain("navigation: 'caller'")
-    }
+    expect(startDictation).toContain('isDictationSetupRequiredError(message)')
+    expect(startDictation).toContain('setShowDictationSetup(true)')
+  })
+
+  it('routes every session-tab activation through the named platform boundary', () => {
+    expect(source.match(/activateSessionTab\(/g)).toHaveLength(4)
+    expect(source).not.toContain("sendRequest('session.tabs.activate'")
   })
 
   it('keeps dynamic agent rows above fixed New Tab actions', () => {
-    const newTabActions = sliceBetween(
-      'title="New Tab"',
-      'onClose={() => setShowCreateTabDrawer',
-      sheetsSource
-    )
+    const newTabActions = sliceBetween('title="New Tab"', 'onClose={() => setShowCreateTabDrawer')
 
     expect(newTabActions.indexOf('...createTabAgentActions')).toBeLessThan(
       newTabActions.indexOf("label: 'Terminal'")
@@ -253,6 +215,7 @@ describe('mobile session startup', () => {
     expect(newTabActions.indexOf("label: 'Browser'")).toBeLessThan(
       newTabActions.indexOf("label: 'Markdown Note'")
     )
+    expect(newTabActions).toContain("label: 'Browser',\n                  closeBeforePress: true")
   })
 
   it('wires pending-handle recovery through its bounded context (STA-4256)', () => {
@@ -262,8 +225,7 @@ describe('mobile session startup', () => {
     )
     const recoveryContext = sliceBetween(
       'const pendingTerminalRecoveryContextCache = useMemo(',
-      'const sessionTabsFetchReporting',
-      tabReconciliationOwnerSource
+      'const sessionTabsFetchReporting'
     )
 
     const tabsRefWrite = 'sessionTabsRef.current = nextTabs'

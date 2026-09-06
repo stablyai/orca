@@ -28,7 +28,11 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
             ? 'No GitLab tasks'
             : 'No Linear tasks'
   const isGithubProjectSearch = provider === 'github' && githubMode === 'project'
-  return Object.assign(model, { headerVerdict, emptyLabel, isGithubProjectSearch })
+  return Object.assign(model, {
+    emptyLabel,
+    headerVerdict,
+    isGithubProjectSearch
+  })
 }
 
 export type ConnectionPresentationModel = ReturnType<typeof useMobileTasksConnectionPresentation>

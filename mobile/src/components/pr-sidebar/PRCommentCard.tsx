@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { Image, Linking, Pressable, Text, View } from 'react-native'
+import { Image, Pressable, Text, View } from 'react-native'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
 import type {
   GitHubReaction,
@@ -7,6 +7,7 @@ import type {
   PRComment
 } from '../../../../src/shared/github/comment-types'
 import { colors } from '../../theme/mobile-theme'
+import { useMobilePrShellOperations } from '../../platform/mobile-pr-shell-operations'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { CommentMarkdown } from './CommentMarkdown'
@@ -74,6 +75,7 @@ export const PRCommentCard = memo(function PRCommentCard({
   actions?: PRCommentCardActions
   now: number
 }) {
+  const shell = useMobilePrShellOperations()
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -140,7 +142,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         {comment.url ? (
           <Pressable
             style={styles.openButton}
-            onPress={() => void Linking.openURL(comment.url).catch(() => {})}
+            onPress={() => void shell.openExternal(comment.url).catch(() => {})}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Open comment on GitHub"

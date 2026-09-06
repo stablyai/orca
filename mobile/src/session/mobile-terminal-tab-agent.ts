@@ -18,7 +18,7 @@ import type { MobileSessionTab } from './mobile-session-route-types'
 type MobileTerminalTabAgentIdentity = {
   title: string
   agentStatus?: { agentType?: AgentStatusEntry['agentType'] | null } | null
-  launchAgent?: TuiAgent | null
+  launchAgent?: TuiAgent | string | null
 }
 
 /** Agent identity Orca owns, excluding the display-only title fallback. */

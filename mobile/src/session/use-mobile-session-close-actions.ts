@@ -28,10 +28,20 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     scheduleDelayedAction,
     unsubscribeTerminal,
     subscribeToTerminal,
-    fetchTerminals
+    fetchTerminals,
+    markdownDocsRef,
+    markdownSaveInFlightRef,
+    markdownSaveSeqRef,
+    sessionTabOperations,
+    sessionTerminalOperations,
+    setFileDocs,
+    setMarkdownDocs,
+    clearMarkdownDraft,
+    fileDocLifecycleRef,
+    markdownDocLifecycleRef
   } = scope
   async function handleRenameTerminal(value: string) {
-    if (!client || !renameTarget) {
+    if (!sessionTerminalOperations || !renameTarget) {
       return
     }
     const target = renameTarget
@@ -39,11 +49,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
 
     try {
       const title = value.trim()
-      const response = await client.sendRequest('terminal.rename', {
-        terminal: target.handle,
-        title
-      })
-      if (response.ok) {
+      if (await sessionTerminalOperations.rename(target.handle, title)) {
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
             terminal.handle === target.handle
@@ -53,7 +59,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           terminalsRef.current = next
           return next
         })
-        scheduleDelayedAction(() => void fetchTerminals(), 300)
+        if (client) {
+          scheduleDelayedAction(() => void fetchTerminals(), 300)
+        }
       }
     } catch {
       // Rename failed — refresh will restore the server title.
@@ -93,18 +101,12 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
   }
 
   async function handleCloseSessionTab(tab: MobileSessionTab) {
-    if (!client) {
+    if (!sessionTabOperations) {
       return
     }
     try {
-      const response = await client.sendRequest('session.tabs.close', {
-        worktree: `id:${worktreeId}`,
-        tabId: tab.id,
-        // Why: a tapped tab close is explicit user intent; older hosts strip
-        // the unknown field and keep their legacy behavior.
-        reason: 'user'
-      })
-      if (response.ok) {
+      const response = await sessionTabOperations.close(worktreeId, tab.id)
+      if (response.outcome === 'closed') {
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
@@ -116,6 +118,18 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           terminalRefs.current.delete(terminalHandle)
           initializedHandlesRef.current.delete(terminalHandle)
           clearTerminalLiveInputDefault(terminalHandle)
+        }
+        if (tab.type === 'file') {
+          fileDocLifecycleRef.current.close(tab.id, setFileDocs)
+        }
+        if (tab.type === 'markdown') {
+          // Draft persistence must not delay reconciliation of an acknowledged close.
+          void clearMarkdownDraft(tab).catch(() => {})
+          const nextDocs = markdownDocLifecycleRef.current.close(tab.id, markdownDocsRef.current)
+          markdownDocsRef.current = nextDocs
+          setMarkdownDocs(nextDocs)
+          markdownSaveSeqRef.current.delete(tab.id)
+          markdownSaveInFlightRef.current.delete(tab.id)
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)

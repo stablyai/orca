@@ -1,20 +1,31 @@
 # Orca Mobile
 
-React Native companion app for Orca. Monitor worktrees, view terminal output, and send commands from your phone.
+React Native/Expo companion app for Orca Desktop. Pairing, encrypted
+connectivity, device capabilities, recovery, settings, and diagnostics remain
+native. Ordinary release builds preserve the existing native workspace UI. A
+dedicated hybrid release renders that same UI through React Native Web from a
+verified package shipped with each paired Desktop.
 
-Local development uses two processes:
+This is one shared UI, not a replacement web implementation. Read the
+[hybrid architecture reference](../docs/reference/mobile-hybrid-webview-architecture.md)
+before changing package delivery, hosted adapters, the native bridge, or
+recovery.
 
-- Orca desktop/Electron from the repo root. This hosts the mobile WebSocket RPC server on port `6768`.
-- Expo Metro from `mobile/`. This serves the React Native app on port `8081`.
+Local development normally uses:
 
-Unless a command says otherwise, run mobile app commands from the `mobile/` directory.
+- Orca Desktop/Electron from the repository root. It hosts the authenticated
+  mobile RPC server on port `6768` and serves `out/mobile-web-rnw`.
+- Expo Metro from `mobile/`. It serves the native application on port `8081`.
+
+Unless a command says otherwise, run mobile commands from `mobile/`.
 
 ## Prerequisites
 
 - Node.js 24+
 - pnpm
 - Xcode and/or Android Studio tooling for simulator or device builds
-- Expo Go on your phone, or a development client build when native modules are needed
+- A development-client build. The hybrid shell uses custom native modules and
+  cannot be validated in Expo Go.
 - Phone and desktop on the same LAN when testing a physical phone
 
 ## Start Desktop Orca
@@ -26,13 +37,16 @@ pnpm install
 pnpm dev
 ```
 
-Confirm the mobile RPC server is listening:
-
-```bash
-lsof -nP -iTCP:6768 -sTCP:LISTEN
-```
+Confirm **Settings → Mobile** shows the pairing QR and companion server state.
 
 Restart `pnpm dev` after changing Electron main-process code. Metro hot reload only applies to the mobile JavaScript bundle.
+
+Build and verify the hosted package after changing shared workspace UI, hosted
+adapters, or package contracts:
+
+```bash
+pnpm build:mobile-web-rnw
+```
 
 ## Start The Mobile App
 
@@ -42,9 +56,7 @@ pnpm install
 pnpm start
 ```
 
-Scan the Expo QR code with your phone's camera on iOS, or Expo Go on Android.
-
-For a native dev-client build:
+For a native development-client build:
 
 ```bash
 pnpm exec expo run:android
@@ -54,56 +66,120 @@ pnpm start --dev-client
 
 ## Pair With Desktop Orca
 
-1. Open Orca desktop.
-2. Go to Settings > Mobile.
-3. Scan the pairing QR code from the mobile app.
+1. Open Orca Desktop and go to **Settings → Mobile**.
+2. Open the mobile pairing scanner.
+3. Scan the QR code displayed by Desktop.
 4. Confirm the mobile host endpoint is `ws://<desktop-ip>:6768`.
 
 For the Android emulator, use `ws://10.0.2.2:6768`. For a physical phone, use the desktop LAN IP, for example `ws://192.168.0.179:6768`.
 
 If the phone has a stale host entry, remove it from the app and pair again.
 
+The hybrid package travels through this authenticated encrypted connection. It
+is not loaded from an HTTP development server, and pairing credentials must
+never be placed in a hosted document URL or support report.
+
 ## Development Paths
 
-### Android Phone
+### Android
 
-1. Install Expo Go from Google Play
-2. Run `pnpm start`, scan QR with Expo Go
-3. For native modules: `pnpm exec expo run:android`
-4. Run with `pnpm start --dev-client`
+1. Run `pnpm exec expo run:android`.
+2. Run `pnpm start --dev-client`.
+3. Pair with `ws://10.0.2.2:6768` in the Android emulator or the Desktop LAN
+   address on a physical phone.
 
 ### iOS Simulator
 
-1. Install Xcode from the App Store
-2. Run `pnpm start --ios` to open in iOS Simulator
-
-## Physical Phone Debugging
-
-The phone can be inspected through the connected device tooling:
+The repository launcher starts Metro, creates an isolated paired Desktop
+runtime, registers the simulator with Orca, and opens the development client:
 
 ```bash
-orca snapshot --json
-orca click --element @e3 --json
-orca fill --element @e1 --value "ls" --json
-orca screenshot --json
+pnpm start:emulator -- --device "iPhone 17 Pro" --wait-for-ready
 ```
 
-Use `snapshot` first to find the current element refs, then click/fill those refs. After mobile file edits, Metro usually hot reloads automatically, but navigating out of and back into the session screen can be useful because it re-runs `terminal.subscribe`.
+The launcher owns its temporary user-data directory; do not repeat
+`ORCA_DEV_USER_DATA_PATH` or `ORCA_USER_DATA_PATH` prefixes manually. Control
+the registered simulator through Orca:
+
+```bash
+orca emulator list --json
+orca emulator attach "iPhone 17 Pro" --json
+orca emulator ax --json
+orca emulator tap 0.5 0.7 --json
+```
+
+After mobile edits, Metro usually reloads the native route. Rebuild
+`out/mobile-web-rnw` before checking hosted package identity or Desktop
+delivery. Native module changes require a fresh development-client build.
+
+## Shared UI Development
+
+Workspace presentation lives in the existing routes under `app/` and
+components under `src/`. `host-web-app/` is a small React Native Web entry graph
+that imports those screens and supplies hosted operation adapters.
+
+- Change the existing screen once; do not copy it into DOM-only JSX.
+- Keep native/hosted differences behind concrete platform modules or named
+  operation adapters.
+- Treat the shared `app/h/` screens as the behavior oracle. They remain source
+  modules for the hosted package, but the native shell no longer exposes them
+  as workspace destinations.
+- Test the hosted route and the relevant shared presentation modules when a
+  screen changes.
+
+Host, session, task, account, onboarding, notification, and cold-resume entry
+follow the selected mobile architecture. Ordinary release builds default to
+the native routes; a hybrid TestFlight/APK opts in at build time:
+
+```bash
+EXPO_PUBLIC_ORCA_MOBILE_ARCHITECTURE=hybrid pnpm exec expo run:ios
+EXPO_PUBLIC_ORCA_MOBILE_ARCHITECTURE=hybrid pnpm exec expo run:android
+```
+
+`EXPO_PUBLIC_ORCA_MOBILE_ARCHITECTURE=native` always selects the native routes.
+Leaving it unset is **not** the same everywhere: a release build defaults to
+native, but a development build defaults to hybrid so the hosted journeys and
+the native baselines share one Metro bundle. Set it to `native` explicitly to
+exercise the native app from a dev build:
+
+```bash
+EXPO_PUBLIC_ORCA_MOBILE_ARCHITECTURE=native pnpm exec expo run:ios
+```
+
+The development-only `EXPO_PUBLIC_ORCA_E2E_MOBILE_NATIVE_BASELINE=1` override
+also selects native routes, for parity captures.
+
+## Package Build
+
+From the repository root:
+
+```bash
+pnpm build:mobile-web-rnw
+```
+
+This exports `mobile/host-web-app/`, packages content-addressed assets into
+`out/mobile-web-rnw`, writes the canonical manifest, and verifies hashes, CSP,
+source boundaries, and bundle budgets. `build:desktop` and `build:release`
+include this step, and Electron Builder copies the verified tree to the
+Desktop resources directory.
 
 ## Terminal Streaming Repro Without A Phone
 
-Use this when terminal output does not render on device and you need to split server streaming bugs from WebView/UI bugs:
+Use this when terminal output does not render on device and you need to split
+server streaming bugs from WebView/UI bugs. Set `ORCA_MOBILE_WS_URL` to the
+Desktop endpoint, such as `ws://127.0.0.1:6768`, in the command environment,
+then run:
 
 ```bash
 cd mobile
-ORCA_MOBILE_WS_URL=ws://127.0.0.1:6768 pnpm exec tsx scripts/test-subscribe.ts <deviceToken> <serverPublicKeyB64>
+pnpm exec tsx scripts/test-subscribe.ts <deviceToken> <serverPublicKeyB64>
 ```
 
 You can pass a worktree selector as the third argument:
 
 ```bash
 pnpm exec tsx scripts/test-subscribe.ts <deviceToken> <serverPublicKeyB64> "id:<worktreeId>"
-pnpm exec tsx scripts/test-subscribe.ts <deviceToken> <serverPublicKeyB64> "path:/absolute/worktree/path"
+pnpm exec tsx scripts/test-subscribe.ts <deviceToken> <serverPublicKeyB64> "path:<absolute-workspace-path>"
 pnpm exec tsx scripts/test-subscribe.ts <deviceToken> <serverPublicKeyB64> "name:my-worktree"
 ```
 
@@ -118,31 +194,72 @@ If this repro fails, debug the desktop runtime/PTY path before the mobile WebVie
 
 ## Terminal Color Repro Without A Phone
 
-Use this when terminal colors disappear after switching tabs. Open a Claude Code terminal and at least one other terminal in the target worktree, then run:
+Use this when terminal colors disappear after switching tabs. Open a Claude
+Code terminal and at least one other terminal in the target worktree, set
+`ORCA_MOBILE_WS_URL` in the command environment, then run:
 
 ```bash
 cd mobile
-ORCA_MOBILE_WS_URL=ws://127.0.0.1:6768 pnpm exec tsx scripts/repro-terminal-colors.ts \
-  <deviceToken> <serverPublicKeyB64> "id:<worktreeId>"
+pnpm exec tsx scripts/repro-terminal-colors.ts <deviceToken> <serverPublicKeyB64> "id:<worktreeId>"
 ```
 
 The script captures `terminal.subscribe` snapshots in an A → B → A sequence and writes raw snapshots to `mobile/terminal-color-repro/`. If the two A snapshots have different `sgrColor` counts, the desktop snapshot changed during the switch. If they match, the ANSI color data is still present and the bug is in mobile replay/rendering.
 
 ## Validation
 
-Run these checks before committing mobile terminal changes:
+Run the checks relevant to the change:
 
 ```bash
-cd mobile
-pnpm exec tsc --noEmit
-pnpm lint
-cd ..
+pnpm --dir mobile typecheck
+pnpm --dir mobile lint
 pnpm typecheck:node
+pnpm typecheck:mobile-web
+pnpm lint:mobile-web
+pnpm build:mobile-web-rnw
 ```
 
-## Protocol Version Compatibility
+### Hosted WebView journeys
 
-Mobile and desktop talk over a versioned protocol. Because mobile updates lag desktop by 24-48h via the App Store, both sides exchange version numbers on `status.get` so a genuinely incompatible combo can hard-block instead of silently misbehaving.
+Repository-root entrypoints build Desktop and the hosted bundle first, then hand
+off to the mobile runner:
+
+| Command                                            | Needs                                            |
+| -------------------------------------------------- | ------------------------------------------------ |
+| `pnpm test:e2e:hosted-mobile-webview`              | macOS, Xcode, a booted iOS simulator             |
+| `pnpm test:e2e:hosted-mobile-webview:ssh`          | the above, plus Docker for the SSH relay target  |
+| `pnpm test:e2e:hosted-mobile-webview:ssh:packaged` | the above, against packaged mobile-web resources |
+
+Mobile-side entrypoints (`pnpm --dir mobile <script>`) drive an already-built
+Desktop through the `orca` CLI, so a paired Desktop must be reachable:
+
+| Command                                         | Needs                                                                                     |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `test:e2e:hosted-webview`                       | macOS, Xcode, a booted iOS simulator                                                      |
+| `test:e2e:hosted-webview:security`              | same; runs only the origin/capability assertions                                          |
+| `test:e2e:hosted-webview:android-routes`        | an Android emulator or device on `adb`, with accessibility reads                          |
+| `test:e2e:hosted-webview:android-back`          | an Android emulator or device on `adb`                                                    |
+| `test:e2e:hosted-webview:android-security`      | an Android device on `adb` plus a local network probe port                                |
+| `test:e2e:hosted-webview:android-release`       | a **user**-build (release-signed, non-debuggable) install; `--serial` or `ANDROID_SERIAL` |
+| `test:e2e:hosted-webview:android-crash-loop`    | an Android device on `adb`; forwards the WebView DevTools socket                          |
+| `test:e2e:hosted-webview:android-corrupt-cache` | an Android device on `adb`, POSIX signals, and `--desktop-pid`                            |
+| `test:e2e:hosted-webview:ios-crash-loop`        | macOS, Xcode, an iOS simulator reachable through `xcrun simctl`                           |
+
+### Native store suites
+
+| Command                                                                        | Needs                                                                                                                    |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `pnpm --dir mobile test:native:ios-web-store`                                  | macOS with Xcode command line tools; compiles the shipped Swift store sources with `xcrun swiftc` and needs no simulator |
+| `cd mobile/android && ./gradlew :orca-expo-mobile-web-shell:testDebugUnitTest` | JDK 17 and the Android SDK, after `npx expo prebuild --platform android --no-install`                                    |
+
+Both native suites run in CI from `.github/workflows/mobile-native-shell-tests.yml`.
+The hosted journeys do not: none of them can run on a GitHub-hosted runner that
+has an emulator and Docker at once.
+
+## Protocol Compatibility
+
+Native routes and Desktop exchange broad protocol versions through
+`status.get`. Because store updates can lag Desktop, a genuinely incompatible
+combination can hard-block instead of silently misbehaving.
 
 Constants live in two files (Metro can't resolve outside `mobile/`):
 
@@ -171,6 +288,13 @@ When a verdict is `blocked`, `mobile/src/components/ProtocolBlockScreen.tsx` ren
 
 To exercise the block screen locally: set `MIN_COMPATIBLE_DESKTOP_VERSION = 999` in `mobile/src/transport/protocol-version.ts`, rebuild, pair to any desktop. Revert before merging.
 
+The hosted capability bridge has a separate policy in
+`src/shared/mobile-web/bridge-release-policy.ts`. Additive hosted operations use
+capability negotiation without bumping bridge version 2. Breaking bridge or
+security semantics require a native shell release, and Desktop must retain the
+old bridge floor for at least two stable mobile releases containing its
+replacement.
+
 ## Mock Server
 
 Develop the mobile app without a running Orca desktop instance:
@@ -198,21 +322,35 @@ Read on every request, so behaviour can be flipped mid-session without a restart
 
 1. Start Orca desktop with WebSocket transport enabled
 2. In Orca, go to Settings > Mobile and scan the QR code with this app
-3. The QR encodes the connection endpoint, device token, and TLS fingerprint
+3. Keep the QR payload private; it contains pairing material.
+
+## Troubleshooting and Recovery
+
+In the app, open **Settings → Troubleshooting** to run reachability checks.
+Open **Connection Log → Copy diagnostics** for the selected host when filing a
+support issue.
+
+Do not attach pairing material, endpoints, full build IDs, absolute cache
+paths, filenames, repository content, terminal bytes, or hosted page payloads.
+For package/cache incidents, follow the
+[rollback and recovery runbook](../docs/reference/mobile-hybrid-webview-rollback.md).
 
 ## Project Structure
 
 ```
 mobile/
-├── app/                   # Expo Router screens (file-based routing)
-│   ├── _layout.tsx        # Root layout with navigation stack
-│   ├── index.tsx          # Home screen — paired hosts list
-│   └── pair-scan.tsx      # QR code scanning screen
+├── app/                   # Native Expo Router graph and shared screens
+├── host-web-app/          # RNW entry graph importing the shared screens
+├── packages/
+│   └── expo-mobile-web-shell/ # iOS/Android private origin and verified cache
 ├── src/
-│   ├── terminal/          # Terminal WebView and xterm bridge
-│   └── transport/         # WebSocket RPC client
+│   ├── mobile-web/        # Native shell, package download, bridge authority
+│   ├── terminal/          # Shared terminal presentation and adapters
+│   └── transport/         # Authenticated encrypted mobile RPC client
 ├── scripts/
-│   ├── test-subscribe.ts  # Desktop streaming repro without a phone
-│   └── mock-server.ts     # Standalone mock WebSocket server
+│   ├── export-host-mobile-web.mjs
+│   ├── start-emulator.mjs
+│   ├── test-subscribe.ts
+│   └── mock-server.ts
 └── assets/                # App icons and splash screen
 ```

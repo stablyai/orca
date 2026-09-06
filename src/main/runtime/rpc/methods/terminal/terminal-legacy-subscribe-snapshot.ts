@@ -29,6 +29,7 @@ export async function publishLegacyBinaryInitialSnapshot(
     ptyId,
     clientId,
     isMobile,
+    supportsQueryReply,
     missingHeadlessStateBeforeMobileFit,
     rendererMountRequestedBeforePty,
     serializerGenerationBeforeMobileFit
@@ -148,7 +149,8 @@ export async function publishLegacyBinaryInitialSnapshot(
     cols: serialized?.cols ?? size?.cols,
     rows: serialized?.rows ?? size?.rows,
     displayMode: state.displayMode,
-    seq: layoutSeq
+    seq: layoutSeq,
+    ...(supportsQueryReply ? { capabilities: { queryReply: 1 as const } } : {})
   })
   const snapshotStats = sendSnapshotFrames(state.sendFrame, {
     kind: 'scrollback',

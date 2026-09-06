@@ -8,7 +8,7 @@ import {
   TextInput,
   View
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   MR_STATE_FILTER_OPTIONS,
@@ -37,7 +37,7 @@ const SOURCE_INPUT_FOCUS_DELAY_MS = 120
 
 type Props = {
   visible: boolean
-  client: RpcClient | null
+  operations: HostWorkspaceCreationOperations | null
   composer: MobileComposerSource
   availability: SmartModeAvailabilityInput
   repoId: string | null
@@ -50,7 +50,7 @@ type Props = {
 
 export function SmartWorkspaceSourceDrawer({
   visible,
-  client,
+  operations,
   composer,
   availability,
   repoId,
@@ -113,7 +113,7 @@ export function SmartWorkspaceSourceDrawer({
     crossRepoPrompt,
     dismissCrossRepoPrompt
   } = useSmartWorkspaceSource({
-    client,
+    operations,
     enabled: searchEnabled,
     mode: effectiveMode,
     query: composer.name,
@@ -151,13 +151,13 @@ export function SmartWorkspaceSourceDrawer({
   }
 
   async function handleAcceptCrossRepo(): Promise<void> {
-    if (!client || !crossRepoPrompt) {
+    if (!operations || !crossRepoPrompt) {
       return
     }
     const { link, matchingRepo } = crossRepoPrompt
     try {
       const item = await lookupGitHubItemByOwnerRepo(
-        client,
+        operations,
         matchingRepo.id,
         link.slug,
         link.number,

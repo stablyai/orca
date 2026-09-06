@@ -12,7 +12,7 @@ export type AgentSendKeyboardDismissalTab = {
     readonly agentType?: AgentStatusEntry['agentType'] | null
     readonly state?: AgentStatusEntry['state']
   } | null
-  readonly launchAgent?: TuiAgent | null
+  readonly launchAgent?: TuiAgent | string | null
 }
 
 /** Whether a send from this tab should drop the software keyboard.

@@ -26,6 +26,10 @@ import { PRReviewersSection } from './pr-sidebar/PRReviewersSection'
 import { PRChecksSection } from './pr-sidebar/PRChecksSection'
 import { PRCommentsSection } from './pr-sidebar/PRCommentsSection'
 import { PrSidebarCreateEmptyState } from './pr-sidebar/PrSidebarCreateEmptyState'
+import {
+  MobilePrShellOperationsProvider,
+  type MobilePrShellOperations
+} from '../platform/mobile-pr-shell-operations'
 
 type Props = {
   state: PrSidebarState
@@ -42,10 +46,19 @@ type Props = {
   bottomInset?: number
   // Hub chrome already shows open-on-web; hide the in-body icon there.
   showOpenOnWeb?: boolean
+  shellOperations: MobilePrShellOperations
+}
+
+export function MobilePRSidebar({ shellOperations, ...props }: Props) {
+  return (
+    <MobilePrShellOperationsProvider operations={shellOperations}>
+      <MobilePRSidebarInner {...props} />
+    </MobilePrShellOperationsProvider>
+  )
 }
 
 // Mutation hooks run unconditionally here and gate internally until a PR is ready.
-export function MobilePRSidebar({
+function MobilePRSidebarInner({
   state,
   onRetry,
   refetch,
@@ -57,7 +70,7 @@ export function MobilePRSidebar({
   headSha,
   bottomInset = 0,
   showOpenOnWeb = true
-}: Props) {
+}: Omit<Props, 'shellOperations'>) {
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0

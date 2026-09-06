@@ -3,6 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { nativeHostSessionNativeChatOperations } from './native-host-session-native-chat-operations'
+import type { HostSessionNativeChatOperations } from './host-session-native-chat-operations'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
@@ -32,20 +34,26 @@ describe('useMobileNativeChatSession', () => {
     renderer = null
   })
 
-  function Harness({ client }: { client: RpcClient | null }): null {
+  function Harness({ operations }: { operations: HostSessionNativeChatOperations | null }): null {
     state = useMobileNativeChatSession({
-      client,
-      sourceIdentity: 'host-a\0workspace-a',
+      operations,
+      workspaceId: 'worktree',
       agent: 'claude',
       sessionId: 'session',
-      transcriptPath: null
+      transcriptPath: null,
+      terminalId: 'terminal',
+      clientId: 'device'
     })
     return null
   }
 
   async function mount(client: RpcClient): Promise<void> {
     await act(async () => {
-      renderer = create(createElement(Harness, { client }))
+      renderer = create(
+        createElement(Harness, {
+          operations: nativeHostSessionNativeChatOperations(client)
+        })
+      )
     })
   }
 
@@ -103,7 +111,7 @@ describe('useMobileNativeChatSession', () => {
     })
     await mount({ sendRequest, subscribe } as unknown as RpcClient)
     act(() => state?.loadEarlier())
-    await act(async () => renderer?.update(createElement(Harness, { client: null })))
+    await act(async () => renderer?.update(createElement(Harness, { operations: null })))
     await act(async () => {
       resolveEarlier({ ok: true, result: { messages: [message('stale-page')] } })
       await Promise.resolve()
@@ -115,6 +123,28 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.messages).toHaveLength(40)
     expect(state?.status).toBe('idle')
     expect(state?.loadingEarlier).toBe(false)
+  })
+
+  it('retains explicit transcript lifecycle evidence and clears it with the source', async () => {
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      emit = onData
+      onData({
+        type: 'snapshot',
+        messages: [],
+        lifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 123 }
+      })
+      return () => {}
+    })
+    await mount({ sendRequest: vi.fn(), subscribe } as unknown as RpcClient)
+
+    expect(state?.lifecycle).toEqual({
+      state: 'interrupted',
+      turnId: 'turn-1',
+      timestamp: 123
+    })
+
+    await act(async () => renderer?.update(createElement(Harness, { operations: null })))
+    expect(state?.lifecycle).toBeUndefined()
   })
 
   it.each(['replacement', 'snapshot'] as const)(
@@ -161,7 +191,9 @@ describe('useMobileNativeChatSession', () => {
         agent: 'claude',
         sessionId: 'session',
         limit: 60,
-        beforeOffset: 500
+        beforeOffset: 500,
+        worktreeId: 'worktree',
+        terminal: 'terminal'
       })
     }
   )
@@ -239,7 +271,9 @@ describe('useMobileNativeChatSession', () => {
     expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
       agent: 'claude',
       sessionId: 'session',
-      limit: 100
+      limit: 100,
+      worktreeId: 'worktree',
+      terminal: 'terminal'
     })
   })
 
@@ -299,7 +333,9 @@ describe('useMobileNativeChatSession', () => {
     expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
       agent: 'claude',
       sessionId: 'session',
-      limit: 100
+      limit: 100,
+      worktreeId: 'worktree',
+      terminal: 'terminal'
     })
   })
 
@@ -420,7 +456,9 @@ describe('useMobileNativeChatSession', () => {
     expect(sendRequest).toHaveBeenLastCalledWith('nativeChat.readSession', {
       agent: 'claude',
       sessionId: 'session',
-      limit: 100
+      limit: 100,
+      worktreeId: 'worktree',
+      terminal: 'terminal'
     })
     expect(state?.messages.map((entry) => entry.id)).toEqual(['fresh-growing-tail'])
   })
@@ -445,22 +483,24 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
   })
 
   function Harness({
-    client,
+    operations,
     sessionId,
     agent = 'claude',
-    sourceIdentity = 'host-a\0workspace-a'
+    workspaceId = 'worktree'
   }: {
-    client: RpcClient | null
+    operations: HostSessionNativeChatOperations | null
     sessionId: string | null
     agent?: string | null
-    sourceIdentity?: string
+    workspaceId?: string
   }): null {
     const session = useMobileNativeChatSession({
-      client,
-      sourceIdentity,
+      operations,
+      workspaceId,
       agent,
       sessionId,
-      transcriptPath: null
+      transcriptPath: null,
+      terminalId: 'terminal',
+      clientId: 'device'
     })
     renders.push({
       sessionId,
@@ -471,9 +511,12 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     return null
   }
 
-  async function mountAt(client: RpcClient | null, sessionId: string | null): Promise<void> {
+  async function mountAt(
+    operations: HostSessionNativeChatOperations | null,
+    sessionId: string | null
+  ): Promise<void> {
     await act(async () => {
-      renderer = create(createElement(Harness, { client, sessionId }))
+      renderer = create(createElement(Harness, { operations, sessionId }))
     })
   }
 
@@ -481,7 +524,10 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     // `status` starts at 'idle', so on its own it would tell the launch-draft
     // seed that an empty transcript is this session's real history.
     const subscribe: RpcClient['subscribe'] = vi.fn(() => () => {})
-    await mountAt({ subscribe } as unknown as RpcClient, 'session-a')
+    const operations = nativeHostSessionNativeChatOperations({
+      subscribe
+    } as unknown as RpcClient)
+    await mountAt(operations, 'session-a')
 
     expect(renders[0]).toMatchObject({ transcriptLoading: true, ids: [] })
   })
@@ -496,16 +542,19 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       return () => {}
     })
     const client = { subscribe } as unknown as RpcClient
-    await mountAt(client, 'session-a')
+    const operations = nativeHostSessionNativeChatOperations(client)
+    await mountAt(operations, 'session-a')
     expect(renders.at(-1)).toMatchObject({ status: 'ready', transcriptLoading: false })
 
     // Toggle out to the terminal view, then back.
     await act(async () =>
-      renderer?.update(createElement(Harness, { client, sessionId: 'session-a', agent: null }))
+      renderer?.update(createElement(Harness, { operations, sessionId: 'session-a', agent: null }))
     )
     renders.length = 0
     await act(async () =>
-      renderer?.update(createElement(Harness, { client, sessionId: 'session-a', agent: 'claude' }))
+      renderer?.update(
+        createElement(Harness, { operations, sessionId: 'session-a', agent: 'claude' })
+      )
     )
 
     expect(renders[0]).toMatchObject({
@@ -524,7 +573,8 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       return () => {}
     })
     const client = { subscribe } as unknown as RpcClient
-    await mountAt(client, 'session-a')
+    const operations = nativeHostSessionNativeChatOperations(client)
+    await mountAt(operations, 'session-a')
     expect(renders.at(-1)).toMatchObject({ status: 'ready' })
 
     let emitFresh: (frame: unknown) => void = () => {}
@@ -534,9 +584,12 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
         return () => {}
       })
     } as unknown as RpcClient
+    const reconnectedOperations = nativeHostSessionNativeChatOperations(reconnected)
     renders.length = 0
     await act(async () =>
-      renderer?.update(createElement(Harness, { client: reconnected, sessionId: 'session-a' }))
+      renderer?.update(
+        createElement(Harness, { operations: reconnectedOperations, sessionId: 'session-a' })
+      )
     )
 
     expect(renders[0]).toMatchObject({
@@ -591,16 +644,17 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
         return () => {}
       })
     } as unknown as RpcClient
-    await mountAt(firstClient, 'session-a')
+    await mountAt(nativeHostSessionNativeChatOperations(firstClient), 'session-a')
 
     const secondClient = { subscribe: vi.fn(() => () => {}) } as unknown as RpcClient
+    const secondOperations = nativeHostSessionNativeChatOperations(secondClient)
     renders.length = 0
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
-          client: secondClient,
+          operations: secondOperations,
           sessionId: 'session-a',
-          sourceIdentity: 'host-b\0workspace-b'
+          workspaceId: 'workspace-b'
         })
       )
     )
@@ -616,9 +670,10 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       return () => {}
     })
     const client = { subscribe } as unknown as RpcClient
-    await mountAt(client, 'session-a')
+    const operations = nativeHostSessionNativeChatOperations(client)
+    await mountAt(operations, 'session-a')
     await act(async () =>
-      renderer?.update(createElement(Harness, { client, sessionId: 'session-b' }))
+      renderer?.update(createElement(Harness, { operations, sessionId: 'session-b' }))
     )
 
     // The effect that resets the list lands a commit later, so `messages` still
@@ -632,82 +687,5 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
       transcriptLoading: true,
       ids: []
     })
-  })
-
-  it('settles the view but not the read on a pending snapshot', async () => {
-    // The host answers with an empty pending window while the transcript file
-    // does not exist yet. Calling that 'ready' would let the launch-draft seed
-    // adopt a prefill the agent may already have been sent; leaving it
-    // 'loading' is the bare forever-spinner this frame exists to end.
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
-      return () => {}
-    })
-    await mountAt({ subscribe } as unknown as RpcClient, 'session-a')
-
-    expect(subscribe).toHaveBeenCalledWith(
-      'nativeChat.subscribe',
-      expect.objectContaining({ capabilities: { transcriptPending: 1 } }),
-      expect.any(Function)
-    )
-    expect(renders.at(-1)).toMatchObject({
-      status: 'awaiting-transcript',
-      transcriptLoading: true,
-      ids: []
-    })
-  })
-
-  it('takes the real snapshot after a pending one as this subscription’s base', async () => {
-    let emitFrame: (frame: unknown) => void = () => {}
-    const client = {
-      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
-        emitFrame = onData
-        onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
-        return () => {}
-      })
-    } as unknown as RpcClient
-    await mountAt(client, 'session-a')
-
-    await act(async () =>
-      emitFrame({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
-    )
-
-    expect(renders.at(-1)).toMatchObject({
-      status: 'ready',
-      transcriptLoading: false,
-      ids: ['a-1']
-    })
-  })
-
-  it('never captures a pending window over the retained transcript', async () => {
-    const client = {
-      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
-        onData({ type: 'snapshot', messages: [message('a-1')], hasMore: false })
-        return () => {}
-      })
-    } as unknown as RpcClient
-    await mountAt(client, 'session-a')
-
-    // Same identity, fresh client: this read finds no transcript file behind the
-    // session and answers pending.
-    const reconnected = {
-      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
-        onData({ type: 'snapshot', messages: [], hasMore: false, pending: true })
-        return () => {}
-      })
-    } as unknown as RpcClient
-    await act(async () =>
-      renderer?.update(createElement(Harness, { client: reconnected, sessionId: 'session-a' }))
-    )
-
-    // One more rebind reads retention back: it still holds the real history,
-    // which it could not had the empty pending window captured over it.
-    const rebound = { subscribe: vi.fn(() => () => {}) } as unknown as RpcClient
-    renders.length = 0
-    await act(async () =>
-      renderer?.update(createElement(Harness, { client: rebound, sessionId: 'session-a' }))
-    )
-
-    expect(renders.at(-1)).toMatchObject({ status: 'loading', ids: ['a-1'] })
   })
 })

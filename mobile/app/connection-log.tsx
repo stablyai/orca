@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native'
+import { View, Text, Pressable, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import Constants from 'expo-constants'
 import { ChevronLeft, Copy, Check, Send } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { colors, spacing } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import { loadHosts } from '../src/transport/host-store'
 import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
@@ -15,6 +15,7 @@ import {
   useReconnectAttempt
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
+import { mobileWebDiagnosticsStore } from '../src/mobile-web/mobile-web-diagnostics-store'
 import {
   diagnoseConnection,
   getReportableConnectionIncidentId
@@ -30,6 +31,7 @@ import {
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
+import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
 // Why: getSnapshot must be referentially stable when there's no data —
@@ -94,6 +96,15 @@ export default function ConnectionLogScreen() {
     [selectedId]
   )
   const entries = useSyncExternalStore(subscribe, getSnapshot)
+  const subscribeMobileWeb = useCallback(
+    (listener: () => void) => mobileWebDiagnosticsStore.subscribe(listener),
+    []
+  )
+  const getMobileWebSnapshot = useCallback(
+    () => mobileWebDiagnosticsStore.get(selectedId),
+    [selectedId]
+  )
+  const mobileWebDiagnostics = useSyncExternalStore(subscribeMobileWeb, getMobileWebSnapshot)
   const diagnosis = selected
     ? diagnoseConnection({ endpoint: selected.endpoint, state, activePath, pendingPath, entries })
     : null
@@ -121,7 +132,6 @@ export default function ConnectionLogScreen() {
       selected.id
     )
     const report = buildConnectionDiagnosticsReport({
-      hostName: selected.name,
       endpoint: selected.endpoint,
       state: snapshot.state,
       reconnectAttempts: snapshot.reconnectAttempts,
@@ -131,12 +141,13 @@ export default function ConnectionLogScreen() {
       desktopAppVersion,
       entries: snapshot.entries,
       activePath: snapshot.activePath,
-      pendingPath: snapshot.pendingPath
+      pendingPath: snapshot.pendingPath,
+      mobileWeb: mobileWebDiagnostics
     })
     await Clipboard.setStringAsync(report)
     setCopiedHostId(selected.id)
     setTimeout(() => setCopiedHostId((hostId) => (hostId === selected.id ? null : hostId)), 2000)
-  }, [selected, liveDesktopAppVersion, clientContext])
+  }, [selected, liveDesktopAppVersion, clientContext, mobileWebDiagnostics])
 
   const sendDiagnostics = useCallback(async () => {
     if (!selected || !submissionKey || submissionState === 'sending') {
@@ -164,7 +175,6 @@ export default function ConnectionLogScreen() {
       return
     }
     const report = buildConnectionDiagnosticsReport({
-      hostName: selected.name,
       endpoint: selected.endpoint,
       state: snapshot.state,
       reconnectAttempts: snapshot.reconnectAttempts,
@@ -174,13 +184,21 @@ export default function ConnectionLogScreen() {
       desktopAppVersion,
       entries: snapshot.entries,
       activePath: snapshot.activePath,
-      pendingPath: snapshot.pendingPath
+      pendingPath: snapshot.pendingPath,
+      mobileWeb: mobileWebDiagnostics
     })
     const result = await submitConnectionDiagnostics({ report, appVersion, platform })
     setSubmissionStates((states) =>
       updateDiagnosticsSubmissionState(states, startedKey, result.ok ? 'sent' : 'failed')
     )
-  }, [selected, submissionKey, submissionState, liveDesktopAppVersion, clientContext])
+  }, [
+    selected,
+    submissionKey,
+    submissionState,
+    liveDesktopAppVersion,
+    clientContext,
+    mobileWebDiagnostics
+  ])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -236,8 +254,9 @@ export default function ConnectionLogScreen() {
               {diagnosis.reportability === 'orca-relay' && (
                 <>
                   <Text style={styles.privacyHint}>
-                    Sends a size-limited redacted report including host name, endpoint, versions,
-                    connection state, and events—never terminal contents or credentials.
+                    Sends a size-limited redacted report including connection path, versions,
+                    connection state, and events—never terminal contents, host identity, or
+                    credentials.
                   </Text>
                   <Pressable
                     style={styles.sendButton}
@@ -277,131 +296,3 @@ export default function ConnectionLogScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  hostPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md
-  },
-  hostChip: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.bgRaised
-  },
-  hostChipActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  hostChipText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    maxWidth: 160
-  },
-  hostChipTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  statusText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary
-  },
-  diagnosisCard: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    padding: spacing.md,
-    marginBottom: spacing.md
-  },
-  diagnosisHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs
-  },
-  diagnosisText: {
-    fontSize: typography.metaSize,
-    color: colors.textPrimary,
-    lineHeight: 18
-  },
-  diagnosisNext: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    marginTop: spacing.xs
-  },
-  privacyHint: {
-    marginTop: spacing.sm,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textMuted
-  },
-  sendButton: {
-    marginTop: spacing.md,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  sendButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  copyButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  emptyText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  }
-})

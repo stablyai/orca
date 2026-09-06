@@ -21,6 +21,7 @@ type Props = {
   onSave: () => void
   onCopy: () => void
   onDiscard: () => void
+  onOpenLink?: (url: string) => void
   keyboardLift: number
 }
 
@@ -32,6 +33,7 @@ export function MobileMarkdownReader({
   onSave,
   onCopy,
   onDiscard,
+  onOpenLink,
   keyboardLift
 }: Props) {
   const editorRef = useRef<MobileRichMarkdownEditorHandle>(null)
@@ -86,6 +88,7 @@ export function MobileMarkdownReader({
         editable={doc.editable && !doc.saving}
         onChange={onChange}
         onKeyboardInsetChange={setWebviewKeyboardInset}
+        onOpenLink={onOpenLink}
       />
       {showFloatingActions ? (
         <View

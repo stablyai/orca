@@ -14,14 +14,18 @@ type HostedBaseResult = ComposerHostedBase | { error: string }
 // Resolves a GitHub PR's base via worktree.resolvePrBase, mirroring desktop's
 // select-time resolution. The runtime returns a soft { error } payload rather
 // than an RPC error for provider failures.
-export async function resolveComposerPrBase(args: {
+export type ResolveComposerPrBaseArgs = {
   client: RpcClient
   repoId: string
   prNumber: number
   headRefName?: string
   baseRefName?: string
   isCrossRepository?: boolean
-}): Promise<GitHubPrStartPoint> {
+}
+
+export async function resolveComposerPrBase(
+  args: ResolveComposerPrBaseArgs
+): Promise<GitHubPrStartPoint> {
   const { client, repoId, prNumber, headRefName, baseRefName, isCrossRepository } = args
   const response = await client.sendRequest(
     'worktree.resolvePrBase',
@@ -45,14 +49,18 @@ export async function resolveComposerPrBase(args: {
 }
 
 // Resolves a GitLab MR's base via worktree.resolveMrBase.
-export async function resolveComposerMrBase(args: {
+export type ResolveComposerMrBaseArgs = {
   client: RpcClient
   repoId: string
   mrIid: number
   sourceBranch?: string
   targetBranch?: string
   isCrossRepository?: boolean
-}): Promise<ComposerHostedBase> {
+}
+
+export async function resolveComposerMrBase(
+  args: ResolveComposerMrBaseArgs
+): Promise<ComposerHostedBase> {
   const { client, repoId, mrIid, sourceBranch, targetBranch, isCrossRepository } = args
   const response = await client.sendRequest(
     'worktree.resolveMrBase',

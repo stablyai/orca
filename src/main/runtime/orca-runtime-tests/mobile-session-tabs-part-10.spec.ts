@@ -528,4 +528,52 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toHaveLength(1)
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
   })
+  // An unreachable SSH host clears the connection's agent status, so the live tab loses its
+  // provider session. Treating that as a missing session reported not_found for a terminal that
+  // still exists; the last-known identity must survive loss of contact.
+  it('keeps the native-chat binding when loss of contact clears agent status', () => {
+    const runtime = new OrcaRuntimeService(null as never)
+    const readyTab = {
+      type: 'terminal',
+      status: 'ready',
+      terminal: 'handle-1',
+      launchAgent: 'claude',
+      agentStatus: {
+        agentType: 'claude',
+        providerSession: { id: 'session-1', transcriptPath: '/remote/transcript.jsonl' }
+      }
+    }
+    const strippedTab = { type: 'terminal', status: 'ready', terminal: 'handle-1' }
+    let tabs: unknown[] = [readyTab]
+    let context: unknown = { worktreeId: 'worktree-1', connectionId: 'ssh-1' }
+    const internals = runtime as unknown as {
+      resolveTerminalContext: (handle: string) => unknown
+      mobileSessionTabsByWorktree: Map<string, unknown>
+      toMobileSessionTabsResult: (snapshot: unknown) => { tabs: unknown[] }
+      resolveNativeChatTranscriptBinding: (handle: string) => { providerSession?: unknown } | null
+    }
+    internals.resolveTerminalContext = () => context
+    internals.mobileSessionTabsByWorktree = new Map([['worktree-1', {}]])
+    internals.toMobileSessionTabsResult = () => ({ tabs })
+
+    expect(internals.resolveNativeChatTranscriptBinding('handle-1')).toMatchObject({
+      agent: 'claude',
+      providerSession: { id: 'session-1' }
+    })
+
+    tabs = [strippedTab]
+    expect(internals.resolveNativeChatTranscriptBinding('handle-1')).toMatchObject({
+      agent: 'claude',
+      providerSession: { id: 'session-1' }
+    })
+
+    // A terminal that is genuinely gone still resolves to nothing.
+    context = null
+    expect(internals.resolveNativeChatTranscriptBinding('handle-1')).toBeNull()
+    // ...and the remembered identity goes with it, so the grant cannot outlive the terminal.
+    context = { worktreeId: 'worktree-1', connectionId: 'ssh-1' }
+    expect(internals.resolveNativeChatTranscriptBinding('handle-1')).toMatchObject({
+      providerSession: null
+    })
+  })
 })

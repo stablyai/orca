@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostWorkspaceOperations } from './host-workspace-operations'
 import { startHostWorktreeRefresh } from './host-worktree-refresh'
 
 const appState = vi.hoisted(() => ({
@@ -40,15 +40,17 @@ describe('startHostWorktreeRefresh', () => {
   })
 
   function start(): void {
-    const client = {
-      subscribe: vi.fn(
-        (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
-          eventListener = listener
-          return unsubscribe
-        }
-      )
-    } as unknown as RpcClient
-    stop = startHostWorktreeRefresh({ client, fetchWorktrees, fetchRepoMetadata })
+    const operations = {
+      subscribeChanges(listener) {
+        eventListener = listener
+        return unsubscribe
+      }
+    } as HostWorkspaceOperations
+    stop = startHostWorktreeRefresh({
+      operations,
+      fetchWorktrees,
+      fetchRepoMetadata
+    })
   }
 
   afterEach(() => {

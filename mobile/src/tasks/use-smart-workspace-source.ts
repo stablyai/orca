@@ -7,7 +7,7 @@ import {
   type SmartNameMode,
   type SmartWorkspaceSourceRow
 } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 import { fanOutSmartSearch, type SmartFanOutResult } from './smart-source-fan-out'
 import type { MrStateFilter } from './mobile-composer-source-types'
 import {
@@ -32,7 +32,7 @@ export type SmartCrossRepoPrompt = {
 }
 
 export type UseSmartWorkspaceSourceArgs = {
-  client: RpcClient | null
+  operations: HostWorkspaceCreationOperations | null
   enabled: boolean
   mode: SmartNameMode
   query: string
@@ -55,10 +55,11 @@ const EMPTY_FAN: SmartFanOutResult = {
 }
 
 type PasteResolved = { github: GitHubWorkItem | null; gitlab: GitLabWorkItem | null }
+const EMPTY_PASTE: PasteResolved = { github: null, gitlab: null }
 
 export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   const {
-    client,
+    operations,
     enabled,
     mode,
     query,
@@ -71,7 +72,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     repos
   } = args
   const [fan, setFan] = useState<SmartFanOutResult>(EMPTY_FAN)
-  const [paste, setPaste] = useState<PasteResolved>({ github: null, gitlab: null })
+  const [paste, setPaste] = useState<PasteResolved>(EMPTY_PASTE)
   const [loading, setLoading] = useState(false)
   const [crossRepoPrompt, setCrossRepoPrompt] = useState<SmartCrossRepoPrompt | null>(null)
   // Why: preserve results across keystrokes (debounce) but drop them the moment
@@ -83,9 +84,9 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   >(new Map())
 
   useEffect(() => {
-    if (!client || !enabled || mode === 'text') {
+    if (!operations || !enabled || mode === 'text') {
       setFan(EMPTY_FAN)
-      setPaste({ github: null, gitlab: null })
+      setPaste(EMPTY_PASTE)
       setLoading(false)
       setCrossRepoPrompt(null)
       return
@@ -95,14 +96,14 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     scopeRef.current = scope
     if (scopeChanged) {
       setFan(EMPTY_FAN)
-      setPaste({ github: null, gitlab: null })
+      setPaste(EMPTY_PASTE)
       setCrossRepoPrompt(null)
     }
     setLoading(true)
     let stale = false
     const timer = setTimeout(() => {
       void runSmartSearch({
-        client,
+        operations,
         mode,
         query,
         repoId,
@@ -135,7 +136,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
       clearTimeout(timer)
     }
   }, [
-    client,
+    operations,
     enabled,
     mode,
     query,
@@ -189,17 +190,17 @@ const EMPTY_PASTE_LOOKUP: PasteLookup = {
 
 // Resolves a pasted issue/PR/MR reference to the exact item it names.
 async function resolvePastedItem(args: {
-  client: RpcClient
+  operations: HostWorkspaceCreationOperations
   intent: NonNullable<ReturnType<typeof resolvePasteIntent>>
   repoId: string
   repos: readonly PasteRepoCandidate[]
   repoSlugCache: Map<string, { owner: string; repo: string; host?: string } | null>
 }): Promise<PasteLookup> {
-  const { client, intent, repoId, repos, repoSlugCache } = args
+  const { operations, intent, repoId, repos, repoSlugCache } = args
   if (intent.kind === 'github-number') {
     return {
       paste: {
-        github: await lookupGitHubItemByNumber(client, repoId, intent.number),
+        github: await lookupGitHubItemByNumber(operations, repoId, intent.number),
         gitlab: null
       },
       crossRepoPrompt: null
@@ -207,7 +208,7 @@ async function resolvePastedItem(args: {
   }
   if (intent.kind === 'github-link') {
     const matchingRepo = await findRepoMatchingSlugForPaste(
-      client,
+      operations,
       repos,
       intent.link.slug,
       repoSlugCache
@@ -221,7 +222,7 @@ async function resolvePastedItem(args: {
     return {
       paste: {
         github: await lookupGitHubItemByOwnerRepo(
-          client,
+          operations,
           repoId,
           intent.link.slug,
           intent.link.number,
@@ -233,13 +234,16 @@ async function resolvePastedItem(args: {
     }
   }
   return {
-    paste: { github: null, gitlab: await lookupGitLabItemByPath(client, repoId, intent.link) },
+    paste: {
+      github: null,
+      gitlab: await lookupGitLabItemByPath(operations, repoId, intent.link)
+    },
     crossRepoPrompt: null
   }
 }
 
 async function runSmartSearch(args: {
-  client: RpcClient
+  operations: HostWorkspaceCreationOperations
   mode: SmartNameMode
   query: string
   repoId: string | null
@@ -256,7 +260,7 @@ async function runSmartSearch(args: {
   paste: PasteResolved
   crossRepoPrompt: SmartCrossRepoPrompt | null
 }> {
-  const { client, mode, query, repoId, repos, dismissedPasteRef, repoSlugCache } = args
+  const { operations, mode, query, repoId, repos, dismissedPasteRef, repoSlugCache } = args
   const intent =
     mode === 'branches' || dismissedPasteRef.current === query.trim()
       ? null
@@ -267,7 +271,7 @@ async function runSmartSearch(args: {
   const [fan, pasteLookup] = await Promise.all([
     fanOutSmartSearch(args),
     intent && repoId
-      ? resolvePastedItem({ client, intent, repoId, repos, repoSlugCache }).catch(
+      ? resolvePastedItem({ operations, intent, repoId, repos, repoSlugCache }).catch(
           // Best-effort paste resolution; fall back to the fan-out results.
           () => EMPTY_PASTE_LOOKUP
         )

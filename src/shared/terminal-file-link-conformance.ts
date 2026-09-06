@@ -121,10 +121,38 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     expected: { pathText: '/tmp/b.txt', line: null, column: null }
   },
   {
+    name: 'first of two adjacent absolute paths',
+    lineText: '/etc/hosts /tmp/output.png',
+    tapText: 'hosts',
+    expected: { pathText: '/etc/hosts', line: null, column: null }
+  },
+  {
+    name: 'second of two adjacent absolute paths',
+    lineText: '/etc/hosts /tmp/output.png',
+    tapText: 'output',
+    expected: { pathText: '/tmp/output.png', line: null, column: null }
+  },
+  {
     name: 'surrounding punctuation',
     lineText: 'open (src/a.ts) now',
     tapText: 'a.ts',
     expected: { pathText: 'src/a.ts', line: null, column: null }
+  },
+  {
+    name: 'non-ASCII path segments with a line suffix',
+    lineText: 'see src/コンポーネント/ボタン.tsx:12 here',
+    tapText: 'ボタン',
+    expected: {
+      pathText: 'src/コンポーネント/ボタン.tsx',
+      line: 12,
+      column: null
+    }
+  },
+  {
+    name: 'accented absolute path',
+    lineText: 'wrote /tmp/rapport-français/résumé.md for you',
+    tapText: 'résumé',
+    expected: { pathText: '/tmp/rapport-français/résumé.md', line: null, column: null }
   },
   {
     name: 'bare filename with extension',

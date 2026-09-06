@@ -1,15 +1,11 @@
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { MobileWebNativeChatAgentStatus } from '../../../src/shared/mobile-web/native-chat-operation-contract'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
 import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript
 } from '../../../src/shared/native-chat-agent-support'
 
-// Why: native chat renders an agent's own JSONL transcript, and the host
-// resolver knows these transcript layouts. Agents whose hook reports no
-// transcript path (Grok, omp) are additionally gated on host readability,
-// because Model-A SSH stores their transcript on the remote target.
 export function isMobileNativeChatTranscriptReadable(
   connectionId: string | null | undefined
 ): boolean {
@@ -29,12 +25,22 @@ export type MobileNativeChatResolution = {
 export type MobileNativeChatTab = {
   type: string
   launchAgent?: string | null
-  agentStatus?: AgentStatusEntry | null
+  agentStatus?: MobileNativeChatAgentStatusWithProvider | null
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
+  nativeChatSessionId?: string | null
   sessionId?: string | null
   agent?: string | null
+}
+
+export type MobileNativeChatAgentStatusWithProvider = MobileWebNativeChatAgentStatus & {
+  // Why native-only: the hosted page addresses a transcript by the shell's opaque
+  // `nativeChatSessionId`, so the provider session never crosses the bridge.
+  providerSession?: {
+    id: string
+    transcriptPath?: string
+  }
 }
 
 /** Resolve a session tab to the transcript identity native chat needs, or
@@ -72,7 +78,7 @@ export function resolveMobileNativeChat(
   }
   return {
     agent,
-    sessionId: tab.agentStatus?.providerSession?.id ?? null,
+    sessionId: tab.nativeChatSessionId ?? tab.agentStatus?.providerSession?.id ?? null,
     transcriptPath: tab.agentStatus?.providerSession?.transcriptPath ?? null
   }
 }

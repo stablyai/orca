@@ -2,12 +2,16 @@ type ImmediateGlobal = typeof globalThis & {
   setImmediate?: (callback: () => void) => unknown
 }
 
+type ProcessGlobal = typeof globalThis & {
+  process?: { env?: { VITEST?: string } }
+}
+
 const pendingRendererYields = new Map<number, () => void>()
 let nextRendererYieldId = 0
 let rendererYieldChannel: MessageChannel | null = null
 
 function isVitestEnvironment(): boolean {
-  return typeof process !== 'undefined' && process.env?.VITEST === 'true'
+  return (globalThis as ProcessGlobal).process?.env?.VITEST === 'true'
 }
 
 function getRendererYieldChannel(): MessageChannel {

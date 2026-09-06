@@ -43,6 +43,11 @@ const READY: ReviewScreenState = {
   reviewState: { version: 1, files: {} }
 }
 
+const DEVICE = {
+  writeClipboard: vi.fn().mockResolvedValue(undefined),
+  success: vi.fn()
+}
+
 describe('useMobileDiffReviewSendActions', () => {
   let renderer: ReactTestRenderer | null = null
   let actions: SendActions | null = null
@@ -56,6 +61,8 @@ describe('useMobileDiffReviewSendActions', () => {
     setActionError = vi.fn()
     setSendSheet = vi.fn()
     saveCommentsAndReviewState = vi.fn().mockResolvedValue(undefined)
+    DEVICE.writeClipboard.mockClear()
+    DEVICE.success.mockClear()
   })
 
   afterEach(() => {
@@ -73,7 +80,8 @@ describe('useMobileDiffReviewSendActions', () => {
       screenState: READY,
       setActionError,
       setSendSheet,
-      saveCommentsAndReviewState
+      saveCommentsAndReviewState,
+      device: DEVICE
     })
     return null
   }

@@ -1,9 +1,13 @@
 import { useCallback, useMemo, useState } from 'react'
 import { View, Text, Pressable, TextInput, Switch } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { colors } from '../theme/mobile-theme'
 import { BottomDrawer } from './BottomDrawer'
+import {
+  loadCustomKeys,
+  saveCustomKeys,
+  type CustomKey
+} from '../storage/terminal-custom-key-storage'
 import {
   buildTerminalShortcutKey,
   normalizeShortcutKeyInput,
@@ -13,14 +17,7 @@ import {
 } from '../terminal/terminal-accessory-keys'
 import { customKeyModalStyles as styles } from './CustomKeyModal.styles'
 
-const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
-
-export type CustomKey = {
-  id: string
-  label: string
-  bytes: string
-  enter: boolean
-}
+export * from '../storage/terminal-custom-key-storage'
 
 type Step = 'choose-type' | 'shortcut-combo' | 'special-keys' | 'text-macro'
 
@@ -61,24 +58,22 @@ const SPECIAL_KEY_BY_ID: Record<string, TerminalShortcutSpecialKey> = Object.fro
 type Props = {
   visible: boolean
   onClose: () => void
+  onAfterClose?: () => void
   onKeysChanged: (keys: CustomKey[]) => void
   onManageShortcuts?: () => void
+  loadKeys?: () => Promise<CustomKey[]>
+  saveKeys?: (keys: CustomKey[]) => Promise<void>
 }
 
-export async function loadCustomKeys(): Promise<CustomKey[]> {
-  try {
-    const raw = await AsyncStorage.getItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as CustomKey[]) : []
-  } catch {
-    return []
-  }
-}
-
-export async function saveCustomKeys(keys: CustomKey[]): Promise<void> {
-  await AsyncStorage.setItem(CUSTOM_ACCESSORY_KEYS_STORAGE_KEY, JSON.stringify(keys))
-}
-
-export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortcuts }: Props) {
+export function CustomKeyModal({
+  visible,
+  onClose,
+  onAfterClose,
+  onKeysChanged,
+  onManageShortcuts,
+  loadKeys = loadCustomKeys,
+  saveKeys = saveCustomKeys
+}: Props) {
   const [step, setStep] = useState<Step>('choose-type')
   const [shortcutKey, setShortcutKey] = useState('c')
   const [shortcutModifiers, setShortcutModifiers] = useState<TerminalShortcutModifier[]>(['ctrl'])
@@ -103,14 +98,14 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
   const addKey = useCallback(
     async (key: Omit<CustomKey, 'id'>) => {
-      const existing = await loadCustomKeys()
+      const existing = await loadKeys()
       const newKey: CustomKey = { ...key, id: `custom-${Date.now()}` }
       const updated = [...existing, newKey]
-      await saveCustomKeys(updated)
+      await saveKeys(updated)
       onKeysChanged(updated)
       onClose()
     },
-    [onClose, onKeysChanged]
+    [loadKeys, onClose, onKeysChanged, saveKeys]
   )
 
   const shortcutPreview = useMemo(
@@ -185,7 +180,7 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
   }, [step])
 
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
+    <BottomDrawer visible={visible} onClose={onClose} onAfterClose={onAfterClose}>
       <View style={styles.header}>
         {showBack ? (
           <Pressable

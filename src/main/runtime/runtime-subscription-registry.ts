@@ -42,18 +42,40 @@ export class RuntimeSubscriptionRegistry {
   }
 
   cleanupIfOwnedByConnection(subscriptionId: string, connectionId?: string): boolean {
-    if (!connectionId) {
+    const verdict = this.resolveConnectionOwnership(subscriptionId, connectionId)
+    if (verdict === 'cleanup') {
       this.cleanup(subscriptionId)
-      return true
     }
+    return verdict !== 'foreign'
+  }
+
+  // Why: an unwatch that returns before the underlying watcher is released lets a fast
+  // rewatch hold two watchers on one path and double-deliver change events.
+  async cleanupIfOwnedByConnectionAndWait(
+    subscriptionId: string,
+    connectionId?: string
+  ): Promise<boolean> {
+    const verdict = this.resolveConnectionOwnership(subscriptionId, connectionId)
+    if (verdict === 'cleanup') {
+      await this.cleanupAndWait(subscriptionId)
+    }
+    return verdict !== 'foreign'
+  }
+
+  private resolveConnectionOwnership(
+    subscriptionId: string,
+    connectionId?: string
+  ): 'cleanup' | 'absent' | 'foreign' {
+    if (!connectionId) {
+      return 'cleanup'
+    }
+    // An unregistered id is already gone, not refused.
     if (!this.cleanups.has(subscriptionId)) {
-      return true
+      return 'absent'
     }
-    if (this.connectionBySubscription.get(subscriptionId) !== connectionId) {
-      return false
-    }
-    this.cleanup(subscriptionId)
-    return true
+    return this.connectionBySubscription.get(subscriptionId) === connectionId
+      ? 'cleanup'
+      : 'foreign'
   }
 
   cleanup(subscriptionId: string): void {

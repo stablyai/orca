@@ -4,14 +4,12 @@ import {
   type DetailComment,
   type DetailPayload,
   type GitHubDetailFile,
-  type GitHubPRFileContents,
   type TaskItem,
-  isSuccess
-} from './mobile-tasks-legacy-foundation'
+  taskItemMutationTarget
+} from './mobile-tasks-model'
 
 export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewActionsModel) {
   const {
-    client,
     detailPayload,
     expandedPrFilePath,
     mutatingStatus,
@@ -24,33 +22,23 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
     setMutatingStatus,
     setPrFileCommentDrafts,
     setPrFileContents,
-    setPrFileLoadingPath
+    setPrFileLoadingPath,
+    taskItemFileOperations,
+    taskItemReviewOperations
   } = model
   const rerunGitHubChecks = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, failedOnly: boolean): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!taskItemFileOperations || mutatingStatus || item.source.type !== 'pr') {
         return
       }
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.rerunPRChecks',
-          {
-            repo: `id:${item.source.repoId}`,
-            prNumber: item.source.number,
-            headSha: detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
-            failedOnly
-          },
-          { timeoutMs: 60_000 }
+        await taskItemFileOperations.rerunChecks(
+          taskItemMutationTarget(item),
+          detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
+          failedOnly
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to rerun checks')
-        }
         setDetailRefreshSeq((current) => current + 1)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to rerun checks')
@@ -58,15 +46,14 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
         setMutatingStatus(false)
       }
     },
-    [client, detailPayload, mutatingStatus]
+    [detailPayload, mutatingStatus, taskItemFileOperations]
   )
-
   const toggleGitHubFileViewed = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
       file: NonNullable<Extract<DetailPayload, { provider: 'github' }>['files'][number]>
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!taskItemFileOperations || mutatingStatus || item.source.type !== 'pr') {
         return
       }
       if (detailPayload?.provider !== 'github' || !detailPayload.pullRequestId) {
@@ -77,22 +64,11 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.setPRFileViewed',
-          {
-            repo: `id:${item.source.repoId}`,
-            pullRequestId: detailPayload.pullRequestId,
-            path: file.path,
-            viewed
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (response.result !== true) {
-          throw new Error('Failed to sync viewed state with GitHub.')
-        }
+        await taskItemFileOperations.setFileViewed(taskItemMutationTarget(item), {
+          pullRequestId: detailPayload.pullRequestId,
+          path: file.path,
+          viewed
+        })
         setDetailPayload((current) =>
           current?.provider === 'github'
             ? {
@@ -111,36 +87,30 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
         setMutatingStatus(false)
       }
     },
-    [client, detailPayload, mutatingStatus]
+    [detailPayload, mutatingStatus, taskItemFileOperations]
   )
-
   const toggleGitHubReviewThread = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
       comment: DetailComment
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr' || !comment.threadId) {
+      if (
+        !taskItemReviewOperations ||
+        mutatingStatus ||
+        item.source.type !== 'pr' ||
+        !comment.threadId
+      ) {
         return
       }
       const resolve = !comment.isResolved
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.resolveReviewThread',
-          {
-            repo: `id:${item.source.repoId}`,
-            threadId: comment.threadId,
-            resolve
-          },
-          { timeoutMs: 30_000 }
+        await taskItemReviewOperations.resolveThread(
+          taskItemMutationTarget(item),
+          comment.threadId,
+          resolve
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (response.result !== true) {
-          throw new Error(resolve ? 'Failed to resolve thread' : 'Failed to reopen thread')
-        }
         setDetailPayload((current) =>
           current?.provider === 'github'
             ? {
@@ -159,9 +129,8 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
         setMutatingStatus(false)
       }
     },
-    [client, mutatingStatus]
+    [mutatingStatus, taskItemReviewOperations]
   )
-
   const toggleGitHubFileExpansion = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
@@ -176,7 +145,7 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
         return
       }
       if (
-        !client ||
+        !taskItemFileOperations ||
         item.source.type !== 'pr' ||
         detailPayload?.provider !== 'github' ||
         !detailPayload.headSha ||
@@ -188,42 +157,32 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
       setPrFileLoadingPath(file.path)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.prFileContents',
+        const contents = await taskItemFileOperations.loadFileContents(
+          taskItemMutationTarget(item),
           {
-            repo: `id:${item.source.repoId}`,
-            prNumber: item.source.number,
             path: file.path,
             oldPath: file.oldPath,
             status: file.status ?? 'modified',
             headSha: detailPayload.headSha,
             baseSha: detailPayload.baseSha
-          },
-          { timeoutMs: 30_000 }
+          }
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        setPrFileContents((current) => ({
-          ...current,
-          [file.path]: response.result as GitHubPRFileContents
-        }))
+        setPrFileContents((current) => ({ ...current, [file.path]: contents }))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load file contents')
       } finally {
         setPrFileLoadingPath(null)
       }
     },
-    [client, detailPayload, expandedPrFilePath, prFileContents]
+    [detailPayload, expandedPrFilePath, prFileContents, taskItemFileOperations]
   )
-
   const addGitHubFileReviewComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }>,
       file: GitHubDetailFile,
       line: number
     ): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!taskItemFileOperations || mutatingStatus || item.source.type !== 'pr') {
         return
       }
       if (detailPayload?.provider !== 'github' || !detailPayload.headSha) {
@@ -238,30 +197,15 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.addPRReviewComment',
+        const comment: DetailComment = (await taskItemFileOperations.addInlineComment(
+          taskItemMutationTarget(item),
           {
-            repo: `id:${item.source.repoId}`,
-            prNumber: item.source.number,
             commitId: detailPayload.headSha,
             path: file.path,
             line,
             body
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to add review comment')
-        }
-        const comment: DetailComment = result.comment ?? {
+          }
+        )) ?? {
           id: `local-${Date.now()}`,
           author: 'You',
           body,
@@ -285,14 +229,14 @@ export function useMobileTasksGithubCheckFileActions(model: HostedCommentReviewA
         setMutatingStatus(false)
       }
     },
-    [client, detailPayload, mutatingStatus, prFileCommentDrafts]
+    [detailPayload, mutatingStatus, prFileCommentDrafts, taskItemFileOperations]
   )
   return Object.assign(model, {
+    addGitHubFileReviewComment,
     rerunGitHubChecks,
-    toggleGitHubFileViewed,
-    toggleGitHubReviewThread,
     toggleGitHubFileExpansion,
-    addGitHubFileReviewComment
+    toggleGitHubFileViewed,
+    toggleGitHubReviewThread
   })
 }
 

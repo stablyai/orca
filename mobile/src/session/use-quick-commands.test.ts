@@ -5,8 +5,11 @@ import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-co
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcResponse } from '../transport/types'
+import type { HostSessionQuickCommandOperations } from './host-session-quick-command-operations'
+import { nativeHostSessionQuickCommandOperations } from './native-host-session-quick-command-operations'
 import { useQuickCommands } from './use-quick-commands'
 
+const WORKSPACE_ID = 'folder:test-workspace'
 const FIRST: TerminalQuickCommand = {
   id: 'first',
   label: 'First',
@@ -56,8 +59,9 @@ describe('useQuickCommands', () => {
   })
 
   async function mount(client: RpcClient, enabled = true): Promise<void> {
+    const operations = nativeHostSessionQuickCommandOperations(client)
     function Harness(): null {
-      state = useQuickCommands({ client, enabled })
+      state = useQuickCommands({ operations, workspaceId: WORKSPACE_ID, enabled })
       return null
     }
     await act(async () => {
@@ -127,8 +131,9 @@ describe('useQuickCommands', () => {
       )
     } as unknown as RpcClient
 
+    const operations = nativeHostSessionQuickCommandOperations(client)
     function Harness({ enabled }: { enabled: boolean }): null {
-      state = useQuickCommands({ client, enabled })
+      state = useQuickCommands({ operations, workspaceId: WORKSPACE_ID, enabled })
       return null
     }
     await act(async () => {
@@ -305,20 +310,22 @@ describe('useQuickCommands', () => {
     const newClient = {
       sendRequest: vi.fn().mockResolvedValue(success([SECOND]))
     } as unknown as RpcClient
+    const oldOperations = nativeHostSessionQuickCommandOperations(oldClient)
+    const newOperations = nativeHostSessionQuickCommandOperations(newClient)
 
-    function Harness({ client }: { client: RpcClient }): null {
-      state = useQuickCommands({ client, enabled: true })
+    function Harness({ operations }: { operations: HostSessionQuickCommandOperations }): null {
+      state = useQuickCommands({ operations, workspaceId: WORKSPACE_ID, enabled: true })
       return null
     }
     await act(async () => {
-      renderer = create(createElement(Harness, { client: oldClient }))
+      renderer = create(createElement(Harness, { operations: oldOperations }))
       await Promise.resolve()
     })
     let persisted: Promise<boolean> = Promise.resolve(false)
     await act(async () => {
       persisted = state!.persist({ type: 'delete', id: FIRST.id })
       await Promise.resolve()
-      renderer!.update(createElement(Harness, { client: newClient }))
+      renderer!.update(createElement(Harness, { operations: newOperations }))
       await Promise.resolve()
     })
 
@@ -381,8 +388,9 @@ describe('useQuickCommands', () => {
       })
     } as unknown as RpcClient
 
+    const operations = nativeHostSessionQuickCommandOperations(client)
     function Harness({ enabled }: { enabled: boolean }): null {
-      state = useQuickCommands({ client, enabled })
+      state = useQuickCommands({ operations, workspaceId: WORKSPACE_ID, enabled })
       return null
     }
     await act(async () => {

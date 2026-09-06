@@ -1,12 +1,14 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 import { useSmartWorkspaceSource } from './use-smart-workspace-source'
 
-function Probe(props: { client: RpcClient; query: string }) {
+const REPOS = [{ id: 'repo-1', displayName: 'orca', slug: { owner: 'stablyai', repo: 'orca' } }]
+
+function Probe(props: { operations: HostWorkspaceCreationOperations; query: string }) {
   useSmartWorkspaceSource({
-    client: props.client,
+    operations: props.operations,
     enabled: true,
     mode: 'smart',
     query: props.query,
@@ -15,7 +17,7 @@ function Probe(props: { client: RpcClient; query: string }) {
     gitlabAvailable: false,
     linearAvailable: false,
     mrStateFilter: 'opened',
-    repos: [{ id: 'repo-1', displayName: 'orca', slug: { owner: 'stablyai', repo: 'orca' } }]
+    repos: REPOS
   })
   return null
 }
@@ -39,15 +41,18 @@ describe('smart source paste lookup concurrency', () => {
 
   it('issues the pasted-number lookup while the fan-out is still in flight', async () => {
     const sent: string[] = []
-    const sendRequest = vi.fn((method: string) => {
-      sent.push(method)
-      // Nothing ever settles: only requests issued concurrently can be observed.
-      return new Promise(() => {})
-    })
-    const client = { sendRequest } as unknown as RpcClient
+    const pendingOperation = (operation: string) => {
+      sent.push(operation)
+      return new Promise<never>(() => {})
+    }
+    const operations = {
+      searchGitHubItems: () => pendingOperation('github.listWorkItems'),
+      searchBranches: () => pendingOperation('repo.branches'),
+      lookupGitHubItem: () => pendingOperation('github.workItem')
+    } as unknown as HostWorkspaceCreationOperations
 
     await act(async () => {
-      mounted.push(create(createElement(Probe, { client, query: '16831' })))
+      mounted.push(create(createElement(Probe, { operations, query: '16831' })))
     })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(300)

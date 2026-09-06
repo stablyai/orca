@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
@@ -17,6 +16,7 @@ type QuickCommandRowProps = {
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
+  onCopy?: (text: string) => Promise<unknown>
   disabled: boolean
 }
 
@@ -31,6 +31,7 @@ export function QuickCommandRow({
   onLaunch,
   onEdit,
   onDelete,
+  onCopy,
   disabled
 }: QuickCommandRowProps) {
   const isAgent = isAgentQuickCommand(command)
@@ -67,7 +68,10 @@ export function QuickCommandRow({
       return
     }
     try {
-      await Clipboard.setStringAsync(body)
+      if (!onCopy) {
+        throw new Error('Clipboard unavailable')
+      }
+      await onCopy(body)
       if (!mountedRef.current) {
         return
       }

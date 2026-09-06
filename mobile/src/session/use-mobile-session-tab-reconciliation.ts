@@ -1,8 +1,4 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
-import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import { supportsMobileQuickCommands } from '../terminal/quick-commands'
-import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
 import type { SessionTabsStreamSource } from './mobile-session-tabs-stream-health'
 import { useMobileSessionTabsFetchReporting } from './use-mobile-session-tabs-fetch-reporting'
@@ -11,6 +7,7 @@ import { PendingTerminalHandleRecoveryContextCache } from './pending-terminal-ha
 import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-records'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
+import { startRuntimeCapabilityRead } from '../transport/runtime-capability-probe'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
@@ -23,20 +20,18 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
     setMarkdownDocs,
-    setShowQuickCommands,
     terminalGestureInputQueuesRef,
     terminalGestureInputInFlightRef,
     terminalDiagnosticsRef,
     pendingBrowserFocusPageIdRef,
     switchSessionTabRef,
-    setBrowserScreencastSupported,
-    setAgentSessionHistorySupported,
-    setQuickCommandsSupported,
     nativeChatStream,
     fetchTerminals,
     applySessionTabs,
     terminalInventoryRecoveryScope,
-    registerTerminalInventoryRecoveryAction
+    registerTerminalInventoryRecoveryAction,
+    sessionTabOperations,
+    setRuntimeCapabilitySnapshot
   } = scope
   const [parkedPendingTerminalContext, setParkedPendingTerminalContext] = useState<string | null>(
     null
@@ -110,6 +105,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     requestTerminalInventoryRecovery
   } = useMobileSessionTabsReconciliation<SessionTabsResult, MobileSessionTab>({
     client,
+    sessionTabOperations,
     connState,
     worktreeId,
     applySessionTabs,
@@ -145,34 +141,28 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   const hostQueryReplyInputSupportedRef = useRef(false)
 
   useEffect(() => {
-    if (!client || connState !== 'connected') {
-      setBrowserScreencastSupported(null)
-      setAgentSessionHistorySupported(null)
-      setQuickCommandsSupported(null)
-      setShowQuickCommands(false)
+    if (!sessionTabOperations || connState !== 'connected') {
       hostQueryReplyInputSupportedRef.current = false
       return
     }
-    // Why: a client swap can keep the route connected while moving to an older
-    // host; clear the prior capability before exposing host-specific actions.
-    setBrowserScreencastSupported(null)
-    setAgentSessionHistorySupported(null)
-    setQuickCommandsSupported(null)
-    setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
     // Why: the probe retries — a relay→direct cutover or request timeout rejects
     // status.get without changing connState, which used to latch these hidden.
-    return startRuntimeCapabilityProbe(client, (capabilities) => {
-      setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
-      setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
-      setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
-      // Why: hosts without this capability strip inputKind from terminal.send,
-      // so a forwarded xterm reply would become floor-stealing shell input.
-      hostQueryReplyInputSupportedRef.current = capabilities.includes(
-        TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
-      )
-    })
-  }, [client, connState])
+    return startRuntimeCapabilityRead(
+      () => sessionTabOperations.runtimeCapabilities(),
+      (value) => {
+        setRuntimeCapabilitySnapshot({
+          operations: sessionTabOperations,
+          browserScreencastSupported: value.browserScreencastSupported,
+          agentSessionHistorySupported: value.agentHistorySupported,
+          quickCommandsSupported: value.quickCommandsSupported
+        })
+        // Why: hosts without this capability strip inputKind from terminal.send,
+        // so a forwarded xterm reply would become floor-stealing shell input.
+        hostQueryReplyInputSupportedRef.current = value.terminalQueryReplyInputSupported
+      }
+    )
+  }, [connState, sessionTabOperations])
   return {
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,

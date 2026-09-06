@@ -1,4 +1,4 @@
-import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
 import { isAbsolutePathLike } from '../editor/editor-panel-file-mode'
 
 export type TabEntryLocalPlatform = 'posix' | 'windows'

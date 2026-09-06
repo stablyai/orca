@@ -10,6 +10,7 @@ import type {
   MobileGitStatusResult,
   MobileGitUpstreamStatus
 } from '../source-control/mobile-git-status'
+import type { MobileDiffLine } from './mobile-diff-lines'
 
 export type MobileReviewGitDiffResult =
   | {
@@ -17,6 +18,7 @@ export type MobileReviewGitDiffResult =
       originalContent: string
       modifiedContent: string
     }
+  | { kind: 'rows'; rows: MobileDiffLine[]; truncated: boolean }
   | { kind: 'binary' }
   | { kind: 'too-large'; byteLength?: number }
 
@@ -216,6 +218,12 @@ export function readMobileReviewGitDiffResult(value: unknown): MobileReviewGitDi
       modifiedContent: value.modifiedContent
     }
   }
+  if (value.kind === 'rows' && Array.isArray(value.rows) && typeof value.truncated === 'boolean') {
+    const rows = value.rows.map(readDiffRow)
+    return rows.every((row): row is MobileDiffLine => row !== null)
+      ? { kind: 'rows', rows, truncated: value.truncated }
+      : null
+  }
   if (value.kind === 'binary') {
     return { kind: 'binary' }
   }
@@ -223,6 +231,25 @@ export function readMobileReviewGitDiffResult(value: unknown): MobileReviewGitDi
     return { kind: 'too-large', byteLength: readNumber(value.byteLength) }
   }
   return null
+}
+
+function readDiffRow(value: unknown): MobileDiffLine | null {
+  if (!isRecord(value) || typeof value.text !== 'string') {
+    return null
+  }
+  const kind =
+    value.kind === 'context' || value.kind === 'add' || value.kind === 'delete' ? value.kind : null
+  if (!kind) {
+    return null
+  }
+  const oldLineNumber = readNumber(value.oldLineNumber)
+  const newLineNumber = readNumber(value.newLineNumber)
+  return {
+    kind,
+    text: value.text,
+    ...(oldLineNumber === undefined ? {} : { oldLineNumber }),
+    ...(newLineNumber === undefined ? {} : { newLineNumber })
+  }
 }
 
 export function readMobileReviewTerminalTabs(value: unknown): MobileReviewTerminalTab[] {

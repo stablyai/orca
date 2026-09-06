@@ -1,6 +1,7 @@
 import { View } from 'react-native'
 import { Monitor } from 'lucide-react-native'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 import type { PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { colors } from '../theme/mobile-theme'
@@ -23,7 +24,7 @@ type Composer = ReturnType<typeof useMobileComposerSource>
 export function NewWorktreeModalDrawers(props: {
   visible: boolean
   drawerView: NewWorktreeDrawerView
-  client: Parameters<typeof SmartWorkspaceSourceDrawer>[0]['client']
+  operations: HostWorkspaceCreationOperations | null
   composer: Composer
   sourceAvailability: SmartModeAvailabilityInput
   selectedRepo: MobileWorkspaceRepo | null
@@ -49,7 +50,7 @@ export function NewWorktreeModalDrawers(props: {
     <>
       <SmartWorkspaceSourceDrawer
         visible={props.visible && props.drawerView === 'source'}
-        client={props.client}
+        operations={props.operations}
         composer={props.composer}
         availability={props.sourceAvailability}
         repoId={props.selectedRepo?.id ?? null}

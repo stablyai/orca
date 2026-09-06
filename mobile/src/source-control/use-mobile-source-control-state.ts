@@ -1,6 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useHostClient, useForceReconnect } from '../transport/client-context'
 import { getWorktreeLabel } from '../session/worktree-label'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
@@ -24,6 +22,8 @@ import {
   getUnstageablePaths,
   type MobileGitStatusEntry
 } from './mobile-git-status'
+import type { HostSourceControlBinding } from './host-source-control-binding'
+import { useHostSourceControlBinding } from './use-host-source-control-binding'
 import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
 import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
 import {
@@ -31,8 +31,6 @@ import {
   formatBranchLabel,
   type MobileBranchEntryView
 } from './mobile-source-control-screen-state'
-
-type MobileGitLocalBranches = RuntimeGitLocalBranches
 
 export type MobileSourceControlStateParams = {
   hostId: string
@@ -46,6 +44,7 @@ export type MobileSourceControlStateParams = {
   // When the panel runs inside the hub, "History" switches the segment instead of
   // pushing the standalone route. Absent for the standalone/dock usage.
   onOpenHistory?: () => void
+  binding?: HostSourceControlBinding
 }
 
 export function useMobileSourceControlState(params: MobileSourceControlStateParams) {
@@ -58,16 +57,16 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     onRequestClose,
     onFileOpenStart,
     onOpenedFileDiff,
-    onOpenHistory
+    onOpenHistory,
+    binding
   } = params
-  const insets = useSafeAreaInsets()
-  const { client, state: connState } = useHostClient(hostId)
-  const forceReconnect = useForceReconnect()
+  const host = useHostSourceControlBinding(hostId, binding)
+  const { client, connState, forceReconnect, feedback, prShellOperations, insets } = host
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
   const [generatingMessage, setGeneratingMessage] = useState(false)
   const [showBranchPicker, setShowBranchPicker] = useState(false)
-  const [localBranches, setLocalBranches] = useState<MobileGitLocalBranches | null>(null)
+  const [localBranches, setLocalBranches] = useState<RuntimeGitLocalBranches | null>(null)
   const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
   const [createdPrWarning, setCreatedPrWarning] = useState<string | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileGitStatusEntry | null>(null)
@@ -76,7 +75,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const keyboardLift = useMobileSourceControlKeyboardLift()
   const busyActionRef = useRef<string | null>(null)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
-  const statusIdentityKey = `${hostId}\0${worktreeId}`
   const { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure } =
     useMobileSourceControlCommitFailure({ client, connState, worktreeId })
   const clearCommitFailureRecovery = useCallback(() => {
@@ -87,7 +85,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     useMobileSourceControlLoaders({
       client,
       connState,
-      statusIdentityKey,
+      statusIdentityKey: `${hostId}\0${worktreeId}`,
       worktreeId,
       setActionError,
       onStatusLoadSuccess: clearCommitFailureRecovery
@@ -115,7 +113,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     branchCompareState,
     mountedRef,
     busyActionRef,
-    setActionError
+    setActionError,
+    feedback
   })
 
   const status = screenState.kind === 'ready' ? screenState.status : null
@@ -130,16 +129,15 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const branchCompareSummaryText = branchCompareResult
     ? formatMobileBranchCompareSummary(branchCompareResult.summary)
     : null
-  const branchCompareCanOpen = branchCompareResult
-    ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
-    : false
   const branchEntries = useMemo<MobileBranchEntryView[]>(
     () =>
       (branchCompareSection?.data ?? []).map((entry) => ({
         ...entry,
-        canOpen: branchCompareCanOpen
+        canOpen: branchCompareResult
+          ? canOpenMobileBranchCompareDiff(branchCompareResult.summary)
+          : false
       })),
-    [branchCompareCanOpen, branchCompareSection]
+    [branchCompareResult, branchCompareSection]
   )
   // Local changes only: dirty files + committed file diffs vs base (not PR/push).
   const shouldShowBranchCompareSection =
@@ -162,7 +160,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   )
   const branchLabel = formatBranchLabel(status?.branch, status?.head)
   const upstream = status?.upstreamStatus
-  const upstreamKnown = upstream !== undefined
   const syncLabel =
     upstream && upstream.hasUpstream
       ? `${upstream.ahead} ahead, ${upstream.behind} behind`
@@ -204,7 +201,8 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     setCreatedPrUrl,
     setCreatedPrWarning,
     recordCommitFailure,
-    onOpenHistory
+    onOpenHistory,
+    feedback
   })
   const createPrAction = useMobileSourceControlCreatePrAction({
     client,
@@ -258,6 +256,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     client,
     connState,
     forceReconnect,
+    prShellOperations,
     insets,
     router,
     setRootRef,
@@ -288,7 +287,6 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     keyboardLift,
     openingPath,
     openingBranchPath,
-    // derived
     status,
     sections,
     branchCompareResult,
@@ -302,7 +300,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     unstagedCount,
     branchLabel,
     upstream,
-    upstreamKnown,
+    upstreamKnown: upstream !== undefined,
     syncLabel,
     primaryAction,
     createPrAction,

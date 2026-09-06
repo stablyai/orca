@@ -12,3 +12,6 @@ dist/
 *.mobileprovision
 *.orig.*
 web-build/
+
+# Gradle output from `npx expo prebuild` + local :orca-expo-mobile-web-shell runs
+packages/*/android/build/

@@ -13,7 +13,7 @@ import {
   PickerModal
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
-import { PROJECT_VIEW_DEFAULT_SORT } from './mobile-tasks-legacy-foundation'
+import { PROJECT_VIEW_DEFAULT_SORT } from './mobile-tasks-model'
 
 export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentationModel) {
   const {

@@ -14,15 +14,19 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import type { HostSessionDictationOperations } from '../session/host-session-dictation-operations'
 
 const POLL_INTERVAL_MS = 1500
 
 type Props = {
   visible: boolean
   client: RpcClient | null
+  operations?: HostSessionDictationOperations | null
   onClose: () => void
   // Called after the user reaches a ready+enabled state, so the caller can retry.
   onReady?: () => void
+  onErrorFeedback?: () => void
+  onSuccessFeedback?: () => void
 }
 
 function formatSize(bytes: number | null): string {
@@ -34,16 +38,26 @@ function formatSize(bytes: number | null): string {
 
 // Lets the user enable dictation and download a speech model on the paired
 // desktop, from the phone. Polls while a download is in flight.
-export function MobileDictationSetupSheet({ visible, client, onClose, onReady }: Props) {
+export function MobileDictationSetupSheet({
+  visible,
+  client,
+  operations,
+  onClose,
+  onReady,
+  onErrorFeedback = triggerError,
+  onSuccessFeedback = triggerSuccess
+}: Props) {
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
-    if (!client) {
+    if (!client && !operations) {
       return false
     }
     try {
-      const next = await fetchDictationSetup(client)
+      const next = operations
+        ? await operations.loadSetup()
+        : await fetchDictationSetup(client as RpcClient)
       setSetup(next)
       setError(null)
       return next.models.some(isModelInFlight)
@@ -51,11 +65,11 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       setError(err instanceof Error ? err.message : 'Failed to load')
       return undefined
     }
-  }, [client])
+  }, [client, operations])
 
   const polling = setup?.models.some(isModelInFlight) ?? false
   const refreshSetup = useDictationSetupPoller({
-    visible: visible && client !== null,
+    visible: visible && (client !== null || operations != null),
     polling,
     refresh,
     intervalMs: POLL_INTERVAL_MS
@@ -69,59 +83,70 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
 
   const handleDownload = useCallback(
     async (model: MobileSpeechModel) => {
-      if (!client) {
+      if (!client && !operations) {
         return
       }
       setBusy(model.id)
       setError(null)
       try {
-        await downloadDictationModel(client, model.id)
+        await (operations
+          ? operations.downloadModel(model.id)
+          : downloadDictationModel(client as RpcClient, model.id))
         await refreshSetup()
       } catch (err) {
-        triggerError()
+        onErrorFeedback()
         setError(err instanceof Error ? err.message : 'Download failed')
       } finally {
         setBusy(null)
       }
     },
-    [client, refreshSetup]
+    [client, onErrorFeedback, operations, refreshSetup]
   )
 
   const handleUseModel = useCallback(
     async (model: MobileSpeechModel) => {
-      if (!client) {
+      if (!client && !operations) {
         return
       }
       setBusy(model.id)
       setError(null)
       try {
-        const next = await setDictationConfig(client, { enabled: true, modelId: model.id })
+        const next = operations
+          ? await operations.configure({ enabled: true, modelId: model.id })
+          : await setDictationConfig(client as RpcClient, {
+              enabled: true,
+              modelId: model.id
+            })
         setSetup(next)
-        triggerSuccess()
+        onSuccessFeedback()
         onReady?.()
       } catch (err) {
-        triggerError()
+        onErrorFeedback()
         setError(err instanceof Error ? err.message : 'Could not select model')
       } finally {
         setBusy(null)
       }
     },
-    [client, onReady]
+    [client, onErrorFeedback, onReady, onSuccessFeedback, operations]
   )
 
   const handleToggleEnabled = useCallback(
     async (enabled: boolean) => {
-      if (!client) {
+      if (!client && !operations) {
         return
       }
       setError(null)
       try {
-        setSetup(await setDictationConfig(client, { enabled }))
+        setSetup(
+          operations
+            ? await operations.configure({ enabled })
+            : await setDictationConfig(client as RpcClient, { enabled })
+        )
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not update')
       }
     },
-    [client]
+    [client, operations]
   )
 
   return (

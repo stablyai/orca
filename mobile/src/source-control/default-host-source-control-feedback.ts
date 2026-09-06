@@ -1,0 +1,3 @@
+import { NATIVE_HOST_SOURCE_CONTROL_FEEDBACK } from './native-host-source-control-feedback'
+
+export const DEFAULT_HOST_SOURCE_CONTROL_FEEDBACK = NATIVE_HOST_SOURCE_CONTROL_FEEDBACK

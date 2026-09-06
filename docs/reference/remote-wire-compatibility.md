@@ -75,6 +75,28 @@ Treat these as wire changes even though nothing in the codec moves:
 If old clients cannot interpret the new projection correctly, gate it behind a
 runtime capability the same way Rule 2 gates an opcode.
 
+## Worked example — a new optional param on a strict schema
+
+`mobileWeb.package.asset.gzip` gained an optional `length` so a phone can pull several
+48 KiB chunks per round trip. That is not Rule 1 free: the params schema is zod
+`.strict()`, so a host that predates the field answers `invalid_argument` rather than
+ignoring it. The negotiation is therefore Rule 2 shaped even though nothing about the
+framing changed:
+
+- the host advertises `MOBILE_WEB_PACKAGE_RANGE_RUNTIME_CAPABILITY`
+  (`mobileWeb.package.range.v1`) in `RUNTIME_CAPABILITIES`;
+- `useMobileWebPackageCapability` reads it off the same probe that already gates
+  `mobileWeb.package.gzip.v1`, and only then does the downloader send `length`;
+- a host that answers without the capability keeps getting one-chunk reads, and the
+  response it returns still validates against the old client's chunk schema.
+
+The response side is Rule 1 in the safe direction: `sourceByteLength`'s ceiling moved up
+to `MOBILE_WEB_PACKAGE_MAX_RANGE_BYTES`, but a host only returns more than one chunk to a
+client that asked for it, so an old client never receives a chunk its schema would refuse.
+Read the ceiling before widening it again — 384 KiB of incompressible bytes is still
+inside the relay's 1 MiB control-lane frame after gzip, base64, and the E2EE layer's own
+base64, and a larger range is not.
+
 ## Enforcement
 
 `tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts` runs the real

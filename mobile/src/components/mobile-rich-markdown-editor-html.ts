@@ -1,3 +1,4 @@
+import { MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_CSP_HASH } from '../../../src/shared/mobile-web/markdown-editor-csp'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_RICH_MARKDOWN_KEYBOARD_DISMISS_SCRIPT } from './mobile-rich-markdown-keyboard-dismiss-script'
 import { MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT } from './mobile-rich-markdown-editor-keyboard-inset-script'
@@ -9,16 +10,19 @@ import {
   MOBILE_RICH_MARKDOWN_EDITOR_DOCUMENT_END
 } from './mobile-rich-markdown-editor-document-suffix'
 
-export function escapeInjectedJavaScriptString(value: string): string {
-  return JSON.stringify(value).replace(/<\/script/gi, '<\\/script')
-}
+export { escapeInjectedJavaScriptString } from './mobile-rich-markdown-editor-script-string'
+export { MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_CSP_HASH } from '../../../src/shared/mobile-web/markdown-editor-csp'
 
-export function buildMobileRichMarkdownEditorHtml(): string {
+// Why: `https:` keeps the remote markdown images main rendered; plaintext `http:` stays blocked.
+const MOBILE_RICH_MARKDOWN_EDITOR_FRAME_CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_CSP_HASH}; style-src 'unsafe-inline'; img-src data: https:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; base-uri 'none'; form-action 'none'" />`
+
+export function buildMobileRichMarkdownEditorHtml(_options?: { isolatedFrame?: boolean }): string {
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  ${MOBILE_RICH_MARKDOWN_EDITOR_FRAME_CSP}
   <style>
     :root {
       color-scheme: dark;

@@ -8,8 +8,7 @@ import {
 } from '../../../src/shared/new-workspace/github-links'
 import { parseGitLabIssueOrMRLink } from '../../../src/shared/new-workspace/gitlab-links'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 
 // A repo the picker can switch to for a cross-repo GitHub paste. Slug is derived
@@ -93,7 +92,7 @@ export function findRepoMatchingSlug(
 }
 
 export async function findRepoMatchingSlugForPaste(
-  client: RpcClient,
+  operations: HostWorkspaceCreationOperations,
   repos: readonly PasteRepoCandidate[],
   slug: RepoSlug,
   cache: Map<string, RepoSlug | null>
@@ -108,14 +107,14 @@ export async function findRepoMatchingSlugForPaste(
     let resolved = cache.get(repo.id)
     if (!cache.has(repo.id)) {
       try {
-        const response = await client.sendRequest('github.repoSlug', { repo: `id:${repo.id}` })
-        if (!response.ok && response.error.code === 'method_not_found') {
+        const result = await operations.resolveGitHubRepoSlug(repo.id)
+        if (!result.supported) {
           // Why: RPC availability is host-wide; avoid repeating an unsupported
           // probe for every repo or on the next paste attempt.
           repos.forEach((candidate) => cache.set(candidate.id, null))
           return null
         }
-        resolved = response.ok ? ((response as RpcSuccess).result as RepoSlug | null) : null
+        resolved = result.slug
       } catch {
         resolved = null
       }
@@ -129,55 +128,38 @@ export async function findRepoMatchingSlugForPaste(
 }
 
 export async function lookupGitHubItemByNumber(
-  client: RpcClient,
+  operations: HostWorkspaceCreationOperations,
   repoId: string,
   number: number
 ): Promise<GitHubWorkItem | null> {
-  const response = await client.sendRequest('github.workItem', { repo: `id:${repoId}`, number })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitHubWorkItem | null
-  return item ? { ...item, repoId } : null
+  return operations.lookupGitHubItem(repoId, number)
 }
 
 export async function lookupGitHubItemByOwnerRepo(
-  client: RpcClient,
+  operations: HostWorkspaceCreationOperations,
   repoId: string,
   slug: RepoSlug,
   number: number,
   type: 'issue' | 'pr'
 ): Promise<GitHubWorkItem | null> {
-  const response = await client.sendRequest('github.workItemByOwnerRepo', {
-    repo: `id:${repoId}`,
-    owner: slug.owner,
-    ownerRepo: slug.repo,
-    ...(slug.host ? { host: slug.host } : {}),
+  return operations.lookupGitHubItemByOwnerRepo({
+    repoId,
+    slug,
     number,
     type
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitHubWorkItem | null
-  return item ? { ...item, repoId } : null
 }
 
 export async function lookupGitLabItemByPath(
-  client: RpcClient,
+  operations: HostWorkspaceCreationOperations,
   repoId: string,
   link: NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
 ): Promise<GitLabWorkItem | null> {
-  const response = await client.sendRequest('gitlab.workItemByPath', {
-    repo: `id:${repoId}`,
+  return operations.lookupGitLabItemByPath({
+    repoId,
     host: link.slug.host,
     path: link.slug.path,
     iid: link.number,
     type: link.type
   })
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  const item = (response as RpcSuccess).result as GitLabWorkItem | null
-  return item ? { ...item, repoId } : null
 }

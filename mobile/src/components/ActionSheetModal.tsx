@@ -22,6 +22,7 @@ type Props = {
   title?: string
   message?: string
   actions: ActionSheetAction[]
+  dismissible?: boolean
   onClose: () => void
 }
 
@@ -107,7 +108,14 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
   )
 }
 
-export function ActionSheetModal({ visible, title, message, actions, onClose }: Props) {
+export function ActionSheetModal({
+  visible,
+  title,
+  message,
+  actions,
+  dismissible = true,
+  onClose
+}: Props) {
   const pendingActionRef = useRef<(() => void) | null>(null)
   const sequencedActions = actions.map((action) =>
     action.closeBeforePress
@@ -123,6 +131,7 @@ export function ActionSheetModal({ visible, title, message, actions, onClose }: 
   return (
     <BottomDrawer
       visible={visible}
+      dismissible={dismissible}
       onClose={onClose}
       onAfterClose={() => {
         // Why: iOS cannot present a second native modal until the action

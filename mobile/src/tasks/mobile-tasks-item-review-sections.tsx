@@ -6,7 +6,7 @@ import {
   getGitHubReviewerRows,
   splitReviewerList,
   GitHubPrFileDiff
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import {
   TextInput,
   colors,
@@ -21,6 +21,7 @@ import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationModel) {
   const {
+    handleOpenExternalUrl,
     actionItem,
     detailPayload,
     itemBodyDraft,
@@ -78,12 +79,17 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
       >
         <Text style={styles.inlineSaveText}>Save description</Text>
       </Pressable>
-      <MobileMarkdown content={itemBodyDraft} fallback="No description." />
+      <MobileMarkdown
+        content={itemBodyDraft}
+        fallback="No description."
+        onOpenLink={handleOpenExternalUrl}
+      />
     </>
   ) : (
     <MobileMarkdown
       content={detailPayload.provider === 'linear' ? detailPayload.description : detailPayload.body}
       fallback="No description."
+      onOpenLink={handleOpenExternalUrl}
     />
   )
 }
@@ -247,7 +253,7 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
                 ) : prFileContents[file.path] ? (
                   <GitHubPrFileDiff
                     filePath={file.path}
-                    contents={prFileContents[file.path]}
+                    contents={prFileContents[file.path]!}
                     commentDrafts={prFileCommentDrafts}
                     disabled={mutatingStatus}
                     onCommentDraftChange={(draftKey, next) =>

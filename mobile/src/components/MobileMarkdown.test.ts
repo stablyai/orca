@@ -1,7 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { isMobileMermaidLanguage } from './mobile-mermaid-language'
+import {
+  MobileWebOpenExternalPayloadSchema,
+  normalizeMobileWebExternalUrl
+} from '../../../src/shared/mobile-web/native-operation-contract'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { isMobileMermaidLanguage } from './mobile-mermaid-language'
+import { readMobileTasksSourceFamily } from '../tasks/mobile-tasks-source-family.test-support'
 
 describe('isMobileMermaidLanguage', () => {
   it('matches mermaid case-insensitively after trim', () => {
@@ -304,5 +310,51 @@ describe('parseMobileMarkdown', () => {
     expect(normalizeMobileMarkdownPreviewHtml(`${'<p>x'.repeat(4096)}</p>`)).toBe(
       `${'x'.repeat(4095)}\nx`
     )
+  })
+})
+
+describe('mobile Markdown external links', () => {
+  it('normalizes only bounded HTTP(S)/mailto URLs at the native capability contract', () => {
+    expect(normalizeMobileWebExternalUrl(' https://example.com/path ')).toBe(
+      'https://example.com/path'
+    )
+    expect(MobileWebOpenExternalPayloadSchema.parse({ url: ' http://example.com ' })).toEqual({
+      url: 'http://example.com'
+    })
+    // Markdown bodies, task links and PR comments all carry mailto; the OS handler owns it.
+    expect(normalizeMobileWebExternalUrl('mailto:security@example.com')).toBe(
+      'mailto:security@example.com'
+    )
+    expect(normalizeMobileWebExternalUrl('javascript:alert(1)')).toBeNull()
+    expect(normalizeMobileWebExternalUrl('data:text/html,bad')).toBeNull()
+    expect(normalizeMobileWebExternalUrl('https://example.com/\nscript')).toBeNull()
+    expect(normalizeMobileWebExternalUrl(`https://example.com/${'x'.repeat(4096)}`)).toBeNull()
+  })
+
+  it('routes every read-only Markdown surface through an injected capability', () => {
+    const markdownSource = readFileSync(new URL('./MobileMarkdown.tsx', import.meta.url), 'utf8')
+    const sessionMessageSource = readFileSync(
+      new URL('../session/MobileNativeChatMessage.tsx', import.meta.url),
+      'utf8'
+    )
+    const tasksSource = readMobileTasksSourceFamily()
+    const filePreviewSource = readFileSync(
+      new URL('../files/MobileFilePreviewScreen.tsx', import.meta.url),
+      'utf8'
+    )
+    const workspaceSourceField = readFileSync(
+      new URL('./SmartWorkspaceSourceField.tsx', import.meta.url),
+      'utf8'
+    )
+
+    expect(markdownSource).toContain('onOpenLink?.(externalUrl)')
+    expect(markdownSource).not.toContain('Linking.openURL')
+    expect(sessionMessageSource).toContain('onOpenLink={onOpenLink}')
+    expect(tasksSource).toContain('onOpenLink={handleOpenExternalUrl}')
+    expect(filePreviewSource).toContain('operations?.openExternalUrl(url)')
+    expect(filePreviewSource).toContain('onOpenLink={handleOpenExternalUrl}')
+    expect(filePreviewSource).not.toContain('MOBILE_WEB_NATIVE_CAPABILITY_AUTHORITY')
+    expect(workspaceSourceField).toContain('onOpenExternalUrl(selection.url)')
+    expect(workspaceSourceField).not.toContain('Linking.openURL')
   })
 })
