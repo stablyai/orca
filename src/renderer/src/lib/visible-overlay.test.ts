@@ -35,7 +35,7 @@ describe('hasVisibleOverlay', () => {
 
     expect(hasVisibleOverlay()).toBe(false)
 
-    document.querySelector('[data-worktree-sidebar]')!.innerHTML = '<div role="menu"></div>'
+    mount('<div role="listbox" data-worktree-sidebar><div role="menu"></div></div>')
 
     expect(hasVisibleOverlay()).toBe(true)
   })
