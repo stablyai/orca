@@ -98,7 +98,26 @@ export async function closeOpenDialogs(page: Page): Promise<void> {
     }
     const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true })
     await ((await cancel.isVisible()) ? cancel.click() : page.keyboard.press('Escape'))
-    await expect(dialog).toBeHidden({ timeout: 3_000 })
+    await expect(dialog).toBeHidden({ timeout: 3_000 }).catch(async (error) => {
+      console.log('[dialog-exit-diagnostic]', JSON.stringify(await page.evaluate(() => ({
+        visibility: document.visibilityState,
+        dialogs: Array.from(document.querySelectorAll('[role="dialog"]')).map((element) => {
+          const style = getComputedStyle(element)
+          return {
+            id: element.id, state: element.getAttribute('data-state'),
+            title: element.querySelector('h2')?.textContent,
+            animationName: style.animationName, duration: style.animationDuration,
+            delay: style.animationDelay, playState: style.animationPlayState,
+            display: style.display, visibility: style.visibility, opacity: style.opacity,
+            animations: element.getAnimations().map((animation) => ({
+              playState: animation.playState, currentTime: animation.currentTime,
+              pending: animation.pending, timing: animation.effect?.getComputedTiming()
+            }))
+          }
+        })
+      }))))
+      throw error
+    })
   }
   await expect(page.getByRole('dialog')).toHaveCount(0, { timeout: 3_000 })
 }
