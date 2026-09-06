@@ -526,6 +526,45 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     expect(narrowSubscription().unsubscribe).not.toHaveBeenCalled()
   })
 
+  it('routes a dropped event batch through the dedicated overflow callback', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const received: WorktreeBasePollEvent[][] = []
+    const onOverflow = vi.fn()
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      alwaysVisible,
+      undefined,
+      () => [],
+      undefined,
+      onOverflow
+    )
+    cleanups.push(() => watch.unsubscribe())
+
+    narrowSubscription().hooks.onOverflow?.()
+
+    expect(onOverflow).toHaveBeenCalledOnce()
+    // The dedicated callback owns the refresh; the generic event/error paths
+    // must not also fire so the caller cannot double-count the same loss.
+    expect(received).toEqual([])
+    expect(narrowSubscription().unsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('falls back to a structural change when no overflow callback is wired', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const worktreesDir = join(commonDir, 'worktrees')
+    const received: WorktreeBasePollEvent[][] = []
+    await startWatch(commonDir, received)
+
+    narrowSubscription().hooks.onOverflow?.()
+
+    expect(received.flat()).toContainEqual({ type: 'update', path: worktreesDir })
+  })
+
   it('arms via existence polling when the worktrees dir appears later', async () => {
     installSubscribeMock()
     const commonDir = await makeCommonDir(false)

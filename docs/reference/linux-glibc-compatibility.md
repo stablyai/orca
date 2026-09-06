@@ -6,6 +6,14 @@ Packaging enforces this floor automatically; keep it in mind when adding or
 upgrading native dependencies. (The optional speech feature is the one
 exception — see below.)
 
+## Local package build prerequisites
+
+`pnpm run build:linux` produces AppImage, deb, and RPM artifacts. The RPM target
+requires `rpmbuild` on `PATH`; install `rpm` on Ubuntu/Debian, `rpm-build` on
+Fedora/RHEL, or `rpm` through Homebrew on macOS, then verify it with
+`rpmbuild --version` before packaging. Cross-host builds have the same
+requirement.
+
 ## Why this needs attention
 
 A native module (`.node`) links against the glibc of the machine that compiled

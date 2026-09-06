@@ -9,7 +9,7 @@ export type BrowserClientRetainedRendererPage = {
   webContentsId: number | null
   metadataRevision: number
   attachmentObserved: boolean
-  visibleAttachment: { container: HTMLElement } | null
+  visibleAttachment: { container: HTMLElement; stopTrackingViewport: () => void } | null
   mount: Promise<{ webContentsId: number }>
   resolveMount: (value: { webContentsId: number }) => void
   rejectMount: (error: Error) => void

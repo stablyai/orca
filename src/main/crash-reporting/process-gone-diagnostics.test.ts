@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProcessGoneCrashDetails,
   collectProcessGoneMetricDetails,
-  resetPreGoneProcessMetricsSamplingForTest,
+  resetPreGoneCrashSamplingForTest,
   samplePreGoneProcessMetrics,
-  startPreGoneProcessMetricsSampling
+  startPreGoneCrashSampling
 } from './process-gone-diagnostics'
-import { setSystemMemoryInfoReaderForTest } from './gone-time-system-memory'
+import { setSystemMemoryInfoReaderForTest } from './system-memory-details'
 
 type MetricFixture = {
   pid?: number
@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
 
 describe('process gone diagnostics', () => {
   beforeEach(() => {
-    resetPreGoneProcessMetricsSamplingForTest()
+    resetPreGoneCrashSamplingForTest()
     setSystemMemoryInfoReaderForTest(null)
   })
 
@@ -141,8 +141,8 @@ describe('process gone diagnostics', () => {
     appMetricsMock.mockReturnValue([
       { pid: 30, type: 'Tab', memory: { workingSetSize: 1024 * 100 } }
     ])
-    startPreGoneProcessMetricsSampling(1_000)
-    startPreGoneProcessMetricsSampling(1_000)
+    startPreGoneCrashSampling(1_000)
+    startPreGoneCrashSampling(1_000)
 
     // A crash inside the first interval already has a sample to draw from.
     expect(buildProcessGoneCrashDetails({}, 'renderer')).toMatchObject({
@@ -582,12 +582,12 @@ describe('process gone diagnostics', () => {
   it("arms an unref'd interval so sampling never holds the event loop open", () => {
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
     try {
-      startPreGoneProcessMetricsSampling(60_000)
+      startPreGoneCrashSampling(60_000)
       const timer = setIntervalSpy.mock.results[0]?.value as NodeJS.Timeout
       expect(timer.hasRef()).toBe(false)
     } finally {
       setIntervalSpy.mockRestore()
-      resetPreGoneProcessMetricsSamplingForTest()
+      resetPreGoneCrashSamplingForTest()
     }
   })
 
@@ -641,7 +641,7 @@ describe('process gone diagnostics', () => {
     expect(details.systemMemoryTotalMB).toBe(16_384)
   })
 
-  it('samples system memory at gone time but never into the pre-gone snapshot', () => {
+  it('samples system memory at gone time but never into the processMetrics family', () => {
     appMetricsMock.mockReturnValue([{ pid: 1, type: 'Browser', memory: { workingSetSize: 0 } }])
     samplePreGoneProcessMetrics()
     setSystemMemoryInfoReaderForTest(() => ({
@@ -658,7 +658,9 @@ describe('process gone diagnostics', () => {
       systemMemorySwapTotalMB: 8_192,
       systemMemorySwapFreeMB: 40
     })
-    expect(details.processMetricsPreGoneSystemMemoryTotalMB).toBeUndefined()
+    expect(
+      Object.keys(details).filter((key) => key.startsWith('processMetricsPreGoneSystem'))
+    ).toEqual([])
   })
 
   it('leaves records unflagged when the crashed bucket is still populated', () => {

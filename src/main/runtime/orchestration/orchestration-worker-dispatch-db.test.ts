@@ -168,7 +168,12 @@ describe('OrchestrationDb worker Dispatch state', () => {
           payloadHash: 'payload_hash'
         }
       })
-    ).toThrow('was not found')
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'task_not_found',
+        message: 'Task task_missing was not found.'
+      })
+    )
     expect(d.getMutationReceipt('caller_fingerprint', 'invalid_worker_start')).toBeUndefined()
   })
 

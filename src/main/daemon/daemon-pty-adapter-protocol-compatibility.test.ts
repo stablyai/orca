@@ -720,14 +720,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       return inspectionAdapter
     }
 
-    it('reports protocol 10 inspection as unavailable without unsupported RPCs', async () => {
+    it('reports protocol 10 inspection as client-only unverifiable without unsupported RPCs', async () => {
       const request = vi.fn()
       const legacy = createInspectionAdapter(GET_FOREGROUND_PROCESS_PROTOCOL_VERSION - 1, request)
 
       await expect(legacy.inspectProcess('sess-a')).resolves.toEqual({
         foregroundProcess: null,
-        hasChildProcesses: true,
-        unavailable: true
+        hasChildProcesses: false,
+        verdict: 'unverifiable',
+        reason: 'old_host'
       })
       await expect(legacy.getForegroundProcess('sess-a')).resolves.toBeNull()
       await expect(legacy.hasChildProcesses('sess-a')).resolves.toBe(true)
@@ -809,5 +810,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         current.dispose()
       }
     )
+
+    it('forwards the optional incarnation fence to a current daemon', async () => {
+      const request = vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false }))
+      const current = createInspectionAdapter(PROTOCOL_VERSION, request)
+
+      await current.inspectProcess('sess-a', { expectedIncarnationId: 'incarnation-a' })
+
+      expect(request).toHaveBeenCalledWith('inspectProcess', {
+        sessionId: 'sess-a',
+        expectedIncarnationId: 'incarnation-a'
+      })
+      current.dispose()
+    })
   })
 })

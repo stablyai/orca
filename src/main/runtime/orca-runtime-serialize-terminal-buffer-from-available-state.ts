@@ -87,12 +87,8 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
       kittyKeyboardFlags?: number
     } | null = null
     try {
-      // Why: recovery/read fallback wants visible alt-screen content (e.g. an
-      // active TUI), so altScreenForcesZeroRows is FALSE here. Hydration is
-      // the only path that suppresses alt-screen scrollback.
       rendererSnapshot = await (this.ptyController?.serializeBuffer?.(ptyId, {
-        scrollbackRows: opts.scrollbackRows,
-        altScreenForcesZeroRows: false
+        scrollbackRows: opts.scrollbackRows
       }) ?? Promise.resolve(null))
     } catch {
       // Why: terminal snapshots should not depend on a mounted renderer pane.

@@ -9,6 +9,7 @@ import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -534,7 +535,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       partitioned = true
       callbacksByConnection[0].onClose?.()
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
 
       const disconnectedState = transport.getRecoveryState?.()
       const callsAtCutoff = runtimeSubscribe.mock.calls.length

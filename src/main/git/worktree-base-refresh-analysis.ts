@@ -5,7 +5,7 @@ import type {
 } from '../../shared/worktree/base-ref-drift-types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { probeWorktreeBaseRefPresence } from './worktree-base-ref-probe'
-import { parseWorktreeList } from './worktree-list-parser'
+import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from './worktree-operation-options'
 import { gitExecOptions } from './worktree-operation-options'
 

@@ -10,6 +10,7 @@ import {
 } from '@/components/task-page-github-resume-cache'
 import { sortWorkItemsByNumber } from '../../../shared/work-items'
 import { useAppStore } from '@/store'
+import type { GitHubListRestoreWrite } from './task-page-github-list-scroll-restore'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
 export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const {
@@ -99,6 +100,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const githubListScrollRef = useRef<HTMLDivElement>(null)
   const githubListScrollTopRef = useRef(0)
   const pendingGithubScrollRestoreRef = useRef<number | null>(null)
+  const githubListRestoreWriteRef = useRef<GitHubListRestoreWrite | null>(null)
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
   const [countedTotalPages, setCountedTotalPages] = useState<number | null>(null)
@@ -218,6 +220,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     githubListScrollRef: typeof githubListScrollRef
     githubListScrollTopRef: typeof githubListScrollTopRef
     pendingGithubScrollRestoreRef: typeof pendingGithubScrollRestoreRef
+    githubListRestoreWriteRef: typeof githubListRestoreWriteRef
     paginationLoading: typeof paginationLoading
     setPaginationLoading: typeof setPaginationLoading
     loadingTargetPage: typeof loadingTargetPage
@@ -275,6 +278,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   nextModel.githubListScrollRef = githubListScrollRef
   nextModel.githubListScrollTopRef = githubListScrollTopRef
   nextModel.pendingGithubScrollRestoreRef = pendingGithubScrollRestoreRef
+  nextModel.githubListRestoreWriteRef = githubListRestoreWriteRef
   nextModel.paginationLoading = paginationLoading
   nextModel.setPaginationLoading = setPaginationLoading
   nextModel.loadingTargetPage = loadingTargetPage

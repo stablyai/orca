@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as ptyShellUtils from './pty-shell-utils'
+import {
+  PTY_ATTACH_PROVEN_EXITED_MARKER,
+  isProvenExitedPtyAttachRefusal
+} from '../shared/pty-attach-absence-evidence'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -87,7 +91,7 @@ describe('PtyHandler', () => {
     try {
       await expect(
         dispatcher.callRequest('pty.attach', { id: PTY_1, suppressReplayNotification: true })
-      ).rejects.toThrow(`PTY "${PTY_1}" not found`)
+      ).rejects.toThrow(`PTY "${PTY_1}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
     } finally {
       aliveSpy.mockRestore()
     }
@@ -96,9 +100,18 @@ describe('PtyHandler', () => {
     // is freed so a later attach also cleanly reports not-found.
     expect(exits).toEqual([{ id: PTY_1, paneKey: 'tab-dead:0' }])
     expect(handler.activePtyCount).toBe(0)
-    await expect(
-      dispatcher.callRequest('pty.attach', { id: PTY_1, suppressReplayNotification: true })
-    ).rejects.toThrow(`PTY "${PTY_1}" not found`)
+    const unknownId = await dispatcher
+      .callRequest('pty.attach', { id: PTY_1, suppressReplayNotification: true })
+      .then(
+        () => new Error('expected the attach to be refused'),
+        (error: Error) => error
+      )
+
+    // The second refusal is the shape a restarted relay gives for every id the previous one minted:
+    // same words, no liveness check behind them. Only the probed one may be read as a death
+    // (docs/reference/ssh-execution-boundary.md).
+    expect(unknownId.message).toContain(`PTY "${PTY_1}" not found`)
+    expect(isProvenExitedPtyAttachRefusal(unknownId)).toBe(false)
   })
 
   it('settles concurrent immediate shutdown when attach proves the shell exited', async () => {

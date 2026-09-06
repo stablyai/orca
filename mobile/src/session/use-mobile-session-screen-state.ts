@@ -23,6 +23,7 @@ import type {
   MobileSessionTab,
   Terminal
 } from './mobile-session-route-types'
+import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
@@ -90,19 +91,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
-  const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
-  const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
-    MobileSessionTab,
-    { type: 'markdown' }
-  > | null>(null)
-  const [fileActionTarget, setFileActionTarget] = useState<Extract<
-    MobileSessionTab,
-    { type: 'file' }
-  > | null>(null)
-  const [browserActionTarget, setBrowserActionTarget] = useState<Extract<
-    MobileSessionTab,
-    { type: 'browser' }
-  > | null>(null)
+  const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
     { type: 'markdown' }
@@ -211,14 +200,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateBrowserModal,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
-    actionTarget,
-    setActionTarget,
-    markdownActionTarget,
-    setMarkdownActionTarget,
-    fileActionTarget,
-    setFileActionTarget,
-    browserActionTarget,
-    setBrowserActionTarget,
+    ...sessionTabActionTargets,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
     leaveDrafts,

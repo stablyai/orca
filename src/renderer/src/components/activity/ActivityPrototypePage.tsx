@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
-import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useAppStore } from '@/store'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { useSidebarResize } from '@/hooks/useSidebarResize'
+import { ActivityScopeFilterChips } from './activity-scope-filter-controls'
 import {
   setActivityTerminalPortals,
   type ActivityTerminalPortalTarget
@@ -11,15 +10,10 @@ import {
   reconcileActivityPortalThreads,
   resolveActivityPortalSwap
 } from './activity-portal-thread-reconciliation'
-import { buildActivityEvents } from './activity-event-builder'
-import { buildAgentPaneThreads } from './activity-thread-builder'
-import {
-  activityThreadMatchesSearchQuery,
-  buildActivityThreadGroups,
-  isActivitySearchQueryTooLarge
-} from './activity-thread-grouping'
+import { useAgentPaneThreads } from './use-agent-pane-threads'
 import { handleActivityFilterFocusShortcut } from './activity-filter-focus-shortcut'
-import { createActivityThreadActions } from './activity-thread-actions'
+import { hasActivityThreadWorkspace } from './activity-thread-actions'
+import { useActivityThreadActionBindings } from './use-activity-thread-action-bindings'
 import { ActivityThreadListPane } from './activity-thread-list-pane'
 import { ActivityThreadDetailPane } from './activity-thread-detail-pane'
 import {
@@ -27,22 +21,24 @@ import {
   useActivityTerminalLoadingLabel,
   useActivityTerminalPortalStatus
 } from './activity-terminal-portal-status'
-import type {
-  ActivityGroupBy,
-  ActivityTerminalPortalSlotId,
-  ThreadReadFilter
-} from './activity-thread-types'
+import type { ActivityTerminalPortalSlotId } from './activity-thread-types'
 
 export * from './activity-prototype-page-exports'
 
 export default function ActivityPrototypePage(): React.JSX.Element {
-  const [readFilter, setReadFilter] = useState<ThreadReadFilter>('all')
-  const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
   // Why: bounds auto mark-read to one acknowledgement per selected thread turn.
   const autoAcknowledgedTurnRef = useRef<string | null>(null)
-  const [compactMode, setCompactMode] = useState(false)
+  // Why store-backed: persisted preferences shared with the sidebar agents list.
+  const readFilter = useAppStore((s) => s.agentsReadFilter)
+  const setReadFilter = useAppStore((s) => s.setAgentsReadFilter)
+  const groupBy = useAppStore((s) => s.agentsGroupBy)
+  const setGroupBy = useAppStore((s) => s.setAgentsGroupBy)
+  const compactMode = useAppStore((s) => s.agentsCompactMode)
+  const setCompactMode = useAppStore((s) => s.setAgentsCompactMode)
+  const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
+  const setShowChildAgents = useAppStore((s) => s.setAgentsShowChildAgents)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
   const [activePortalSlotId, setActivePortalSlotId] =
@@ -64,86 +60,30 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     setWidth: setThreadListWidth
   })
 
-  const storeData = useAppStore(
-    useShallow((s) => ({
-      agentStatusByPaneKey: s.agentStatusByPaneKey,
-      migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
-      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
-      tabsByWorktree: s.tabsByWorktree,
-      worktreeMap: getWorktreeMapFromState(s),
-      repoMap: getRepoMapFromState(s),
-      acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
-      acknowledgeAgents: s.acknowledgeAgents,
-      unacknowledgeAgents: s.unacknowledgeAgents,
-      generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true
-    }))
-  )
-  // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-
-  const { events: allEvents, liveAgentByPaneKey } = useMemo(
-    () =>
-      buildActivityEvents({
-        agentStatusByPaneKey: storeData.agentStatusByPaneKey,
-        migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
-        tabsByWorktree: storeData.tabsByWorktree,
-        worktreeMap: storeData.worktreeMap,
-        repoMap: storeData.repoMap,
-        acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
-        // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
-        now: Date.now()
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch]
-  )
-
-  const allThreads = useMemo(
-    () =>
-      buildAgentPaneThreads({
-        events: allEvents,
-        liveAgentByPaneKey,
-        generatedTitlesEnabled: storeData.generatedTitlesEnabled
-      }),
-    [allEvents, liveAgentByPaneKey, storeData.generatedTitlesEnabled]
-  )
-  const selectedPaneKeyIsLive =
-    selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
-  const effectiveSelectedPaneKey = selectedPaneKeyIsLive ? selectedPaneKey : null
+  const {
+    storeData,
+    allThreads,
+    selectedPaneKeyIsLive,
+    effectiveSelectedPaneKey,
+    visibleThreads,
+    markAllReadThreads,
+    visibleThreadGroups
+  } = useAgentPaneThreads({ query, readFilter, groupBy, selectedPaneKey, showChildAgents })
   if (!selectedPaneKeyIsLive) {
     // Why: rows disappear when agent retention or tab state changes; clear stale selection before detail/portal rendering targets it.
     setSelectedPaneKey(null)
   }
 
-  const visibleThreads = useMemo(() => {
-    const normalizedQuery = isActivitySearchQueryTooLarge(query) ? null : query.trim().toLowerCase()
-    return allThreads.filter((thread) => {
-      // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
-      if (
-        readFilter === 'unread' &&
-        !thread.unread &&
-        thread.paneKey !== effectiveSelectedPaneKey
-      ) {
-        return false
-      }
-      if (normalizedQuery === null) {
-        return false
-      }
-      return activityThreadMatchesSearchQuery({ thread, searchQuery: normalizedQuery })
-    })
-  }, [allThreads, readFilter, query, effectiveSelectedPaneKey])
-  const visibleThreadGroups = useMemo(
-    () => buildActivityThreadGroups(visibleThreads, groupBy),
-    [visibleThreads, groupBy]
-  )
-
   const selectedThread = effectiveSelectedPaneKey
     ? (allThreads.find((thread) => thread.paneKey === effectiveSelectedPaneKey) ?? null)
     : null
   const selectedTabId = selectedThread?.tab.id ?? null
+  const selectedWorktreeAvailable = selectedThread
+    ? hasActivityThreadWorkspace(selectedThread, storeData)
+    : false
   // Why: repo-less terminal buckets can produce Activity rows, but the workspace Terminal tree only portals real worktrees.
   const selectedHasLiveTab =
-    selectedThread && selectedTabId && storeData.worktreeMap.has(selectedThread.worktree.id)
+    selectedThread && selectedTabId && selectedWorktreeAvailable
       ? (storeData.tabsByWorktree[selectedThread.worktree.id] ?? []).some(
           (tab) => tab.id === selectedTabId
         )
@@ -152,8 +92,11 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     ? (allThreads.find((thread) => thread.paneKey === displayedPaneKey) ?? null)
     : null
   const displayedTabId = displayedThread?.tab.id ?? null
+  const displayedWorktreeAvailable = displayedThread
+    ? hasActivityThreadWorkspace(displayedThread, storeData)
+    : false
   const displayedHasLiveTab =
-    displayedThread && displayedTabId && storeData.worktreeMap.has(displayedThread.worktree.id)
+    displayedThread && displayedTabId && displayedWorktreeAvailable
       ? (storeData.tabsByWorktree[displayedThread.worktree.id] ?? []).some(
           (tab) => tab.id === displayedTabId
         )
@@ -298,13 +241,38 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     return () => window.removeEventListener('keydown', focusActivityFilter, { capture: true })
   }, [activePortalTargetEl, inactivePortalTargetEl])
 
-  const { hasUnreadThreads, markThreadUnread, selectThread, jumpToWorkspace, markAllThreadsRead } =
-    createActivityThreadActions({
-      allThreads,
-      acknowledgeAgents: storeData.acknowledgeAgents,
-      unacknowledgeAgents: storeData.unacknowledgeAgents,
-      setSelectedPaneKey
-    })
+  const {
+    markThreadRead,
+    markThreadUnread,
+    selectThread,
+    jumpToWorkspace,
+    markAllThreadsRead,
+    hasUnreadThreads,
+    hasCompletedThreads,
+    handleClearCompleted
+  } = useActivityThreadActionBindings({
+    visibleThreads,
+    markAllReadThreads,
+    acknowledgeAgents: storeData.acknowledgeAgents,
+    unacknowledgeAgents: storeData.unacknowledgeAgents,
+    setSelectedPaneKey
+  })
+
+  const canJumpToWorkspace = useCallback(
+    (thread: Parameters<typeof hasActivityThreadWorkspace>[0]) =>
+      hasActivityThreadWorkspace(thread, {
+        worktreesByRepo: storeData.worktreesByRepo,
+        detectedWorktreesByRepo: storeData.detectedWorktreesByRepo,
+        folderWorkspaces: storeData.folderWorkspaces,
+        defaultHostId: storeData.defaultHostId
+      }),
+    [
+      storeData.worktreesByRepo,
+      storeData.detectedWorktreesByRepo,
+      storeData.folderWorkspaces,
+      storeData.defaultHostId
+    ]
+  )
 
   useEffect(() => {
     if (
@@ -356,25 +324,29 @@ export default function ActivityPrototypePage(): React.JSX.Element {
           readFilter={readFilter}
           onReadFilterChange={setReadFilter}
           compactMode={compactMode}
+          showChildAgents={showChildAgents}
           hasUnreadThreads={hasUnreadThreads}
           onCompactModeChange={setCompactMode}
+          onShowChildAgentsChange={setShowChildAgents}
           onMarkAllThreadsRead={markAllThreadsRead}
+          hasCompletedThreads={hasCompletedThreads}
+          onClearCompleted={handleClearCompleted}
           visibleThreadGroups={visibleThreadGroups}
           visibleThreadCount={visibleThreads.length}
           selectedPaneKey={selectedThread?.paneKey ?? null}
           onSelectThread={selectThread}
           onJumpToWorkspace={jumpToWorkspace}
+          onMarkThreadRead={markThreadRead}
           onMarkThreadUnread={markThreadUnread}
-          canJumpToWorkspace={(thread) => storeData.worktreeMap.has(thread.worktree.id)}
+          canJumpToWorkspace={canJumpToWorkspace}
           isThreadListResizing={isThreadListResizing}
           onResizeStart={onResizeStart}
+          scopeFilterRow={<ActivityScopeFilterChips />}
         />
         <ActivityThreadDetailPane
           selectedThread={selectedThread}
           selectedHasLiveTab={Boolean(selectedHasLiveTab)}
-          selectedWorktreeAvailable={Boolean(
-            selectedThread && storeData.worktreeMap.has(selectedThread.worktree.id)
-          )}
+          selectedWorktreeAvailable={selectedWorktreeAvailable}
           visibleThread={visibleThread}
           stagedThread={stagedThread}
           activePortalSlotId={activePortalSlotId}

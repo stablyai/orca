@@ -103,8 +103,8 @@ export function createCodexStructuredItemStreams(
     }
     const options = { coalescingKey: `checkpoint:${agentJournalItemKey(state.identity)}` }
     const admission = deps.sink.tryAppendItem
-      ? deps.sink.tryAppendItem(state.identity, translated.body, translated.blobs, options)
-      : (deps.sink.appendItem(state.identity, translated.body, translated.blobs, options),
+      ? deps.sink.tryAppendItem(state.identity, translated.body, options)
+      : (deps.sink.appendItem(state.identity, translated.body, options),
         { accepted: true as const })
     if (!admission.accepted) {
       return false
@@ -167,9 +167,8 @@ export function createCodexStructuredItemStreams(
     }
     for (const [key, pending] of pendingPatches) {
       const admission = deps.sink.tryAppendItem
-        ? deps.sink.tryAppendItem(pending.identity, pending.body, pending.blobs)
-        : (deps.sink.appendItem(pending.identity, pending.body, pending.blobs),
-          { accepted: true as const })
+        ? deps.sink.tryAppendItem(pending.identity, pending.body)
+        : (deps.sink.appendItem(pending.identity, pending.body), { accepted: true as const })
       if (!admission.accepted) {
         flushed = false
         continue
@@ -193,9 +192,8 @@ export function createCodexStructuredItemStreams(
       return { accepted: true }
     }
     const admission = deps.sink.tryAppendItem
-      ? deps.sink.tryAppendItem(pending.identity, pending.body, pending.blobs)
-      : (deps.sink.appendItem(pending.identity, pending.body, pending.blobs),
-        { accepted: true as const })
+      ? deps.sink.tryAppendItem(pending.identity, pending.body)
+      : (deps.sink.appendItem(pending.identity, pending.body), { accepted: true as const })
     if (!admission.accepted) {
       return admission
     }
@@ -237,8 +235,7 @@ export function createCodexStructuredItemStreams(
         if (translated.body) {
           const nextPending: CodexPendingItemPatch = {
             identity: state.identity,
-            body: translated.body,
-            blobs: translated.blobs
+            body: translated.body
           }
           const previous = pendingPatches.get(key)
           const previousBytes = previous ? pendingPatchBytes(previous) : 0

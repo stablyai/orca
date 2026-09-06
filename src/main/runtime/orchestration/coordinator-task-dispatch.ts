@@ -132,7 +132,7 @@ export async function dispatchTaskToWorker(params: {
   let gateContext = ''
   if (gates.length > 0) {
     const latest = gates.at(-1)!
-    gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n---\n`
+    gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n\n---\n`
   }
 
   try {

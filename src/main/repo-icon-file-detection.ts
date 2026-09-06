@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { buildImageDataUri } from '../shared/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../shared/repo-icon'
+import type { ExecutionHostFilesystemRoute } from './providers/execution-host-provider-dispatch'
 import type { IFilesystemProvider } from './providers/types'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
@@ -258,20 +259,26 @@ async function detectRemoteImageIcon(
   return null
 }
 
+/**
+ * Takes the resolved host route rather than a `connectionId`, because the incumbent shape spelled
+ * "this is local", "this host is unreachable" and "this is a runtime host" all as a falsy id — and
+ * only the first of those may read this machine's filesystem.
+ */
 export function detectRepoFileIcon(
   repoPath: string,
-  {
-    connectionId,
-    fsProvider
-  }: { connectionId?: string | null; fsProvider?: IFilesystemProvider } = {}
+  route: ExecutionHostFilesystemRoute
 ): Promise<RepoIcon | null> {
-  if (fsProvider) {
-    return detectRemoteImageIcon(repoPath, fsProvider)
+  switch (route.kind) {
+    case 'local':
+      return detectLocalImageIcon(repoPath)
+    case 'ssh':
+      // A dropped provider fails closed: repoPath lives on the SSH host, so a same-named local
+      // path would hand back another repository's icon.
+      return route.provider
+        ? detectRemoteImageIcon(repoPath, route.provider)
+        : Promise.resolve(null)
+    case 'runtime':
+      // That environment's server holds these files; this process has no route to them.
+      return Promise.resolve(null)
   }
-  if (connectionId) {
-    // Why: repoPath lives on the SSH host, so a dropped provider must fail closed —
-    // a same-named local path would hand back another repository's icon.
-    return Promise.resolve(null)
-  }
-  return detectLocalImageIcon(repoPath)
 }

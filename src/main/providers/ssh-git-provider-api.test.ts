@@ -54,6 +54,7 @@ describe('SshGitProvider public API parity', () => {
       'worktreeIsClean',
       'refreshLocalBaseRefForWorktreeCreate',
       'renameCurrentBranch',
+      'markRemoteOrcaCreated',
       'forceDeletePreservedBranch',
       'exec',
       'clone',
@@ -63,7 +64,7 @@ describe('SshGitProvider public API parity', () => {
       'getRemoteCommitUrl'
     ] as const
 
-    expect(methods).toHaveLength(51)
+    expect(methods).toHaveLength(52)
     for (const method of methods) {
       expect(provider[method], method).toBeTypeOf('function')
     }
