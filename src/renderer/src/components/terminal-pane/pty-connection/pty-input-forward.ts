@@ -33,6 +33,9 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     // engage the guard via replayIntoTerminal; here we drop everything
     // xterm emits while the guard is active. See replay-guard.ts.
     if (isPaneReplaying(session.deps.replayingPanesRef, session.pane.id)) {
+      const dataset = session.pane.container.dataset
+      dataset.e2eReplayDroppedInput = ((dataset.e2eReplayDroppedInput ?? '') + data).slice(-512)
+      dataset.e2eReplayDropCount = String(Number(dataset.e2eReplayDropCount ?? '0') + 1)
       return
     }
     const currentPtyId = session.transport.getPtyId()

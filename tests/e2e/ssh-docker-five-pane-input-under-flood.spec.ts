@@ -144,6 +144,15 @@ test.describe('five SSH panes under simultaneous output', () => {
           })
           throw error
         } finally {
+          const replayDrops = await orcaPage.evaluate((tabId) => {
+            const manager = window.__paneManagers!.get(tabId)!
+            return manager.getPanes().map((pane) => ({
+              ptyId: pane.container.dataset.ptyId,
+              droppedInput: pane.container.dataset.e2eReplayDroppedInput ?? '',
+              dropCount: pane.container.dataset.e2eReplayDropCount ?? '0'
+            }))
+          }, tabId)
+          console.log('[five-pane-replay-drops]', JSON.stringify({ round, index, replayDrops }))
           await inputTrace.evaluate((trace) => trace.dispose())
           await inputTrace.dispose()
         }
