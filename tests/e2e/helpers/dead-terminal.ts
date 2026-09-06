@@ -59,7 +59,10 @@ export async function createAndActivateWorktreeWithSetup(
   await ensureSetupHookCommitted(page)
 
   const name = `e2e-dead-term-${suffix}-${Date.now()}`
-  return page.evaluate(
+  const cdp = await page.context().newCDPSession(page)
+  const gcTimer = setInterval(() => { void cdp.send('HeapProfiler.collectGarbage').catch(() => {}) }, 100)
+  try {
+    return await page.evaluate(
     async ({ worktreeName, direction }) => {
       const store = window.__store
       if (!store) {
@@ -121,6 +124,10 @@ export async function createAndActivateWorktreeWithSetup(
     },
     { worktreeName: name, direction }
   )
+  } finally {
+    clearInterval(gcTimer)
+    await cdp.detach()
+  }
 }
 
 export async function removeWorktreeViaStore(page: TestPage, worktreeId: string): Promise<void> {
