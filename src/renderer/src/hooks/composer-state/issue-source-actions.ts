@@ -219,12 +219,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
           type: 'issue',
           number: task.number,
           title: task.title,
-          url: task.url,
-          linkedContext: {
-            provider: 'kaneo',
-            version: 1,
-            renderedText: `${task.title}\n${task.url}\n\n${task.description}`
-          }
+          url: task.url
         },
         null
       )
