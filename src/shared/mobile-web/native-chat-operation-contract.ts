@@ -20,6 +20,14 @@ export const MOBILE_WEB_NATIVE_CHAT_EVENT_MAX_BYTES = 512 * 1024
 export const MOBILE_WEB_NATIVE_CHAT_PENDING_DELIVERY_LIMIT = 16
 export const MOBILE_WEB_NATIVE_CHAT_PENDING_TEXT_MAX_CHARACTERS = 4096
 export const MOBILE_WEB_NATIVE_CHAT_MAX_DEADLINE_AHEAD_MS = 30_000
+// Bounds the shell projects host transcript content down to. Named rather than inlined because the
+// shell must clamp to exactly what this schema accepts; a mismatch fails the whole transcript.
+export const MOBILE_WEB_NATIVE_CHAT_BLOCK_TEXT_MAX_CHARACTERS = 4200
+export const MOBILE_WEB_NATIVE_CHAT_TOOL_NAME_MAX_CHARACTERS = 256
+export const MOBILE_WEB_NATIVE_CHAT_MESSAGE_ID_MAX_CHARACTERS = 1024
+export const MOBILE_WEB_NATIVE_CHAT_MESSAGE_BLOCK_LIMIT = 64
+export const MOBILE_WEB_NATIVE_CHAT_IMAGE_REF_MAX_CHARACTERS = 4096
+export const MOBILE_WEB_NATIVE_CHAT_IMAGE_ALT_MAX_CHARACTERS = 512
 
 const OptionalBoundedTextSchema = (maximum: number) => z.string().min(1).max(maximum).optional()
 
@@ -33,6 +41,12 @@ export const MobileWebNativeChatAgentStatusSchema = z
     toolInput: OptionalBoundedTextSchema(AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
     interactivePrompt: OptionalBoundedTextSchema(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH),
     lastAssistantMessage: OptionalBoundedTextSchema(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH),
+    /** Marks `lastAssistantMessage` as tool output, so the streaming preview stays suppressed. */
+    lastAssistantMessageIsToolOutput: z.boolean().optional(),
+    // Inlined like `state` above: the page bundle cannot reach `agent-status-types`. Kept equal to
+    // `AGENT_WORKING_MODES` by a test. A closed set, so the tolerant page parse collapses an
+    // unknown future mode to absent — the pre-field reading of a foreground agent.
+    workingMode: z.enum(['monitoring']).optional(),
     interrupted: z.boolean().optional()
   })
   .strict()
@@ -52,34 +66,39 @@ const MobileWebNativeChatDeadlineShape = {
 } as const
 
 const MobileWebNativeChatTextBlockSchema = z
-  .object({ type: z.literal('text'), text: z.string().max(4200) })
+  .object({
+    type: z.literal('text'),
+    text: z.string().max(MOBILE_WEB_NATIVE_CHAT_BLOCK_TEXT_MAX_CHARACTERS)
+  })
   .strict()
 const MobileWebNativeChatToolCallBlockSchema = z
   .object({
     type: z.literal('tool-call'),
-    name: z.string().min(1).max(256),
-    input: z.unknown()
+    name: z.string().min(1).max(MOBILE_WEB_NATIVE_CHAT_TOOL_NAME_MAX_CHARACTERS),
+    input: z.unknown(),
+    /** Provider lifecycle. Absent on the transcript lane, where the turn's working flag decides. */
+    state: z.enum(['running', 'completed', 'failed']).optional()
   })
   .strict()
 const MobileWebNativeChatToolResultBlockSchema = z
   .object({
     type: z.literal('tool-result'),
-    output: z.string().max(4200),
+    output: z.string().max(MOBILE_WEB_NATIVE_CHAT_BLOCK_TEXT_MAX_CHARACTERS),
     isError: z.boolean().optional()
   })
   .strict()
 const MobileWebNativeChatImageRefBlockSchema = z
   .object({
     type: z.literal('image-ref'),
-    path: z.string().max(4096).optional(),
-    url: z.string().max(4096).optional(),
-    alt: z.string().max(512).optional()
+    path: z.string().max(MOBILE_WEB_NATIVE_CHAT_IMAGE_REF_MAX_CHARACTERS).optional(),
+    url: z.string().max(MOBILE_WEB_NATIVE_CHAT_IMAGE_REF_MAX_CHARACTERS).optional(),
+    alt: z.string().max(MOBILE_WEB_NATIVE_CHAT_IMAGE_ALT_MAX_CHARACTERS).optional()
   })
   .strict()
 
 export const MobileWebNativeChatMessageSchema = z
   .object({
-    id: z.string().min(1).max(1024),
+    id: z.string().min(1).max(MOBILE_WEB_NATIVE_CHAT_MESSAGE_ID_MAX_CHARACTERS),
     role: z.enum(['user', 'assistant', 'tool', 'reasoning', 'system']),
     blocks: z
       .array(
@@ -90,10 +109,10 @@ export const MobileWebNativeChatMessageSchema = z
           MobileWebNativeChatImageRefBlockSchema
         ])
       )
-      .max(64),
+      .max(MOBILE_WEB_NATIVE_CHAT_MESSAGE_BLOCK_LIMIT),
     timestamp: z.number().finite().nullable(),
     source: z.enum(['transcript', 'hook', 'scrape']),
-    turnId: z.string().min(1).max(1024).optional()
+    turnId: z.string().min(1).max(MOBILE_WEB_NATIVE_CHAT_MESSAGE_ID_MAX_CHARACTERS).optional()
   })
   .strict()
 
@@ -231,6 +250,7 @@ export const MobileWebNativeChatReadabilityResultSchema = z
   .strict()
 
 export type MobileWebNativeChatAgentStatus = z.infer<typeof MobileWebNativeChatAgentStatusSchema>
+export type MobileWebNativeChatMessage = z.infer<typeof MobileWebNativeChatMessageSchema>
 export type MobileWebNativeChatReadPayload = z.infer<typeof MobileWebNativeChatReadPayloadSchema>
 export type MobileWebNativeChatSubscribePayload = z.infer<
   typeof MobileWebNativeChatSubscribePayloadSchema

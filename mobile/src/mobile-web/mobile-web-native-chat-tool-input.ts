@@ -11,13 +11,6 @@ type ToolInputBudget = {
   seen: WeakSet<object>
 }
 
-export function sanitizeMobileWebNativeChatMessages(value: unknown): unknown {
-  if (!Array.isArray(value)) {
-    return value
-  }
-  return value.map(sanitizeMessage)
-}
-
 export function sanitizeMobileWebNativeChatToolInput(value: unknown): unknown {
   return sanitizeValue(
     value,
@@ -28,20 +21,6 @@ export function sanitizeMobileWebNativeChatToolInput(value: unknown): unknown {
     },
     0
   )
-}
-
-function sanitizeMessage(value: unknown): unknown {
-  if (!isRecord(value) || !Array.isArray(value.blocks)) {
-    return value
-  }
-  return { ...value, blocks: value.blocks.map(sanitizeBlock) }
-}
-
-function sanitizeBlock(value: unknown): unknown {
-  if (!isRecord(value) || value.type !== 'tool-call') {
-    return value
-  }
-  return { ...value, input: sanitizeMobileWebNativeChatToolInput(value.input) }
 }
 
 function sanitizeValue(value: unknown, budget: ToolInputBudget, depth: number): unknown {
@@ -119,8 +98,4 @@ function uniqueKey(result: Record<string, unknown>, key: string, index: number):
 
 function addTruncationProperty(result: Record<string, unknown>): void {
   result[uniqueKey(result, '…', Object.keys(result).length)] = 'truncated'
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

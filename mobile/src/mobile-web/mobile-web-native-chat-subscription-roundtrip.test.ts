@@ -84,6 +84,92 @@ describe('mobile web native chat subscription round trip', () => {
     expect(unsubscribeHost).toHaveBeenCalledOnce()
     dispose()
   })
+
+  it('keeps streaming a Claude edit turn the host enriched past this wire', async () => {
+    const sendRequest = vi
+      .fn<RpcClient['sendRequest']>()
+      .mockResolvedValueOnce(
+        success({ worktrees: [{ worktreeId: 'host-workspace', repoId: 'host-repo' }] })
+      )
+      .mockResolvedValueOnce(success(restoredSessionSnapshot()))
+      .mockResolvedValueOnce(success(restoredSessionSnapshot()))
+    let emitHostEvent: (event: unknown) => void = () => {}
+    const subscribe = vi
+      .fn<RpcClient['subscribe']>()
+      .mockImplementation((_method, _params, onEvent) => {
+        emitHostEvent = onEvent
+        return vi.fn()
+      })
+    let requestIndex = 0
+    const { client, dispose } = createMobileWebBridgeRoundtripFixture({
+      grants: [...MOBILE_WEB_PRODUCTION_GRANTS],
+      rpcClient: { sendRequest, subscribe } as unknown as RpcClient,
+      createRequestId: () => `${String.fromCharCode(65 + requestIndex++)}`.repeat(22),
+      terminalClientId: 'device'
+    })
+
+    const workspace = (await client.workspaceSnapshot({ limit: 1 })).workspaces[0]!
+    const session = await client.sessionSnapshot({ workspaceId: workspace.id })
+    const tab = session.tabs[0]!
+    if (tab.type !== 'terminal' || !tab.nativeChatSessionId) {
+      throw new Error('Expected native chat authority')
+    }
+    const events: unknown[] = []
+    const errors: unknown[] = []
+    const subscription = client.nativeChatSubscribe(
+      { workspaceId: workspace.id, sessionId: tab.nativeChatSessionId, limit: 40 },
+      (event) => events.push(event),
+      (error) => errors.push(error)
+    )
+    await expect(subscription.ready).resolves.toBeUndefined()
+
+    emitHostEvent({
+      type: 'appended',
+      messages: [
+        {
+          id: 'message-2',
+          role: 'assistant',
+          blocks: [
+            { type: 'text', text: 'x'.repeat(64_000) },
+            { type: 'tool-call', name: 'Edit', input: { file_path: 'a.ts' }, state: 'running' }
+          ],
+          timestamp: 2,
+          source: 'transcript'
+        },
+        {
+          id: 'message-3',
+          role: 'tool',
+          blocks: [
+            {
+              type: 'tool-result',
+              output: 'Edited a.ts',
+              editPatch: {
+                filePath: 'a.ts',
+                hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-a', '+b'] }]
+              }
+            }
+          ],
+          timestamp: 3,
+          source: 'transcript'
+        }
+      ]
+    })
+
+    await vi.waitFor(() => expect(events).toHaveLength(1))
+    expect(errors).toEqual([])
+    const appended = events[0] as {
+      messages: { blocks: ({ text?: string } & Record<string, unknown>)[] }[]
+    }
+    expect(appended.messages[0]?.blocks[0]?.text).toHaveLength(4200)
+    expect(appended.messages[0]?.blocks[1]).toMatchObject({ state: 'running' })
+    expect(appended.messages[1]?.blocks[0]).toEqual({
+      type: 'tool-result',
+      output: 'Edited a.ts'
+    })
+
+    subscription.unsubscribe()
+    dispose()
+  })
 })
 
 function restoredSessionSnapshot() {

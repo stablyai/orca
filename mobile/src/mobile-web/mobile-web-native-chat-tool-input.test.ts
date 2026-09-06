@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  sanitizeMobileWebNativeChatMessages,
-  sanitizeMobileWebNativeChatToolInput
-} from './mobile-web-native-chat-tool-input'
+import { sanitizeMobileWebNativeChatToolInput } from './mobile-web-native-chat-tool-input'
 
 describe('mobile web native chat tool input', () => {
   it('preserves supported tool input used by the existing mobile UI', () => {
@@ -40,20 +37,5 @@ describe('mobile web native chat tool input', () => {
     expect(encoded).toContain('truncated')
     expect(encoded).not.toContain('hidden')
     expect(Object.keys(result as Record<string, unknown>)).toHaveLength(6)
-  })
-
-  it('only rewrites tool-call inputs in transcript messages', () => {
-    const textBlock = { type: 'text', text: 'Ready' }
-    const messages = [
-      {
-        id: 'message-1',
-        blocks: [textBlock, { type: 'tool-call', name: 'Read', input: { path: 'src/app.ts' } }]
-      }
-    ]
-
-    expect(sanitizeMobileWebNativeChatMessages(messages)).toEqual(messages)
-    expect((sanitizeMobileWebNativeChatMessages(messages) as typeof messages)[0].blocks[0]).toBe(
-      textBlock
-    )
   })
 })

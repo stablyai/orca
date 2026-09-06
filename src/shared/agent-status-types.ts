@@ -24,7 +24,8 @@ export type {
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
-export type AgentWorkingMode = 'monitoring'
+export const AGENT_WORKING_MODES = ['monitoring'] as const
+export type AgentWorkingMode = (typeof AGENT_WORKING_MODES)[number]
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
 // accepted — these well-known names are just a convenience union for pattern-matching.
 export type WellKnownAgentType =
