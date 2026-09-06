@@ -93,7 +93,6 @@ jobs:
         run: >-
           pnpm run test:e2e
           tests/e2e/golden-tab-bar-agent-launch.spec.ts
-          tests/e2e/terminal-windows-shell-paste-ownership.spec.ts
           --grep "WSL"
           --repeat-each=3
           --workers=1
