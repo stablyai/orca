@@ -28,6 +28,8 @@ import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
+import { moveActiveTabToNewPaneColumn } from './tab-bar/tab-move-to-pane-column'
+import type { TabSplitDirection } from '../store/slices/tabs'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
 export function handleTerminalWorkspaceKeyDown(
@@ -172,6 +174,25 @@ export function handleTerminalWorkspaceKeyDown(
     return
   }
   if (handleEmptyFloatingWorkspacePanelCloseShortcut(event, shortcutPlatform, keybindings)) {
+    return
+  }
+  const paneColumnMove = (
+    [
+      ['tab.moveToSplitRight', 'right'],
+      ['tab.moveToSplitLeft', 'left'],
+      ['tab.moveToSplitDown', 'down'],
+      ['tab.moveToSplitUp', 'up']
+    ] as const satisfies readonly (readonly [KeybindingActionId, TabSplitDirection])[]
+  ).find(([action]) => !event.repeat && matchShortcut(action))
+  if (paneColumnMove) {
+    // Why consume regardless: the chord is bound to this action, so letting an
+    // unmovable tab fall through would type the chord into the terminal.
+    event.preventDefault()
+    notifyTerminalCapture(paneColumnMove[0])
+    moveActiveTabToNewPaneColumn(
+      paneColumnMove[1],
+      floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId
+    )
     return
   }
   if (!event.repeat && matchShortcut('tab.close')) {
