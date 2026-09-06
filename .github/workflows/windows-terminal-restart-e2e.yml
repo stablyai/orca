@@ -56,7 +56,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "WSL guest did not start: $LASTEXITCODE" }
           wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get update
           if ($LASTEXITCODE -ne 0) { throw "WSL apt update failed: $LASTEXITCODE" }
-          wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get install --yes git
+          wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get install --yes git nodejs
           if ($LASTEXITCODE -ne 0) { throw "WSL git install failed: $LASTEXITCODE" }
           $kernelMsi = Join-Path $env:RUNNER_TEMP 'wsl_update_x64.msi'
           Invoke-WebRequest 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $kernelMsi
@@ -70,6 +70,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build WSL hook relay
+        run: pnpm run build:relay
+
       - name: Build Electron app for Windows E2E
         run: pnpm exec electron-vite build --mode e2e
 
@@ -81,7 +84,9 @@ jobs:
         # grep and worker flags positional filters instead of CLI options.
         run: >-
           pnpm run test:e2e
-          tests/e2e/windows-terminal-env-icons.spec.ts
+          tests/e2e/golden-tab-bar-agent-launch.spec.ts
+          tests/e2e/terminal-windows-shell-paste-ownership.spec.ts
+          --grep "WSL"
           --repeat-each=3
           --workers=1
 
