@@ -18046,10 +18046,12 @@
       "invariant": "Transport loss and frozen-host silence must preserve the remote session; host relay loss may rebind a pane without accumulating reattachable leases. Reconnects must preserve usable terminal content, bounded PTYs/fds/processes, complete large listings, and independently recoverable watcher processes. Electron test shutdown must release inherited pipes after confirmed root exit without closing live-process pipes.",
       "oracle": "Poll a changed connected SSH authority after injected faults, then require terminal output and appropriate PTY identity. Read remote process/fd state, listFiles replies, and rendered explorer rows. Resolve Playwright cleanup only after the root process exits and its inherited pipes close; live-process pipes remain untouched.",
       "commands": [
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-transport-drop-recovery.spec.ts tests/e2e/ssh-docker-half-open-link.spec.ts tests/e2e/ssh-docker-quick-open-large-listing.spec.ts tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts tests/e2e/ssh-docker-resource-accumulation.spec.ts tests/e2e/ssh-docker-watcher-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/helpers/electron-process-shutdown.unit.test.ts"
       ],
       "testFiles": [
+        "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts",
         "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
         "tests/e2e/ssh-docker-half-open-link.spec.ts",
         "tests/e2e/ssh-docker-quick-open-large-listing.spec.ts",
@@ -18059,6 +18061,12 @@
         "tests/e2e/helpers/electron-process-shutdown.unit.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts",
+          "assertions": [
+            "five distinct SSH PTYs acknowledge actual keyboard input after two rendered hide/reopen cycles while all five producers flood"
+          ]
+        },
         {
           "file": "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
           "assertions": [
@@ -18145,6 +18153,7 @@
         "Collect CI runtime and flake history plus product red/green evidence before blocking."
       ],
       "knownGaps": [
+        "Five-pane simultaneous flood input is newly registered and awaiting CI evidence; it does not resolve the separate #16764 wall-clock performance oracle.",
         "The disconnected 48MB flood still loses its relay channel: original post-flood input marker failed in 60s, and waiting for the finite producer completion marker failed in 120s. It remains an explicit #18018 fixme reproduction; frozen-host input is re-enabled after four successful runs.",
         "Linux and Windows desktop clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not exercised by these Docker specs.",
         "Some legacy assertions inspect terminal serialization or backing state rather than rendered DOM; no blanket visual coverage claim.",

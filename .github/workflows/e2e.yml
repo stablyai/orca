@@ -267,6 +267,7 @@ jobs:
     if: >-
       inputs.test_files == '' ||
       inputs.ssh_source_changed == 'true' ||
+      contains(inputs.test_files, 'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
     runs-on: ubuntu-latest

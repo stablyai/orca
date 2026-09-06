@@ -54,10 +54,9 @@ if (runtime.status !== 0) {
 //     the product. Same rule as ssh-docker-relay-perf above. Gating needs a distribution
 //     first, then a host-relative oracle; a bigger constant, or a ratio picked from three
 //     samples, is the same arbitrary number in different clothes.
-//     COVERAGE GAP, recorded as such: 5 simultaneously flooding SSH panes exercise writer
-//     saturation, ACK/credit accounting and per-pane polling together, and nothing else covers
-//     that combination. Flip `test.fixme` back to `test` to run it. Tracked in
-//     stablyai/orca#16764.
+//     The five-pane-input-under-flood spec below checks functional keyboard delivery during
+//     simultaneous output and hide/reopen cycles; its initial CI validation is pending.
+//     It does not replace this timing oracle. Performance coverage remains a gap in #16764.
 //
 // Why both projects: ssh-port-forward-lifecycle is @headful, which the headless project
 // grep-inverts away.
@@ -87,6 +86,7 @@ const result = spawnSync(
     'tests/e2e/ssh-ai-vault-session-history.spec.ts',
     'tests/e2e/ssh-cold-activation-restore.spec.ts',
     'tests/e2e/ssh-cold-hydration-gap-tab-seeding.spec.ts',
+    'tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts',
     'tests/e2e/ssh-docker-half-open-link.spec.ts',
     'tests/e2e/ssh-docker-quick-open-large-listing.spec.ts',
     'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
