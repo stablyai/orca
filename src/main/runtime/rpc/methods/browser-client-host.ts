@@ -39,6 +39,12 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
       }
 
       const registry = getBrowserHostLeaseRegistry(runtime)
+      // Attach inventory cannot describe pages created or replaced after readiness is published.
+      const pagePlacementsAtAttach = new Map(
+        getRuntimeBrowserPageRegistry(runtime)
+          .listPages()
+          .map((page) => [page.browserPageId, page.placement])
+      )
       const handle = registry.attach({
         browserHostClientId: params.browserHostClientId,
         connectionId,
@@ -127,6 +133,7 @@ export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
           lease: handle.lease,
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
+          pagePlacementsAtAttach,
           notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
           releaseUnrecoverablePage: (page) =>
             releaseRuntimeBrowserClientPageRecord(runtime, page.browserPageId, page.placement),
