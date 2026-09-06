@@ -2457,6 +2457,7 @@ export class SshRelaySession {
         recoveryRequest,
         shouldContinue
       )
+      console.info('[flood-source-recovery] ' + JSON.stringify({ phase: 'attach', appPtyId, request: recoveryRequest, recovery: attachResult.sourceRecovery, incarnation: attachResult.incarnationId, replayLength: attachResult.replay?.length, pendingReason: pendingReattach.restoreRequired }))
       sourceActivationLease = attachResult.sourceActivationLease
       if (!shouldContinue()) {
         return
@@ -3161,6 +3162,7 @@ export class SshRelaySession {
     if (!this.ownsPtyRecoveryAttempt(appPtyId, pending)) {
       return
     }
+    console.info('[flood-source-recovery] ' + JSON.stringify({ phase: 'abandon', appPtyId, reason: pending.restoreRequired, recovery: pending.recovery, complete: pending.recoveryComplete, nextSource: pending.nextRecoverySourceSu, queued: pending.queuedData.length, recoveryFrames: pending.recoveryData.length, liveFrames: pending.liveData.length }))
     const recovery = pending.recovery
     const { mux, providerGeneration } = pending
     if (recovery && !mux.isDisposed()) {
