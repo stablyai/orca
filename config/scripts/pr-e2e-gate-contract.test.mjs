@@ -677,8 +677,13 @@ describe('PR E2E gate contract', () => {
 
     // Why pin the titles: the runner requires one receipt per name, so a rename that nobody
     // mirrored here would fail the lane loudly instead of quietly halving it.
+    const nativeDigitSpec = readFileSync(
+      join(projectDir, 'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts'),
+      'utf8'
+    )
+    expect(nativeDigitSpec).toContain('appendImeEngagementReceipt(testInfo.title, trace)')
     for (const title of EXPECTED_NATIVE_IME_TESTS) {
-      expect(nativeImeSpec, title).toContain(title)
+      expect(nativeImeSpec + nativeDigitSpec, title).toContain(title)
     }
   })
 

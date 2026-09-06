@@ -43,6 +43,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { appendImeEngagementReceipt } from './terminal-ime-engagement-receipt'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -230,6 +231,11 @@ test.describe('Hangul terminating digit @headful', () => {
       }
 
       receivedBytes = await waitForTerminalImeBytes(page, reader, 20_000)
+      expect(receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8'))).toEqual(
+        Array.from({ length: REPETITIONS }, () => `${EXPECTED_LINE}\n`)
+      )
+      const trace = await readTerminalImeBoundaryTrace(page)
+      appendImeEngagementReceipt(testInfo.title, trace)
     } finally {
       await writeEvidence(page, testInfo, 'hangul-terminating-digit', {
         expectedHex,
@@ -241,8 +247,5 @@ test.describe('Hangul terminating digit @headful', () => {
       await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
       removeTerminalImeByteReader(reader)
     }
-    expect(receivedBytes.map((hex) => Buffer.from(hex, 'hex').toString('utf8'))).toEqual(
-      Array.from({ length: REPETITIONS }, () => `${EXPECTED_LINE}\n`)
-    )
   })
 })
