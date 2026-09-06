@@ -1105,9 +1105,53 @@ html.native-shell .app-layout {
   text-align: left;
 }
 
+.editor-header-path--breadcrumbs {
+  display: flex;
+  align-items: baseline;
+  cursor: default;
+}
+
 .editor-header-path:hover,
 .editor-header-path:focus-visible {
   color: var(--foreground);
+}
+
+.editor-header-path--breadcrumbs:hover,
+.editor-header-path--breadcrumbs:focus-visible {
+  color: var(--muted-foreground);
+}
+
+.editor-header-path-segment {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 1px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  line-height: inherit;
+}
+
+.editor-header-path-segment:hover,
+.editor-header-path-segment:focus-visible {
+  color: var(--foreground);
+}
+
+.editor-header-path-segment-current {
+  color: var(--foreground);
+}
+
+.editor-header-path-separator,
+.editor-header-path-preview-suffix {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.editor-header-path-separator {
+  padding: 0 2px;
+  opacity: 0.55;
+  user-select: none;
 }
 
 .editor-header-path--static {
@@ -1124,28 +1168,6 @@ html.native-shell .app-layout {
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-.editor-header-copy-toast {
-  opacity: 0;
-  transform: translateY(2px);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease;
-  pointer-events: none;
-  flex-shrink: 0;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 72%, transparent);
-  color: var(--foreground);
-  font-size: 11px;
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
-.editor-header-copy-toast.is-visible {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 /* ── Content ─────────────────────────────────────────── */

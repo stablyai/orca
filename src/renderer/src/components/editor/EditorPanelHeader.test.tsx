@@ -66,7 +66,6 @@ const activeFile: OpenFile = {
 
 const baseProps = {
   activeFile,
-  copiedPathVisible: false,
   isSingleDiff: false,
   isDiffSurface: true,
   isMarkdown: false,
@@ -86,7 +85,6 @@ const baseProps = {
   markdownFrontmatterVisible: false,
   sideBySide: false,
   openFileState: { canOpen: false },
-  onCopyPath: vi.fn(),
   onOpenDiffTargetFile: vi.fn(),
   onOpenPreviewToSide: vi.fn(),
   onOpenMarkdownPreview: vi.fn(),
