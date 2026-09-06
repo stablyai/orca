@@ -62,7 +62,8 @@ describe('mapRuntimeError', () => {
   it.each([
     'remote_update_manual_required',
     'remote_update_not_available',
-    'remote_update_not_downloaded'
+    'remote_update_not_downloaded',
+    'remote_update_live_terminals'
   ])('preserves remote updater failure %s', (code) => {
     expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
       ok: false,

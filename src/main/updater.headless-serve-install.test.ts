@@ -133,6 +133,7 @@ vi.mock('./serve-update-spool', () => ({
   clearUpdateRequest: clearUpdateRequestMock,
   clearUpdateResult: clearUpdateResultMock,
   readServeUpdateResultFor: readServeUpdateResultForMock,
+  getServeUpdateAttemptId: vi.fn(() => 'attempt-42'),
   getServeUpdateUnitName: vi.fn(() => 'orca-serve.service')
 }))
 vi.mock('./serve-update-artifact-capture', () => ({
@@ -663,7 +664,6 @@ describe('headless serve update install handoff', () => {
       )
       expect(writeUpdateRequestMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          runtimeId: 'rt-42',
           fromVersion: '1.0.51',
           targetVersion: '1.0.61',
           artifactPath: '/downloads/orca-1.0.61.AppImage',
@@ -672,7 +672,7 @@ describe('headless serve update install handoff', () => {
           unitName: 'orca-serve.service'
         })
       )
-      expect(readServeUpdateResultForMock).toHaveBeenCalledWith('rt-42', '1.0.61')
+      expect(readServeUpdateResultForMock).toHaveBeenCalledWith('attempt-42', '1.0.61')
       expect(killAllPtyMock).toHaveBeenCalled()
       expect(appMock.quit).toHaveBeenCalled()
       expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()

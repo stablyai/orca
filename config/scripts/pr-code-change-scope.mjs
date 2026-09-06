@@ -184,6 +184,7 @@ const LINUX_PACKAGE_PREFIXES = [
   'config/docker/cli-launch-contract/',
   'config/docker/headless-pairing/',
   'config/docker/headless-serve-shutdown/',
+  'config/docker/headless-serve-update/',
   'config/scripts/run-linux-cli-launch-contract',
   'config/scripts/run-headless-linux-pairing-docker',
   'config/scripts/static-appimage-package-contract',

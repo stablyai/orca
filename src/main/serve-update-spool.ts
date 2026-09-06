@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import {
   getHelperMarkerPath,
@@ -45,8 +46,27 @@ function writeJsonFile(path: string, value: unknown, mode: number): boolean {
   }
 }
 
-export function writeUpdateRequest(request: Omit<ServeUpdateRequest, 'schemaVersion'>): boolean {
-  return writeJsonFile(getRequestPath(resolveSpoolDir()), { schemaVersion: 2, ...request }, 0o664)
+export function writeUpdateRequest(
+  request: Omit<ServeUpdateRequest, 'schemaVersion' | 'attemptId'>
+): boolean {
+  const attemptId = randomUUID()
+  const written = writeJsonFile(
+    getRequestPath(resolveSpoolDir()),
+    { schemaVersion: 2, attemptId, ...request },
+    0o640
+  )
+  if (written) {
+    cachedAttemptId = attemptId
+  }
+  return written
+}
+
+/** The attemptId of the most recently spooled request; undefined until one is written. */
+let cachedAttemptId: string | undefined
+
+/** The per-attempt id the current request was spooled with; pairs with writeUpdateRequest. */
+export function getServeUpdateAttemptId(): string | undefined {
+  return cachedAttemptId
 }
 
 /** Captured download metadata the spooled request carries; the helper re-hashes independently. */
@@ -83,17 +103,18 @@ export function clearUpdateResult(): void {
 }
 
 export function readServeUpdateResultFor(
-  runtimeId: string,
+  attemptId: string,
   targetVersion: string
 ): { verdict: ServeUpdateVerdict; message: string } | null {
   // Why: the result must describe THIS install attempt, not a stale verdict left by a
-  // previous boot. The helper echoes the runtimeId and targetVersion from the request.
+  // previous boot or a replayed request. The helper echoes the per-attempt attemptId
+  // and targetVersion from the request.
   try {
     const raw = JSON.parse(readFileSync(getResultPath(resolveSpoolDir()), 'utf8')) as Record<
       string,
       unknown
     >
-    if (raw.runtimeId !== runtimeId) {
+    if (raw.attemptId !== attemptId) {
       return null
     }
     if (raw.targetVersion !== targetVersion) {
