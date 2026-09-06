@@ -12,7 +12,8 @@ import {
   TEST_WORKTREE_PATH,
   createRuntime,
   makeWorktreeMeta,
-  store
+  store,
+  syncSinglePty
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
@@ -449,5 +450,34 @@ describe('OrcaRuntimeService', () => {
       lastOutputAt: 123
     })
     expect(runtime.getStatus().liveLeafCount).toBe(liveLeafCount)
+  })
+
+  describe('showTerminal freshWorktreeId (#17307)', () => {
+    const OTHER_WORKTREE_ID = `${TEST_REPO_ID}::/tmp/worktree-b`
+
+    it('reports the pty live worktree once it reincarnates away from the leaf-assigned one', async () => {
+      const runtime = createRuntime()
+      const internals = runtime as unknown as {
+        recordPtyWorktree: (
+          ptyId: string,
+          worktreeId: string,
+          state?: Record<string, unknown>
+        ) => void
+      }
+      syncSinglePty(runtime, 'pty-1')
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      const before = await runtime.showTerminal(terminal.handle)
+      expect(before.worktreeId).toBe(TEST_WORKTREE_ID)
+      expect(before.freshWorktreeId).toBe(TEST_WORKTREE_ID)
+
+      // Simulate a daemon crash/restart that reincarnates the same ptyId into a
+      // different worktree — recordPtyWorktree updates ptysById but never the leaf.
+      internals.recordPtyWorktree('pty-1', OTHER_WORKTREE_ID, { incarnationId: 'incarnation-2' })
+
+      const after = await runtime.showTerminal(terminal.handle)
+      expect(after.worktreeId).toBe(TEST_WORKTREE_ID)
+      expect(after.freshWorktreeId).toBe(OTHER_WORKTREE_ID)
+    })
   })
 })

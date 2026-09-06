@@ -146,6 +146,11 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
       incarnationId: pty?.incarnationId ?? null,
       orphaned: false,
       worktreeId: leaf.worktreeId,
+      // Why: recordPtyWorktree keeps `pty.worktreeId` current across a PTY
+      // reincarnation into a different worktree, but never rewrites the leaf's
+      // static worktreeId — callers that must not act on a stale value (e.g.
+      // orchestration worker-start's ownership check) need the live one.
+      freshWorktreeId: pty?.worktreeId ?? leaf.worktreeId,
       worktreePath: worktree?.path ?? '',
       branch: worktree?.branch ?? '',
       tabId: leaf.tabId,
