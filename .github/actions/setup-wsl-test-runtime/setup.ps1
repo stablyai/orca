@@ -15,6 +15,7 @@ wsl.exe --distribution Ubuntu --user root --exec /usr/bin/apt-get install --yes 
 if ($LASTEXITCODE -ne 0) { throw "WSL git install failed: $LASTEXITCODE" }
 $kernelMsi = Join-Path $env:RUNNER_TEMP 'wsl_update_x64.msi'
 Invoke-WebRequest 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi' -OutFile $kernelMsi
+if ((Get-FileHash $kernelMsi -Algorithm SHA256).Hash.ToLowerInvariant() -ne '4d09c776c8d45f70a202281d18e19be1118f53159b0c217a5274a31ce18525fe') { throw 'WSL kernel installer checksum mismatch' }
 $installer = Start-Process msiexec.exe -ArgumentList @('/i', $kernelMsi, '/quiet', '/norestart') -Wait -PassThru
 if ($installer.ExitCode -ne 0) { throw "WSL kernel installation failed: $($installer.ExitCode)" }
 wsl.exe --status
