@@ -6,6 +6,7 @@ import {
 } from '../terminal-dead-session-reconcile'
 import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/pane-tree-ops'
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-pty-resize-hold'
+import { PANE_TUI_REPAINT_REQUEST_EVENT } from '@/lib/pane-manager/pane-tui-repaint-request'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import {
   getProviderSessionClaimKey,
@@ -294,6 +295,10 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.pane.container.removeEventListener(
         PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
         session.onHeldPtyResizeFlush
+      )
+      session.pane.container.removeEventListener(
+        PANE_TUI_REPAINT_REQUEST_EVENT,
+        session.onTuiRepaintRequest
       )
       session.geometryReportObserver?.disconnect()
       if (session.pendingGeometryReportRaf !== null) {

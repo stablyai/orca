@@ -14740,6 +14740,28 @@
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端"
     },
+    "terminal": {
+      "richInput": {
+        "label": "增强型终端输入",
+        "agentPlaceholder": "询问任何内容…",
+        "terminalPlaceholder": "输入命令或提示词…",
+        "sendFailed": "终端输入未发送。",
+        "sendPartial": "部分输入已粘贴。重试前请检查终端。",
+        "hint": "Enter 发送 · {{value0}} 换行",
+        "shortcutHint": "关闭",
+        "send": "发送到终端",
+        "loadingFiles": "正在加载文件…",
+        "files": "文件",
+        "noFiles": "没有匹配的文件",
+        "toggle": "切换增强型终端输入",
+        "imagePasteFailed": "图片粘贴失败。",
+        "addingImage": "正在添加图片…",
+        "slashCommands": "斜杠命令",
+        "removeResource": "移除 {{value0}}",
+        "previewUnavailable": "预览不可用",
+        "openResource": "在 Orca 中打开 {{value0}}"
+      }
+    },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {

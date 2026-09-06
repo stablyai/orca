@@ -78,10 +78,87 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'subagents', description: 'Switch the active agent thread' }
 ]
 
+const OPENCODE_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'new', description: 'Start a new session' },
+  { name: 'models', description: 'Choose a model' },
+  { name: 'sessions', description: 'Browse sessions' },
+  { name: 'compact', description: 'Compact the conversation' },
+  { name: 'init', description: 'Create or update project instructions' },
+  { name: 'undo', description: 'Undo the last message' },
+  { name: 'redo', description: 'Redo the last undone message' },
+  { name: 'editor', description: 'Compose in an external editor' },
+  { name: 'export', description: 'Export the conversation' },
+  { name: 'share', description: 'Share the conversation' },
+  { name: 'help', description: 'Show available commands' },
+  { name: 'exit', description: 'Exit OpenCode' }
+]
+
+const KIMI_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'init', description: 'Generate an AGENTS.md file' },
+  { name: 'compact', description: 'Compact the context' },
+  { name: 'clear', description: 'Clear the context' },
+  { name: 'plan', description: 'Configure plan mode' },
+  { name: 'add-dir', description: 'Add a workspace directory' },
+  { name: 'model', description: 'Switch model or thinking mode' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'sessions', description: 'List or resume sessions' },
+  { name: 'title', description: 'Set or show the session title' },
+  { name: 'task', description: 'Browse background tasks' },
+  { name: 'mcp', description: 'Show MCP servers and tools' },
+  { name: 'hooks', description: 'List configured hooks' },
+  { name: 'undo', description: 'Fork and retry a previous turn' },
+  { name: 'fork', description: 'Fork the current session' },
+  { name: 'export', description: 'Export the session to Markdown' },
+  { name: 'import', description: 'Import context from a file or session' },
+  { name: 'help', description: 'Show available commands' },
+  { name: 'exit', description: 'Exit Kimi Code' }
+]
+
+const PI_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'model', description: 'Switch models' },
+  { name: 'scoped-models', description: 'Configure model cycling' },
+  { name: 'settings', description: 'Open settings' },
+  { name: 'resume', description: 'Resume a previous session' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'name', description: 'Set the session name' },
+  { name: 'session', description: 'Show session information' },
+  { name: 'tree', description: 'Navigate the session tree' },
+  { name: 'fork', description: 'Fork from a previous message' },
+  { name: 'clone', description: 'Clone the active branch into a new session' },
+  { name: 'compact', description: 'Compact the context' },
+  { name: 'copy', description: 'Copy the last assistant response' },
+  { name: 'export', description: 'Export the session' },
+  { name: 'import', description: 'Import and resume a session' },
+  { name: 'share', description: 'Share the session as a private gist' },
+  { name: 'reload', description: 'Reload configuration and resources' },
+  { name: 'hotkeys', description: 'Show keyboard shortcuts' },
+  { name: 'changelog', description: 'Show version history' },
+  { name: 'quit', description: 'Exit Pi' }
+]
+
+const GROK_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'workflows', description: 'Show workflow runs' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'compact', description: 'Compact the conversation' },
+  { name: 'copy', description: 'Copy the last response' },
+  { name: 'memory', description: 'Manage memory' },
+  { name: 'resume', description: 'Resume a session' },
+  { name: 'session-info', description: 'Show session information' },
+  { name: 'usage', description: 'Show usage information' },
+  { name: 'help', description: 'Browse commands and shortcuts' },
+  { name: 'docs', description: 'Open Grok documentation' },
+  { name: 'home', description: 'Return to the welcome screen' },
+  { name: 'quit', description: 'Exit Grok' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
-  codex: CODEX_COMMANDS
+  codex: CODEX_COMMANDS,
+  opencode: OPENCODE_COMMANDS,
+  kimi: KIMI_COMMANDS,
+  pi: PI_COMMANDS,
+  grok: GROK_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

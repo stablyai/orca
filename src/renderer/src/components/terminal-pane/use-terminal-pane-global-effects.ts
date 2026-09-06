@@ -10,6 +10,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import type { IDisposable } from '@xterm/xterm'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
+import { getTerminalRichInputDropPathReceiver } from './terminal-rich-input-native-drop'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
 import { useAppStore } from '@/store'
@@ -316,14 +317,20 @@ export function useTerminalPaneGlobalEffects({
       if (!wtId) {
         return
       }
-      void handleTerminalFileDrop({
+      const richInputPathReceiver = getTerminalRichInputDropPathReceiver(manager, data.paneLeafId)
+      richInputPathReceiver?.begin(data.paths)
+      const dropResult = handleTerminalFileDrop({
         manager,
         paneTransports: paneTransportsRef.current,
         worktreeId: wtId,
         tabId,
         cwd: cwdRef.current,
-        data
+        data,
+        // Why: native drops still need the terminal's WSL/SSH/runtime resolver,
+        // but an open composer must receive the resolved paths instead of PTY input.
+        ...(richInputPathReceiver ? { onResolvedPaths: richInputPathReceiver.receive } : {})
       })
+      void Promise.resolve(dropResult).finally(() => richInputPathReceiver?.end())
     })
   }, [isActive, isVisible, managerRef, paneTransportsRef, tabId])
 }

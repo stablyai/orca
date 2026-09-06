@@ -14684,6 +14684,28 @@
       },
       "launchPromptNotDelivered": "No entregado — revisa la terminal"
     },
+    "terminal": {
+      "richInput": {
+        "label": "Entrada enriquecida del terminal",
+        "agentPlaceholder": "Pregunta lo que quieras…",
+        "terminalPlaceholder": "Escribe un comando o una instrucción…",
+        "sendFailed": "No se envió la entrada al terminal.",
+        "sendPartial": "Se pegó parte de la entrada. Revisa el terminal antes de volver a intentarlo.",
+        "hint": "Intro para enviar · {{value0}} para una nueva línea",
+        "shortcutHint": "para cerrar",
+        "send": "Enviar al terminal",
+        "loadingFiles": "Cargando archivos…",
+        "files": "Archivos",
+        "noFiles": "No hay archivos coincidentes",
+        "toggle": "Alternar entrada enriquecida del terminal",
+        "imagePasteFailed": "No se pudo pegar la imagen.",
+        "addingImage": "Añadiendo imagen…",
+        "slashCommands": "Comandos con barra",
+        "removeResource": "Eliminar {{value0}}",
+        "previewUnavailable": "Vista previa no disponible",
+        "openResource": "Abrir {{value0}} en Orca"
+      }
+    },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {

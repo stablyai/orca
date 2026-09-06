@@ -17121,6 +17121,29 @@
       "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
       "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
     },
+    "terminal": {
+      "richInput": {
+        "label": "Rich terminal input",
+        "agentPlaceholder": "Ask anything…",
+        "terminalPlaceholder": "Type a command or prompt…",
+        "sendFailed": "Terminal input was not sent.",
+        "sendPartial": "Part of the input was pasted. Check the terminal before retrying.",
+        "hint": "Enter to send · {{value0}} for newline",
+        "shortcutHint": "to close",
+        "send": "Send to terminal",
+        "loadingFiles": "Loading files…",
+        "files": "Files",
+        "noFiles": "No matching files",
+        "toggle": "Toggle rich terminal input",
+        "imagePasteFailed": "Image paste failed.",
+        "addingImage": "Adding image…",
+        "slashCommands": "Slash commands",
+        "removeResource": "Remove {{value0}}",
+        "previewUnavailable": "Preview unavailable",
+        "openResource": "Open {{value0}} in Orca",
+        "sendUnconfirmed": "Sent, but the agent did not confirm. Check the terminal."
+      }
+    },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {

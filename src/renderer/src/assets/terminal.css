@@ -549,3 +549,98 @@
   color: #a1a1aa;
   background: rgba(24, 24, 27, 0.85);
 }
+
+/* Rich input is a real dock row rather than an overlay: xterm's observed
+   container shrinks, so its existing ResizeObserver refits instead of hiding
+   the last terminal lines behind the composer. */
+.pane[data-terminal-rich-input-mounted] {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.pane[data-terminal-rich-input-mounted] .xterm-container {
+  grid-row: 1;
+  min-height: 0;
+}
+
+.terminal-rich-input-dock {
+  position: relative;
+  z-index: 30;
+  display: grid;
+  grid-row: 2;
+  grid-template-rows: 0fr;
+}
+
+.terminal-rich-input-dock[data-layout-open] {
+  grid-template-rows: 1fr;
+}
+
+.terminal-rich-input-dock[data-layout-open] .terminal-rich-input-dock-content {
+  overflow: visible;
+}
+
+.terminal-rich-input-dock-content {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 140ms ease-out,
+    transform 140ms ease-out;
+}
+
+.terminal-rich-input-dock[data-visible] .terminal-rich-input-dock-content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-rich-input-dock-content {
+    transition: none;
+  }
+}
+
+.pane-manager-root [data-terminal-rich-input-dock] {
+  border-color: var(--border);
+}
+
+.pane-manager-root [data-terminal-rich-input-menu],
+.pane-manager-root [data-terminal-rich-input-mention],
+.pane-manager-root [data-terminal-rich-input-send] {
+  border-color: var(--border);
+}
+
+.terminal-rich-input-editor {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.terminal-rich-input-range-selected [data-terminal-rich-input-mention] > span,
+.terminal-rich-input-range-selected [data-terminal-rich-input-image-attachment] > span {
+  border-color: Highlight;
+  background: Highlight;
+}
+
+.terminal-rich-input-block-selected {
+  width: fit-content;
+  max-width: 100%;
+  background: color-mix(in srgb, Highlight 34%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, Highlight 34%, transparent);
+}
+
+.terminal-rich-input-block-selected
+  .terminal-rich-input-range-selected
+  [data-terminal-rich-input-mention]
+  > span,
+.terminal-rich-input-block-selected
+  .terminal-rich-input-range-selected
+  [data-terminal-rich-input-image-attachment]
+  > span {
+  border-color: Highlight;
+  background: color-mix(in srgb, var(--background) 38%, transparent);
+}
+
+.terminal-rich-input-range-selected ::selection,
+.terminal-rich-input-block-selected::selection,
+.terminal-rich-input-block-selected *::selection {
+  color: inherit;
+  background: transparent;
+}

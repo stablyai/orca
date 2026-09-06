@@ -22,11 +22,7 @@ import {
   type TerminalPanePasteExecution
 } from './terminal-pane-paste-execution'
 
-const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
-
-function isInsideNativeChatRoot(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(NATIVE_CHAT_ROOT_SELECTOR) !== null
-}
+import { terminalPasteIsOwnedByOverlay } from './terminal-paste-overlay-target'
 
 export function registerTerminalPanePasteListeners({
   container,
@@ -71,10 +67,7 @@ export function registerTerminalPanePasteListeners({
   }
   const onKeyPaste = (event: KeyboardEvent): void => {
     const target = event.target
-    if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatRoot(target)
-    ) {
+    if (terminalPasteIsOwnedByOverlay(target)) {
       return
     }
     const matchesPaste = keybindingMatchesAction(
@@ -123,10 +116,7 @@ export function registerTerminalPanePasteListeners({
 
   const onPaste = (event: ClipboardEvent): void => {
     const target = event.target
-    if (
-      (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
-      isInsideNativeChatRoot(target)
-    ) {
+    if (terminalPasteIsOwnedByOverlay(target)) {
       return
     }
     if (suppressNextNativePaste) {
@@ -164,8 +154,7 @@ export function registerTerminalPanePasteListeners({
     if (
       !(activeElementAtDispatch instanceof Element) ||
       !container.contains(activeElementAtDispatch) ||
-      activeElementAtDispatch.closest('[data-terminal-search-root]') ||
-      isInsideNativeChatRoot(activeElementAtDispatch)
+      terminalPasteIsOwnedByOverlay(activeElementAtDispatch)
     ) {
       return
     }
@@ -204,8 +193,7 @@ export function registerTerminalPanePasteListeners({
       !(activeElement instanceof Element) ||
       !container.contains(activeElement) ||
       isEditableTarget(activeElement) ||
-      activeElement.closest('[data-terminal-search-root]') ||
-      isInsideNativeChatRoot(activeElement)
+      terminalPasteIsOwnedByOverlay(activeElement)
     ) {
       return
     }

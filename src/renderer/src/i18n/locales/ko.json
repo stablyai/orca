@@ -14797,6 +14797,28 @@
       },
       "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요"
     },
+    "terminal": {
+      "richInput": {
+        "label": "리치 터미널 입력",
+        "agentPlaceholder": "무엇이든 물어보세요…",
+        "terminalPlaceholder": "명령어나 프롬프트를 입력하세요…",
+        "sendFailed": "터미널 입력을 보내지 못했습니다.",
+        "sendPartial": "입력 일부가 붙여넣어졌습니다. 다시 시도하기 전에 터미널을 확인하세요.",
+        "hint": "Enter로 보내기 · {{value0}}로 줄 바꿈",
+        "shortcutHint": "로 닫기",
+        "send": "터미널로 보내기",
+        "loadingFiles": "파일 불러오는 중…",
+        "files": "파일",
+        "noFiles": "일치하는 파일 없음",
+        "toggle": "리치 터미널 입력 전환",
+        "imagePasteFailed": "이미지 붙여넣기에 실패했습니다.",
+        "addingImage": "이미지 추가 중…",
+        "slashCommands": "슬래시 명령",
+        "removeResource": "{{value0}} 제거",
+        "previewUnavailable": "미리보기를 사용할 수 없음",
+        "openResource": "Orca에서 {{value0}} 열기"
+      }
+    },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {

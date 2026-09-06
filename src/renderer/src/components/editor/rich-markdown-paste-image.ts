@@ -75,5 +75,6 @@ async function saveClipboardImageForMarkdownPaste(
   // temp save through SSH would put the source file on the wrong machine.
   const connectionId = hasRuntimeOwner ? undefined : (getConnectionId(worktreeId) ?? undefined)
 
-  return window.api.ui.saveClipboardImageAsTempFile({ connectionId })
+  const savedImage = await window.api.ui.saveClipboardImageAsTempFile({ connectionId })
+  return typeof savedImage === 'string' ? savedImage : (savedImage?.path ?? null)
 }

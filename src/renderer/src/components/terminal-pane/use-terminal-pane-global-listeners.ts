@@ -52,6 +52,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     shouldMeasureHiddenStartup,
     tabId,
     toggleExpandPane,
+    toggleRichInput,
     worktreeId
   } = controller
 
@@ -78,6 +79,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     onClearPaneScrollback: clearPaneScrollback,
     onSetTitle: handleStartRename,
     onClearPaneTitle: handleClearPaneTitleShortcut,
+    onToggleRichInput: toggleRichInput,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,

@@ -1,3 +1,4 @@
+import { TerminalPaneRichInputPortal } from './TerminalPaneRichInputPortal'
 import { createPortal } from 'react-dom'
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
@@ -213,6 +214,7 @@ export function TerminalPaneSurface({
         panes={managerRef.current?.getPanes() ?? []}
         paneIds={sessionRestoredBannerPaneIds}
       />
+      <TerminalPaneRichInputPortal controller={controller} />
       <TerminalPaneNativeChatPortal controller={controller} />
       <TerminalContextMenu
         open={contextMenu.open}
@@ -312,6 +314,9 @@ export function TerminalPaneSurface({
         hiddenStartupStyle={hiddenStartupStyle}
         managerRef={managerRef}
         paneTransportsRef={paneTransportsRef}
+        canToggleRichInput={isActive && !controller.effectiveChatViewMode}
+        isRichInputOpen={controller.richInputLeafId === activePane?.leafId}
+        onToggleRichInput={controller.toggleRichInput}
         canToggleNativeChat={activePaneCanToggleChat}
         isChatViewMode={activePaneIsChatLeaf}
         onToggleNativeChat={handleToggleNativeChat}

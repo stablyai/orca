@@ -234,6 +234,19 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'terminal.richInput.toggle',
+    title: 'Toggle rich terminal input',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'prompt', 'composer', 'rich input', 'multiline'],
+    defaultBindings: {
+      darwin: ['Mod+I'],
+      // Why: keep Ctrl+I available to terminal applications on non-Mac hosts.
+      linux: ['Ctrl+Shift+M'],
+      win32: ['Ctrl+Shift+M']
+    }
+  },
+  {
     id: 'terminal.search',
     title: 'Search active pane',
     group: 'Terminal Panes',

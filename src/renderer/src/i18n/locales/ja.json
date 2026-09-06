@@ -14719,6 +14719,28 @@
       },
       "launchPromptNotDelivered": "配信されませんでした — ターミナルを確認してください"
     },
+    "terminal": {
+      "richInput": {
+        "label": "リッチターミナル入力",
+        "agentPlaceholder": "何でも聞いてください…",
+        "terminalPlaceholder": "コマンドまたはプロンプトを入力…",
+        "sendFailed": "ターミナル入力を送信できませんでした。",
+        "sendPartial": "入力の一部が貼り付けられました。再試行する前にターミナルを確認してください。",
+        "hint": "Enterで送信 · {{value0}}で改行",
+        "shortcutHint": "で閉じる",
+        "send": "ターミナルに送信",
+        "loadingFiles": "ファイルを読み込み中…",
+        "files": "ファイル",
+        "noFiles": "一致するファイルはありません",
+        "toggle": "リッチターミナル入力を切り替え",
+        "imagePasteFailed": "画像の貼り付けに失敗しました。",
+        "addingImage": "画像を追加中…",
+        "slashCommands": "スラッシュコマンド",
+        "removeResource": "{{value0}}を削除",
+        "previewUnavailable": "プレビューを利用できません",
+        "openResource": "Orca で{{value0}}を開く"
+      }
+    },
     "tab": {
       "bar": {
         "SortableTabContextMenu": {

@@ -89,6 +89,7 @@ function createHarness(bindings?: Map<number, ShortcutBinding>): {
     persistLayoutSnapshot: vi.fn(),
     toggleExpandPane: vi.fn(),
     setSearchOpen: vi.fn(),
+    onToggleRichInput: vi.fn(),
     onSearchSelectedText: vi.fn(),
     onRequestClosePane: vi.fn(),
     onClearPaneScrollback: vi.fn(),
@@ -128,6 +129,32 @@ describe('Windows IME keyboard ownership', () => {
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.restoreAllMocks()
+  })
+
+  it.each([
+    { platform: 'Mac', key: 'i', code: 'KeyI', metaKey: true, ctrlKey: false, shiftKey: false },
+    { platform: 'Linux', key: 'M', code: 'KeyM', metaKey: false, ctrlKey: true, shiftKey: true },
+    { platform: 'Windows', key: 'M', code: 'KeyM', metaKey: false, ctrlKey: true, shiftKey: true }
+  ])('toggles rich input before the editable guard on $platform', (binding) => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(binding.platform)
+    const harness = createHarness()
+    const hook = renderHook(() => useTerminalKeyboardShortcuts(harness.deps))
+    const event = keyboardEvent('keydown', { ...binding, keyCode: 0, timeStamp: 1 })
+    harness.editable.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    expect(harness.deps.onToggleRichInput).toHaveBeenCalledOnce()
+    harness.editable.dispatchEvent(
+      keyboardEvent('keydown', {
+        ...binding,
+        repeat: true,
+        keyCode: 0,
+        timeStamp: 2
+      })
+    )
+    expect(harness.deps.onToggleRichInput).toHaveBeenCalledOnce()
+    expect(harness.sendInput).not.toHaveBeenCalled()
+    hook.unmount()
+    harness.dispose()
   })
 
   it.each([

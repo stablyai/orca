@@ -12,7 +12,8 @@ export type UiWindowApi = {
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
     runtimeEnvironmentId?: string | null
-  }) => Promise<string | null>
+    includeLocalPreview?: boolean
+  }) => Promise<string | { path: string; previewSrc?: string } | null>
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>

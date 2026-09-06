@@ -1,3 +1,4 @@
+import { useTerminalPaneRichInput } from './use-terminal-pane-rich-input'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -56,6 +57,8 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  const richInput = useTerminalPaneRichInput(controller, effectiveChatViewMode)
+  const { setRichInputLeafId } = richInput
   const chatPaneDispatchStatus = useAppStore((store) =>
     chatLeafId
       ? store.agentStatusByPaneKey[makePaneKey(tabId, chatLeafId)]?.orchestration?.dispatchStatus
@@ -239,10 +242,18 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
       }
       setChatLeafId(leafId)
       if (!effectiveChatViewMode) {
+        setRichInputLeafId(null)
         toggleTabViewMode(unifiedTabId)
       }
     },
-    [chatLeafId, effectiveChatViewMode, setChatLeafId, toggleTabViewMode, unifiedTabId]
+    [
+      chatLeafId,
+      effectiveChatViewMode,
+      setChatLeafId,
+      setRichInputLeafId,
+      toggleTabViewMode,
+      unifiedTabId
+    ]
   )
   const handleToggleNativeChat = useCallback(() => {
     const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
@@ -275,10 +286,10 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     consumePendingCodexPaneRestart,
     clearCodexRestartNotice,
     unifiedTabId,
+    ...richInput,
     structuredSessionAgent,
     isChatViewMode,
     structuredSessionId,
-    nativeChatEnabled,
     effectiveChatViewMode,
     chatPaneDispatchStatus,
     unifiedTabLabel,

@@ -23,6 +23,7 @@ import {
 type TerminalFileOpenDeps = {
   worktreeId: string
   worktreePath: string
+  connectionId?: string | null
   runtimeEnvironmentId?: string | null
   wslDistro?: string | null
   openWithSystemDefault?: boolean
@@ -48,9 +49,13 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
 export function getTerminalFileContext(
   worktreeId: string,
   worktreePath: string,
-  runtimeEnvironmentId?: string | null
+  runtimeEnvironmentId?: string | null,
+  connectionId?: string | null
 ): RuntimeFileOperationArgs {
-  return buildWorkspaceFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+  const context = buildWorkspaceFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+  return connectionId === undefined
+    ? context
+    : { ...context, connectionId: connectionId ?? undefined }
 }
 
 // Why: a WSL-runtime pane prints POSIX paths even when the worktree lives on a
@@ -129,7 +134,13 @@ export function openDetectedFilePath(
   column: number | null,
   deps: TerminalFileOpenDeps
 ): void {
-  const { openWithSystemDefault = false, runtimeEnvironmentId, worktreeId, worktreePath } = deps
+  const {
+    connectionId,
+    openWithSystemDefault = false,
+    runtimeEnvironmentId,
+    worktreeId,
+    worktreePath
+  } = deps
   const mappedFilePath = mapTerminalFilePath(
     filePath,
     worktreePath,
@@ -140,7 +151,12 @@ export function openDetectedFilePath(
 
   void (async () => {
     let statResult
-    const fileContext = getTerminalFileContext(worktreeId, worktreePath, runtimeEnvironmentId)
+    const fileContext = getTerminalFileContext(
+      worktreeId,
+      worktreePath,
+      runtimeEnvironmentId,
+      connectionId
+    )
     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
       fileContext,
       mappedFilePath
@@ -261,9 +277,9 @@ export function openDetectedFilePath(
         language,
         mode: 'edit',
         runtimeEnvironmentId,
-        // Why: absolute SSH paths outside the worktree otherwise look identical
-        // to client-local external files when the editor reloads or restores.
-        ...(relativePath === filePath &&
+        // Why: explicit ownership from a restored rich-input chip must survive
+        // workspace route changes even for paths inside the worktree.
+        ...((connectionId !== undefined || relativePath === filePath) &&
         !fileContext.settings?.activeRuntimeEnvironmentId?.trim() &&
         fileContext.connectionId
           ? { externalSshTargetId: fileContext.connectionId }

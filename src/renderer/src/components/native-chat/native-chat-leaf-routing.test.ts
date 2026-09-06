@@ -68,6 +68,20 @@ describe('nativeChatLaunchAgentForLeaf', () => {
     ).toBeNull()
   })
 
+  it.each(['claude', 'codex', 'opencode', 'kimi', 'pi', 'grok'] as const)(
+    'preserves the %s launch identity for its sole leaf',
+    (launchAgent) => {
+      expect(
+        nativeChatLaunchAgentForLeaf({
+          launchAgent,
+          launchAgentLeafId: 'leaf-a',
+          leafId: 'leaf-a',
+          leafIds: ['leaf-a']
+        })
+      ).toBe(launchAgent)
+    }
+  )
+
   it('does not lend the original launch agent to either leaf of a mixed split', () => {
     const leafIds = ['agent-leaf', 'shell-leaf']
 

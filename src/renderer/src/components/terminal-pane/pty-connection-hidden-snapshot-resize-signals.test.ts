@@ -1,5 +1,6 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { requestPaneTuiRepaint } from '@/lib/pane-manager/pane-tui-repaint-request'
 import { flushAsyncTicks, createDeferred } from './pty-connection-test-async'
 import {
   createMockTransport,
@@ -347,6 +348,36 @@ describe('connectPanePty', () => {
     expect(transport.resize).toHaveBeenCalledWith(132, 40)
     expect(transport.resize).toHaveBeenCalledWith(133, 40)
     expect(signalPty).not.toHaveBeenCalledWith('pty-id', 'SIGWINCH')
+    disposable.dispose()
+  })
+
+  it('reasserts only the settled alternate-screen size through normal resize routing', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    pane.terminal.cols = 133
+    pane.terminal.rows = 47
+    ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'alternate'
+    const manager = createManager(1)
+    const disposable = connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({ isVisibleRef: { current: true } }) as never
+    )
+    await flushAsyncTicks(6)
+    transport.resize.mockClear()
+
+    requestPaneTuiRepaint(pane.container, { cols: 133, rows: 47 })
+
+    expect(transport.resize).toHaveBeenCalledOnce()
+    expect(transport.resize).toHaveBeenCalledWith(133, 47, { claim: true })
+
+    requestPaneTuiRepaint(pane.container, { cols: 132, rows: 47 })
+    expect(transport.resize).toHaveBeenCalledOnce()
+    ;(pane.terminal.buffer.active as { type: 'normal' | 'alternate' }).type = 'normal'
+    requestPaneTuiRepaint(pane.container, { cols: 133, rows: 47 })
+    expect(transport.resize).toHaveBeenCalledOnce()
     disposable.dispose()
   })
 

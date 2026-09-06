@@ -22,6 +22,26 @@ describe('getAgentSlashCommands', () => {
     expect(names).not.toContain('model')
   })
 
+  it.each([
+    ['opencode', ['new', 'editor', 'exit']],
+    ['kimi', ['compact', 'model', 'sessions']],
+    ['pi', ['settings', 'tree', 'quit']],
+    ['grok', ['workflows', 'session-info', 'help']]
+  ] as const)('returns curated commands for %s', (agent, expected) => {
+    const names = getAgentSlashCommands(agent).map((command) => command.name)
+    for (const command of expected) {
+      expect(names).toContain(command)
+    }
+  })
+
+  it('keeps the main agent terminals on non-empty, duplicate-free command catalogs', () => {
+    for (const agent of ['claude', 'codex', 'opencode', 'kimi', 'pi', 'grok'] as const) {
+      const names = getAgentSlashCommands(agent).map((command) => command.name)
+      expect(names.length).toBeGreaterThan(0)
+      expect(new Set(names).size).toBe(names.length)
+    }
+  })
+
   it('falls back to a small common set for an unknown agent (never empty)', () => {
     const names = getAgentSlashCommands('some-other-agent').map((c) => c.name)
     expect(names).toEqual(['clear', 'help'])

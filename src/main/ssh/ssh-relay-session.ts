@@ -1174,7 +1174,8 @@ export class SshRelaySession {
           this.requireReadyConnection().writeBuffer(remotePath, contents, {
             hostPlatform,
             append: options.append,
-            exclusive: options.exclusive
+            exclusive: options.exclusive,
+            ...(options.mode === undefined ? {} : { mode: options.mode })
           })
       },
       hostPlatform

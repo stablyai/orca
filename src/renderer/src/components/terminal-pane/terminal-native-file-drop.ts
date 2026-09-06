@@ -36,6 +36,7 @@ export type NativeTerminalFileDropArgs = {
   tabId: string
   cwd: string | undefined
   data: { paths: string[]; target: string; tabId?: string; paneLeafId?: string }
+  onResolvedPaths?: (paths: string[]) => boolean | Promise<boolean>
 }
 
 /**
@@ -60,7 +61,7 @@ export async function handleNativeTerminalFileDrop(
 async function handleNativeTerminalFileDropWithCapturedOwner(
   args: NativeTerminalFileDropArgs
 ): Promise<void> {
-  const { manager, paneTransports, worktreeId, tabId, cwd, data } = args
+  const { manager, paneTransports, worktreeId, tabId, cwd, data, onResolvedPaths } = args
   if (data.paths.length === 0) {
     return
   }
@@ -92,6 +93,7 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
       dataPaths: data.paths,
       dropTarget,
       manager,
+      onResolvedPaths,
       paneTransports,
       pane,
       settings,
@@ -132,6 +134,7 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
       dropTarget,
       localWslDrop,
       manager,
+      onResolvedPaths,
       paneTransports,
       pane,
       tabId,
@@ -147,6 +150,7 @@ async function handleNativeTerminalFileDropWithCapturedOwner(
     dataPaths: data.paths,
     dropTarget,
     manager,
+    onResolvedPaths,
     paneTransports,
     pane,
     tabId,
@@ -159,6 +163,7 @@ type NativeDropFlowArgs = {
   dataPaths: string[]
   dropTarget: ReturnType<typeof captureTerminalDropTarget>
   manager: PaneManager
+  onResolvedPaths?: (paths: string[]) => boolean | Promise<boolean>
   paneTransports: Map<number, PtyTransport>
   pane: ReturnType<typeof resolveNativeTerminalDropPane> & {}
   tabId: string
@@ -287,6 +292,9 @@ async function pasteResolvedDropPaths(
     args.dropTarget
   )
   if (!liveTransport) {
+    return
+  }
+  if (args.onResolvedPaths && (await args.onResolvedPaths(args.paths))) {
     return
   }
   const writeResult = await writeTerminalDropPathsToCapturedTarget({
