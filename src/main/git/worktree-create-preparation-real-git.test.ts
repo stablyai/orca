@@ -55,6 +55,39 @@ afterEach(async () => {
 })
 
 describe('prepared worktree creation with real Git', () => {
+  it('retains preparation ownership when the removal command cannot start', async () => {
+    const fixture = await createRepo()
+    const repoPath = await realpath(fixture.repoPath)
+    const root = await realpath(fixture.root)
+    const preparedPath = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY, 'owned-removal')
+    await mkdir(join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY), { recursive: true })
+    const lockReason = createWorktreePreparationLockReason('removal-failure')
+    await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason)
+    const original = gitRunner.gitExecFileAsync
+    const spy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      if (args.includes('remove') && args.includes(preparedPath)) {
+        return Promise.reject(new Error('injected removal launch failure'))
+      }
+      return original(args, options)
+    })
+    try {
+      await expect(discardPreparedWorktree(repoPath, preparedPath)).rejects.toThrow(
+        'injected removal launch failure'
+      )
+      const remaining = await listWorktrees(repoPath, { includeCreatePreparations: true })
+      const prepared = remaining.find((worktree) =>
+        areWorktreePathsEqual(worktree.path, preparedPath)
+      )
+      expect(prepared).toBeDefined()
+      expect(prepared?.lockReason).toBe(lockReason)
+      expect(await readFile(join(preparedPath, 'version.txt'), 'utf8')).toBe('one\n')
+    } finally {
+      spy.mockRestore()
+      await discardPreparedWorktree(repoPath, preparedPath)
+    }
+    expect(existsSync(preparedPath)).toBe(false)
+  })
+
   it('creates and finalizes while dead-owner reclamation is stalled', async () => {
     const fixture = await createRepo()
     const repoPath = await realpath(fixture.repoPath)
