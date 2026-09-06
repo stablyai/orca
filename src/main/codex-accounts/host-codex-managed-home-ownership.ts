@@ -10,6 +10,12 @@ type HostCodexManagedHomeOwnershipOptions = {
 }
 
 export const MISSING_MANAGED_HOME_MESSAGE = 'Managed Codex home directory does not exist on disk.'
+/** Shared with the WSL probe so the two lanes cannot drift apart on this wording. */
+export const MISSING_OWNERSHIP_MARKER_MESSAGE =
+  'Managed Codex home is missing Orca ownership marker.'
+/** A marker that is not a regular file proves nothing, whatever it resolves to. */
+export const MARKER_NOT_REGULAR_FILE_MESSAGE =
+  'Managed Codex home ownership marker is not a regular file.'
 
 /**
  * Why: the gate answers two different questions and callers act on them very
@@ -156,15 +162,12 @@ function evaluate({
     // Why: the marker is required, so its definitive absence is structural — but
     // an unreadable marker is not evidence of anything.
     if (isDefinitiveAbsence(error)) {
-      return { kind: 'untrusted', reason: 'Managed Codex home is missing Orca ownership marker.' }
+      return { kind: 'untrusted', reason: MISSING_OWNERSHIP_MARKER_MESSAGE }
     }
     return { kind: 'indeterminate', error }
   }
   if (!markerIsRegularFile) {
-    return {
-      kind: 'untrusted',
-      reason: 'Managed Codex home ownership marker is not a regular file.'
-    }
+    return { kind: 'untrusted', reason: MARKER_NOT_REGULAR_FILE_MESSAGE }
   }
   if (expectedAccountId !== undefined && markerContents.trim() !== expectedAccountId) {
     return {
@@ -193,7 +196,11 @@ export function resolveHostCodexManagedHomeVerdict(
 export function assertOwnedHostCodexManagedHomePath(
   options: HostCodexManagedHomeOwnershipOptions
 ): string {
-  const verdict = evaluate(options)
+  return assertOwnedCodexManagedHomeVerdict(evaluate(options))
+}
+
+/** Shared by the host and WSL lanes so neither can invent its own error mapping. */
+export function assertOwnedCodexManagedHomeVerdict(verdict: HostCodexManagedHomeVerdict): string {
   if (verdict.kind === 'owned') {
     return verdict.homePath
   }
