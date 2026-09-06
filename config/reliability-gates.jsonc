@@ -113,7 +113,8 @@
       ],
       "knownGaps": [
         "No native mobile-to-PTY or physical Bluetooth proof in this gate.",
-        "Manual native Android-to-PTY runs at 300/400/500 ms simulated application-frame RTT passed, but one initial 400 ms attempt was one byte short and remains unexplained; no native soak claim.",
+        "Manual native Android-to-PTY single-sequence runs at 300/400/500 ms simulated application-frame RTT passed. Three rapid sequences at 400 ms lost Tab despite kernel delivery; native tracing locates a missing Tab between pre-IME and normal window dispatch. Rapid runs also exposed text-boundary corruption. No native soak claim.",
+        "Native Android negotiated rejection and post-write-unknown recovery passed at 300 ms simulated application-frame RTT: hardware Enter explicitly resubscribes, queued Return is suppressed, and no input is replayed. Public relay and physical-device recovery remain unproved.",
         "Receipt-serialized held controls retain an RTT-per-control latency cost.",
         "No real daemon, SSH, WSL, Linux or Windows stress run.",
         "Host acceptance is not shell execution; stream negotiation and user-visible recovery require separate evidence."
