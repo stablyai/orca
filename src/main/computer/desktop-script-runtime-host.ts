@@ -264,10 +264,14 @@ export class DesktopScriptRuntimeHost {
     const pending = this.pending
     if (!pending || parsed.requestId !== pending.id) {
       // One unmatched reply would otherwise shift every later response by one.
+      // Carry the helper's own message when it sent one: a line it could not tag
+      // with an id is usually the only account of what went wrong, and reporting
+      // a bare desync in its place loses the cause for good.
+      const reported = typeof parsed.error === 'string' ? `: ${parsed.error}` : ''
       this.abortChannel(
         new RuntimeClientError(
           'accessibility_error',
-          'desktop provider response did not match the pending request'
+          `desktop provider response did not match the pending request${reported}`
         )
       )
       return

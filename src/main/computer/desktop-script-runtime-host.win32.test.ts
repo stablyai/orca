@@ -1,7 +1,13 @@
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '../../shared/child-process/run-process'
+import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
 import { DesktopScriptRuntimeHost } from './desktop-script-runtime-host'
+import { startServeChannel } from './desktop-script-serve-channel'
+import {
+  PREFERRED_WINDOWS_EXECUTION_POLICY,
+  windowsPowerShellRuntimeArgs
+} from './windows-powershell-execution-policy'
 
 /**
  * The other half of the serve-mode proof: the unit test drives a fake child,
@@ -62,4 +68,63 @@ describeOnWindows('runtime.ps1 serve mode', () => {
     await expect(runtime.request({ tool: 'handshake' })).resolves.toMatchObject({ ok: true })
     expect(spawns).toBe(1)
   })
+
+  /**
+   * The host can only write well-formed JSON, so the parse-failure branch of the
+   * serve loop is unreachable through it. Driving the channel directly is the
+   * only way to prove what the real PowerShell answers.
+   */
+  it('echoes the id it can recover when a request will not parse', async () => {
+    const answer = await answerRawLine('{"tool":"handshake","requestId":7')
+
+    // Tagged, so the host resolves the waiting request with a failed operation
+    // instead of reading an untagged line as a desynchronised stream.
+    expect(answer).toMatchObject({ ok: false, requestId: 7 })
+    expect(String(answer.error)).not.toBe('')
+  })
+
+  it('reports an error for a line with no recoverable id', async () => {
+    const answer = await answerRawLine('{"tool":"handshake"')
+
+    expect(answer).toMatchObject({ ok: false })
+    expect(answer.requestId).toBeUndefined()
+    expect(String(answer.error)).not.toBe('')
+  })
 })
+
+/** One raw line into a real `runtime.ps1 -Serve`, and the line it writes back. */
+function answerRawLine(raw: string): Promise<Record<string, unknown>> {
+  return new Promise((settle, fail) => {
+    const channel = startServeChannel(
+      {
+        program: windowsPowerShellPath(),
+        args: windowsPowerShellRuntimeArgs(SCRIPT_PATH, PREFERRED_WINDOWS_EXECUTION_POLICY, [
+          '-Serve'
+        ]),
+        env: process.env
+      },
+      spawnProcess,
+      {
+        onLine: (line) => {
+          let parsed: Record<string, unknown>
+          try {
+            parsed = JSON.parse(line) as Record<string, unknown>
+          } catch {
+            return
+          }
+          if (parsed.ready === true) {
+            channel.write(`${raw}\n`, fail)
+            return
+          }
+          channel.stop()
+          settle(parsed)
+        },
+        onGone: (detail) => fail(new Error(`helper exited before answering: ${detail}`)),
+        onOverflow: () => {
+          channel.stop()
+          fail(new Error('helper overflowed the response buffer'))
+        }
+      }
+    )
+  })
+}

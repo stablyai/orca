@@ -1340,6 +1340,15 @@ function Invoke-OrcaServeLoop {
             $response = Invoke-OrcaOperation $operation
         } catch {
             $response = [pscustomobject]@{ ok = $false; error = [string]$_.Exception.Message }
+            # ConvertFrom-Json throws before the id is read, so recover it from the
+            # raw line. An error the caller can match is delivered to the request
+            # that caused it; an unmatched one only trips the caller's desync
+            # guard, which kills this helper, charges a failure toward its cooldown
+            # and discards the message below - so a malformed request would be
+            # reported as a broken stream and its real cause never surface.
+            if ($null -eq $requestId -and $line -match '"requestId"\s*:\s*(\d+)') {
+                $requestId = [long]$Matches[1]
+            }
         }
         # Echoed so the caller can prove which request a line answers; a reply it
         # cannot match is a desynchronised stream, not a usable response.

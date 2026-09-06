@@ -678,6 +678,44 @@ describe('DesktopScriptRuntimeHost', () => {
     host.dispose()
   })
 
+  it('keeps the helper account of a reply it could not tag', async () => {
+    const { host, children } = createHost()
+
+    const promise = host.request({ tool: 'handshake' })
+    await settle()
+    const child = children[0]
+    // What an old runtime.ps1 sends when a request will not parse: a real error,
+    // with no id to route it by. The desync is honest, but replacing its message
+    // reports a broken stream and loses the only account of the cause.
+    child.respond({ ok: false, error: 'Invalid object passed in' }, child.pendingId() + 500)
+
+    await expect(promise).rejects.toThrow(
+      /did not match the pending request: Invalid object passed in/
+    )
+    host.dispose()
+  })
+
+  it('does not charge a cooldown for requests the helper rejects as malformed', async () => {
+    const { host, children } = createHost({ cooldownMs: 60_000 })
+
+    // A tagged error is the helper working, not failing. Three of them used to
+    // arrive untagged, and three desync aborts is exactly the cooldown.
+    for (let round = 0; round < 3; round++) {
+      const promise = host.request({ tool: 'handshake' })
+      await settle()
+      children[0].respond({ ok: false, error: 'Invalid object passed in' })
+      await expect(promise).resolves.toMatchObject({ ok: false })
+      await settle()
+    }
+
+    expect(children).toHaveLength(1)
+    const next = host.request({ tool: 'handshake' })
+    await settle()
+    children[0].respond({ ok: true, capabilities: {} })
+    await expect(next).resolves.toMatchObject({ ok: true })
+    host.dispose()
+  })
+
   it('fails a request that spends its whole timeout queued behind others', async () => {
     vi.useFakeTimers()
     const { host, children } = createHost({ requestTimeoutMs: 1_000 })
