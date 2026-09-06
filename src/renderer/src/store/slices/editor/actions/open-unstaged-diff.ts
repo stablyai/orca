@@ -5,7 +5,7 @@ import { buildDiffEditorFileId, withDiffContentReloadRequest } from '../file-ids
 import { resolveDiffRuntimeEnvironmentId } from '../git/diff-runtime-owner'
 import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
 import {
-  getReplaceablePreviewFileId,
+  resolveReplaceablePreviewSlot,
   openWorkspaceEditorItem,
   removeEditorStateForReplacedPreview
 } from '../tabs/workspace-editor-item'
@@ -68,16 +68,12 @@ export function createOpenUnstagedDiff(
           runtimeEnvironmentId
         }
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
-          const replaceablePreviewIndex = s.openFiles.findIndex(
-            (file) => file.id === replaceablePreviewId
-          )
-          if (replaceablePreviewIndex !== -1) {
+          const slot = resolveReplaceablePreviewSlot(s, worktreeId, options?.targetGroupId)
+          if (slot) {
+            editorItemTargetGroupId = slot.retargetGroupId ?? editorItemTargetGroupId
             return {
-              openFiles: s.openFiles.map((file, index) =>
-                index === replaceablePreviewIndex ? newFile : file
-              ),
-              ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
+              openFiles: s.openFiles.map((file, index) => (index === slot.index ? newFile : file)),
+              ...removeEditorStateForReplacedPreview(s, s.openFiles[slot.index], id),
               activeFileId: id,
               activeTabType: 'editor',
               activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -93,15 +89,11 @@ export function createOpenUnstagedDiff(
           activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
         }
       })
-      void openWorkspaceEditorItem(
-        get(),
-        editorItemFileId,
-        worktreeId,
-        relativePath,
-        'diff',
+      void openWorkspaceEditorItem(get(), editorItemFileId, worktreeId, relativePath, 'diff', {
         isPreview,
-        editorItemTargetGroupId
-      )
+        targetGroupId: editorItemTargetGroupId,
+        pinnedGroupId: options?.targetGroupId
+      })
     }
   }
 }

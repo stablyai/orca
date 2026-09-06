@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => {
     openConflictFile: vi.fn(),
     openBranchDiff: vi.fn(),
     createEmptySplitGroup: vi.fn(),
+    setDiffColumnGroupId: vi.fn(),
     discardRuntimeGitPath: vi.fn(),
     bulkStageRuntimeGitPaths: vi.fn(),
     refreshGitStatusForWorktree: vi.fn(),
@@ -149,6 +150,9 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     activeWorktreeId: mocks.activeWorktree.id,
     activeGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-1' },
     groupsByWorktree: { [mocks.activeWorktree.id]: [{ id: 'group-1', activeTabId: null }] },
+    unifiedTabsByWorktree: { [mocks.activeWorktree.id]: [] },
+    diffColumnGroupIdByWorktree: {},
+    setDiffColumnGroupId: mocks.calls.setDiffColumnGroupId,
     repos: [mocks.activeRepo],
     worktreesByRepo: { [mocks.activeRepo.id]: [mocks.activeWorktree] },
     rightSidebarOpen: false,
@@ -530,5 +534,124 @@ describe('SourceControl preview row opens', () => {
       'typescript',
       { targetGroupId: undefined, preview: true }
     )
+  })
+})
+
+const sideSplitSettings = { sourceControlOpenDiffsInSideSplit: true }
+
+function group(id: string): Record<string, unknown> {
+  return { id, activeTabId: null }
+}
+
+function tabIn(groupId: string, contentType: string, isPreview?: boolean): Record<string, unknown> {
+  return { groupId, contentType, isPreview }
+}
+
+function expectDiffOpenedIn(targetGroupId: string | undefined): void {
+  expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+    mocks.activeWorktree.id,
+    '/repo/wt/src/file.ts',
+    'src/file.ts',
+    'typescript',
+    false,
+    { targetGroupId, preview: true }
+  )
+}
+
+describe('SourceControl side-split diff column', () => {
+  it('still creates the split when a preview is parked in the active group', () => {
+    resetState({
+      settings: sideSplitSettings,
+      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] },
+      unifiedTabsByWorktree: { [mocks.activeWorktree.id]: [tabIn('group-1', 'diff', true)] }
+    })
+    renderSourceControl()
+
+    clickUncommitted('src/file.ts')
+
+    expect(mocks.calls.createEmptySplitGroup).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      'group-1',
+      'right'
+    )
+    expect(mocks.calls.setDiffColumnGroupId).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      'group-2'
+    )
+    expectDiffOpenedIn('group-2')
+  })
+
+  it('reuses the recorded column after the split became the active group', () => {
+    resetState({
+      settings: sideSplitSettings,
+      activeGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-2' },
+      groupsByWorktree: { [mocks.activeWorktree.id]: [group('group-1'), group('group-2')] },
+      diffColumnGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-2' },
+      unifiedTabsByWorktree: { [mocks.activeWorktree.id]: [tabIn('group-2', 'diff', true)] },
+      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
+    })
+    renderSourceControl()
+
+    clickUncommitted('src/file.ts')
+
+    expect(mocks.calls.createEmptySplitGroup).not.toHaveBeenCalled()
+    expect(mocks.calls.setDiffColumnGroupId).not.toHaveBeenCalled()
+    expectDiffOpenedIn('group-2')
+  })
+
+  it('re-infers and re-records once the recorded column is gone', () => {
+    resetState({
+      settings: sideSplitSettings,
+      groupsByWorktree: { [mocks.activeWorktree.id]: [group('group-1'), group('group-3')] },
+      diffColumnGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-closed' },
+      unifiedTabsByWorktree: { [mocks.activeWorktree.id]: [tabIn('group-3', 'diff')] },
+      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
+    })
+    renderSourceControl()
+
+    clickUncommitted('src/file.ts')
+
+    expect(mocks.calls.createEmptySplitGroup).not.toHaveBeenCalled()
+    expect(mocks.calls.setDiffColumnGroupId).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      'group-3'
+    )
+    expectDiffOpenedIn('group-3')
+  })
+
+  it('leaves the recorded column untouched for modifier-click splits', () => {
+    resetState({
+      settings: sideSplitSettings,
+      groupsByWorktree: { [mocks.activeWorktree.id]: [group('group-1'), group('group-3')] },
+      diffColumnGroupIdByWorktree: { [mocks.activeWorktree.id]: 'group-3' },
+      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] }
+    })
+    renderSourceControl()
+
+    clickUncommitted('src/file.ts', { ctrlKey: true })
+
+    expect(mocks.calls.setDiffColumnGroupId).not.toHaveBeenCalled()
+    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      '/repo/wt/src/file.ts',
+      'src/file.ts',
+      'typescript',
+      false,
+      { targetGroupId: 'group-2', preview: false }
+    )
+  })
+
+  it('never records or splits while the setting is off', () => {
+    resetState({
+      gitStatusByWorktree: { [mocks.activeWorktree.id]: [gitEntry({ path: 'src/file.ts' })] },
+      unifiedTabsByWorktree: { [mocks.activeWorktree.id]: [tabIn('group-1', 'diff', true)] }
+    })
+    renderSourceControl()
+
+    clickUncommitted('src/file.ts')
+
+    expect(mocks.calls.createEmptySplitGroup).not.toHaveBeenCalled()
+    expect(mocks.calls.setDiffColumnGroupId).not.toHaveBeenCalled()
+    expectDiffOpenedIn(undefined)
   })
 })

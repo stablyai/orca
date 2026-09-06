@@ -5,7 +5,7 @@ import type { OpenFile } from '../types/open-file'
 import { toOpenConflictMetadata } from '../git/git-status-reconciliation'
 import { resolveEditorOpenTargetGroupId } from '../tabs/editor-open-target-group'
 import {
-  getReplaceablePreviewFileId,
+  resolveReplaceablePreviewSlot,
   openWorkspaceEditorItem,
   removeEditorStateForReplacedPreview
 } from '../tabs/workspace-editor-item'
@@ -83,16 +83,12 @@ export function createOpenConflictFile(
         }
 
         if (isPreview) {
-          const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
-          const replaceablePreviewIndex = s.openFiles.findIndex(
-            (file) => file.id === replaceablePreviewId
-          )
-          if (replaceablePreviewIndex !== -1) {
+          const slot = resolveReplaceablePreviewSlot(s, worktreeId, options?.targetGroupId)
+          if (slot) {
+            editorItemTargetGroupId = slot.retargetGroupId ?? editorItemTargetGroupId
             return {
-              openFiles: s.openFiles.map((file, index) =>
-                index === replaceablePreviewIndex ? newFile : file
-              ),
-              ...removeEditorStateForReplacedPreview(s, s.openFiles[replaceablePreviewIndex], id),
+              openFiles: s.openFiles.map((file, index) => (index === slot.index ? newFile : file)),
+              ...removeEditorStateForReplacedPreview(s, s.openFiles[slot.index], id),
               activeFileId: id,
               activeTabType: 'editor',
               activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -121,15 +117,11 @@ export function createOpenConflictFile(
       if (!openedConflictFile) {
         return
       }
-      void openWorkspaceEditorItem(
-        get(),
-        absolutePath,
-        worktreeId,
-        entry.path,
-        'editor',
+      void openWorkspaceEditorItem(get(), absolutePath, worktreeId, entry.path, 'editor', {
         isPreview,
-        editorItemTargetGroupId
-      )
+        targetGroupId: editorItemTargetGroupId,
+        pinnedGroupId: options?.targetGroupId
+      })
     }
   }
 }

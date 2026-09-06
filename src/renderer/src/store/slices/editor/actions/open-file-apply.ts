@@ -21,7 +21,7 @@ import {
   resolveEditorOpenTargetGroupId
 } from '../tabs/editor-open-target-group'
 import {
-  getReplaceablePreviewFileId,
+  resolveReplaceablePreviewSlot,
   removeEditorStateForReplacedPreview
 } from '../tabs/workspace-editor-item'
 
@@ -162,12 +162,13 @@ export function applyOpenFileToState(
     }
   }
 
-  // Why: scope preview replacement to worktreeId + targetGroupId so link clicks in group B don't evict group A's previews.
+  // Why: preview replacement is worktree-scoped — recycle the parked preview wherever it lives; an explicit target keeps group scoping.
   let newFiles = s.openFiles
   if (isPreview) {
-    const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
-    const existingPreviewIdx = s.openFiles.findIndex((f) => f.id === replaceablePreviewId)
-    if (existingPreviewIdx !== -1) {
+    const slot = resolveReplaceablePreviewSlot(s, worktreeId, options?.targetGroupId)
+    if (slot) {
+      scratch.editorItemTargetGroupId = slot.retargetGroupId ?? scratch.editorItemTargetGroupId
+      const existingPreviewIdx = slot.index
       const replacedPreview = s.openFiles[existingPreviewIdx]
       // Why: reuse the shared eviction helper so per-file cursor/draft/visibility cleanup stays in one place.
       const {

@@ -11,6 +11,7 @@ import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-o
 import type { FlatEntry } from './use-selection'
 import {
   isSourceControlSplitOpenModifier,
+  resolveSideSplitDiffColumn,
   shouldOpenSourceControlRowAsPreview,
   type SourceControlRowOpenEvent
 } from './split-open'
@@ -37,6 +38,11 @@ export function useSourceControlRowOpening({
   const openFile = useAppStore((s) => s.openFile)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
+  const diffColumnGroupIdByWorktree = useAppStore((s) => s.diffColumnGroupIdByWorktree)
+  const setDiffColumnGroupId = useAppStore((s) => s.setDiffColumnGroupId)
+  const openDiffsInSideSplit = useAppStore(
+    (s) => s.settings?.sourceControlOpenDiffsInSideSplit ?? false
+  )
 
   // Why: modifier-click keeps the current pane intact by opening the file in a fresh split to the right.
   const resolveSplitTargetGroupId = useCallback(
@@ -52,6 +58,60 @@ export function useSourceControlRowOpening({
       return createEmptySplitGroup(activeWorktreeId, sourceGroupId, 'right') ?? undefined
     },
     [activeGroupIdByWorktree, activeWorktreeId, createEmptySplitGroup, groupsByWorktree, isMac]
+  )
+
+  // Why: the side-split setting records the resolved diff column so it stops following focus.
+  const resolveDiffOpenPlacement = useCallback(
+    (
+      event?: SourceControlRowOpenEvent
+    ): { targetGroupId: string | undefined; preview: boolean } => {
+      const modifierGroupId = resolveSplitTargetGroupId(event)
+      if (modifierGroupId) {
+        return {
+          targetGroupId: modifierGroupId,
+          preview: shouldOpenSourceControlRowAsPreview(event, modifierGroupId)
+        }
+      }
+      const preview = shouldOpenSourceControlRowAsPreview(event, undefined)
+      if (!openDiffsInSideSplit || !activeWorktreeId) {
+        return { targetGroupId: undefined, preview }
+      }
+      const tabs = useAppStore.getState().unifiedTabsByWorktree[activeWorktreeId] ?? []
+      const groups = groupsByWorktree[activeWorktreeId] ?? []
+      // Distinct from render-scoped activeGroupId: this one falls back to the first group.
+      const resolvedActiveGroupId = activeGroupIdByWorktree[activeWorktreeId] ?? groups[0]?.id
+      const { groupId, shouldRecord } = resolveSideSplitDiffColumn({
+        tabs,
+        activeGroupId: resolvedActiveGroupId,
+        liveGroupIds: groups.map((group) => group.id),
+        recordedGroupId: diffColumnGroupIdByWorktree[activeWorktreeId]
+      })
+      if (groupId) {
+        if (shouldRecord) {
+          setDiffColumnGroupId(activeWorktreeId, groupId)
+        }
+        return { targetGroupId: groupId, preview }
+      }
+      if (!resolvedActiveGroupId) {
+        return { targetGroupId: undefined, preview }
+      }
+      const splitGroupId =
+        createEmptySplitGroup(activeWorktreeId, resolvedActiveGroupId, 'right') ?? undefined
+      if (splitGroupId) {
+        setDiffColumnGroupId(activeWorktreeId, splitGroupId)
+      }
+      return { targetGroupId: splitGroupId, preview }
+    },
+    [
+      activeGroupIdByWorktree,
+      activeWorktreeId,
+      createEmptySplitGroup,
+      diffColumnGroupIdByWorktree,
+      groupsByWorktree,
+      openDiffsInSideSplit,
+      resolveSplitTargetGroupId,
+      setDiffColumnGroupId
+    ]
   )
 
   // Why: a stable string signature keeps this selector referentially stable so the panel re-renders only when the active editor file changes; null when the tab isn't an editor.
@@ -87,8 +147,7 @@ export function useSourceControlRowOpening({
       if (!activeWorktreeId || !worktreePath) {
         return
       }
-      const targetGroupId = resolveSplitTargetGroupId(event)
-      const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
+      const { targetGroupId, preview: openAsPreview } = resolveDiffOpenPlacement(event)
       if (entry.conflictKind && entry.conflictStatus) {
         if (entry.conflictStatus === 'unresolved') {
           trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
@@ -124,7 +183,7 @@ export function useSourceControlRowOpening({
     [
       activeWorktreeId,
       worktreePath,
-      resolveSplitTargetGroupId,
+      resolveDiffOpenPlacement,
       trackConflictPath,
       openConflictFile,
       openDiff,
@@ -143,17 +202,17 @@ export function useSourceControlRowOpening({
       ) {
         return
       }
-      const targetGroupId = resolveSplitTargetGroupId(event)
+      const { targetGroupId, preview } = resolveDiffOpenPlacement(event)
       openBranchDiff(
         activeWorktreeId,
         worktreePath,
         entry,
         branchSummary,
         detectLanguage(entry.path),
-        { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
+        { targetGroupId, preview }
       )
     },
-    [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
+    [activeWorktreeId, branchSummary, openBranchDiff, resolveDiffOpenPlacement, worktreePath]
   )
 
   return { resolveSplitTargetGroupId, activeOpenRowKeys, handleOpenDiff, openCommittedDiff }

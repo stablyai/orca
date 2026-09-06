@@ -52,6 +52,15 @@ export function useSourceControlPanelViewState({
     })
   }, [settings, sourceControlViewMode, updateSettings])
 
+  const openDiffsInSideSplit = settings?.sourceControlOpenDiffsInSideSplit ?? false
+
+  const handleToggleOpenDiffsInSideSplit = useCallback(() => {
+    if (!settings) {
+      return
+    }
+    updateSettings({ sourceControlOpenDiffsInSideSplit: !openDiffsInSideSplit })
+  }, [openDiffsInSideSplit, settings, updateSettings])
+
   // Why: reset during render instead of key-remounting on switch (which caused a Windows IPC storm).
   const [viewStateWorktreeId, setViewStateWorktreeId] = useState(activeWorktreeId)
   if (viewStateWorktreeId !== activeWorktreeId) {
@@ -96,9 +105,11 @@ export function useSourceControlPanelViewState({
     fileListScrollElement,
     filterExpanded,
     filterQuery,
+    handleToggleOpenDiffsInSideSplit,
     handleToggleSourceControlViewMode,
     isGitHistoryExpanded,
     isMac,
+    openDiffsInSideSplit,
     setBaseRefDialogOpen,
     setFileListScrollElement,
     setFilterExpanded,

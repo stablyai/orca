@@ -83,6 +83,8 @@ export function applyRemoveWorktreeSuccessState(
     delete nextLayoutByWorktree[worktreeId]
     const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
     delete nextActiveGroupIdByWorktree[worktreeId]
+    const nextDiffColumnGroupIdByWorktree = { ...s.diffColumnGroupIdByWorktree }
+    delete nextDiffColumnGroupIdByWorktree[worktreeId]
     // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
     const nextGitStatusByWorktree = { ...s.gitStatusByWorktree }
     delete nextGitStatusByWorktree[worktreeId]
@@ -243,6 +245,7 @@ export function applyRemoveWorktreeSuccessState(
       groupsByWorktree: nextGroupsByWorktree,
       layoutByWorktree: nextLayoutByWorktree,
       activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+      diffColumnGroupIdByWorktree: nextDiffColumnGroupIdByWorktree,
       editorDrafts: nextEditorDrafts,
       markdownViewMode: nextMarkdownViewMode,
       markdownRichModeSizeOverride: nextMarkdownRichModeSizeOverride,

@@ -4,15 +4,33 @@ import type { OpenFile } from '../types/open-file'
 import { resolveEditorOpenTargetGroupId } from './editor-open-target-group'
 import { isEditorTabContentType } from './editor-tab-content-type'
 
+type WorkspaceEditorItemOpen = {
+  isPreview?: boolean
+  /** Where to open; may already be retargeted to a parked preview's group. */
+  targetGroupId?: string
+  /** Group the caller pinned. Absent marks an unpinned open, free to reuse the entity's tab in any group. */
+  pinnedGroupId?: string
+}
+
 export function openWorkspaceEditorItem(
   state: AppState,
   fileId: string,
   worktreeId: string,
   label: string,
   contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
-  isPreview?: boolean,
-  targetGroupId?: string
+  open?: WorkspaceEditorItemOpen
 ): string {
+  const { isPreview, targetGroupId, pinnedGroupId } = open ?? {}
+  // Why: unpinned previews re-activate the entity's tab wherever it lives (#11839).
+  if (isPreview && !pinnedGroupId) {
+    const existingAnywhere = (state.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
+      (tab) => tab.entityId === fileId && tab.contentType === contentType
+    )
+    if (existingAnywhere) {
+      state.activateTab?.(existingAnywhere.id, { preservePreview: isPreview })
+      return existingAnywhere.id
+    }
+  }
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(
@@ -35,40 +53,54 @@ export function openWorkspaceEditorItem(
   })
   return created?.id ?? fileId
 }
-export function getReplaceablePreviewFileId(
+
+export type ReplaceablePreviewSlot = {
+  /** Index into `openFiles` of the preview entry to overwrite in place. */
+  index: number
+  /** Group holding that preview; undefined when the caller pinned a target group. */
+  retargetGroupId: string | undefined
+}
+
+// Why: unpinned preview reuse is worktree-scoped; pinned opens keep old group scoping.
+export function resolveReplaceablePreviewSlot(
   state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree'>,
   worktreeId: string,
-  targetGroupId: string | undefined
-): string | null {
+  pinnedGroupId: string | undefined
+): ReplaceablePreviewSlot | null {
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []
-  if (targetGroupId) {
-    const previewTab = tabsForWorktree.find(
-      (tab) =>
-        tab.groupId === targetGroupId && tab.isPreview && isEditorTabContentType(tab.contentType)
-    )
-    if (!previewTab) {
-      return null
-    }
-    // Why: split groups can share one OpenFile; a group-scoped preview replacement must not mutate it out from under another group's tab.
-    const isSharedEntity = tabsForWorktree.some(
-      (tab) =>
-        tab.id !== previewTab.id &&
-        tab.entityId === previewTab.entityId &&
-        isEditorTabContentType(tab.contentType)
-    )
-    if (isSharedEntity) {
-      return null
-    }
-    return (
-      state.openFiles.find(
-        (file) =>
-          file.id === previewTab.entityId && file.worktreeId === worktreeId && file.isPreview
-      )?.id ?? null
-    )
-  }
-  return (
-    state.openFiles.find((file) => file.worktreeId === worktreeId && file.isPreview)?.id ?? null
+  const previewTab = tabsForWorktree.find(
+    (tab) =>
+      (!pinnedGroupId || tab.groupId === pinnedGroupId) &&
+      tab.isPreview &&
+      isEditorTabContentType(tab.contentType)
   )
+  if (!previewTab) {
+    // Why: without tab-layer state, only unpinned opens may fall back to the worktree preview.
+    if (pinnedGroupId) {
+      return null
+    }
+    const index = state.openFiles.findIndex(
+      (file) => file.worktreeId === worktreeId && file.isPreview
+    )
+    return index === -1 ? null : { index, retargetGroupId: undefined }
+  }
+  // Why: split groups can share one OpenFile; replacing it would mutate it out from under another group's tab.
+  const isSharedEntity = tabsForWorktree.some(
+    (tab) =>
+      tab.id !== previewTab.id &&
+      tab.entityId === previewTab.entityId &&
+      isEditorTabContentType(tab.contentType)
+  )
+  if (isSharedEntity) {
+    return null
+  }
+  const index = state.openFiles.findIndex(
+    (file) => file.id === previewTab.entityId && file.worktreeId === worktreeId && file.isPreview
+  )
+  if (index === -1) {
+    return null
+  }
+  return { index, retargetGroupId: pinnedGroupId ? undefined : previewTab.groupId }
 }
 
 export function removeEditorStateForReplacedPreview(
