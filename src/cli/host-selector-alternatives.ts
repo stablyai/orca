@@ -1,14 +1,9 @@
 import type { RuntimeClient } from './runtime-client'
 import { mapWithConcurrency } from '../shared/map-with-concurrency'
 import { performance } from 'node:perf_hooks'
+import type { SshTargetSummary } from '../shared/ssh-types'
 
-export type SshTargetSummary = {
-  id: string
-  label: string
-  remotePlatform?: 'linux' | 'darwin' | 'win32'
-  connected?: boolean
-  connectionStatus?: string
-}
+export type { SshTargetSummary } from '../shared/ssh-types'
 export type EnvironmentSummary = { id: string; name: string }
 
 export type HostAlternatives = {
@@ -152,8 +147,8 @@ async function enrichLegacySshTargetStates(
     try {
       const response = await client.call<{
         state: {
-          status?: string
-          remotePlatform?: 'linux' | 'darwin' | 'win32'
+          status?: SshTargetSummary['connectionStatus']
+          remotePlatform?: SshTargetSummary['remotePlatform']
         } | null
       }>(
         'ssh.getState',
