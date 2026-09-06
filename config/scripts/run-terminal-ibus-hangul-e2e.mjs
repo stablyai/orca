@@ -199,7 +199,8 @@ async function runInsideSession(evidenceDir) {
         'test:e2e:headful',
         '--workers=1',
         '--',
-        'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+        'tests/e2e/terminal-ibus-hangul-native.spec.ts',
+        'tests/e2e/terminal-hangul-terminating-digit-native.spec.ts'
       ],
       {
         cwd: projectDir,

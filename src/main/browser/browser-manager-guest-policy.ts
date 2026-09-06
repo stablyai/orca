@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import {
   BROWSING_GUEST_POLICY,
   type BrowserGuestPolicy,
@@ -27,18 +26,10 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
-    // Why: only the primary embedded browser converts new-tab clicks to Orca tabs; OAuth child windows keep native link behavior.
-    const clickedLinkFrameName = inheritedOwnerContext
-      ? null
-      : `__orca_clicked_link_foreground_${randomUUID()}`
-    if (clickedLinkFrameName) {
-      this.clickedLinkFrameNameByGuestId.set(guest.id, clickedLinkFrameName)
-    }
-
     const disposeAuthDetachTracking = this.trackDebuggerDetachForAuthUserAgent(guest)
     // Why: disable throttling so background screenshots still get frames; else the compositor stalls and capture returns empty.
     guest.setBackgroundThrottling(false)
-    const disposePopupPolicy = this.installGuestPopupPolicy(guest, clickedLinkFrameName)
+    const disposePopupPolicy = this.installGuestPopupPolicy(guest, !inheritedOwnerContext)
     const disposeNavigationPolicy = this.installGuestNavigationPolicy(guest)
 
     // Why: store cleanup so unregisterGuest can drop these listeners on teardown and let the WebContents wrapper GC.
