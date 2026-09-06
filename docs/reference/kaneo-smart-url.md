@@ -65,3 +65,24 @@ changes. Task prose uses Orca's existing untrusted-context wrapper.
 
 Provider contracts are documented in [Kaneo's API reference](https://kaneo.app/docs/api-reference/introduction)
 and [authentication guide](https://kaneo.app/docs/api-reference/authentication).
+
+## Rendered regression checks
+
+Run the desktop checks with Node 24 and the repository's Electron test fixture:
+
+```sh
+ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e tests/e2e/kaneo-smart-url.spec.ts tests/e2e/kaneo-paired-runtime.spec.ts --workers=1
+```
+
+The tests cover light/dark mode, loading and retry, keyboard selection, real Git
+worktree creation, all sidebar card layouts, secret clearing, and paired-runtime
+credential ownership. Only the Kaneo HTTP boundary is replaced with synthetic data;
+Electron IPC, credential storage, runtime RPC and worktree creation remain real.
+Screenshots are Playwright attachments, not committed assets.
+
+`tests/e2e/kaneo-ssh-worktree.spec.ts` additionally exercises task-linked creation
+over real SSH. It is opt-in for a disposable Linux environment whose root account
+can access the fixture's local repository path through localhost SSH. Set
+`ORCA_E2E_SSH_LOCALHOST=1`, `ORCA_E2E_SSH_USER=root`, `ORCA_E2E_SSH_PORT` and
+`ORCA_E2E_SSH_IDENTITY_FILE` for that environment. The test seeds the legacy SSH
+fixture's project projection before exercising the rendered composer.

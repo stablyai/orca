@@ -17684,6 +17684,7 @@
       "apiKey": "api key",
       "selfHosted": "self-hosted"
     },
-    "instanceUrlPlaceholder": "https://kaneo.example.com"
+    "instanceUrlPlaceholder": "https://kaneo.example.com",
+    "requestFailed": "Kaneo request failed."
   }
 }

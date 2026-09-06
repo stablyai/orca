@@ -149,7 +149,13 @@ export function renderSmartWorkspaceNameField(
         </div>
       )}
       <Popover
-        open={!disabled && open && mode !== 'text' && selectedSource === null}
+        open={
+          !disabled &&
+          open &&
+          mode !== 'text' &&
+          selectedSource === null &&
+          (!controller.kaneoSource.intent || controller.kaneoSource.task !== null)
+        }
         onOpenChange={handleSourcePopoverOpenChange}
       >
         <Command
