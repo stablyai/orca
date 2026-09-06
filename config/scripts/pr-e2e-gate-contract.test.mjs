@@ -379,8 +379,7 @@ describe('PR E2E gate contract', () => {
     // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
     const unreachableSpecs = new Set([
       'tests/e2e/ssh-docker-relay-perf.spec.ts',
-      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
-      'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts'
+      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts'
     ])
     // Why comments are stripped: this file's own runner lists the two exempt specs by name in a
     // prose comment. A substring scan over raw text would count any spec merely *discussed* in a
