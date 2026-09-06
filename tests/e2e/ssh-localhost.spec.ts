@@ -209,16 +209,83 @@ test.describe('Localhost SSH', () => {
             throw new Error(result.error)
           }
 
-          await store.getState().fetchRepos()
-          await store.getState().fetchWorktrees(result.repo.id)
-
-          const worktrees = store.getState().worktreesByRepo[result.repo.id] ?? []
-          const worktree =
-            worktrees.find((candidate) => candidate.path === result.repo.path) ?? worktrees[0]
-          if (!worktree) {
-            throw new Error(`No remote worktree found for ${result.repo.path}`)
+          if (!state.providerEpoch || !Number.isSafeInteger(state.connectionGeneration) || state.connectionGeneration <= 0) {
+            throw new Error('Connected SSH target has incomplete authority')
           }
-
+          const executionHostId = `ssh:${encodeURIComponent(createdTarget.id)}` as const
+          const authority = {
+            targetId: createdTarget.id,
+            providerEpoch: state.providerEpoch,
+            connectionGeneration: state.connectionGeneration
+          }
+        const hasExpectedRepoOwner = (): boolean =>
+          store
+            .getState()
+            .repos.some(
+              (repo) =>
+                repo.id === result.repo.id &&
+                repo.connectionId === createdTarget.id &&
+                repo.executionHostId === executionHostId
+            )
+        const waitForRepoOwner = async (): Promise<void> => {
+          if (hasExpectedRepoOwner()) {
+            return
+          }
+          await new Promise<void>((resolve, reject) => {
+            const timer = window.setTimeout(() => {
+              unsubscribe()
+              reject(new Error(`Remote repo owner did not hydrate for ${result.repo.path}`))
+            }, 15_000)
+            const unsubscribe = store.subscribe((next) => {
+              if (
+                !next.repos.some(
+                  (repo) =>
+                    repo.id === result.repo.id &&
+                    repo.connectionId === createdTarget.id &&
+                    repo.executionHostId === executionHostId
+                )
+              ) {
+                return
+              }
+              window.clearTimeout(timer)
+              unsubscribe()
+              resolve()
+            })
+          })
+        }
+        await store.getState().fetchRepos()
+        await waitForRepoOwner()
+        const currentState = store.getState().sshConnectionStates.get(createdTarget.id)
+        if (
+          currentState?.providerEpoch !== authority.providerEpoch ||
+          currentState.connectionGeneration !== authority.connectionGeneration
+        ) {
+          throw new Error(`SSH authority rotated before worktree hydration for ${result.repo.path}`)
+        }
+        const worktreeResult = await store.getState().fetchWorktrees(result.repo.id, {
+          executionHostId,
+          directSshAuthority: authority,
+          requireAuthoritative: true
+        })
+        if (
+          worktreeResult.status !== 'complete' ||
+          worktreeResult.repoId !== result.repo.id ||
+          worktreeResult.authority.kind !== 'direct-ssh' ||
+          worktreeResult.authority.executionHostId !== executionHostId ||
+          worktreeResult.authority.targetId !== authority.targetId ||
+          worktreeResult.authority.providerEpoch !== authority.providerEpoch ||
+          worktreeResult.authority.connectionGeneration !== authority.connectionGeneration
+        ) {
+          throw new Error(
+            `Remote worktree hydration was not authoritative: ${JSON.stringify(worktreeResult)}`
+          )
+        }
+        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? []).find(
+          (candidate) => candidate.hostId === executionHostId
+        )
+        if (!worktree) {
+          throw new Error(`No remote worktree found for ${result.repo.path}`)
+        }
           store.getState().setActiveWorktree(worktree.id)
           if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
             store.getState().createTab(worktree.id)
