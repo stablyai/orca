@@ -1,4 +1,8 @@
 import { getDefaultWorkspaceSession } from './constants'
+import {
+  projectRemoteWorkspaceSshPtyOwner,
+  stripRemoteWorkspaceSshPtyOwners
+} from './remote-workspace-ssh-pty-owner'
 import type { RemoteWorkspaceSession, RemoteWorkspaceTerminalTab } from './remote-workspace-types'
 import type { TerminalTab } from './terminal-tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
@@ -135,7 +139,7 @@ export function exportRemoteWorkspaceSession(
     }
   }
 
-  return {
+  return stripRemoteWorkspaceSshPtyOwners({
     activeWorktreePath,
     activeTabId,
     tabsByWorktreePath,
@@ -158,13 +162,14 @@ export function exportRemoteWorkspaceSession(
       : undefined,
     lastVisitedAtByWorktreePath,
     defaultTerminalTabsAppliedByWorktreePath
-  }
+  })
 }
 
 export function importRemoteWorkspaceSession(
   remote: RemoteWorkspaceSession,
   options: ImportOptions
 ): WorkspaceSessionState {
+  remote = projectRemoteWorkspaceSshPtyOwner(remote, options.executionHostId)
   const session = getDefaultWorkspaceSession()
   const tabsByWorktree: Record<string, TerminalTab[]> = {}
   const terminalTabIds = new Set<string>()
