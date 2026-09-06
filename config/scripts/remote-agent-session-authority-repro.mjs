@@ -176,7 +176,13 @@ try {
   const closed = await callClient(pairingCode, 'terminal.close', {
     terminal: first.result.terminal.handle
   })
-  assertOk(closed, 'fixture terminal close')
+  await assertClosedOrRetired(
+    pairingCode,
+    worktree,
+    first.result.terminal.handle,
+    closed,
+    'fixture terminal close'
+  )
   await waitFor(async () => {
     const [terminals, tabs] = await Promise.all([
       callClient(pairingCode, 'terminal.list', { worktree }),
@@ -252,7 +258,13 @@ try {
   const freshClosed = await callClient(pairingCode, 'terminal.close', {
     terminal: fresh.result.terminal.handle
   })
-  assertOk(freshClosed, 'unrelated fresh terminal close')
+  await assertClosedOrRetired(
+    pairingCode,
+    worktree,
+    fresh.result.terminal.handle,
+    freshClosed,
+    'unrelated fresh terminal close'
+  )
   const remainingClosed = await callClient(pairingCode, 'terminal.stop', { worktree })
   assertOk(remainingClosed, 'isolated fixture terminal cleanup')
   await waitFor(async () => {
@@ -306,7 +318,29 @@ try {
     child.kill()
   }
   await cleanupIsolatedDaemons(profilePath)
-  rmSync(scratch, { recursive: true, force: true })
+  await removeScratchDirectory()
+}
+
+async function removeScratchDirectory() {
+  if (process.platform === 'win32') {
+    execFileSync('attrib.exe', ['-R', '-H', '-S', path.join(scratch, '*'), '/S', '/D'], {
+      stdio: 'ignore'
+    })
+  }
+  let lastError
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      rmSync(scratch, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (!['EBUSY', 'ENOTEMPTY', 'EPERM'].includes(error?.code)) {
+        throw error
+      }
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
+  throw lastError
 }
 
 function installFixtureAgent(targetDir) {
@@ -327,7 +361,7 @@ function installFixtureAgent(targetDir) {
 
 function quoteFixtureAgentCommand(commandPath) {
   return process.platform === 'win32'
-    ? `"${commandPath.replaceAll('"', '""')}" ${agentSessionToken}`
+    ? `& '${process.execPath.replaceAll("'", "''")}' '${fixtureScript.replaceAll("'", "''")}' ${agentSessionToken}`
     : `${shellQuote(commandPath)} ${agentSessionToken}`
 }
 
@@ -337,9 +371,9 @@ function shellQuote(value) {
 
 function fixtureCommand(scriptPath, markerPath) {
   if (process.platform === 'win32') {
-    return [process.execPath, scriptPath, markerPath]
-      .map((value) => `"${value.replaceAll('"', '""')}"`)
-      .join(' ')
+    return `& ${[process.execPath, scriptPath, markerPath]
+      .map((value) => `'${value.replaceAll("'", "''")}'`)
+      .join(' ')}`
   }
   return [process.execPath, scriptPath, markerPath].map(shellQuote).join(' ')
 }
@@ -536,6 +570,19 @@ function assertOk(response, description) {
   if (!response?.ok) {
     throw new Error(`${description} failed: ${JSON.stringify(response)}`)
   }
+}
+
+async function assertClosedOrRetired(pairingCode, worktree, terminal, response, description) {
+  if (response?.ok) {
+    return
+  }
+  if (response?.error?.message !== 'tab_not_found') {
+    assertOk(response, description)
+  }
+  await waitFor(async () => {
+    const inventory = await callClient(pairingCode, 'terminal.list', { worktree })
+    return inventory.ok && !inventory.result.terminals.some((entry) => entry.handle === terminal)
+  }, `${description} retirement`)
 }
 
 function assertSameTerminal(left, right) {

@@ -19,6 +19,7 @@ type ClientMirror = {
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-headed-agent-focus-'))
 const spawnMarkerPath = path.join(scratch, 'agent-spawns.txt')
 const inputMarkerPath = path.join(scratch, 'agent-input.txt')
+const lifecycleMarkerPath = path.join(scratch, 'agent-lifecycle.txt')
 const exitTriggerPath = path.join(scratch, 'exit-agent')
 const fixtureScript = path.join(
   process.cwd(),
@@ -37,6 +38,7 @@ test.use({
   launchEnv: {
     ORCA_REPRO_EXIT_TRIGGER: exitTriggerPath,
     ORCA_REPRO_INPUT_MARKER: inputMarkerPath,
+    ORCA_REPRO_LIFECYCLE_MARKER: lifecycleMarkerPath,
     ORCA_REPRO_SPAWN_MARKER: spawnMarkerPath
   }
 })
@@ -52,7 +54,7 @@ function shellQuote(value: string): string {
 function fixtureCommand(scriptPath: string, ...args: string[]): string {
   const command = [process.execPath, scriptPath, ...args]
   return process.platform === 'win32'
-    ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
+    ? `& ${command.map((value) => `'${value.replaceAll("'", "''")}'`).join(' ')}`
     : command.map(shellQuote).join(' ')
 }
 

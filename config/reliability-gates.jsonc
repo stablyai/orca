@@ -7269,9 +7269,9 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": ["macos", "windows"],
       "coveredProviders": ["local", "daemon", "remote-runtime"],
-      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. The Electron oracle covers a local macOS runtime and daemon with real agent, Setup, and unrelated-canary processes; SSH, WSL, paired-server, Linux, and Windows remain contract-only or unrun.",
+      "coverageNotes": "Renderer ownership/dedupe contracts cover provider-session claims. Local and daemon attach-only contracts prove an existing stable-pane owner is adopted without provider creation, while remote-runtime transport contracts preserve adopted ownership through cancellation. Electron oracles cover a local macOS runtime and a physical Windows paired host with two persistent viewers racing one provider-session identity; SSH, WSL, and Linux remain contract-only or unrun.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6800",
         "https://github.com/stablyai/orca/pull/5240",
@@ -7286,7 +7286,8 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty-provider-spawn-session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/ipc/pty-pane-materialization-race.test.ts src/main/ipc/pty-persisted-incarnation-repair.test.ts src/main/ipc/pty-pane-reservation-settlement.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
-        "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-agent-session-ownership.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
@@ -7301,7 +7302,8 @@
         "src/renderer/src/lib/pane-manager/pane-fit.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-deferred-reattach-live-output.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-session-launch.test.ts",
-        "tests/e2e/live-background-terminal-mount-authority.spec.ts"
+        "tests/e2e/live-background-terminal-mount-authority.spec.ts",
+        "tests/e2e/paired-agent-session-ownership.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -7365,9 +7367,25 @@
             "runtime inventory, renderer graph, persisted session, runtime epoch, and daemon PID converge without replacement or resume",
             "the unrelated canary remains writable and receives no signal across target projection repair"
           ]
+        },
+        {
+          "file": "tests/e2e/paired-agent-session-ownership.spec.ts",
+          "assertions": [
+            "two persistent paired viewers racing one exact resume identity receive created plus adopted dispositions and share one live writable Windows process",
+            "retries preserve the canonical terminal handle, tab, and PTY without another process spawn"
+          ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-agent-session-ownership.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 72,
+          "summary": "A physical Windows host and two persistent paired web viewers shared one live writable resumed provider session. Reverting only canonical claim-key sharing re-failed with two live fixture PIDs, 129856 and 73496, running identical resume argv 292 ms apart; restoring it returned to one process."
+        },
         {
           "date": "2026-07-03",
           "runner": "local",
@@ -7401,9 +7419,9 @@
         "Record byte-identical latest-main, candidate, and candidate-revert Electron results."
       ],
       "knownGaps": [
-        "Providers listed on this gate are affected identity surfaces; live integration is limited to local macOS while daemon and remote-runtime adoption also have focused contracts.",
+        "Providers listed on this gate are affected identity surfaces; live integration covers local macOS and a paired Windows host while SSH, WSL, Linux, and installed-app update paths remain gaps.",
         "The Electron oracle seeds the production hook-store contract instead of running an authenticated Codex hook end to end.",
-        "The live Electron topology is local macOS only; folder workspaces, SSH, WSL, paired headed/headless servers, Linux, and Windows are not exercised by that journey.",
+        "Folder workspaces, SSH, WSL, Linux, and installed-app update paths are not exercised by the live ownership journeys.",
         "The oracle covers first activation and one renderer reload, not repeated soak activation or an installed-app update."
       ],
       "demotionRule": "Demote or quarantine if failures are non-actionable or if a duplicate resume escape occurs outside the modeled matrix."
@@ -7428,9 +7446,9 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": ["macos", "windows"],
       "coveredProviders": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
-      "coverageNotes": "Deterministic macOS tests cover controller claims, daemon and SSH/relay operation replay, mixed-version selection, runtime ownership, exact provisional handoff, durable terminal retirement, two independent viewer mirrors, guarded adoption of legacy live PTYs, and completion classification when either the outer remote transport or authoritative host/provider process inspection becomes unreachable. The adoption harness models v1.4.150 agent/setup/shell tabs, current-generation restart and reconnect, exact handle/incarnation/worktree/host checks, topology CAS, competing clients, split-pane/group restoration, WSL ownership, and SSH owner rejection. The secondary parity repro runs independent clients against one headless remote Orca runtime over encrypted pairing and a real daemon-backed PTY, with tokened fixture-process identity separated from unrelated Codex app-server startup probes. The automated primary topology runs an isolated headed macOS Orca desktop server plus a separate paired web client and proves viewer-local fresh/resume focus, exact legacy placement, writable PTYs, unrelated-terminal survival, and host/client cleanup. SSH coverage is provider/relay contract and fault-injection coverage only; it does not substitute for paired-server coverage. Live Windows, Linux, WSL, SSH, and physical paired-Linux hosts remain gaps.",
+      "coverageNotes": "Deterministic macOS tests cover controller claims, daemon and SSH/relay operation replay, mixed-version selection, runtime ownership, exact provisional handoff, durable terminal retirement, two independent viewer mirrors, guarded adoption of legacy live PTYs, and completion classification when either the outer remote transport or authoritative host/provider process inspection becomes unreachable. The adoption harness models v1.4.150 agent/setup/shell tabs, current-generation restart and reconnect, exact handle/incarnation/worktree/host checks, topology CAS, competing clients, split-pane/group restoration, WSL ownership, and SSH owner rejection. The secondary parity repro runs independent clients against one headless remote Orca runtime over encrypted pairing and a real daemon-backed PTY. Headed physical-host coverage includes macOS focus/placement and one local Windows create-with-agent plus synchronized two-viewer resume journey, with exact fixture PIDs and writable ConPTY input. SSH coverage is provider/relay contract and fault-injection coverage only; Linux, WSL, SSH, Windows CI, and physical paired-Linux hosts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8878",
         "https://github.com/stablyai/orca/issues/9151",
@@ -7451,6 +7469,7 @@
         "pnpm exec electron-vite build --mode e2e",
         "VITE_EXPOSE_STORE=true pnpm run build:web",
         "ORCA_E2E_WEB_CLIENT=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/remote-agent-session-focus-authority.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-agent-session-ownership.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
         "Manual headed paired-server journey: isolated Orca desktop host + separate paired web client + real Codex process + 20-second WebSocket fault + reconnect + explicit stop",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-orphan-owner.test.ts src/main/runtime/terminal-orphan-topology.test.ts src/renderer/src/runtime/web-session-terminal-orphan-recovery.test.ts src/renderer/src/runtime/web-session-terminal-orphan-mixed-version.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/pty-process-inspection.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/relay/pty-handler-spawn-admission.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/runtime/orca-runtime.test.ts tests/e2e/remote-agent-completion-authority.unit.test.ts src/renderer/src/runtime/runtime-terminal-inspection.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-process-cadence.test.ts src/renderer/src/components/terminal-pane/agent-completion-coordinator-pending-title-inspection.test.ts",
@@ -7484,6 +7503,7 @@
         "src/renderer/src/runtime/web-session-intent-owner.test.ts",
         "src/renderer/src/runtime/remote-server-parity.test.ts",
         "tests/e2e/remote-agent-session-focus-authority.spec.ts",
+        "tests/e2e/paired-agent-session-ownership.spec.ts",
         "config/scripts/remote-agent-session-authority-repro.mjs",
         "config/scripts/remote-agent-session-process-cleanup.mjs",
         "tests/e2e/remote-terminal-tab-retirement.unit.test.ts",
@@ -7615,6 +7635,13 @@
           ]
         },
         {
+          "file": "tests/e2e/paired-agent-session-ownership.spec.ts",
+          "assertions": [
+            "a paired viewer's real create-with-agent response identifies the backend-spawned terminal, PTY, and live fixture PID retained in both renderer mirrors",
+            "two persistent paired viewers synchronously dispatch and retry one provider-session identity, preserve independent focus, mirror the same tab, and both write to one canonical ConPTY process"
+          ]
+        },
+        {
           "file": "config/scripts/remote-agent-session-authority-repro.mjs",
           "assertions": [
             "headless focused fresh/resume requests create background host surfaces without a renderer window",
@@ -7663,6 +7690,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "windows",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-agent-session-ownership.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
+          "result": "passed",
+          "durationSeconds": 60,
+          "summary": "One source-built local physical Windows run passed a paired-viewer worktree.create-with-Codex RPC and explicit mirror activation with one backend startup PID/PTY in both renderers, then passed a synchronized two-persistent-viewer resume request and retry with one canonical writable ConPTY PID."
+        },
         {
           "date": "2026-07-23",
           "runner": "local",
@@ -7760,11 +7796,11 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "New experimental gate with deterministic local coverage and no soak history yet."
+        "evidence": "New experimental gate with deterministic contract coverage plus one local physical-Windows paired journey; it has no Windows CI or soak history yet."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Issue #10192 has byte-identical renderer-oracle evidence: origin/main@ee87bb38d (and earlier ef985ed80 and 94d3db4a2) fails activated fresh and resume rows by requesting focused host presentation, the PR client change passes all four rows, and disabling it turns the activated rows red again. The original PR still fails an old-client focused request against a new headless host; host-boundary normalization turns that mixed-version control green while trusted local callers remain focused. Issue #9151 has local red/green evidence for completion authority. The exact retirement oracle is red on pre-#9687 commit 2a32c5c9a and PR #9053 head d3a1d3047, and green on main@4fce2de49. Saved CI artifacts are still needed."
+        "evidence": "Issue #10192 has byte-identical renderer-oracle evidence: origin/main@ee87bb38d (and earlier ef985ed80 and 94d3db4a2) fails activated fresh and resume rows by requesting focused host presentation, the PR client change passes all four rows, and disabling it turns the activated rows red again. The original PR still fails an old-client focused request against a new headless host; host-boundary normalization turns that mixed-version control green while trusted local callers remain focused. Issue #9151 has local red/green evidence for completion authority. The exact retirement oracle is red on pre-#9687 commit 2a32c5c9a and PR #9053 head d3a1d3047, and green on main@4fce2de49. For STA-3859, replacing only the canonical claim key with a per-call key spawned two live Windows fixture PIDs 292 ms apart; restoring the canonical key returned the suite to one process. STA-4908 is green on current main, and reverting only startup-terminal propagation did not turn it red because later paired-runtime ownership protections overlap. Saved CI artifacts and Windows soak remain needed."
       },
       "performanceBudget": {
         "required": true,
