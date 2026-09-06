@@ -215,6 +215,7 @@ jobs:
         with:
           name: orca-windows-installer-unsigned-${{ github.run_id }}
           path: dist/orca-windows-setup.exe
+          compression-level: 0
           if-no-files-found: error
 
       - name: Submit Windows installer signing request

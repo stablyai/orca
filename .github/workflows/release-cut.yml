@@ -858,15 +858,16 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
           install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
 
       # Why: Linux terminal golden E2E uses the same native install path as
       # release CI, which needs pnpm to bypass its non-executable gyp_main.py.
@@ -1074,15 +1075,16 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
           install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
 
       # Why: keep the non-blocking evidence lane on the same Linux native
       # install path as the blocking golden and release build jobs.
@@ -1716,6 +1718,7 @@ jobs:
         with:
           name: orca-windows-unsigned-${{ needs.cut.outputs.tag }}
           path: dist/orca-windows-setup.exe
+          compression-level: 0
           if-no-files-found: error
 
       # Why: SignPath Foundation production certificates require manual review,
