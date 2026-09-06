@@ -213,6 +213,28 @@ describe('kimi managed hooks TOML block', () => {
     })
   })
 
+  it('recovers an orphaned block whose user TOML starts after a blank line (#18861)', () => {
+    for (const nl of ['\n', '\r\n']) {
+      const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+      // A blank line separates the last orphaned table from the user's
+      // appended section: recovery must still strip the orphan instead of
+      // leaving it behind for reinstall to duplicate.
+      const orphaned = installed
+        .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, nl)
+        .concat(nl, `[tools]${nl}`, `name = "user-tool"${nl}`)
+
+      const removed = removeManagedKimiHooks(orphaned)
+      expect(removed.changed).toBe(true)
+      expect(removed.text).toContain('[tools]')
+      expect(removed.text).toContain('name = "user-tool"')
+      expect(removed.text).not.toContain(COMMAND)
+      expect(readManagedKimiHookEvents(removed.text, isManaged).size).toBe(0)
+
+      const reinstalled = applyManagedKimiHooks(orphaned, COMMAND)
+      expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
+    }
+  })
+
   it('treats stale managed entries pointing at a moved script path as managed', () => {
     const staleCommand =
       "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"
