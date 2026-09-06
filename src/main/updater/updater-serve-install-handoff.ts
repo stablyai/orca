@@ -117,13 +117,17 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
   /** Resolves once the helper's verdict lands in the spool, or null on timeout. Never clears spool state. */
   private async awaitSupervisedServeVerdict(
     attemptId: string,
-    targetVersion: string
+    targetVersion: string,
+    isAborted: () => boolean = () => false
   ): Promise<{ verdict: ServeUpdateVerdict; message: string } | null> {
     const deadline = Date.now() + SERVE_UPDATE_VERDICT_TIMEOUT_MS
     while (Date.now() < deadline) {
       const result = readServeUpdateResultFor(attemptId, targetVersion)
       if (result) {
         return result
+      }
+      if (isAborted()) {
+        return null
       }
       await new Promise((resolve) => setTimeout(resolve, SERVE_UPDATE_VERDICT_POLL_MS))
     }
@@ -162,14 +166,15 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
     }
     // Why: the helper must be running for the verdict to ever appear, but a helper
     // that dies fast (no sudo, bad install) should surface quickly instead of
-    // burning the full 90s window. Race spawn-exit against the verdict poll.
+    // burning the full 90s window. Race spawn-exit against the verdict poll: a
+    // spawn error aborts the poll immediately.
     let spawnError: string | null = null
     const helperRun = this.spawnSupervisedServeHelper().catch((error: unknown) => {
       spawnError = error instanceof Error ? error.message : String(error)
     })
     const attemptId = getServeUpdateAttemptId()
     const outcome = attemptId
-      ? await this.awaitSupervisedServeVerdict(attemptId, targetVersion)
+      ? await this.awaitSupervisedServeVerdict(attemptId, targetVersion, () => spawnError !== null)
       : null
     if (spawnError && !outcome) {
       await helperRun
