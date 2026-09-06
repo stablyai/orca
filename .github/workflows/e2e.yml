@@ -262,7 +262,7 @@ jobs:
     needs: [build, prepare-native-cache]
     # effect of one route listing a startup-readiness spec — pruning that spec would have
     # silently retired the whole lane. The signal is now derived from the SSH routes directly.
-    # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
+    # The three spec clauses stay for their honest purpose: changed-e2e hands these specs to this
     # lane, so editing one must still run it here.
     if: >-
       inputs.test_files == '' ||

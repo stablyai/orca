@@ -18037,7 +18037,7 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap.",
+      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The original six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The added five-pane input spec passed in Linux CI run 34033353595, but diagnostic run 34034754815 reproduced real input loss during scrollback replay; application PR #19075 is required before this coverage can land.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/18018",
         "https://github.com/stablyai/orca/pull/18546",
@@ -18137,7 +18137,7 @@
       },
       "flakeHistory": {
         "status": "flaky",
-        "evidence": "Baseline: ten enabled tests passed, two fixme skipped, worker teardown timed out (7.3m). After pipe cleanup: ten passed and worker exited cleanly (5.2m); two half-open repeats passed (1.7m). The formerly skipped thaw-input case failed before its recovered-authority wait and passed 1+3 executions afterward (56.9s + 2.6m). Flood failed both its original input oracle and a strengthened producer-completion oracle after recovery."
+        "evidence": "Baseline: ten enabled tests passed, two fixme skipped, worker teardown timed out (7.3m). After pipe cleanup: ten passed and worker exited cleanly (5.2m); two half-open repeats passed (1.7m). The formerly skipped thaw-input case failed before its recovered-authority wait and passed 1+3 executions afterward (56.9s + 2.6m). Flood failed both its original input oracle and a strengthened producer-completion oracle after recovery. Five-pane input diagnostics additionally failed 1/5 in run 34034754815: the intended focused PTY emitted the full input, the replay guard discarded 31 characters, and the remote ACK contained exactly the remaining suffix. PR #19075 addresses that application bug; passing repetitions alone do not establish its resolution."
       },
       "redGreenEvidence": {
         "status": "partial",
@@ -18153,7 +18153,7 @@
         "Collect CI runtime and flake history plus product red/green evidence before blocking."
       ],
       "knownGaps": [
-        "Five-pane simultaneous flood input is newly registered and awaiting CI evidence; it does not resolve the separate #16764 wall-clock performance oracle.",
+        "Five-pane simultaneous flood input depends on application PR #19075: replay discarded the first 31 characters of correctly focused keyboard input in run 34034754815. Require validation against the merged fix before landing; the separate #16764 wall-clock performance oracle remains unresolved.",
         "The disconnected 48MB flood still loses its relay channel: original post-flood input marker failed in 60s, and waiting for the finite producer completion marker failed in 120s. It remains an explicit #18018 fixme reproduction; frozen-host input is re-enabled after four successful runs.",
         "Linux and Windows desktop clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not exercised by these Docker specs.",
         "Some legacy assertions inspect terminal serialization or backing state rather than rendered DOM; no blanket visual coverage claim.",
