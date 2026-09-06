@@ -1,3 +1,4 @@
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -44,6 +45,9 @@ export abstract class RemoteRuntimeTerminalBinaryController extends RemoteRuntim
       this.queueOutputAcknowledgement(stream, frame.payload.byteLength)
       return
     }
+    recordRendererCrashBreadcrumb('remote_terminal_diagnostic_inbound', {
+      terminal: stream.terminal, streamId: stream.streamId, kind: frame.opcode
+    })
     stream.watchdog.recordInbound()
     if (frame.opcode === TerminalStreamOpcode.WriteUnavailable) {
       stream.callbacks.onWriteUnavailable?.()

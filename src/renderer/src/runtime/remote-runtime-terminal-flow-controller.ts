@@ -1,3 +1,4 @@
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   TerminalStreamOpcode,
   encodeTerminalStreamJson,
@@ -46,6 +47,11 @@ export abstract class RemoteRuntimeTerminalFlowController extends RemoteRuntimeT
       TerminalStreamOpcode.Input,
       encodeTerminalStreamText(text)
     )
+    if (/[\r\n]/u.test(text)) {
+      recordRendererCrashBreadcrumb('remote_terminal_diagnostic_input', {
+        terminal: stream.terminal, streamId: stream.streamId, sent, outputPaused: stream.outputPaused
+      })
+    }
     if (sent && !stream.outputPaused) {
       stream.watchdog.recordCommandInput(text)
     }

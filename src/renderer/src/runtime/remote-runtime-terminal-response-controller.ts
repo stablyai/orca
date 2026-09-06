@@ -1,3 +1,4 @@
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR } from '../../../shared/terminal-multiplex-flow-control'
 import { parseTerminalStreamEndVerdict } from '../../../shared/terminal-stream-end-verdict'
@@ -40,6 +41,9 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
     if (!stream) {
       return
     }
+    recordRendererCrashBreadcrumb('remote_terminal_diagnostic_inbound', {
+      terminal: stream.terminal, streamId: stream.streamId, kind: event.type
+    })
     stream.watchdog.recordInbound()
     if (event.type === 'end' && shouldHoldE2eRemoteTerminalEnd(stream.terminal)) {
       return
