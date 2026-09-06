@@ -176,7 +176,11 @@ test('@headful keeps resizing after the divider loses pointer capture', async ({
 
   await orcaPage.mouse.move(startX + 260, startY, { steps: 10 })
   await orcaPage.mouse.up()
-  await expect.poll(async () => gridsMatch(await readDividerGeometry(orcaPage))).toBe(true)
+  await expect.poll(async () => {
+    const geometry = await readDividerGeometry(orcaPage)
+    console.info('[divider-capture-loss] ' + JSON.stringify({ before, geometry }))
+    return gridsMatch(geometry)
+  }).toBe(true)
   const after = await readDividerGeometry(orcaPage)
   await testInfo.attach('divider-capture-loss-geometry', {
     body: Buffer.from(JSON.stringify({ before, after }, null, 2)),
