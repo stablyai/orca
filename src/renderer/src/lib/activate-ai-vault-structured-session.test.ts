@@ -10,9 +10,10 @@ function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSess
   return {
     activate: vi.fn(() => true),
     refresh: vi.fn(async () => undefined),
-    reveal: vi.fn(async () => true),
+    reveal: vi.fn(async () => 'revealed' as const),
     unavailable: vi.fn(),
     gone: vi.fn(),
+    hostTooOld: vi.fn(),
     ...overrides
   }
 }
@@ -52,11 +53,10 @@ describe('activateAiVaultStructuredSession', () => {
   })
 
   it('says the chat is gone rather than asking for a retry that cannot succeed', async () => {
-    // Covers both terminal answers: the host refused, and the host cannot answer at all because it
-    // does not advertise the reveal capability. Neither improves by waiting.
+    // The host answered, and its answer was that it holds no such chat. Waiting cannot change it.
     const parts = deps({
       activate: vi.fn(() => false),
-      reveal: vi.fn(async () => false)
+      reveal: vi.fn(async () => 'gone' as const)
     })
 
     await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)

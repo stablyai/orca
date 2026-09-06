@@ -5,21 +5,33 @@ import { activateAndRevealWorktree } from './worktree-activation'
 import { activateStructuredAgentSessionById } from './structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  getActiveRuntimeTarget,
+  runtimeEnvironmentSupportsCapability
+} from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync'
-import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
+/** Why four: the three terminal answers a user can act on differ, and folding them together sends
+ *  someone to the wrong remedy — wait, give up, or update the host. `unreachable` is the only one
+ *  that improves by retrying. */
+export type StructuredSessionRevealOutcome = 'revealed' | 'gone' | 'host-too-old' | 'unreachable'
+
 type StructuredSessionActivationDeps = {
   activate: typeof activateStructuredAgentSessionById
   refresh: (worktreeId: string) => Promise<void>
-  reveal: (target: { worktreeId: string; sessionId: string }) => Promise<boolean>
+  reveal: (target: {
+    worktreeId: string
+    sessionId: string
+  }) => Promise<StructuredSessionRevealOutcome>
   unavailable: () => void
   gone: () => void
+  hostTooOld: () => void
 }
 
 const defaultDeps: StructuredSessionActivationDeps = {
@@ -41,6 +53,17 @@ const defaultDeps: StructuredSessionActivationDeps = {
       translate(
         'auto.lib.activateAiVaultStructuredSession.gone',
         'This chat is no longer on this host, so it cannot be reopened here.'
+      )
+    )
+  },
+  // Separate from `gone` because the chat is not gone: the host that holds it is too old to be
+  // asked for it, and telling someone their work is lost when an update would bring it back is the
+  // worse of the two wrong answers.
+  hostTooOld: () => {
+    toast.error(
+      translate(
+        'auto.lib.activateAiVaultStructuredSession.hostTooOld',
+        'Reopening this chat requires a newer Orca server. Update the host and try again.'
       )
     )
   }
@@ -65,8 +88,16 @@ export async function activateAiVaultStructuredSession(
     if (!deps.activate(target)) {
       // The inventory genuinely does not carry this chat: it was closed, or this process never
       // published it. Ask the host to republish the tab from the record it still holds on disk.
-      if (!(await deps.reveal(target))) {
-        deps.gone()
+      const revealed = await deps.reveal(target)
+      if (revealed !== 'revealed') {
+        if (revealed === 'gone') {
+          deps.gone()
+        } else if (revealed === 'host-too-old') {
+          deps.hostTooOld()
+        } else {
+          // Unreachable: we never got an answer, so this is the one case waiting can still fix.
+          deps.unavailable()
+        }
         return true
       }
       await deps.refresh(structured.workspaceId).catch(() => undefined)
@@ -85,35 +116,54 @@ export async function activateAiVaultStructuredSession(
 /**
  * Ask the host to republish a persisted chat's tab.
  *
- * False means "do not keep waiting": either this host cannot answer the call at all, or it answered
- * that the chat is gone. Both are terminal for this click, and neither is worth a retry.
+ * Only `revealed` means the tab is on its way. The other three are all terminal for this click, and
+ * they are kept apart because the remedy differs: retry, give up, or update the host.
  */
-async function revealStructuredSession(target: {
+export async function revealStructuredSession(target: {
   worktreeId: string
   sessionId: string
-}): Promise<boolean> {
-  // Negotiated rather than discovered by calling: an older host has no `agentSession.reveal`, and
-  // its method-not-found is indistinguishable from a refusal this client should surface.
-  if (!readLocalRuntimeCapabilities().includes(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)) {
-    return false
-  }
+}): Promise<StructuredSessionRevealOutcome> {
   const environmentId = getRuntimeEnvironmentIdForWorktree(
     useAppStore.getState(),
     target.worktreeId
   )
+  const host = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId })
+  // Negotiated against the host that will answer this call, not the local one: a paired host runs
+  // its own build, and its method-not-found is indistinguishable from a refusal we should surface.
+  // A local host is this build, so it always has the method and needs no round trip to prove it.
+  if (host.kind === 'environment') {
+    let supported: boolean
+    try {
+      supported = await runtimeEnvironmentSupportsCapability(
+        host.environmentId,
+        STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+        STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
+      )
+    } catch {
+      // We could not reach the host to ask. That is not evidence about the chat or the host's age.
+      return 'unreachable'
+    }
+    if (!supported) {
+      return 'host-too-old'
+    }
+  }
+  let result: { ok?: boolean } | undefined
   try {
-    const result = await withStructuredSessionRestoreTimeout(
+    result = await withStructuredSessionRestoreTimeout(
       callRuntimeRpc<{ ok?: boolean }>(
-        getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
+        host,
         'agentSession.reveal',
         { sessionId: target.sessionId },
-        { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
+        {
+          timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
+        }
       )
     )
-    return result?.ok === true
   } catch {
-    return false
+    return 'unreachable'
   }
+  // The host answered, and its answer was a refusal: this chat is not one it holds a record for.
+  return result?.ok === true ? 'revealed' : 'gone'
 }
 
 async function refreshStructuredSessionTabs(worktreeId: string): Promise<void> {
