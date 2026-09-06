@@ -32,10 +32,12 @@ const BLOCK_END = '# <<< orca-managed-kimi-hooks <<<'
 //    bounded to the contiguous installer-shaped `[[hooks]]` tables (header +
 //    event/command/timeout lines), so user TOML appended after the orphaned
 //    tables survives remove/reinstall instead of being swallowed to EOF (#18861).
-//    Each recovered table must be followed — apart from blank lines — by the
-//    next table header or EOF, so a user table that reuses the installer field
-//    order but carries extra keys ends recovery with the table intact instead
-//    of being truncated to its installer-shaped prefix.
+//    Each recovered table must be followed — apart from blank lines and `#`
+//    comments, which never extend a TOML table — by the next `[` table header
+//    or EOF, so a user table that reuses the installer field order but carries
+//    extra keys ends recovery with the table intact instead of being truncated
+//    to its installer-shaped prefix. A key/value line, even behind a comment,
+//    extends the table and likewise ends recovery.
 //    Line boundaries accept CRLF: an editor saving the config with Windows
 //    endings after deleting BLOCK_END must still be recoverable.
 //    A user table that mirrors the exact installer shape remains
@@ -46,8 +48,17 @@ const MANAGED_HOOK_TABLE =
   'event\\s*=\\s*"[^"\\n]*"\\r?\\n' +
   'command\\s*=\\s*"(?:[^"\\\\]|\\\\.)*"\\r?\\n' +
   'timeout\\s*=\\s*\\d+'
+// Consumed only BETWEEN recovered tables; the last table keeps its trailing
+// newline so removal never glues the surviving neighbors together.
+const RECOVERED_TABLE_SEPARATOR = '\\r?\\n(?:[ \\t]*\\r?\\n)*'
+// Zero-width end-of-recovery check: past the last recovered table's line
+// ending, blank and comment lines may intervene, but the next content must be
+// a `[` header or EOF — anything else (a key/value continuation, even behind a
+// comment) extends the table and ends recovery with the table left intact.
+const RECOVERED_TABLE_BOUNDARY =
+  '(?=\\r?\\n(?:[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n)*(?:\\[|(?:[ \\t]*#[^\\r\\n]*)?$))'
 const MANAGED_BLOCK_RE = new RegExp(
-  `(?:\\r?\\n)*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\r?\\n(?:${MANAGED_HOOK_TABLE}(?:(?:\\r?\\n)+(?=\\[)|(?:\\r?\\n)*$))+)`,
+  `(?:\\r?\\n)*${escapeRegex(BLOCK_START)}(?:[\\s\\S]*?${escapeRegex(BLOCK_END)}[^\\n]*|\\r?\\n${MANAGED_HOOK_TABLE}(?:${RECOVERED_TABLE_SEPARATOR}${MANAGED_HOOK_TABLE})*${RECOVERED_TABLE_BOUNDARY})`,
   'g'
 )
 

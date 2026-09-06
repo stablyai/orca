@@ -235,6 +235,67 @@ describe('kimi managed hooks TOML block', () => {
     }
   })
 
+  it('recovers an orphaned block followed by a comment line and keeps the comment intact (#18861)', () => {
+    for (const nl of ['\n', '\r\n']) {
+      const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+      // A `#` comment ahead of the user's appended TOML must not strand the
+      // last orphaned table: partial removal reports changed=true while
+      // leaving a live managed hook command behind.
+      const orphaned = installed
+        .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, '\n')
+        .concat(
+          `# my own hooks${nl}`,
+          `[[hooks]]${nl}`,
+          `event = "SessionStart"${nl}`,
+          `command = "node my-own-hook.mjs"${nl}`,
+          `timeout = 120${nl}`,
+          `priority = 1${nl}`
+        )
+
+      const removed = removeManagedKimiHooks(orphaned)
+      expect(removed.changed).toBe(true)
+      expect(removed.text).toContain('# my own hooks')
+      expect(removed.text).toContain('priority = 1')
+      expect(removed.text).not.toContain(COMMAND)
+      expect(readManagedKimiHookEvents(removed.text, isManaged).size).toBe(0)
+
+      const reinstalled = applyManagedKimiHooks(orphaned, COMMAND)
+      expect((reinstalled.match(/orca-managed-kimi-hooks \(/g) ?? []).length).toBe(1)
+      expect(reinstalled).toContain('# my own hooks')
+      expect(reinstalled).toContain('priority = 1')
+    }
+  })
+
+  it('recovers an orphaned block whose only trailing content is a comment (#18861)', () => {
+    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+    const orphaned = installed
+      .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, '\n')
+      .concat('# trailing note')
+
+    const removed = removeManagedKimiHooks(orphaned)
+    expect(removed.changed).toBe(true)
+    expect(removed.text).toContain('# trailing note')
+    expect(removed.text).not.toContain(COMMAND)
+    expect(readManagedKimiHookEvents(removed.text, isManaged).size).toBe(0)
+  })
+
+  it('keeps a hook table extended behind a comment line intact (#18861)', () => {
+    const installed = applyManagedKimiHooks('default_model = "x"\n', COMMAND)
+    // A comment does not close a TOML table: `priority` below extends the
+    // installer-shaped table above it, so recovery must leave it alone rather
+    // than strip its header and detach the key.
+    const orphaned = installed
+      .replace(/\n# <<< orca-managed-kimi-hooks <<<\n?/, '\n')
+      .concat('# knob\n', 'priority = 1\n', '[tools]\n', 'name = "user-tool"\n')
+
+    const removed = removeManagedKimiHooks(orphaned)
+    expect(removed.changed).toBe(true)
+    expect(removed.text).not.toContain('orca-managed-kimi-hooks')
+    expect(removed.text).toContain('# knob')
+    expect(removed.text).toContain('priority = 1')
+    expect(removed.text).toContain('[tools]')
+  })
+
   it('treats stale managed entries pointing at a moved script path as managed', () => {
     const staleCommand =
       "if [ -x '/old/userData/agent-hooks/kimi-hook.sh' ]; then /bin/sh '/old/userData/agent-hooks/kimi-hook.sh'; fi"
