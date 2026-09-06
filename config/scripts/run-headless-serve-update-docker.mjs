@@ -87,33 +87,63 @@ function buildHelperInstallScript() {
 function runUpdateCase({ image, appImage, platform, helperInstallScript }) {
   const appImageName = 'orca-update.AppImage'
   // Mounted at the exact path the case script's placeholder line expects.
-  const helperInstallMount = join(
-    mkdtempSync(join(tmpdir(), 'orca-helper-mount-')),
-    'helper-install.sh'
-  )
+  const helperInstallDir = mkdtempSync(join(tmpdir(), 'orca-helper-mount-'))
+  const helperInstallMount = join(helperInstallDir, 'helper-install.sh')
   writeFileSync(helperInstallMount, helperInstallScript, { mode: 0o755 })
   console.log('Running headless serve update Docker case...')
-  docker([
-    'run',
-    '--rm',
-    '--name',
-    container,
-    '--platform',
-    platform,
-    '--privileged',
-    '--cgroupns=host',
-    '-v',
-    '/sys/fs/cgroup:/sys/fs/cgroup:rw',
-    '-v',
-    `${appImage}:/input/${appImageName}:ro`,
-    '-v',
-    `${helperInstallMount}:/tmp/helper-install.sh:ro`,
-    '-e',
-    `ORCA_UPDATE_TIMEOUT=${updateTimeout}`,
-    '-e',
-    `ORCA_READINESS_TIMEOUT=${readinessTimeout}`,
-    image
-  ])
+  try {
+    // Why /sbin/init: the case script drives systemctl, which needs systemd as PID 1;
+    // the image ENTRYPOINT is the case script, so it runs via docker exec after boot.
+    docker([
+      'run',
+      '-d',
+      '--name',
+      container,
+      '--platform',
+      platform,
+      '--privileged',
+      '--cgroupns=host',
+      '--entrypoint',
+      '/sbin/init',
+      '-v',
+      '/sys/fs/cgroup:/sys/fs/cgroup:rw',
+      '-v',
+      `${appImage}:/input/${appImageName}:ro`,
+      '-v',
+      `${helperInstallMount}:/tmp/helper-install.sh:ro`,
+      image
+    ])
+    waitForSystemd(container)
+    docker(
+      [
+        'exec',
+        '-e',
+        `ORCA_UPDATE_TIMEOUT=${updateTimeout}`,
+        '-e',
+        `ORCA_READINESS_TIMEOUT=${readinessTimeout}`,
+        container,
+        '/usr/local/bin/run-update-case'
+      ],
+      { timeoutMs: Number(updateTimeout) * 1000 }
+    )
+  } finally {
+    rmSync(helperInstallDir, { recursive: true, force: true })
+  }
+}
+
+function waitForSystemd(container) {
+  const deadline = Date.now() + 120_000
+  while (Date.now() < deadline) {
+    const result = docker(['exec', container, 'systemctl', 'is-system-running'], {
+      allowFailure: true
+    })
+    const state = (result.stdout || '').trim()
+    if (state === 'running' || state === 'degraded') {
+      return
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
+  }
+  fail('systemd did not reach a running state within 120s')
 }
 
 function valueAfter(flag) {
@@ -125,7 +155,8 @@ function docker(dockerArgs, options = {}) {
   const result = spawnSync('docker', dockerArgs, {
     cwd: process.cwd(),
     encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024
+    maxBuffer: 20 * 1024 * 1024,
+    timeout: options.timeoutMs
   })
   if (result.error) {
     throw result.error

@@ -56,6 +56,8 @@ StartLimitBurst=5
 Type=simple
 User=$SERVICE_USER
 Environment=LIBGL_ALWAYS_SOFTWARE=1
+Environment=APPIMAGE_EXTRACT_AND_RUN=1
+Environment=ORCA_RELEASE_FEED_BASE=http://127.0.0.1:8123
 ExecStart=$APPIMAGE_TARGET serve --json
 StandardOutput=journal
 StandardError=journal
@@ -78,20 +80,24 @@ bash /tmp/helper-install.sh
 
 # --- 5. Spool a request the way the app does ---------------------------------
 install -d -m 0775 -o root -g "$SERVICE_USER" "$SPOOL_DIR"
-cat > "$SPOOL_DIR/request.json" <<EOF
-{"schemaVersion":2,"runtimeId":"e2e-runtime-1","fromVersion":"0.0.0-test-old","targetVersion":"1.2.3-test","artifactPath":"/srv/feed/orca-linux-1.AppImage","sha512":"$b64","servingPid":1,"unitName":"$UNIT_NAME"}
+spool_request() {
+  cat > "$SPOOL_DIR/request.json" <<EOF
+{"schemaVersion":2,"runtimeId":"$1","attemptId":"$2","fromVersion":"$3","targetVersion":"$4","artifactPath":"/srv/feed/orca-linux-1.AppImage","sha512":"$b64","servingPid":1,"unitName":"$UNIT_NAME"}
 EOF
-chown root:"$SERVICE_USER" "$SPOOL_DIR/request.json"
-chmod 0664 "$SPOOL_DIR/request.json"
+  chown root:"$SERVICE_USER" "$SPOOL_DIR/request.json"
+  chmod 0640 "$SPOOL_DIR/request.json"
+}
 
 # --- 6. Run the helper the way the app does: sudo from the service user ------
 old_main_pid=$(systemctl show -p MainPID --value "$UNIT_NAME")
 [[ -n "$old_main_pid" && "$old_main_pid" != 0 ]] || fail "unit not running before helper run"
-runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH"
+spool_request "e2e-runtime-1" "e2e-attempt-1" "0.0.0-test-old" "1.2.3-test"
+runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH" || fail "helper run failed (positive case)"
 
-verdict=$(cat "$SPOOL_DIR/result.json")
+verdict=$(cat "$SPOOL_DIR/result.json") || fail "helper wrote no result.json (positive case)"
 log "verdict: $verdict"
 [[ $(jq -r '.phase' <<<"$verdict") == "ok" ]] || fail "expected phase=ok, got: $verdict"
+[[ $(jq -r '.attemptId' <<<"$verdict") == "e2e-attempt-1" ]] || fail "wrong attemptId echo"
 [[ $(jq -r '.targetVersion' <<<"$verdict") == "1.2.3-test" ]] || fail "wrong targetVersion"
 [[ ! -f "$SPOOL_DIR/request.json" ]] || fail "request.json was not consumed"
 
@@ -103,14 +109,10 @@ new_main_pid=$(systemctl show -p MainPID --value "$UNIT_NAME")
 [[ ! -f "$APPIMAGE_TARGET.update-backup" ]] || fail "rollback snapshot left behind"
 
 # --- 8. Negative case: downgrade must be rejected ----------------------------
-cat > "$SPOOL_DIR/request.json" <<EOF
-{"schemaVersion":2,"runtimeId":"e2e-runtime-2","fromVersion":"1.2.3-test","targetVersion":"0.0.0-test-old","artifactPath":"/srv/feed/orca-linux-1.AppImage","sha512":"$b64","servingPid":1,"unitName":"$UNIT_NAME"}
-EOF
-chown root:"$SERVICE_USER" "$SPOOL_DIR/request.json"
-chmod 0664 "$SPOOL_DIR/request.json"
+spool_request "e2e-runtime-2" "e2e-attempt-2" "1.2.3-test" "0.0.0-test-old"
 rm -f "$SPOOL_DIR/result.json"
-runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH"
-downgrade_verdict=$(cat "$SPOOL_DIR/result.json")
+runuser -u "$SERVICE_USER" -- sudo -n "$HELPER_PATH" || fail "helper run failed (downgrade case)"
+downgrade_verdict=$(cat "$SPOOL_DIR/result.json") || fail "helper wrote no result.json (downgrade case)"
 [[ $(jq -r '.phase' <<<"$downgrade_verdict") == "rejected" ]] || fail "downgrade not rejected: $downgrade_verdict"
 [[ $(jq -r '.reason' <<<"$downgrade_verdict") == *"downgrade"* ]] || fail "unexpected downgrade reason"
 [[ ! -f "$SPOOL_DIR/request.json" ]] || fail "request.json survived a rejected downgrade"
