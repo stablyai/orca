@@ -1,4 +1,5 @@
 import { expect } from './orca-app'
+import { terminalMarkerCommand } from './terminal-output-marker'
 import type {
   createRuntimeDesktopPairingOffer,
   PairedElectronClient
@@ -19,12 +20,7 @@ export type ProjectedWorktreeRoute = {
 export { assertNestedFilesystemRoute } from './nested-runtime-ssh-filesystem-route'
 export { assertPairedTerminalCreation } from './nested-runtime-ssh-terminal-creation'
 
-export function terminalMarkerCommand(marker: string): string {
-  const encoded = [...marker]
-    .map((character) => `\\${character.charCodeAt(0).toString(8).padStart(3, '0')}`)
-    .join('')
-  return `printf '${encoded}\\n'`
-}
+export { terminalMarkerCommand } from './terminal-output-marker'
 
 export async function assertNestedTerminalDestination(
   client: PairedElectronClient,
