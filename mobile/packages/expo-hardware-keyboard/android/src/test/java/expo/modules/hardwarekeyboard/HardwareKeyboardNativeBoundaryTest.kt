@@ -19,7 +19,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], manifest = Config.NONE)
 class HardwareKeyboardNativeBoundaryTest {
-  private class Fixture {
+  internal class Fixture {
     val context = HardwareKeyboardRecordingContext(RuntimeEnvironment.getApplication()).also {
       DisplayMetricsHolder.initDisplayMetricsIfNotInitialized(it)
     }
