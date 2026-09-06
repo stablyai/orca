@@ -1,5 +1,4 @@
 import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
-import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 import type { BrowserPaletteSearchResult } from '@/lib/browser-palette-search'
 import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace-tab-palette-search'
@@ -14,13 +13,7 @@ export function buildBrowserPaletteItems(
   results: readonly BrowserPaletteSearchResult[]
 ): BrowserPaletteItem[] {
   return results.map((result) => ({
-    id: encodePaletteIdentity([
-      'browser-page',
-      result.executionHostId ?? '',
-      result.worktreeId,
-      result.workspaceId,
-      result.pageId
-    ]),
+    id: result.paletteIdentity,
     type: 'browser-page',
     result
   }))
@@ -30,12 +23,7 @@ export function buildSimulatorPaletteItems(
   results: readonly SimulatorPaletteSearchResult[]
 ): SimulatorPaletteItem[] {
   return results.map((result) => ({
-    id: encodePaletteIdentity([
-      'simulator-tab',
-      result.executionHostId ?? '',
-      result.worktreeId,
-      result.tabId
-    ]),
+    id: result.paletteIdentity,
     type: 'simulator-tab',
     result
   }))
@@ -45,12 +33,7 @@ export function buildWorkspaceTabPaletteItems(
   results: readonly WorkspaceTabPaletteSearchResult[]
 ): WorkspaceTabPaletteItem[] {
   return results.map((result) => ({
-    id: encodePaletteIdentity([
-      'workspace-tab',
-      result.executionHostId ?? '',
-      result.worktreeId,
-      result.tabId
-    ]),
+    id: result.paletteIdentity,
     type: 'workspace-tab',
     result
   }))

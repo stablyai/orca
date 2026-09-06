@@ -101,7 +101,8 @@ describe('host-qualified agent metadata joins', () => {
           paneKey: 'shared-tab:local-pane',
           tabId: 'shared-tab',
           prompt: 'local atlas prompt',
-          updatedAt: 1_000
+          updatedAt: 1_000,
+          connectionId: null
         }),
         'shared-tab:remote-pane': makeEntry({
           paneKey: 'shared-tab:remote-pane',
@@ -109,6 +110,12 @@ describe('host-qualified agent metadata joins', () => {
           prompt: 'remote atlas prompt',
           updatedAt: 2_000,
           connectionId: 'private-target'
+        }),
+        'shared-tab:unstamped-pane': makeEntry({
+          paneKey: 'shared-tab:unstamped-pane',
+          tabId: 'shared-tab',
+          prompt: 'unknown owner prompt',
+          updatedAt: 3_000
         })
       },
       retainedAgentsByPaneKey: {},

@@ -55,6 +55,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   latestQueryRef,
   setQuery,
   setSelectedItemId,
+  setExpandedSectionCaps,
   selectionMovedByUserRef,
   taskSourceUrl,
   listRef,
@@ -103,10 +104,12 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       latestQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
+      setExpandedSectionCaps({})
       selectionMovedByUserRef.current = false
       listRef.current?.scrollTo(0, 0)
     }
     if (!visible && wasVisibleRef.current) {
+      setExpandedSectionCaps({})
       if (preserveCreateLookupOnCloseRef.current) {
         preserveCreateLookupOnCloseRef.current = false
       } else {
@@ -166,6 +169,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
       latestQueryRef.current = nextQuery
       setQuery(nextQuery)
       setSelectedItemId('')
+      setExpandedSectionCaps({})
       listRef.current?.scrollTo(0, 0)
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.

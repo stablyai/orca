@@ -8,19 +8,35 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import type { AppState } from '@/store/types'
+
+export function getPaletteOwnershipWorktreeIds(
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
+): Pick<Worktree, 'id'>[] {
+  return [
+    ...getIndexedAllWorktrees(state.worktreesByRepo),
+    ...(state.folderWorkspaces ?? []).map((workspace) => ({ id: folderWorkspaceKey(workspace.id) }))
+  ]
+}
+
+export function findDuplicateIds(items: readonly { id: string }[]): ReadonlySet<string> {
+  const seen = new Set<string>()
+  const duplicates = new Set<string>()
+  for (const item of items) {
+    if (seen.has(item.id)) {
+      duplicates.add(item.id)
+    }
+    seen.add(item.id)
+  }
+  return duplicates
+}
 
 export function findAmbiguousWorktreeIds(
   worktrees: readonly Pick<Worktree, 'id'>[]
 ): ReadonlySet<string> {
-  const seen = new Set<string>()
-  const ambiguous = new Set<string>()
-  for (const worktree of worktrees) {
-    if (seen.has(worktree.id)) {
-      ambiguous.add(worktree.id)
-    }
-    seen.add(worktree.id)
-  }
-  return ambiguous
+  return findDuplicateIds(worktrees)
 }
 
 export function getActiveExecutionHostIdForWorktree(

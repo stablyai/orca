@@ -283,7 +283,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
     ])
   })
 
-  it('does not borrow editor paths across same-id worktrees', () => {
+  it('omits editor rows whose bare file id cannot be activated safely', () => {
     const entries = buildSearchableWorkspaceTabs({
       worktrees: pairedWorktrees(),
       repoMap: new Map(),
@@ -341,12 +341,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       generatedTitlesEnabled: true
     })
 
-    expect(searchWorkspaceTabs(entries, 'local-atlas')).toMatchObject([
-      { executionHostId: 'local', secondaryText: 'local/local-atlas.ts' }
-    ])
-    expect(searchWorkspaceTabs(entries, 'remote-atlas')).toMatchObject([
-      { executionHostId: RUNTIME_HOST_ID, secondaryText: 'remote/remote-atlas.ts' }
-    ])
+    expect(searchWorkspaceTabs(entries, 'local-atlas')).toEqual([])
+    expect(searchWorkspaceTabs(entries, 'remote-atlas')).toEqual([])
   })
 
   it('retains one unambiguous legacy tab without guessing between sibling hosts', () => {
@@ -403,7 +399,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         generatedTitlesEnabled: true,
         groupsByWorktree: {},
         openFiles: [],
-        ownershipWorktrees,
+        folderWorkspaces: [],
         repo: null,
         tabsByWorktree: {
           [SHARED_WORKTREE_ID]: [
@@ -420,7 +416,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
           ]
         },
         unifiedTabsByWorktree,
-        worktree: ownershipWorktrees[0]
+        worktree: ownershipWorktrees[0],
+        worktreesByRepo: { repo: ownershipWorktrees }
       },
       {
         agentStatusByPaneKey: {},

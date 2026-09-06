@@ -56,7 +56,10 @@ export function useOpenTabSearch({
     [agentState, state]
   )
   const deferredQuery = useDeferredValue(query)
-  const evaluationSnapshot = useMemo(() => ({ deferredQuery, enabled }), [deferredQuery, enabled])
+  const evaluationSnapshot = useMemo(
+    () => ({ deferredQuery, enabled, entries }),
+    [deferredQuery, enabled, entries]
+  )
   const context = usePaletteSearchEvaluationContext(evaluationSnapshot)
   const candidates = useMemo(
     () =>

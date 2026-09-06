@@ -25,17 +25,16 @@ function renderPrimaryLine(
   )
 }
 
-it('exposes the extra secondary matches without adding a palette tab stop', () => {
+it('exposes the extra secondary matches to pointer and keyboard users', () => {
   renderPrimaryLine([
     { text: 'src/app.ts', ranges: [] },
     { text: 'src/deep/nested.ts', ranges: [] },
     { text: 'docs/readme.md', ranges: [] }
   ])
 
-  expect(screen.getByText('src/deep/nested.ts, docs/readme.md')).toBeTruthy()
   const badge = screen.getByText('+2')
-  expect(badge.getAttribute('aria-hidden')).toBe('true')
-  expect(badge.tabIndex).toBe(-1)
+  expect(badge.getAttribute('aria-label')).toBe('src/deep/nested.ts, docs/readme.md')
+  expect(badge.tabIndex).toBe(0)
 })
 
 it('renders no badge when every secondary match is already shown', () => {

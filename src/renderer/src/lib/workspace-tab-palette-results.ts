@@ -116,7 +116,7 @@ function baseResult(
   return {
     ...(executionHostId ? { executionHostId } : {}),
     paletteIdentity: encodePaletteIdentity([
-      'workspace',
+      'workspace-tab',
       executionHostId ?? '',
       entry.worktree.id,
       entry.tab.id

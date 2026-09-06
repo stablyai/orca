@@ -77,7 +77,6 @@ export function useWorktreeJumpPaletteLocalState({
       setFilter(buildPaletteFilterFromSidebarScope(sidebarScope))
     }
   }
-
   return {
     query,
     setQuery,

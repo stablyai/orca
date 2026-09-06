@@ -210,13 +210,7 @@ describe('buildSearchableBrowserPages', () => {
     ])
   })
 
-  it('re-hosts a same-id page entry when the sibling row is missing from the catalog', () => {
-    // Why: host qualification is gated on both same-id rows being present. With one reaped, a
-    // local-stamped tab still renders but carries the surviving row's host — so a wrong-host
-    // Cmd-J activation means the catalog lost a row, not that host qualification regressed.
-    // This characterizes today's fallback, it does not bless it: overriding a tab's own 'local'
-    // stamp may be the wrong answer, and changing it is tracked as the unified-tab-host-ownership
-    // follow-up. Update this expectation with that change rather than treating it as a contract.
+  it('does not re-host a tab whose stamped owner is absent from the catalog', () => {
     const sharedId = 'repo-shared::/workspace'
     const remote = makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
     const entries = buildSearchableBrowserPages({
@@ -239,9 +233,7 @@ describe('buildSearchableBrowserPages', () => {
       activeTabType: 'terminal'
     })
 
-    expect(entries.map((entry) => [entry.page.id, entry.executionHostId])).toEqual([
-      ['page-local', 'runtime:host-b']
-    ])
+    expect(entries).toEqual([])
   })
 
   it('does not route one ambiguous legacy browser bucket to both hosts', () => {
@@ -258,6 +250,25 @@ describe('buildSearchableBrowserPages', () => {
         worktreeOrder,
         browserTabsByWorktree: { [sharedId]: [workspace] },
         browserPagesByWorkspace: { [workspace.id]: [makePage({ worktreeId: sharedId })] },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'terminal'
+      })
+    ).toEqual([])
+  })
+
+  it('omits a browser row whose backing tab id is duplicated', () => {
+    const browserTab = browserUnifiedTab('shared-tab', 'ws-1', 'wt-1')
+    expect(
+      buildSearchableBrowserPages({
+        worktrees: [worktreeA],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+        browserPagesByWorkspace: { 'ws-1': [makePage()] },
+        unifiedTabsByWorktree: {
+          'wt-1': [browserTab, { ...browserTab, contentType: 'terminal' }]
+        },
         activeBrowserTabId: null,
         activeWorktreeId: null,
         activeTabType: 'terminal'

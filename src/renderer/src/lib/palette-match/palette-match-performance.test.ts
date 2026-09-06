@@ -252,6 +252,56 @@ describe('palette matcher performance budget', () => {
     expect(selectionVisits(buildDocument(100))).toBe(selectionVisits(buildDocument(0)))
   })
 
+  it('does not revisit an all-visible assignment for dominated evidence matches', () => {
+    const buildDocument = (evidenceCount: number): PaletteDocument =>
+      buildPaletteDocument({
+        id: `visible-matched-${evidenceCount}`,
+        visibleFields: [
+          {
+            id: 'title',
+            profile: 'structured-label',
+            text: 'atlas',
+            role: 'primary',
+            destinationEligible: true
+          }
+        ],
+        evidence: Array.from({ length: evidenceCount }, (_, index) => ({
+          unit: {
+            id: `evidence-${index}`,
+            kind: 'comment',
+            text: 'atlas',
+            accessibilityLabel: 'Comment'
+          },
+          fields: [
+            {
+              id: `evidence-field-${index}`,
+              profile: 'prose' as const,
+              text: 'atlas',
+              evidenceId: `evidence-${index}`,
+              renderOffset: 0
+            }
+          ]
+        }))
+      })
+    const query = preparePaletteQuery('atlas')
+    if (query.state !== 'ready') {
+      throw new Error('Expected ready query')
+    }
+    const selectionVisits = (document: PaletteDocument): number => {
+      const diagnostics: PaletteMatchDiagnostics = { selectionCandidateVisits: 0 }
+      const match = matchPaletteDocument({
+        document,
+        tokens: query.tokens,
+        normalizedQuery: query.normalized,
+        diagnostics
+      })
+      expect(match?.supportingEvidence).toEqual([])
+      return diagnostics.selectionCandidateVisits
+    }
+
+    expect(selectionVisits(buildDocument(100))).toBe(selectionVisits(buildDocument(0)))
+  })
+
   it('keeps retained match and range payload within budget', () => {
     const documents = buildWorktreePaletteDocuments(worktrees, sources)
     const matches = matchEveryDocument(documents)

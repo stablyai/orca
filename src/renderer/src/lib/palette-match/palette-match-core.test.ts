@@ -314,7 +314,7 @@ describe('duplicate evidence unit ids', () => {
             profile: 'structured-label',
             text: 'node',
             evidenceId: 'port:3000',
-            renderOffset: 7
+            renderOffset: 0
           }
         ]
       }

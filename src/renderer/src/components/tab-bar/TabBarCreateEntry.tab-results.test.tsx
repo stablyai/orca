@@ -133,11 +133,15 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
+function openWorkspaceTabId(tabId: string): string {
+  return encodePaletteIdentity(['workspace-tab', 'local', 'wt', tabId])
+}
+
 function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSearchResult {
   return {
     executionHostId: 'local',
     source: 'workspace',
-    id: encodePaletteIdentity(['open-tab', 'workspace', 'local', 'wt', 'tab-1']),
+    id: openWorkspaceTabId('tab-1'),
     title: 'Add tab search and jump in worktree',
     matchedText: null,
     worktreeId: 'wt',
@@ -266,7 +270,7 @@ describe('TabBarCreateEntry tab results', () => {
     tabSearchMock.resultsByQuery['fix the flaky'] = [
       terminalResult({ title: 'Claude Code', matchedText: 'fix the flaky retry test' }),
       terminalResult({
-        id: encodePaletteIdentity(['open-tab', 'workspace', 'local', 'wt', 'tab-2']),
+        id: openWorkspaceTabId('tab-2'),
         tabId: 'tab-2',
         title: 'Claude Code'
       })
@@ -421,7 +425,7 @@ describe('TabBarCreateEntry tab results', () => {
     tabSearchMock.resultsByQuery['add tab'] = [
       terminalResult(),
       terminalResult({
-        id: encodePaletteIdentity(['open-tab', 'workspace', 'local', 'wt', 'tab-2']),
+        id: openWorkspaceTabId('tab-2'),
         tabId: 'tab-2',
         title: 'second tab'
       })

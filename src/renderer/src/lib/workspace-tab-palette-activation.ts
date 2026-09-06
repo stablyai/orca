@@ -8,9 +8,9 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorktree } from './worktree-activation'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   findAmbiguousWorktreeIds,
+  getPaletteOwnershipWorktreeIds,
   hasOpenFileExecutionHostEvidence,
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
@@ -37,6 +37,7 @@ type WorkspaceTabPaletteActivationState = Pick<
   AppState,
   | 'activateTab'
   | 'focusGroup'
+  | 'folderWorkspaces'
   | 'getKnownWorktreeById'
   | 'groupsByWorktree'
   | 'openFiles'
@@ -51,14 +52,14 @@ function validateTarget(
   state: WorkspaceTabPaletteActivationState,
   result: WorkspaceTabPaletteActivationTarget
 ): WorkspaceTabPaletteActivationFailure | null {
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(getPaletteOwnershipWorktreeIds(state))
+  if (!result.executionHostId && ambiguousWorktreeIds.has(result.worktreeId)) {
+    return 'missing-worktree'
+  }
   const worktree = state.getKnownWorktreeById(result.worktreeId, result.executionHostId)
   if (!worktree) {
     return 'missing-worktree'
   }
-  // A hostless record cannot be attributed when the same worktree ID exists on several hosts.
-  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(
-    getIndexedAllWorktrees(state.worktreesByRepo)
-  )
   const group = (state.groupsByWorktree[result.worktreeId] ?? []).find(
     (candidate) => candidate.id === result.groupId
   )

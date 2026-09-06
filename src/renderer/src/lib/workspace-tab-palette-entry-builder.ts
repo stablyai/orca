@@ -3,7 +3,7 @@ import {
   resolveTerminalTabTitle,
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
-import type { Tab, TabContentType } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/tab-types'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
 import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
@@ -23,6 +23,7 @@ import type {
 } from './workspace-tab-palette-search'
 import {
   findAmbiguousWorktreeIds,
+  findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   hasOpenFileExecutionHostEvidence,
   isOpenFileOwnedByWorktree,
@@ -30,6 +31,7 @@ import {
 } from './unified-tab-host-ownership'
 import type { OpenFile } from '@/store/slices/editor'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
 
 function getActiveUnifiedTabId({
   worktreeId,
@@ -89,12 +91,6 @@ function isCurrentWorkspaceTab({
   return visibleType === 'terminal'
     ? (activeTabIdByWorktree[tab.worktreeId] ?? activeTabId) === tab.entityId
     : (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
-}
-
-function isWorkspaceTabContentType(
-  contentType: TabContentType
-): contentType is WorkspaceTabContentType {
-  return ['terminal', 'editor', 'diff', 'conflict-review', 'check-details'].includes(contentType)
 }
 
 export function buildSearchableWorkspaceTabEntries({
@@ -173,8 +169,11 @@ export function buildSearchableWorkspaceTabEntries({
       terminalTabs.set(terminalTab.id, terminalTabs.has(terminalTab.id) ? null : terminalTab)
     }
 
-    for (const rawTab of unifiedTabsByWorktree[worktree.id] ?? []) {
+    const unifiedTabs = unifiedTabsByWorktree[worktree.id] ?? []
+    const duplicateTabIds = findDuplicateIds(unifiedTabs)
+    for (const rawTab of unifiedTabs) {
       if (
+        duplicateTabIds.has(rawTab.id) ||
         !isWorkspaceTabContentType(rawTab.contentType) ||
         !isUnifiedTabOwnedByWorktree(rawTab, worktree, ambiguousWorktreeIds)
       ) {
@@ -210,6 +209,9 @@ export function buildSearchableWorkspaceTabEntries({
       }
       if (tab.contentType === 'terminal') {
         const terminalTab = terminalTabs.get(tab.entityId)
+        if (terminalTab === null) {
+          continue
+        }
         const terminalTitle = terminalTab
           ? resolveTerminalTabTitle(terminalTab, generatedTitlesEnabled, 'Terminal')
           : 'Terminal'
@@ -260,16 +262,18 @@ export function buildSearchableWorkspaceTabEntries({
         })
         continue
       }
-      const file = openFilesById
-        .get(tab.entityId)
-        ?.find(
-          (candidate) =>
-            candidate.worktreeId === worktree.id &&
-            (!(
-              hasOpenFileExecutionHostEvidence(candidate) || ambiguousWorktreeIds.has(worktree.id)
-            ) ||
-              isOpenFileOwnedByWorktree(candidate, worktree))
-        )
+      const files = openFilesById.get(tab.entityId)
+      if (files?.length !== 1) {
+        continue
+      }
+      const file = files.find(
+        (candidate) =>
+          candidate.worktreeId === worktree.id &&
+          (!(
+            hasOpenFileExecutionHostEvidence(candidate) || ambiguousWorktreeIds.has(worktree.id)
+          ) ||
+            isOpenFileOwnedByWorktree(candidate, worktree))
+      )
       if (!file) {
         continue
       }

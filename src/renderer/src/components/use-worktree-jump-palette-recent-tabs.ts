@@ -28,37 +28,14 @@ type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &
     'query' | 'filter' | 'autoSelectedItemIdRef' | 'setSelectedItemId'
   >
 
-function getRecentTabOccurrenceBase(item: OpenTabRecentRow['item']): string {
-  if (item.type === 'browser-page') {
-    const result = item.result
-    return JSON.stringify([
-      item.type,
-      item.id,
-      result.executionHostId ?? '',
-      result.worktreeId,
-      result.workspaceId,
-      result.pageId
-    ])
-  }
-  if (item.type === 'simulator-tab') {
-    const result = item.result
-    return JSON.stringify([
-      item.type,
-      item.id,
-      result.executionHostId ?? '',
-      result.worktreeId,
-      result.tabId
-    ])
-  }
-  const result = item.result
-  return JSON.stringify([
-    item.type,
-    item.id,
-    result.executionHostId ?? '',
-    result.worktreeId,
-    result.tabId,
-    result.entityId
-  ])
+type RecentTabOrderSnapshot = {
+  order: readonly string[]
+  attentionReady: boolean
+}
+
+const EMPTY_RECENT_TAB_SNAPSHOT: RecentTabOrderSnapshot = {
+  order: EMPTY_RECENT_TAB_ORDER,
+  attentionReady: false
 }
 
 export function useWorktreeJumpPaletteRecentTabs({
@@ -85,20 +62,22 @@ export function useWorktreeJumpPaletteRecentTabs({
   const occurrenceIds = useMemo(() => {
     const counts = new Map<string, number>()
     return openTabItems.map((item) => {
-      const base = getRecentTabOccurrenceBase(item)
+      const base = item.id
       const ordinal = counts.get(base) ?? 0
       counts.set(base, ordinal + 1)
       return `recent-tab:${base}:${ordinal}`
     })
   }, [openTabItems])
-  const terminalTabsById = useMemo(() => {
-    const byId = new Map<string, TerminalTab>()
-    for (const tabs of Object.values(tabsByWorktree)) {
+  const terminalTabsByWorktree = useMemo(() => {
+    const byWorktree = new Map<string, Map<string, TerminalTab | null>>()
+    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+      const byId = new Map<string, TerminalTab | null>()
       for (const tab of tabs ?? []) {
-        byId.set(tab.id, tab)
+        byId.set(tab.id, byId.has(tab.id) ? null : tab)
       }
+      byWorktree.set(worktreeId, byId)
     }
-    return byId
+    return byWorktree
   }, [tabsByWorktree])
   const recentTabPaneSources = useMemo<TabPaneInputSources>(
     () => ({
@@ -138,14 +117,14 @@ export function useWorktreeJumpPaletteRecentTabs({
           unifiedTabId: item.type === 'browser-page' ? null : item.result.tabId,
           terminalTab:
             item.type === 'workspace-tab' && item.result.contentType === 'terminal'
-              ? (terminalTabsById.get(item.result.entityId) ?? null)
+              ? (terminalTabsByWorktree.get(worktree.id)?.get(item.result.entityId) ?? null)
               : null,
           worktreeLastActivityAt: worktree.lastActivityAt
         }
       })
     }
     return entries
-  }, [occurrenceIds, openTabItems, resolveWorktree, terminalTabsById])
+  }, [occurrenceIds, openTabItems, resolveWorktree, terminalTabsByWorktree])
   const recentTabRowByItem = useMemo(
     () => new Map(openTabRecentRows.map(({ item, row }) => [item, row])),
     [openTabRecentRows]
@@ -170,9 +149,7 @@ export function useWorktreeJumpPaletteRecentTabs({
     }
     return rows
   }, [openTabRecentRows, recentTabPaneSources, unreadAgentCompletionPanes, unreadTerminalTabs])
-  const [recentTabOrder, setRecentTabOrder] = useState<readonly string[]>(EMPTY_RECENT_TAB_ORDER)
-  const recentTabOrderCapturedRef = useRef(false)
-  const recentTabOrderAttentionReadyRef = useRef(false)
+  const [recentTabSnapshot, setRecentTabSnapshot] = useState(EMPTY_RECENT_TAB_SNAPSHOT)
   // Why: recent rows are already narrowed by the filter, so a filter change mid-open must
   // re-capture — a frozen order would otherwise hide rows a cleared chip brought back.
   const capturedFilterRef = useRef(filter)
@@ -192,23 +169,21 @@ export function useWorktreeJumpPaletteRecentTabs({
   }, [openTabRecentRows])
   useLayoutEffect(() => {
     if (!visible) {
-      recentTabOrderCapturedRef.current = false
-      recentTabOrderAttentionReadyRef.current = false
       autoSelectedItemIdRef.current = null
-      setRecentTabOrder(EMPTY_RECENT_TAB_ORDER)
+      setRecentTabSnapshot(EMPTY_RECENT_TAB_SNAPSHOT)
       return
     }
     if (hasQuery || query.length > 0) {
       return
     }
-    if (capturedFilterRef.current !== filter) {
+    const filterChanged = capturedFilterRef.current !== filter
+    if (filterChanged) {
       capturedFilterRef.current = filter
-      recentTabOrderCapturedRef.current = false
-      recentTabOrderAttentionReadyRef.current = false
     }
     if (
-      recentTabOrderCapturedRef.current &&
-      (recentTabOrderAttentionReadyRef.current || recentOrderAttentionIncomplete)
+      !filterChanged &&
+      recentTabSnapshot.order.length > 0 &&
+      (recentTabSnapshot.attentionReady || recentOrderAttentionIncomplete)
     ) {
       return
     }
@@ -220,14 +195,10 @@ export function useWorktreeJumpPaletteRecentTabs({
       focusedGroupTabRecency: buildFocusedGroupTabRecency(activeGroupIdByWorktree, groupsByWorktree)
     })
     if (order.length === 0) {
-      recentTabOrderCapturedRef.current = false
-      recentTabOrderAttentionReadyRef.current = false
-      setRecentTabOrder(EMPTY_RECENT_TAB_ORDER)
+      setRecentTabSnapshot(EMPTY_RECENT_TAB_SNAPSHOT)
       return
     }
-    recentTabOrderCapturedRef.current = true
-    recentTabOrderAttentionReadyRef.current = !recentOrderAttentionIncomplete
-    setRecentTabOrder(order)
+    setRecentTabSnapshot({ order, attentionReady: !recentOrderAttentionIncomplete })
     setSelectedItemId((current) =>
       current === '' || current === autoSelectedItemIdRef.current ? '' : current
     )
@@ -240,6 +211,7 @@ export function useWorktreeJumpPaletteRecentTabs({
     lastVisitedAtByWorktreeId,
     query.length,
     recentOrderAttentionIncomplete,
+    recentTabSnapshot,
     recentTabPaneSources,
     recentTabRows,
     visible
@@ -248,8 +220,10 @@ export function useWorktreeJumpPaletteRecentTabs({
     const itemByOccurrenceId = new Map(
       openTabRecentRows.map(({ occurrenceId, item }) => [occurrenceId, item])
     )
-    return recentTabOrder.flatMap((occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? [])
-  }, [openTabRecentRows, recentTabOrder])
+    return recentTabSnapshot.order.flatMap(
+      (occurrenceId) => itemByOccurrenceId.get(occurrenceId) ?? []
+    )
+  }, [openTabRecentRows, recentTabSnapshot.order])
 
   return { recentTabPaneSources, recentTabRowByItem, recentTabItems, openTabRecentRows }
 }

@@ -49,7 +49,7 @@ export type PaletteFieldSource = PaletteVisibleFieldSource | PaletteEvidenceFiel
 export type PaletteIndexedField = {
   id: string
   /** Stable source order used to break otherwise-equivalent match proofs. */
-  proofIdentity: string
+  sourceOrder: number
   profile: PaletteFieldProfile
   text: NormalizedText
   atoms: readonly PaletteAtom[]
@@ -129,7 +129,10 @@ export function paletteProfileAllowedQualities(
   return QUALITIES_BY_PROFILE[profile]
 }
 
-export function indexPaletteField(source: PaletteFieldSource): PaletteIndexedField | null {
+export function indexPaletteField(
+  source: PaletteFieldSource,
+  sourceOrder = 0
+): PaletteIndexedField | null {
   const trimmed = source.text.trim()
   if (!trimmed) {
     return null
@@ -138,7 +141,7 @@ export function indexPaletteField(source: PaletteFieldSource): PaletteIndexedFie
   const segments = segmentPaletteText(text)
   return {
     id: source.id,
-    proofIdentity: '',
+    sourceOrder,
     profile: source.profile,
     text,
     atoms: segments.atoms,
@@ -159,10 +162,9 @@ export function indexPaletteFields(
     if (!source) {
       continue
     }
-    const field = indexPaletteField(source)
+    const field = indexPaletteField(source, fields.length)
     if (field && !seenIds.has(field.id)) {
       seenIds.add(field.id)
-      field.proofIdentity = String(fields.length).padStart(6, '0')
       fields.push(field)
     }
   }

@@ -4,6 +4,8 @@ import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getActivatableBrowserWorkspaceTab } from './browser-workspace-tab-activation'
 
 const initialState = useAppStore.getInitialState()
@@ -51,6 +53,25 @@ function seedState(worktreesByRepo: Record<string, Worktree[]>, tab: Tab): void 
   )
 }
 
+function makeFolderWorkspace(executionHostId: 'local' | 'ssh:remote'): FolderWorkspace {
+  return {
+    id: 'shared-folder',
+    projectGroupId: 'group',
+    name: 'Shared folder',
+    folderPath: '/workspace',
+    executionHostId,
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 0,
+    updatedAt: 0
+  }
+}
+
 it('refuses a hostless browser tab for a remote worktree whose ID also exists locally', () => {
   seedState(
     {
@@ -93,4 +114,21 @@ it('accepts a hostless browser tab when the worktree ID is unambiguous', () => {
       executionHostId: 'ssh:remote'
     })
   ).toEqual(browserTab)
+})
+
+it('includes folder workspaces when rejecting ambiguous hostless activation', () => {
+  const worktreeId = folderWorkspaceKey('shared-folder')
+  useAppStore.setState(
+    {
+      ...initialState,
+      folderWorkspaces: [makeFolderWorkspace('local'), makeFolderWorkspace('ssh:remote')],
+      worktreesByRepo: {},
+      unifiedTabsByWorktree: {
+        [worktreeId]: [{ ...browserTab, worktreeId, executionHostId: 'ssh:remote' }]
+      }
+    },
+    true
+  )
+
+  expect(getActivatableBrowserWorkspaceTab({ worktreeId, workspaceId: 'workspace' })).toBeNull()
 })

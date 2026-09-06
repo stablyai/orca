@@ -88,10 +88,7 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (isWorktreePaletteQueryTooLarge(query)) {
     return { state: 'invalid', reason: 'too-large' }
   }
-  // Why collapse runs: field text is always single-spaced, so an uncollapsed double
-  // space can never satisfy the whole-query equality/prefix tier and the exact-name
-  // match silently loses its rank. Safe here — this string feeds only scoreWholeQuery
-  // and carries no offset mapping back into the source text.
+  // Field text is single-spaced, and this value has no source-offset mapping to preserve.
   const normalized = normalizePaletteText(query).normalized.replace(/ +/g, ' ').trim()
   if (!normalized) {
     return { state: 'empty' }

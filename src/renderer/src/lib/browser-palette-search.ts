@@ -167,7 +167,7 @@ function baseResult(
   return {
     ...(executionHostId ? { executionHostId } : {}),
     paletteIdentity: encodePaletteIdentity([
-      'browser',
+      'browser-page',
       executionHostId ?? '',
       entry.worktree.id,
       entry.workspace.id,

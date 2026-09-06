@@ -125,22 +125,12 @@ function getEditorRelativePath(entry: SearchableWorkspaceTab | undefined): strin
 }
 
 function baseResult(
-  source: OpenTabSearchSource,
-  id: string,
   result: EngineResult,
   executionHostId: ExecutionHostId
 ): OpenTabSearchResultBase {
-  const sourceId =
-    source === 'browser' ? [(result as BrowserPaletteSearchResult).workspaceId, id] : [id]
   return {
     executionHostId,
-    id: encodePaletteIdentity([
-      'open-tab',
-      source,
-      executionHostId,
-      result.worktreeId,
-      ...sourceId
-    ]),
+    id: result.paletteIdentity,
     title: result.title,
     matchedText: getMatchedText(result),
     matchedTexts: result.secondaryMatches.map((match) => match.text).filter(Boolean),
@@ -202,12 +192,7 @@ export function searchOpenTabCandidates({
       'workspace',
       searchWorkspaceTabs([...workspaceTabs], trimmed, { context, fieldMode: 'omnibox' }),
       (result) => ({
-        ...baseResult(
-          'workspace',
-          result.tabId,
-          result,
-          result.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-        ),
+        ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
         source: 'workspace',
         contentType: result.contentType,
         tabId: result.tabId,
@@ -229,12 +214,7 @@ export function searchOpenTabCandidates({
       'browser',
       searchBrowserPages([...browserPages], trimmed, { context, fieldMode: 'omnibox' }),
       (result) => ({
-        ...baseResult(
-          'browser',
-          result.pageId,
-          result,
-          result.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-        ),
+        ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
         source: 'browser',
         contentType: 'browser',
         pageId: result.pageId,
@@ -247,12 +227,7 @@ export function searchOpenTabCandidates({
       'simulator',
       searchSimulatorTabs([...simulatorTabs], trimmed, { context, fieldMode: 'omnibox' }),
       (result) => ({
-        ...baseResult(
-          'simulator',
-          result.tabId,
-          result,
-          result.executionHostId ?? LOCAL_EXECUTION_HOST_ID
-        ),
+        ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
         source: 'simulator',
         contentType: 'simulator',
         tabId: result.tabId,

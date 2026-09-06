@@ -39,7 +39,6 @@ export type PaletteDocument = {
   renderOffsetByFieldId: ReadonlyMap<string, number>
   /** Visible identity fields, cached because they carry the whole-query check. */
   visibleFields: readonly PaletteIndexedField[]
-  fieldsByEvidenceId: ReadonlyMap<string, readonly PaletteIndexedField[]>
   fieldById: ReadonlyMap<string, PaletteIndexedField>
 }
 
@@ -74,25 +73,19 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     evidenceUnits.set(entry.unit.id, entry.unit)
     for (const field of fields) {
       evidenceSources.push(field)
-      renderOffsetByFieldId.set(field.id, field.renderOffset)
+      if (!renderOffsetByFieldId.has(field.id)) {
+        renderOffsetByFieldId.set(field.id, field.renderOffset)
+      }
     }
   }
 
   const fields = indexPaletteFields([...input.visibleFields, ...evidenceSources])
-  const fieldsByEvidenceId = new Map<string, PaletteIndexedField[]>()
   const visibleFields: PaletteIndexedField[] = []
   const fieldById = new Map<string, PaletteIndexedField>()
   for (const field of fields) {
     fieldById.set(field.id, field)
     if (!field.evidenceId) {
       visibleFields.push(field)
-      continue
-    }
-    const bucket = fieldsByEvidenceId.get(field.evidenceId)
-    if (bucket) {
-      bucket.push(field)
-    } else {
-      fieldsByEvidenceId.set(field.evidenceId, [field])
     }
   }
 
@@ -106,7 +99,6 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     evidenceUnits,
     renderOffsetByFieldId,
     visibleFields,
-    fieldsByEvidenceId,
     fieldById
   }
 }
@@ -160,16 +152,6 @@ const RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
   'placement'
 ]
 
-// Aggregate token counts distinguish entities without replacing the best rendered proof.
-const PROOF_RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
-  'destination',
-  'recovery',
-  'wordMatch',
-  'coverage',
-  'strength',
-  'placement'
-]
-
 const SEMANTIC_RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
   'destination',
   'recovery',
@@ -200,10 +182,6 @@ export function comparePaletteSemanticRank(a: PaletteDocumentRank, b: PaletteDoc
 
 export function comparePaletteDocumentRank(a: PaletteDocumentRank, b: PaletteDocumentRank): number {
   return compareRankKeys(a, b, RANK_KEYS)
-}
-
-export function comparePaletteProofRank(a: PaletteDocumentRank, b: PaletteDocumentRank): number {
-  return compareRankKeys(a, b, PROOF_RANK_KEYS)
 }
 
 export function createRecognizedPaletteRank(): PaletteDocumentRank {

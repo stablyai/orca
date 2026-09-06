@@ -30,6 +30,7 @@ import {
 } from './palette-match/palette-ranking'
 import {
   findAmbiguousWorktreeIds,
+  findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
@@ -160,7 +161,7 @@ function baseResult(
   return {
     ...(executionHostId ? { executionHostId } : {}),
     paletteIdentity: encodePaletteIdentity([
-      'simulator',
+      'simulator-tab',
       executionHostId ?? '',
       entry.worktree.id,
       entry.tab.id
@@ -225,8 +226,10 @@ export function buildSearchableSimulatorTabs({
       groups: groupsByWorktree[worktree.id]
     })
     const tabs = unifiedTabsByWorktree[worktree.id] ?? []
+    const duplicateTabIds = findDuplicateIds(tabs)
     for (const tab of tabs) {
       if (
+        duplicateTabIds.has(tab.id) ||
         tab.contentType !== 'simulator' ||
         !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
       ) {

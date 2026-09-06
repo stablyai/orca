@@ -2,7 +2,7 @@ import { matchPaletteField, type PaletteFieldMatch } from './match-field'
 import { resolvePaletteResultQualityClass, type PaletteMatchQuality } from './match-quality'
 import { createPaletteQueryToken, type PaletteQueryToken } from './palette-query'
 import {
-  comparePaletteProofRank,
+  comparePaletteDocumentRank,
   type PaletteDocument,
   type PaletteDocumentMatch,
   type PaletteTokenAssignment
@@ -18,6 +18,8 @@ import {
   type RankedAssignment
 } from './palette-assignment-ranking'
 import { buildRangesByField, buildSupportingEvidence } from './palette-match-rendering'
+import { assignmentsAreContainerOnly } from './palette-assignment-inspection'
+import { compareSelectedSourceOrder } from './palette-selection-source-order'
 
 type FieldHit = { field: PaletteIndexedField; match: PaletteFieldMatch }
 
@@ -29,7 +31,7 @@ export type TokenCandidate = {
   wordMatch: number
   coverage: number
   strength: number
-  identity: string
+  containerOnly: number
 }
 
 export type TokenCandidates = {
@@ -92,11 +94,8 @@ function toCandidate(hits: readonly FieldHit[]): TokenCandidate {
     recovery,
     wordMatch,
     coverage,
-    strength,
-    identity:
-      hits.length === 1
-        ? hits[0].field.proofIdentity
-        : hits.map((hit) => hit.field.proofIdentity).join('\u0000')
+    containerOnly: hits.every((hit) => hit.field.role === 'container') ? 1 : 0,
+    strength
   }
 }
 
@@ -187,21 +186,6 @@ function toTokenAssignments(
   return assignments
 }
 
-function isContainerOnly(
-  document: PaletteDocument,
-  assignments: readonly PaletteTokenAssignment[]
-): boolean {
-  const tokenRoles = new Map<number, boolean>()
-  for (const assignment of assignments) {
-    const isContainer = document.fieldById.get(assignment.fieldId)?.role === 'container'
-    tokenRoles.set(
-      assignment.tokenIndex,
-      (tokenRoles.get(assignment.tokenIndex) ?? true) && isContainer
-    )
-  }
-  return tokenRoles.size > 0 && [...tokenRoles.values()].every(Boolean)
-}
-
 export function matchPaletteDocument(args: {
   document: PaletteDocument
   tokens: readonly PaletteQueryToken[]
@@ -279,11 +263,11 @@ export function matchPaletteDocument(args: {
     return null
   }
   ranked.sort((a, b) => {
-    const rank = comparePaletteProofRank(a.rank, b.rank)
+    const rank = comparePaletteDocumentRank(a.rank, b.rank)
     if (rank !== 0) {
       return rank
     }
-    return a.proofIdentity < b.proofIdentity ? -1 : a.proofIdentity > b.proofIdentity ? 1 : 0
+    return compareSelectedSourceOrder(a.selected, b.selected)
   })
   const winner = ranked[0]
   const winnerRank = args.exactIntent ? { ...winner.rank, destination: 0 } : winner.rank
@@ -303,7 +287,7 @@ export function matchPaletteDocument(args: {
         : resolvePaletteResultQualityClass({
             worstQuality,
             usesSupportingEvidence,
-            isContainerOnly: isContainerOnly(args.document, assignments)
+            isContainerOnly: assignmentsAreContainerOnly(args.document, assignments)
           }),
     rank: winnerRank,
     assignments,

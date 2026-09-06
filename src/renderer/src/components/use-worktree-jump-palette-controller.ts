@@ -31,9 +31,28 @@ export function useWorktreeJumpPaletteController({
   const paletteEvaluationSnapshot = useMemo(
     () => ({
       query: localState.paletteSearchQuery,
+      agentStatus: storeState.agentStatusByPaneKey,
+      worktrees: storeState.allWorktrees,
+      browserPages: storeState.browserPagesByWorkspace,
+      browserWorkspaces: storeState.browserTabsByWorktree,
+      openFiles: storeState.openFiles,
+      retainedAgents: storeState.retainedAgentsByPaneKey,
+      sleepingAgents: storeState.sleepingAgentSessionsByPaneKey,
+      unifiedTabs: storeState.unifiedTabsByWorktree,
       visible
     }),
-    [localState.paletteSearchQuery, visible]
+    [
+      localState.paletteSearchQuery,
+      storeState.agentStatusByPaneKey,
+      storeState.allWorktrees,
+      storeState.browserPagesByWorkspace,
+      storeState.browserTabsByWorktree,
+      storeState.openFiles,
+      storeState.retainedAgentsByPaneKey,
+      storeState.sleepingAgentSessionsByPaneKey,
+      storeState.unifiedTabsByWorktree,
+      visible
+    ]
   )
   const paletteSearchContext = usePaletteSearchEvaluationContext(paletteEvaluationSnapshot)
   const evaluation = { paletteSearchContext }

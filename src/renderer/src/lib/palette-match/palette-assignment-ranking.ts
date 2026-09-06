@@ -2,9 +2,32 @@ import type { PaletteDocument, PaletteDocumentRank } from './palette-document'
 import type { PaletteIndexedField } from './indexed-field'
 import type { PaletteMatchDiagnostics, TokenCandidate, TokenCandidates } from './match-document'
 
-type CandidateMetric = 'recovery' | 'wordMatch' | 'coverage' | 'strength'
+type CandidateMetric = 'recovery' | 'wordMatch' | 'coverage' | 'containerOnly' | 'strength'
 
-const METRIC_KEYS: readonly CandidateMetric[] = ['recovery', 'wordMatch', 'coverage', 'strength']
+const CANDIDATE_METRICS: readonly CandidateMetric[] = [
+  'recovery',
+  'wordMatch',
+  'coverage',
+  'containerOnly',
+  'strength'
+]
+
+const SELECTION_STEPS: readonly {
+  key: CandidateMetric
+  aggregate: 'maximum' | 'total'
+}[] = [
+  { key: 'recovery', aggregate: 'maximum' },
+  { key: 'wordMatch', aggregate: 'maximum' },
+  { key: 'coverage', aggregate: 'maximum' },
+  { key: 'containerOnly', aggregate: 'total' },
+  { key: 'recovery', aggregate: 'total' },
+  { key: 'strength', aggregate: 'maximum' }
+]
+
+function isDominatedBy(candidate: TokenCandidate, alternative: TokenCandidate): boolean {
+  // Visible fields precede evidence in source order, so equality is dominated too.
+  return CANDIDATE_METRICS.every((key) => alternative[key] <= candidate[key])
+}
 
 function phrasePlacement(field: PaletteIndexedField, normalizedQuery: string): number {
   const text = field.text.normalized
@@ -29,7 +52,25 @@ export function selectThresholdAssignment(
     return null
   }
   let remaining = candidates.map((entries) => [...entries])
-  for (const key of METRIC_KEYS) {
+  for (const { key, aggregate } of SELECTION_STEPS) {
+    if (aggregate === 'total') {
+      remaining = remaining.map((entries) => {
+        let optimum = Number.POSITIVE_INFINITY
+        for (const candidate of entries) {
+          if (diagnostics) {
+            diagnostics.selectionCandidateVisits += 1
+          }
+          optimum = Math.min(optimum, candidate[key])
+        }
+        return entries.filter((candidate) => {
+          if (diagnostics) {
+            diagnostics.selectionCandidateVisits += 1
+          }
+          return candidate[key] === optimum
+        })
+      })
+      continue
+    }
     let optimum = 0
     for (const entries of remaining) {
       let minimum = Number.POSITIVE_INFINITY
@@ -55,7 +96,9 @@ export function selectThresholdAssignment(
 
 function candidateMetricKey(candidate: TokenCandidate): number {
   return (
-    (((candidate.recovery * 2 + candidate.wordMatch) * 4 + candidate.coverage) * 6 +
+    ((((candidate.recovery * 2 + candidate.wordMatch) * 4 + candidate.coverage) * 2 +
+      candidate.containerOnly) *
+      6 +
       candidate.strength) |
     0
   )
@@ -65,6 +108,9 @@ export function summarizeCandidates(
   candidates: readonly TokenCandidate[],
   diagnostics?: PaletteMatchDiagnostics
 ): TokenCandidate[] {
+  if (candidates.length < 2) {
+    return [...candidates]
+  }
   const byMetric = new Map<number, TokenCandidate>()
   for (const candidate of candidates) {
     if (diagnostics) {
@@ -108,24 +154,17 @@ function rankSelected(
     recovery: Math.max(...selected.map((candidate) => candidate.recovery)),
     wordMatch: Math.max(...selected.map((candidate) => candidate.wordMatch)),
     coverage: Math.max(...selected.map((candidate) => candidate.coverage)),
-    containerOnlyTokenCount: selected.filter((candidate) =>
-      candidate.hits.every((hit) => hit.field.role === 'container')
-    ).length,
+    containerOnlyTokenCount: selected.filter((candidate) => candidate.containerOnly === 1).length,
     recoveryTokenCount: selected.filter((candidate) => candidate.recovery > 0).length,
     strength: Math.max(...selected.map((candidate) => candidate.strength)),
     placement
   }
 }
 
-function candidateProofIdentity(selected: readonly TokenCandidate[]): string {
-  return selected.map((candidate) => candidate.identity).join('\u0001')
-}
-
 export type RankedAssignment = {
   selected: readonly TokenCandidate[]
   rank: PaletteDocumentRank
   evidenceId: string | null
-  proofIdentity: string
 }
 
 export function addRankedAssignment(
@@ -146,8 +185,7 @@ export function addRankedAssignment(
       destination,
       assignmentPlacement(document, selected, normalizedQuery)
     ),
-    evidenceId,
-    proofIdentity: candidateProofIdentity(selected)
+    evidenceId
   })
 }
 
@@ -159,20 +197,30 @@ export function collectScopeAssignments(args: {
   evidenceId: string
   diagnostics?: PaletteMatchDiagnostics
 }): RankedAssignment[] {
-  const scopeCandidates = args.visibleSummaries.map((visible, index) =>
-    summarizeCandidates(
-      [...visible, ...(args.evidenceSummaries[index].get(args.evidenceId) ?? [])],
-      args.diagnostics
+  let addsUsefulCandidate = false
+  const scopeCandidates = args.visibleSummaries.map((visible, index) => {
+    const evidence = (args.evidenceSummaries[index].get(args.evidenceId) ?? []).filter(
+      (candidate) => !visible.some((alternative) => isDominatedBy(candidate, alternative))
     )
-  )
+    if (!evidence.length) {
+      return visible
+    }
+    addsUsefulCandidate = true
+    return summarizeCandidates([...visible, ...evidence], args.diagnostics)
+  })
+  if (!addsUsefulCandidate) {
+    return []
+  }
   const assignments: RankedAssignment[] = []
-  addRankedAssignment(
-    assignments,
-    args.document,
-    selectThresholdAssignment(scopeCandidates, args.diagnostics),
-    args.normalizedQuery,
-    args.evidenceId
-  )
+  const selected = selectThresholdAssignment(scopeCandidates, args.diagnostics)
+  if (
+    !selected?.some((candidate) =>
+      candidate.hits.some((hit) => hit.field.evidenceId === args.evidenceId)
+    )
+  ) {
+    return assignments
+  }
+  addRankedAssignment(assignments, args.document, selected, args.normalizedQuery, args.evidenceId)
   return assignments
 }
 
@@ -219,6 +267,9 @@ export function collectRecognizedIdentifierAssignments(args: {
   diagnostics?: PaletteMatchDiagnostics
 }): RankedAssignment[] {
   const assignments: RankedAssignment[] = []
+  if (args.normalizedQuery[0] !== '#' && args.normalizedQuery[0] !== '!') {
+    return assignments
+  }
   for (const tokenCandidates of args.candidates) {
     for (const entries of [tokenCandidates.visible, ...tokenCandidates.byEvidenceId.values()]) {
       for (const candidate of entries) {

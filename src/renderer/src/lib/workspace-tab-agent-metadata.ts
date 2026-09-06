@@ -289,6 +289,9 @@ export function collectAgentMetadataFromIndex(
       if (entry.connectionId) {
         return isExecutionHostAliasForWorktree(toSshExecutionHostId(entry.connectionId), worktree)
       }
+      if (entry.connectionId === undefined && ambiguousWorktreeIds.has(worktree.id)) {
+        return false
+      }
       return (
         !ambiguousWorktreeIds.has(worktree.id) ||
         isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)

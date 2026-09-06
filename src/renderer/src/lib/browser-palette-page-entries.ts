@@ -10,6 +10,7 @@ import {
 } from './browser-palette-search'
 import {
   findAmbiguousWorktreeIds,
+  findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
@@ -49,6 +50,16 @@ export function buildSearchableBrowserPages({
 }: BuildSearchableBrowserPagesOptions): SearchableBrowserPage[] {
   const entries: SearchableBrowserPage[] = []
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
+  const allUnifiedTabs = Object.values(unifiedTabsByWorktree ?? {}).flatMap((tabs) => tabs ?? [])
+  const duplicateTabIds = findDuplicateIds(allUnifiedTabs)
+  const duplicateWorkspaceIds = findDuplicateIds(
+    allUnifiedTabs
+      .filter((tab) => tab.contentType === 'browser')
+      .map((tab) => ({ id: tab.entityId }))
+  )
+  const duplicateStoredWorkspaceIds = findDuplicateIds(
+    Object.values(browserTabsByWorktree).flatMap((workspaces) => workspaces ?? [])
+  )
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
@@ -68,17 +79,35 @@ export function buildSearchableBrowserPages({
       }
     }
     for (const workspace of browserTabsByWorktree[worktree.id] ?? []) {
-      const unifiedTab = unifiedTabs.find(
-        (tab) =>
-          tab.contentType === 'browser' &&
-          tab.entityId === workspace.id &&
-          isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      if (
+        duplicateWorkspaceIds.has(workspace.id) ||
+        duplicateStoredWorkspaceIds.has(workspace.id)
+      ) {
+        continue
+      }
+      const workspaceTabs = unifiedTabs.filter(
+        (tab) => tab.contentType === 'browser' && tab.entityId === workspace.id
       )
-      if (!unifiedTab && ambiguousWorktreeIds.has(worktree.id)) {
+      const unifiedTab = workspaceTabs.find((tab) =>
+        isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      )
+      if (!unifiedTab && (workspaceTabs.length > 0 || ambiguousWorktreeIds.has(worktree.id))) {
+        continue
+      }
+      if (unifiedTab && duplicateTabIds.has(unifiedTab.id)) {
         continue
       }
       const workspaceFocusedAt = focusedAtByWorkspaceId.get(workspace.id)
-      for (const page of browserPagesByWorkspace[workspace.id] ?? []) {
+      const pages = browserPagesByWorkspace[workspace.id] ?? []
+      const duplicatePageIds = findDuplicateIds(pages)
+      for (const page of pages) {
+        if (
+          duplicatePageIds.has(page.id) ||
+          page.workspaceId !== workspace.id ||
+          page.worktreeId !== worktree.id
+        ) {
+          continue
+        }
         entries.push({
           page,
           workspace,
