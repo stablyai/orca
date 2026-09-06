@@ -164,5 +164,8 @@ function formatPath(path: MobileConnectionDiagnosticPath): string {
   if (path === 'relay') {
     return 'Relay'
   }
+  if (path === 'iroh') {
+    return 'Iroh'
+  }
   return path === 'tailscale' ? 'Tailscale/direct' : 'LAN/direct'
 }

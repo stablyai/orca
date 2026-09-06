@@ -164,6 +164,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "1.7.6",
     "@linear/sdk": "^82.1.0",
+    "@number0/iroh": "1.1.0",
     "@parcel/watcher": "^2.5.6",
     "@xterm/addon-serialize": "0.15.0-beta.300",
     "@xterm/headless": "6.1.0-beta.302",

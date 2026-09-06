@@ -24,8 +24,10 @@ export function writeStoredHostProfiles(hosts: readonly StoredHostProfile[]): Pr
 }
 
 export function toStoredHostProfile(host: HostProfile): StoredHostProfile {
-  const { id, name, endpoint, publicKeyB64, lastConnected } = host
-  return { id, name, endpoint, publicKeyB64, lastConnected }
+  const { id, name, endpoint, publicKeyB64, lastConnected, iroh } = host
+  // Why: iroh dial data is pairing output, not relay overlay state — it has no
+  // other durable home, so dropping it here would strand the host after restart.
+  return { id, name, endpoint, publicKeyB64, lastConnected, ...(iroh ? { iroh } : {}) }
 }
 
 function parseStoredHostProfiles(raw: string | null): StoredHostProfile[] | null {

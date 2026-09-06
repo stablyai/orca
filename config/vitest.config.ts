@@ -15,6 +15,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Why: iroh is on by default in production; tests must stay hermetic — real
+    // UDP binds + public relay traffic are opt-in via injected irohBindEndpoint.
+    env: {
+      ORCA_DISABLE_IROH: '1'
+    },
     // Why: Node 26's undefined Web Storage globals prevent Vitest from installing happy-dom's.
     // Why --expose-gc: retention tests need a deterministic collection point to measure what a queue really holds.
     execArgv: ['--no-experimental-webstorage', '--expose-gc'],

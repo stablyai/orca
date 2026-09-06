@@ -1,3 +1,4 @@
+import type { IrohTransport, IrohTransportOptions } from '../rpc/iroh-transport'
 import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -40,6 +41,8 @@ export class RuntimeRpcState {
   protected readonly exposeNetworkByDefault: boolean
   protected readonly pinnedBindHost: string | null
   protected readonly webClientRoot: string | undefined
+  protected readonly irohBindEndpoint: IrohTransportOptions['bindEndpoint']
+  protected irohTransport: IrohTransport | null = null
   // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
   protected wsBoundHost: string | null = null
   // Why: STA-2370 — in-flight widen so concurrent pairing requests share a single rebind.
@@ -101,6 +104,7 @@ export class RuntimeRpcState {
     exposeNetworkByDefault = false,
     pinnedBindHost,
     webClientRoot,
+    irohBindEndpoint,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
@@ -116,6 +120,7 @@ export class RuntimeRpcState {
     this.preferPinnedWsPort = preferPinnedWsPort
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.pinnedBindHost = pinnedBindHost ?? null
+    this.irohBindEndpoint = irohBindEndpoint
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap

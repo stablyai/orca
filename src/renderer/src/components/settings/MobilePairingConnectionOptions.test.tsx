@@ -48,16 +48,20 @@ describe('MobilePairingConnectionOptions', () => {
   let statusListener: ((status: MobileRelayStatus) => void) | null
   const connect = vi.fn().mockResolvedValue(null)
   const fetchAuthStatus = vi.fn().mockResolvedValue(null)
+  const getIrohStatus = vi.fn().mockResolvedValue({ bound: false, endpointId: null })
 
   beforeEach(() => {
     statusListener = null
     connect.mockClear()
     fetchAuthStatus.mockClear()
+    getIrohStatus.mockReset()
+    getIrohStatus.mockResolvedValue({ bound: false, endpointId: null })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
         mobile: {
           getRelayStatus: vi.fn().mockResolvedValue({ status: 'registered' }),
+          getIrohStatus,
           onRelayStatusChanged: vi.fn((listener: (status: MobileRelayStatus) => void) => {
             statusListener = listener
             return vi.fn()
@@ -102,7 +106,7 @@ describe('MobilePairingConnectionOptions', () => {
     // own — and its label must not double-announce the button it wraps.
     const group = screen.getByRole('radiogroup')
     expect(within(group).queryAllByRole('group')).toHaveLength(0)
-    expect(within(group).getAllByRole('radio')).toHaveLength(2)
+    expect(within(group).getAllByRole('radio')).toHaveLength(3)
     expect(signInPanel).not.toHaveAttribute('aria-label')
     // Why: do not surface build-setup diagnostics in the pairing flow.
     expect(screen.queryByText(/not configured for this build/i)).toBeNull()
@@ -238,6 +242,37 @@ describe('MobilePairingConnectionOptions', () => {
     statusListener?.('standby')
   })
 
+  it('shows a selectable Iroh option when the transport is bound', async () => {
+    getIrohStatus.mockResolvedValue({ bound: true, endpointId: 'a'.repeat(64) })
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(<MobilePairingConnectionOptions value="local-only" onChange={onChange} />)
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Iroh/i })).toBeVisible())
+    expect(
+      screen.getByText(
+        'Phone can be on cellular or any Wi‑Fi. No sign-in, no address setup. Direct P2P (hole-punched) with public relay fallback.'
+      )
+    ).toBeVisible()
+
+    await user.click(screen.getByRole('radio', { name: /Iroh/i }))
+    expect(onChange).toHaveBeenCalledWith('iroh')
+  })
+
+  it('disables Iroh when the transport failed to bind', async () => {
+    getIrohStatus.mockResolvedValue({ bound: false, endpointId: null })
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(<MobilePairingConnectionOptions value="local-only" onChange={onChange} />)
+
+    const iroh = await screen.findByRole('radio', { name: /Iroh/i })
+    expect(iroh).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByText('Transport failed to bind. Restart Orca, or check logs.')).toBeVisible()
+
+    await user.click(iroh)
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it('keeps LAN available while Relay is retrying', async () => {
     mocks.state = {
       ...mocks.state,
@@ -266,6 +301,21 @@ describe('MobilePairingConnectionOptions', () => {
     expect(lan).toHaveAttribute('aria-disabled', 'false')
     await user.click(lan)
     expect(onChange).toHaveBeenCalledWith('local-only')
+  })
+
+  it('skips Relay in keyboard navigation while Relay is retrying', async () => {
+    getIrohStatus.mockResolvedValue({ bound: true, endpointId: 'a'.repeat(64) })
+    const onChange = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <MobilePairingConnectionOptions value="local-only" onChange={onChange} relayMintRetrying />
+    )
+
+    const iroh = screen.getByRole('radio', { name: /Iroh/i })
+    await waitFor(() => expect(iroh).toHaveAttribute('aria-disabled', 'false'))
+    screen.getByRole('radio', { name: /^LAN\b/i }).focus()
+    await user.keyboard('{ArrowUp}')
+    expect(onChange).toHaveBeenCalledWith('iroh')
   })
 
   it('re-reads a session revoked since startup and offers Sign in again', async () => {

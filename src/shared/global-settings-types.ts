@@ -412,8 +412,8 @@ export type GlobalSettings = {
    *  Clamped on read to [5_000ms, 60min]. See docs/mobile-fit-hold.md. */
   mobileAutoRestoreFitMs: number | null
   /** Preferred mobile pairing path for new QR codes. Missing/'automatic' = Anywhere (Relay + local);
-   *  explicit 'local-only' = same-network only. */
-  mobilePairingConnectionMode?: 'automatic' | 'local-only'
+   *  explicit 'local-only' = same-network only; 'iroh' = LAN + experimental iroh (no Relay). */
+  mobilePairingConnectionMode?: 'automatic' | 'local-only' | 'iroh'
   /** Explicit custom address restored when generating future mobile pairing codes. */
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */

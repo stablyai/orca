@@ -13,7 +13,10 @@ import {
 import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import {
+  parseMobilePairingConnectionMode,
+  type MobilePairingConnectionMode
+} from '../../shared/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 
 export type { DeviceScope }
@@ -200,8 +203,8 @@ export class DeviceRegistry {
       return null
     }
     // Why: pairings created before this preference existed used automatic
-    // direct-first Relay fallback, so missing state must preserve that behavior.
-    return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
+    // direct-first Relay fallback, so missing/unknown state must preserve that.
+    return parseMobilePairingConnectionMode(device.mobilePairingConnectionMode)
   }
 
   listDevices(): readonly DeviceEntry[] {
@@ -293,8 +296,9 @@ export class DeviceRegistry {
         // scope as mobile so legacy device tokens do not gain new CLI powers.
         scope: device.scope === 'runtime' ? 'runtime' : 'mobile',
         relayBinding: validRelayBinding(device.relayBinding, device.deviceId),
-        mobilePairingConnectionMode:
-          device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic',
+        mobilePairingConnectionMode: parseMobilePairingConnectionMode(
+          device.mobilePairingConnectionMode
+        ),
         // Why: registries written before this field existed only ever held network-reach grants (phones and
         // LAN links), so a missing value must keep binding every interface on reconnect.
         pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network'

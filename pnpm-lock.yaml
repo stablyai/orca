@@ -137,6 +137,9 @@ importers:
       '@linear/sdk':
         specifier: ^82.1.0
         version: 82.1.0(graphql@16.14.2)
+      '@number0/iroh':
+        specifier: 1.1.0
+        version: 1.1.0
       '@parcel/watcher':
         specifier: ^2.5.6
         version: 2.5.6
@@ -1311,6 +1314,80 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@number0/iroh-android-arm-eabi@1.1.0':
+    resolution: {integrity: sha512-PcrwZUGdqEnR0/tus0ehulEa68wVrJRJzFjZN5iBV1Jjhgy00oQ5hKtRdCam1lYAQp3jWmRGktLHF2ejj0xAMg==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [android]
+
+  '@number0/iroh-android-arm64@1.1.0':
+    resolution: {integrity: sha512-wmnWLRNIHYARAecXbXPwZwduoFkmI+Bt75RSa+NZ3mdXiU+hBwWbHt7x0OEDtG8sMOgGgM22nqWemeU9r+UPqA==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [android]
+
+  '@number0/iroh-darwin-arm64@1.1.0':
+    resolution: {integrity: sha512-CM6gaQ+6r9K0HRswc2gOKeGL8XYUHUbz7ESkgOltBFin9OsYKmIo+JVYFxlahH8C7ypGEKq1ybU22Ifcf2kXnQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@number0/iroh-linux-arm-gnueabihf@1.1.0':
+    resolution: {integrity: sha512-5K4Kaz4gzyPo5s5LLAFO0zLXc2F0EZ3BXeMKzQc5zuPaeHQt4XqdwxozXVtn0/3EiUYqFNH1JIowagpwahxAlw==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [linux]
+
+  '@number0/iroh-linux-arm-musleabihf@1.1.0':
+    resolution: {integrity: sha512-Bz/vWWauI9t96imq8Jq1a2La4u5K9jVTjuCgm6gjpcFIp7wivfv4syZ4HlbgVD61C3Aqjb89lnlhzMd5qE/w0w==}
+    engines: {node: '>= 10'}
+    cpu: [arm]
+    os: [linux]
+
+  '@number0/iroh-linux-arm64-gnu@1.1.0':
+    resolution: {integrity: sha512-AZHpCKQEcJdXya9llNld5u+S2Cz+ehWgGzILtpEJ1qljNYJAClDovzA+5ehUVaXEc+P7ZUNQ+pIjMcWXM0cAug==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@number0/iroh-linux-arm64-musl@1.1.0':
+    resolution: {integrity: sha512-4ZS/U2L4+zk2E5cn5WmxxuUDTkdwWiyxRq0NFArRQNFbuH7mjtQok2aDIbOIFOIrTTB4x1hwb4Gt0OJw4om4SQ==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@number0/iroh-linux-x64-gnu@1.1.0':
+    resolution: {integrity: sha512-P2mo734gUjrfJgwbma1fHAyfeWqtY5IHTx53b1peei2/05JKZ2JJ4LS/YzI4qYW20mVtLKD9GS0T3q/iFYVC9Q==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@number0/iroh-linux-x64-musl@1.1.0':
+    resolution: {integrity: sha512-GTnr8v59AeS5iGmXLyqcgLCsTAFW2w6tdfDzjyyCYr6iO3h4vZuBv9HG3CwaVU+vOzzig9ojDzauDLgl96nniw==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@number0/iroh-win32-arm64-msvc@1.1.0':
+    resolution: {integrity: sha512-LvG4Vcw8D7tFAxZpuZsh6rmyW1YmtS3McDIQjEUNhf9VNBFzQ7WHyEIxdr1GAg/HvC8rmPJ1MQBM24RCDbdUew==}
+    engines: {node: '>= 10'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@number0/iroh-win32-x64-msvc@1.1.0':
+    resolution: {integrity: sha512-1eSztLtesLu2tHdAgr9KNPBsSVdiz2+MDHNvCVDtH+UQAN8F+21YqAAbRJB0ctBvB5zcGeTwYawGaqVMTyRVJg==}
+    engines: {node: '>= 10'}
+    cpu: [x64]
+    os: [win32]
+
+  '@number0/iroh@1.1.0':
+    resolution: {integrity: sha512-DlrJ4Sza5MiI+WwQg63lg+7eSbxlfQR2Bd+wVDjo7XTqenALD2OCRoSfPTuD12IhcvDbVHr4l7qH48DilocqYA==}
+    engines: {node: '>= 20.3.0'}
 
   '@open-draft/deferred-promise@2.2.0':
     resolution: {integrity: sha512-CecwLWx3rhxVQF6V4bAgPS5t+So2sTbPgAzafKkVizyi7tlwpcFpdFqq+wqF2OwNBmqFuu6tOyouTuxgpMfzmA==}
@@ -7871,6 +7948,53 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@number0/iroh-android-arm-eabi@1.1.0':
+    optional: true
+
+  '@number0/iroh-android-arm64@1.1.0':
+    optional: true
+
+  '@number0/iroh-darwin-arm64@1.1.0':
+    optional: true
+
+  '@number0/iroh-linux-arm-gnueabihf@1.1.0':
+    optional: true
+
+  '@number0/iroh-linux-arm-musleabihf@1.1.0':
+    optional: true
+
+  '@number0/iroh-linux-arm64-gnu@1.1.0':
+    optional: true
+
+  '@number0/iroh-linux-arm64-musl@1.1.0':
+    optional: true
+
+  '@number0/iroh-linux-x64-gnu@1.1.0':
+    optional: true
+
+  '@number0/iroh-linux-x64-musl@1.1.0':
+    optional: true
+
+  '@number0/iroh-win32-arm64-msvc@1.1.0':
+    optional: true
+
+  '@number0/iroh-win32-x64-msvc@1.1.0':
+    optional: true
+
+  '@number0/iroh@1.1.0':
+    optionalDependencies:
+      '@number0/iroh-android-arm-eabi': 1.1.0
+      '@number0/iroh-android-arm64': 1.1.0
+      '@number0/iroh-darwin-arm64': 1.1.0
+      '@number0/iroh-linux-arm-gnueabihf': 1.1.0
+      '@number0/iroh-linux-arm-musleabihf': 1.1.0
+      '@number0/iroh-linux-arm64-gnu': 1.1.0
+      '@number0/iroh-linux-arm64-musl': 1.1.0
+      '@number0/iroh-linux-x64-gnu': 1.1.0
+      '@number0/iroh-linux-x64-musl': 1.1.0
+      '@number0/iroh-win32-arm64-msvc': 1.1.0
+      '@number0/iroh-win32-x64-msvc': 1.1.0
 
   '@open-draft/deferred-promise@2.2.0':
     optional: true

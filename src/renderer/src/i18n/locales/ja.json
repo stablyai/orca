@@ -9815,7 +9815,10 @@
           "signInRequired": "Relay のみ — LAN にはアカウントは不要です。",
           "relayUnavailable": "このビルドでは Orca Relay を利用できません。LAN をご利用ください。",
           "signInAgain": "Relay に再サインイン",
-          "localTitle": "LAN"
+          "localTitle": "LAN",
+          "irohTitle": "Iroh",
+          "irohDescription": "スマホはモバイル回線や任意のWi‑Fiで接続可能。サインイン不要、アドレス設定不要。直接P2P（ホールパンチング）、公開リレーにフォールバック。",
+          "irohUnavailable": "トランスポートのバインドに失敗しました。Orcaを再起動するか、ログを確認してください。"
         },
         "MobilePairingSetupSection": {
           "title": "スマートフォンをペアリング",

@@ -203,7 +203,10 @@ export function MobilePane(): React.JSX.Element {
             setPairingUrl(result.pairingUrl)
             setQrError(result.qrDataUrl === null)
             setRelayMintFailure(null)
-            setEndpoint(result.endpoint)
+            // Why null for iroh: the caption describes the offer on screen, and an
+            // iroh QR dials by key — showing the ws:// LAN URL reads as "this QR is
+            // bound to that address", which it is not.
+            setEndpoint(result.connectionMode === 'iroh' ? null : result.endpoint)
             setDeviceCountAtQr(getPairedMobileDevicesSnapshot().length)
             clearCodeCopiedResetTimer()
             setCodeCopied(false)

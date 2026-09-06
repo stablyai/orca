@@ -1,3 +1,4 @@
+import type { IrohTransportOptions } from '../rpc/iroh-transport'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcAnyMethod } from '../rpc/core'
 import type { DeviceRegistry } from '../device-registry'
@@ -50,6 +51,8 @@ export type OrcaRuntimeRpcServerOptions = {
    */
   pinnedBindHost?: string
   webClientRoot?: string
+  // Why: tests inject a fake bind so CI never loads the native module or opens UDP.
+  irohBindEndpoint?: IrohTransportOptions['bindEndpoint']
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
   longPollCap?: number
@@ -66,6 +69,7 @@ export type PairingOfferUnavailableReason =
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
   | 'network_exposure_failed'
+  | 'iroh_unavailable'
 
 export type PairingOfferUnavailable = {
   available: false

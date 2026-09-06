@@ -51,6 +51,7 @@ export function MobilePairingSetupSection({
   onGenerateQr
 }: MobilePairingSetupSectionProps): React.JSX.Element {
   const usingRelay = connectionMode === 'automatic'
+  const usingIroh = connectionMode === 'iroh'
   const [addressDisclosureOpen, setAddressDisclosureOpen] = useState(false)
   // A search hit or a custom address pins the picker open: render it outright
   // rather than behind a trigger that could not collapse it anyway.
@@ -58,7 +59,9 @@ export function MobilePairingSetupSection({
   // Relay offers still carry a LAN endpoint for the direct fast path, but main
   // substitutes its own default when the renderer has not resolved one yet.
   // LAN has no such fallback, so it needs an explicit reachable host.
-  const generateDisabled = loading || !canGenerate || (!usingRelay && !selectedAddress)
+  // Iroh dials by public key, so an unpicked LAN address must not block the QR either.
+  const generateDisabled =
+    loading || !canGenerate || (!usingRelay && !usingIroh && !selectedAddress)
   // "Also use…" frames this as additive under Relay, not a second connection mode.
   // The phone races both paths and direct wins ties when nearby.
   const relayAddressLabel = translate(
@@ -139,7 +142,8 @@ export function MobilePairingSetupSection({
         {connectionPathControl}
       </div>
 
-      {usingRelay && addressDisclosurePinned ? (
+      {/* Why: iroh dials by public key — there is no address for the user to pick. */}
+      {usingIroh ? null : usingRelay && addressDisclosurePinned ? (
         <div className="space-y-2">
           <p className="text-xs font-medium text-foreground">{relayAddressLabel}</p>
           <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3">

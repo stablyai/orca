@@ -2,12 +2,13 @@ import { Platform } from 'react-native'
 import {
   DeviceCredentialInstalledSchema,
   PairingGetEndpointsResultSchema,
-  type DeviceCredentialInstalled,
-  type MobileRelayEndpoint
+  type DeviceCredentialInstalled
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
+import { openIrohRpcClient } from './mobile-iroh-physical-link'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
-import type { HostProfile, PairingOffer, RpcResponse } from './types'
+import { baseHost, relayHost } from './paired-host-profile'
+import type { PairingOffer, RpcResponse } from './types'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -40,6 +41,7 @@ export type PreProfilePairingAttempt = {
 
 type Dependencies = {
   connectDirect: typeof connect
+  connectIroh: typeof openIrohRpcClient
   connectRelay: typeof connectMobileRelayForPairing
   resolveInviteDirector: typeof resolvePairingInviteThroughDirector
   resolveHostIdentity: typeof resolvePairingHostIdentity
@@ -54,6 +56,7 @@ type Dependencies = {
 
 const defaultDependencies: Dependencies = {
   connectDirect: connect,
+  connectIroh: openIrohRpcClient,
   connectRelay: connectMobileRelayForPairing,
   resolveInviteDirector: resolvePairingInviteThroughDirector,
   resolveHostIdentity: resolvePairingHostIdentity,
@@ -152,14 +155,44 @@ async function runPairing(
     assertActive(isDisposed)
   }
 
-  const directClient = dependencies.connectDirect(
-    offer.endpoint,
-    offer.deviceToken,
-    offer.publicKeyB64,
-    { ...connectOptions, onLog: attributePairingLogPath('direct', connectOptions?.onLog) }
-  )
-  clients.add(directClient)
-  const candidates: PairingCandidate[] = [{ path: 'direct', client: directClient }]
+  // Why: iroh offers pair over iroh itself — it reaches the desktop on LAN and
+  // cellular alike, so the ws dial (and its failure noise) is skipped entirely
+  // unless iroh is unavailable on this platform (Android stub / Expo Go).
+  let irohPairingClient: ReturnType<typeof openIrohRpcClient> = null
+  const irohLog = attributePairingLogPath('iroh', connectOptions?.onLog)
+  if (offer.iroh && !journal && dependencies.platform === 'ios') {
+    irohPairingClient = dependencies.connectIroh({
+      desktopEndpointId: offer.iroh.endpointId,
+      ...(offer.iroh.relayUrl || offer.iroh.directAddresses?.length
+        ? {
+            dialHints: {
+              ...(offer.iroh.relayUrl ? { relayUrl: offer.iroh.relayUrl } : {}),
+              ...(offer.iroh.directAddresses?.length
+                ? { directAddresses: offer.iroh.directAddresses }
+                : {})
+            }
+          }
+        : {}),
+      deviceToken: offer.deviceToken,
+      publicKeyB64: offer.publicKeyB64,
+      ...(irohLog ? { onLog: irohLog } : {})
+    })
+  }
+
+  const candidates: PairingCandidate[] = []
+  if (irohPairingClient) {
+    clients.add(irohPairingClient)
+    candidates.push({ path: 'iroh', client: irohPairingClient })
+  } else {
+    const directClient = dependencies.connectDirect(
+      offer.endpoint,
+      offer.deviceToken,
+      offer.publicKeyB64,
+      { ...connectOptions, onLog: attributePairingLogPath('direct', connectOptions?.onLog) }
+    )
+    clients.add(directClient)
+    candidates.push({ path: 'direct', client: directClient })
+  }
   const log = createPairingRelayLogger(connectOptions?.onLog)
   if (journal) {
     log(
@@ -205,6 +238,11 @@ async function runPairing(
     await dependencies.saveHost(baseHost(offer, hostId, hostName, now))
     return { hostId }
   }
+  if (winner.path === 'iroh') {
+    // Why: the iroh candidate is only raced for journal-less offers; a journal
+    // implies direct/relay, and the metadata schema only records those paths.
+    throw new Error('iroh pairing path cannot carry a relay journal')
+  }
 
   journal = {
     ...journal,
@@ -244,43 +282,6 @@ async function runPairing(
   await dependencies.saveHost(relayHost(journal, endpoints.relay))
   await dependencies.clearJournal(journal.metadata.journalId)
   return { hostId }
-}
-
-function baseHost(
-  offer: PairingOffer,
-  hostId: string,
-  name: string,
-  lastConnected: number
-): HostProfile {
-  return {
-    id: hostId,
-    name,
-    endpoint: offer.endpoint,
-    deviceToken: offer.deviceToken,
-    publicKeyB64: offer.publicKeyB64,
-    lastConnected
-  }
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
 }
 
 function requireSuccess(response: RpcResponse): unknown {

@@ -262,6 +262,14 @@ export function registerMobileHandlers(
     }
   })
 
+  ipcMain.handle('mobile:getIrohStatus', () => {
+    const endpointId = rpcServer.getIrohEndpointId()
+    return {
+      bound: endpointId != null,
+      endpointId
+    }
+  })
+
   ipcMain.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {
     const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
     return inspectWindowsMobileFirewall(port, args?.address, firewallEnvironment)

@@ -199,4 +199,14 @@ describe('verdictDisplayLabel', () => {
     expect(verdictDisplayLabel({ kind: 'warning', label: "Can't connect" })).toBe("Can't connect")
     expect(verdictDisplayLabel({ kind: 'normal', label: 'Connected' })).toBe('Connected')
   })
+
+  it('surfaces iroh diagnostics while reconnecting', () => {
+    expect(
+      verdictDisplayLabel({
+        kind: 'normal',
+        label: 'Reconnecting…',
+        hint: 'Iroh attempting…'
+      })
+    ).toBe('Reconnecting… — Iroh attempting…')
+  })
 })

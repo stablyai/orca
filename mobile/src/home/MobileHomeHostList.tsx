@@ -5,6 +5,7 @@ import { MobileHostCard } from '../components/MobileHostCard'
 import type { HomeStatsSummary } from '../stats/home-stats-total'
 import { spacing } from '../theme/mobile-theme'
 import { classifyConnection } from '../transport/connection-health'
+import { getIrohHostStatus, irohStatusDisplayLabel } from '../transport/mobile-iroh-host-status'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 import type { ConnectionState, HostCatalogEntry } from '../transport/types'
@@ -116,6 +117,7 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
     reconnectAttempts: props.hostAttempts[item.id] ?? 0,
     lastConnectedAt: props.hostLastConnected[item.id] ?? null,
     endpoint: item.endpoint,
+    irohHint: irohStatusDisplayLabel(getIrohHostStatus(item.id)),
     pendingPath: props.hostPendingPaths[item.id] ?? null,
     pairingRejected: props.hostPairingRejected[item.id] ?? false,
     hostSignedOut: props.hostSignedOut[item.id] ?? false

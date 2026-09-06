@@ -50,7 +50,10 @@ const EXTERNAL = [
   'better-sqlite3',
   'keytar',
   'fsevents',
-  'cpu-features'
+  'cpu-features',
+  // napi-rs reaches its addon via a bare platform package whose `main` IS the .node
+  // file, so the specifier never matches externalNativeAddons' /\.node$/ filter.
+  '@number0/iroh'
 ]
 
 /**

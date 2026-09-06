@@ -39,7 +39,7 @@ export type RpcResponse = RpcSuccess | RpcFailure
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
-export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
+export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay' | 'iroh'
 
 export type ConnectionDiagnosticCode =
   | 'client-session-started'
@@ -87,6 +87,16 @@ export type ConnectionState =
   | 'reconnecting'
   | 'auth-failed'
 
+// Why: 64-char hex EndpointId from iroh 1.1.0 (same pin as desktop pairing offers).
+const IrohEndpointIdSchema = z.string().regex(/^[0-9a-f]{64}$/)
+
+export type HostIrohEndpoint = {
+  endpointId: string
+  // Why: pairing-time dial hints — offline-LAN connect + skip discovery RTT.
+  relayUrl?: string
+  directAddresses?: string[]
+}
+
 // Why: a user-attention nudge must not tear down a healthy relay (probe it); only a
 // network-change nudge marks the socket suspect enough to replace it.
 export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
@@ -101,6 +111,8 @@ export type HostProfile = {
   endpoints?: MobileAccessEndpoint[]
   relayHostId?: MobileRelayHostOverlay['relayHostId']
   relay?: MobileRelayHostOverlay['relay']
+  // Why: optional iroh dial target from pairing offers; reconnects reuse it.
+  iroh?: HostIrohEndpoint
 }
 
 export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
@@ -122,7 +134,16 @@ export const HostProfileSchema = z.object({
     .string()
     .regex(/^[A-Za-z0-9_-]{16}$/)
     .optional(),
-  relay: MobileRelayEndpointSchema.optional()
+  relay: MobileRelayEndpointSchema.optional(),
+  iroh: z
+    .object({
+      endpointId: IrohEndpointIdSchema,
+      // Why: 2048 matches the desktop offer's PAIRING_RELAY_URL_MAX_CHARACTERS —
+      // a stricter stored cap would drop valid dial hints on restore.
+      relayUrl: z.string().min(1).max(2048).optional(),
+      directAddresses: z.array(z.string().min(1).max(64)).max(8).optional()
+    })
+    .optional()
 })
 
 // Why: persisted host record after the v0.0.3 keychain split. The
@@ -133,7 +154,14 @@ export const StoredHostProfileSchema = z.object({
   name: z.string().min(1),
   endpoint: z.string().min(1),
   publicKeyB64: z.string().min(1),
-  lastConnected: z.number().finite()
+  lastConnected: z.number().finite(),
+  iroh: z
+    .object({
+      endpointId: IrohEndpointIdSchema,
+      relayUrl: z.string().min(1).max(2048).optional(),
+      directAddresses: z.array(z.string().min(1).max(64)).max(8).optional()
+    })
+    .optional()
 })
 
 export type StoredHostProfile = z.infer<typeof StoredHostProfileSchema>

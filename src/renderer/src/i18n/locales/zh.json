@@ -9863,7 +9863,10 @@
           "signInRequired": "仅 Relay 需要 — 局域网无需账号。",
           "relayUnavailable": "此版本不支持 Orca Relay。请使用局域网。",
           "signInAgain": "重新登录以使用 Relay",
-          "localTitle": "局域网"
+          "localTitle": "局域网",
+          "irohTitle": "Iroh",
+          "irohDescription": "手机可使用蜂窝数据或任意 Wi‑Fi。无需登录、无需选择地址。直接 P2P（打洞直连），公共中继兜底。",
+          "irohUnavailable": "传输层绑定失败。请重启 Orca 或查看日志。"
         },
         "MobilePairingSetupSection": {
           "title": "配对手机",

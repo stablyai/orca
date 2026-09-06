@@ -8,7 +8,7 @@ import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
 
-export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
+export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay' | 'iroh'
 
 export class LogicalClientCutoverError extends Error {
   constructor() {

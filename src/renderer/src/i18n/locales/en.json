@@ -11041,7 +11041,10 @@
           "signInAgain": "Sign in again for Relay",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
-          "retrying": "Retrying"
+          "retrying": "Retrying",
+          "irohTitle": "Iroh",
+          "irohDescription": "Phone can be on cellular or any Wi‑Fi. No sign-in, no address setup. Direct P2P (hole-punched) with public relay fallback.",
+          "irohUnavailable": "Transport failed to bind. Restart Orca, or check logs."
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",

@@ -9820,7 +9820,10 @@
           "signInRequired": "Relay만 해당 — LAN에는 계정이 필요하지 않습니다.",
           "relayUnavailable": "이 빌드에서는 Orca Relay를 사용할 수 없습니다. LAN을 사용하세요.",
           "signInAgain": "Relay용 다시 로그인",
-          "localTitle": "LAN"
+          "localTitle": "LAN",
+          "irohTitle": "Iroh",
+          "irohDescription": "휴대폰이 셀룰러나 어떤 Wi‑Fi에 있어도 됩니다. 로그인·주소 설정 불필요. 직접 P2P(홀 펀칭), 공개 릴레이 폴백.",
+          "irohUnavailable": "전송 계층 바인딩에 실패했습니다. Orca를 재시작하거나 로그를 확인하세요."
         },
         "MobilePairingSetupSection": {
           "title": "휴대폰 페어링",

@@ -1,3 +1,5 @@
+import type { PairingIroh } from '../../../shared/mobile-relay-pairing-offer'
+import { isMobilePairingRelayDisabled } from '../../../shared/mobile-pairing-connection-mode'
 import type { DeviceEntry, DeviceRegistry, DeviceScope } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
@@ -20,6 +22,25 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
+  getIrohEndpointId(): string | null {
+    return this.irohTransport?.endpointId ?? null
+  }
+
+  protected getIrohPairingTarget(): PairingIroh | null {
+    const endpointId = this.irohTransport?.endpointId
+    if (!endpointId) {
+      return null
+    }
+    const hints = this.irohTransport?.endpointDialHints() ?? null
+    return {
+      endpointId,
+      ...(hints?.relayUrl ? { relayUrl: hints.relayUrl } : {}),
+      ...(hints && hints.directAddresses.length > 0
+        ? { directAddresses: hints.directAddresses }
+        : {})
+    }
+  }
+
   getDeviceRegistry(): DeviceRegistry | null {
     return this.deviceRegistry
   }
@@ -46,9 +67,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
 
   setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
     const current = this.deviceRegistry?.getDevice(deviceId)
+    const pairingMode = this.deviceRegistry?.getMobilePairingConnectionMode(deviceId)
     if (
       current?.scope !== 'mobile' ||
-      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+      (pairingMode != null && isMobilePairingRelayDisabled(pairingMode))
     ) {
       return false
     }
@@ -117,6 +139,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    // Why: only iroh-mode mobile offers may carry the iroh dial target — a
+    // local-only QR advertising it would grant off-LAN reachability via the
+    // public relay, breaking the "same network only" promise.
+    includeIroh?: boolean
     // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
     // next launch bind every interface. Defaults to network reach, which is what every other caller means.
     reach?: RuntimePairingReach
@@ -132,12 +158,31 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
     }
-    const rawEndpoint = this.getWebSocketEndpoint()
-    if (!rawEndpoint) {
+    const iroh = args.includeIroh ? this.getIrohPairingTarget() : null
+    if (args.includeIroh && !iroh) {
       return pairingUnavailable(
-        'websocket_unavailable',
-        'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
+        'iroh_unavailable',
+        'Iroh pairing is unavailable. Restart Orca or inspect the Iroh transport logs.'
       )
+    }
+    const rawEndpoint = this.getWebSocketEndpoint()
+    let endpoint: string
+    if (!rawEndpoint) {
+      if (!iroh) {
+        return pairingUnavailable(
+          'websocket_unavailable',
+          'WebSocket pairing is unavailable. Inspect preceding runtime errors and choose an unused --port if the listener failed.'
+        )
+      }
+      endpoint = `iroh://${iroh.endpointId}`
+    } else if (iroh && !args.address) {
+      endpoint = `iroh://${iroh.endpointId}`
+    } else {
+      const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
+      if (!advertised.ok) {
+        return pairingUnavailable(advertised.reason, advertised.guidance)
+      }
+      endpoint = advertised.endpoint
     }
     if (!this.deviceRegistry) {
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -147,11 +192,6 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       return pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
     }
 
-    const advertised = resolveAdvertisedPairingEndpoint(rawEndpoint, args.address)
-    if (!advertised.ok) {
-      return pairingUnavailable(advertised.reason, advertised.guidance)
-    }
-    const endpoint = advertised.endpoint
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
@@ -170,7 +210,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       deviceToken: device.token,
       publicKeyB64,
       pairedDeviceId: device.deviceId,
-      scope
+      scope,
+      ...(iroh ? { iroh } : {})
     })
     return {
       available: true,
