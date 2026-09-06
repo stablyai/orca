@@ -2,6 +2,7 @@ package expo.modules.hardwarekeyboard
 
 import android.view.InputDevice
 import android.view.KeyEvent
+import android.widget.Button
 import android.view.inputmethod.BaseInputConnection
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.uimanager.DisplayMetricsHolder
@@ -108,5 +109,50 @@ class HardwareKeyboardSubmitArrowTest {
     assertTrue(fixture.key())
     fixture.capture.onWindowFocusChanged(false)
     assertFalse(fixture.key(action = KeyEvent.ACTION_UP))
+  }
+
+  @Test fun heldMovementClaimsReleaseOnlyAfterAnUnhandledBoundaryRepeat() {
+    val fixture = Fixture()
+    fixture.nativeHandled = true
+    assertTrue(fixture.key())
+    assertTrue(fixture.key(repeat = 1))
+    fixture.nativeHandled = false
+    assertTrue(fixture.key(repeat = 2))
+    assertTrue(fixture.key(repeat = 3))
+    val delegated = fixture.delegated.size
+    assertTrue(fixture.key(action = KeyEvent.ACTION_UP))
+    assertEquals(delegated, fixture.delegated.size)
+    assertEquals(listOf(0, 1, 2, 3), fixture.delegated.map { it.repeatCount })
+  }
+
+  @Test fun boundaryReleaseDoesNotLeakToNewlyFocusedControl() {
+    val fixture = Fixture()
+    val received = mutableListOf<KeyEvent>()
+    val button = object : Button(fixture.input.context) {
+      override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        received.add(event)
+        return false
+      }
+    }.apply { isFocusableInTouchMode = true }
+    fixture.capture.addView(button)
+    button.layout(0, 0, 100, 100)
+    assertTrue(fixture.key())
+    assertTrue(button.requestFocus())
+    assertFalse(fixture.input.hasFocus())
+    assertTrue(fixture.key(action = KeyEvent.ACTION_UP))
+    assertTrue(received.isEmpty())
+    assertFalse(fixture.key())
+    assertFalse(fixture.key(action = KeyEvent.ACTION_UP))
+    assertEquals(listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP), received.map { it.action })
+  }
+
+  @Test fun freshNativeMovementSupersedesLostBoundaryRelease() {
+    val fixture = Fixture()
+    assertTrue(fixture.key())
+    fixture.nativeHandled = true
+    assertTrue(fixture.key())
+    assertTrue(fixture.key(action = KeyEvent.ACTION_UP))
+    assertEquals(listOf(KeyEvent.ACTION_DOWN, KeyEvent.ACTION_DOWN, KeyEvent.ACTION_UP),
+      fixture.delegated.map { it.action })
   }
 }
