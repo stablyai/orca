@@ -344,7 +344,7 @@ async function seedScenario(
     const hostTabs = await callEnvironment(client.page, client.environmentId, 'session.tabs.list', { worktree: `id:${worktreeId}` })
     const readStore = (page: Page) => page.evaluate((id) => {
       const state = window.__store!.getState()
-      return { activeWorktreeId: state.activeWorktreeId, tabs: state.tabsByWorktree[id], activeTabId: state.activeTabId, ptyIdsByTab: state.ptyIdsByTab }
+      return { activeWorktreeId: state.activeWorktreeId, tabs: state.tabsByWorktree[id], activeTabId: state.activeTabId, frames: (window as any).__pairedTabFrameTrace }
     }, worktreeId)
     console.info(`[paired-reveal-tab-publication] ${JSON.stringify({ target, decoys, hostTabs, hostStore: await readStore(hostPage), clientStore: await readStore(client.page) })}`)
     throw error

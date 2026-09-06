@@ -80,6 +80,10 @@ export function decideWebSessionTabsSnapshot(
     return WEB_SESSION_TABS_FRAME_UNMIRRORED
   }
   const current = latestSessionTabsSnapshotByWorktree.get(key)
+  const frames = ((globalThis as any).__pairedTabFrameTrace ??= [])
+  frames.push({ worktree: snapshot.worktree, epoch: snapshot.publicationEpoch, version: snapshot.snapshotVersion, tabs: snapshot.tabs.map((tab) => tab.id), current, retired: isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch), runtimeId })
+  if (frames.length > 80) frames.shift()
+
   const currentSharesPublicationLineage = Boolean(
     current &&
     sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch)
