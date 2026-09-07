@@ -22,6 +22,7 @@ export type StartupActions = Pick<
   | 'reconnectPersistedTerminals'
   | 'setTerminalStartupRestorationReady'
   | 'setDeferredSshReconnectTargets'
+  | 'removeDeferredSshReconnectTarget'
   | 'setSshConnectionState'
   | 'hydratePersistedUI'
   | 'setHydrationSucceeded'
@@ -59,6 +60,8 @@ export function selectStartupActions(state: StartupActions): StartupActions {
     cachedStartupActions.setTerminalStartupRestorationReady ===
       state.setTerminalStartupRestorationReady &&
     cachedStartupActions.setDeferredSshReconnectTargets === state.setDeferredSshReconnectTargets &&
+    cachedStartupActions.removeDeferredSshReconnectTarget ===
+      state.removeDeferredSshReconnectTarget &&
     cachedStartupActions.setSshConnectionState === state.setSshConnectionState &&
     cachedStartupActions.hydratePersistedUI === state.hydratePersistedUI &&
     cachedStartupActions.setHydrationSucceeded === state.setHydrationSucceeded &&
@@ -91,6 +94,7 @@ export function selectStartupActions(state: StartupActions): StartupActions {
     reconnectPersistedTerminals: state.reconnectPersistedTerminals,
     setTerminalStartupRestorationReady: state.setTerminalStartupRestorationReady,
     setDeferredSshReconnectTargets: state.setDeferredSshReconnectTargets,
+    removeDeferredSshReconnectTarget: state.removeDeferredSshReconnectTarget,
     setSshConnectionState: state.setSshConnectionState,
     hydratePersistedUI: state.hydratePersistedUI,
     setHydrationSucceeded: state.setHydrationSucceeded,

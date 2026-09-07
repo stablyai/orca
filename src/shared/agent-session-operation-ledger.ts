@@ -1,3 +1,8 @@
+import {
+  isAgentSessionRewindResult,
+  type AgentSessionRewindReason,
+  type AgentSessionRewindResult
+} from './agent-session-rewind'
 /**
  * Durable client-operation ledger.
  *
@@ -13,14 +18,23 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from './agent-session-host-authority'
+import {
+  isAgentSessionConversationCommandResult,
+  type AgentSessionConversationCommandResult
+} from './agent-session-conversation-command'
 
 export const AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT = 512
 export const AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT = 4_096
 
 export type AgentSessionOperationOutcome =
   | { status: 'pending' }
-  | { status: 'succeeded'; sessionId: string }
-  | { status: 'failed'; code: string; message?: string }
+  | {
+      status: 'succeeded'
+      sessionId: string
+      conversationCommand?: AgentSessionConversationCommandResult
+      rewind?: AgentSessionRewindResult
+    }
+  | { status: 'failed'; code: string; message?: string; rewindReason?: AgentSessionRewindReason }
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
   | { status: 'unknown' }
 
@@ -176,7 +190,11 @@ export function isAgentSessionOperationRow(value: unknown): value is AgentSessio
     typeof outcome === 'object' &&
     outcome !== null &&
     ((outcome.status === 'pending' && true) ||
-      (outcome.status === 'succeeded' && typeof outcome.sessionId === 'string') ||
+      (outcome.status === 'succeeded' &&
+        typeof outcome.sessionId === 'string' &&
+        (outcome.rewind === undefined || isAgentSessionRewindResult(outcome.rewind)) &&
+        (outcome.conversationCommand === undefined ||
+          isAgentSessionConversationCommandResult(outcome.conversationCommand))) ||
       (outcome.status === 'failed' && typeof outcome.code === 'string') ||
       outcome.status === 'unknown')
   return (

@@ -1,10 +1,7 @@
 // @ts-nocheck -- mechanically split class members.
 import { RuntimeFileCommandsWithReadFileExplorerPreview } from './runtime-file-commands-read-file-explorer-preview'
 import { assertRuntimeFileMutationExpectation } from './runtime-file-commands-mobile-file-list-limit'
-import {
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
+import { requireRuntimeFileProvider } from './runtime-file-command-target'
 import { lstat, mkdir, writeFile } from 'node:fs/promises'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
@@ -25,16 +22,13 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
-      target.connectionId,
+      target.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       await provider.writeFile(target.path, content)
       return { ok: true }
     }
@@ -64,17 +58,14 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
-      target.connectionId,
+      target.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
+    const provider = requireRuntimeFileProvider(target)
     const content = Buffer.from(contentBase64, 'base64')
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    if (provider) {
       await provider.writeFileBase64(target.path, contentBase64)
       return { ok: true }
     }
@@ -96,17 +87,14 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
-      target.connectionId,
+      target.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
+    const provider = requireRuntimeFileProvider(target)
     const content = Buffer.from(contentBase64, 'base64')
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    if (provider) {
       await provider.writeFileBase64Chunk(target.path, contentBase64, append)
       return { ok: true }
     }
@@ -126,16 +114,13 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
-      target.connectionId,
+      target.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       await provider.createFile(target.path)
       return { ok: true }
     }
@@ -159,16 +144,13 @@ export class RuntimeFileCommandsWithWriteFileExplorerFile extends RuntimeFileCom
   ): Promise<{ ok: true }> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     assertRuntimeFileMutationExpectation(
-      target.connectionId,
+      target.executionHostId,
       expectedExecutionHostId,
       expectedSshTargetId,
       expectedSshConnectionGeneration
     )
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       await provider.createDir(target.path)
       return { ok: true }
     }

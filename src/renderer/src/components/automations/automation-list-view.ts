@@ -1,5 +1,3 @@
-import { getIntlLocale } from '@/i18n/i18n'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { hostStableKey } from '../../../../shared/automation-owner-key'
 import type { AutomationListRow } from './automation-list-row-identity'
@@ -7,8 +5,6 @@ import type { ExternalAutomationListEntry } from './external-automation-list-ent
 import {
   getAutomationRowLastRunSnapshot,
   getExternalAutomationLastRunSnapshot,
-  getLocalAutomationLastRunSnapshot,
-  indexLatestAutomationRuns,
   type AutomationLastRunSnapshot
 } from './automation-list-last-run'
 
@@ -22,6 +18,13 @@ export type AutomationListSort = {
   direction: AutomationListSortDirection
 }
 
+/**
+ * A row and an external job flattened to what the shared list renders and sorts.
+ *
+ * `id` is the row's own key, never the bare automation ID: under All hosts two
+ * authorities can return the same ID, and the sort tie-break decides render
+ * order, so a bare ID would collapse them. See `automation-list-row-identity`.
+ */
 export type AutomationListViewItem =
   | {
       kind: 'local'
@@ -31,7 +34,7 @@ export type AutomationListViewItem =
       lastRunAt: number | null
       lastRun: AutomationLastRunSnapshot
       agentId: TuiAgent
-      automation: Automation
+      row: AutomationListRow
     }
   | {
       kind: 'external'
@@ -117,30 +120,26 @@ function matchesLastRunFilter(
   return snapshot.tone === filter
 }
 
+/** Flattens the two rendered collections into one sortable list, preserving row identity. */
 export function buildAutomationListViewItems({
-  automations,
-  externalEntries,
-  runs
+  rows,
+  externalEntries
 }: {
-  automations: readonly Automation[]
+  rows: readonly AutomationListRow[]
   externalEntries: readonly ExternalAutomationListEntry[]
-  runs: readonly AutomationRun[]
 }): AutomationListViewItem[] {
-  const lastRunByAutomationId = indexLatestAutomationRuns(runs)
-  const locals: AutomationListViewItem[] = automations.map((automation) => {
-    const lastRun = getLocalAutomationLastRunSnapshot(
-      automation,
-      lastRunByAutomationId.get(automation.id)
-    )
+  const locals: AutomationListViewItem[] = rows.map((row) => {
+    // Why: the same snapshot the row cell renders, so the sort matches the column.
+    const lastRun = getAutomationRowLastRunSnapshot(row)
     return {
       kind: 'local',
-      id: automation.id,
-      name: automation.name,
-      enabled: automation.enabled,
+      id: row.key,
+      name: row.automation.name,
+      enabled: row.automation.enabled,
       lastRunAt: lastRun.at,
       lastRun,
-      agentId: automation.agentId,
-      automation
+      agentId: row.automation.agentId,
+      row
     }
   })
   const externals: AutomationListViewItem[] = externalEntries.map((entry) => {
@@ -217,36 +216,25 @@ export function filterExternalAutomationListEntries(
   )
 }
 
-export function filterAutomationListViewItems(
-  items: readonly AutomationListViewItem[],
-  filter: AutomationListFilter
-): AutomationListViewItem[] {
-  if (!isAutomationListFilterActive(filter)) {
-    return [...items]
-  }
-  return items.filter(
-    (item) =>
-      matchesStatusFilter(item.enabled, filter.status) &&
-      matchesLastRunFilter(item.lastRun, filter.lastRun) &&
-      (filter.agentIds.length === 0 ||
-        (item.agentId !== null && filter.agentIds.includes(item.agentId)))
-  )
-}
-
+/**
+ * `locale` is a parameter, not a `getIntlLocale()` read, so callers memoizing this
+ * can declare it — a hidden read is invisible to a dependency array.
+ */
 export function sortAutomationListViewItems(
   items: readonly AutomationListViewItem[],
-  sort: AutomationListSort | null
+  sort: AutomationListSort | null,
+  locale: string
 ): AutomationListViewItem[] {
-  if (!sort) {
+  if (!sort || items.length < 2) {
     return [...items]
   }
   const next = [...items]
-  const locale = getIntlLocale()
+  const compareNames =
+    sort.field === 'name' ? new Intl.Collator(locale, { sensitivity: 'base' }).compare : null
   next.sort((left, right) => {
-    const compared =
-      sort.field === 'name'
-        ? left.name.localeCompare(right.name, locale, { sensitivity: 'base' })
-        : (left.lastRunAt ?? 0) - (right.lastRunAt ?? 0)
+    const compared = compareNames
+      ? compareNames(left.name, right.name)
+      : (left.lastRunAt ?? 0) - (right.lastRunAt ?? 0)
     if (compared !== 0) {
       return sort.direction === 'asc' ? compared : -compared
     }
@@ -255,24 +243,26 @@ export function sortAutomationListViewItems(
   return next
 }
 
+/** The rendered list: filter each collection with its own rules, then sort as one. */
 export function applyAutomationListView({
-  automations,
+  rows,
   externalEntries,
-  runs,
   filter,
-  sort
+  sort,
+  locale
 }: {
-  automations: readonly Automation[]
+  rows: readonly AutomationListRow[]
   externalEntries: readonly ExternalAutomationListEntry[]
-  runs: readonly AutomationRun[]
   filter: AutomationListFilter
   sort: AutomationListSort | null
+  locale: string
 }): AutomationListViewItem[] {
   return sortAutomationListViewItems(
-    filterAutomationListViewItems(
-      buildAutomationListViewItems({ automations, externalEntries, runs }),
-      filter
-    ),
-    sort
+    buildAutomationListViewItems({
+      rows: filterAutomationListRows(rows, filter),
+      externalEntries: filterExternalAutomationListEntries(externalEntries, filter)
+    }),
+    sort,
+    locale
   )
 }

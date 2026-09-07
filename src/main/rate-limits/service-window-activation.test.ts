@@ -5,7 +5,7 @@ import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
-import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
@@ -41,7 +41,7 @@ vi.mock('./opencode-go-usage-fetcher', () => ({
   fetchOpenCodeGoRateLimits: vi.fn()
 }))
 
-vi.mock('./minimax-fetcher', () => ({
+vi.mock('./minimax/minimax-fetcher', () => ({
   fetchMiniMaxRateLimits: vi.fn()
 }))
 

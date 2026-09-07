@@ -65,6 +65,8 @@ export type ProcessResult = {
   stderr: string
   /** True when the process was killed by `timeoutMs` rather than exiting. */
   timedOut: boolean
+  /** True when stdout or stderr exceeded `maxOutputBytes` and was clipped. */
+  outputTruncated?: boolean
 }
 
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30_000

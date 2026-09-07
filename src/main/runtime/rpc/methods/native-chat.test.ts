@@ -266,6 +266,39 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(JSON.stringify(input)).toContain('truncated')
   })
 
+  // The roster block reached mobile through a bare fall-through, uncapped, on the
+  // one path that exists to keep the payload off the phone.
+  it('bounds a spawn-group roster before sending it to mobile', async () => {
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage('ignored'),
+          blocks: [
+            {
+              type: 'subagent-group',
+              groupId: 'thread-1:turn-1',
+              agents: Array.from({ length: 80 }, (_unused, index) => ({
+                id: `child-${index}`,
+                label: index === 0 ? OVERSIZED : 'read',
+                state: index === 0 ? (OVERSIZED as 'working') : ('working' as const)
+              }))
+            }
+          ]
+        }
+      ]
+    }
+
+    const result = await readSessionHandler()({ agent: 'codex', sessionId: 's' }, ctxWith('mobile'))
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0]
+    if (block.type !== 'subagent-group') {
+      throw new Error('expected a subagent-group block')
+    }
+
+    expect(block.agents).toHaveLength(64)
+    expect(block.agents[0].label.length).toBeLessThan(OVERSIZED.length)
+    expect(block.agents[0].state).toBe('unverifiable')
+  })
+
   it('preserves AskUserQuestion option objects at the supported nesting depth', async () => {
     cachedResult.value = {
       messages: [

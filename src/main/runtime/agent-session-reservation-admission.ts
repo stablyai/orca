@@ -21,13 +21,18 @@ import {
   agentSessionExecutionLocationsEqual,
   isAgentSessionLaunchArgs,
   isAgentSessionLaunchEnv,
+  isAgentSessionOptions,
   type AgentSessionAccountHome,
   type AgentSessionExecutionLocation,
   type AgentSessionLaunchArgs,
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
-import type { AgentSessionHandleProvider } from '../../shared/agent-session-provider-handle'
+import {
+  agentSessionProviderHandleRoot,
+  type AgentSessionHandleProvider,
+  type AgentSessionProviderHandleLink
+} from '../../shared/agent-session-provider-handle'
 import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
@@ -43,6 +48,11 @@ export type AgentSessionReserveRequest = {
   launchArgs?: AgentSessionLaunchArgs
   /** Current launch input validated here but never written to the durable record. */
   launchEnv?: AgentSessionLaunchEnv
+  /** Initial provider options persisted before the first process is acquired. */
+  options?: Readonly<Record<string, string>>
+  /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
+   *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
+  adoptedHandleLink?: AgentSessionProviderHandleLink
   runtimeKind: AgentSessionReservation['runtimeKind']
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
@@ -131,6 +141,9 @@ export function applyAgentSessionReservation(
   if (request.launchArgs && !isAgentSessionLaunchArgs(request.launchArgs)) {
     throw new Error('agent_session_launch_args_invalid')
   }
+  if (request.options && !isAgentSessionOptions(request.options)) {
+    throw new Error('agent_session_options_invalid')
+  }
   const reservation: AgentSessionReservation = {
     runtimeKind: request.runtimeKind,
     spawnToken:
@@ -140,6 +153,11 @@ export function applyAgentSessionReservation(
     leaseTtlMs: request.leaseTtlMs ?? leaseTtlMs,
     now: request.now
   }
+  // Inside the transaction, not only in the RPC resolver: two concurrent adoptions of one
+  // conversation mint different session ids, so the compare-and-swap never collides and a
+  // pre-commit check passes for both. Codex would then hold one thread from two app-servers, which
+  // it permits silently and which corrupts the conversation rather than erroring.
+  assertAdoptedConversationUnowned(state, request)
   const existing = state.records.get(request.sessionId)
   if (!existing) {
     if (state.unreadableRecords.has(request.sessionId)) {
@@ -175,6 +193,41 @@ export function applyAgentSessionReservation(
   })
 }
 
+/**
+ * Refuse an adoption whose conversation ANOTHER record already holds.
+ *
+ * The self-exemption is part of that definition, not a replay mechanism: replay is settled earlier
+ * by the operation ledger, and an adoption always arrives with a null expected fence, so a request
+ * naming an existing session id is refused a few lines below regardless. Keeping the scan scoped to
+ * other records is what makes this guard mean what its name says.
+ *
+ * It runs inside the store transaction because the pre-commit check in the RPC resolver cannot be
+ * the guard: two concurrent adoptions of one conversation mint different session ids, so the
+ * compare-and-swap never collides and both would pass. Codex permits two app-servers on one thread
+ * silently, so the cost of missing this is a corrupted conversation rather than an error.
+ */
+function assertAdoptedConversationUnowned(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest
+): void {
+  const adopted = request.adoptedHandleLink
+  if (!adopted) {
+    return
+  }
+  const root = agentSessionProviderHandleRoot(adopted.handle)
+  for (const record of state.records.values()) {
+    if (record.sessionId === request.sessionId) {
+      continue
+    }
+    const holdsSameConversation = record.providerHandleChain.some(
+      (link) => agentSessionProviderHandleRoot(link.handle) === root
+    )
+    if (holdsSameConversation) {
+      throw new Error('agent_session_conflict')
+    }
+  }
+}
+
 function createAgentSessionRecord(
   request: AgentSessionReserveRequest,
   reservation: AgentSessionReservation
@@ -184,8 +237,11 @@ function createAgentSessionRecord(
     sessionId: request.sessionId,
     location: request.location,
     provider: request.provider,
-    providerHandleChain: [],
+    // Fence 1 below is this record's first, and the owner probe requires the head link to carry the
+    // record's current fence — so an adopted link must be minted at that same fence.
+    providerHandleChain: request.adoptedHandleLink ? [request.adoptedHandleLink] : [],
     accountHome: request.accountHome,
+    ...(request.options ? { options: { ...request.options } } : {}),
     ...(request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
     createdAt: request.now,
     updatedAt: request.now,

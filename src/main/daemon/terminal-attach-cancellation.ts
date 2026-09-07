@@ -1,10 +1,7 @@
 import { TerminalAttachCanceledError } from './daemon-errors'
 
 /** Never resolves; only rejects, so it can bound a wait without settling it. */
-export function rejectOnAbort(
-  signal: AbortSignal | undefined,
-  sessionId: string
-): Promise<never> {
+export function rejectOnAbort(signal: AbortSignal | undefined, sessionId: string): Promise<never> {
   if (!signal) {
     return new Promise<never>(() => {})
   }

@@ -1,5 +1,5 @@
 import type { Repo } from '../../shared/repo-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import type { GitPushTarget } from '../../shared/worktree/types'
 
@@ -38,8 +38,9 @@ export function getRuntimeWorktreeRemovalOptionsKey(
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime
-// host can adopt a legacy (unstamped) repo. But an unstamped repo with a connectionId is an SSH repo
-// (resolves to ssh:<id>), so it must not be adopted/matched by a runtime host at the same path.
+// host can adopt a legacy (unstamped) repo. A repo that names a host in *either* spelling matches
+// only that host — including its own ssh:<connectionId>, which an executionHostId-only comparison
+// used to reject, so an unstamped SSH repo failed to dedupe against itself.
 export function runtimeRepoMatchesExecutionHost(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
   executionHostId?: ExecutionHostId | null
@@ -47,10 +48,10 @@ export function runtimeRepoMatchesExecutionHost(
   if (executionHostId == null) {
     return true
   }
-  if (repo.executionHostId != null) {
-    return repo.executionHostId === executionHostId
+  if (repo.executionHostId == null && repo.connectionId == null) {
+    return true
   }
-  return repo.connectionId == null
+  return getRepoExecutionHostId(repo) === executionHostId
 }
 
 export function parseExactWorktreeIdSelector(

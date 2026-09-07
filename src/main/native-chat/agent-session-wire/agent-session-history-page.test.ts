@@ -1,4 +1,4 @@
-import { appendFile, mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -19,15 +19,16 @@ import {
   serializeRemoteRuntimePayload
 } from '../../../shared/remote-runtime-memory-limits'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { JOURNAL_LOG_FILE } from '../agent-session-journal/journal-log-file'
-import {
-  serializeJournalRow,
-  type JournalItemRow,
-  type JournalRow,
-  type JournalTombstoneRow
+import { openJournalDatabase } from '../agent-session-journal/journal-database'
+import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
+import { insertJournalRow } from '../agent-session-journal/journal-row-table'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
+import type {
+  JournalItemRow,
+  JournalRow,
+  JournalTombstoneRow
 } from '../agent-session-journal/journal-row-schema'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { readAgentSessionHistory, resolveHistoryLimit } from './agent-session-history-page'
 
@@ -39,6 +40,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
 
+const journals = createTrackedJournalOpener()
 let root: string
 let clock = 1_000
 let epochs = 0
@@ -67,7 +69,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-history-'))
   clock = 1_000
   epochs = 0
-  journal = await openAgentSessionJournal({
+  journal = await journals.open({
     identity: IDENTITY,
     journalDir: root,
     now: tick,
@@ -79,6 +81,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -477,12 +480,20 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
         ts: tick()
       }) as JournalRow
   )
-  await appendFile(
-    join(root, JOURNAL_LOG_FILE),
-    `${full.map(serializeJournalRow).join('\n')}\n`,
-    'utf-8'
-  )
-  return openAgentSessionJournal({ identity: IDENTITY, journalDir: root, now: tick })
+  // Rows are staged straight into the session database: the reopen below has to
+  // see them exactly as a previous writer would have committed them.
+  await journal.close()
+  const opened = openJournalDatabase(journalDatabaseFile(root))
+  try {
+    opened.db.exec('BEGIN IMMEDIATE')
+    for (const row of full) {
+      insertJournalRow(opened.db, IDENTITY.sessionId, row)
+    }
+    opened.db.exec('COMMIT')
+  } finally {
+    opened.db.close()
+  }
+  return journals.open({ identity: IDENTITY, journalDir: root, now: tick })
 }
 
 describe('pre-existing oversized identities', () => {

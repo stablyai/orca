@@ -36,7 +36,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     nativeChatInputLeaseReady,
     nativeChatController,
     getActiveWorktreeConnectionId,
-    refreshCanPaste
+    refreshCanPaste,
+    activeSessionTab
   } = scope
   const handlePaste = useMobileTerminalPaste({
     client,
@@ -80,6 +81,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     getActiveWorktreeConnectionId,
     beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
     nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
+    structuredNativeChat: activeSessionTab?.type === 'agent-session',
     readSeededLaunchDraft: nativeChatController.readSeededLaunchDraft,
     showToast,
     onNativeChatSendError: nativeChatSendError.show,

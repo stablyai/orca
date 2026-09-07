@@ -5,6 +5,7 @@ import type {
   Automation,
   AutomationDispatchResult,
   AutomationRun,
+  AutomationRunsPage,
   AutomationRunTrigger
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -12,6 +13,10 @@ import {
   nextAutomationRunNumber,
   pruneAutomationRuns
 } from '../../../shared/automation-run-retention'
+import {
+  compareAutomationRunsNewestFirst,
+  paginateAutomationRuns
+} from '../../../shared/automation-run-cursor'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -36,14 +41,27 @@ function touchAutomation(state: PersistedState, automationId: string, now: numbe
   )
 }
 
-export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
+function sortedAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   const runs = state.automationRuns ?? []
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
     .map((run) => ({
       ...run,
       precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
     }))
-    .sort((left, right) => right.createdAt - left.createdAt)
+    .sort(compareAutomationRunsNewestFirst)
+}
+
+export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
+  return sortedAutomationRuns(state, automationId)
+}
+
+export function listAutomationRunsPage(
+  state: PersistedState,
+  automationId: string | undefined,
+  limit = 100,
+  cursor?: string
+): AutomationRunsPage {
+  return paginateAutomationRuns(sortedAutomationRuns(state, automationId), limit, cursor)
 }
 
 export function createAutomationRun(

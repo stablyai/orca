@@ -4,11 +4,24 @@
 /config/scripts/**/*.mjs text eol=lf
 /skill-guides/*.md text eol=lf
 /skill-stubs/*.md text eol=lf
+/skill-stubs/_shared/*.md text eol=lf
 /skills/*/SKILL.md text eol=lf
 /src/cli/bundled-skill-guides.ts text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
-# pnpm hashes every patch byte-for-byte, so a CRLF checkout breaks the install.
+# Relay assets are copied verbatim into the bundle and hashed byte-for-byte into
+# .version, which names the immutable remote install dir. A CRLF checkout makes a
+# Windows-built client disagree with a mac/Linux-built one on the same release,
+# so one host ends up with two relay trees (#17886 review).
+/config/relay-assets/** text eol=lf
+# Pin the bytes so a patch reads and diffs identically on every host. It is NOT
+# what makes the hash right: pnpm hashes a patch LF-normalized, so a CRLF checkout
+# cannot change it. Believing otherwise put a hand-computed raw digest in the
+# lockfile twice and broke every install (#17886).
+# These files are stored LF, which is not always the encoding they were written
+# against -- @vscode/windows-process-tree ships CRLF sources -- so any code that
+# runs `git apply` on one must force `-c core.autocrlf=input` rather than trust
+# the host's setting. See config/scripts/windows-process-tree-gyp-rebuild.mjs.
 /config/patches/*.patch -text
 # The xterm bundle hunks also make a diff nobody can read; review the hand-written
 # source patch under xterm-src/ instead. The sibling patches stay diffable.
@@ -18,3 +31,6 @@
 # the reviewable change, and pin LF because they are compared byte-for-byte.
 # Not -diff: the shell diff is the review surface when a wrapper does change.
 /src/main/__fixtures__/shell-wrapper-snapshots/*.txt linguist-generated=true text eol=lf
+# Generated runtime English subset: compared byte-for-byte by
+# verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
+/src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf

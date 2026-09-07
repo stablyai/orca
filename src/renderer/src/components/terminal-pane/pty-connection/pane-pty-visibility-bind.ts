@@ -193,13 +193,18 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
       // Do not strand a successful spawn because a delivery callback failed.
     }
   }
-  session.onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
+  session.onPtyRebind = (
+    ptyId: string,
+    replacedPtyId: string,
+    incarnationId?: string | null
+  ): void => {
     if (session.deps.paneTransportsRef.current.get(session.pane.id) !== session.transport) {
       return
     }
     if (!session.canAdoptCapturedDirectSshRetryPty(ptyId)) {
       return
     }
+    session.remotePtyIncarnationId = incarnationId ?? null
     // Why: provider handle rotation keeps the existing pane/session generation;
     // replace its stale store identity without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { ClaudeManagedAccount } from '../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../shared/local-account-runtime'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { shouldStripClaudeAuthEnvForAccount } from '../environment'
 import { getDefaultWslDistro, getWslHome } from '../../wsl'
 import {
   getSelectedClaudeAccountIdForTarget,
@@ -69,7 +70,10 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
       wslDistro: null,
       wslLinuxConfigDir: null,
       envPatch: paths.envPatch,
-      stripAuthEnv: Boolean(activeAccountId && activeAccount?.managedAuthRuntime !== 'wsl'),
+      stripAuthEnv: shouldStripClaudeAuthEnvForAccount(
+        settings.claudeManagedAccounts,
+        activeAccountId
+      ),
       managedRefreshDeferredByLivePty: Boolean(
         activeAccountId &&
         activeAccount?.managedAuthRuntime !== 'wsl' &&

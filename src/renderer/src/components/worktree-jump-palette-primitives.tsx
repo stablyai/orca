@@ -1,5 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import type React from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
@@ -7,6 +6,8 @@ import type { MatchRange, PaletteSearchResult } from '@/lib/worktree-palette-sea
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+
+const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
 
 export function PaletteRowShortcutBadge({
   index,
@@ -30,10 +31,12 @@ export function PaletteRowShortcutBadge({
 
 export function HighlightedText({
   text,
-  matchRanges
+  matchRanges,
+  highlightClassName = 'font-semibold text-foreground'
 }: {
   text: string
   matchRanges?: readonly MatchRange[] | null
+  highlightClassName?: string
 }): React.JSX.Element {
   const ranges = (matchRanges ?? []).filter(
     (range) => range.start < range.end && range.start < text.length
@@ -51,7 +54,7 @@ export function HighlightedText({
     }
     if (end > start) {
       parts.push(
-        <span className="font-semibold text-foreground" key={`${start}-${end}`}>
+        <span className={highlightClassName} key={`${start}-${end}`}>
           {text.slice(start, end)}
         </span>
       )
@@ -69,6 +72,7 @@ export function PaletteOpenTabPrimaryLine({
   titleRanges,
   secondaryText,
   secondaryRanges,
+  secondaryMatches = NO_SECONDARY_MATCHES,
   worktreeName,
   worktreeRanges,
   sessionAge,
@@ -78,6 +82,7 @@ export function PaletteOpenTabPrimaryLine({
   titleRanges: readonly MatchRange[]
   secondaryText: string
   secondaryRanges: readonly MatchRange[]
+  secondaryMatches?: readonly { text: string; ranges: readonly MatchRange[] }[]
   worktreeName: string
   worktreeRanges: readonly MatchRange[]
   sessionAge?: string
@@ -85,12 +90,15 @@ export function PaletteOpenTabPrimaryLine({
 }): React.JSX.Element {
   const showSecondary = secondaryText.trim().length > 0
   const showWorktree = worktreeName.trim().length > 0
+  const additionalSecondaryMatches = secondaryMatches.filter(
+    (match) => match.text && match.text !== secondaryText
+  )
 
   return (
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       <span
         data-slot="palette-open-tab-title"
-        className="min-w-0 flex-1 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
+        className="min-w-0 flex-auto truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
       >
         <HighlightedText text={title} matchRanges={titleRanges} />
       </span>
@@ -113,6 +121,37 @@ export function PaletteOpenTabPrimaryLine({
           <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
             <HighlightedText text={secondaryText} matchRanges={secondaryRanges} />
           </span>
+        </>
+      ) : null}
+      {additionalSecondaryMatches.length ? (
+        <>
+          {/* Tab selects the palette filter, so the badge stays out of the tab order and
+              reads its matches through the row's own accessible name instead. */}
+          <span className="sr-only" data-slot="palette-open-tab-extra-matches">
+            {additionalSecondaryMatches.map((match) => match.text).join(', ')}
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                aria-hidden
+                tabIndex={-1}
+                className="shrink-0 self-center rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
+              >
+                +{additionalSecondaryMatches.length}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4} align="start" className="max-w-96 space-y-1">
+              {additionalSecondaryMatches.map((match) => (
+                <div className="break-all" key={match.text}>
+                  <HighlightedText
+                    text={match.text}
+                    matchRanges={match.ranges}
+                    highlightClassName="font-semibold text-inherit"
+                  />
+                </div>
+              ))}
+            </TooltipContent>
+          </Tooltip>
         </>
       ) : null}
       {showWorktree ? (

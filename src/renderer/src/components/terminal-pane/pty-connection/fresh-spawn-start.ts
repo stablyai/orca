@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
+import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
 import { STARTUP_CWD_FALLBACK_NOTICE } from './startup-cwd-fallback-notice'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pty-connect-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
@@ -46,6 +47,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       return Promise.resolve(null)
     }
     session.authoritativeReattachGeneration += 1
+    // Every fresh connect creates or rebinds a PTY. Do not let a legacy
+    // response that omits `incarnationId` inherit the predecessor's fence.
+    session.remotePtyIncarnationId = null
     session.clearPaneMode2031State()
     session.clearHiddenOutputRestoreState()
     // Why: a canceled old replay clear can preserve xterm's native
@@ -188,6 +192,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId
             : null
+        // Old hosts may return a string or an object without the optional
+        // field; either way remote evidence must remain client-only
+        // unverifiable until a stamped attach result arrives.
+        session.remotePtyIncarnationId = connectResult?.incarnationId ?? null
         if (connectResult?.isReattach) {
           session.pendingStartupCommand = null
           const accepted = await session.handleReattachResult(
@@ -324,7 +332,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         ) {
           return
         }
-        session.settleDirectSshPaneRetryAttempt(session.directSshRetryAttempt, 'failed')
+        settleSpawnThatLeftPaneUnbound(session)
       })
     })
     // Why: split panes in the same tab can spawn concurrently. Key by pane

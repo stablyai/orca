@@ -1,4 +1,6 @@
 import { execFile, execFileSync } from 'node:child_process'
+import { runProcess, runProcessSync, type ProcessSpec } from '../shared/child-process/run-process'
+import { buildWslExecArgs } from '../shared/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from './wsl-interop-spawn-directory'
 
 type WslAvailabilityCache =
@@ -94,6 +96,55 @@ function cacheWslAvailabilityProbeResult(error: unknown, startedAtGeneration: nu
   return !error
 }
 
+// `wsl --status` exits 0x1bc when the WSL2 kernel package is missing -- a package
+// a WSL1 distro never needed. Node keeps the Windows DWORD; the console prints the
+// signed form, and either spelling can reach us.
+function isMissingWsl2KernelStatus(error: unknown): boolean {
+  const failure = error as { status?: unknown; code?: unknown } | null
+  return [failure?.status, failure?.code].some((code) => code === -444 || code === 4_294_966_852)
+}
+
+// Cheapest proof the default guest runs: no login shell, no output to parse.
+function defaultGuestExecutionProbe(): ProcessSpec {
+  return {
+    program: 'wsl.exe',
+    args: buildWslExecArgs(undefined, ['/bin/true']),
+    cwd: resolveWslInteropSpawnCwd(),
+    timeoutMs: WSL_AVAILABILITY_PROBE_TIMEOUT_MS,
+    maxOutputBytes: 4096
+  }
+}
+
+/**
+ * The `--status` error still worth caching, or null once the guest ran anyway.
+ *
+ * Why it returns that error rather than a fresh negative: a guest probe that could not
+ * spawn means "could not ask", and minting an answer for that is the bug this subsystem
+ * keeps re-shipping (docs/reference/wsl-probe-failure-semantics.md).
+ */
+function wslStatusErrorAfterGuestProbe(error: unknown): unknown {
+  if (!isMissingWsl2KernelStatus(error)) {
+    return error
+  }
+  try {
+    return runProcessSync(defaultGuestExecutionProbe()).code === 0 ? null : error
+  } catch {
+    return error
+  }
+}
+
+/** Async twin of `wslStatusErrorAfterGuestProbe`; the sync/async pair share one cache. */
+async function wslStatusErrorAfterGuestProbeAsync(error: unknown): Promise<unknown> {
+  if (!isMissingWsl2KernelStatus(error)) {
+    return error
+  }
+  try {
+    return (await runProcess(defaultGuestExecutionProbe())).code === 0 ? null : error
+  } catch {
+    return error
+  }
+}
+
 function probeWslStatus(): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(
@@ -147,7 +198,10 @@ export function isWslAvailable(): boolean {
     })
     return cacheWslAvailabilityProbeResult(null, startedAtGeneration)
   } catch (error) {
-    return cacheWslAvailabilityProbeResult(error, startedAtGeneration)
+    return cacheWslAvailabilityProbeResult(
+      wslStatusErrorAfterGuestProbe(error),
+      startedAtGeneration
+    )
   }
 }
 
@@ -176,7 +230,12 @@ export function isWslAvailableAsync(): Promise<boolean> {
   const startedAtGeneration = wslAvailabilityCacheGeneration
   wslAvailabilityProbeInFlight = probeWslStatus()
     .then(() => cacheWslAvailabilityProbeResult(null, startedAtGeneration))
-    .catch((error: unknown) => cacheWslAvailabilityProbeResult(error, startedAtGeneration))
+    .catch(async (error: unknown) =>
+      cacheWslAvailabilityProbeResult(
+        await wslStatusErrorAfterGuestProbeAsync(error),
+        startedAtGeneration
+      )
+    )
     .finally(() => {
       wslAvailabilityProbeInFlight = null
     })

@@ -100,6 +100,12 @@ export function scheduleRemoteWatcherRetryCore(
             listeners.filter((_, index) => results[index] === 'installed')
           )
         }
+        // Why capacity leaves the fast window: the relay is refusing on a full watch-root cap, and a
+        // 1 Hz reinstall per refused root is exactly the load that keeps the cap busy (#11196).
+        if (results.some((result) => result === 'capacity')) {
+          dependencies.scheduleDormant(connectionId, worktreePath)
+          return
+        }
         // Why: don't re-arm on 'cancelled' (renderer stopped watching) — it would fire a stale overflow when the 60s window expires.
         if (results.some((result) => result === 'unavailable')) {
           for (const listener of listeners) {

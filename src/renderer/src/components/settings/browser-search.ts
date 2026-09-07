@@ -35,6 +35,10 @@ export function getTerminalLinkActionSearchKeywords(platform: BrowserShortcutPla
       'terminal'
     ),
     ...translateSearchKeyword(
+      'auto.components.settings.browser.search.terminalLinkActions.chat',
+      'chat'
+    ),
+    ...translateSearchKeyword(
       'auto.components.settings.browser.search.terminalLinkActions.click',
       'click'
     ),
@@ -182,7 +186,7 @@ export function getBrowserPaneSearchEntries(
     {
       title: translate(
         'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
-        'Show terminal link actions'
+        'Show link actions'
       ),
       description: getTerminalLinkActionsDescription(platform),
       keywords: getTerminalLinkActionSearchKeywords(platform)

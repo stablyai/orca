@@ -1,3 +1,7 @@
+import type {
+  AgentSessionRewindReason,
+  AgentSessionRewindSupport
+} from '../../../shared/agent-session-rewind'
 // What the wire needs from a provider adapter.
 //
 // Phase 2 implements this over the Codex app-server and the Claude Agent SDK;
@@ -8,6 +12,7 @@
 
 import type {
   AgentJournalItemIdentity,
+  AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -17,7 +22,9 @@ import type {
   AgentSessionProcessIdentity
 } from '../../../shared/agent-session-record'
 import type {
+  AgentSessionBackgroundTaskState,
   AgentSessionOptionsResult,
+  AgentSessionSlashCommand,
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -29,6 +36,26 @@ export class AgentSessionAcquisitionRefusal extends Error {
   ) {
     super(message)
     this.name = 'AgentSessionAcquisitionRefusal'
+  }
+}
+
+export class AgentSessionRewindRefusal extends AgentSessionAcquisitionRefusal {
+  constructor(readonly rewindReason: AgentSessionRewindReason) {
+    super(`agent_session_rewind:${rewindReason}`)
+  }
+}
+
+/**
+ * The provider's own root process was observed to exit, but its descendant tree
+ * could not be verified. The lease keys on the root's pid and start time, so its
+ * observed death releases the reservation; nothing is claimed about descendants.
+ * Never thrown when a descendant was observed still alive — that stays unproven.
+ */
+export class AgentSessionAcquisitionRootExitObservedError extends Error {
+  constructor(cause: unknown) {
+    // The provider's own diagnostic is the only thing the user can act on.
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.name = 'AgentSessionAcquisitionRootExitObservedError'
   }
 }
 
@@ -49,7 +76,7 @@ export type AgentSessionAcquisition = {
   acquisitionGeneration?: string
 }
 
-/** Acquisition validation failed before the adapter attempted to spawn. */
+/** Acquisition failed with first-hand proof that no provider process existed. */
 export class AgentSessionPreSpawnError extends Error {
   constructor(cause: unknown) {
     super(cause instanceof Error ? cause.message : String(cause), { cause })
@@ -81,6 +108,14 @@ export type StructuredAgentSessionLifecycleEvent = {
 
 export type StructuredAgentSessionAcquireInput = {
   identity: AgentSessionJournalIdentity
+  rewind?: {
+    targetUuid: string
+    previousLeafUuid: string
+    dropsTurn?: string
+    onProved?: (leafUuid: string) => Promise<void>
+  }
+  /** Recovery restores an unproved rewind's original cursor with ordinary branch proof. */
+  rewindRecovery?: { leafUuid: string; onProved: () => Promise<void> }
   fence: number
   spawnToken: string
   options?: Readonly<Record<string, string>>
@@ -105,7 +140,9 @@ export type StructuredAgentSessionAdapter = {
    *  at — the store rejects a link minted at any other fence. */
   acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition>
   /** Reaps an acquired provider when the host cannot commit or prove its lease.
-   *  Returns true only after provider child exit is proven. */
+   *  Returns true only after provider child exit is proven. Throws
+   *  `AgentSessionAcquisitionRootExitObservedError` when the provider root's own
+   *  exit was observed first-hand but its descendants could not be verified. */
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   dispatch(input: {
     sessionId: string
@@ -113,6 +150,33 @@ export type StructuredAgentSessionAdapter = {
     body: AgentJournalMessageItem
     fence: number
   }): Promise<AgentSessionDispatchOutcome>
+  rewindSupport?(sessionId: string): AgentSessionRewindSupport
+  recoverRewind?(input: {
+    sessionId: string
+    fence: number
+    beforeTurnId: string
+  }): Promise<
+    | { ok: true; items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
+    | { ok: false; reason: AgentSessionRewindReason }
+  >
+  rewind?(input: {
+    sessionId: string
+    fence: number
+    beforeTurnId: string
+    onPrepared?: (
+      items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
+    ) => Promise<void>
+    onReverted?: () => Promise<void>
+  }): Promise<
+    | { ok: true; items?: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
+    | { ok: false; reason: AgentSessionRewindReason }
+  >
+  compact?(input: {
+    turnId: string
+    sessionId: string
+    fence: number
+    onLateResult?: (result: { error?: string }) => Promise<void>
+  }): Promise<{ error?: string }>
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */
   cancelTurn(input: {
@@ -120,6 +184,15 @@ export type StructuredAgentSessionAdapter = {
     turnId: string
     fence: number
   }): Promise<{ cancelled: boolean }>
+  stopBackgroundTasks?(input: {
+    sessionId: string
+    fence: number
+    taskId?: string
+  }): Promise<{ cancelled: boolean }>
+  backgroundTaskState?(sessionId: string): AgentSessionBackgroundTaskState | null | undefined
+  /** The `/` surface the running provider reports for itself. Undefined when the
+   *  provider never reports one, which is what keeps the client on its catalog. */
+  readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
   /** Fires the provider callback for an approval or a question. The wire calls
    *  this only after the durable compare-and-set won, so it runs exactly once. */
   answerPrompt(input: {
@@ -133,6 +206,8 @@ export type StructuredAgentSessionAdapter = {
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
   readOptions?(input: { sessionId: string; fence: number }): Promise<AgentSessionOptionsResult>
+  /** Option keys skipped after a provider rejected their persisted restore value. */
+  readOptionRestoreFailures?(sessionId: string): readonly string[]
   /** Transcript path for journal recovery. Omit to let the existing session-file
    *  resolver discover it from the provider session id. */
   historyFilePath?(input: { identity: AgentSessionJournalIdentity }): Promise<string | null>
@@ -154,9 +229,15 @@ export async function rethrowAfterAgentSessionAcquisitionCleanup(
   try {
     released = (await adapter.releaseAcquisition?.({ sessionId })) === true
   } catch (cleanupError) {
-    throw new AgentSessionAcquisitionExitUnprovenError(
-      new AggregateError([cause, cleanupError], 'agent session acquisition cleanup failed')
-    )
+    // A root exit the cleanup observed first-hand keeps its classification and its
+    // provider diagnostic; the failure that triggered cleanup rides along as cause.
+    throw cleanupError instanceof AgentSessionAcquisitionRootExitObservedError
+      ? new AgentSessionAcquisitionRootExitObservedError(
+          new AggregateError([cause, cleanupError], cleanupError.message)
+        )
+      : new AgentSessionAcquisitionExitUnprovenError(
+          new AggregateError([cause, cleanupError], 'agent session acquisition cleanup failed')
+        )
   }
   if (released) {
     throw cause

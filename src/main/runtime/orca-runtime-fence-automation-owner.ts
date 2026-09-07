@@ -53,6 +53,23 @@ export class OrcaRuntimeWithFenceAutomationOwner extends OrcaRuntimeWithPtyForeg
     })
   }
 
+  listAutomationRunsPage(
+    automationId?: string,
+    expectedOwner?: AutomationOwnerPrecondition,
+    limit?: number,
+    cursor?: string
+  ) {
+    if (expectedOwner && !automationId) {
+      throw new Error('An expected owner requires an automation id.')
+    }
+    return this.automation.withExternalProbePriority(() => {
+      if (automationId) {
+        this.fenceAutomationOwner(automationId, expectedOwner, 'read')
+      }
+      return this.automation.listRunsPage(automationId, limit, cursor)
+    })
+  }
+
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
     const automation = this.automation.show(id)
     this.fenceAutomationOwner(id, expectedOwner, 'read')

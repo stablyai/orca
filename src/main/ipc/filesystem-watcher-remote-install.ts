@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import type { FsChangedPayload } from '../../shared/filesystem-entry-types'
+import { isWatchRootCapacityRefusal } from '../../shared/watch-root-capacity-refusal'
 import {
   WATCH_BATCH_MAX_WAIT_MS,
   WATCH_BATCH_TRAILING_MS
@@ -201,6 +202,10 @@ async function doInstallRemoteWatcher(
     batch.close()
     if (cancelToken.cancelled || cancelToken.abortController.signal.aborted) {
       return 'cancelled'
+    }
+    if (isWatchRootCapacityRefusal(err)) {
+      console.warn(`[filesystem-watcher] relay watch-root capacity reached for ${key}`)
+      return 'capacity'
     }
     console.warn(`[filesystem-watcher] SSH watcher unavailable for ${key}:`, err)
     return 'unavailable'

@@ -1,33 +1,41 @@
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
-import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStateHistoryEntry,
   type AgentStatusEntry,
+  type AgentStatusOrchestrationContext,
   type AgentStatusState,
-  type AgentType,
   type MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   ActivityEvent,
-  ActivityEventState,
   ActivityHookLiveAgentState,
   ActivityLiveAgentSnapshot,
   ActivityLiveAgentState
 } from './activity-thread-types'
 import { capActivityEvents } from './activity-event-cap'
+import { newestActivityHistoryEntries } from './activity-pane-events'
+import {
+  createActivityEventBuildCache,
+  resolvePaneBuild,
+  type ActivityEventBuildCache
+} from './activity-event-build-cache'
+import { appendUnsupportedAndRetainedEvents } from './activity-event-builder-sources'
+import {
+  attributedActivityTabContext,
+  buildActivityTabContext,
+  buildActivityTabHostIndex,
+  resolveActivityEventOwner,
+  type ActivityEventOwner
+} from './activity-event-builder-context'
 
-const STANDALONE_ACTIVITY_WORKTREE_REPO_ID = '__activity_standalone__'
-
-function isActivityEventState(state: AgentStatusState): state is ActivityEventState {
-  return state === 'done' || state === 'blocked' || state === 'waiting'
-}
+export { createActivityEventBuildCache, type ActivityEventBuildCache, newestActivityHistoryEntries }
 
 function isActivityHookLiveAgentState(
   state: AgentStatusState
@@ -50,142 +58,47 @@ function freshActivityLiveAgentState(
     : entry.state
 }
 
-function standaloneActivityWorktree(worktreeId: string): Worktree {
-  const displayName =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? 'Floating terminal' : 'Standalone terminal'
-  return {
-    id: worktreeId,
-    repoId: STANDALONE_ACTIVITY_WORKTREE_REPO_ID,
-    path: '',
-    head: '',
-    branch: displayName,
-    isBare: false,
-    isMainWorktree: false,
-    displayName,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0
-  }
-}
-
-function historyEntrySnapshot(
-  entry: AgentStatusEntry,
-  history: AgentStateHistoryEntry
-): AgentStatusEntry {
-  return {
-    ...entry,
-    state: history.state,
-    prompt: history.prompt,
-    updatedAt: history.startedAt,
-    stateStartedAt: history.startedAt,
-    stateHistory: [],
-    toolName: undefined,
-    toolInput: undefined,
-    lastAssistantMessage: undefined,
-    interrupted: history.interrupted
-  }
-}
-
-function appendActivityEvent(args: {
-  events: ActivityEvent[]
-  seenEventIds: Set<string>
-  state: ActivityEventState
-  timestamp: number
-  worktree: Worktree
-  repo: Repo | null
-  entry: AgentStatusEntry
-  tab: TerminalTab
-  agentType: AgentType
-  agentAlive: boolean
-  acknowledgedAt: number
-  migrationUnsupportedPtyId?: string
-}): void {
-  const id = `agent:${args.entry.paneKey}:${args.state}:${args.timestamp}`
-  if (args.seenEventIds.has(id)) {
-    return
-  }
-  args.seenEventIds.add(id)
-  args.events.push({
-    id,
-    state: args.state,
-    timestamp: args.timestamp,
-    worktree: args.worktree,
-    repo: args.repo,
-    entry: args.entry,
-    tab: args.tab,
-    agentType: args.agentType,
-    agentAlive: args.agentAlive,
-    migrationUnsupportedPtyId: args.migrationUnsupportedPtyId,
-    unread: args.acknowledgedAt < args.timestamp
-  })
-}
-
-function appendActivityEventsForEntry(args: {
-  events: ActivityEvent[]
-  seenEventIds: Set<string>
-  entry: AgentStatusEntry
-  worktree: Worktree
-  repo: Repo | null
-  tab: TerminalTab
-  agentType: AgentType
-  agentAlive: boolean
-  acknowledgedAt: number
-  migrationUnsupportedPtyId?: string
-}): void {
-  // Why: Activity is append-only; when a pane continues (done→working), stateHistory is the only record of the previous done/blocking event.
-  for (const history of args.entry.stateHistory) {
-    if (!isActivityEventState(history.state)) {
-      continue
-    }
-    appendActivityEvent({
-      ...args,
-      state: history.state,
-      timestamp: history.startedAt,
-      entry: historyEntrySnapshot(args.entry, history)
-    })
-  }
-
-  // Why: SessionStart creates an idle row, not an "Agent finished" activity event (STA-3386).
-  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
-    return
-  }
-  appendActivityEvent({
-    ...args,
-    state: args.entry.state,
-    timestamp: args.entry.stateStartedAt
-  })
-}
-
-type BuildActivityEventsArgs = {
+export type BuildActivityEventsArgs = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
+  unifiedTabsByWorktree?: Record<string, Tab[]>
   worktreeMap: Map<string, Worktree>
   repoMap: Map<string, Repo>
+  repos?: readonly Repo[]
+  resolveWorktree?: (worktreeId: string, executionHostId?: ExecutionHostId) => Worktree | undefined
   acknowledgedAgentsByPaneKey: Record<string, number>
+  /** Per-pane "Clear completed" cutoffs; events stamped at or before the cutoff are hidden. */
+  activityClearedAtByPaneKey?: Record<string, number>
   now: number
 }
 
-export function buildActivityEvents(args: BuildActivityEventsArgs): {
+export function buildActivityEvents(
+  args: BuildActivityEventsArgs,
+  cache?: ActivityEventBuildCache
+): {
   events: ActivityEvent[]
   liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
 } {
   const events: ActivityEvent[] = []
   const seenEventIds = new Set<string>()
-  const tabContext = new Map<string, { worktree: Worktree; tab: TerminalTab }>()
+  const tabContext = buildActivityTabContext(args.tabsByWorktree, args.unifiedTabsByWorktree)
+  const tabHostIndex = buildActivityTabHostIndex(args.unifiedTabsByWorktree)
+  const ownerCache = new Map<string, ActivityEventOwner>()
   const liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot> = {}
+  const seenCacheKeys = cache ? new Set<string>() : null
 
-  for (const [worktreeId, tabs] of Object.entries(args.tabsByWorktree)) {
-    const worktree = args.worktreeMap.get(worktreeId) ?? standaloneActivityWorktree(worktreeId)
-    for (const tab of tabs) {
-      tabContext.set(tab.id, { worktree, tab })
+  const pushPaneEvents = (paneEvents: ActivityEvent[]): void => {
+    // Why: a paneKey can appear in more than one source (live + retained overlap);
+    // event ids stay globally unique so the first source wins, as before.
+    for (const event of paneEvents) {
+      if (seenEventIds.has(event.id)) {
+        continue
+      }
+      seenEventIds.add(event.id)
+      events.push(event)
     }
   }
 
@@ -194,101 +107,64 @@ export function buildActivityEvents(args: BuildActivityEventsArgs): {
     if (!parsed) {
       continue
     }
-    const context = tabContext.get(parsed.tabId)
+    const context = tabContext.get(parsed.tabId) ?? attributedActivityTabContext(entry)
     if (!context) {
       continue
     }
-    const ackAt = args.acknowledgedAgentsByPaneKey[paneKey] ?? 0
+    const owner = resolveActivityEventOwner(
+      args,
+      context,
+      entry,
+      context.tab.ptyId,
+      tabHostIndex,
+      ownerCache
+    )
+    const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
     // Why: live status is separate from history; a fresh working turn updates the thread without counting as an unread done/blocked/waiting event.
+    // The freshness check runs on the raw entry (orchestration merges never change state/timing fields).
     const liveState = freshActivityLiveAgentState(entry, args.now)
-    if (liveState) {
-      liveAgentByPaneKey[paneKey] = {
-        state: liveState,
-        timestamp: entry.stateStartedAt,
-        worktree: context.worktree,
-        repo: args.repoMap.get(context.worktree.repoId) ?? null,
+    const { events: paneEvents, live } = resolvePaneBuild(
+      {
+        cacheKey: `live:${paneKey}`,
+        source: entry,
         entry,
+        orchestration,
+        worktree: owner.worktree,
+        repo: owner.repo,
         tab: context.tab,
-        agentType: entry.agentType ?? 'unknown'
+        agentType: entry.agentType ?? 'unknown',
+        agentAlive: true,
+        acknowledgedAt: args.acknowledgedAgentsByPaneKey[paneKey] ?? 0,
+        clearedAt: args.activityClearedAtByPaneKey?.[paneKey] ?? 0,
+        liveState
+      },
+      cache,
+      seenCacheKeys
+    )
+    if (live) {
+      liveAgentByPaneKey[paneKey] = live
+    }
+    pushPaneEvents(paneEvents)
+  }
+
+  appendUnsupportedAndRetainedEvents({
+    args,
+    cache,
+    seenCacheKeys,
+    liveAgentByPaneKey,
+    tabContext,
+    resolveOwner: (context, entry, terminalPtyId) =>
+      resolveActivityEventOwner(args, context, entry, terminalPtyId, tabHostIndex, ownerCache),
+    pushPaneEvents
+  })
+
+  // Why: evict panes gone from every source so the cache can't outgrow the live state maps.
+  if (cache && seenCacheKeys) {
+    for (const cacheKey of cache.panes.keys()) {
+      if (!seenCacheKeys.has(cacheKey)) {
+        cache.panes.delete(cacheKey)
       }
     }
-    appendActivityEventsForEntry({
-      events,
-      seenEventIds,
-      worktree: context.worktree,
-      repo: args.repoMap.get(context.worktree.repoId) ?? null,
-      entry,
-      tab: context.tab,
-      agentType: entry.agentType ?? 'unknown',
-      agentAlive: true,
-      acknowledgedAt: ackAt
-    })
   }
-
-  appendUnsupportedAndRetainedEvents(args, events, seenEventIds, liveAgentByPaneKey, tabContext)
   return { events: capActivityEvents(events), liveAgentByPaneKey }
-}
-
-function appendUnsupportedAndRetainedEvents(
-  args: BuildActivityEventsArgs,
-  events: ActivityEvent[],
-  seenEventIds: Set<string>,
-  liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>,
-  tabContext: Map<string, { worktree: Worktree; tab: TerminalTab }>
-): void {
-  for (const unsupported of Object.values(args.migrationUnsupportedByPtyId ?? {})) {
-    const entry = migrationUnsupportedToAgentStatusEntry(unsupported)
-    const parsed = entry ? parsePaneKey(entry.paneKey) : null
-    const context = parsed ? tabContext.get(parsed.tabId) : null
-    if (!entry || !context) {
-      continue
-    }
-    const ackAt = args.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0
-    liveAgentByPaneKey[entry.paneKey] = {
-      state: 'blocked',
-      timestamp: entry.stateStartedAt,
-      worktree: context.worktree,
-      repo: args.repoMap.get(context.worktree.repoId) ?? null,
-      entry,
-      tab: context.tab,
-      agentType: entry.agentType ?? 'unknown'
-    }
-    appendActivityEventsForEntry({
-      events,
-      seenEventIds,
-      worktree: context.worktree,
-      repo: args.repoMap.get(context.worktree.repoId) ?? null,
-      entry,
-      tab: context.tab,
-      agentType: entry.agentType ?? 'unknown',
-      agentAlive: false,
-      acknowledgedAt: ackAt,
-      migrationUnsupportedPtyId: unsupported.ptyId
-    })
-  }
-
-  for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
-    if (!parsePaneKey(paneKey)) {
-      continue
-    }
-    const worktree =
-      args.worktreeMap.get(retained.worktreeId) ??
-      (args.tabsByWorktree[retained.worktreeId]
-        ? standaloneActivityWorktree(retained.worktreeId)
-        : null)
-    if (!worktree) {
-      continue
-    }
-    appendActivityEventsForEntry({
-      events,
-      seenEventIds,
-      worktree,
-      repo: args.repoMap.get(worktree.repoId) ?? null,
-      entry: retained.entry,
-      tab: retained.tab,
-      agentType: retained.agentType,
-      agentAlive: false,
-      acknowledgedAt: args.acknowledgedAgentsByPaneKey[paneKey] ?? 0
-    })
-  }
 }

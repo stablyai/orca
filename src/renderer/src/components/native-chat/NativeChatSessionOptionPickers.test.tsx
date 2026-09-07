@@ -165,6 +165,7 @@ function model(overrides: Partial<SessionOptionDescriptor> = {}): SessionOptionD
       ]
     },
     valueSource: 'applied',
+    transport: 'catalog',
     settable: true,
     ...overrides
   }
@@ -183,6 +184,7 @@ const effort: SessionOptionDescriptor = {
     ]
   },
   valueSource: 'applied',
+  transport: 'catalog',
   settable: true
 }
 
@@ -192,6 +194,7 @@ const fast: SessionOptionDescriptor = {
   category: 'mode',
   kind: { type: 'boolean', currentValue: true },
   valueSource: 'applied',
+  transport: 'catalog',
   settable: true
 }
 
@@ -342,16 +345,47 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByRole('button', { name: /^Effort/ })).toBeNull()
   })
 
-  it('shows the unconfirmed hint for dispatched values', () => {
+  // The terminal transport typed the value at the agent and has not read it back,
+  // so the pill says so; the structured transport's own per-turn report is the
+  // confirmation, which makes the same hedge transient noise there.
+  it('hedges a dispatched value the terminal transport produced', () => {
     render(
       <NativeChatSessionOptionPickers
         surface={surface}
-        snapshot={[model({ valueSource: 'dispatched' })]}
+        snapshot={[model({ valueSource: 'dispatched', transport: 'catalog' })]}
         isWorking={false}
       />
     )
-    expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
+    expect(screen.getByText('Model')).not.toBeNull()
+    expect(screen.getAllByText('Sent to the agent — not confirmed').length).toBeGreaterThan(0)
   })
+
+  it('does not hedge a dispatched value the structured transport produced', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model({ valueSource: 'dispatched', transport: 'agent-session' })]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByText('Model')).not.toBeNull()
+    expect(screen.queryByText(/not confirmed/)).toBeNull()
+  })
+
+  it.each(['catalog', 'agent-session'] as const)(
+    'does not hedge a reported value on the %s transport',
+    (transport) => {
+      render(
+        <NativeChatSessionOptionPickers
+          surface={surface}
+          snapshot={[model({ valueSource: 'reported', transport })]}
+          isWorking={false}
+        />
+      )
+      expect(screen.getByText('Model')).not.toBeNull()
+      expect(screen.queryByText(/not confirmed/)).toBeNull()
+    }
+  )
 
   it('renders agent-picker routes as one action instead of radio choices', async () => {
     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
@@ -449,6 +483,7 @@ describe('NativeChatSessionOptionPickers', () => {
             category: 'mode',
             kind: { type: 'boolean' },
             valueSource: 'unknown',
+            transport: 'catalog',
             settable: true
           }
         ]}
@@ -463,26 +498,7 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(setOption).toHaveBeenCalledWith('thinking', false))
   })
 
-  it('does not show unconfirmed for applied flip-only booleans', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[
-          model(),
-          {
-            ...fast,
-            kind: { type: 'boolean', currentValue: true },
-            // Why: flip-only tracks as applied — never a healable dispatched state.
-            valueSource: 'applied'
-          }
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.queryByText('Sent to the agent — not confirmed')).toBeNull()
-  })
-
-  it('shows unconfirmed for confirmable dispatched booleans', () => {
+  it('tooltips a dispatched option pill with the category alone', () => {
     render(
       <NativeChatSessionOptionPickers
         surface={surface}
@@ -494,12 +510,14 @@ describe('NativeChatSessionOptionPickers', () => {
             category: 'mode',
             kind: { type: 'boolean', currentValue: true },
             valueSource: 'dispatched',
+            transport: 'catalog',
             settable: true
           }
         ]}
         isWorking={false}
       />
     )
-    expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
+    expect(screen.getAllByText('Thinking').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Sent to the agent — not confirmed').length).toBeGreaterThan(0)
   })
 })

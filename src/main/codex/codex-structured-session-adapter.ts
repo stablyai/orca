@@ -1,7 +1,10 @@
+import * as codexRewind from './codex-structured-rewind'
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
+import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -46,6 +49,7 @@ export type {
 } from './codex-structured-session-state'
 
 export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
+  private readonly compactions = new StructuredSessionCompaction()
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
   private readonly turnCancellation: CodexStructuredTurnCancellation
@@ -71,7 +75,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     })
   }
 
-  supportsLocation = supportsCodexStructuredLocation
+  supportsLocation = (location: Parameters<typeof supportsCodexStructuredLocation>[0]): boolean =>
+    supportsCodexStructuredLocation(location, this.deps.isWindowsProcessStartTimeAvailable)
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireCodexStructuredSession({
@@ -115,6 +120,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     method: string,
     params: unknown
   ): CodexJournalTranslationAdmission {
+    codexRewind.observeCodexRewindActivity(session, method, params)
     if (this.turnCancellation.handleNotification(sessionId, session, method, params)) {
       return { accepted: true }
     }
@@ -131,6 +137,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     const admission = session.translator?.handle(event) ?? { accepted: true }
     if (!admission.accepted) {
       return admission
+    }
+    if (event.type === 'notification') {
+      this.compactions.codex(event.sessionId, event.method, event.params)
+    }
+    if (event.type === 'ended') {
+      this.compactions.ended(event.sessionId)
     }
     this.deps.onEvent?.(event)
     return admission
@@ -167,8 +179,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     fence: number
   }): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
-    await this.turnCancellation.captureBaseline(session)
-    return dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
+    session.dispatchPending = true
+    try {
+      await this.turnCancellation.captureBaseline(session)
+      return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
+    } finally {
+      session.dispatchPending = false
+    }
   }
 
   async cancelTurn(input: {
@@ -177,7 +194,44 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     fence: number
   }): Promise<{ cancelled: boolean }> {
     const session = this.session(input.sessionId)
-    return this.turnCancellation.cancel(session, input.turnId)
+    const turnId = this.compactions.providerTurnId(input.sessionId, input.turnId)
+    return turnId ? this.turnCancellation.cancel(session, turnId) : { cancelled: false }
+  }
+
+  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
+    this.sessions.get(sessionId)?.historyMode === 'legacy'
+      ? { supported: false, reason: 'history-not-paginated' }
+      : { supported: true }
+
+  rewind: NonNullable<StructuredAgentSessionAdapter['rewind']> = (input) =>
+    codexRewind.rewindCodexSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
+
+  recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
+    codexRewind.recoverCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
+
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
+    const session = this.session(input.sessionId)
+    return this.compactions.run(
+      input.sessionId,
+      session.threadId,
+      async () => {
+        await this.turnCancellation.captureBaseline(session)
+        return session.connection
+          .request(
+            'thread/compact/start',
+            { threadId: session.threadId },
+            { timeoutMs: this.deps.requestTimeoutMs }
+          )
+          .catch((error) => {
+            if (isCodexAppServerRequestError(error)) {
+              return { error: error.message }
+            }
+            throw error
+          })
+      },
+      input.onLateResult,
+      input.turnId
+    )
   }
 
   async answerPrompt(input: {
