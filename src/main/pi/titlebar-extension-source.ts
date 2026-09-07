@@ -1,6 +1,9 @@
+import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
+
 export const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 
-export function getPiTitlebarExtensionSource(): string {
+export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
   return [
     'const BRAILLE_FRAMES = [',
     "  '\\u280b',",
@@ -14,6 +17,7 @@ export function getPiTitlebarExtensionSource(): string {
     "  '\\u2807',",
     "  '\\u280f'",
     ']',
+    ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
     '',
     'const FRAME_INTERVAL_MS = 80',
     'const AGENT_END_IDLE_RECHECK_MS = 25',
@@ -113,6 +117,13 @@ export function getPiTitlebarExtensionSource(): string {
     "  pi.on('agent_end', async (event, ctx) => {",
     '    if (event?.willContinue === true) {',
     '      clearPendingAgentEndCheck()',
+    '      return',
+    '    }',
+    '    // Why: OMP marks continuation explicitly. A terminal agent_end can',
+    '    // therefore stop synchronously instead of depending on a later idle',
+    '    // poll that may never run after the final completion hook (#18262).',
+    '    if (isOmpRuntime()) {',
+    '      stopAnimation(ctx)',
     '      return',
     '    }',
     "    if (!ctx || typeof ctx.isIdle !== 'function') {",

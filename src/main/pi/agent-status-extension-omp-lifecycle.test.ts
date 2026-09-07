@@ -69,6 +69,68 @@ describe('OMP agent_end contract', () => {
     )
   })
 
+  it('retries a failed terminal completion post', async () => {
+    vi.useFakeTimers()
+    try {
+      let agentEndAttempts = 0
+      const harness = createAgentStatusExtensionHarness({
+        kind: 'omp',
+        fetchImpl: vi.fn(async (_url, init) => {
+          const hookName = JSON.parse(String(init?.body)).payload.hook_event_name as string
+          if (hookName !== 'agent_end') {
+            return { ok: true }
+          }
+          agentEndAttempts += 1
+          return { ok: agentEndAttempts > 1 }
+        })
+      })
+
+      await harness.callHook('agent_start')
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+      await harness.callHook('agent_end', { willContinue: false })
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      await vi.advanceTimersByTimeAsync(250)
+
+      await vi.waitFor(() =>
+        expect(postedHookNames(harness.fetchMock)).toEqual([
+          'agent_start',
+          'agent_end',
+          'agent_end'
+        ])
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels a pending completion retry when a new run starts', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = createAgentStatusExtensionHarness({
+        kind: 'omp',
+        fetchImpl: vi.fn(async (_url, init) => ({
+          ok: JSON.parse(String(init?.body)).payload.hook_event_name !== 'agent_end'
+        }))
+      })
+
+      await harness.callHook('agent_start')
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+      await harness.callHook('agent_end', { willContinue: false })
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+      await harness.callHook('before_agent_start', { prompt: 'next turn' })
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(postedHookNames(harness.fetchMock)).toEqual([
+        'agent_start',
+        'agent_end',
+        'before_agent_start'
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not apply the OMP contract to Pi or Prime', async () => {
     vi.useFakeTimers()
     try {
