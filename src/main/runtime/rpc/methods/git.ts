@@ -169,7 +169,8 @@ export const GIT_METHODS: RpcMethod[] = [
         params.worktree,
         params.publish,
         params.pushTarget,
-        params.forceWithLease
+        params.forceWithLease,
+        params.noVerify
       )
   }),
   defineMethod({

@@ -301,6 +301,18 @@ describe('git remote operations', () => {
     )
   })
 
+  it('passes --no-verify when requested', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('no branch'), { code: 1 }))
+
+    await gitPush('/repo', true, undefined, { noVerify: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
+      ['push', '--no-verify', '--set-upstream', 'origin', 'HEAD'],
+      { cwd: '/repo' }
+    )
+  })
+
   it('maps non-fast-forward push failures to an actionable message', async () => {
     gitExecFileAsyncMock
       .mockRejectedValueOnce(new Error('no branch'))

@@ -181,7 +181,12 @@ export async function rebaseRuntimeGitFromBase(
 
 export async function pushRuntimeGit(
   context: RuntimeGitContext,
-  args: { publish?: boolean; pushTarget?: GitPushTarget; forceWithLease?: boolean } = {}
+  args: {
+    publish?: boolean
+    pushTarget?: GitPushTarget
+    forceWithLease?: boolean
+    noVerify?: boolean
+  } = {}
 ): Promise<void> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind === 'local' || !context.worktreeId) {
@@ -191,7 +196,8 @@ export async function pushRuntimeGit(
       ...(context.worktreeId ? { worktreeId: context.worktreeId } : {}),
       ...(args.publish !== undefined ? { publish: args.publish } : {}),
       ...(args.pushTarget !== undefined ? { pushTarget: args.pushTarget } : {}),
-      ...(args.forceWithLease !== undefined ? { forceWithLease: args.forceWithLease } : {})
+      ...(args.forceWithLease !== undefined ? { forceWithLease: args.forceWithLease } : {}),
+      ...(args.noVerify !== undefined ? { noVerify: args.noVerify } : {})
     })
     return
   }
@@ -202,7 +208,8 @@ export async function pushRuntimeGit(
       worktree: toRuntimeWorktreeSelector(context.worktreeId),
       ...(args.publish !== undefined ? { publish: args.publish } : {}),
       ...(args.pushTarget !== undefined ? { pushTarget: args.pushTarget } : {}),
-      ...(args.forceWithLease !== undefined ? { forceWithLease: args.forceWithLease } : {})
+      ...(args.forceWithLease !== undefined ? { forceWithLease: args.forceWithLease } : {}),
+      ...(args.noVerify !== undefined ? { noVerify: args.noVerify } : {})
     },
     { timeoutMs: 30_000 }
   )

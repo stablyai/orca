@@ -347,6 +347,23 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('publishes with --no-verify when requested', async () => {
+    const store = createEditorStore()
+
+    await store.getState().pushBranch('wt-1', '/repo', true, undefined, undefined, {
+      noVerify: true
+    })
+
+    expect(gitPushMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      publish: true,
+      connectionId: undefined,
+      worktreeId: 'wt-1',
+      noVerify: true
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
   it('preserves actionable publish errors and refreshes upstream after rejection', async () => {
     const store = createEditorStore()
     const publishError = new Error(

@@ -26,6 +26,7 @@ export type DropdownActionKind =
   | 'rebase_base'
   | 'fetch'
   | 'publish'
+  | 'publish_no_verify'
 
 export type DropdownItem = {
   kind: DropdownActionKind

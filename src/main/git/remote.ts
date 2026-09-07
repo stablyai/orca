@@ -27,7 +27,7 @@ export async function gitPush(
   worktreePath: string,
   _publish = false,
   pushTarget?: GitPushTarget,
-  options: { forceWithLease?: boolean } & GitRuntimeOptions = {}
+  options: { forceWithLease?: boolean; noVerify?: boolean } & GitRuntimeOptions = {}
 ): Promise<void> {
   try {
     if (pushTarget) {
@@ -51,6 +51,7 @@ export async function gitPush(
     const args = [
       'push',
       ...(options.forceWithLease ? ['--force-with-lease'] : []),
+      ...(options.noVerify ? ['--no-verify'] : []),
       '--set-upstream',
       ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
     ]

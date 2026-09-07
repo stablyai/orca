@@ -34,7 +34,12 @@ export function createGitRemotePushPull(
       try {
         await pushRuntimeGit(
           { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
-          { publish, pushTarget, forceWithLease: options.forceWithLease }
+          {
+            publish,
+            pushTarget,
+            forceWithLease: options.forceWithLease,
+            noVerify: options.noVerify
+          }
         )
       } catch (error) {
         shouldRefreshAfterRejectedPush = isNonFastForwardRemoteError(error)

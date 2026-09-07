@@ -25,6 +25,7 @@ export type RemoteDropdownItems = {
   rebase: DropdownItem
   fetch: DropdownItem
   publish: DropdownItem
+  publishNoVerify: DropdownItem
 }
 
 export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDropdownItems {
@@ -229,5 +230,46 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
       publishBlockedByDetachedHead
   }
 
-  return { push, forcePush, pull, fastForward, sync, rebase, fetch, publish }
+  const publishNoVerify: DropdownItem = {
+    kind: 'publish_no_verify',
+    label:
+      publishBlockedByMergedPR || publishBlockedByPRLoading
+        ? 'PR Status'
+        : publishBlockedByOpenHostedReview
+          ? 'Linked Review'
+          : publishBlockedByDetachedHead
+            ? 'No Branch'
+            : translate(
+                'auto.components.right.sidebar.source.control.dropdown.items.publish.no.verify.label',
+                'Publish Branch (Skip Hooks)'
+              ),
+    title: upstreamLoading
+      ? 'Checking branch status…'
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : publishBlockedByOpenHostedReview
+            ? canPushLinkedReviewWithoutUpstream
+              ? 'Linked review branch already exists'
+              : 'Linked review branch target is unavailable'
+            : publishBlockedByDetachedHead
+              ? 'Check out a branch before publishing commits'
+              : hasUpstream
+                ? 'Branch is already published'
+                : translate(
+                    'auto.components.right.sidebar.source.control.dropdown.items.publish.no.verify.title',
+                    'Publish this branch to origin without running pre-push hooks'
+                  ),
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      hasUpstream ||
+      publishBlockedByPRLoading ||
+      publishBlockedByMergedPR ||
+      publishBlockedByOpenHostedReview ||
+      publishBlockedByDetachedHead
+  }
+
+  return { push, forcePush, pull, fastForward, sync, rebase, fetch, publish, publishNoVerify }
 }

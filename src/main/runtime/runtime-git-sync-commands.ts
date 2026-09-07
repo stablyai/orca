@@ -198,7 +198,8 @@ export class RuntimeGitSyncCommands {
     worktreeSelector: string,
     publish?: boolean,
     pushTarget?: GitPushTarget,
-    forceWithLease?: boolean
+    forceWithLease?: boolean,
+    noVerify?: boolean
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
@@ -208,7 +209,8 @@ export class RuntimeGitSyncCommands {
         : undefined
       this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.pushBranch(target.worktree.path, publish === true, materializedPushTarget, {
-        forceWithLease: forceWithLease === true
+        forceWithLease: forceWithLease === true,
+        noVerify: noVerify === true
       })
       return { ok: true }
     }
@@ -224,6 +226,7 @@ export class RuntimeGitSyncCommands {
     this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitPush(target.worktree.path, publish === true, materializedPushTarget, {
       forceWithLease: forceWithLease === true,
+      noVerify: noVerify === true,
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })

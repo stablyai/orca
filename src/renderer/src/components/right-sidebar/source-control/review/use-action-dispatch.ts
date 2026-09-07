@@ -83,6 +83,7 @@ export function useSourceControlActionDispatch({
         case 'sync':
         case 'fetch':
         case 'publish':
+        case 'publish_no_verify':
         case 'rebase_base':
           void runRemoteAction(kind === 'rebase_base' ? 'rebase' : kind)
       }

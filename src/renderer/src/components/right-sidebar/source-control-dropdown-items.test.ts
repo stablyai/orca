@@ -47,7 +47,8 @@ describe('resolveDropdownItems', () => {
       'sync',
       'rebase_base',
       'fetch',
-      'publish'
+      'publish',
+      'publish_no_verify'
     ])
   })
 
@@ -97,6 +98,8 @@ describe('resolveDropdownItems', () => {
     expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.publish.disabled).toBe(false)
+    expect(byKind.publish_no_verify.disabled).toBe(false)
+    expect(byKind.publish_no_verify.label).toBe('Publish Branch (Skip Hooks)')
     expect(byKind.fetch.disabled).toBe(false)
   })
 
@@ -115,6 +118,8 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.label).toBe('No Branch')
     expect(byKind.publish.title).toBe('Check out a branch before publishing commits')
     expect(byKind.publish.disabled).toBe(true)
+    expect(byKind.publish_no_verify.label).toBe('No Branch')
+    expect(byKind.publish_no_verify.disabled).toBe(true)
   })
 
   it('disables Publish Branch when branch already has an upstream', () => {
@@ -127,6 +132,7 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.publish.disabled).toBe(true)
+    expect(byKind.publish_no_verify.disabled).toBe(true)
   })
 
   it('renders counts on action labels when > 0', () => {
