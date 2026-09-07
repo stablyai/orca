@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getHelperMarkerPath, getRequestPath, getResultPath } from '../shared/serve-update-spool'
+import {
+  getHelperMarkerPath,
+  getCensusOkPath,
+  getRequestPath,
+  getResultPath
+} from '../shared/serve-update-spool'
 import {
   clearUpdateRequest,
   clearUpdateResult,
@@ -10,7 +15,6 @@ import {
   hasLinuxServeUpdateHelper,
   readHelperMarker,
   readServeUpdateResultFor,
-  readUpdateResult,
   resetLinuxServeUpdateHelperCache,
   writeUpdateRequest
 } from './serve-update-spool'
@@ -67,17 +71,10 @@ describe('serve-update-spool', () => {
     expect(() => readFileSync(getRequestPath(spoolDir), 'utf8')).toThrow()
   })
 
-  it('reads a well-formed result and rejects malformed ones', () => {
-    expect(readUpdateResult()).toBeNull()
-    writeFileSync(
-      getResultPath(spoolDir),
-      JSON.stringify({ phase: 'ok', targetVersion: '1.4.198' })
-    )
-    expect(readUpdateResult()).toEqual({ phase: 'ok', targetVersion: '1.4.198' })
-    writeFileSync(getResultPath(spoolDir), JSON.stringify({ phase: 'bogus' }))
-    expect(readUpdateResult()).toBeNull()
-    writeFileSync(getResultPath(spoolDir), 'not json')
-    expect(readUpdateResult()).toBeNull()
+  it('spooling a request clears a stale census continuation', () => {
+    writeFileSync(getCensusOkPath(spoolDir), '999999')
+    writeUpdateRequest(VALID_REQUEST)
+    expect(() => readFileSync(getCensusOkPath(spoolDir), 'utf8')).toThrow()
   })
 
   it('binds the result to the spooled attemptId and target version', () => {

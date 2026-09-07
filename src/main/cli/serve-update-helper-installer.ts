@@ -1,5 +1,6 @@
 import { quoteShell } from './cli-install-path-format'
 import { buildServeUpdateHelperScript } from './serve-update-helper-script'
+import { SERVE_UPDATE_HELPER_VERSION } from '../../shared/serve-update-spool'
 
 /** Root-owned install location, outside the service-user-writable spool dir. */
 export const SERVE_UPDATE_HELPER_INSTALL_PATH = '/usr/lib/orca/serve-update-helper.sh'
@@ -33,6 +34,14 @@ export function buildServeUpdateHelperInstallScript(input: ServeUpdateHelperInst
   if (!/^[a-z_][a-z0-9_-]{0,31}$/.test(input.serviceUser)) {
     throw new Error(`invalid service user name: ${input.serviceUser}`)
   }
+  // Why: the helper is embedded in a heredoc; a newline in a flag value could terminate
+  // it early and execute trailing text as root at install time. quoteShell does not
+  // encode newlines, so anything carrying one is refused instead of escaped.
+  for (const [name, value] of Object.entries(input)) {
+    if (/[\r\n]/.test(value)) {
+      throw new Error(`${name} must not contain newlines`)
+    }
+  }
   const helperScript = buildServeUpdateHelperScript(input)
   return `#!/usr/bin/env bash
 set -euo pipefail
@@ -62,10 +71,11 @@ ORCA_HELPER_EOF
 chown root:root ${q(SERVE_UPDATE_HELPER_INSTALL_PATH)}
 chmod 0755 ${q(SERVE_UPDATE_HELPER_INSTALL_PATH)}
 
-# Service user can run exactly the helper, no other command, no password.
+# Service user can run exactly the helper, no other command, no arguments, no password.
 # Why unquoted: sudoers is not a shell — quoting would change (or break) the rule.
+# Why the "" argument spec: without it sudo permits arbitrary argv; the helper takes none.
 cat > ${q(`${SERVE_UPDATE_SUDOERS_PATH}.new`)} <<ORCA_SUDOERS_EOF
-${input.serviceUser} ALL=(root) NOPASSWD: ${SERVE_UPDATE_HELPER_INSTALL_PATH}
+${input.serviceUser} ALL=(root) NOPASSWD: ${SERVE_UPDATE_HELPER_INSTALL_PATH} ""
 ORCA_SUDOERS_EOF
 chown root:root ${q(`${SERVE_UPDATE_SUDOERS_PATH}.new`)}
 chmod 0440 ${q(`${SERVE_UPDATE_SUDOERS_PATH}.new`)}
@@ -84,9 +94,14 @@ chmod 0775 ${q(input.spoolDir)}
 # unitName is JSON-encoded via jq -Rs (not shell-quoted): a quote or backslash in
 # --unit must not produce a helper.json that fails to parse, because the reader
 # treats a malformed marker as "helper absent" and disables the feature.
-printf '{"helperVersion":1,"unitName":%s}' "$(printf '%s' ${q(input.unitName)} | jq -Rs .)" > ${q(`${input.spoolDir}/helper.json`)}
-chown root:root ${q(`${input.spoolDir}/helper.json`)}
-chmod 0644 ${q(`${input.spoolDir}/helper.json`)}
+# Why mktemp+mv and not a bare redirect: the spool dir is service-user-writable, so
+# on a re-install a pre-planted helper.json symlink would otherwise be truncated
+# as root at the redirect target.
+helper_json_tmp=$(mktemp ${q(input.spoolDir)}/helper.json.XXXXXXXX)
+printf '{"helperVersion":${SERVE_UPDATE_HELPER_VERSION},"unitName":%s}' "$(printf '%s' ${q(input.unitName)} | jq -Rs .)" > "$helper_json_tmp"
+chown root:root "$helper_json_tmp"
+chmod 0644 "$helper_json_tmp"
+mv -f "$helper_json_tmp" ${q(`${input.spoolDir}/helper.json`)}
 echo "orca-serve-update-helper installed"
 `
 }
