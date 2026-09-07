@@ -149,12 +149,17 @@ describe('mobile relay RPC session liveness', () => {
     session.close()
   })
 
-  it('terminates a relay whose socket died in the background within one resume probe', async () => {
+  it('terminates a relay whose socket died in the background on two 2s resume misses', async () => {
     const onLog = vi.fn<ConnectionLogSink>()
     const session = await authenticateSession(onLog)
 
     session.notifyForeground('app-resume')
     expect(fakes.sendText).toHaveBeenCalledOnce()
+    // Why: the first frame after a resume rides a cold radio, so one slow answer is
+    // tolerated — but the verdict still lands at 4s instead of the old 8s.
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(session.getState()).toBe('connected')
+    expect(fakes.sendText).toHaveBeenCalledTimes(2)
     await vi.advanceTimersByTimeAsync(1_999)
     expect(session.getState()).toBe('connected')
     await vi.advanceTimersByTimeAsync(1)
@@ -164,7 +169,7 @@ describe('mobile relay RPC session liveness', () => {
     expect(onLog).toHaveBeenCalledWith(
       expect.objectContaining({
         code: 'liveness-timeout',
-        detail: expect.stringMatching(/^probe-timeout; 1\/1 probes missed;/)
+        detail: expect.stringMatching(/^probe-timeout; 2\/2 probes missed;/)
       })
     )
   })

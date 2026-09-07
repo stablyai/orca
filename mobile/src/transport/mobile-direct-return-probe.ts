@@ -90,14 +90,14 @@ export class DirectReturnProbe {
         this.hooks.hysteresis.recordDirectFailure(this.deps.now())
         return
       }
+      // Both early returns leave the candidate to the finally, which owns it until
+      // migration takes over — closing here too would double-close it.
       if (!this.hooks.hysteresis.recordDirectSuccess(this.deps.now())) {
-        successful.client.close()
         return
       }
       if (!this.hooks.canAttempt()) {
         // A relay dial owns the mutex; the streak survives, so the next probe
         // promotes direct instead of this one.
-        successful.client.close()
         return
       }
       this.hooks.beginOperation()

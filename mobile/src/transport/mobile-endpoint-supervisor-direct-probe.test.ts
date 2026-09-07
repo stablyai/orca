@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
+import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import {
   dependencies,
   FakeLogicalClient,
@@ -7,6 +8,17 @@ import {
   FakeSession,
   host
 } from './mobile-endpoint-supervisor-test-fakes'
+
+// A cell that authenticates and then answers the confirm for a different relay host
+// — what a rehomed desktop produces. The session fails after the logical cutover.
+function confirmRejectingRelaySession(logical: FakeLogicalClient): FakeRelaySession {
+  const session = new FakeRelaySession('connected', new Error('relay resume confirmation missing'))
+  session.whenResumeConfirmed = async () => {
+    session.publishState('disconnected')
+    logical.publishState('disconnected')
+  }
+  return session
+}
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
@@ -68,6 +80,45 @@ describe('mobile endpoint supervisor direct probe', () => {
     expect(openRelay).toHaveBeenCalledOnce()
     expect(logical.getState()).toBe('connected')
     expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('backs off a dial whose resume confirm fails after the cutover', async () => {
+    const recordMigration = vi.spyOn(MobileEndpointHysteresis.prototype, 'recordMigration')
+    const logical = new FakeLogicalClient('disconnected', 'lan')
+    const openRelay = vi.fn(() => confirmRejectingRelaySession(logical))
+    const deps = dependencies({ openRelay, randomBytes: () => new Uint8Array([128, 0]) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    // Two sockets per pass: a confirm mismatch reads as a stale cell assignment, so
+    // the existing director fallback re-resolves and dials the authoritative target.
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.migrateTo).toHaveBeenCalledTimes(2)
+
+    // Why: `connected` is published at authentication, so the cutover happens before
+    // the confirm answers. A confirm that then fails must still book the shared
+    // cooldown — reporting it as an established dial redials in a tight loop.
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+
+    // 250ms, then 500ms, then 1000ms: the streak grows instead of resetting, which
+    // it could not do if setActiveSession had run for this dying session.
+    await vi.advanceTimersByTimeAsync(249)
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(openRelay).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(openRelay).toHaveBeenCalledTimes(4)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(openRelay).toHaveBeenCalledTimes(6)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(openRelay).toHaveBeenCalledTimes(6)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(openRelay).toHaveBeenCalledTimes(8)
+
+    // No session whose confirm failed is ever booked as a migration.
+    expect(recordMigration).not.toHaveBeenCalled()
     supervisor.stop()
   })
 

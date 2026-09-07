@@ -20,8 +20,12 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 // Ordinary foreground checks: two 4s misses, at most one voluntary probe per 10s.
 const RELAY_PROBE = { timeoutMs: 4_000, missedProbeLimit: 2, minIntervalMs: 10_000 }
 // A socket that died while the process was suspended must be admitted before the
-// user reads the screen as broken: one 2s probe on resume, no second chance.
-const RELAY_RESUME_PROBE = { timeoutMs: 2_000, missedProbeLimit: 1 }
+// user reads the screen as broken. Two 2s misses, not one: the first frame after a
+// resume rides a cold radio, and a single slow answer is not proof of a dead link.
+const RELAY_RESUME_PROBE = { timeoutMs: 2_000, missedProbeLimit: 2 }
+// Bounds the confirm exactly as migrateTo's own wait used to, so the supervisor's
+// mutex is never held for the full request timeout waiting on a silent cell.
+const RELAY_CONFIRM_TIMEOUT_MS = 12_000
 // Foreground-only sweep so a silently-dead relay surfaces without a user action.
 const RELAY_IDLE_PROBE_MS = 25_000
 let relayRpcSessionSequence = 0
@@ -211,7 +215,7 @@ export function connectMobileRelayRpcSession(args: {
       const response = await sendRpc(
         'pairing.getEndpoints',
         { resumeConfirmReqId: args.resumeConfirmReqId },
-        requestTimeoutMs,
+        Math.min(requestTimeoutMs, RELAY_CONFIRM_TIMEOUT_MS),
         true
       )
       if (!response.ok) {

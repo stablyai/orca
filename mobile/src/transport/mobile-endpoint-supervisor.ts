@@ -193,6 +193,7 @@ export class MobileEndpointSupervisor {
 
   stop(): void {
     this.stopped = true
+    this.pending.clear()
     this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null

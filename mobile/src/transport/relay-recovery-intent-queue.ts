@@ -37,4 +37,9 @@ export class RelayRecoveryIntentQueue {
     this.recovery = false
     return queued
   }
+
+  clear(): void {
+    this.replacement = false
+    this.recovery = false
+  }
 }
