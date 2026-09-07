@@ -356,6 +356,32 @@ describe('fetchMiniMaxRateLimits', () => {
     expect(result.error).toContain('unauth')
   })
 
+  // Why: the live API answers an expired cookie/key with HTTP 200 + status_code 1004,
+  // never 401/403, so this is the only signal that reaches the stale-credential path.
+  it('classifies status_code 1004 on the cookie path as an expired session cookie', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse({
+        base_resp: { status_code: 1004, status_msg: 'cookie is missing, log in again' }
+      })
+    )
+    const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('stale-token')
+    expect(result.error).toMatch(/session cookie expired/i)
+  })
+
+  it('classifies status_code 1004 on the API key path as an expired API key', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse({
+        base_resp: { status_code: 1004, status_msg: 'cookie is missing, log in again' }
+      })
+    )
+    const result = await fetchMiniMaxRateLimits({ apiKey: 'sk-expired', endpointMode: 'cn' })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('stale-token')
+    expect(result.error).toMatch(/API key expired/i)
+  })
+
   it('classifies malformed MiniMax JSON responses as parse failures', async () => {
     netFetchMock.mockResolvedValueOnce({
       ok: true,
