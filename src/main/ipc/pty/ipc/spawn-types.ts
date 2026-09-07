@@ -33,6 +33,7 @@ export type PtySpawnIpcArgs = {
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  codexAccountSwitchRestart?: boolean
   launchToken?: unknown
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
@@ -102,6 +103,7 @@ export type PtySpawnIpcDeps = {
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
     workspacePath?: string
+    accountSwitchRestart?: boolean
   }) => PreparedCodexResumeHome | null
   noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
   resolveCodexResumeLaunch: (

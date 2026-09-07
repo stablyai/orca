@@ -1,4 +1,4 @@
-import { linkSync, symlinkSync } from 'node:fs'
+import { copyFileSync, linkSync, symlinkSync } from 'node:fs'
 
 /**
  * Attempts a hardlink so resume sees one physical JSONL session log.
@@ -8,6 +8,19 @@ export function tryHardlinkCodexSessionFile(sourcePath: string, targetPath: stri
     // Why: Codex resume ignores symlinked JSONL sessions, while a hardlink
     // preserves one physical log without copy divergence.
     linkSync(sourcePath, targetPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Attempts a copy so resume sees a real JSONL session log when hardlink fails
+ * (e.g. cross-volume EXDEV, non-elevated Windows without symlink privilege, or restrictive filesystems).
+ */
+export function tryCopyCodexSessionFile(sourcePath: string, targetPath: string): boolean {
+  try {
+    copyFileSync(sourcePath, targetPath)
     return true
   } catch {
     return false

@@ -16,7 +16,7 @@ let forgetStalePanes: ReturnType<typeof vi.fn>
 let root: Root
 
 function notice(previousAccountLabel: string, nextAccountLabel: string) {
-  return { previousAccountLabel, nextAccountLabel }
+  return { previousAccountLabel, nextAccountLabel, nextAccountId: 'account-next' }
 }
 
 function button(scope: ParentNode, label: string): HTMLButtonElement {
@@ -63,8 +63,29 @@ describe('CodexRestartChip pane ownership', () => {
     })
 
     expect(container.textContent).toContain('Codex is still signed in as old-two@example.com')
-    expect(container.textContent).toContain('Restart this session to use new-two@example.com')
+    expect(container.textContent).toContain(
+      'Restarting this terminal switches it to new-two@example.com'
+    )
     expect(container.textContent).not.toContain('old-one@example.com')
+  })
+
+  it('warns before the press when switching to the system default loses the conversation', async () => {
+    useAppStore.setState({
+      codexRestartNoticeByPtyId: {
+        [PTY_ONE]: {
+          previousAccountLabel: 'old-one@example.com',
+          nextAccountLabel: 'System default',
+          nextAccountId: null
+        }
+      }
+    })
+
+    await act(async () => {
+      root.render(<CodexRestartChip ptyId={PTY_ONE} />)
+    })
+
+    expect(container.textContent).toContain('this conversation will not come along')
+    expect(container.textContent).toContain('add a separate Codex account')
   })
 
   it('uses configuration wording for a home-route restart', async () => {

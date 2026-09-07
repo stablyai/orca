@@ -28,6 +28,7 @@ export type PtyPaneStartup = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  codexAccountSwitchRestart?: boolean
   launchToken?: string
   launchAgent?: TuiAgent
   /** Explicit CLI override for host-owned agent launches; omission uses host settings. */

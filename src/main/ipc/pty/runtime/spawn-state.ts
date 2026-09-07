@@ -96,6 +96,7 @@ export type RuntimePtySpawnArgs = {
   env?: Record<string, string>
   envToDelete?: string[]
   resumeProviderSession?: AgentProviderSessionMetadata
+  codexAccountSwitchRestart?: boolean
   connectionId?: string | null
   worktreeId?: string
   preAllocatedHandle?: string

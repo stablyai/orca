@@ -11,13 +11,50 @@ import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-con
 import { markCodexProjectTrusted } from '../agent-trust-presets'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { resolveCodexAccountSwitchResumeHome } from '../codex/codex-account-switch-resume-repin'
+import { transferCodexThreadGoalBetweenHomes } from '../codex/codex-thread-goal-transfer'
 import { mainProcessState as state } from './main-process-state'
+
+/**
+ * Repins an account-switch restart onto the selected account, carrying the goal.
+ *
+ * Returns null when the switch has to give the conversation up: the user asked
+ * for an account, and honouring that beats keeping them on the one they left.
+ * The caller turns that into a `fresh` outcome, which drops the resume argv and
+ * tells the pane its conversation did not come along.
+ */
+async function moveCodexResumeToSelectedAccount(args: {
+  originHome: string
+  transcriptPath: string
+  threadId: string
+}): Promise<string | null> {
+  const selectedHome =
+    state.codexRuntimeHome?.resolveSelectedHostAccountCodexHomePathForResume() ?? null
+  const move = resolveCodexAccountSwitchResumeHome({
+    originCodexHomePath: args.originHome,
+    selectedCodexHomePath: selectedHome,
+    transcriptPath: args.transcriptPath
+  })
+  if (move.outcome === 'already-there') {
+    return args.originHome
+  }
+  if (move.outcome === 'unmovable') {
+    return null
+  }
+  await transferCodexThreadGoalBetweenHomes({
+    threadId: args.threadId,
+    originCodexHomePath: args.originHome,
+    targetCodexHomePath: move.codexHomePath
+  })
+  return move.codexHomePath
+}
 
 export async function prepareCodexSessionResumeForLaunch(args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
+  accountSwitchRestart?: boolean
 }): Promise<CodexSessionResumePreparation | null> {
   const runtimeHome = state.codexRuntimeHome
   const store = state.store
@@ -35,6 +72,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
   // readable alias wins. A throw here refuses the whole resume instead
   // (#STA-4422).
   const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
+  let accountSwitchGaveUpResume = false
   // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
   const preparation = await prepareCodexSessionResume({
@@ -79,7 +117,19 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           error
         )
       }
-      const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const originHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const movedHome = args.accountSwitchRestart
+        ? await moveCodexResumeToSelectedAccount({
+            originHome,
+            transcriptPath: sessionSource.transcriptPath,
+            threadId: args.providerSession.id
+          })
+        : originHome
+      if (movedHome === null) {
+        accountSwitchGaveUpResume = true
+        return originHome
+      }
+      const resumeHome = movedHome
       if (args.workspacePath) {
         try {
           await markCodexProjectTrusted(args.workspacePath)
@@ -109,6 +159,12 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       return resumeHome
     }
   })
+  if (accountSwitchGaveUpResume) {
+    // Why claimedCodexProvenance: the rollout is real and was verified — the
+    // account move is what it could not survive — so the pane owes the user the
+    // "your conversation did not come along" notice rather than silence.
+    return { outcome: 'fresh', claimedCodexProvenance: true }
+  }
   return preparation.outcome === 'resume'
     ? {
         ...preparation,
