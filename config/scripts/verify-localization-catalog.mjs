@@ -8,6 +8,10 @@ import ts from 'typescript-api'
 
 import { canonicalGenericRenderings } from './locale-generic-ui-terms.mjs'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
+import {
+  createTranslationCompletenessCheck,
+  flattenTranslationCatalog as flattenCatalogEntries
+} from './locale-translation-completeness.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
@@ -208,20 +212,6 @@ function collectInterpolationVariables(value) {
   return Object.values(value).flatMap((child) => collectInterpolationVariables(child))
 }
 
-function flattenCatalogEntries(value, prefix = '', entries = new Map()) {
-  if (typeof value === 'string') {
-    entries.set(prefix, value)
-    return entries
-  }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return entries
-  }
-  for (const [key, child] of Object.entries(value)) {
-    flattenCatalogEntries(child, prefix ? `${prefix}.${key}` : key, entries)
-  }
-  return entries
-}
-
 function getCatalogEntry(catalog, key) {
   return key.split('.').reduce((cursor, part) => cursor?.[part], catalog)
 }
@@ -342,7 +332,7 @@ function verifyLocaleCatalog(enCatalog, localeName, localeCatalog) {
   // Why: feature PRs own English declarations; absent target leaves deliberately
   // use i18next's existing English fallback until a localization PR supplies them.
   console.log(
-    `${localeName}.json coverage: ${enEntries.size - missingInLocale.length}/${enEntries.size} translated, ${missingInLocale.length} missing.`
+    `${localeName}.json coverage: ${enEntries.size - missingInLocale.length}/${enEntries.size} present, ${missingInLocale.length} missing (presence does not certify translation).`
   )
 
   if (
@@ -525,6 +515,8 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     )
     .sort()
 
+  const checkCompleteness = await createTranslationCompletenessCheck(root, catalog, references)
+
   for (const fileName of localeFiles) {
     const localeName = fileName.replace(/\.json$/, '')
     const localeCatalogPath = path.join(localesDir, fileName)
@@ -534,6 +526,9 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
       console.error('')
       console.error('Fix or retire the existing target entry in a localization PR.')
       return exitCode
+    }
+    if (!(await checkCompleteness(localeName, localeCatalog))) {
+      return 1
     }
   }
 

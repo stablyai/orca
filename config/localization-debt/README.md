@@ -1,0 +1,11 @@
+# Translation completeness
+
+`pnpm run verify:localization-catalog` validates declarations, placeholders and translation completeness. It also runs in PR CI. `verify:localization-coverage` checks unwrapped source strings; passing that check alone says nothing about target-language coverage.
+
+`../localization-completeness.json` declares the locales and complete surfaces. References are discovered from source directories and key prefixes, including new files and references into other namespaces. Spanish sessions, the session launcher's shared controls, shared terminal status messages and sidebar navigation are currently required: missing, blank or English-identical values fail validation. Identical words that are valid in Spanish, such as Terminal and Zoom, have explicit key-and-value exceptions. Product/code tokens reuse the existing translation policy.
+
+The Spanish debt snapshot records pre-existing missing or English-identical entries across the **whole** catalog. It is an inventory, not a claim that every identical value is wrong: some need a language review. The verifier rejects new debt, changed English hidden behind an old exception, and any debt in a required surface. When translating an existing entry, remove its resolved snapshot entry; the verifier requires this so reverting it to English cannot pass later. Do not expand the snapshot to make a feature pass. Do not manufacture target translations by copying English.
+
+The September 2026 audit after completing sessions found 2,087 absent Spanish keys in the full English catalog, and 3,190 missing or identical entries after the existing product/code preservation policy. Presence is reported as **present**, never as **translated**. This check detects missing and unchanged copy, not the semantic quality of every sentence or mixed-language phrase; those still require review.
+
+Runtime labels have a separate contract: memoized React boundaries subscribe through `useTranslation()`, and caches containing translated labels depend on the resolved language. Changing language must update an already-mounted screen without terminal output, navigation or remounting live terminals. The session-grid hook regression and hidden Electron test exercise that path.
