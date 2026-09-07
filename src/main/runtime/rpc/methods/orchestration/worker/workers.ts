@@ -51,8 +51,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
       const mode = decideWorkerStartMode({
         params,
-        settings: readWorkerStartModeSettings(runtime),
-        platform: process.platform
+        settings: readWorkerStartModeSettings(runtime)
       })
       if (params.on) {
         // A remote worker is always a terminal agent; the mode receipt rides along so the

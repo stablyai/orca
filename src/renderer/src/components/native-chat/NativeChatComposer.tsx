@@ -217,7 +217,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       [focus, insertTypedText, handlePaste, pasteFromClipboard]
     )
 
-    const { pickAttachment } = useNativeChatFileAttachmentActions(attachExternalPaths)
+    const { pickAttachment } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
     const { toggleDictation, startHoldDictation, stopHoldDictation } =
       useNativeChatDictationActions({ textareaRef, setDictationPressed })
     const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
@@ -365,6 +365,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     return (
       <NativeChatComposerField
+        composerScopeKey={paneKey}
         textareaRef={textareaRef}
         draft={draft}
         disabled={disabled}

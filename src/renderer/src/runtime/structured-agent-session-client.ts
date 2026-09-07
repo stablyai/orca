@@ -4,13 +4,28 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { callRuntimeRpc, type RuntimeClientTarget } from './runtime-rpc-client'
+import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  callRuntimeRpc,
+  runtimeEnvironmentSupportsCapability,
+  type RuntimeClientTarget
+} from './runtime-rpc-client'
 
-export function callStructuredAgentSession<TResult>(
+export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
   params?: unknown
 ): Promise<TResult> {
+  if (
+    method === 'agentSession.rewind' &&
+    target.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+    ))
+  ) {
+    throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
+  }
   return method === 'agentSession.conversationCommand'
     ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
     : callRuntimeRpc<TResult>(target, method, params)

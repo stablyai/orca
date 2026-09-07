@@ -23,13 +23,11 @@ function decide(
   overrides: {
     params?: Parameters<typeof decideWorkerStartMode>[0]['params']
     settings?: Parameters<typeof decideWorkerStartMode>[0]['settings']
-    platform?: NodeJS.Platform
   } = {}
 ): WorkerStartModeReceipt {
   return decideWorkerStartMode({
     params: { agent: 'claude', ...overrides.params },
-    settings: overrides.settings === undefined ? STRUCTURED_DEFAULT : overrides.settings,
-    platform: overrides.platform ?? 'darwin'
+    settings: overrides.settings === undefined ? STRUCTURED_DEFAULT : overrides.settings
   })
 }
 
@@ -90,12 +88,10 @@ describe('a structured default this dispatch cannot honour', () => {
     ).toMatchObject({ mode: 'terminal', reason: 'tui_launch_customization' })
   })
 
-  it('keeps Codex terminal-backed on Windows and leaves Claude to the host', () => {
-    expect(decide({ params: { agent: 'codex' }, platform: 'win32' })).toMatchObject({
-      mode: 'terminal',
-      reason: 'codex_on_windows'
-    })
-    expect(decide({ params: { agent: 'claude' }, platform: 'win32' }).mode).toBe('structured')
+  // Neither provider is refused here on the client's platform: only the executing host knows
+  // whether it can read a provider child's start time, and it answers at create time.
+  it.each(['claude', 'codex'] as const)('leaves a Windows %s worker to the host', (agent) => {
+    expect(decide({ params: { agent } }).mode).toBe('structured')
   })
 })
 

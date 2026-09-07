@@ -43,7 +43,10 @@ export function makeMiniMaxUnavailable(error: string): ProviderRateLimits {
 
 export function makeMiniMaxError(
   error: string,
-  failureKind: NonNullable<ProviderRateLimits['usageMetadata']>['failureKind']
+  failureKind: NonNullable<ProviderRateLimits['usageMetadata']>['failureKind'],
+  // Why: the status bar localizes the expiry copy per credential kind; the raw
+  // `error` string stays English for logs.
+  credentialSource?: 'api-key' | 'session-cookie'
 ): ProviderRateLimits {
   return {
     provider: 'minimax',
@@ -52,7 +55,7 @@ export function makeMiniMaxError(
     updatedAt: Date.now(),
     error,
     status: 'error',
-    usageMetadata: { failureKind, source: 'web' }
+    usageMetadata: { failureKind, source: 'web', ...(credentialSource ? { credentialSource } : {}) }
   }
 }
 

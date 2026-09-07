@@ -64,10 +64,10 @@ identity scan opens nothing.
 So the module exposes two snapshots, and the row types differ so a cheap caller
 cannot read what its flag set did not pay for:
 
-| reader                                     | row type                     | flags                       | per-process handles |
-| ------------------------------------------ | ---------------------------- | --------------------------- | ------------------- |
-| `readWindowsProcessIdentityTable[Fresh]()` | `WindowsProcessIdentityRow`  | `None \| CreationTime`      | none                |
-| `readWindowsProcessTable[Fresh]()`         | `WindowsProcessRow`          | `+ CommandLine`             | one `OpenProcess`   |
+| reader                                     | row type                    | flags                  | per-process handles |
+| ------------------------------------------ | --------------------------- | ---------------------- | ------------------- |
+| `readWindowsProcessIdentityTable[Fresh]()` | `WindowsProcessIdentityRow` | `None \| CreationTime` | none                |
+| `readWindowsProcessTable[Fresh]()`         | `WindowsProcessRow`         | `+ CommandLine`        | one `OpenProcess`   |
 
 `Memory` is requested by neither. Nothing reads a working set off this table —
 `windows-process-resource-collector.ts` runs its own sweep because it needs
@@ -103,7 +103,7 @@ only under concurrency.
 
 Nothing else in this module prevents that. Each snapshot cache single-flights
 only within itself (`inFlight` is a closure per reader), and the wedge set
-latches only *after* a read misses its 3 s deadline, so through the healthy
+latches only _after_ a read misses its 3 s deadline, so through the healthy
 ~12 ms of a scan neither excludes the other. Overlap is the normal state rather
 than an edge case: other panes keep polling detailed at 750 ms while a teardown
 takes identity snapshots, and `codex-structured-turn-processes.ts` issues fresh
@@ -166,15 +166,15 @@ through `toIdentityRow`, so an identity row carries no command line on any host.
 
 ### Which callers need which
 
-| caller                                        | reads              | flag set |
-| --------------------------------------------- | ------------------ | -------- |
-| `windows-agent-foreground-process.ts`         | `command` (agent recognition) | detailed |
-| `local-workspace-platform-port-scanner.ts`    | `command` (port attribution)  | detailed |
-| `codex-structured-turn-processes.ts`          | `command` (turn-process identity) | detailed |
-| `structured-tui-process-identity.ts`          | `command` (child match)       | detailed |
-| `windows-pty-root-identity.ts`                | `pid` / `ppid` only           | identity |
-| `agent-session-process-identity-probe.ts`     | `creationTimeMs` only         | identity |
-| `relay/windows-port-scan.ts`                  | `name` (port owner label)     | detailed |
+| caller                                     | reads                             | flag set |
+| ------------------------------------------ | --------------------------------- | -------- |
+| `windows-agent-foreground-process.ts`      | `command` (agent recognition)     | detailed |
+| `local-workspace-platform-port-scanner.ts` | `command` (port attribution)      | detailed |
+| `codex-structured-turn-processes.ts`       | `command` (turn-process identity) | detailed |
+| `structured-tui-process-identity.ts`       | `command` (child match)           | detailed |
+| `windows-pty-root-identity.ts`             | `pid` / `ppid` only               | identity |
+| `agent-session-process-identity-probe.ts`  | `creationTimeMs` only             | identity |
+| `relay/windows-port-scan.ts`               | `name` (port owner label)         | detailed |
 
 `windows-port-scan.ts` is the one mismatch in the table: it reads only `pid` and
 `name`, which the identity set answers, but it calls the detailed reader. On a
@@ -344,7 +344,7 @@ on any other OS keeps using the scan.
 
 ## Why the package is patched
 
-`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries five changes.
+`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries six changes.
 
 1. **Spectre mitigation.** The upstream `binding.gyp` requires Spectre-mitigated
    libraries, which Orca's Windows build agents do not install. `node-pty` is
@@ -368,10 +368,10 @@ on any other OS keeps using the scan.
    to Unix ms; a process that denies the handle is emitted with the field
    absent, never zero, because callers must be able to tell "cannot identify"
    from a timestamp.
-5. **`supportedProcessDataFlags`.** `addon.cc` exports the flag bits the
+6. **`supportedProcessDataFlags`.** `addon.cc` exports the flag bits the
    compiled binary understands, and `lib/index.js` re-exports it.
 
-   Why a fifth hunk and not just the enum: unlike `node-pty`, this package
+   Why a separate hunk and not just the enum: unlike `node-pty`, this package
    publishes a prebuilt `.node` at the same `build/Release/` path node-gyp
    writes to. pnpm patches the source tree and leaves that prebuilt alone, so a
    host can hold a patched `lib/index.js` — `ProcessDataFlag.CreationTime` and

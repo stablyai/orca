@@ -189,8 +189,8 @@ describe('ActivityThreadOptionsMenu', () => {
     )
   })
 
-  it('puts search and unread actions in the menu when header overflow handlers are provided', async () => {
-    const onSearch = vi.fn()
+  it('puts persisted search visibility and unread actions in the menu', async () => {
+    const onShowSearchChange = vi.fn()
     const onToggleUnread = vi.fn()
     await act(async () => {
       root.render(
@@ -200,7 +200,8 @@ describe('ActivityThreadOptionsMenu', () => {
             hasUnreadThreads={false}
             onCompactModeChange={vi.fn()}
             onMarkAllThreadsRead={vi.fn()}
-            onSearch={onSearch}
+            showSearch
+            onShowSearchChange={onShowSearchChange}
             unreadOnly={false}
             onToggleUnread={onToggleUnread}
           />
@@ -215,8 +216,18 @@ describe('ActivityThreadOptionsMenu', () => {
       trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
     })
 
-    expect(document.body.textContent).toContain('Search')
+    expect(document.body.textContent).toContain('Show search')
     expect(document.body.textContent).toContain('Show unread only')
+
+    const showSearchItem = Array.from(
+      document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')
+    ).find((item) => item.textContent?.includes('Show search'))
+    expect(showSearchItem?.getAttribute('data-state')).toBe('checked')
+
+    await act(async () => {
+      showSearchItem?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
+    })
+    expect(onShowSearchChange).toHaveBeenCalledWith(false)
   })
 
   it('explains show unread threads only on hover without a second unread state marker', async () => {

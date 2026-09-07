@@ -1,11 +1,16 @@
-// The attach transition end to end: reserve the lease, make the reservation
-// real, open the journal.
-//
-// Split out of the host so the sequence reads in one place. The host still owns
-// the decisions that must not be client-supplied — the spawn token, the claim
-// key, the owner probe — and passes them in.
+import { settlePostAcquisitionAttachFailure } from './structured-agent-session-attach-failure'
+import { rewindRefusal } from './structured-rewind-refusal'
+import {
+  AgentSessionRewindRefusal,
+  AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
+  AgentSessionAcquisitionRefusal,
+  isAgentSessionPreSpawnError,
+  type StructuredAgentSessionAcquireInput,
+  type StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
+// The host supplies owner authority; this flow reserves, proves, and publishes the session.
 
-import { isDeepStrictEqual } from 'node:util'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
@@ -16,32 +21,24 @@ import {
   admitAttachOrRefuse,
   attachJournal,
   classifyStoreFailure,
-  journalIdentityFor,
   reserveRequestFor,
   type AgentSessionAttachAuthority,
   type AgentSessionAttachParams,
   type AttachedJournal
 } from './structured-agent-session-attach'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import {
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError,
-  AgentSessionAcquisitionRefusal,
-  AgentSessionPreSpawnError,
-  isAgentSessionPreSpawnError,
-  rethrowAfterAgentSessionAcquisitionCleanup
-} from './structured-agent-session-adapter'
+import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
-import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
+import { acquireOwner } from './structured-agent-session-acquisition'
 import {
   importAdoptedTranscript,
   prepareAdoptedTranscript
 } from './structured-agent-session-adopted-import'
 
 export type AttachFlowInput = {
+  rewind?: StructuredAgentSessionAcquireInput['rewind']
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   journalRoot: string
@@ -49,22 +46,18 @@ export type AttachFlowInput = {
   callerKey: string
   params: AgentSessionAttachParams
   now: () => number
-  /** Registers the opened journal and fans out to subscribers before the caller
-   *  sees the result, so no client can send against a session the host has not
-   *  finished publishing. */
+  /** Publishes the journal before clients can send against the new owner. */
   onAttached: (
     attached: AttachedJournal,
     acquisitionGeneration: string | null
   ) => Promise<void> | void
-  /** Handed to the adapter so it can journal what the provider streams. The
-   *  host owns it and binds it to the journal inside `onAttached`. */
+  /** Host-owned provider sink, bound to the journal inside `onAttached`. */
   eventSink?: StructuredAgentSessionEventSink
   /** Stops acquisition-window events targeting the superseded journal. */
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** Removes any partial host publication after journal attachment fails, and
-   *  closes the journal handle of the map entry it drops. Awaited: see eviction. */
+  /** Closes and removes partial publication after journal attachment fails. */
   onAttachFailed?: () => Promise<void>
 }
 
@@ -72,15 +65,27 @@ export async function performAttach(
   input: AttachFlowInput
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { params, store } = input
+  const unsupported = (): AgentSessionMutationResult<AgentSessionAttachResult> => ({
+    ok: false,
+    refusal: {
+      code: 'structured_agent_session_unsupported',
+      message: 'This execution host cannot create the requested structured agent session.'
+    }
+  })
   const sessionId = params.envelope.sessionId
   const admitted = admitAttachOrRefuse(params)
   if (!admitted.ok) {
     return admitted
   }
+  // Ensure/recovery bypass create-intent, so recheck before reserving or spawning.
+  if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
+    return unsupported()
+  }
 
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
   let reservedRecord: AgentSessionRecord | null = null
+  let unsupportedReservationSettlementAttempted = false
   let replayed = false
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
@@ -101,6 +106,21 @@ export async function performAttach(
     )
     record = reserved.record
     replayed = reserved.disposition === 'replayed'
+    // Capability can change while the durable reservation is in flight. Recheck
+    // every reservation at its effect boundary so it cannot bypass the support
+    // gate, and release a pending reservation that support drift invalidated.
+    reservedRecord = record
+    if (!adapterSupportsCreateIfDeclared(input.adapter, params.location, params.agent)) {
+      if (
+        record.lease.claimStatus === 'reserved' &&
+        record.lease.handoffStage === 'new-owner-proving' &&
+        record.lease.reservedSpawnToken
+      ) {
+        unsupportedReservationSettlementAttempted = true
+        await settleUnsupportedReservation(input, record)
+      }
+      return unsupported()
+    }
     if (
       replayed &&
       reserved.operationRow.outcome.status !== 'pending' &&
@@ -115,7 +135,6 @@ export async function performAttach(
         return { ok: false, refusal: replay.refusal }
       }
     }
-    reservedRecord = record
     if (!agentSessionLeaseAdmitsWriter(record.lease)) {
       const acquired = await acquireOwner(input, record)
       record = acquired.record
@@ -123,9 +142,8 @@ export async function performAttach(
     }
   } catch (error) {
     const spawnToken = reservedRecord?.lease.reservedSpawnToken
-    if (reservedRecord && spawnToken) {
-      // A pre-spawn failure is its own processless proof; the settlement records the
-      // evidence and the failed operation in one durable transaction.
+    if (reservedRecord && spawnToken && !unsupportedReservationSettlementAttempted) {
+      // Settle processless proof and failed operation atomically.
       const exitProof = isAgentSessionPreSpawnError(error)
         ? 'processless'
         : error instanceof AgentSessionAcquisitionExitUnprovenError
@@ -168,6 +186,9 @@ export async function performAttach(
           'agent session acquisition failure settlement failed'
         )
       }
+    }
+    if (error instanceof AgentSessionRewindRefusal) {
+      return rewindRefusal(error.rewindReason)
     }
     if (error instanceof AgentSessionAcquisitionRefusal) {
       return { ok: false, refusal: { code: error.code, message: error.message } }
@@ -217,115 +238,30 @@ export async function performAttach(
   }
 }
 
-async function settlePostAcquisitionAttachFailure(
+async function settleUnsupportedReservation(
   input: AttachFlowInput,
-  record: AgentSessionRecord,
-  cause: unknown
-): Promise<never> {
-  let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
-  try {
-    await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
-  } catch (error) {
-    cleanupError = error
-    exitProof =
-      error instanceof AgentSessionAcquisitionExitUnprovenError
-        ? 'unproven'
-        : error instanceof AgentSessionAcquisitionRootExitObservedError
-          ? 'root-exit-observed'
-          : 'exit-proven'
+  record: AgentSessionRecord
+): Promise<void> {
+  const spawnToken = record.lease.reservedSpawnToken
+  if (!spawnToken) {
+    return
   }
-  // Why: the close is awaited so the map entry is gone only once its handle is
-  // released, but a failed close must not also cost the store settlement below.
-  await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
   try {
-    await input.store.settleFailedPostAcquisitionAttachment({
+    await input.store.settleFailedAcquisition({
       sessionId: record.sessionId,
       fence: record.lease.runtimeFence,
-      spawnToken: record.lease.reservedSpawnToken ?? '',
+      spawnToken,
       callerKey: input.callerKey,
       operationId: input.params.envelope.clientOperationId,
       outcome: {
         status: 'failed',
-        code: 'agent_session_operation_invalid',
-        message: cause instanceof Error ? cause.message : String(cause)
+        code: 'structured_agent_session_unsupported',
+        message: 'Structured session support changed before the provider could start.'
       },
-      exitProof,
+      exitProof: 'processless',
       now: input.now()
     })
-  } catch (settlementError) {
-    throw new AggregateError(
-      [cleanupError, settlementError],
-      'agent session post-acquisition attachment failure settlement failed'
-    )
-  }
-  throw cleanupError
-}
-
-/** A reservation with no process behind it is only a promise to spawn; the
- *  adapter makes it real and the store then grants the writer. */
-async function acquireOwner(
-  input: AttachFlowInput,
-  record: AgentSessionRecord
-): Promise<{ record: AgentSessionRecord; acquisitionGeneration: string | null }> {
-  const fence = record.lease.runtimeFence
-  const spawnToken = record.lease.reservedSpawnToken
-  if (!spawnToken) {
-    throw new Error('agent_session_ownership_unknown')
-  }
-  // Pre-spawn proof is single-use: this retry may create a child after the durable clear.
-  try {
-    try {
-      record = await input.store.setReservationProcesslessProof({
-        sessionId: record.sessionId,
-        fence,
-        spawnToken,
-        processlessAt: null,
-        now: input.now()
-      })
-      await input.onAcquiring?.()
-    } catch (error) {
-      throw new AgentSessionPreSpawnError(error)
-    }
-    const acquired = await input.adapter.acquire({
-      identity: journalIdentityFor(record, input.params),
-      fence,
-      // Retries must recover the original reservation, not mint a second child.
-      spawnToken,
-      ...(record.options ? { options: record.options } : {}),
-      ...(input.eventSink ? { events: input.eventSink } : {})
-    })
-    const options = await readNativeSessionOptions({
-      adapter: input.adapter,
-      sessionId: record.sessionId,
-      fence,
-      ...(record.options ? { priorOptions: record.options } : {})
-    })
-    if (record.lease.ownerProcess === null) {
-      await input.store.commitProcessIdentity({
-        sessionId: record.sessionId,
-        fence,
-        process: acquired.process,
-        now: input.now()
-      })
-    } else if (!isDeepStrictEqual(record.lease.ownerProcess, acquired.process)) {
-      throw new Error('agent_session_ownership_unknown')
-    }
-    const proved = await input.store.proveOwner({
-      sessionId: record.sessionId,
-      fence,
-      link: acquired.link,
-      now: input.now(),
-      ...(options ? { options } : {})
-    })
-    return {
-      record: proved,
-      acquisitionGeneration: acquired.acquisitionGeneration ?? null
-    }
   } catch (error) {
-    if (isAgentSessionPreSpawnError(error)) {
-      throw error
-    }
-    return rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, error)
+    throw new AggregateError([error], 'agent session unsupported reservation settlement failed')
   }
 }

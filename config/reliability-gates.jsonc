@@ -13325,9 +13325,7 @@
         },
         {
           "file": "src/main/runtime/orchestration/mailbox-pointer-stage.test.ts",
-          "assertions": [
-            "a refused pointer write drains a delivery parked behind its watermark"
-          ]
+          "assertions": ["a refused pointer write drains a delivery parked behind its watermark"]
         },
         {
           "file": "src/main/providers/settled-pty-writer-census.test.ts",
@@ -18549,27 +18547,13 @@
       "protection": "partial",
       "owner": "browser-runtime",
       "layer": "electron-packaged",
-      "surfaces": [
-        "paired browser placement"
-      ],
-      "platforms": [
-        "linux",
-        "macos",
-        "windows"
-      ],
-      "providers": [
-        "paired-runtime"
-      ],
-      "coveredPlatforms": [
-        "linux"
-      ],
-      "coveredProviders": [
-        "paired-runtime"
-      ],
+      "surfaces": ["paired browser placement"],
+      "platforms": ["linux", "macos", "windows"],
+      "providers": ["paired-runtime"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["paired-runtime"],
       "coverageNotes": "Published Linux 1.4.188 desktop against current source in both directions; scheduled weekly and manually runnable. No required PR check.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/actions/runs/34069063016"
-      ],
+      "motivatingLinks": ["https://github.com/stablyai/orca/actions/runs/34069063016"],
       "invariant": "A paired client and host without client-hosted browser capabilities retain server-hosted browser placement across supported version skew.",
       "oracle": "Require both existing named browser placement scenarios to pass three times with one attempt, zero skips, zero failures, and no report errors.",
       "commands": [
@@ -18593,9 +18577,7 @@
         },
         {
           "file": "config/scripts/verify-packaged-browser-participation.test.mjs",
-          "assertions": [
-            "reject missing, substituted, skipped and retried scenarios"
-          ]
+          "assertions": ["reject missing, substituted, skipped and retried scenarios"]
         },
         {
           "file": "config/scripts/packaged-browser-lane-contract.test.mjs",
@@ -18650,26 +18632,13 @@
       "protection": "partial",
       "owner": "terminal-input",
       "layer": "electron-native-ime-e2e",
-      "surfaces": [
-        "native Hangul composition",
-        "Wayland terminal input"
-      ],
-      "platforms": [
-        "linux"
-      ],
-      "providers": [
-        "local"
-      ],
-      "coveredPlatforms": [
-        "linux"
-      ],
-      "coveredProviders": [
-        "local"
-      ],
+      "surfaces": ["native Hangul composition", "Wayland terminal input"],
+      "platforms": ["linux"],
+      "providers": ["local"],
+      "coveredPlatforms": ["linux"],
+      "coveredProviders": ["local"],
       "coverageNotes": "Ubuntu 22.04 nested GNOME and IBus Hangul drive three complete native executions in GitHub Actions. GNOME owns IBus; daemon and CLI share its default config discovery path.",
-      "motivatingLinks": [
-        "https://github.com/stablyai/orca/pull/19174"
-      ],
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19174"],
       "invariant": "Typing d k 1 Return through native IBus Hangul delivers exactly 아1 followed by newline without missing, duplicate, or reordered characters.",
       "oracle": "Three executions each assert three exact UTF-8 PTY lines. Verify the exact Playwright title, zero skips/retries, each individual native composition receipt, and the nested launch Wayland flag.",
       "commands": [
@@ -18685,15 +18654,11 @@
       "assertionRefs": [
         {
           "file": "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts",
-          "assertions": [
-            "a digit typed right after a Hangul syllable reaches the pty"
-          ]
+          "assertions": ["a digit typed right after a Hangul syllable reaches the pty"]
         },
         {
           "file": "config/scripts/terminal-ime-e2e-workflow.test.mjs",
-          "assertions": [
-            "runs native Wayland independently with CJK fonts and retained evidence"
-          ]
+          "assertions": ["runs native Wayland independently with CJK fonts and retained evidence"]
         }
       ],
       "evidenceRuns": [

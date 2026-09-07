@@ -12,12 +12,15 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  assertWindowsProcessTreeCreationTimePatch,
+  assertWindowsProcessTreeRuntimeCreationTime,
   inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
   stageWindowsProcessTreeNodeAddonApiHeaders,
   WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS,
   WINDOWS_PROCESS_TREE_PACKAGE_DIR
 } from './windows-process-tree-gyp-rebuild.mjs'
+import { writeFakeWindowsProcessTreeWithNodeAddonApi } from './rebuild-native-deps-test-fixtures.mjs'
 
 describe('windows-process-tree node-gyp rebuild', () => {
   it("resolves node-addon-api's gyp target from the rebuild cwd", () => {
@@ -95,5 +98,49 @@ describe('inspecting a compiled windows-process-tree addon', () => {
     const staged = join(dir, 'windows-process-tree.node')
     writeFileSync(staged, Buffer.from('MZ\0\0ReadProcessMemory\0', 'binary'))
     expect(inspectWindowsProcessTreeAddon(staged)).toBe('unpatched')
+  })
+})
+
+describe('windows-process-tree CreationTime patch assertion', () => {
+  let dir
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-windows-process-tree-creation-time-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('accepts a package whose source and JS surfaces expose process creation time', () => {
+    writeFakeWindowsProcessTreeWithNodeAddonApi(dir)
+
+    expect(() =>
+      assertWindowsProcessTreeCreationTimePatch(
+        join(dir, 'node_modules', '@vscode', 'windows-process-tree')
+      )
+    ).not.toThrow()
+  })
+
+  it('rejects a package missing the process creation-time patch', () => {
+    writeFakeWindowsProcessTreeWithNodeAddonApi(dir, { creationTimePatchApplied: false })
+
+    expect(() =>
+      assertWindowsProcessTreeCreationTimePatch(
+        join(dir, 'node_modules', '@vscode', 'windows-process-tree')
+      )
+    ).toThrow('process creation-time patch')
+  })
+
+  it('requires the runtime ProcessDataFlag.CreationTime enum', () => {
+    expect(() =>
+      assertWindowsProcessTreeRuntimeCreationTime({
+        ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 }
+      })
+    ).not.toThrow()
+    expect(() =>
+      assertWindowsProcessTreeRuntimeCreationTime({
+        ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 }
+      })
+    ).toThrow('ProcessDataFlag.CreationTime')
   })
 })

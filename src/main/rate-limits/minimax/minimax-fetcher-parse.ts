@@ -34,6 +34,19 @@ export type MiniMaxUsageResponse = {
   }[]
 }
 
+// Why: MiniMax answers an expired cookie/key with HTTP 200 + base_resp.status_code 1004,
+// so the credential-expiry signal has to be read from the payload, not the status line.
+const MINIMAX_UNAUTHENTICATED_STATUS_CODE = 1004
+
+function makeMiniMaxExpiredCredentialError(fetchResult: MiniMaxFetchResponse): ProviderRateLimits {
+  const usesApiKey = fetchResult.transport === 'api-key'
+  return makeMiniMaxError(
+    `MiniMax ${usesApiKey ? 'API key' : 'session cookie'} expired. Replace it in Settings.`,
+    'stale-token',
+    usesApiKey ? 'api-key' : 'session-cookie'
+  )
+}
+
 function handleMiniMaxHttpError(fetchResult: MiniMaxFetchResponse): ProviderRateLimits | null {
   const { response } = fetchResult
   if (response.status === 401 || response.status === 403) {
@@ -43,11 +56,7 @@ function handleMiniMaxHttpError(fetchResult: MiniMaxFetchResponse): ProviderRate
       cookieNames: fetchResult.cookieNames,
       requestHeaderNames: fetchResult.requestHeaderNames
     })
-    const credentialLabel = fetchResult.transport === 'api-key' ? 'API key' : 'session cookie'
-    return makeMiniMaxError(
-      `MiniMax ${credentialLabel} expired. Replace it in Settings.`,
-      'stale-token'
-    )
+    return makeMiniMaxExpiredCredentialError(fetchResult)
   }
   if (!response.ok) {
     logMiniMaxFetchFailure({
@@ -77,6 +86,9 @@ function handleMiniMaxPayloadError(
     cookieNames: fetchResult.cookieNames,
     requestHeaderNames: fetchResult.requestHeaderNames
   })
+  if (statusCode === MINIMAX_UNAUTHENTICATED_STATUS_CODE) {
+    return makeMiniMaxExpiredCredentialError(fetchResult)
+  }
   const message =
     typeof payload.base_resp?.status_msg === 'string'
       ? payload.base_resp.status_msg

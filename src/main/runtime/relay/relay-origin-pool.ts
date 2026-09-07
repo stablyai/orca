@@ -144,7 +144,6 @@ export class RelayOriginPool {
     if (!this.isCurrent() || origin !== this.activeOrigin) {
       return
     }
-    origin.markDraining()
     this.drainingOrigins.add(origin)
     this.options.onStatus('draining')
     if (!this.rotationPromise && !this.drainRetry.pending) {

@@ -237,3 +237,11 @@ export const UnsubscribeParams = z
 
 /** Read-only owner classification retained for restart safety; mutation handoff is separate. */
 export const HandoffStatusParams = z.object({ sessionId: SessionId }).strict()
+
+export const RewindParams = z
+  .object({
+    envelope: MutationEnvelope,
+    itemId: Identifier('Invalid item id', 4096),
+    expectedEpoch: Identifier('Invalid journal epoch')
+  })
+  .strict()

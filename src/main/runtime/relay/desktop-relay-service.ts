@@ -26,7 +26,7 @@ type DesktopRelayServiceOptions = {
   userDataPath: string
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
-  onStatus: (status: RelayBrokerStatus) => void
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
 }
 
 export function pairingAuthorizationForContext(
@@ -71,7 +71,7 @@ export class DesktopRelayService {
       revokeOutbox: this.revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey)
     })
-    const resolvePreferredRegion = createRelayRegionPreferenceReader(options)
+    const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
       readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
       hasDemand: ({ identity }) =>
@@ -88,7 +88,8 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
-          resolvePreferredRegion,
+          resolvePreferredRegion: regionPreference.resolvePreferredRegion,
+          onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
         void this.flushRevokeOutbox(broker)

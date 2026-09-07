@@ -4,6 +4,11 @@ import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { subagentGroupFallbackText } from '../../../../shared/native-chat-subagent-summary'
+import type {
+  NativeChatMessage,
+  NativeChatSubagentEntry
+} from '../../../../shared/native-chat-types'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
 
@@ -558,5 +563,295 @@ describe('NativeChatMessageList assistant messages', () => {
       'aria-expanded',
       'false'
     )
+  })
+})
+
+// List-level, because every defect this feature has shipped so far lived in the
+// assembly between rows — the roster is its own `role: 'system'` journal row, and
+// what reaches the DOM depends on `foldToolMessages`, the turn-key mapping and the
+// disclosure state the list owns. Rendering `NativeChatToolRun` in isolation
+// supplies those by hand and agrees with whatever the caller was asked to assume.
+describe('NativeChatMessageList spawn-group roster', () => {
+  const ROSTER: NativeChatSubagentEntry[] = [
+    { id: 'a', label: 'read', state: 'completed' },
+    { id: 'b', label: 'search', state: 'failed' }
+  ]
+
+  /** The exact two-block row `codexSubagentGroupBody` writes: the structured
+   *  block plus the plain-text twin a client without the block type reads. */
+  function rosterMessage(agents: NativeChatSubagentEntry[], at: number): NativeChatMessage {
+    return {
+      id: 'roster-1',
+      role: 'system',
+      blocks: [
+        { type: 'text', text: subagentGroupFallbackText(agents) },
+        { type: 'subagent-group', groupId: 'thread-1:turn-1', agents }
+      ],
+      timestamp: at,
+      source: 'transcript'
+    }
+  }
+
+  // Explicit ascending timestamps: the list re-sorts by (timestamp, id), so rows
+  // sharing a millisecond tie-break alphabetically and the user turn can land
+  // last — which would strand the roster outside its own turn.
+  function rosterSession(
+    agents: NativeChatSubagentEntry[],
+    startedAt: number
+  ): NativeChatLiveSession {
+    return {
+      ...session,
+      status: 'ready',
+      messages: [
+        {
+          id: 'user-fanout',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Fan this out' }],
+          timestamp: startedAt,
+          source: 'transcript'
+        },
+        {
+          id: 'assistant-fanout',
+          role: 'assistant',
+          blocks: [
+            { type: 'tool-call', name: 'shell', input: { command: 'pwd' }, state: 'completed' },
+            { type: 'tool-result', output: '/repo' }
+          ],
+          timestamp: startedAt + 1,
+          source: 'transcript'
+        },
+        rosterMessage(agents, startedAt + 2)
+      ]
+    }
+  }
+
+  // A settled turn with its activity collapsed is the resting state of the whole
+  // transcript, so this is the roster's normal appearance, not an edge case. The
+  // completed-turn disclosure guard used to swallow it here — the compact row the
+  // feature exists to leave behind vanished the moment its turn ended.
+  it('leaves the roster row behind on a settled turn whose activity is collapsed', () => {
+    const startedAt = Date.now() - 3000
+    render(
+      <NativeChatMessageList
+        session={rosterSession(ROSTER, startedAt)}
+        isWorking={false}
+        workingStartedAt={startedAt}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Toggle turn details' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    expect(screen.getByRole('button', { name: /Ran 2 subagents/ })).toHaveTextContent('1 failed')
+    // The twin is the roster written out for clients that cannot draw the block.
+    // This one draws it, so printing the sentence too would say it all twice.
+    expect(screen.queryByText('Ran 2 subagents (1 failed)')).toBeNull()
+  })
+
+  // The block is provider-agnostic — the Claude lane feeds it too — so a lane
+  // that folds a roster into a message carrying real prose is a live shape. The
+  // filter used to drop EVERY text block once a roster was present, so that
+  // prose vanished on desktop while mobile, which reads the raw blocks, kept it.
+  it('keeps prose beside a roster block and drops only the twin', () => {
+    const startedAt = Date.now() - 3000
+    const twin = subagentGroupFallbackText(ROSTER)
+    render(
+      <NativeChatMessageList
+        session={{
+          ...rosterSession(ROSTER, startedAt),
+          messages: [
+            {
+              id: 'roster-with-prose',
+              role: 'assistant',
+              blocks: [
+                { type: 'text', text: 'Handing the audit to two children.' },
+                { type: 'text', text: twin },
+                { type: 'subagent-group', groupId: 'thread-1:turn-1', agents: ROSTER }
+              ],
+              timestamp: startedAt + 3,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking={false}
+        workingStartedAt={startedAt}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.getByText('Handing the audit to two children.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Ran 2 subagents/ })).toBeInTheDocument()
+    expect(screen.queryByText(twin)).toBeNull()
+  })
+
+  // The reordering that kept the roster visible must not have let TOOL activity
+  // out from behind the same disclosure: a failed child command reading as live
+  // on a finished turn is what put that guard there.
+  it('keeps tool activity behind the disclosure the roster now bypasses', () => {
+    const startedAt = Date.now() - 3000
+    render(
+      <NativeChatMessageList
+        session={rosterSession(ROSTER, startedAt)}
+        isWorking={false}
+        workingStartedAt={startedAt}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.queryByRole('button', { name: /1× shell/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle turn details' }))
+    expect(screen.getByRole('button', { name: /1× shell/ })).toBeInTheDocument()
+    // Expanding must reveal the tools beside the roster, never a second copy of it.
+    expect(screen.getAllByRole('button', { name: /Ran 2 subagents/ })).toHaveLength(1)
+  })
+
+  it('reads as a live spawn while the turn is still working', () => {
+    render(
+      <NativeChatMessageList
+        session={{
+          ...rosterSession(
+            [
+              { id: 'a', label: 'read', state: 'working' },
+              { id: 'b', label: 'search', state: 'working' }
+            ],
+            Date.now() - 3000
+          ),
+          status: 'working'
+        }}
+        isWorking
+        workingStartedAt={Date.now()}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: /Kicked off 2 subagents/ })).toHaveTextContent(
+      '2 working'
+    )
+  })
+
+  // The QA defect, at the seam that produced it. A mid-turn correction opens a
+  // NEW turn, so `isCurrentTurn` goes false for the fan-out's row and the list
+  // passes `activeTurnIsWorking={false}` down to the roster. The row used to
+  // relabel every live child `unverifiable` and flip its headline to "Ran" —
+  // claiming both that contact was lost and that the fan-out had finished, while
+  // the three real children were still running and completed 57-87s later.
+  it('keeps live children working after a newer turn supersedes their own', () => {
+    const startedAt = Date.now() - 3000
+    const live = rosterSession(
+      [
+        { id: 'a', label: 'read_readme', state: 'working', startedAt },
+        { id: 'b', label: 'read_package', state: 'working', startedAt }
+      ],
+      startedAt
+    )
+    render(
+      <NativeChatMessageList
+        session={{
+          ...live,
+          status: 'working',
+          messages: [
+            ...live.messages,
+            {
+              id: 'user-correction',
+              role: 'user',
+              blocks: [{ type: 'text', text: 'Actually, read the styleguide too' }],
+              timestamp: startedAt + 3,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking
+        workingStartedAt={startedAt + 3}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    const roster = screen.getByRole('button', { name: /Kicked off 2 subagents/ })
+    expect(roster).toHaveTextContent('2 working')
+    expect(roster).not.toHaveTextContent('unverifiable')
+    expect(screen.queryByRole('button', { name: /Ran 2 subagents/ })).toBeNull()
+  })
+})
+
+// The block schema admits `agents: []`, so a childless spawn group is a shape the
+// wire allows even though no producer writes one. It draws nothing, so the row
+// must not be mounted on its account: "counts as renderable" and "actually draws"
+// have to answer the same. A row that passes the first and fails the second is an
+// invisible div that still consumes one `gap-5` slot of the transcript.
+describe('NativeChatMessageList childless spawn group', () => {
+  const NO_AGENTS: NativeChatSubagentEntry[] = []
+
+  function rosterSession(blocks: NativeChatMessage['blocks'], at: number): NativeChatLiveSession {
+    return {
+      ...session,
+      status: 'ready',
+      messages: [
+        {
+          id: 'user-fanout',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Fan this out' }],
+          timestamp: at,
+          source: 'transcript'
+        },
+        { id: 'roster-1', role: 'system', blocks, timestamp: at + 1, source: 'transcript' }
+      ]
+    }
+  }
+
+  /** Every slot the transcript column lays out — one per row that mounted. */
+  function emptySlots(container: HTMLElement): Element[] {
+    const column = container.querySelector('.max-w-4xl')
+    expect(column).not.toBeNull()
+    return Array.from(column!.children).filter((slot) => slot.textContent === '')
+  }
+
+  it('mounts no row for a bare spawn group with no children', () => {
+    const startedAt = Date.now() - 3000
+    const { container } = render(
+      <NativeChatMessageList
+        session={rosterSession(
+          [{ type: 'subagent-group', groupId: 'thread-1:turn-1', agents: NO_AGENTS }],
+          startedAt
+        )}
+        isWorking={false}
+        workingStartedAt={startedAt}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.getByText('Fan this out')).toBeInTheDocument()
+    expect(emptySlots(container)).toEqual([])
+  })
+
+  it('falls back to the plain-text twin when the block it stands in for cannot draw', () => {
+    const startedAt = Date.now() - 3000
+    const { container } = render(
+      <NativeChatMessageList
+        session={rosterSession(
+          [
+            { type: 'text', text: subagentGroupFallbackText(NO_AGENTS) },
+            { type: 'subagent-group', groupId: 'thread-1:turn-1', agents: NO_AGENTS }
+          ],
+          startedAt
+        )}
+        isWorking={false}
+        workingStartedAt={startedAt}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    // The twin is dropped only because the block draws the roster instead. This
+    // one cannot, so suppressing it too would leave the row with nothing at all.
+    expect(screen.getByText(subagentGroupFallbackText(NO_AGENTS))).toBeInTheDocument()
+    expect(emptySlots(container)).toEqual([])
   })
 })

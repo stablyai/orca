@@ -87,9 +87,11 @@ const BLOCKER_REASON: Record<
   'floating-workspace': 'structured_unsupported_on_host',
   'tui-launch-customization': 'tui_launch_customization',
   'remote-execution-host': 'remote_execution_host',
-  'codex-on-windows': 'codex_on_windows',
   'project-runtime': 'wsl_execution_runtime',
-  'runtime-capability': 'structured_sessions_unavailable'
+  'runtime-capability': 'structured_sessions_unavailable',
+  // Orchestration passes its own host's list, so this is unreachable there; the map is
+  // exhaustive by type and must still name it.
+  'runtime-capability-unknown': 'structured_sessions_unavailable'
 }
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
@@ -105,7 +107,6 @@ const HOST_SUPPORT_REASON: Record<
 export function decideWorkerStartMode(args: {
   params: WorkerStartModePlacement
   settings: WorkerStartModeSettings | null | undefined
-  platform: NodeJS.Platform
 }): WorkerStartModeReceipt {
   const { params, settings } = args
   if (!prefersStructuredNativeChatByDefault(settings)) {
@@ -125,7 +126,6 @@ export function decideWorkerStartMode(args: {
     agent,
     // Set only by --on, which the placement check above already turned into a fallback.
     executionHostId: 'local',
-    platform: args.platform,
     hostCapabilities: RUNTIME_CAPABILITIES,
     // Orchestration resolves a managed worktree or folder workspace; a floating terminal is never
     // a worker placement. WSL is left to the executing host's own create-support probe, which

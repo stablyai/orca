@@ -54,6 +54,10 @@ export const ADMISSION_METHODS = [
   { method: 'agentSession.ensure', params: attachParams() },
   { method: 'agentSession.send', params: sendParams() },
   {
+    method: 'agentSession.rewind',
+    params: { envelope: envelope(), itemId: 'chosen', expectedEpoch: 'epoch' }
+  },
+  {
     method: 'agentSession.respondToApproval',
     params: { envelope: envelope(), itemId: 'item-1', expectedRevision: 1, optionId: 'allow' }
   },

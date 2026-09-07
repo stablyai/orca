@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
@@ -84,9 +85,14 @@ export type MailboxCheckOptions = {
 
 export function createRuntime(
   db: OrchestrationDb,
-  options: { connectionId?: string; isWsl?: boolean } = {}
+  options: {
+    connectionId?: string
+    isWsl?: boolean
+    getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+  } = {}
 ): MailboxNotificationHarness {
   const runtime = new OrcaRuntimeService(null, undefined, {
+    getAgentStatusSnapshot: options.getAgentStatusSnapshot,
     attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
       paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
         ? { paneKey, source: 'current_hook' }
