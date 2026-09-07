@@ -36,7 +36,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       lastOutputAt: pty.lastOutputAt,
       preview: pty.preview,
       surface: this.getLeavesForPty(pty.ptyId).some(
-        (leaf) => (leaf.surface ?? 'visible') === 'visible'
+        (leaf) => (leaf.surface ?? (leaf.parked ? 'background' : 'visible')) === 'visible'
       )
         ? 'visible'
         : 'background',
