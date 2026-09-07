@@ -96,6 +96,21 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
 
+  /** Single host writer for mobile session snapshots; versions are total-order stamps. */
+  protected storeMobileSessionSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const snapshotVersion = existing
+      ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
+      : snapshot.snapshotVersion
+    const stamped =
+      snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
+    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    return stamped
+  }
+
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null

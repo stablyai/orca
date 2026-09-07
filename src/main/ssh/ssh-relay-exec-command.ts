@@ -24,6 +24,16 @@ type SshCommandTerminationError = Error & {
   sshChannelCloseConfirmed: boolean
 }
 
+// Why: callers must tell "the host answered no" from "the host never answered". Matching the
+// message text is what let an unanswered probe be read as a definitive negative.
+export const SSH_EXEC_TIMEOUT_CODE = 'SSH_EXEC_TIMEOUT'
+
+export function isSshExecTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error && (error as Partial<{ code: string }>).code === SSH_EXEC_TIMEOUT_CODE
+  )
+}
+
 export function isUnconfirmedSshCommandTermination(
   error: unknown
 ): error is SshCommandTerminationError {
@@ -164,8 +174,13 @@ export async function execCommand(
     }
     const timeout = setTimeout(() => {
       requestTermination(
-        new Error(
-          `Command "${redactRelayInstallMarkerTokens(command)}" timed out after ${timeoutMs / 1000}s`
+        Object.assign(
+          new Error(
+            `Command "${redactRelayInstallMarkerTokens(command)}" timed out after ${
+              timeoutMs / 1000
+            }s`
+          ),
+          { code: SSH_EXEC_TIMEOUT_CODE }
         )
       )
     }, timeoutMs)

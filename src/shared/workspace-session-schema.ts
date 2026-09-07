@@ -47,9 +47,10 @@ const workspaceKeySchema = z.custom<WorkspaceKey>(
 )
 
 // Why: z.lazy + type annotation keeps the recursive inference working without
-// forcing zod to resolve the whole tree at definition time.
+// forcing zod to resolve the whole tree at definition time. Discriminated on `type` because a
+// plain union re-tries the leaf branch for every split node of every restored terminal layout.
 const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = z.lazy(() =>
-  z.union([
+  z.discriminatedUnion('type', [
     z.object({
       type: z.literal('leaf'),
       leafId: z.string()
@@ -168,7 +169,7 @@ const tabGroupSchema = z.object({
 const tabGroupSplitDirectionSchema = z.enum(['horizontal', 'vertical'])
 
 const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
-  z.union([
+  z.discriminatedUnion('type', [
     z.object({
       type: z.literal('leaf'),
       groupId: z.string()

@@ -32,16 +32,19 @@ same way in POSIX shells, PowerShell, and cmd.exe.
 If the selected executable cannot run, report its exact error and stop. Do not fall through
 to another executable, which could silently target a different Orca build.
 
-## Load the full guide before running Orca commands
+## Load the version-matched guide before running Orca commands
 
 ```text
 ORCA skills get orchestration
 ```
 
-That prints the complete, version-matched guide for the exact binary that will handle your
-next commands — task creation and dispatch, injected lifecycle preambles, worker_done
-authority, decision gates, and coordinator loops. Read it first, then run the specific
-command you need.
+That prints the compact, version-matched guide for the exact binary that will handle your
+next commands. It covers the normal local coordinator loop. For a conditional action gate
+such as remote placement, uncertain release recovery, or expanded DAG work, load only the
+reference that gate names with
+`ORCA skills get orchestration --reference references/<file>.md`
+(`--references` lists the names). If that binary rejects `--reference`, run
+`ORCA skills get orchestration --full` and read the named bundled reference before acting.
 
 Don't guess subcommands or flags from memory or from a cached copy of this stub. They
 change between Orca releases, and this file deliberately no longer lists them. Confirm the

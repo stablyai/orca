@@ -518,6 +518,115 @@ describe('createUISlice hydratePersistedUI', () => {
     }
   })
 
+  it('keeps agents scope filter array identities stable across unchanged re-hydrations', () => {
+    const store = createUIStore()
+    const persisted = makePersistedUI({
+      agentsVisibleHostIds: ['ssh:devbox'],
+      agentsFilterRepoIds: ['repo-1']
+    })
+
+    store.getState().hydratePersistedUI(persisted)
+    const firstHostIds = store.getState().agentsVisibleHostIds
+    const firstRepoIds = store.getState().agentsFilterRepoIds
+
+    // Why identity (toBe): sync hydration fires on every ui:changed broadcast, and a
+    // fresh array would invalidate the agents-view scope memos each time.
+    store.getState().hydratePersistedUI(makePersistedUI({ ...persisted }))
+    expect(store.getState().agentsVisibleHostIds).toBe(firstHostIds)
+    expect(store.getState().agentsFilterRepoIds).toBe(firstRepoIds)
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ ...persisted, agentsVisibleHostIds: ['ssh:otherbox'] }))
+    expect(store.getState().agentsVisibleHostIds).toEqual(['ssh:otherbox'])
+    expect(store.getState().agentsFilterRepoIds).toBe(firstRepoIds)
+  })
+
+  it('hydrates agents view preferences with safe defaults for absent fields', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({}))
+
+    expect(store.getState().agentsVisibleHostIds).toBeNull()
+    expect(store.getState().agentsFilterRepoIds).toEqual([])
+    expect(store.getState().agentsShowChildAgents).toBe(false)
+    expect(store.getState().agentsCompactMode).toBe(true)
+    expect(store.getState().agentsReadFilter).toBe('all')
+    expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('restores the persisted agents read filter and grouping, rejecting unknown values', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ agentsReadFilter: 'unread', agentsGroupBy: 'project' }))
+    expect(store.getState().agentsReadFilter).toBe('unread')
+    expect(store.getState().agentsGroupBy).toBe('project')
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsReadFilter: 'bogus' as unknown as PersistedUIState['agentsReadFilter'],
+        agentsGroupBy: 'bogus' as unknown as PersistedUIState['agentsGroupBy']
+      })
+    )
+    expect(store.getState().agentsReadFilter).toBe('all')
+    expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('sanitizes malformed agents repo filters before the repo catalog loads', () => {
+    const store = createUIStore()
+
+    expect(() =>
+      store.getState().hydratePersistedUI(
+        makePersistedUI({
+          agentsFilterRepoIds: 'repo-1' as unknown as PersistedUIState['agentsFilterRepoIds']
+        })
+      )
+    ).not.toThrow()
+    expect(store.getState().agentsFilterRepoIds).toEqual([])
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsFilterRepoIds: [
+          'repo-1',
+          42,
+          'missing'
+        ] as unknown as PersistedUIState['agentsFilterRepoIds']
+      })
+    )
+    expect(store.getState().agentsFilterRepoIds).toEqual(['repo-1', 'missing'])
+  })
+
+  it('sanitizes and prunes agents repo filters against a loaded repo catalog', () => {
+    const store = createUIStore()
+    store.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/tmp/repo-1',
+          displayName: 'Repo 1',
+          badgeColor: 'gray',
+          addedAt: 1,
+          kind: 'git'
+        }
+      ]
+    })
+
+    expect(() =>
+      store.getState().hydratePersistedUI(
+        makePersistedUI({
+          agentsFilterRepoIds: [
+            'repo-1',
+            null,
+            'missing'
+          ] as unknown as PersistedUIState['agentsFilterRepoIds']
+        })
+      )
+    ).not.toThrow()
+    expect(store.getState().agentsFilterRepoIds).toEqual(['repo-1'])
+  })
+
   it('prunes acknowledgedAgentsByPaneKey entries older than the 7-day TTL during hydration', () => {
     // HYDRATE_MAX_AGE_MS lives in src/renderer/src/store/slices/ui.ts and matches
     // the constant in src/main/agent-hooks/server.ts.
@@ -691,5 +800,35 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().agentActivityDisplayMode).toBe('compact')
+  })
+})
+
+describe('createUISlice hydratePersistedUI manual unread turns', () => {
+  it('restores manual unread stamps and prunes malformed or stale ones', () => {
+    const store = createUIStore()
+    const fresh = Date.now() - 60_000
+    const stale = Date.now() - 8 * 24 * 60 * 60 * 1000
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        manuallyUnreadTurnsByPaneKey: {
+          'tab-a:1': fresh,
+          'tab-b:1': stale,
+          'tab-c:1': 'bogus' as unknown as number
+        }
+      })
+    )
+
+    expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual({ 'tab-a:1': fresh })
+  })
+
+  it('hydrates to an empty record when the field is absent from an older profile', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ manuallyUnreadTurnsByPaneKey: undefined }))
+
+    expect(store.getState().manuallyUnreadTurnsByPaneKey).toEqual({})
   })
 })

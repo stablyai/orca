@@ -146,6 +146,7 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
         tabId: TAB_ID,
         leafId: LEAF,
         ptyId: PARKED_PTY,
+        parked: true,
         surface: 'background'
       })
     )

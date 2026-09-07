@@ -14,6 +14,7 @@ import { getInitialCodexRateLimitTarget } from '../rate-limits/codex-rate-limit-
 import { getInitialClaudeRateLimitTarget } from '../rate-limits/claude-rate-limit-target'
 import { getKimiRuntimeTarget, resolveKimiHome } from '../kimi/kimi-runtime-home'
 import { readMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
+import { readMiniMaxApiKey } from '../minimax/minimax-api-key-store'
 import { createAccountRuntimeTargetSettingsSync } from '../rate-limits/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../claude-accounts/runtime-selection'
@@ -102,10 +103,13 @@ export function initializeMainProcessAccountServices(): void {
   })
   state.rateLimits.setMiniMaxConfigResolver(() => {
     const settings = store.getSettings()
+    const apiKey = readMiniMaxApiKey() ?? ''
     return {
-      sessionCookie: readMiniMaxSessionCookie() ?? '',
+      sessionCookie: apiKey ? '' : (readMiniMaxSessionCookie() ?? ''),
       groupId: settings.minimaxGroupId,
-      models: settings.minimaxUsageModels
+      models: settings.minimaxUsageModels,
+      endpoint: settings.minimaxEndpoint,
+      apiKey
     }
   })
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)

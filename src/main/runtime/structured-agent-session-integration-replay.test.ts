@@ -21,7 +21,7 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protoc
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import { attachFingerprintFields } from '../native-chat/agent-session-wire/structured-agent-session-attach'
 import { journalDirectoryFor } from '../native-chat/agent-session-journal/journal-paths'
-import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -30,6 +30,8 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+
+const journals = createTrackedJournalOpener()
 
 const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
@@ -257,6 +259,7 @@ beforeEach(async () => {
         claimKeyId: 'key-1',
         resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
         resolveCodexCommand: () => '/usr/local/bin/codex',
+        resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveEnvironment: async () => {
           bootEnvironmentReads += 1
           return {
@@ -285,6 +288,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await stopStructuredAgentSessionRuntime()
   await rm(root, { recursive: true, force: true })
 })
@@ -317,6 +321,7 @@ describe('a structured codex session over agentSession.*', () => {
       claimKeyId: 'key-1',
       resolveWorkspacePath: async (workspaceId) => `/repos/${workspaceId}`,
       resolveCodexCommand: () => '/usr/local/bin/codex',
+      resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
       openCodexConnection: codex.openConnection,
       readProcessStartTime: async () => 1_700_000_000_000
     })
@@ -364,7 +369,7 @@ describe('a structured codex session over agentSession.*', () => {
       agent: 'codex' as const,
       providerHandle: { kind: 'codex' as const, threadId: THREAD }
     }
-    const reopened = await openAgentSessionJournal({
+    const reopened = await journals.open({
       identity,
       journalDir: journalDirectoryFor(root, identity)
     })

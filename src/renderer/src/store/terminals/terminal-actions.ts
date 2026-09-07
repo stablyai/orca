@@ -141,6 +141,8 @@ export type TerminalActions = {
   clearTabPtyId: (tabId: string, ptyId?: string) => void
   /** Protects a tab from orphan cleanup after an unverified PTY loss. */
   markUnverifiedPtyLoss: (tabId: string) => void
+  /** Records the relay's own answer that a PTY id is gone; the one `exited` a respawn may act on. */
+  markPtySourceDisowned: (ptyId: string) => void
   clearDirectSshTargetPtyBindings: (targetId: string) => number
   invalidateStaleDirectSshTargetPtyBindings: (authority: DirectSshAuthority) => number
   retryDirectSshTargetPanes: (authority: DirectSshAuthority, now?: number) => number

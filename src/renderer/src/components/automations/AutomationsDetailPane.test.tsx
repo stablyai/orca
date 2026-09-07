@@ -47,7 +47,6 @@ function renderDetailPane(options: {
           selected={selected}
           selectedExternal={null}
           selectedExternalRunPage={null}
-          selectedAutomationRunPage={null}
           selectedRuns={[]}
           selectedRunsNotice={null}
           activePaneTab={activePaneTab}
@@ -59,15 +58,10 @@ function renderDetailPane(options: {
           selectedHostEntry={null}
           hostLabelById={new Map()}
           selectedRunNowAvailability={null}
-          selectedAutomationRunPageWorkspaceDisplay={null}
-          selectedAutomationRunPageViewState={null}
-          canRerunSelectedAutomationRunPage={false}
-          isSelectedAutomationRunPageRerunPending={false}
           worktreeMap={new Map()}
           fetchExternalAutomationRuns={async () => []}
           onActivePaneTabChange={onActivePaneTabChange}
           onClearExternalRunPage={() => undefined}
-          onClearAutomationRunPage={() => undefined}
           requestExternalAction={() => undefined}
           openExternalRunPage={() => undefined}
           openEditExternalDialog={() => undefined}
@@ -75,8 +69,6 @@ function renderDetailPane(options: {
           openEditDialog={() => undefined}
           toggleAutomation={() => undefined}
           requestDeleteAutomation={() => undefined}
-          rerunAutomationRun={() => undefined}
-          openRunWorkspace={() => undefined}
           openAutomationRunPage={() => undefined}
           onBackToList={() => undefined}
           recoverSelectedRuns={() => undefined}
@@ -178,7 +170,6 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
             selected={selected}
             selectedExternal={null}
             selectedExternalRunPage={null}
-            selectedAutomationRunPage={null}
             selectedRuns={[]}
             selectedRunsNotice={null}
             activePaneTab="overview"
@@ -190,15 +181,10 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
             selectedHostEntry={null}
             hostLabelById={new Map()}
             selectedRunNowAvailability={null}
-            selectedAutomationRunPageWorkspaceDisplay={null}
-            selectedAutomationRunPageViewState={null}
-            canRerunSelectedAutomationRunPage={false}
-            isSelectedAutomationRunPageRerunPending={false}
             worktreeMap={new Map()}
             fetchExternalAutomationRuns={async () => []}
             onActivePaneTabChange={() => undefined}
             onClearExternalRunPage={() => undefined}
-            onClearAutomationRunPage={() => undefined}
             requestExternalAction={() => undefined}
             openExternalRunPage={() => undefined}
             openEditExternalDialog={() => undefined}
@@ -206,8 +192,6 @@ describe('AutomationsDetailPane tab keyboard navigation', () => {
             openEditDialog={() => undefined}
             toggleAutomation={() => undefined}
             requestDeleteAutomation={() => undefined}
-            rerunAutomationRun={() => undefined}
-            openRunWorkspace={() => undefined}
             openAutomationRunPage={() => undefined}
             onBackToList={onBackToList}
             recoverSelectedRuns={() => undefined}

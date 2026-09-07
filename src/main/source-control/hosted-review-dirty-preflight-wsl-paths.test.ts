@@ -30,7 +30,7 @@ describe('hasUncommittedChanges shared-symlink probe', () => {
 
   it('passes the configured distro through to the probe', async () => {
     await expect(
-      hasUncommittedChanges('/home/me/repo/feature', null, {
+      hasUncommittedChanges('/home/me/repo/feature', 'local', {
         localGitExecOptions: { wslDistro: 'Ubuntu' },
         sharedLinkPaths: ['node_modules']
       })

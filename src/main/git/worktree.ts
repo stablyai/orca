@@ -5,7 +5,7 @@ export {
   resolveWorktreeAddBaseContext
 } from './worktree-add'
 export { forceDeleteLocalBranch } from './worktree-branch-removal'
-export { parseWorktreeList } from './worktree-list-parser'
+export { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 // Unshared by design: verification-after-mutation callers must not join an
 // in-flight scan that predates a raw `git worktree prune` or an external client.
 // Opt into coalescing with `listWorktreesSharedStrict`.
@@ -32,7 +32,8 @@ export {
   _resetWorktreeScanCacheForTests,
   listWorktreeGraph,
   listWorktrees,
-  listWorktreesSharedStrict
+  listWorktreesSharedStrict,
+  listWorktreesSharedStrictAllowingTrueEmpty
 } from './worktree-scan-cache'
 export { bumpWorktreeScanGeneration as notifyPreparedWorktreeMutation } from './worktree-scan-cache'
 export { addSparseWorktree } from './worktree-sparse-add'

@@ -22,39 +22,56 @@ import {
 
 const JOURNAL_RESTORE_CONCURRENCY = 4
 
-export async function restoreStructuredAgentSessionsOnRestart(input: {
+export type StructuredAgentSessionReadRestoreDeps = {
   store: AgentSessionRecordStore
   journalRoot: string
-  records: AgentSessionRecord[]
   reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
   resolveRecovery: (sessionId: string) => Promise<unknown>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
   onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
   restoreHandoff: (sessionId: string) => Promise<void>
-}): Promise<void> {
-  await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, async ({ sessionId }) => {
-    const unreconciled = await input.reconcile(sessionId)
-    if (!unreconciled) {
-      // A session latched in recovery exits here at startup, without waiting for a client.
-      await input.resolveRecovery(sessionId)
-    }
-    await input.serialize(sessionId, async () => {
-      if (input.hasSession(sessionId)) {
-        // A surface that took a hold mid-restore already attached this one.
-        await input.restoreHandoff(sessionId)
-        return
-      }
-      const restored = await restoreStructuredAgentSessionRead(
-        input.store,
-        input.journalRoot,
-        sessionId
-      )
-      if (!restored) {
-        return
-      }
-      input.onReadable(sessionId, restored)
+}
+
+/**
+ * One session's share of the restart restore, and the whole of an on-demand one.
+ *
+ * Startup maps this over every supported record; a surface asking for a session it cannot see
+ * calls it for one id. The CALLER decides which records are eligible — startup filters by
+ * `supportsRecord` before mapping, so an on-demand caller owes the same check.
+ */
+export async function restoreOneStructuredAgentSessionRead(
+  input: StructuredAgentSessionReadRestoreDeps,
+  sessionId: string
+): Promise<void> {
+  const unreconciled = await input.reconcile(sessionId)
+  if (!unreconciled) {
+    // A session latched in recovery exits here at startup, without waiting for a client.
+    await input.resolveRecovery(sessionId)
+  }
+  await input.serialize(sessionId, async () => {
+    if (input.hasSession(sessionId)) {
+      // A surface that took a hold mid-restore already attached this one.
       await input.restoreHandoff(sessionId)
-    })
+      return
+    }
+    const restored = await restoreStructuredAgentSessionRead(
+      input.store,
+      input.journalRoot,
+      sessionId
+    )
+    if (!restored) {
+      return
+    }
+    input.onReadable(sessionId, restored)
+    await input.restoreHandoff(sessionId)
   })
+}
+
+export async function restoreStructuredAgentSessionsOnRestart(
+  input: StructuredAgentSessionReadRestoreDeps & { records: AgentSessionRecord[] }
+): Promise<void> {
+  await mapWithConcurrency(input.records, JOURNAL_RESTORE_CONCURRENCY, ({ sessionId }) =>
+    restoreOneStructuredAgentSessionRead(input, sessionId)
+  )
 }

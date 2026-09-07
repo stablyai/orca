@@ -296,4 +296,40 @@ describe('useStructuredAgentSession options', () => {
 
     expect(result.current.error).toBeNull()
   })
+
+  it('includes one background task id in the cancel fingerprint and payload', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options'
+        ? Promise.resolve(OPTIONS)
+        : Promise.resolve({
+            ok: true,
+            value: { turnId: 'background-tasks', cancelled: true }
+          })
+    )
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'claude',
+        isVisible: true
+      })
+    )
+
+    await act(async () => {
+      await expect(result.current.stopBackgroundTask('task-2')).resolves.toMatchObject({
+        cancelled: true
+      })
+    })
+
+    const mutation = mocks.call.mock.calls.find(([, method]) => method === 'agentSession.cancel')
+    expect(mutation?.[2]).toMatchObject({
+      envelope: {
+        sessionId: 'session-1',
+        expectedRuntimeFence: 3
+      },
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      taskId: 'task-2'
+    })
+  })
 })

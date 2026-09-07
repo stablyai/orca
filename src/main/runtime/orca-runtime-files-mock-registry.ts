@@ -105,11 +105,20 @@ export const filesystemSearchGitMock = {
   searchWithGitGrep: searchWithGitGrepMock
 }
 
+const SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE =
+  'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+
 export const sshFilesystemDispatchMock = {
   getSshFilesystemProvider: getSshFilesystemProviderMock,
+  requireSshFilesystemProvider: (connectionId: string) => {
+    const provider = getSshFilesystemProviderMock(connectionId)
+    if (!provider) {
+      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
+    }
+    return provider
+  },
   onSshFilesystemProviderRegistered: () => () => undefined,
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE:
-    'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE
 }
 
 export function resetRuntimeFileMocks(): void {

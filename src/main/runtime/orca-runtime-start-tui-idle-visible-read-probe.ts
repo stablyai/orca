@@ -72,9 +72,8 @@ export class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWith
           return
         }
         const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
-        if (waiter.pollInterval) {
-          clearInterval(waiter.pollInterval)
-          waiter.pollInterval = null
+        if (waiter.cancelIdlePoll) {
+          waiter.cancelIdlePoll()
         }
         this.terminalWaiters.resolve(waiter, result)
       })

@@ -6,15 +6,12 @@ import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } fro
 import { abortMerge, abortRebase, commitChanges } from '../git/status'
 import { getUpstreamStatus } from '../git/upstream'
 import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../providers/ssh-git-dispatch'
-import {
   materializeWorktreePushTargetRemote,
   materializeWorktreePushTargetRemoteSsh
 } from '../ipc/worktree-remote'
 import {
   localGitOptionsForTarget,
+  requireRuntimeGitProvider,
   type RuntimeGitCommandHost,
   type RuntimeGitTarget
 } from './runtime-git-command-target'
@@ -37,11 +34,8 @@ export class RuntimeGitSyncCommands {
 
   async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       await provider.abortMerge(target.worktree.path)
       return { ok: true }
     }
@@ -54,11 +48,8 @@ export class RuntimeGitSyncCommands {
 
   async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       await provider.abortRebase(target.worktree.path)
       return { ok: true }
     }
@@ -74,11 +65,8 @@ export class RuntimeGitSyncCommands {
     pushTarget?: GitPushTarget
   ): Promise<GitUpstreamStatus> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       return provider.getUpstreamStatus(target.worktree.path, pushTarget)
     }
     return getUpstreamStatus(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
@@ -89,11 +77,8 @@ export class RuntimeGitSyncCommands {
     pushTarget?: GitPushTarget
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
@@ -123,11 +108,8 @@ export class RuntimeGitSyncCommands {
     expectedUpstream: GitForkSyncExpectedUpstream
   ): Promise<GitForkSyncResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       return provider.syncForkDefaultBranch(target.worktree.path, expectedUpstream)
     }
     return gitSyncForkDefaultBranch(target.worktree.path, expectedUpstream, {
@@ -141,11 +123,8 @@ export class RuntimeGitSyncCommands {
     pushTarget?: GitPushTarget
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
@@ -175,11 +154,8 @@ export class RuntimeGitSyncCommands {
     pushTarget?: GitPushTarget
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
@@ -206,11 +182,8 @@ export class RuntimeGitSyncCommands {
 
   async rebaseRuntimeGitFromBase(worktreeSelector: string, baseRef: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       await provider.rebaseFromBase(target.worktree.path, baseRef)
       return { ok: true }
     }
@@ -228,11 +201,8 @@ export class RuntimeGitSyncCommands {
     forceWithLease?: boolean
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
@@ -268,11 +238,8 @@ export class RuntimeGitSyncCommands {
       throw new Error('Commit message is required')
     }
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
-    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeGitProvider(target)
+    if (provider) {
       return provider.commit(target.worktree.path, message)
     }
     return commitChanges(target.worktree.path, message, {

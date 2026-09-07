@@ -1,0 +1,74 @@
+name: Packaged browser compatibility
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA or ref to validate (defaults to the selected revision)
+        type: string
+        required: false
+  schedule:
+    - cron: '20 8 * * 1'
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - name: Install headless tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 ripgrep xvfb zsh openbox x11-utils
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+      - name: Download pinned old release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v1.4.188 --repo stablyai/orca --pattern orca-ide_1.4.188_amd64.deb --dir "$RUNNER_TEMP/old-orca"
+          python3 - <<'PYVERIFY'
+          import base64,hashlib,os,pathlib,subprocess
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'old-orca'
+          package=root/'orca-ide_1.4.188_amd64.deb'
+          expected='uGONFUDfinYggxcT9ac72wnnlofLQaqasDDeP0HWOSqarBwTi1Ax3khmzKUY3vUnvuYOpSCEmsH4InzLZ2vg6g=='
+          assert base64.b64encode(hashlib.sha512(package.read_bytes()).digest()).decode()==expected
+          extracted=root/'extracted'
+          subprocess.run(['dpkg-deb','-x',str(package),str(extracted)],check=True)
+          executable=extracted/'opt'/'Orca'/'orca-ide'
+          assert executable.is_file() and os.access(executable,os.X_OK)
+          with open(os.environ['GITHUB_ENV'],'a') as env: env.write('ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE='+str(executable)+'\n')
+          print('Verified old package:',executable)
+          PYVERIFY
+      - name: Build current Electron app
+        env:
+          VITE_EXPOSE_STORE: 'true'
+        run: |
+          pnpm run build:relay
+          pnpm exec electron-vite build --mode e2e
+          pnpm run build:web-from-renderer
+      - name: Run both mixed-version directions
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/packaged-browser-results.json
+        run: >-
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh
+          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
+          pnpm exec playwright test --config tests/playwright.config.ts
+          tests/e2e/packaged-mixed-version-browser-placement.spec.ts
+          --project=electron-headless --workers=1 --retries=0 --repeat-each=3 --reporter=list,json
+      - name: Require all six compatibility executions
+        if: always()
+        run: node config/scripts/verify-packaged-browser-participation.mjs test-results/packaged-browser-results.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: packaged-mixed-version-audit
+          path: test-results/
+          retention-days: 3

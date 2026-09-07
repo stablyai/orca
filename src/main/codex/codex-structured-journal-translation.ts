@@ -1,3 +1,4 @@
+import { createCodexProviderActivityReader } from '../native-chat/agent-session-wire/provider-frame-activity'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import { CodexJournalPrompts } from './codex-structured-journal-prompts'
@@ -20,6 +21,7 @@ import {
   readCodexJournalString
 } from './codex-structured-journal-translation-values'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 export type {
   CodexJournalTranslationAdmission,
@@ -55,22 +57,44 @@ export function createCodexJournalTranslator(
   )
   const flushStreams = (): CodexJournalTranslationAdmission =>
     items.streams.flush() ? CODEX_JOURNAL_ADMITTED : { accepted: false, reason: 'backpressure' }
+  let readActivity = createCodexProviderActivityReader()
+  const publishActivity = (
+    event: Extract<CodexStructuredSessionEvent, { type: 'notification' }>,
+    admission: CodexJournalTranslationAdmission
+  ): CodexJournalTranslationAdmission => {
+    if (!admission.accepted || event.threadId !== (deps.primaryThreadId?.() ?? null)) {
+      return admission
+    }
+    const turnId = readCodexTurnId(event.params) ?? activeTurns.current(event.threadId)
+    if (!turnId) {
+      return admission
+    }
+    const text = readActivity(event.method, event.params)
+    if (text !== undefined) {
+      deps.sink.setActivity?.(text ? { turnId, text } : null)
+    }
+    return admission
+  }
 
   return {
-    restoreThread: (threadId, thread) =>
-      restoreCodexJournalThread({
+    restoreThread: (threadId, thread) => {
+      if (threadId === (deps.primaryThreadId?.() ?? null)) {
+        readActivity = createCodexProviderActivityReader()
+      }
+      return restoreCodexJournalThread({
         threadId,
         thread,
         currentTurnIds: activeTurns.byThread,
         ordinals: items.ordinals,
         handleItem: (event) => {
-          const translated = items.handle(event)
+          const translated = items.handle(event, 'history')
           return translated.handled
             ? translated.admission
             : { accepted: false, reason: 'untranslated' }
         },
         flush: items.streams.flush
-      }),
+      })
+    },
     handle: (event) => {
       if (event.type === 'ended') {
         const streamAdmission = flushStreams()
@@ -94,6 +118,8 @@ export function createCodexJournalTranslator(
         if (!admission.accepted) {
           return admission
         }
+        readActivity = createCodexProviderActivityReader()
+        deps.sink.setActivity?.(null)
         items.activeItems.clear()
         prompts.pending.clear()
         activeTurns.clear()
@@ -102,7 +128,7 @@ export function createCodexJournalTranslator(
       if (event.type === 'notification') {
         const streamResult = items.streams.handle(event.threadId, event.method, event.params)
         if (streamResult.handled) {
-          return streamResult.admission
+          return publishActivity(event, streamResult.admission)
         }
       }
       const streamAdmission = flushStreams()
@@ -135,18 +161,20 @@ export function createCodexJournalTranslator(
       }
       if (event.method === 'item/started' || event.method === 'item/completed') {
         const translated = items.handle(event)
-        return translated.handled
-          ? translated.admission
-          : genericFrames.appendUnhandled(
-              `notification:${event.method}`,
-              event.params,
-              event.threadId
-            )
+        return publishActivity(
+          event,
+          translated.handled
+            ? translated.admission
+            : genericFrames.appendUnhandled(
+                `notification:${event.method}`,
+                event.params,
+                event.threadId
+              )
+        )
       }
-      return genericFrames.appendUnhandled(
-        `notification:${event.method}`,
-        event.params,
-        event.threadId
+      return publishActivity(
+        event,
+        genericFrames.appendUnhandled(`notification:${event.method}`, event.params, event.threadId)
       )
     },
     resolvePrompt: (journalItemId) => prompts.resolve(journalItemId),
@@ -206,6 +234,10 @@ export function createCodexJournalTranslator(
     })
     if (admission.accepted) {
       activeTurns.remember(event.threadId, turnId)
+      if (event.threadId === (deps.primaryThreadId?.() ?? null)) {
+        readActivity = createCodexProviderActivityReader()
+        deps.sink.setActivity?.(null)
+      }
     }
     return admission
   }
@@ -234,6 +266,10 @@ export function createCodexJournalTranslator(
     if (admission.accepted) {
       items.ordinals.forgetTurn(event.threadId, turnId)
       activeTurns.forget(event.threadId, turnId)
+      if (event.threadId === (deps.primaryThreadId?.() ?? null)) {
+        readActivity = createCodexProviderActivityReader()
+        deps.sink.setActivity?.(null)
+      }
     }
     return admission
   }

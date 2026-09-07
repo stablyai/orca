@@ -1,3 +1,7 @@
+import {
+  RELAY_HOST_CLOSE_REASON,
+  type RelayHostCloseReason
+} from '../../../shared/relay-host-close-reason'
 import type { RelayBrokerStatus } from './relay-session-broker'
 import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
 
@@ -14,7 +18,7 @@ export type RelayAuthContext = {
 }
 
 export type CoordinatedRelayBroker = {
-  closeNow(): void
+  closeNow(hostCloseReason?: RelayHostCloseReason): void
   isLive?(): boolean
 }
 
@@ -78,13 +82,16 @@ export class RelayAuthCoordinator {
     void reconcile
   }
 
-  fenceAndCloseNow(): void {
+  // hostCloseReason names an auth loss the phone should be told about. Quit,
+  // relaunch and every other fence pass nothing, so the control socket dies
+  // abruptly exactly as before and the cell records no cause.
+  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
     ++this.authEpoch
     this.cancelLinger()
     this.cancelRetry()
     this.retryAttempt = 0
     this.invalidatePendingOwnerships()
-    this.invalidateOwnership()
+    this.invalidateOwnership(hostCloseReason)
     this.options.onStatus('offline')
   }
 
@@ -146,7 +153,11 @@ export class RelayAuthCoordinator {
       if (!context || !context.relayEntitled) {
         this.cancelLinger()
         this.retryAttempt = 0
-        this.invalidateOwnership()
+        // Why only the null case: readContext throws on transient failures and
+        // returns null solely when the cloud session is gone (absent, or cleared
+        // by a 401). A present-but-unentitled context is still a signed-in
+        // desktop, and "sign in to reconnect" would be wrong advice for it.
+        this.invalidateOwnership(context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
         this.options.onStatus('offline')
         return
       }
@@ -271,12 +282,12 @@ export class RelayAuthCoordinator {
     return context.accessToken
   }
 
-  private invalidateOwnership(): void {
+  private invalidateOwnership(hostCloseReason?: RelayHostCloseReason): void {
     const ownership = this.ownership
     this.ownership = null
     if (ownership) {
       ownership.valid = false
-      ownership.broker?.closeNow()
+      ownership.broker?.closeNow(hostCloseReason)
     }
   }
 
