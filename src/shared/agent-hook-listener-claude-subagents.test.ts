@@ -628,6 +628,34 @@ describe('shared agent-hook-listener', () => {
       expect(done?.payload.interrupted).toBe(true)
     })
 
+    it('keeps an inference-only interrupt on a StopFailure error boundary', () => {
+      // Why: only a clean Stop proves clean completion. A StopFailure is an error boundary,
+      // so it must not clear a provisional interrupt.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'cancel this' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const failed = claudeEvent({ hook_event_name: 'StopFailure' })
+      expect(failed?.payload.state).toBe('done')
+      expect(failed?.payload.interrupted).toBe(true)
+    })
+
+    it('clears an inference-only interrupt even while a subagent still holds the pane working', () => {
+      // Why: a subagent spawned between the Escape and the clean Stop keeps the pane 'working'
+      // (that gate ignores interrupt), so the clean lead Stop must still drop the provisional
+      // flag — otherwise the false red returns once the child drains.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'keep working' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+      claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'achild-1', agent_type: 'probe' })
+
+      const stillWorking = claudeEvent({ hook_event_name: 'Stop' })
+      expect(stillWorking?.payload.state).toBe('working')
+      expect(stillWorking?.payload.interrupted).toBeUndefined()
+
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'achild-1' })
+      expect(drained?.payload.state).toBe('done')
+      expect(drained?.payload.interrupted).toBeUndefined()
+    })
+
     it('does not resurrect persisted idle child rows after a restart', () => {
       // Why: the roster tracks only working children now. A persisted idle
       // snapshot (from a build that kept idle rows) is a finished child, so
