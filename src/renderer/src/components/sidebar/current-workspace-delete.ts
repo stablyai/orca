@@ -1,12 +1,8 @@
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getWorktreeOnHostFromState } from '@/store/selectors'
 import type { AppState } from '@/store/types'
 import { isEditableTarget } from '@/lib/editable-target'
-import {
-  composeWorktreeHostIdentity,
-  getExecutionHostIdFromWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../../shared/worktree/host-qualified-identity'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -16,9 +12,10 @@ import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-matc
 const pendingFolderDeletes = new Set<string>()
 
 type DeleteWorktree = typeof runWorktreeDelete
-type HoveredWorkspaceDeleteState = Pick<
+type CurrentWorkspaceDeleteState = Pick<
   AppState,
   | 'activeModal'
+  | 'activeWorkspaceExecutionHostId'
   | 'activeWorktreeId'
   | 'deleteFolderWorkspace'
   | 'deleteStateByWorktreeId'
@@ -28,62 +25,50 @@ type CurrentWorkspaceState = Pick<
   AppState,
   'activeWorkspaceExecutionHostId' | 'activeWorktreeId' | 'setActiveWorktree'
 >
-type HoveredWorkspaceDeleteDependencies = {
+type CurrentWorkspaceDeleteDependencies = {
   deleteWorktree: DeleteWorktree
   getCurrentState: () => CurrentWorkspaceState
 }
-type HoveredWorkspaceDocument = Pick<Document, 'activeElement' | 'querySelectorAll'>
+type CurrentWorkspaceDocument = Pick<Document, 'activeElement'>
 
-export type HoveredWorkspaceDeleteTarget =
+export type CurrentWorkspaceDeleteTarget =
   | {
       kind: 'folder'
-      executionHostId: ExecutionHostId
+      executionHostId: ExecutionHostId | undefined
       folderWorkspaceId: string
       workspaceKey: string
     }
   | { kind: 'worktree'; worktree: Worktree }
 
-export function getHoveredWorkspaceIdentity(
-  doc: HoveredWorkspaceDocument = document
-): { hostIdentity: string; workspaceId: string } | null {
-  const hoveredRows = doc.querySelectorAll<HTMLElement>(
-    '[data-worktree-sidebar] [role="option"][data-worktree-id]:hover'
-  )
-  const row = hoveredRows.item(hoveredRows.length - 1)
-  const workspaceId = row?.dataset.worktreeId
-  const hostIdentity = row?.dataset.worktreeHostIdentity
-  return workspaceId && hostIdentity ? { workspaceId, hostIdentity } : null
-}
-
-export function resolveHoveredWorkspaceDeleteTarget(
-  state: HoveredWorkspaceDeleteState,
-  doc: HoveredWorkspaceDocument = document
-): HoveredWorkspaceDeleteTarget | null {
+/**
+ * The workspace the delete shortcut acts on: the one selected in the sidebar (store state), never
+ * the row under the pointer. `:hover` lingers on whichever row the mouse last crossed — it goes
+ * stale when the pointer sits over a native browser view or the list shifts under it — so a
+ * hover-derived target silently deletes a workspace other than the highlighted one.
+ */
+export function resolveCurrentWorkspaceDeleteTarget(
+  state: CurrentWorkspaceDeleteState,
+  doc: CurrentWorkspaceDocument = document
+): CurrentWorkspaceDeleteTarget | null {
   if (state.activeModal !== 'none' || (doc.activeElement && isEditableTarget(doc.activeElement))) {
     return null
   }
-  const hovered = getHoveredWorkspaceIdentity(doc)
-  if (!hovered) {
+  const workspaceId = state.activeWorktreeId
+  if (!workspaceId) {
     return null
   }
-  const workspaceScope = parseWorkspaceKey(hovered.workspaceId)
+  const executionHostId = state.activeWorkspaceExecutionHostId ?? undefined
+  const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type === 'folder') {
-    const executionHostId = getExecutionHostIdFromWorktreeHostIdentity(hovered.hostIdentity)
-    if (!executionHostId) {
-      return null
-    }
     return {
       kind: 'folder',
       executionHostId,
       folderWorkspaceId: workspaceScope.folderWorkspaceId,
-      workspaceKey: hovered.workspaceId
+      workspaceKey: workspaceId
     }
   }
-  const worktree = getAllWorktreesFromState(state).find(
-    (candidate) =>
-      candidate.id === hovered.workspaceId &&
-      getWorktreeHostIdentity(candidate) === hovered.hostIdentity
-  )
+  // Why: same host-qualified lookup as runWorktreeDelete — one row per host can share a path.
+  const worktree = getWorktreeOnHostFromState(state, workspaceId, executionHostId)
   return worktree &&
     !worktree.isMainWorktree &&
     !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting
@@ -91,10 +76,10 @@ export function resolveHoveredWorkspaceDeleteTarget(
     : null
 }
 
-export function deleteHoveredWorkspaceImmediately(
-  state: HoveredWorkspaceDeleteState,
-  target: HoveredWorkspaceDeleteTarget | null = resolveHoveredWorkspaceDeleteTarget(state),
-  dependencies: HoveredWorkspaceDeleteDependencies = {
+export function deleteCurrentWorkspaceImmediately(
+  state: CurrentWorkspaceDeleteState,
+  target: CurrentWorkspaceDeleteTarget | null = resolveCurrentWorkspaceDeleteTarget(state),
+  dependencies: CurrentWorkspaceDeleteDependencies = {
     deleteWorktree: runWorktreeDelete,
     getCurrentState: useAppStore.getState
   }
@@ -109,15 +94,17 @@ export function deleteHoveredWorkspaceImmediately(
     }
     pendingFolderDeletes.add(pendingIdentity)
     void state
-      .deleteFolderWorkspace(target.folderWorkspaceId, {
-        executionHostId: target.executionHostId
-      })
+      .deleteFolderWorkspace(
+        target.folderWorkspaceId,
+        target.executionHostId ? { executionHostId: target.executionHostId } : undefined
+      )
       .then((deleted) => {
         const current = dependencies.getCurrentState()
         if (
           deleted &&
           current.activeWorktreeId === target.workspaceKey &&
-          current.activeWorkspaceExecutionHostId === target.executionHostId
+          (!target.executionHostId ||
+            current.activeWorkspaceExecutionHostId === target.executionHostId)
         ) {
           current.setActiveWorktree(null)
         }

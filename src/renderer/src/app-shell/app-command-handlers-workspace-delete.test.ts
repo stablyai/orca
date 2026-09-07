@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { HoveredWorkspaceDeleteTarget } from '../components/sidebar/hovered-workspace-delete'
+import type { CurrentWorkspaceDeleteTarget } from '../components/sidebar/current-workspace-delete'
 import type { AppShortcutState, ShortcutDispatchInput } from './app-command-handlers'
 
 const mocks = vi.hoisted(() => ({
-  deleteHoveredWorkspaceImmediately: vi.fn(),
-  hoveredTarget: { kind: 'worktree', worktree: {} } as HoveredWorkspaceDeleteTarget | null,
+  deleteCurrentWorkspaceImmediately: vi.fn(),
+  activeTarget: { kind: 'worktree', worktree: {} } as CurrentWorkspaceDeleteTarget | null,
   store: {} as AppState
 }))
 
@@ -13,9 +13,9 @@ vi.mock('../store', () => ({
   useAppStore: Object.assign(vi.fn(), { getState: () => mocks.store })
 }))
 
-vi.mock('../components/sidebar/hovered-workspace-delete', () => ({
-  deleteHoveredWorkspaceImmediately: mocks.deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget: () => mocks.hoveredTarget
+vi.mock('../components/sidebar/current-workspace-delete', () => ({
+  deleteCurrentWorkspaceImmediately: mocks.deleteCurrentWorkspaceImmediately,
+  resolveCurrentWorkspaceDeleteTarget: () => mocks.activeTarget
 }))
 
 vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
@@ -59,7 +59,7 @@ describe('workspace delete app command', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.store = { activeWorktreeId: 'repo::/feature' } as AppState
-    mocks.hoveredTarget = { kind: 'worktree', worktree: {} as never }
+    mocks.activeTarget = { kind: 'worktree', worktree: {} as never }
   })
 
   it('claims the chord and immediately deletes the active workspace', () => {
@@ -70,19 +70,19 @@ describe('workspace delete app command', () => {
 
     expect(handler?.()).toBe(true)
     expect(input.preventDefault).toHaveBeenCalledOnce()
-    expect(mocks.deleteHoveredWorkspaceImmediately).toHaveBeenCalledWith(
+    expect(mocks.deleteCurrentWorkspaceImmediately).toHaveBeenCalledWith(
       mocks.store,
-      mocks.hoveredTarget
+      mocks.activeTarget
     )
   })
 
-  it('does not claim the chord without a hovered workspace', () => {
+  it('does not claim the chord without a deletable active workspace', () => {
     const input = shortcutInput()
     const handler = createAppCommandHandlers(shortcutState(), input).get('workspace.delete')
 
-    mocks.hoveredTarget = null
+    mocks.activeTarget = null
     expect(handler?.()).toBe(false)
     expect(input.preventDefault).not.toHaveBeenCalled()
-    expect(mocks.deleteHoveredWorkspaceImmediately).not.toHaveBeenCalled()
+    expect(mocks.deleteCurrentWorkspaceImmediately).not.toHaveBeenCalled()
   })
 })

@@ -33,6 +33,8 @@ import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '@/store'
+import { isActiveWorkspaceRow } from './active-workspace-row'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from './WorktreeStatusMenuItems'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
@@ -101,6 +103,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
+  // Why: the shortcut acts on the selected workspace, so its badge belongs on that row only.
+  const isActiveWorkspace = useAppStore((s) => isActiveWorkspaceRow(s, worktree))
   return (
     <div
       ref={scopeRef}
@@ -374,7 +378,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                           'auto.components.sidebar.WorktreeContextMenu.f4475537d8',
                           'Delete'
                         )}
-            {!isMultiContext && !removesProject && deleteShortcut ? (
+            {!isMultiContext && !removesProject && isActiveWorkspace && deleteShortcut ? (
               <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
             ) : null}
           </DropdownMenuItem>
