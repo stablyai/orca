@@ -87,12 +87,13 @@ describe('buildActivityEvents', () => {
       now: 2_000
     })
 
-    expect(result.events).toHaveLength(1)
-    expect(result.events[0]).toMatchObject({
+    expect(result.events).toHaveLength(2)
+    expect(result.events[0]).toMatchObject({ state: 'working', timestamp: 2_000 })
+    expect(result.events[1]).toMatchObject({
       state: 'done',
       timestamp: 1_000
     })
-    expect(result.events[0].entry.prompt).toBe('First prompt')
+    expect(result.events[1].entry.prompt).toBe('First prompt')
     expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
     expect(result.liveAgentByPaneKey[PANE_KEY].entry.prompt).toBe('Second prompt')
 
@@ -101,7 +102,7 @@ describe('buildActivityEvents', () => {
     expect(threads).toHaveLength(1)
     expect(threads[0].paneTitle).toBe('Second prompt')
     expect(threads[0].latestTimestamp).toBe(2_000)
-    expect(threads[0].events[0].entry.prompt).toBe('First prompt')
+    expect(threads[0].events[1].entry.prompt).toBe('First prompt')
   })
 
   it('does not turn a session boundary into an Agent finished event', () => {
@@ -144,15 +145,15 @@ describe('buildActivityEvents', () => {
 
     const threads = makeThreads(result)
 
-    expect(result.events).toHaveLength(0)
+    expect(result.events).toHaveLength(1)
     expect(threads).toHaveLength(1)
     expect(threads[0]).toMatchObject({
       paneKey: PANE_KEY,
       paneTitle: 'New run',
       currentAgentState: 'working',
       latestTimestamp: 3_000,
-      latestEvent: null,
-      unread: false
+      latestEvent: { state: 'working', timestamp: 3_000 },
+      unread: true
     })
   })
 
@@ -228,7 +229,7 @@ describe('buildActivityEvents', () => {
 
     const threads = makeThreads(result)
 
-    expect(result.events).toHaveLength(0)
+    expect(result.events).toHaveLength(1)
     expect(threads).toHaveLength(1)
     expect(threads[0]).toMatchObject({
       paneKey: PANE_KEY,
@@ -382,12 +383,12 @@ describe('buildActivityEvents', () => {
       tab
     })
 
-    expect(result.events).toHaveLength(1)
-    expect(result.events[0]).toMatchObject({
+    expect(result.events).toHaveLength(2)
+    expect(result.events[1]).toMatchObject({
       state: 'done',
       timestamp: 1_000
     })
-    expect(result.events[0].entry.prompt).toBe('Retained prior run')
+    expect(result.events[1].entry.prompt).toBe('Retained prior run')
     expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('working')
 
     const threads = makeThreads(result)
@@ -396,7 +397,7 @@ describe('buildActivityEvents', () => {
     expect(threads[0].paneTitle).toBe('New run')
     expect(threads[0].responsePreview).toBe('')
     expect(threads[0].latestTimestamp).toBe(3_000)
-    expect(threads[0].events[0].entry.prompt).toBe('Retained prior run')
+    expect(threads[0].events[1].entry.prompt).toBe('Retained prior run')
   })
 
   it('groups visible threads with attention states before working and done', () => {

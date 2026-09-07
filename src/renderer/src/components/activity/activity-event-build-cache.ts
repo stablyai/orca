@@ -87,19 +87,21 @@ export function resolvePaneBuild(
     return { events: cached.events, live: cached.live }
   }
 
-  const events = inputsUnchanged
-    ? cached.events
-    : buildPaneActivityEvents({
-        entry: rowEntry,
-        worktree: request.worktree,
-        repo: request.repo,
-        tab: request.tab,
-        agentType: request.agentType,
-        agentAlive: request.agentAlive,
-        acknowledgedAt: request.acknowledgedAt,
-        clearedAt: request.clearedAt,
-        migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
-      })
+  const events =
+    inputsUnchanged && liveMatchesCache
+      ? cached.events
+      : buildPaneActivityEvents({
+          entry: rowEntry,
+          worktree: request.worktree,
+          repo: request.repo,
+          tab: request.tab,
+          agentType: request.agentType,
+          agentAlive: request.agentAlive,
+          acknowledgedAt: request.acknowledgedAt,
+          clearedAt: request.clearedAt,
+          liveState: request.liveState,
+          migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
+        })
   const live: ActivityLiveAgentSnapshot | null =
     request.liveState === null
       ? null

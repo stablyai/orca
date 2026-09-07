@@ -120,7 +120,7 @@ export function buildActivityEvents(
       ownerCache
     )
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-    // Why: live status is separate from history; a fresh working turn updates the thread without counting as an unread done/blocked/waiting event.
+    // Only fresh live turns contribute working activity; history cannot establish liveness.
     // The freshness check runs on the raw entry (orchestration merges never change state/timing fields).
     const liveState = freshActivityLiveAgentState(entry, args.now)
     const { events: paneEvents, live } = resolvePaneBuild(

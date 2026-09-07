@@ -59,6 +59,9 @@ export function activityThreadResponseRenderPreview({
 }
 
 export function agentTitle(event: ActivityEvent): string {
+  if (event.state === 'working') {
+    return 'Agent working'
+  }
   if (event.state === 'done') {
     return event.entry.interrupted ? 'Agent interrupted' : 'Agent finished'
   }
@@ -67,6 +70,9 @@ export function agentTitle(event: ActivityEvent): string {
 
 export function agentSummary(event: ActivityEvent): string {
   const prompt = getAgentRowPrimaryText(event.entry)
+  if (event.state === 'working') {
+    return prompt || 'The agent is working on the current turn.'
+  }
   if (event.state === 'done') {
     const message = event.entry.lastAssistantMessage?.trim()
     return message || prompt || 'Completed the current turn.'
@@ -76,6 +82,9 @@ export function agentSummary(event: ActivityEvent): string {
 
 export function agentMeta(event: ActivityEvent): string {
   const agent = formatAgentTypeLabel(event.agentType)
+  if (event.state === 'working') {
+    return `${agent} ${event.state}`
+  }
   if (event.state === 'done') {
     return event.entry.interrupted ? `${agent} interrupted` : `${agent} completed`
   }
