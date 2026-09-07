@@ -128,6 +128,7 @@ describe('SshRelaySession abandoned remote PTYs', () => {
     deps: ReturnType<typeof createMockDeps>
     shutdown: ReturnType<typeof vi.fn>
     attachForReconnect: ReturnType<typeof vi.fn>
+    runtime: { onPtyExit: ReturnType<typeof vi.fn>; registerPty: ReturnType<typeof vi.fn> }
   }> {
     const deps = createMockDeps()
     const shutdown = vi.fn().mockResolvedValue(undefined)
@@ -140,27 +141,30 @@ describe('SshRelaySession abandoned remote PTYs', () => {
     vi.mocked(deps.mockStore.getSshRemotePtyLeases).mockReturnValue([detachedLease()] as ReturnType<
       typeof deps.mockStore.getSshRemotePtyLeases
     >)
+    const runtime = { onPtyExit: vi.fn(), registerPty: vi.fn() }
     const session = new SshRelaySession(
       'target-1',
       deps.getMainWindow,
       deps.mockStore,
-      deps.mockPortForward
+      deps.mockPortForward,
+      runtime as never
     )
 
     await session.establish(deps.mockConn)
 
-    return { deps, shutdown, attachForReconnect }
+    return { deps, shutdown, attachForReconnect, runtime }
   }
 
   it('leaves a live shell running and reachable when reattach attempts are exhausted', async () => {
     // A transport stall proves nothing about the remote shell; the user's long-running process
     // may be untouched, so the lease must stay terminable rather than be tombstoned as expired.
-    const { deps, shutdown, attachForReconnect } = await establishWithFailingReattach(
+    const { deps, shutdown, attachForReconnect, runtime } = await establishWithFailingReattach(
       new Error('PTY reattach attempt timed out after 15000ms')
     )
 
     expect(attachForReconnect).toHaveBeenCalled()
     expect(shutdown).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
     expect(deps.mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
       'target-1',
       'pty-live',
@@ -173,12 +177,13 @@ describe('SshRelaySession abandoned remote PTYs', () => {
   it('leaves another pane live shell running when the relay reports an identity mismatch', async () => {
     // The relay answered that a *live* PTY holds this id under a different pane identity. Killing
     // it would destroy an unrelated terminal, so this path may only stop claiming the id.
-    const { deps, shutdown, attachForReconnect } = await establishWithFailingReattach(
+    const { deps, shutdown, attachForReconnect, runtime } = await establishWithFailingReattach(
       new Error('PTY "pty-live" not found (identity mismatch)')
     )
 
     expect(attachForReconnect).toHaveBeenCalled()
     expect(shutdown).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
     expect(deps.mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
       'target-1',
       'pty-live',
@@ -187,17 +192,19 @@ describe('SshRelaySession abandoned remote PTYs', () => {
     expect(clearProviderPtyState).not.toHaveBeenCalledWith(APP_PTY_ID)
   })
 
-  it('stops claiming the id without asserting an exit when the relay answers not-found', async () => {
-    // pty.attach answers not-found both when it verified the pid is dead AND when its session map
-    // simply has no such id — which is every id after a relay restart, since the relay renumbers
-    // from pty-1. The client cannot tell those apart, so this branch may release the id but must
-    // not certify a death: the exit it publishes carries the unverified-loss sentinel, never a
-    // status the renderer would read as a real exit.
-    const { deps, shutdown } = await establishWithFailingReattach(
+  it('publishes a disowned-source signal when the relay answers not-found', async () => {
+    // A reachable relay answered for this exact id and disowned it. That licenses replacing the
+    // pane — respawning leaks the old process rather than killing it — but a restarted relay
+    // answers the same way for ids it never minted, so this is not an `exited` verdict
+    // (docs/reference/ssh-execution-boundary.md).
+    const { deps, shutdown, runtime } = await establishWithFailingReattach(
       new Error('PTY "pty-live" not found')
     )
 
     expect(shutdown).not.toHaveBeenCalled()
+    // The runtime is where a death certificate would land (`hostExitConfirmed`), and this branch
+    // holds no evidence to write one from.
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
     // 'expired' records that reattach gave up on the id, not that the shell died; ssh:terminateSessions still reaches it.
     expect(deps.mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(
       'target-1',
@@ -207,7 +214,8 @@ describe('SshRelaySession abandoned remote PTYs', () => {
     expect(clearProviderPtyState).toHaveBeenCalledWith(APP_PTY_ID)
     expect(deps.mockWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
       id: APP_PTY_ID,
-      code: -1
+      code: -1,
+      ptySourceDisowned: true
     })
     const exitCall = vi
       .mocked(deps.mockWindow.webContents.send)
@@ -215,8 +223,9 @@ describe('SshRelaySession abandoned remote PTYs', () => {
     if (!exitCall) {
       throw new Error('expected a pty:exit publication')
     }
-    // The ratchet that makes the above safe: swapping -1 for any provable status would turn an
-    // unreachable relay into a death certificate, closing tabs and dropping leaf↔PTY bindings.
+    // The ratchet: the verdict rides its own field, never the code. Swapping -1 for a provable
+    // status would make every reader that keys off the code close the tab and drop its leaf↔PTY
+    // binding, which is a far wider claim than "this id is gone from this relay".
     expect(isProvenProcessExit((exitCall[1] as { code: number }).code)).toBe(false)
   })
 

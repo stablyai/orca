@@ -22,6 +22,7 @@ const CURRENT_COORDINATOR_PANE = 'tab_current:55555555-5555-4555-8555-5555555555
 
 type Harness = {
   db: OrchestrationDb
+  runtime: OrcaRuntimeService
   dispatcher: RpcDispatcher
   adoptedRunId: string
   taskId: string
@@ -99,6 +100,7 @@ function createHarness(): Harness {
   vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
   return {
     db,
+    runtime,
     dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }),
     adoptedRunId,
     taskId: task.id,
@@ -209,13 +211,12 @@ describe('legacy compatibility after explicit takeover', () => {
 
     expect(bound).toMatchObject({
       ok: true,
-      result: {
-        run: {
-          coordinator_handle: CURRENT_COORDINATOR_HANDLE,
-          coordinator_pane_key: CURRENT_COORDINATOR_PANE
-        }
-      }
+      result: { run: { coordinator_handle: CURRENT_COORDINATOR_HANDLE } }
     })
+    // Why: the pane key is routing state the receipt withholds; prove the binding on the row.
+    expect(harness.db.getRun(harness.adoptedRunId)?.coordinator_pane_key).toBe(
+      CURRENT_COORDINATOR_PANE
+    )
   })
 
   it('does not let an uncommitted legacy coordinator attest after explicit takeover', async () => {
@@ -395,11 +396,11 @@ describe('legacy compatibility after explicit takeover', () => {
 
     expect(takeover).toMatchObject({
       ok: true,
-      result: { binding: { consumerGeneration: 2 } }
+      result: { run: { consumer_generation: 2 } }
     })
     expect(repeated).toMatchObject({
       ok: true,
-      result: { binding: { consumerGeneration: 2 } }
+      result: { run: { consumer_generation: 2 } }
     })
     expect(harness.db.getDispatchContextById(harness.dispatchId)?.status).toBe('dispatched')
     expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('revoked')
@@ -562,5 +563,57 @@ describe('legacy compatibility after explicit takeover', () => {
         )
       )
     ).resolves.toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
+  })
+})
+
+const COORDINATOR_ALIAS_HANDLE = 'term_legacy_coord_alias'
+
+describe('injected dispatch from a legacy-adopted coordinator', () => {
+  it('refuses an alias of the coordinator pane when only dispatch authority resolves the caller', async () => {
+    const harness = createHarness()
+    // The legacy coordinator is reachable only through the window-graph leaf, so the record-backed
+    // resolver returns null for both its handle and the alias for the same pane.
+    vi.spyOn(harness.runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === WORKER_HANDLE
+        ? WORKER_PANE
+        : handle === CURRENT_COORDINATOR_HANDLE
+          ? CURRENT_COORDINATOR_PANE
+          : null
+    )
+    vi.spyOn(harness.runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
+      handle === COORDINATOR_HANDLE || handle === COORDINATOR_ALIAS_HANDLE
+        ? ({
+            terminalHandle: handle,
+            paneKey: COORDINATOR_PANE,
+            processIncarnation: 'process-1',
+            hostScope: { kind: 'local', hostId: 'local' }
+          } as never)
+        : null
+    )
+    vi.spyOn(harness.runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+    vi.spyOn(harness.runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    const sendPrompt = vi
+      .spyOn(harness.runtime, 'sendTerminalAgentPrompt')
+      .mockResolvedValue({ handle: COORDINATOR_ALIAS_HANDLE, accepted: true, bytesWritten: 1 })
+    const task = harness.db.createTask({ spec: 'self inject', runId: harness.adoptedRunId })
+
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.dispatch',
+        {
+          task: task.id,
+          run: harness.adoptedRunId,
+          from: COORDINATOR_HANDLE,
+          to: COORDINATOR_ALIAS_HANDLE,
+          inject: true
+        },
+        evidence('coordinator'),
+        'legacy-self-inject'
+      )
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'terminal_is_coordinator' } })
+    expect(sendPrompt).not.toHaveBeenCalled()
+    expect(harness.db.getDispatchContext(task.id)).toBeUndefined()
   })
 })

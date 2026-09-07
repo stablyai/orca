@@ -10,15 +10,9 @@
 // would otherwise release a hold that has not landed yet, and the late hold would never be undone.
 
 import { useEffect, useRef } from 'react'
+import { structuredAgentSessionHolderId } from '../../../../shared/structured-agent-session-holder'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-
-let holderOrdinal = 0
-
-export function structuredAgentSessionHolderId(surface: string): string {
-  holderOrdinal += 1
-  return `${surface}:${holderOrdinal}`
-}
 
 export function useStructuredAgentSessionHold(args: {
   sessionId: string

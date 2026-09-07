@@ -112,13 +112,25 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       if (!ptyId || !trackedPty || !this.ptyController) {
         return false
       }
-      const agent = recognizeAgentProcess(
-        await this.ptyController.getForegroundProcess(ptyId)
-      )?.agent
+      let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
+      let agent = recognizeAgentProcess(foregroundProcess)?.agent
+      // Why: the cached foreground name can be an executable basename nothing recognizes
+      // (macOS p_comm reports the native Claude installer as `2.1.258`), and treating that
+      // as "no agent" silently downgrades the prompt to unframed chunks, which Claude's
+      // composer truncates. A fresh process-table scan reads the real command line.
+      if (agent === undefined && this.ptyController.confirmForegroundProcess) {
+        foregroundProcess = await this.ptyController.confirmForegroundProcess(ptyId)
+        agent = recognizeAgentProcess(foregroundProcess)?.agent
+      }
       if (agent !== 'claude' && agent !== 'codex') {
         return false
       }
-      if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
+      if (
+        !(await this.isTerminalRunningAgent(handle, {
+          retryForegroundWrappers: false,
+          foregroundProcess
+        }))
+      ) {
         return false
       }
       trackedPty.foregroundAgent = agent
@@ -133,19 +145,21 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   }
 
   protected scheduleRestoredMessageRepoints(): void {
-    let handles: string[]
+    let handles: Set<string>
     try {
-      handles = this._orchestrationDb?.getUndeliveredUnreadMailboxHandles?.() ?? []
+      const db = this._orchestrationDb
+      // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
+      handles = new Set([
+        ...(db?.getUndeliveredUnreadMailboxHandles?.() ?? []),
+        ...(db?.getPendingMailboxPointerHandles?.() ?? [])
+      ])
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)
       return
     }
     for (const handle of handles) {
       try {
-        if (handle.startsWith('dispatch:')) {
-          continue
-        }
-        if (handle.startsWith('run:')) {
+        if (handle.startsWith('run:') || handle.startsWith('dispatch:')) {
           this.mailPointerRepointScheduler.schedule(handle)
           continue
         }

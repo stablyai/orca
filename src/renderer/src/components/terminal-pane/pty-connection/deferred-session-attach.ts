@@ -3,12 +3,9 @@ import { useAppStore } from '@/store'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { resolveSshPaneConnectGate } from '../ssh-pane-connect-gate'
 
-import {
-  isSshSessionExpiredError,
-  waitForUserInitiatedSshConnect,
-  waitForSshConnection
-} from './ssh-session-connect'
+import { waitForUserInitiatedSshConnect, waitForSshConnection } from './ssh-session-connect'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { isSshSessionGoneError } from './pty-connect-limits'
 import { toProcessExitStartup } from './process-exit-startup'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -153,7 +150,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
           session.clearHiddenOutputRestoreState()
           const outputCallbacks = session.captureTransportOutputCallbacks(
             (message) => {
-              if (isSshSessionExpiredError(message)) {
+              if (isSshSessionGoneError(message)) {
                 expiredReattachError = true
                 return
               }
@@ -287,7 +284,7 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
               if (session.rejectObsoleteDirectSshReattach(pendingSessionId)) {
                 return
               }
-              if (isSshSessionExpiredError(err)) {
+              if (isSshSessionGoneError(err)) {
                 useAppStore.getState().removeDeferredSshSessionId(session.deps.tabId)
                 session.clearExitedPanePtyLayoutBinding(pendingSessionId)
                 session.deps.clearTabPtyId(session.deps.tabId, pendingSessionId)

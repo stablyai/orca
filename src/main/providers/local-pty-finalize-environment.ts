@@ -109,6 +109,9 @@ export function finalizeLocalPtySpawnEnvironment(args: {
         codexStartupCommand !== undefined && supportsPosixShellStartupCommand(shell)
           ? codexStartupCommand
           : undefined
+      // Why no line-editor widening here (unlike the daemon and relay): a Codex
+      // startup command this provider wraps is run by the wrapper's own prompt
+      // hook, never written into the PTY, so there is no early write to double-echo.
       const waitsForShellReady =
         Boolean(spawn.command) && (!isCodexStartupCommand || codexRequiresShellReady)
       return getShellLaunchConfig(

@@ -9,6 +9,9 @@ import { useCombinedDiffSectionLoadRegistry } from '../load-sections/combined-di
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { combinedDiffViewStateCache } from './combined-diff-view-memory'
 import { useCombinedDiffViewRestore } from './use-combined-diff-view-restore'
+import { disposeClosedEditorTabs } from '../../closed-editor-tab-disposal'
+import type { MonacoModelRegistry } from '../../diff-monaco-model-disposal'
+import type { OpenFile } from '@/store/slices/editor'
 
 function buildAllModeEntrySet(
   uncommittedEntries: GitStatusEntry[],
@@ -73,6 +76,61 @@ describe('useCombinedDiffViewRestore deferral', () => {
       'mixed-pass-view'
     )
     expect(sections.map((section) => section.loadOnDemand)).toEqual([true, true, false])
+  })
+
+  it('restores a closed combined-diff tab from the view-state cache when it is reopened', () => {
+    // Why this test exists: combined-diff tab ids are deterministic
+    // (`<worktreeId>::all-diffs::uncommitted`), so closing and reopening the review hits the same
+    // viewStateKey and restores loaded bodies + scroll with no refetch. Sweeping the combined-diff
+    // view-state caches on tab close would therefore change what the user sees on reopen.
+    const entrySet = buildAllModeEntrySet(
+      [{ path: 'src/app.ts', status: 'modified', area: 'unstaged', added: 5 }],
+      []
+    )
+    const viewStateKey = 'wt-1::all-diffs::uncommitted'
+    const loadedSections: DiffSection[] = [
+      {
+        key: 'unstaged:src/app.ts',
+        path: 'src/app.ts',
+        status: 'modified',
+        area: 'unstaged',
+        added: 5,
+        originalContent: 'before',
+        modifiedContent: 'after',
+        collapsed: false,
+        loading: false,
+        dirty: false,
+        diffResult: null,
+        largeDiffRenderLimit: null
+      }
+    ]
+    combinedDiffViewStateCache.set(viewStateKey, {
+      entrySignature: entrySet.entrySignature,
+      gitStatusSignature: '',
+      sections: loadedSections,
+      sectionHeights: {},
+      loadedIndices: [0],
+      scrollTop: 0,
+      sideBySide: false
+    })
+    cleanup()
+
+    const closedTab = {
+      id: viewStateKey,
+      mode: 'diff',
+      diffSource: 'combined-uncommitted',
+      filePath: '/repo',
+      worktreeId: 'wt-1'
+    } as unknown as OpenFile
+    disposeClosedEditorTabs(
+      {
+        editor: { getModel: () => null, getModels: () => [] },
+        Uri: { parse: (v: string) => v }
+      } as unknown as MonacoModelRegistry,
+      [closedTab]
+    )
+
+    expect(restoreSections(entrySet, viewStateKey)).toEqual(loadedSections)
   })
 
   it('auto-loads an uncounted tracked row once its own pass counted something', () => {

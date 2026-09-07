@@ -21,6 +21,10 @@ import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
 import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import {
+  AgentStatusObservedPaneIdentities,
+  recordObservedAgentStatusPaneIdentity
+} from '../runtime/agent-status-observed-pane-identity'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   const activation = state.desktopActivationGate
@@ -44,20 +48,24 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       return {
         environmentId: environment.id,
         name: environment.name,
-        peerFingerprint: fingerprintOrchestrationPeer(pairing.publicKeyB64)
+        peerFingerprint: fingerprintOrchestrationPeer(pairing.publicKeyB64),
+        pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },
-    call: (selector, method, params, timeoutMs, envelope) =>
+    call: (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
       callRuntimeEnvironment(
         app.getPath('userData'),
         selector,
         method,
         params,
         timeoutMs,
-        undefined,
+        expectedPairingRevision,
         envelope
       )
   }
+  // Why here and not in the window listener: `subscribeEnrichedStatus` also fires under headless
+  // `orca serve`, which never opens one, and the fleet path runs there too.
+  const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
     agentSessionClaimSigner: loadAgentSessionClaimSigner(
       getProfileUserDataPath(),
@@ -79,6 +87,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
+    // read, so a row observed under one process otherwise acquires whatever the pane owns now.
+    readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     // Why: the filter above hides resume-identity rows from the live-agent views, but
     // those rows carry the provider session mobile native chat addresses transcripts
     // by — Pi publishes identity that way and would otherwise be unreachable.
@@ -115,6 +126,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     skillTransactionRecovery: state.skillTransactionRecovery
   })
   state.runtime = runtime
+  agentHookServer.subscribeEnrichedStatus((enriched) =>
+    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
+  )
   runtime.prepareLegacyWorkerTerminalRecovery()
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.

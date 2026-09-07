@@ -3,9 +3,10 @@ import { ActivityIndicator, Keyboard, Pressable, StyleSheet, Text, View } from '
 import { ChevronLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionValue
+import {
+  sessionOptionDispatchUnconfirmed,
+  type SessionOptionDescriptor,
+  type SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 import {
   mobileModelPillLabel,
@@ -119,7 +120,7 @@ export function MobileNativeChatSessionOptionPickers({
                 ) : null}
               </View>
             </View>
-            {activeDescriptor.valueSource === 'dispatched' ? (
+            {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}

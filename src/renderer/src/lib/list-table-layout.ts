@@ -5,9 +5,9 @@
  */
 export const LIST_TABLE_CONTAINER_CLASS = 'rounded-md border border-border/50 bg-muted/20'
 
-// Why: z-30 must beat the rows' sticky first cells (z-20) so the header still covers them.
+// Why: z-30 and opaque wash ensure scrolled rows cannot show through the sticky header.
 export const LIST_TABLE_HEADER_CLASS =
-  'sticky top-0 z-30 h-8 items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground'
+  'sticky top-0 z-30 h-8 items-center gap-3 border-b border-border/50 bg-[color-mix(in_srgb,var(--muted)_40%,var(--background))] px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground'
 
 // Why: keep keyboard-selected rows clear of the sticky table header.
 export const LIST_TABLE_ROW_CLASS =

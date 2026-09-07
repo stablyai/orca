@@ -23,7 +23,11 @@ import {
 import { stripRemotePaneEnvWhenHooksDisabled } from '../provider/liveness'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isClaudeAuthSwitchInProgress } from '../../../claude-accounts/live-pty-gate'
-import { hasClaudeAuthEnvConflict } from '../../../claude-accounts/environment'
+import {
+  CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
+  CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
+  hasClaudeAuthEnvConflict
+} from '../../../claude-accounts/environment'
 import {
   isSafePtySessionId,
   mintPtySessionId,
@@ -65,7 +69,7 @@ export async function prepareRuntimePtySpawn(
   ctx.isClaudeLaunch =
     !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error('A Claude account switch is in progress. Try again after it finishes.')
+    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
   ctx.terminalRuntimeOptions =
@@ -134,12 +138,10 @@ export async function prepareRuntimePtySpawn(
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
-    throw new Error('A Claude account switch is in progress. Try again after it finishes.')
+    throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
-    throw new Error(
-      'This Claude launch defines explicit Anthropic auth environment variables. Remove those overrides before using a managed Claude account.'
-    )
+    throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
   }
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true

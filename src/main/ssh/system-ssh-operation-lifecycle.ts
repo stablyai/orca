@@ -3,13 +3,25 @@ import type { SystemSshCommandChannel } from './system-ssh-command'
 
 export type ProcessResult = { label: string; stderr: string }
 
+/**
+ * `timeoutMs` bounds a remote consumer that never returns. Windows PowerShell 5.1 cannot drain a
+ * large redirected stdin over a non-pty ssh exec (#16432): the remote process stays alive at idle
+ * CPU, writes nothing, and never closes — so without a bound this promise is simply never settled
+ * and the caller waits forever with no error to show.
+ */
 export function waitForChannelClose(
   channel: SystemSshCommandChannel,
-  label: string
+  label: string,
+  timeoutMs?: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let stderr = ''
+    let timer: ReturnType<typeof setTimeout> | null = null
     const cleanup = (): void => {
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
       channel.stderr.off('data', onStderrData)
       channel.off('error', onError)
       channel.off('close', onClose)
@@ -17,6 +29,20 @@ export function waitForChannelClose(
     const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
       cleanup()
       fn(val as never)
+    }
+    if (timeoutMs !== undefined) {
+      timer = setTimeout(() => {
+        // Settle before closing: the close we request would otherwise come back as a SIGTERM
+        // failure and mask the timeout, which is the only diagnosis a wedged remote gives.
+        settle(
+          reject,
+          new Error(
+            `${label} timed out after ${timeoutMs}ms with no response from the remote host: ${stderr.trim()}`
+          )
+        )
+        channel.close()
+      }, timeoutMs)
+      timer.unref?.()
     }
     const onStderrData = (data: Buffer): void => {
       stderr += data.toString('utf-8')

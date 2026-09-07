@@ -42,8 +42,18 @@ export type DropHibernatedAgentPaneOptions = {
   retainedCompletionEvidence?: readonly RetainedAgentEntry[]
 }
 
+export type DropAgentStatusOptions = {
+  /** The pane itself is gone (pane close, stale-row teardown). Row-only dismissals leave the
+   *  cleared-at cutoff and manual-unread stamp in place so a still-live pane's next hook event
+   *  cannot resurrect activity the user already cleared. */
+  paneRemoved?: boolean
+}
+
 export type DropAgentStatusByTabPrefixOptions = {
   worktreeId?: string
+  /** Keep cleared-at cutoffs and manual-unread stamps: a mirrored-tab retraction is loss of
+   *  contact, not pane death, and the host republishes the same panes on reconnect. */
+  preserveActivityClearedState?: boolean
 }
 
 export type AgentLaunchConfigRegistrationMetadata = {
@@ -82,6 +92,8 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
 }
 
 export type AgentStatusTiming = {
+  /** Ordered authoritative sources may correct a prior publication clock. */
+  allowOlderTimestamp?: boolean
   updatedAt?: number
   /** Observation clock for staleness; see `AgentStatusEntry.evidenceObservedAt`. */
   evidenceObservedAt?: number

@@ -89,6 +89,8 @@ export type RuntimePtyTitleTrackerEntry = {
   tracker: TerminalTitleTracker
   applyingChunk: boolean
   lastMobileTitleGateKey: string | null
+  /** When the last title fact was emitted — throttles decorative-only repeats. */
+  lastTitleFactAtMs: number | null
   chunkTouchedSessionTabs: boolean
   pendingFacts: TerminalSideEffectFact[]
   commandCodeDetector: { observe: (data: string) => boolean } | null

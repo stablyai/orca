@@ -12,10 +12,7 @@ import {
   previewableBinaryByteLimit,
   readPreviewFileWithinCap
 } from './runtime-file-commands-mobile-file-list-limit'
-import {
-  SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
-  getSshFilesystemProvider
-} from '../providers/ssh-filesystem-dispatch'
+import { requireRuntimeFileProvider } from './runtime-file-command-target'
 import { open, stat } from 'node:fs/promises'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { extname } from 'node:path'
@@ -42,11 +39,8 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
         ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
         : previewableBinaryByteLimit(maxContentBytes)
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       const fileStats = await provider.stat(target.path)
       if (fileStats.size > binaryMaxBytes) {
         throw new Error('file_too_large')
@@ -140,11 +134,8 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
       maxTextBytes: MOBILE_FILE_READ_MAX_BYTES,
       maxBinaryBytes: binaryMaxBytes
     }
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId && !provider) {
-      throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-    }
-    if (target.connectionId && !provider?.readDocPreviewFile) {
+    const provider = requireRuntimeFileProvider(target)
+    if (provider && !provider.readDocPreviewFile) {
       throw new Error('Secure document previews require a newer SSH relay')
     }
     const result = provider?.readDocPreviewFile
@@ -160,11 +151,8 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     length: number
   ): Promise<RuntimeFileReadChunkResult> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       const fileStat = await provider.stat(target.path)
       if (fileStat.type === 'directory') {
         throw new Error('Cannot download a directory')

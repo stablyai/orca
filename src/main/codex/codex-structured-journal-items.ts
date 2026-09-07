@@ -2,7 +2,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
-import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-lifecycle-capacity'
+import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
 import {
   codexItemIdentity,
   codexJournalItem,
@@ -60,7 +60,10 @@ export class CodexJournalItems {
     return this.details.get(codexStructuredItemKey(threadId, itemId)) ?? null
   }
 
-  handle(event: { threadId: string; method: string; params: unknown }): CodexItemTranslation {
+  handle(
+    event: { threadId: string; method: string; params: unknown },
+    source: 'live' | 'history' = 'live'
+  ): CodexItemTranslation {
     const params =
       typeof event.params === 'object' && event.params !== null
         ? (event.params as Record<string, unknown>)
@@ -71,6 +74,10 @@ export class CodexJournalItems {
     }
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
     const identity = this.identityFor(event.threadId, turnId, item)
+    // Count echoes for stable resume ordinals, but user bubbles come from submissions.
+    if (source === 'live' && item.type === 'userMessage') {
+      return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
+    }
     const translated = codexJournalItem(item)
     const command = readCodexJournalString(item, 'command')
     if (command) {
@@ -126,19 +133,13 @@ export class CodexJournalItems {
       return CODEX_JOURNAL_ADMITTED
     }
     if (method === 'item/completed') {
-      const admission = appendCodexLifecycleItem(
-        this.deps.sink,
-        identity,
-        translated.body,
-        translated.blobs
-      )
+      const admission = appendCodexLifecycleItem(this.deps.sink, identity, translated.body)
       return admission.accepted ? publishCodexLifecycle(this.deps.sink) : admission
     }
     const options = requiresTerminalSettlement(translated.body) ? { lifecycle: true } : {}
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, translated.blobs, options)
-      : (this.deps.sink.appendItem(identity, translated.body, translated.blobs),
-        CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, options)
+      : (this.deps.sink.appendItem(identity, translated.body), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       return admission
     }

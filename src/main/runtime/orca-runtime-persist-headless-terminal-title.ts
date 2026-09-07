@@ -8,7 +8,13 @@ import type {
 } from '../../shared/runtime-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { Repo } from '../../shared/repo-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 
 export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWithMoveHeadlessMobileSessionTab {
   // Persist a manual terminal rename so a headless rebuild keeps the title
@@ -157,36 +163,61 @@ export class OrcaRuntimeWithPersistHeadlessTerminalTitle extends OrcaRuntimeWith
     return await this.notifier.saveMobileMarkdownTab(worktreeId, tabId, baseVersion, content)
   }
 
+  // Why: `getRepo(id)` is host-blind and never read `worktree.hostId`, which outranks every repo
+  // row. One id can name rows on local, SSH and runtime hosts at once, so an arbitrary row decided
+  // the execution host for ~36 downstream Git dispatches: a worktree on one SSH host routed to
+  // another, and a runtime host's *nested* target got dialled in this client's namespace (#11163).
   protected async resolveRuntimeGitTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
     repo?: Repo
-    connectionId?: string
+    executionHostId: ExecutionHostId
     localGitOptions?: { wslDistro?: string }
   }> {
     const store = this.requireStore()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const repo = store.getRepo(worktree.repoId)
-    const connectionId = repo?.connectionId ?? undefined
+    const routing = resolveWorktreeHostRouting(store.getRepos(), worktree)
+    if (routing.kind === 'ambiguous') {
+      throw new Error('worktree_execution_host_unresolved')
+    }
+    const executionHostId = routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID
+    // Metadata only (shared-link paths, source-control AI defaults); routing is `executionHostId`.
+    const repo =
+      (routing.kind === 'resolved' ? routing.repo : null) ?? store.getRepo(worktree.repoId)
     const localGitOptions =
-      repo && !connectionId ? getLocalProjectWorktreeGitOptions(store, repo) : {}
-    return { worktree, repo, connectionId, localGitOptions }
+      repo && executionHostId === LOCAL_EXECUTION_HOST_ID
+        ? getLocalProjectWorktreeGitOptions(store, repo)
+        : {}
+    return { worktree, repo, executionHostId, localGitOptions }
   }
 
+  // Why: same defect as `resolveRuntimeGitTarget` above, in ~30 filesystem dispatches. `getRepo(id)`
+  // is host-blind and never read `worktree.hostId`, and the `connectionId` it returned spelled
+  // "runtime host", "unresolved" and "genuinely local" all as `undefined` (#11163).
   protected async resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree
-    connectionId?: string
+    executionHostId: ExecutionHostId
   }> {
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(worktreeSelector)
     if (folderScope?.folderWorkspace) {
+      // A folder workspace has no repo row to disagree with; its own inference already threw on an
+      // ambiguous one, and it is never hosted by a runtime environment.
       return {
         worktree: this.folderWorkspaceToResolvedWorktree(folderScope.folderWorkspace),
-        connectionId: folderScope.connectionId ?? undefined
+        executionHostId: folderScope.connectionId
+          ? toSshExecutionHostId(folderScope.connectionId)
+          : LOCAL_EXECUTION_HOST_ID
       }
     }
 
     const store = this.requireStore()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const repo = store.getRepo(worktree.repoId)
-    return { worktree, connectionId: repo?.connectionId ?? undefined }
+    const routing = resolveWorktreeHostRouting(store.getRepos(), worktree)
+    if (routing.kind === 'ambiguous') {
+      throw new Error('worktree_execution_host_unresolved')
+    }
+    return {
+      worktree,
+      executionHostId: routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID
+    }
   }
 }

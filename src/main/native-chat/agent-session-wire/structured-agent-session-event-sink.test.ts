@@ -3,6 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createDeferredStructuredAgentSessionEventSink,
@@ -20,7 +21,13 @@ function identity(ordinal: number): AgentJournalItemIdentity {
   return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
 }
 
-type Recorded = { call: string; fence?: number; ordinal?: number; settlementId?: string }
+type Recorded = {
+  call: string
+  fence?: number
+  ordinal?: number
+  settlementId?: string
+  activity?: AgentSessionTurnActivity | null
+}
 
 function target(
   fence: number,
@@ -49,7 +56,12 @@ function target(
       return { epoch: 'e', sequence: 0 }
     })
   } as unknown as AgentSessionJournal
-  return { journal, fence, publish: () => log.push({ call: 'publish', fence }) }
+  return {
+    journal,
+    fence,
+    publish: (activity) =>
+      log.push({ call: 'publish', fence, ...(activity !== undefined ? { activity } : {}) })
+  }
 }
 
 describe('deferred structured agent-session event sink', () => {
@@ -287,13 +299,13 @@ describe('deferred structured agent-session event sink', () => {
     releaseSecond?.()
   })
 
-  it('replaces a queued same-item checkpoint before any blob is created', async () => {
+  it('replaces a queued same-item checkpoint before it runs', async () => {
     const log: Recorded[] = []
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const options = { coalescingKey: 'checkpoint:item-1' }
 
-    deferred.sink.appendItem(identity(0), BODY, [], options)
-    deferred.sink.appendItem(identity(1), BODY, [], options)
+    deferred.sink.appendItem(identity(0), BODY, options)
+    deferred.sink.appendItem(identity(1), BODY, options)
     expect(deferred.state().queuedOperations).toBe(1)
 
     deferred.bind(target(6, log))
@@ -306,15 +318,33 @@ describe('deferred structured agent-session event sink', () => {
     const deferred = createDeferredStructuredAgentSessionEventSink()
     const options = { coalescingKey: 'checkpoint:item-1' }
 
-    deferred.sink.appendItem(identity(0), BODY, [], options)
+    deferred.sink.appendItem(identity(0), BODY, options)
     deferred.sink.appendItem(identity(1), BODY)
-    deferred.sink.appendItem(identity(2), BODY, [], options)
+    deferred.sink.appendItem(identity(2), BODY, options)
     deferred.bind(target(6, log))
     await deferred.drained()
 
     expect(log).toEqual([
       { call: 'appendItem', fence: 6, ordinal: 1 },
       { call: 'appendItem', fence: 6, ordinal: 2 }
+    ])
+  })
+
+  it('coalesces provider activity as a publication without a journal write', async () => {
+    const log: Recorded[] = []
+    const deferred = createDeferredStructuredAgentSessionEventSink()
+
+    deferred.sink.setActivity?.({ turnId: 'turn-1', text: 'Thinking' })
+    deferred.sink.setActivity?.({ turnId: 'turn-1', text: 'Checking the result' })
+    deferred.bind(target(6, log))
+    await deferred.drained()
+
+    expect(log).toEqual([
+      {
+        call: 'publish',
+        fence: 6,
+        activity: { turnId: 'turn-1', text: 'Checking the result' }
+      }
     ])
   })
 })

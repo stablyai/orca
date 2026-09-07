@@ -6,6 +6,7 @@ import type {
   MobileRelayEndpoint,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import {
   deriveRelayHostId,
@@ -15,6 +16,7 @@ import {
   type RelayAssignment
 } from './relay-http-client'
 import { RelayOriginPool } from './relay-origin-pool'
+import { relayRenewalDelayMs } from './relay-renewal-jitter'
 import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-session-broker-contract'
 
 export type { RelayBrokerStatus } from './relay-session-broker-contract'
@@ -180,7 +182,7 @@ export class RelaySessionBroker {
     return result
   }
 
-  closeNow(): void {
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
     if (this.closed) {
       return
     }
@@ -190,7 +192,7 @@ export class RelaySessionBroker {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
-    this.originPool.closeNow()
+    this.originPool.closeNow(hostCloseReason)
     if (publishOffline) {
       this.options.onStatus('offline')
     }
@@ -242,8 +244,7 @@ export class RelaySessionBroker {
     }
     const now = (this.options.now ?? Date.now)()
     const random = this.options.random ?? Math.random
-    const earlyMs = 60_000 + Math.floor(random() * 60_001)
-    const delay = Math.max(0, authorization.expiresAt - earlyMs - now)
+    const delay = relayRenewalDelayMs(authorization.expiresAt, now, random)
     this.refreshTimer = setTimeout(() => void this.refreshAuthorization(), delay)
   }
 

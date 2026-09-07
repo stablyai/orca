@@ -59,9 +59,12 @@ export function hasCanonicalNumericCsiParams(params: string): boolean {
   return /^[0-9;]*$/.test(params)
 }
 
+const ESCAPE_CHAR_CODE = 0x1b
+
 export function containsTerminalVerticalLineControl(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
-    if (value[index] !== '\u001b') {
+    // Why charCodeAt: `value[index]` mints a one-char string per position on every chunk.
+    if (value.charCodeAt(index) !== ESCAPE_CHAR_CODE) {
       continue
     }
     const parsed = parseAnsiControlSequence(value, index)

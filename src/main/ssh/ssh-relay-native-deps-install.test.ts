@@ -394,6 +394,31 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     }
   })
 
+  it('does not rewrite node_modules when the health probe never answered', async () => {
+    // Why (#14830): a wedged `require("node-pty")` makes the probe time out. Reading that silence
+    // as "every native dep is missing" sent a healthy install through npm install + rebuild that
+    // could not help, and the retry loop burned the whole deploy budget at "Deploying relay…".
+    const conn = makeMockConnection(sftpCapture)
+    vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      '/home/u',
+      { reject: 'Command "node -e ..." timed out after 30s' } // health probe never answered
+    ])
+
+    await deployAndLaunchRelay(conn).catch(() => {})
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    expect(execCalls.some((c) => c.includes('npm install'))).toBe(false)
+    expect(execCalls.some((c) => c.includes('npm rebuild'))).toBe(false)
+
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('Repairing missing native deps'))).toBe(false)
+    // Why no log assertion: the behavioural claim above is the real one. Asserting on warn text
+    // pinned wording that main's landed probe verdict does not use, and #18000 adds its own.
+    expect(execCalls.some((c) => c.includes("rm -rf 'node_modules/node-pty'"))).toBe(false)
+  })
+
   it('lets a probe SSH-channel failure bubble up rather than silently mapping to MISSING', async () => {
     const conn = makeMockConnection(sftpCapture)
     feed(
@@ -536,7 +561,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // clean stage root
       '', // no persisted active pipe marker
       'WAITING', // initial pipe probe
-      '', // publish the per-launch credential
       '', // WMI relay launch
       'READY', // readiness poll
       '' // persist active pipe marker
@@ -632,7 +656,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // rm probe stderr
       'ORCA-NPTY-CLOEXEC:patched\n', // pty-master cloexec patch on the loadable node-pty
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -870,7 +893,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       'ORCA-NATIVE-DEPS-OK',
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 
@@ -895,7 +917,6 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       'ORCA-NATIVE-DEPS-OK',
       '', // launch namespace marker
       'DEAD',
-      '', // publish the per-launch credential
       'READY'
     ])
 

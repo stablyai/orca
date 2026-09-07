@@ -1,4 +1,5 @@
 import { paneHasStateClaims } from '../../../shared/agent-hook-listener/listener-state'
+import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 
@@ -33,6 +34,51 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitStatusDropped(deleted.paneKey)
+  }
+
+  /** Evict a UI-cleared status only if no newer status has replaced it. */
+  dropPersistedStatusEntry(identity: AgentStatusCacheIdentity): boolean {
+    return this.dropPersistedStatusEntries([identity]).length > 0
+  }
+
+  /** Batch form: one persist and one listener notification for the whole set. Returns the
+   *  pane keys that were actually evicted. */
+  dropPersistedStatusEntries(identities: readonly AgentStatusCacheIdentity[]): string[] {
+    const evicted: string[] = []
+    for (const identity of identities) {
+      const resolvedPaneKey = this.resolvePaneKeyAlias(identity.paneKey)
+      const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      // Why: stateStartedAt pins the turn; the renderer's updatedAt is stamped at or after this
+      // receivedAt (runtime-sync and recovery paths use Date.now()/capturedAt), so a strictly
+      // newer cached event is the only replacement worth protecting.
+      if (
+        !existing ||
+        existing.stateStartedAt !== identity.stateStartedAt ||
+        existing.receivedAt > identity.receivedAt
+      ) {
+        continue
+      }
+      const deleted = this.deleteStatusEntry(resolvedPaneKey, { preserveAuthority: true })
+      if (!deleted) {
+        continue
+      }
+      const retained = this.toRetainedProviderSessionRow(deleted)
+      if (retained) {
+        this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
+      }
+      evicted.push(deleted.paneKey)
+    }
+    if (evicted.length === 0) {
+      return evicted
+    }
+    this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
+    for (const paneKey of evicted) {
+      this.emitStatusDropped(paneKey)
+    }
+    return evicted
   }
 
   /** Retire panes whose owning process is certifiably dead.

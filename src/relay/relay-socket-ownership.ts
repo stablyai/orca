@@ -14,6 +14,13 @@ function sameSocketIdentity(a: SocketIdentity, b: SocketIdentity): boolean {
   return a.dev === b.dev && a.ino === b.ino && a.ctimeNs === b.ctimeNs
 }
 
+// Why both codes: libuv reports a path that already exists as EADDRINUSE once someone listens on
+// it and as EEXIST while the file exists but its owner has not reached listen() yet (macOS), so a
+// bind racing another starter sees either. Both mean "held or stale", never "free".
+function isSocketPathOccupiedError(error: NodeJS.ErrnoException): boolean {
+  return error.code === 'EADDRINUSE' || error.code === 'EEXIST'
+}
+
 export function isRelayNamedPipePath(sockPath: string): boolean {
   return process.platform === 'win32' && /^\\\\[.?]\\pipe\\/i.test(sockPath)
 }
@@ -86,7 +93,7 @@ export class RelaySocketOwnership {
       const failInitial = (error: NodeJS.ErrnoException): void => {
         removeStartupListeners()
         restoreUmask()
-        if (error.code === 'EADDRINUSE') {
+        if (isSocketPathOccupiedError(error)) {
           relayLogLine(
             `[relay] Socket path already in use: ${this.sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.`
           )
@@ -97,7 +104,7 @@ export class RelaySocketOwnership {
       }
       const onInitialError = (error: NodeJS.ErrnoException): void => {
         if (
-          error.code !== 'EADDRINUSE' ||
+          !isSocketPathOccupiedError(error) ||
           staleRetryAttempted ||
           isRelayNamedPipePath(this.sockPath)
         ) {

@@ -252,8 +252,8 @@ export class Session {
     return this.output.getCwd()
   }
 
-  getForegroundProcess(): string | null {
-    return this.subprocess.getForegroundProcess()
+  getForegroundProcess(options?: { rawFallback?: boolean }): string | null {
+    return this.subprocess.getForegroundProcess(options)
   }
 
   async confirmForegroundProcess(): Promise<string | null> {
