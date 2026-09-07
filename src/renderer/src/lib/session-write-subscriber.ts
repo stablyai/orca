@@ -233,12 +233,13 @@ export function createSessionWriteSubscriber({
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
+    // Equivalent projections still consume the new source identities.
+    prevTabsSource = state.tabsByWorktree
+    prevUnifiedTabsSource = state.unifiedTabsByWorktree
     if (changedFields.length === 0 && pendingChangedFields.size === 0) {
       return
     }
     prev = next
-    prevTabsSource = state.tabsByWorktree
-    prevUnifiedTabsSource = state.unifiedTabsByWorktree
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }

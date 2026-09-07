@@ -8,6 +8,7 @@ import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTar
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import {
@@ -15,7 +16,7 @@ import {
   filterEnabledTuiAgents
 } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
-import { useStructuredCodexLaunchStatus } from '@/lib/structured-agent-session-launch'
+import { useStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-launch'
 
 export type QuickLaunchAgentMenuItemsProps = {
   worktreeId: string
@@ -117,7 +118,12 @@ function QuickLaunchAgentMenuItemsInner({
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
-  const structuredCodexLaunchStatus = useStructuredCodexLaunchStatus(worktreeId)
+  // One hook per structured provider: the launch registry is keyed by agent, and hooks cannot run
+  // inside the agent list's render loop.
+  const structuredLaunchStatusByAgent = {
+    claude: useStructuredAgentLaunchStatus(worktreeId, 'claude'),
+    codex: useStructuredAgentLaunchStatus(worktreeId, 'codex')
+  }
 
   const openAgentSettings = useCallback(() => {
     openSettingsTarget({ pane: 'agents', repoId: null })
@@ -199,26 +205,33 @@ function QuickLaunchAgentMenuItemsInner({
       {agents.map((agent) => {
         const entry = getCatalogEntry(agent)
         const label = entry?.label ?? agent
-        const isStructuredCodexPending =
-          agent === 'codex' && structuredCodexLaunchStatus === 'pending'
-        const menuLabel = isStructuredCodexPending ? 'Starting Codex chat…' : label
+        const isStructuredLaunchPending =
+          isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
+        const pendingLabel = translate(
+          'components.native-chat.structuredSessionLaunchPending',
+          'Starting {{value0}} chat…',
+          { value0: label }
+        )
+        const menuLabel = isStructuredLaunchPending ? pendingLabel : label
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
         return (
           <DropdownMenuItem
             key={agent}
-            disabled={isStructuredCodexPending}
+            disabled={isStructuredLaunchPending}
             onSelect={() => runLaunch(agent)}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            title={translate(
-              'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
-              isStructuredCodexPending
-                ? 'Starting Codex chat…'
-                : 'Launch {{value0}} in a new terminal',
-              isStructuredCodexPending ? undefined : { value0: label }
-            )}
+            title={
+              isStructuredLaunchPending
+                ? pendingLabel
+                : translate(
+                    'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+                    'Launch {{value0}} in a new terminal',
+                    { value0: label }
+                  )
+            }
           >
-            {isStructuredCodexPending ? (
+            {isStructuredLaunchPending ? (
               <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
             ) : (
               <AgentIcon agent={agent} size={14} />

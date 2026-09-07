@@ -190,30 +190,33 @@ export function ExperimentalPane({
             />
           </div>
           {agentHibernationEnabled ? (
-            <NumberField
-              label={translate(
-                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
-                'Sleep after'
-              )}
-              description={translate(
-                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
-                'How many idle minutes a completed background agent must wait before Orca can sleep it.'
-              )}
-              value={agentHibernationIdleMinutes}
-              min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
-              max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
-              step={1}
-              suffix={translate(
-                'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
-                'minutes'
-              )}
-              onChange={(minutes) =>
-                updateSettings({
-                  // Why: settings persist the planner contract, not the display unit.
-                  agentHibernationIdleMs: minutes * MS_PER_MINUTE
-                })
-              }
-            />
+            <div className="ml-4 space-y-3 border-l border-border pl-4">
+              <NumberField
+                className="py-0"
+                label={translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel',
+                  'Sleep after'
+                )}
+                description={translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription',
+                  'How many idle minutes a completed background agent must wait before Orca can sleep it.'
+                )}
+                value={agentHibernationIdleMinutes}
+                min={MIN_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+                max={MAX_AGENT_HIBERNATION_IDLE_MS / MS_PER_MINUTE}
+                step={1}
+                suffix={translate(
+                  'auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesSuffix',
+                  'minutes'
+                )}
+                onChange={(minutes) =>
+                  updateSettings({
+                    // Why: settings persist the planner contract, not the display unit.
+                    agentHibernationIdleMs: minutes * MS_PER_MINUTE
+                  })
+                }
+              />
+            </div>
           ) : null}
         </SearchableSetting>
       ) : null}

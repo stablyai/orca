@@ -15,7 +15,10 @@ export function encodeBrowserNetworkTunnelStreamFrame(frame: Uint8Array): Uint8A
 }
 
 export class BrowserNetworkTunnelStreamFrameDecoder {
-  private retained = new Uint8Array()
+  private readonly header = new Uint8Array(LENGTH_BYTES)
+  private headerBytes = 0
+  private frame: Uint8Array | null = null
+  private frameBytes = 0
   private closed = false
 
   constructor(
@@ -29,30 +32,50 @@ export class BrowserNetworkTunnelStreamFrameDecoder {
     if (this.closed || chunk.byteLength === 0) {
       return
     }
-    if (this.retained.byteLength + chunk.byteLength > this.maxRetainedBytes) {
+    if (this.headerBytes + this.frameBytes + chunk.byteLength > this.maxRetainedBytes) {
       this.fail(new Error('browser_tunnel_stream_buffer_overflow'))
       return
     }
-    const combined = new Uint8Array(this.retained.byteLength + chunk.byteLength)
-    combined.set(this.retained)
-    combined.set(chunk, this.retained.byteLength)
     let offset = 0
-    while (combined.byteLength - offset >= LENGTH_BYTES) {
-      const length = new DataView(
-        combined.buffer,
-        combined.byteOffset + offset,
-        LENGTH_BYTES
-      ).getUint32(0, false)
-      if (length === 0 || length > this.maxFrameBytes) {
-        this.fail(new Error('browser_tunnel_stream_frame_invalid'))
+    while (offset < chunk.byteLength) {
+      if (this.headerBytes < LENGTH_BYTES) {
+        let length: number
+        if (this.headerBytes === 0 && chunk.byteLength - offset >= LENGTH_BYTES) {
+          length = new DataView(chunk.buffer, chunk.byteOffset + offset, LENGTH_BYTES).getUint32(
+            0,
+            false
+          )
+          this.headerBytes = LENGTH_BYTES
+          offset += LENGTH_BYTES
+        } else {
+          const count = Math.min(LENGTH_BYTES - this.headerBytes, chunk.byteLength - offset)
+          this.header.set(chunk.subarray(offset, offset + count), this.headerBytes)
+          this.headerBytes += count
+          offset += count
+          if (this.headerBytes < LENGTH_BYTES) {
+            return
+          }
+          length = new DataView(this.header.buffer).getUint32(0, false)
+        }
+        if (length === 0 || length > this.maxFrameBytes) {
+          this.fail(new Error('browser_tunnel_stream_frame_invalid'))
+          return
+        }
+        this.frame = new Uint8Array(length)
+      }
+      const frame = this.frame!
+      const count = Math.min(frame.byteLength - this.frameBytes, chunk.byteLength - offset)
+      frame.set(chunk.subarray(offset, offset + count), this.frameBytes)
+      this.frameBytes += count
+      offset += count
+      if (this.frameBytes < frame.byteLength) {
         return
       }
-      const end = offset + LENGTH_BYTES + length
-      if (end > combined.byteLength) {
-        break
-      }
+      this.frame = null
+      this.frameBytes = 0
+      this.headerBytes = 0
       try {
-        this.onFrame(combined.slice(offset + LENGTH_BYTES, end))
+        this.onFrame(frame)
       } catch (error) {
         this.fail(error instanceof Error ? error : new Error(String(error)))
         return
@@ -60,14 +83,14 @@ export class BrowserNetworkTunnelStreamFrameDecoder {
       if (this.closed) {
         return
       }
-      offset = end
     }
-    this.retained = combined.slice(offset)
   }
 
   close(): void {
     this.closed = true
-    this.retained = new Uint8Array()
+    this.frame = null
+    this.frameBytes = 0
+    this.headerBytes = 0
   }
 
   private fail(error: Error): void {

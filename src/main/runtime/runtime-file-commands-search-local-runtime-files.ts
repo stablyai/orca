@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split class members.
+import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
 import { RuntimeFileCommandsWithSearchRuntimeFiles } from './runtime-file-commands-search-runtime-files'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -58,7 +59,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
       }
 
       const acc = createAccumulator()
-      let stdoutBuffer = ''
+      const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
       let resolved = false
       let processErrorObserved = false
       let unavailableExitObserved = false
@@ -84,6 +85,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
 
       let killTimeout: ReturnType<typeof setTimeout> | null = null
       const cleanupListeners = (): void => {
+        lines.clear()
         if (killTimeout) {
           clearTimeout(killTimeout)
           killTimeout = null
@@ -123,12 +125,7 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
 
       nextChild.stdout!.setEncoding('utf-8')
       const onStdoutData = (chunk: string): void => {
-        stdoutBuffer += chunk
-        const lines = stdoutBuffer.split('\n')
-        stdoutBuffer = lines.pop() ?? ''
-        for (const line of lines) {
-          processLine(line)
-        }
+        lines.push(chunk, processLine)
       }
       const onStderrData = (): void => {
         // Drain stderr so rg cannot block on a full pipe.
@@ -152,8 +149,9 @@ export class RuntimeFileCommandsWithSearchLocalRuntimeFiles extends RuntimeFileC
           resolveWithoutRipgrep()
           return
         }
-        if (stdoutBuffer) {
-          processLine(stdoutBuffer)
+        const tail = lines.finish()
+        if (tail !== null) {
+          processLine(tail)
         }
         resolveOnce()
       }

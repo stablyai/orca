@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
+import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { parseArgs } from '../args'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
@@ -250,6 +251,20 @@ describe('terminal close CLI', () => {
 })
 
 describe('terminal send CLI', () => {
+  const promptClient = (call: ReturnType<typeof vi.fn>, supported: boolean) =>
+    ({
+      call,
+      getCliStatus: vi.fn().mockResolvedValue({
+        result: {
+          runtime: {
+            reachable: true,
+            runtimeId: 'runtime-current',
+            capabilities: supported ? [TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY] : []
+          }
+        }
+      })
+    }) as unknown as RuntimeClient
+
   afterEach(() => {
     vi.restoreAllMocks()
     process.exitCode = ORIGINAL_EXIT_CODE
@@ -257,7 +272,22 @@ describe('terminal send CLI', () => {
 
   it('marks combined text and Enter as an agent prompt candidate', async () => {
     const call = vi.fn().mockResolvedValue({
-      result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
+      result: {
+        send: {
+          handle: 'term-1',
+          accepted: true,
+          bytesWritten: 7,
+          prompt: {
+            requestId: '11111111-1111-4111-8111-111111111111',
+            stages: ['input_accepted'],
+            provider: 'codex',
+            observation: 'supported',
+            processIncarnation: 'inc-1',
+            generation: 1,
+            baselineWorkingSequence: 0
+          }
+        }
+      }
     })
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -267,19 +297,60 @@ describe('terminal send CLI', () => {
         ['text', 'review'],
         ['enter', true]
       ]),
-      client: { call } as unknown as RuntimeClient,
+      client: promptClient(call, true),
       cwd: '/tmp/worktree',
       json: true
     })
 
-    expect(call).toHaveBeenCalledWith('terminal.send', {
-      terminal: 'term-1',
-      text: 'review',
-      enter: true,
-      interrupt: false,
-      agentPrompt: true,
-      client: { id: 'orca-cli', type: 'desktop' }
+    expect(call).toHaveBeenCalledWith(
+      'terminal.send',
+      {
+        terminal: 'term-1',
+        text: 'review',
+        enter: true,
+        interrupt: false,
+        agentPrompt: true,
+        client: { id: 'orca-cli', type: 'desktop' }
+      },
+      { terminalPromptPreflight: { runtimeId: 'runtime-current' } }
+    )
+  })
+
+  it('carries the swallowed-Enter warning into the --json receipt', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        send: {
+          handle: 'term-1',
+          accepted: true,
+          bytesWritten: 7,
+          prompt: {
+            requestId: 'prompt-swallowed',
+            stages: ['input_accepted'],
+            provider: 'claude',
+            observation: 'supported',
+            processIncarnation: 'inc-1',
+            generation: 1,
+            baselineWorkingSequence: 0
+          }
+        }
+      }
     })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true]
+      ]),
+      client: promptClient(call, true),
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0])).result.warnings).toEqual([
+      expect.stringContaining('no turn start was observed')
+    ])
   })
 
   it('explains that Structured Chat blocked a refused send and how to recover', async () => {
@@ -302,6 +373,7 @@ describe('terminal send CLI', () => {
     })
     vi.spyOn(console, 'log').mockImplementation(() => {})
     process.exitCode = undefined
+    const client = promptClient(call, true)
 
     await TERMINAL_HANDLERS['terminal send']({
       flags: new Map<string, string | true>([
@@ -309,11 +381,12 @@ describe('terminal send CLI', () => {
         ['text', 'review'],
         ['enter', true]
       ]),
-      client: { call } as unknown as RuntimeClient,
+      client,
       cwd: '/tmp/worktree',
       json: false
     })
 
+    expect(client.getCliStatus).toHaveBeenCalledOnce()
     expect(console.log).toHaveBeenCalledWith(
       expect.stringMatching(/Structured Chat.*Switch it to Terminal.*orca terminal send/s)
     )
@@ -359,5 +432,256 @@ describe('terminal send CLI', () => {
       interrupt: false,
       client: { id: 'orca-cli', type: 'desktop' }
     })
+  })
+
+  it('passes retry identity and observation wait only for agent prompts', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        send: {
+          handle: 'term-1',
+          accepted: true,
+          bytesWritten: 8,
+          prompt: {
+            requestId: '11111111-1111-4111-8111-111111111111',
+            stages: ['input_accepted'],
+            provider: 'codex',
+            observation: 'supported',
+            processIncarnation: 'inc-1',
+            generation: 1,
+            baselineWorkingSequence: 1
+          }
+        }
+      }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'continue'],
+        ['enter', true],
+        ['retry-request', '11111111-1111-4111-8111-111111111111'],
+        ['wait-submit', '3']
+      ]),
+      client: promptClient(call, true),
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith(
+      'terminal.send',
+      expect.objectContaining({ agentPrompt: true, waitSubmitMs: 3_000 }),
+      {
+        terminalPromptPreflight: { runtimeId: 'runtime-current' },
+        orchestrationRequestId: '11111111-1111-4111-8111-111111111111',
+        timeoutMs: 13_000
+      }
+    )
+  })
+
+  it('fails closed when the host downgrades after the prompt capability preflight', async () => {
+    const response = {
+      result: { send: { handle: 'term-1', accepted: true, bytesWritten: 8 } },
+      _meta: { runtimeId: 'old-runtime-after-restart' }
+    }
+    const call = vi.fn().mockResolvedValue(response)
+    const client = {
+      call,
+      getCliStatus: vi.fn().mockResolvedValue({
+        result: {
+          runtime: {
+            reachable: true,
+            runtimeId: 'new-runtime-before-restart',
+            capabilities: [TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY]
+          }
+        }
+      })
+    } as unknown as RuntimeClient
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const error = await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'continue'],
+        ['enter', true],
+        ['retry-request', '11111111-1111-4111-8111-111111111111'],
+        ['wait-submit', '3']
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+      .then(() => undefined)
+      .catch((caught: unknown) => caught)
+
+    expect(call).toHaveBeenCalledWith(
+      'terminal.send',
+      expect.objectContaining({ agentPrompt: true, waitSubmitMs: 3_000 }),
+      {
+        terminalPromptPreflight: { runtimeId: 'new-runtime-before-restart' },
+        orchestrationRequestId: '11111111-1111-4111-8111-111111111111',
+        timeoutMs: 13_000
+      }
+    )
+    expect(error).toMatchObject({
+      code: 'incompatible_runtime',
+      data: {
+        deliveryOutcome: 'unknown',
+        retrySafe: false,
+        nextSteps: expect.arrayContaining([expect.stringContaining('Inspect the terminal output')])
+      }
+    })
+    expect((error as Error).message).toContain('cannot prove whether the prompt was delivered')
+    expect((response.result.send as { prompt?: unknown }).prompt).toBeUndefined()
+    expect(log).not.toHaveBeenCalled()
+  })
+
+  it('labels an old-host response as non-idempotent without claiming submission', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true]
+      ]),
+      client: promptClient(call, false),
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith(
+      'terminal.send',
+      expect.objectContaining({ agentPrompt: true }),
+      { legacyTerminalPrompt: true }
+    )
+    expect(call.mock.results[0]?.value).toBeDefined()
+    const response = await call.mock.results[0]?.value
+    expect(response.result.send.prompt).toEqual({
+      requestId: 'unsupported-old-host',
+      stages: ['input_accepted'],
+      provider: 'old-host',
+      observation: 'unsupported',
+      processIncarnation: 'unknown',
+      generation: 0,
+      baselineWorkingSequence: 0
+    })
+  })
+
+  it('does not fabricate an accepted prompt receipt for an old-host refusal', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        send: {
+          handle: 'term-1',
+          accepted: false,
+          bytesWritten: 0,
+          refusedReason: 'permission'
+        }
+      }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true]
+      ]),
+      client: promptClient(call, false),
+      cwd: '/tmp/worktree',
+      json: false
+    })
+
+    const response = await call.mock.results[0]?.value
+    expect(response.result.send.prompt).toBeUndefined()
+    expect(String(log.mock.calls[0]?.[0])).toBe('Input refused by term-1: permission.')
+  })
+
+  it('refuses old-host retry before sending any input', async () => {
+    const call = vi.fn()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const error = await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true],
+        ['retry-request', '11111111-1111-4111-8111-111111111111']
+      ]),
+      client: {
+        call,
+        getCliStatus: vi.fn().mockResolvedValue({
+          result: { runtime: { reachable: true, capabilities: [] } }
+        })
+      } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+      .then(() => undefined)
+      .catch((caught: unknown) => caught)
+
+    expect(error).toMatchObject({ code: 'incompatible_runtime' })
+    expect((error as Error).message).toContain(
+      'updating the host cannot make this specific retry idempotent'
+    )
+    expect((error as Error).message).not.toContain('omit --retry-request')
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('preserves retry identity after a pre-write host failure', async () => {
+    const call = vi
+      .fn()
+      .mockRejectedValueOnce(new RuntimeClientError('internal_error', 'terminal_not_writable'))
+      .mockResolvedValueOnce({
+        result: {
+          send: {
+            handle: 'term-1',
+            accepted: true,
+            bytesWritten: 13,
+            prompt: {
+              requestId: '22222222-2222-4222-8222-222222222222',
+              stages: ['input_accepted'],
+              provider: 'codex',
+              observation: 'supported',
+              processIncarnation: 'inc-1',
+              generation: 1,
+              baselineWorkingSequence: 0
+            }
+          }
+        }
+      })
+    const client = promptClient(call, true)
+    const flags = new Map<string, string | true>([
+      ['terminal', 'term-1'],
+      ['text', 'retry safely'],
+      ['enter', true],
+      ['retry-request', '22222222-2222-4222-8222-222222222222']
+    ])
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await expect(
+      TERMINAL_HANDLERS['terminal send']({ flags, client, cwd: '/tmp/worktree', json: true })
+    ).rejects.toMatchObject({ message: 'terminal_not_writable' })
+    await TERMINAL_HANDLERS['terminal send']({
+      flags,
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledTimes(2)
+    expect(call.mock.calls.map((args) => args[2])).toEqual([
+      {
+        terminalPromptPreflight: { runtimeId: 'runtime-current' },
+        orchestrationRequestId: '22222222-2222-4222-8222-222222222222'
+      },
+      {
+        terminalPromptPreflight: { runtimeId: 'runtime-current' },
+        orchestrationRequestId: '22222222-2222-4222-8222-222222222222'
+      }
+    ])
   })
 })

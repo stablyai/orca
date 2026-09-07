@@ -7,7 +7,11 @@ import type { TerminalProcessInspection } from '../../shared/terminal-process-in
 export const ptyStreamAndSerializationApi = {
   inspectProcess: (
     id: string,
-    options?: { expectedIncarnationId?: string }
+    options?: {
+      expectedIncarnationId?: string
+      scanChildProcesses?: boolean
+      steadyState?: boolean
+    }
   ): Promise<TerminalProcessInspection> =>
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
   confirmForegroundProcess: (id: string): Promise<string | null> =>

@@ -5,9 +5,11 @@ import {
   SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR,
   SSH_SESSION_EXPIRED_ERROR,
   SshPtyAbsentFromRelayError,
+  SshPtyProvenExitedOnRelayError,
   isSshPtyIdentityMismatchError,
   isSshPtyNotFoundError
 } from './ssh-pty-errors'
+import { isProvenExitedPtyAttachRefusal } from '../../shared/pty-attach-absence-evidence'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 import type { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
@@ -238,6 +240,13 @@ export async function reattachSshPtySession(args: {
       // Why the class: the relay answered for this exact id, so callers holding a pane binding may
       // retire it and spawn fresh. Plain `SSH_SESSION_EXPIRED` cannot say that — a restarted relay
       // renumbers from pty-1, so the message alone is indistinguishable from a lost link.
+      //
+      // Why the subclass: the relay marks the one refusal it backed with a pid probe. Without the
+      // marker the answer is the "no such id" union, which is not evidence the shell ended, so the
+      // narrow class is minted only when the relay said so (docs/reference/ssh-execution-boundary.md).
+      if (isProvenExitedPtyAttachRefusal(error)) {
+        throw new SshPtyProvenExitedOnRelayError(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
+      }
       throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
     }
     throw error

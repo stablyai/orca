@@ -4,6 +4,7 @@ import {
   FolderOpen,
   LocateFixed,
   MessageSquarePlus,
+  MessagesSquare,
   PanelTopOpen,
   Play,
   Trash2
@@ -19,6 +20,7 @@ export function SessionActionMenuItems({
   resumeLabel,
   onResume,
   onContinueInNewSession,
+  onResumeInNewChat,
   onJumpToOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
@@ -36,6 +38,7 @@ export function SessionActionMenuItems({
   resumeLabel: string
   onResume: () => void
   onContinueInNewSession?: () => void
+  onResumeInNewChat?: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
@@ -93,6 +96,15 @@ export function SessionActionMenuItems({
         <Play className="size-3.5" />
         {resumeLabel}
       </Item>
+      {onResumeInNewChat ? (
+        <Item onSelect={onResumeInNewChat}>
+          <MessagesSquare className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewChat',
+            'Resume in New Chat'
+          )}
+        </Item>
+      ) : null}
       {onContinueInNewSession ? (
         <Item onSelect={onContinueInNewSession}>
           <MessageSquarePlus className="size-3.5" />

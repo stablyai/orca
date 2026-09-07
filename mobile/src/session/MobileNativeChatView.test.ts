@@ -72,6 +72,9 @@ type Overrides = {
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
+  structuredActivityUi?: boolean
+  agentWorking?: boolean
+  sendSurfaceId?: string
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -242,5 +245,112 @@ describe('MobileNativeChatView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('structured turn status wiring', () => {
+    const userTurn = (id: string, text: string): NativeChatMessage => ({
+      id,
+      role: 'user',
+      blocks: [{ type: 'text', text }],
+      timestamp: 0,
+      source: 'transcript'
+    })
+
+    function rowProps(id: string): Record<string, unknown> {
+      return (renderedRow(id) as { props: Record<string, unknown> }).props
+    }
+
+    function workingIndicators(): ReactTestInstance[] {
+      return renderer!.root.findAll((node) => node.type === 'WorkingIndicator')
+    }
+
+    it('gives the live user turn a status row and drops the three-dot indicator', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
+      const props = rowProps('u1')
+      expect(props.structuredActivityUi).toBe(true)
+      expect(props.turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
+      expect(props.activeTurnIsWorking).toBe(true)
+      expect(workingIndicators()).toHaveLength(0)
+    })
+
+    it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({ messages: folded, folded, agentWorking: true })
+      const props = rowProps('u1')
+      expect(props.structuredActivityUi).toBe(false)
+      expect(props.turnStatus).toBeNull()
+      expect(props.activeTurnIsWorking).toBe(false)
+      expect(workingIndicators()).toHaveLength(1)
+    })
+
+    it('settles the finished turn to a tappable duration', async () => {
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
+      expect(rowProps('u1').turnStatus).toMatchObject({ thinking: false, workedSeconds: null })
+      await update({ messages: folded, folded, structuredActivityUi: true, agentWorking: false })
+      const settled = rowProps('u1')
+      expect(settled.turnStatus).toMatchObject({ thinking: false })
+      expect((settled.turnStatus as { workedSeconds: number | null }).workedSeconds).toBeTypeOf(
+        'number'
+      )
+      expect(settled.onToggleTurn).toBeTypeOf('function')
+      expect(settled.activeTurnIsWorking).toBe(false)
+    })
+
+    it('hangs no status row on an assistant row', async () => {
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
+      expect(rowProps('a1').turnStatus).toBeNull()
+      // The assistant row still belongs to the live turn, so its tool row stays visible.
+      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+    })
+
+    it('does not carry a running turn clock across chat surfaces', async () => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(1_000)
+        const firstTab = [userTurn('u1', 'first')]
+        await render({
+          messages: firstTab,
+          folded: firstTab,
+          structuredActivityUi: true,
+          agentWorking: true,
+          sendSurfaceId: 'host\0worktree\0tab-a'
+        })
+        expect(rowProps('u1').turnStatus).toMatchObject({ startedAt: 1_000 })
+
+        vi.setSystemTime(12_000)
+        const secondTab = [userTurn('u2', 'second')]
+        await update({
+          messages: secondTab,
+          folded: secondTab,
+          structuredActivityUi: true,
+          agentWorking: true,
+          sendSurfaceId: 'host\0worktree\0tab-b'
+        })
+
+        expect(rowProps('u2').turnStatus).toMatchObject({ startedAt: 12_000 })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not treat pre-user history as part of the live turn', async () => {
+      const history = [
+        assistantTurn('a0', 'before the first prompt'),
+        userTurn('u1', 'go'),
+        assistantTurn('a1', 'working')
+      ]
+      await render({
+        messages: history,
+        folded: history,
+        structuredActivityUi: true,
+        agentWorking: true
+      })
+
+      expect(rowProps('a0').activeTurnIsWorking).toBe(false)
+      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+    })
   })
 })

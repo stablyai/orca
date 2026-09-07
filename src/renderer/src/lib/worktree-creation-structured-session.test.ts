@@ -6,8 +6,8 @@ const mocks = vi.hoisted(() => ({
   },
   listener: null as ((state: { pendingWorktreeCreations: Record<string, unknown> }) => void) | null,
   unsubscribe: vi.fn(),
-  startStructuredCodexLaunch: vi.fn(),
-  cancelStructuredCodexLaunch: vi.fn(),
+  startStructuredAgentLaunch: vi.fn(),
+  cancelStructuredAgentLaunch: vi.fn(),
   closeStructuredAgentSession: vi.fn(),
   callRuntimeRpc: vi.fn(),
   activateStructuredAgentSessionById: vi.fn()
@@ -26,8 +26,8 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/structured-agent-session-launch', () => ({
-  startStructuredCodexLaunch: mocks.startStructuredCodexLaunch,
-  cancelStructuredCodexLaunch: mocks.cancelStructuredCodexLaunch
+  startStructuredAgentLaunch: mocks.startStructuredAgentLaunch,
+  cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
 }))
 
 vi.mock('@/runtime/structured-agent-session-close', () => ({
@@ -58,7 +58,7 @@ vi.mock('@/lib/agent-trust-preflight', () => ({
   preflightAgentTrust: vi.fn()
 }))
 
-vi.mock('@/lib/launch-structured-codex-session', () => ({
+vi.mock('@/lib/launch-structured-agent-session', () => ({
   StructuredAgentSessionCreateRefusalError: class extends Error {}
 }))
 
@@ -78,7 +78,7 @@ describe('launchStructuredWorktreeSession', () => {
     const launchResult = new Promise<{ sessionId: string; fence: number }>((resolve) => {
       resolveLaunch = resolve
     })
-    mocks.startStructuredCodexLaunch.mockReturnValue({
+    mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
       launchResult,
       isVisibilityUnknown: () => false,
@@ -117,7 +117,7 @@ describe('launchStructuredWorktreeSession', () => {
       activation: false,
       primaryTabId: null
     })
-    expect(mocks.cancelStructuredCodexLaunch).toHaveBeenCalledWith('worktree-1', 'session-1')
+    expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'session-1')
     expect(mocks.closeStructuredAgentSession).toHaveBeenCalledWith({ kind: 'local' }, 'session-1')
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'session.tabs.close', {
       worktree: { id: 'worktree-1' },
@@ -130,7 +130,7 @@ describe('launchStructuredWorktreeSession', () => {
 
   it('reports an unknown launch without claiming a visible surface', async () => {
     const releaseCallerAfterUnknownOutcome = vi.fn()
-    mocks.startStructuredCodexLaunch.mockReturnValue({
+    mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-unknown',
       launchResult: Promise.reject(new Error('connection lost')),
       isVisibilityUnknown: () => true,

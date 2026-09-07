@@ -3,7 +3,7 @@ import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import { getRepoIdFromWorktreeId } from './worktree/id'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'
-import { clampUtf8TextTail, measureUtf8ByteLength } from './utf8-byte-limits'
+import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from './utf8-byte-limits'
 import { parseExecutionHostId } from './execution-host'
 
 export type RepoConnection = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
@@ -50,12 +50,7 @@ export function shouldPreserveTerminalScrollbackBuffers(
 }
 
 export function capTerminalScrollbackSessionBuffer(buffer: string): string {
-  if (
-    buffer.length <= TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT &&
-    !measureUtf8ByteLength(buffer, {
-      stopAfterBytes: TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
-    }).exceededLimit
-  ) {
+  if (isUtf8ByteLengthWithinLimit(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT)) {
     return buffer
   }
   return clampUtf8TextTail(buffer, TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT).text

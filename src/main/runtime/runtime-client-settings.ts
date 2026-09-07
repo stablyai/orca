@@ -10,6 +10,8 @@ import {
 } from '../../shared/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { applyNativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-option-defaults'
+import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
@@ -32,9 +34,13 @@ export type RuntimeClientSettings = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
+  | 'experimentalNativeChat'
+  | 'openAgentTabsInChatByDefault'
+  | 'experimentalStructuredNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
+  | 'minimaxEndpoint'
   | 'prBotAuthorOverrides'
   | 'artifactSharingEnabled'
   | 'worktreeVisibilityDefaults'
@@ -65,6 +71,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
+  | 'minimaxEndpoint'
   | 'prBotAuthorOverrides'
   | 'worktreeVisibilityDefaults'
 >
@@ -97,9 +104,15 @@ export class RuntimeClientSettingsController {
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
       githubProjects: settings.githubProjects,
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
+      // The three that decide whether a new agent tab -- and so an orchestration worker -- is a
+      // structured chat session rather than a terminal agent.
+      experimentalNativeChat: settings.experimentalNativeChat === true,
+      openAgentTabsInChatByDefault: settings.openAgentTabsInChatByDefault === true,
+      experimentalStructuredNativeChat: settings.experimentalStructuredNativeChat === true,
       compactWorktreeCards: settings.compactWorktreeCards === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
+      minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings),
       worktreeVisibilityDefaults: settings.worktreeVisibilityDefaults ?? { external: 'hide' },
@@ -168,6 +181,19 @@ export class RuntimeClientSettingsController {
       { notifyListeners: true }
     )
     return this.get()
+  }
+
+  updateNativeChatSessionOptions(mutation: NativeChatSessionOptionSettingsMutation): void {
+    if (!this.store?.getSettings || !this.store.updateSettings) {
+      throw new Error('runtime_unavailable')
+    }
+    const next = applyNativeChatSessionOptionSettingsMutation(
+      this.store.getSettings().nativeChatSessionOptions,
+      mutation
+    )
+    if (next) {
+      this.store.updateSettings({ nativeChatSessionOptions: next }, { notifyListeners: true })
+    }
   }
 
   private reconcileManagedAgentHooks(): Promise<void> {

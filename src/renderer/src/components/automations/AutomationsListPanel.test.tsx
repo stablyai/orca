@@ -11,7 +11,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AutomationsListPanel } from './AutomationsListPanel'
-import { EMPTY_AUTOMATION_LIST_FILTER } from './automation-list-view'
+import {
+  buildAutomationListViewItems,
+  EMPTY_AUTOMATION_LIST_FILTER,
+  type AutomationListSort,
+  type AutomationListSortField
+} from './automation-list-view'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import {
   makeAutomation,
@@ -49,7 +54,13 @@ const HOST_CATALOG = {
     status: 'all',
     announceFallback: false
   },
-  rows: { rows: [], automations: [], capturedOwners: new Map(), groups: [], answered: true },
+  rows: {
+    rows: [],
+    automations: [],
+    capturedOwners: new Map(),
+    groups: [],
+    answered: true
+  },
   loadCounts: { failedHostCount: 0, totalHostCount: 1 },
   selectHost: () => undefined,
   recover: () => undefined,
@@ -70,6 +81,8 @@ function renderPanel(
     selectExternalKey?: (key: string | null) => void
     externalEntries?: readonly ExternalAutomationListEntry[]
     setActivePaneTab?: (tab: AutomationPaneTab) => void
+    listSort?: AutomationListSort | null
+    onListSortChange?: (field: AutomationListSortField) => void
   } = {}
 ): void {
   const externalEntries = options.externalEntries ?? []
@@ -95,8 +108,12 @@ function renderPanel(
           externalManagersUncheckedNotice={uncheckedNotice}
           onSelectHost={() => undefined}
           onRecoverHost={() => undefined}
-          filteredRows={rows}
-          filteredExternalAutomationEntries={externalEntries}
+          sortedListItems={buildAutomationListViewItems({
+            rows,
+            externalEntries
+          })}
+          listSort={options.listSort ?? null}
+          onListSortChange={options.onListSortChange ?? (() => undefined)}
           selectedRowKey={options.selectedRowKey ?? null}
           selectedExternalKey={options.selectedExternalKey ?? null}
           relativeNow={0}
@@ -221,7 +238,11 @@ describe('AutomationsListPanel enter key navigation', () => {
     const input = searchField()
     expect(input).not.toBeNull()
 
-    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true
+    })
     input?.dispatchEvent(enter)
 
     expect(enter.defaultPrevented).toBe(true)
@@ -252,7 +273,11 @@ describe('AutomationsListPanel enter key navigation', () => {
     const input = searchField()
     expect(input).not.toBeNull()
 
-    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true
+    })
     input?.dispatchEvent(enter)
 
     expect(enter.defaultPrevented).toBe(true)
@@ -272,7 +297,11 @@ describe('AutomationsListPanel enter key navigation', () => {
     const input = searchField()
     expect(input).not.toBeNull()
 
-    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true
+    })
     input?.dispatchEvent(enter)
 
     expect(detailOpened).toBe(false)

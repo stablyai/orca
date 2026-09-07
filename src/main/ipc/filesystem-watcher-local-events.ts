@@ -139,7 +139,10 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       DIRECTORY_STAT_CONCURRENCY,
       async (evt) => {
         // Why: a deleted path can't be stat'd; leave isDirectory undefined and let the renderer infer from dirCache.
-        const isDirectory = evt.type === 'delete' ? undefined : await tryStatIsDirectory(evt.path)
+        const isDirectory =
+          root.batch.cancelled || evt.type === 'delete'
+            ? undefined
+            : await tryStatIsDirectory(evt.path)
 
         return {
           kind: evt.type,

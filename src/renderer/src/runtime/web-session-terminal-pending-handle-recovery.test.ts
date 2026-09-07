@@ -145,7 +145,7 @@ describe('web session pending terminal handle recovery', () => {
             topologyRevisions: { [WORKTREE_ID]: 4 },
             totalCount: 1,
             truncated: false,
-            hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
           }
         }
       }
@@ -316,7 +316,7 @@ describe('web session pending terminal handle recovery', () => {
             topologyRevisions: { [WORKTREE_ID]: 4 },
             totalCount: 1,
             truncated: false,
-            hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
           }
         }
       }
@@ -394,7 +394,7 @@ describe('web session pending terminal handle recovery', () => {
             topologyRevisions: { [WORKTREE_ID]: 4 },
             totalCount: 1,
             truncated: false,
-            hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+            hostScope: { hostIds: ['local'], omittedHostIds: [] }
           }
         }
       }
@@ -459,7 +459,7 @@ describe('web session pending terminal handle recovery', () => {
         terminals: [],
         totalCount: 0,
         truncated: false,
-        hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
       }
     }))
 
@@ -655,7 +655,7 @@ describe('web session pending terminal handle recovery', () => {
         terminals: [],
         totalCount: 0,
         truncated: false,
-        hostScope: { hostIds: [ENVIRONMENT_ID], omittedHostIds: [] }
+        hostScope: { hostIds: ['local'], omittedHostIds: [] }
       }
     }))
 

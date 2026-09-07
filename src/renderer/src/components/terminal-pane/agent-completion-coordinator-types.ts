@@ -32,7 +32,7 @@ export type AgentCompletionCoordinatorOptions = {
   inspectProcess: (
     settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
     ptyId: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void

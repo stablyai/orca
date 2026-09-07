@@ -78,7 +78,7 @@ async function dispatchStructuredLaunchPrompt(
   }
 }
 
-export function settleStructuredCodexLaunchPrompt(args: {
+export function settleStructuredAgentLaunchPrompt(args: {
   launchResult: Promise<LaunchReceipt>
   options: StructuredLaunchPromptOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null

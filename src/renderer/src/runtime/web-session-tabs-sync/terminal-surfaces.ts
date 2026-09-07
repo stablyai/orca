@@ -59,11 +59,51 @@ export function buildMirroredAgentTabs(
   currentUnifiedTabs: readonly Tab[],
   now: number
 ): MirroredAgentTab[] {
-  return snapshot.tabs.filter(isAgentSessionTab).map((tab, index) => {
-    const localId = structuredAgentSessionTabId(tab.sessionId)
-    const existing = currentUnifiedTabs.find(
-      (candidate) => candidate.contentType === 'agent-session' && candidate.id === localId
-    )
+  const agentTabs = snapshot.tabs.filter(isAgentSessionTab)
+  const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
+  const assignedIds = new Set<string>()
+  const replacementTabs = new Map<string, Tab>()
+  const replacementIds = new Set<string>()
+  for (const tab of agentTabs) {
+    if (!tab.replacesSessionId) {
+      continue
+    }
+    const existing =
+      currentUnifiedTabs.find(
+        (candidate) =>
+          candidate.contentType === 'agent-session' && candidate.entityId === tab.sessionId
+      ) ??
+      currentUnifiedTabs.find(
+        (candidate) =>
+          !replacementIds.has(candidate.id) &&
+          (candidate.structuredSessionId === tab.replacesSessionId ||
+            (candidate.contentType === 'agent-session' &&
+              candidate.entityId === tab.replacesSessionId))
+      )
+    if (existing) {
+      replacementTabs.set(tab.sessionId, existing)
+      replacementIds.add(existing.id)
+    }
+  }
+  return agentTabs.map((tab, index) => {
+    const existing =
+      replacementTabs.get(tab.sessionId) ??
+      currentUnifiedTabs.find(
+        (candidate) =>
+          !replacementIds.has(candidate.id) &&
+          candidate.contentType === 'agent-session' &&
+          candidate.entityId === tab.sessionId
+      )
+    const baseId = structuredAgentSessionTabId(tab.sessionId)
+    let localId = existing?.id ?? baseId
+    if (!existing || assignedIds.has(localId)) {
+      let suffix = 0
+      while (occupiedIds.has(localId)) {
+        localId = `${baseId}:history-${++suffix}`
+      }
+    }
+    occupiedIds.add(localId)
+    assignedIds.add(localId)
     return {
       hostTabId: tab.id,
       unifiedTab: {

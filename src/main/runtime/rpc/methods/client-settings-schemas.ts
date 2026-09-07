@@ -18,6 +18,45 @@ export const PRBotAuthorOverrideUpdate = z
   .object({ author: z.string(), isBot: z.boolean() })
   .strict()
 
+const NativeChatSessionOptionPickBase = {
+  modelId: z.string().trim().min(1).max(512),
+  adoptModelAsLaunchDefault: z.boolean().optional()
+}
+
+const NativeChatSessionOptionPick = z.union([
+  z
+    .object({
+      ...NativeChatSessionOptionPickBase,
+      optionId: z.enum(['model', 'effort']),
+      value: z.string().trim().min(1).max(512)
+    })
+    .strict(),
+  z
+    .object({
+      ...NativeChatSessionOptionPickBase,
+      optionId: z.enum(['fastMode', 'thinking']),
+      value: z.boolean()
+    })
+    .strict()
+])
+
+export const NativeChatSessionOptionsMutation = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('apply-picks'),
+      agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'grok']),
+      picks: z.array(NativeChatSessionOptionPick).min(1).max(8)
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('clear-model-if-missing'),
+      agent: z.enum(['claude', 'codex', 'gemini', 'cursor', 'grok']),
+      availableModelIds: z.array(z.string().trim().min(1).max(512)).min(1).max(256)
+    })
+    .strict()
+])
+
 const GitHubProjectRef = z
   .object({
     owner: z.string(),
@@ -72,6 +111,7 @@ export const SettingsUpdate = z
     compactWorktreeCards: z.boolean().optional(),
     minimaxGroupId: z.string().optional(),
     minimaxUsageModels: z.string().optional(),
+    minimaxEndpoint: z.enum(['overseas', 'cn']).optional(),
     githubProjects: GitHubProjectSettings.optional(),
     prBotAuthorOverrides: z
       .unknown()

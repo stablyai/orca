@@ -43,7 +43,7 @@ const artifactVolume = `orca-headless-serve-shutdown-${suffix}`
 const sha256 = createHash('sha256').update(readFileSync(appImage)).digest('hex')
 
 try {
-  docker([
+  const buildArgs = [
     'build',
     '--platform',
     platform,
@@ -52,7 +52,15 @@ try {
     '-t',
     image,
     shutdownDockerDirectory
-  ])
+  ]
+  // Why: apt fetches from archive.ubuntu.com stall or fail mid-sync; a second build usually lands on a healthy index.
+  const firstBuild = docker(buildArgs, { allowFailure: true })
+  if (firstBuild.status !== 0) {
+    process.stderr.write(
+      `${firstBuild.stdout}${firstBuild.stderr}\ndocker build failed with status ${firstBuild.status}; retrying once...\n`
+    )
+    docker(buildArgs)
+  }
   docker(['volume', 'create', artifactVolume])
   runDesktopStartupOracle({ image, appImage, platform })
   docker([

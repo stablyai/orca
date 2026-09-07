@@ -15,6 +15,11 @@ vi.mock('./e2ee', () => ({
   decryptBytes: (bytes: Uint8Array) => bytes
 }))
 
+// Capability ordering has dedicated coverage; keep connection tests focused on socket behavior.
+vi.mock('./mobile-runtime-capability-negotiation', () => ({
+  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
+}))
+
 class MockWebSocket {
   static CONNECTING = 0
   static OPEN = 1
@@ -64,36 +69,20 @@ class MockWebSocket {
 const mockSockets: MockWebSocket[] = []
 const originalWebSocket = globalThis.WebSocket
 
-function sentRequest(socket: MockWebSocket, method: string): { id: string; params?: unknown } {
-  for (const payload of socket.sent) {
-    const decoded = JSON.parse(payload.replace(/^encrypted:/, '')) as {
-      id: string
-      method: string
-      params?: unknown
-    }
-    if (decoded.method === method) {
-      return { id: decoded.id, params: decoded.params }
-    }
+type SentRpcRequest = { id: string; method: string; params?: unknown }
+
+function sentRequest(socket: MockWebSocket, method: string): SentRpcRequest {
+  const request = sentRequests(socket, method)[0]
+  if (request) {
+    return request
   }
   throw new Error(`Request not sent: ${method}`)
 }
 
-function sentRequests(
-  socket: MockWebSocket,
-  method: string
-): Array<{ id: string; params?: unknown }> {
-  const requests: Array<{ id: string; params?: unknown }> = []
-  for (const payload of socket.sent) {
-    const decoded = JSON.parse(payload.replace(/^encrypted:/, '')) as {
-      id: string
-      method: string
-      params?: unknown
-    }
-    if (decoded.method === method) {
-      requests.push({ id: decoded.id, params: decoded.params })
-    }
-  }
-  return requests
+function sentRequests(socket: MockWebSocket, method: string): SentRpcRequest[] {
+  return socket.sent
+    .map((payload) => JSON.parse(payload.replace(/^encrypted:/, '')) as SentRpcRequest)
+    .filter((request) => request.method === method)
 }
 
 function encodeBrowserFrame(): Uint8Array {

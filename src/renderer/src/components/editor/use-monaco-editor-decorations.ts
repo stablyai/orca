@@ -6,7 +6,7 @@ import {
   setMarkdownDocCompletionDocuments
 } from './monaco-markdown-doc-completions'
 import type { MarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
-import { buildGitConflictDecorations, hasGitConflictMarkers } from './monaco-conflict-decorations'
+import { buildGitConflictDecorations } from './monaco-conflict-decorations'
 
 export type MonacoEditorDecorations = {
   markdownDocLinkDecorationsRef: MutableRefObject<MarkdownDocLinkDecorationController | null>
@@ -67,13 +67,17 @@ export function useMonacoEditorDecorations(params: {
       return
     }
 
-    if (!conflictDecorationsEnabled || !hasGitConflictMarkers(content)) {
+    if (!conflictDecorationsEnabled) {
       conflictDecorationsRef.current?.clear()
       return
     }
 
     // Why: conflict markers are ordinary file text, so Monaco needs explicit decorations to keep unresolved blocks visible.
     const decorations = buildGitConflictDecorations(content)
+    if (decorations.length === 0) {
+      conflictDecorationsRef.current?.clear()
+      return
+    }
     if (!conflictDecorationsRef.current) {
       conflictDecorationsRef.current = ed.createDecorationsCollection(decorations)
       return

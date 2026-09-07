@@ -1,3 +1,4 @@
+import { yieldToEventLoop as yieldToEventLoopTask } from '../../../../shared/event-loop-yield'
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
 import { iterateTerminalPastePlanChunks } from './terminal-paste-chunks'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
@@ -40,7 +41,7 @@ async function executeTerminalPastePlanNow(
     writePty,
     isTargetCurrent,
     canContinue,
-    yieldToEventLoop = defaultYieldToEventLoop,
+    yieldToEventLoop = yieldToEventLoopTask,
     operationTimeoutMs = getTerminalPasteOperationTimeoutMs(plan),
     now = defaultNow
   }: ExecuteTerminalPastePlanArgs
@@ -189,8 +190,4 @@ function result(
 
 function defaultNow(): number {
   return globalThis.performance?.now?.() ?? Date.now()
-}
-
-function defaultYieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
 }

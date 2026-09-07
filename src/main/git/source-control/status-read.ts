@@ -14,7 +14,10 @@ import {
 } from '../../../shared/git-status-line-stats-cache'
 import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
+import {
+  findExistingWorktreeSymlinkPaths,
+  getSafeRelativePath
+} from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
 import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
@@ -89,8 +92,18 @@ async function dropSharedSymlinkUntrackedEntries(
   if (sharedLinkPaths.length === 0 || !entries.some((entry) => entry.area === 'untracked')) {
     return
   }
+  const untrackedPaths = new Set(
+    entries.filter((entry) => entry.area === 'untracked').map((entry) => entry.path)
+  )
+  const candidatePaths = sharedLinkPaths.filter((rawPath) => {
+    const path = getSafeRelativePath(rawPath)
+    return path.safe && untrackedPaths.has(path.rel)
+  })
+  if (candidatePaths.length === 0) {
+    return
+  }
   const sharedLinks = new Set(
-    await findExistingWorktreeSymlinkPaths(worktreePath, sharedLinkPaths, {
+    await findExistingWorktreeSymlinkPaths(worktreePath, candidatePaths, {
       wslDistro: options.wslDistro
     })
   )

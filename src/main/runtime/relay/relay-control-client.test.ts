@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
 import { RelayControlClient } from './relay-control-client'
 
 const encoder = new TextEncoder()
@@ -549,5 +550,49 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
 
     vi.advanceTimersByTime(91_000)
     expect(client.isLive()).toBe(false)
+  })
+
+  it('ignores an unrecognized control message without closing the active control', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    expect(client.isLive()).toBe(true)
+
+    // A newer relay opcode the desktop schema does not know. Rule 2 of
+    // remote-wire-compatibility: an unknown-but-well-formed frame is dropped,
+    // never fatal to a live control.
+    socket.deliver({ type: 'relay-hint', v: 2, hint: 'future-feature' })
+
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('ignores a reply whose request already timed out instead of self-closing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+
+    // A relay control-error carrying a reqId with no live waiter — e.g. a late
+    // reply that arrived after the desktop's request deadline deleted it, or the
+    // relay's no-op error for a command it could not route. Must not be fatal.
+    socket.deliver({ type: 'control-error', reqId: 'expired-req', code: 'unknown_control_message' })
+
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('still tears down a malformed (non-JSON) control frame', async () => {
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+
+    socket.emit('message', 'not-json{', false)
+
+    expect(client.isLive()).toBe(false)
+    expect(socket.readyState).toBe(3)
+    expect(onClose).toHaveBeenCalledWith(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
   })
 })

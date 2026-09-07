@@ -53,7 +53,8 @@ function createHarness(
     shutdown
   } as unknown as IPtyProvider
   const store = {
-    getSshRemotePtyLeases: vi.fn().mockReturnValue(leases)
+    getSshRemotePtyLeases: vi.fn().mockReturnValue(leases),
+    reconcileSshRemotePtyLeasesForTarget: vi.fn()
   } as unknown as Store
   return { provider, store, shutdown }
 }

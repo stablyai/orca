@@ -138,6 +138,7 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       path: MobileConnectionPath
       pendingPath: MobileConnectionPath | null
       pairingRejected: boolean
+      hostSignedOut: boolean
     }>((hostId) => {
       const client = clientsByHostId.get(hostId)
       return client
@@ -148,7 +149,8 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
               state: ctx.getState(hostId),
               path: ctx.getActivePath(hostId),
               pendingPath: ctx.getPendingPath(hostId),
-              pairingRejected: ctx.isPairingRejected(hostId)
+              pairingRejected: ctx.isPairingRejected(hostId),
+              hostSignedOut: ctx.isHostSignedOut(hostId)
             }
           ]
         : []

@@ -29,7 +29,10 @@ export type BatchedForegroundProcessResult = {
   processName: string | null
   reason?: string
   /** Set only when the table was readable: every process group attached to this PTY's terminal is
-   *  the shell's own, and none of them is stopped. Left absent when we could not observe it. */
+   *  the shell's own, none of them is stopped, AND that group's only member is the shell itself.
+   *  Left absent when we could not observe it. Keeps the tty-shaped name because it is on the wire
+   *  (`ForegroundProcessEvidence`); the value only ever got stricter, so an old client reading it
+   *  skips more, never less. */
   shellOwnsEveryTtyProcessGroup?: boolean
 }
 
@@ -62,30 +65,45 @@ export type BatchedForegroundProcessOptions = {
   stats?: ProcessTableIndexStats
 }
 
-/** Which process groups occupy each controlling terminal, and which terminals hold a stopped
- *  process. */
-type TtyOccupancy = {
+/** The two units a forced stop can reach, indexed from one capture: which process groups occupy
+ *  each controlling terminal (which terminals hold a stopped process), and how many rows belong to
+ *  each process group anywhere on the host. */
+type PaneOccupancy = {
   processGroupsByTty: ReadonlyMap<number, ReadonlySet<number>>
   stoppedTtys: ReadonlySet<number>
+  /** Rows per `pgid`, counted over the WHOLE table with no tty filter — that is the point of it.
+   *  A member that shares the shell's group but has no controlling terminal is reachable by
+   *  `killpg` and invisible to every tty-shaped index. */
+  rowsByProcessGroup: ReadonlyMap<number, number>
+  /** True when some row carried no `pgid`, so the group counts are incomplete and cannot support
+   *  an idleness claim. */
+  processGroupsIncomplete: boolean
 }
 
-const ttyOccupancyByCapture = new WeakMap<readonly ProcessTableRow[], TtyOccupancy>()
+const paneOccupancyByCapture = new WeakMap<readonly ProcessTableRow[], PaneOccupancy>()
 
-/** Index the capture by controlling terminal.
+/** Index the capture by controlling terminal and by process group.
  *
- *  Keyed on `tpgid` because the snapshot carries no tty column and does not need one: a process
- *  group belongs to exactly one session, a session to at most one controlling terminal, so two
- *  rows reporting the same live `tpgid` are on the same tty. Memoized per capture, since the
- *  per-pane cadence poll and `pty.listProcesses` share one TTL-cached table. */
-function getTtyOccupancy(rows: readonly ProcessTableRow[]): TtyOccupancy {
-  const cached = ttyOccupancyByCapture.get(rows)
+ *  The tty half is keyed on `tpgid` because the snapshot carries no tty column and does not need
+ *  one: a process group belongs to exactly one session, a session to at most one controlling
+ *  terminal, so two rows reporting the same live `tpgid` are on the same tty. Memoized per capture,
+ *  since the per-pane cadence poll and `pty.listProcesses` share one TTL-cached table. */
+function getPaneOccupancy(rows: readonly ProcessTableRow[]): PaneOccupancy {
+  const cached = paneOccupancyByCapture.get(rows)
   if (cached) {
     return cached
   }
   const processGroupsByTty = new Map<number, Set<number>>()
   const stoppedTtys = new Set<number>()
+  const rowsByProcessGroup = new Map<number, number>()
+  let processGroupsIncomplete = false
   for (const row of rows) {
-    if (row.pgid === undefined || row.tpgid === undefined || row.tpgid <= 0) {
+    if (row.pgid === undefined) {
+      processGroupsIncomplete = true
+      continue
+    }
+    rowsByProcessGroup.set(row.pgid, (rowsByProcessGroup.get(row.pgid) ?? 0) + 1)
+    if (row.tpgid === undefined || row.tpgid <= 0) {
       continue
     }
     let groups = processGroupsByTty.get(row.tpgid)
@@ -99,8 +117,13 @@ function getTtyOccupancy(rows: readonly ProcessTableRow[]): TtyOccupancy {
       stoppedTtys.add(row.tpgid)
     }
   }
-  const occupancy: TtyOccupancy = { processGroupsByTty, stoppedTtys }
-  ttyOccupancyByCapture.set(rows, occupancy)
+  const occupancy: PaneOccupancy = {
+    processGroupsByTty,
+    stoppedTtys,
+    rowsByProcessGroup,
+    processGroupsIncomplete
+  }
+  paneOccupancyByCapture.set(rows, occupancy)
   return occupancy
 }
 
@@ -161,7 +184,7 @@ export function resolveAgentForegroundProcessesFromIndex(
     }
   }
 
-  const occupancy = getTtyOccupancy(index.rows)
+  const occupancy = getPaneOccupancy(index.rows)
   return requests.map((request) => {
     const root = lookupProcessTableIndex(index, (value) => value.byPid.get(request.rootPid))
     if (!root) {
@@ -185,20 +208,40 @@ export function resolveAgentForegroundProcessesFromIndex(
         reason: 'no_controlling_tty'
       }
     }
-    // The only host-observable "nothing is running here" signal, and it has to be read off the
-    // whole tty rather than off `tpgid === pgid`. A backgrounded `pnpm build &` and a Ctrl-Z'd
-    // editor both leave the shell owning the foreground group, byte-identical to an idle prompt;
-    // what separates them is a second process group attached to the pane's terminal. That is also
-    // exactly the blast radius of the stop this attests to — `forceKillPosixPtyProcessGroups`
-    // SIGKILLs every process group on the tty — so the evidence and the kill now measure the same
-    // thing. A reader may treat `false` as "busy" and must never treat absence as "idle".
+    // The only host-observable "nothing is running here" signal, and it takes TWO measurements
+    // because the stop it authorizes has two units. `forceKillPosixPtyProcessGroups` collects every
+    // process group on the pane's tty and then `killpg`s each one, so the blast radius is
+    // (groups on the tty) x (members of those groups, wherever they are). Neither half implies the
+    // other, so both are required:
+    //
+    //   tty:   a backgrounded `pnpm build &` and a Ctrl-Z'd editor both hand the terminal back, so
+    //          the shell's row is byte-identical to an idle prompt. What separates them is a second
+    //          process group attached to the pane's terminal.
+    //   group: with job control off (`set +m`, common in non-interactive and dumb-terminal shells,
+    //          and settable by the user at the prompt) a background job KEEPS the shell's pgid, so
+    //          the tty shows one group and that group is running a build. Same for a child that
+    //          drops the controlling terminal without `setsid` (`tpgid == -1`, absent from every
+    //          tty index, still reachable by `killpg`) and for a double-forked grandchild that
+    //          reparents to pid 1 and so never appears in the ppid walk below.
+    //
+    // Residual after both, written down because the predicate cannot see it: the capture is a
+    // snapshot, so work started between the `ps` and the signal is invisible — bounded, not
+    // removed, by RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS on the reading side; and a process the host's
+    // own `ps` cannot enumerate (another PID namespace, `hidepid=2`, a table truncated by a
+    // permission boundary) is unobservable here while `killpg` still reaches it.
+    //
+    // A reader may treat `false` as "busy" and must never treat absence as "idle".
     const ttyProcessGroups = occupancy.processGroupsByTty.get(root.tpgid)
     const shellOwnsEveryTtyProcessGroup =
       root.tpgid === root.pgid &&
       ttyProcessGroups !== undefined &&
       ttyProcessGroups.size === 1 &&
       ttyProcessGroups.has(root.pgid) &&
-      !occupancy.stoppedTtys.has(root.tpgid)
+      !occupancy.stoppedTtys.has(root.tpgid) &&
+      !occupancy.processGroupsIncomplete &&
+      // The root always counts itself, so exactly one row in its group means the group IS the
+      // shell — no separate leader check, and no set of pids retained per capture.
+      occupancy.rowsByProcessGroup.get(root.pgid) === 1
     const allCandidates = rowsByOwner.get(root.pid) ?? []
     const foregroundCandidates = allCandidates.filter((row) => row.pgid === root.tpgid)
     const fallbackProcess = request.fallbackProcess

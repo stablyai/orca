@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
+  getExecutionHostLabel,
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getRepoSshConnectionId,
@@ -168,5 +169,17 @@ describe('execution host id delimiter invariant', () => {
       id: 'ssh:a%7Cb',
       targetId: 'a|b'
     })
+  })
+
+  // "All hosts" is the everything-scope. Answering with it for an id that names no host shows one
+  // unroutable row as though it were on every host, which is the opposite of what it is.
+  it('labels an id that names no host as one unknown host, not as every host', () => {
+    for (const id of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box'] as const) {
+      expect(getExecutionHostLabel(id as never)).toBe('Unknown host')
+    }
+    expect(getExecutionHostLabel(null)).toBe('Unknown host')
+    expect(getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE)).toBe('All hosts')
+    expect(getExecutionHostLabel('ssh:box')).toBe('box')
+    expect(getExecutionHostLabel('runtime:env-1')).toBe('env-1')
   })
 })

@@ -188,7 +188,8 @@ describe('agentStatus:getSnapshot IPC', () => {
               coordinatorHandle: 'term-parent'
             }
           : undefined
-      )
+      ),
+      getTerminalProcessIncarnation: vi.fn(() => 'pty-1:inc-1')
     }
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers(runtime)

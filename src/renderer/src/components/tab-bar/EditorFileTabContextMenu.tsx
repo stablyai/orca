@@ -126,6 +126,10 @@ export function EditorFileTabContextMenu({
           }
           skipMenuFocusRestoreRef.current = false
           event.preventDefault()
+          // Why: opening the input in onSelect lets the still-closing menu reclaim
+          // focus, and the resulting blur commits the rename away before the user types.
+          onActivate()
+          onOpenRenameInput()
         }}
       >
         <TabWorkspaceLayoutMenuSection
@@ -137,8 +141,6 @@ export function EditorFileTabContextMenu({
           disabled={!canRename || isRenaming}
           onSelect={() => {
             skipMenuFocusRestoreRef.current = true
-            onActivate()
-            onOpenRenameInput()
           }}
         >
           <Pencil className="size-3.5" />

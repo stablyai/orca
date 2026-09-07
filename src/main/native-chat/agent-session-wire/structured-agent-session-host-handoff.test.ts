@@ -6,14 +6,18 @@ import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
+import type { AgentSessionHandoffStatus } from '../../../shared/agent-session-wire'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import {
   acquireNativeHandoffOwner,
+  createStructuredAgentSessionHostHandoff,
   structuredTuiTranscriptImportOptions
 } from './structured-agent-session-host-handoff'
+
+const journals = createTrackedJournalOpener()
 
 function importRecord(provider: 'claude' | 'codex', accountHome: string): AgentSessionRecord {
   return {
@@ -54,6 +58,7 @@ describe('native handoff acquisition', () => {
   })
 
   afterEach(async () => {
+    await journals.closeAll()
     await rm(root, { recursive: true, force: true })
   })
 
@@ -82,7 +87,7 @@ describe('native handoff acquisition', () => {
       },
       now
     })
-    const journal = await openAgentSessionJournal({
+    const journal = await journals.open({
       identity: {
         sessionId,
         workspaceId: location.workspaceId,
@@ -170,6 +175,7 @@ describe('native handoff acquisition', () => {
       },
       {
         session: () => session,
+        findSession: () => session,
         eventSink: () => eventSink,
         flush: async () => undefined,
         serialize: async (_session, task) => task(),
@@ -195,5 +201,93 @@ describe('native handoff acquisition', () => {
     await acquiring
 
     expect(order).toEqual(['append-entered', 'append-complete', 'unbind', 'acquire'])
+  })
+})
+
+describe('handoff status published for a session the host no longer holds', () => {
+  const sessionId = 'session-handoff-publish-detached'
+  const now = 1_800_000_000_000
+  const failed: AgentSessionHandoffStatus = {
+    owner: 'native',
+    direction: 'to-tui',
+    phase: 'failed',
+    stage: null,
+    operationId: null
+  }
+  let root: string
+  let store: AgentSessionRecordStore
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-handoff-publish-'))
+    store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
+  })
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  function detachedHandoff(frames: { fence: number; status: AgentSessionHandoffStatus }[]) {
+    return createStructuredAgentSessionHostHandoff(
+      { store, adapter: {} as never, journalRoot: root, claimKeyId: 'key-1' },
+      {
+        // Eviction and host teardown both drop the map entry while a flow is still settling.
+        session: () => {
+          throw new Error('agent_session_ownership_unknown')
+        },
+        findSession: () => undefined,
+        eventSink: () => {
+          throw new Error('unreachable: publishing reads no sink')
+        },
+        flush: async () => undefined,
+        serialize: async (_sessionId, task) => task(),
+        subscribers: {
+          publish: vi.fn(),
+          reset: vi.fn(),
+          snapshot: vi.fn(),
+          handoff: (_id: string, fence: number, status: AgentSessionHandoffStatus) =>
+            void frames.push({ fence, status })
+        } as never,
+        now: () => now
+      }
+    )
+  }
+
+  it('still reaches subscribers at the record fence instead of throwing', async () => {
+    const reserved = await store.reserveOwner({
+      sessionId,
+      location: {
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'git-worktree'
+      },
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: join(root, 'codex-home') },
+      runtimeKind: 'native',
+      expectedFence: null,
+      spawnToken: 'detached-publish',
+      claimKeyId: 'key-1',
+      handoffOperationId: `${now}-00000000000000000000000000000001`,
+      probe: { outcome: 'reservation-unused' },
+      operation: {
+        callerKey: 'test',
+        operationId: `${now}-00000000000000000000000000000002`,
+        fingerprint: 'handoff'
+      },
+      now
+    })
+    const frames: { fence: number; status: AgentSessionHandoffStatus }[] = []
+
+    expect(() => detachedHandoff(frames).setStatus(sessionId, failed)).not.toThrow()
+
+    expect(frames).toEqual([{ fence: reserved.record.lease.runtimeFence, status: failed }])
+  })
+
+  it('drops the publish when neither a session nor a record remains', () => {
+    const frames: { fence: number; status: AgentSessionHandoffStatus }[] = []
+
+    expect(() => detachedHandoff(frames).setStatus(sessionId, failed)).not.toThrow()
+
+    expect(frames).toEqual([])
   })
 })

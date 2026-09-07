@@ -1,5 +1,15 @@
 import type { RemoteForegroundEvidence } from './foreground-process-evidence'
 
+/**
+ * What the execution host observed about processes running under a PTY's shell.
+ *
+ * Separate from `hasChildProcesses` because a boolean cannot hold the third answer. The host that
+ * could not read its own process table and the host that read it and found nothing both had to
+ * spell themselves `false`, and every close guard reads `false` as "nothing is running here".
+ * Windows relays spelled it `false` unconditionally.
+ */
+export type PtyChildProcessVerdict = 'children' | 'no-children' | 'unverifiable'
+
 /** Reasons the renderer could not observe the execution host. */
 export type ClientOnlyUnverifiableReason =
   | 'transport_loss'
@@ -17,6 +27,7 @@ export type ClientOnlyUnverifiableInspection = {
   verdict: 'unverifiable'
   reason: string
   foregroundProcessEvidence?: never
+  childProcessEvidence?: never
   authorityGeneration?: never
   observationEpoch?: never
   capturedAgeMs?: never
@@ -30,6 +41,8 @@ export type HostProcessInspection = {
   hasChildProcesses: boolean
   /** Optional on old hosts; the renderer treats an omitted field as old-host unverifiable. */
   foregroundProcessEvidence?: RemoteForegroundEvidence
+  /** Absent on hosts that predate the member, and on answers the host did not pay to observe. */
+  childProcessEvidence?: PtyChildProcessVerdict
   verdict?: never
   reason?: never
 }

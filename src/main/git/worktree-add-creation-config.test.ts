@@ -199,7 +199,7 @@ describe('addWorktree', () => {
     })
 
     const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'worktree' && argv[1] === 'add'
+      ([argv]) => Array.isArray(argv) && argv.includes('worktree') && argv.includes('add')
     )
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: WORKTREE_ADD_TIMEOUT_MS })
     expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
@@ -214,7 +214,7 @@ describe('addWorktree', () => {
     })
 
     const worktreeAddCall = gitExecFileAsyncMock.mock.calls.find(
-      ([argv]) => Array.isArray(argv) && argv[0] === 'worktree' && argv[1] === 'add'
+      ([argv]) => Array.isArray(argv) && argv.includes('worktree') && argv.includes('add')
     )
     expect(worktreeAddCall?.[1]).toMatchObject({ timeout: 600_000 })
   })

@@ -40,7 +40,7 @@ export abstract class RemoteRuntimeTerminalResponseController extends RemoteRunt
     if (!stream) {
       return
     }
-    stream.watchdog.recordInbound()
+    stream.watchdog.recordInbound(false)
     if (event.type === 'end' && shouldHoldE2eRemoteTerminalEnd(stream.terminal)) {
       return
     }

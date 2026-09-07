@@ -126,13 +126,13 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredCopy',
-                    'Opt in to the host-owned structured Codex runtime. Off keeps the existing terminal-backed chat path.'
+                    'Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.'
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
-                    'Local macOS and Linux sessions only for now. Windows, WSL, and remote execution hosts (including SSH) continue to use terminal chat.'
+                    'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
                   )}
                 </p>
               </div>

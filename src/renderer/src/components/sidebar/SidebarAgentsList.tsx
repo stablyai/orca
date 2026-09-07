@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { ActivityScopeFilterChips } from '@/components/activity/activity-scope-filter-controls'
 import { hasActivityThreadWorkspace } from '@/components/activity/activity-thread-actions'
 import { useActivityThreadActionBindings } from '@/components/activity/use-activity-thread-action-bindings'
 import { ActivityThreadListPane } from '@/components/activity/activity-thread-list-pane'
@@ -164,7 +163,6 @@ export default function SidebarAgentsList({
         showFilterControls={false}
         showOptionsMenu={false}
         showInlineActions={false}
-        scopeFilterRow={<ActivityScopeFilterChips />}
         scrollTopRef={scrollTopRef}
       />
       {optionsTarget

@@ -19,7 +19,6 @@ import {
   addRuntimeProject,
   api,
   installAutomationsPageHarness,
-  listedRow,
   mocks,
   renderPage,
   runtimeHost,
@@ -30,6 +29,7 @@ import {
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { listedRow } from './automations-page-listed-items'
 import { makeAutomation, REPO_ID, WORKSPACE_ID } from './automations-page-fixtures'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
