@@ -87,6 +87,7 @@ function countWorkspaceRows(rows: readonly Row[]): number {
   // while a visibly populated project sits right under it.
   let count = 0
   const seenWorktreeIds = new Set<string>()
+  const seenFolderWorkspaceIds = new Set<string>()
   let pendingHeader: Extract<Row, { type: 'header' }> | null = null
   let pendingHeaderHadWorkspaces = false
   const flushHeader = (): void => {
@@ -123,7 +124,12 @@ function countWorkspaceRows(rows: readonly Row[]): number {
       continue
     }
     if (row.type === 'folder-workspace') {
-      count += 1
+      // Why dedupe: a pinned folder workspace renders in Pinned and in its group
+      // under duplicate-in-groups, but it is still one workspace to the badge.
+      if (!seenFolderWorkspaceIds.has(row.folderWorkspace.id)) {
+        count += 1
+        seenFolderWorkspaceIds.add(row.folderWorkspace.id)
+      }
       pendingHeaderHadWorkspaces = pendingHeader !== null
     }
   }

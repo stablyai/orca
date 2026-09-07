@@ -149,6 +149,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       prCache: props.prCache,
       hostedReviewCache: props.hostedReviewCache,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
+      getActiveSurfaceVariant: primaryActive.getActiveSurfaceVariant,
       onSelectionGesture: props.onSelectionGesture,
       onContextMenuSelect: props.onContextMenuSelect,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,

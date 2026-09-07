@@ -61,7 +61,7 @@ export function useEffectiveCollapsedGroups(args: {
         agentSendTargetWorktreeId,
         folderWorkspaces,
         projectGroups,
-        { groupBy, workspaceStatuses, defaultHostId }
+        { groupBy, workspaceStatuses, defaultHostId, pinnedDisplayPolicy }
       )
       if (folderKeys.length === 0) {
         return collapsedGroups
