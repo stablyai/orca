@@ -18,6 +18,12 @@ vi.mock('./host-store', () => ({
 
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
 import {
+  getSessionTabStripCacheKey,
+  readCachedSessionTabStrip,
+  resetSessionTabStripCacheForTests,
+  saveCachedSessionTabStrip
+} from '../cache/session-tab-strip-cache'
+import {
   getHostNotificationSession,
   resetHostNotificationSessionsForTests
 } from '../notifications/notification-reconnect-catchup'
@@ -27,6 +33,7 @@ describe('host removal lifecycle', () => {
     removeHostMock.mockReset()
     asyncStorage.removeItem.mockClear()
     resetHostNotificationSessionsForTests()
+    resetSessionTabStripCacheForTests()
   })
 
   it('closes the client only after metadata removal commits', async () => {
@@ -87,5 +94,26 @@ describe('host removal lifecycle', () => {
     await Promise.resolve()
 
     expect(asyncStorage.removeItem).toHaveBeenCalledWith('orca:mobileNotificationsWatermark:host-1')
+  })
+
+  it('drops the removed host cached tab strip and keeps every other host', async () => {
+    // Why: the strip is plaintext and nothing else in the app ever expires an entry, so a
+    // forgotten host would keep its tab titles on disk and get them rewritten by the next
+    // save for any surviving host.
+    removeHostMock.mockResolvedValue(undefined)
+    const removed = getSessionTabStripCacheKey('host-1', 'wt-1')
+    const kept = getSessionTabStripCacheKey('host-2', 'wt-1')
+    const strip = {
+      tabs: [{ id: 'tab-1', type: 'terminal' as const, title: 'Terminal', agentId: null }],
+      activeTabId: 'tab-1'
+    }
+    saveCachedSessionTabStrip(removed, strip)
+    saveCachedSessionTabStrip(kept, strip)
+
+    await removeHostAndCloseClient('host-1', vi.fn())
+    // Fire-and-forget, like clearWatermark above; let its microtasks land.
+    await vi.waitFor(() => expect(readCachedSessionTabStrip(removed)).toBeNull())
+
+    expect(readCachedSessionTabStrip(kept)?.tabs).toHaveLength(1)
   })
 })

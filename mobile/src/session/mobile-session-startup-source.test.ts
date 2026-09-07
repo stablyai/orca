@@ -336,7 +336,7 @@ describe('mobile session startup', () => {
     // Why: the loading and pending-terminal states are exactly the window in which the startup
     // RPCs are outstanding, so the engine loads there rather than after terminal.list answers.
     const loadingBranch = sliceBetween(
-      'return showLoadingState ? (',
+      "return reconnectViewState.kind === 'reconnecting-with-cache' || showLoadingState ? (",
       ') : showEmptyState ? (',
       activeContentSource
     )

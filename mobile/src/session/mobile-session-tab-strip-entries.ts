@@ -1,3 +1,4 @@
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import type { MobileSessionTab, MobileSessionTabType } from './mobile-session-route-types'
 import {
   getMobileSessionTabTitle,
@@ -5,9 +6,8 @@ import {
 } from './mobile-terminal-tab-agent'
 
 /**
- * The only session-tab fields the tab strip draws — and therefore the only ones worth keeping
- * for a reconnect preview. Everything the live tab carries besides these (unsent launch drafts,
- * absolute file paths, browser URLs, agent session ids) stays on the wire and out of storage.
+ * The only session-tab fields the tab strip draws. Everything else the live tab carries (unsent
+ * launch drafts, absolute file paths, browser URLs, agent session ids) stays on the wire.
  */
 export type MobileSessionTabStripEntry = {
   id: string
@@ -40,6 +40,48 @@ export function toMobileSessionTabStripEntry(tab: MobileSessionTab): MobileSessi
           ? resolveMobileTerminalTabAgentId(tab)
           : null
   }
+}
+
+/**
+ * Every tab type the strip knows how to draw. A stored entry naming anything else is dropped
+ * rather than trusted, so a type added later fails closed: its rows go missing from the preview
+ * instead of carrying an unreviewed title into storage.
+ */
+const drawableTabTypes = new Set<string>([
+  'terminal',
+  'markdown',
+  'file',
+  'browser',
+  'agent-session'
+] satisfies readonly MobileSessionTabType[])
+
+export function isDrawableTabStripType(type: string): type is MobileSessionTabType {
+  return drawableTabTypes.has(type)
+}
+
+const agentDisplayNames: Readonly<Record<string, string>> = TUI_AGENT_DISPLAY_NAMES
+
+/**
+ * The title a strip entry may be written to disk under.
+ *
+ * A terminal's title is whatever the shell last set, which is routinely the command line —
+ * `psql postgres://user:password@host/db`, `curl -H "Authorization: Bearer ..."`. None of that
+ * belongs in plaintext storage, and a browser tab's page title is no better. Both collapse to a
+ * fixed label, so what survives is the shape of the strip, not its contents. A resolved agent
+ * still names itself, because that lookup is a closed enum: an unrecognised id yields the
+ * generic label rather than passing text through.
+ */
+export function getPersistableTabStripTitle(
+  entry: Pick<MobileSessionTabStripEntry, 'type' | 'title' | 'agentId'>
+): string {
+  if (entry.type === 'terminal') {
+    const agentLabel = entry.agentId === null ? undefined : agentDisplayNames[entry.agentId]
+    return agentLabel ?? 'Terminal'
+  }
+  if (entry.type === 'browser') {
+    return 'Browser'
+  }
+  return entry.title
 }
 
 export function toMobileSessionTabStripPreview(

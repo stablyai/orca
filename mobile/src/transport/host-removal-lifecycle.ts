@@ -1,3 +1,4 @@
+import { deleteCachedSessionTabStripForHost } from '../cache/session-tab-strip-cache'
 import {
   clearWatermark,
   forgetHostNotificationSession
@@ -17,4 +18,7 @@ export async function removeHostAndCloseClient(
   // re-pair of the same host would inherit a watermark for a counter it never saw.
   forgetHostNotificationSession(hostId)
   void clearWatermark(hostId)
+  // Why: the cached tab strip is plaintext and host-scoped, so forgetting the host has to drop
+  // it here too — nothing else in the app ever expires an entry.
+  void deleteCachedSessionTabStripForHost(hostId)
 }

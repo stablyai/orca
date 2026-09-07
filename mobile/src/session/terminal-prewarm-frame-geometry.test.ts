@@ -120,12 +120,12 @@ describe('terminal pre-warm frame geometry', () => {
 
   it('mounts the tab bar only once a tab is visible, which is what shortens the pane', () => {
     expect(headerSource).toContain(
-      '{visibleTabs.length > 0 && (\n        <View style={styles.tabBar}>'
+      '{tabStripRows.length > 0 && (\n        <View style={styles.tabBar}>'
     )
-    // So the reservation has to be the exact complement of that condition, read off the same list
-    // the header gates on rather than a proxy for it.
+    // So the reservation has to be the exact complement of that condition, read off the same rows
+    // the header gates on (live tabs or the cached reconnect preview) rather than a proxy for it.
     expect(activeContentSource).toContain(
-      'const prewarmReservedTabBarHeight = visibleTabs.length > 0 ? 0 : MOBILE_SESSION_TAB_BAR_HEIGHT'
+      'const prewarmReservedTabBarHeight = tabStripRows.length > 0 ? 0 : MOBILE_SESSION_TAB_BAR_HEIGHT'
     )
   })
 

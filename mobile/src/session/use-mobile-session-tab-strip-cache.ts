@@ -19,23 +19,27 @@ export function useMobileSessionTabStripCache(scope: MobileSessionBulkCloseModel
   const { hostId, worktreeId, connState, terminalsLoaded } = scope
   const { visibleTabs, activeSessionTabId, activeHandle } = scope
   const cacheKey = getSessionTabStripCacheKey(hostId, worktreeId)
-  const [cachedTabStrip, setCachedTabStrip] = useState<MobileSessionTabStripPreview | null>(() =>
-    readCachedSessionTabStrip(cacheKey)
-  )
+  // Why: state settles a commit behind the key it was read for, so carry the key with it —
+  // otherwise the first render after a workspace switch draws the previous workspace's strip.
+  const [loaded, setLoaded] = useState<{
+    key: string | null
+    preview: MobileSessionTabStripPreview | null
+  }>(() => ({ key: cacheKey, preview: readCachedSessionTabStrip(cacheKey) }))
 
   useEffect(() => {
     // Synchronous first, so an in-session revisit never blinks through the uncached branch.
-    setCachedTabStrip(readCachedSessionTabStrip(cacheKey))
+    setLoaded({ key: cacheKey, preview: readCachedSessionTabStrip(cacheKey) })
     let disposed = false
     void loadCachedSessionTabStrip(cacheKey).then((preview) => {
       if (!disposed) {
-        setCachedTabStrip(preview)
+        setLoaded({ key: cacheKey, preview })
       }
     })
     return () => {
       disposed = true
     }
   }, [cacheKey])
+  const cachedTabStrip = loaded.key === cacheKey ? loaded.preview : null
 
   // Only a host-confirmed strip is worth persisting, and an emptied workspace has to be written
   // too — skipping it would leave yesterday's tabs to be drawn over a session that no longer has
