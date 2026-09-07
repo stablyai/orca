@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { test, expect as playwrightExpect } from '@playwright/test'
 
 /**
  * Note: These tests require Orca app running in test mode with:
