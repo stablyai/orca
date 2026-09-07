@@ -74,6 +74,9 @@ export class MobileEndpointSupervisor {
       },
       isStopped: () => this.stopped,
       completeRefresh: () => this.relayReconnect.completeCredentialRefresh(),
+      // Why relayDialAllowed and not the reconnect controller's needsRecovery: a
+      // refresh that lands while direct is still dialing must start the relay race,
+      // not wait on the direct retry loop as the pre-race rotation path did.
       onRefreshed: () => {
         if (this.isActive() && this.relayDialAllowed(false)) {
           void this.recoverRelay()
