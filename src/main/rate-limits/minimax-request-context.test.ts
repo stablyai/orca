@@ -149,7 +149,7 @@ describe('makeMiniMaxRequestHeaders', () => {
 
   it('switches the Referer to the CN console when endpointMode is "cn" (#14264)', () => {
     const headers = makeMiniMaxRequestHeaders(null, 'cn')
-    expect(headers.Referer).toBe('https://www.minimaxi.com/console/usage')
+    expect(headers.Referer).toBe('https://platform.minimaxi.com/console/usage')
   })
 
   it('omits X-Group-Id when groupId is null', () => {

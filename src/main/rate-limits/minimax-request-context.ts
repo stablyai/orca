@@ -29,7 +29,8 @@ function getMiniMaxOrigin(endpoint: MiniMaxEndpoint): string {
 }
 
 function getMiniMaxReferer(endpoint: MiniMaxEndpoint): string {
-  return `${getMiniMaxOrigin(endpoint)}/console/usage`
+  const consoleOrigin = endpoint === 'cn' ? 'https://platform.minimaxi.com' : MINIMAX_OVERSEAS_BASE
+  return `${consoleOrigin}/console/usage`
 }
 
 const MINIMAX_SESSION_PARTITION = 'orca-minimax-rate-limit-fetch'
