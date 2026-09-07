@@ -79,6 +79,7 @@ vi.mock('../rpc/relay-transport', () => ({
     stop = vi.fn().mockResolvedValue(undefined)
     setGeneration = vi.fn()
     metadataFor = vi.fn()
+    hasConnection = vi.fn(() => false)
     openConnection = vi.fn().mockResolvedValue(undefined)
 
     constructor() {
@@ -344,6 +345,60 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     })
     await vi.waitFor(() => expect(onAssignedCellActive).toHaveBeenCalledTimes(2))
     expect(onAssignedCellActive).toHaveBeenLastCalledWith('https://cell-b.relay.example.test')
+  })
+
+  it('attaches a phone whose accept straddles a control rebind', async () => {
+    const ack: RelayHostHelloAckMessage = {
+      type: 'host-hello-ack',
+      v: 1,
+      generation: 7,
+      controlResumeSecret: 'R'.repeat(43),
+      leaseExpiresAt: 1_000_000,
+      activeConnIds: [],
+      pendingConns: []
+    }
+    fakes.controlConnect.mockResolvedValueOnce(ack).mockResolvedValueOnce({
+      ...ack,
+      leaseExpiresAt: 2_000_000,
+      // The cell restates the connection it already announced once; without the
+      // replay the phone waits out its 10s attach deadline and is closed 4404.
+      pendingConns: [{ connId: 'straddling-basis', connTicket: 'T'.repeat(43) }]
+    })
+    fakes.assign.mockResolvedValue({
+      cellUrl: 'https://relay.example.test',
+      assignmentEpoch: 1,
+      leaseExpiresAt: 2_000_000
+    })
+    const broker = await RelaySessionBroker.connect(brokerOptions())
+    fakes.controls[0]!.options.onConnectionOpen({
+      connId: 'straddling-basis',
+      connTicket: 'T'.repeat(43),
+      kind: 'invite',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 10_000
+    })
+    // The blip that costs the control also kills the in-flight data socket.
+    fakes.transports[0]!.openConnection.mockClear()
+
+    fakes.controls[0]!.options.onDrain({
+      type: 'drain',
+      graceMs: 5_000,
+      recovery: 'resolve-director'
+    })
+    await vi.waitFor(() => expect(fakes.controls).toHaveLength(2))
+
+    expect(fakes.transports).toHaveLength(1)
+    await vi.waitFor(() =>
+      expect(fakes.transports[0]!.openConnection).toHaveBeenCalledWith({
+        type: 'conn-open',
+        connId: 'straddling-basis',
+        connTicket: 'T'.repeat(43),
+        kind: 'invite',
+        relayDeviceId: 'device-1',
+        attachDeadlineMs: 10_000
+      })
+    )
+    expect(brokerBasisIds(broker)).toEqual(['straddling-basis'])
   })
 
   it('opens a fresh same-cell generation when process-local rebind state is lost', async () => {
