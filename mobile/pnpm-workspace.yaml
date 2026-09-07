@@ -9,3 +9,4 @@ overrides:
 patchedDependencies:
   react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
   react-native@0.83.10: patches/react-native@0.83.10.patch
+  '@xterm/addon-webgl@0.20.0-beta.299': patches/@xterm__addon-webgl@0.20.0-beta.299.patch
