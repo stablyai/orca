@@ -204,6 +204,15 @@ export const bundle: MobileRelayCredentialBundle = {
   }
 }
 
+// Why: LAN unreachable. A throwing open beats a never-answering socket — the
+// direct dial resolves synchronously, so a relay-only test leaves no probe timer
+// behind and the reconnect race has exactly one runner.
+export function unreachableDirect(): MobileEndpointSupervisorDependencies['openDirect'] {
+  return vi.fn(() => {
+    throw new Error('direct endpoint unreachable')
+  })
+}
+
 export function dependencies(
   overrides: Partial<MobileEndpointSupervisorDependencies> = {}
 ): MobileEndpointSupervisorDependencies {
