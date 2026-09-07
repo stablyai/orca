@@ -16,6 +16,12 @@ import {
 import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import { getTerminalState } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import {
+  TerminalCodexModalObservation,
+  hasCodexModelPickerTail,
+  type TerminalModalFence
+} from './terminal-codex-modal-observation'
+import type { RuntimeVisibleTerminalState } from './runtime-terminal-state-records'
 
 export type RuntimeTerminalAgentStatusSnapshot = {
   waitText: string
@@ -26,6 +32,9 @@ export type RuntimeTerminalAgentStatusSnapshot = {
 }
 
 type Dependencies = {
+  getModalFence(ptyId: string): TerminalModalFence
+  readVisibleState(ptyId: string): Promise<RuntimeVisibleTerminalState | null>
+  isCodex(ptyId: string): boolean
   getController(): RuntimePtyController | null
   getLivePty(handle: string): { pty: RuntimePtyWorktreeRecord } | null
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
@@ -41,6 +50,7 @@ type Dependencies = {
 }
 
 export class RuntimeTerminalAgentStatusQuery {
+  private readonly modal = new TerminalCodexModalObservation()
   private readonly inFlight = new Map<string, Promise<RuntimeTerminalAgentStatus>>()
 
   constructor(private readonly deps: Dependencies) {}
@@ -63,6 +73,7 @@ export class RuntimeTerminalAgentStatusQuery {
 
   private async readStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
     const ptyId = this.getPtyId(handle)
+    await this.refreshModal(handle, ptyId)
     const terminal = this.getSnapshot(handle, ptyId)
     const explicitStatus = this.deps.getExplicitStatus(handle)
     const lifecycle = this.deps.getLifecycleStatus(ptyId)
@@ -129,6 +140,43 @@ export class RuntimeTerminalAgentStatusQuery {
     return { handle, isRunningAgent, status: null }
   }
 
+  async refreshModal(handle: string, ptyId: string): Promise<void> {
+    if (!this.deps.isCodex(ptyId)) {
+      return
+    }
+    const snapshot = this.getSnapshot(handle, ptyId)
+    if (!hasCodexModelPickerTail(snapshot.waitText)) {
+      return
+    }
+    const record = this.deps.getLivePty(handle)?.pty ?? this.deps.getLiveLeaf(handle).leaf
+    const before = this.deps.getModalFence(ptyId)
+    const screen = await this.deps.readVisibleState(ptyId).catch(() => null)
+    this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+    const current = this.deps.getLivePty(handle)?.pty ?? this.deps.getLiveLeaf(handle).leaf
+    if (record !== current) {
+      return
+    }
+    this.modal.reconcile(record, snapshot.waitText, before, this.deps.getModalFence(ptyId), screen)
+  }
+
+  getWaitText(record: RuntimePtyWorktreeRecord | RuntimeLeafRecord, ptyId: string | null): string {
+    const text = buildTerminalWaitText(record.tailBuffer, record.tailPartialLine, record.preview)
+    return ptyId ? this.modal.read(record, text, this.deps.getModalFence(ptyId)) : text
+  }
+
+  isModalComposerReady(handle: string): boolean {
+    const ptyId = this.getPtyId(handle)
+    const record = this.deps.getLivePty(handle)?.pty ?? this.deps.getLiveLeaf(handle).leaf
+    const text = buildTerminalWaitText(record.tailBuffer, record.tailPartialLine, record.preview)
+    const terminal = this.getSnapshot(handle, ptyId)
+    return (
+      terminal.titleStatus !== 'permission' &&
+      this.deps.getExplicitStatus(handle)?.status !== 'permission' &&
+      this.deps.getLifecycleStatus(ptyId)?.status !== 'permission' &&
+      this.modal.isReady(record, text, this.deps.getModalFence(ptyId))
+    )
+  }
+
   getPtyId(handle: string): string {
     const pty = this.deps.getLivePty(handle)
     if (pty) {
@@ -184,11 +232,7 @@ export class RuntimeTerminalAgentStatusQuery {
           { title: pty.pty.title, updatedAt: pty.pty.titleUpdatedAt },
           { title: pty.pty.lastOscTitle, updatedAt: pty.pty.lastOscTitleAt }
         )
-      const waitText = buildTerminalWaitText(
-        pty.pty.tailBuffer,
-        pty.pty.tailPartialLine,
-        pty.pty.preview
-      )
+      const waitText = this.getWaitText(pty.pty, expectedPtyId)
       return {
         waitText,
         waitBlockedAt: pty.pty.waitBlockedAt,
@@ -216,7 +260,7 @@ export class RuntimeTerminalAgentStatusQuery {
       { title: this.deps.getTabTitle(leaf.tabId), updatedAt: 0 }
     )
     return {
-      waitText: buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview),
+      waitText: this.getWaitText(leaf, expectedPtyId),
       waitBlockedAt: leaf.waitBlockedAt,
       title: title?.title ?? null,
       titleStatus: title ? detectAgentStatusFromTitle(title.title) : leaf.lastAgentStatus,

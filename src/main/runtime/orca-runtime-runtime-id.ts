@@ -279,6 +279,7 @@ export class OrcaRuntimeWithRuntimeId {
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
+    getWaitText: (record) => this.terminalAgentStatus.getWaitText(record, record.ptyId),
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
@@ -291,6 +292,7 @@ export class OrcaRuntimeWithRuntimeId {
       getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),
       getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
       getTabTitle: (tabId) => this.tabs.get(tabId)?.title ?? null,
+      getWaitText: (record) => this.terminalAgentStatus.getWaitText(record, record.ptyId),
       startVisibleReadProbe: (waiter, waiterTimeoutMs) =>
         this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
     },

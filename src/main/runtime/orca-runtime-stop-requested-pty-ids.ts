@@ -154,6 +154,13 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   })
 
   protected readonly terminalAgentStatus = new RuntimeTerminalAgentStatusQuery({
+    getModalFence: (ptyId) => ({
+      generation: this.getPtyLifecycleGeneration(ptyId),
+      outputSequence: this.getPtyOutputSequence(ptyId),
+      permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0
+    }),
+    readVisibleState: (ptyId) => this.readVisibleTerminalState(ptyId),
+    isCodex: (ptyId) => this.getPtyAgent(ptyId) === 'codex',
     getController: () => this.ptyController,
     getLivePty: (handle) => this.getLivePtyForHandle(handle),
     getLiveLeaf: (handle) => this.getLiveLeafForHandle(handle),

@@ -14,7 +14,6 @@ import {
   buildTerminalWaitResult,
   getTerminalState
 } from './terminal-wait-results'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -27,6 +26,7 @@ type RuntimeTerminalWaitDependencies = {
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   getTabTitle(tabId: string): string | null
+  getWaitText(record: RuntimePtyWorktreeRecord | RuntimeLeafRecord): string
   startVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void
 }
 
@@ -51,11 +51,7 @@ export class RuntimeTerminalWait {
       if (condition === 'exit' && !pty.pty.connected) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
-      const ptyWaitText = buildTerminalWaitText(
-        pty.pty.tailBuffer,
-        pty.pty.tailPartialLine,
-        pty.pty.preview
-      )
+      const ptyWaitText = this.deps.getWaitText(pty.pty)
       const ptyBlockedReason = detectTerminalWaitBlockedReason(ptyWaitText)
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
@@ -104,11 +100,7 @@ export class RuntimeTerminalWait {
         } else if (condition === 'exit' && !live.pty.connected) {
           this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
         } else if (condition === 'tui-idle') {
-          const livePtyWaitText = buildTerminalWaitText(
-            live.pty.tailBuffer,
-            live.pty.tailPartialLine,
-            live.pty.preview
-          )
+          const livePtyWaitText = this.deps.getWaitText(live.pty)
           const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
           if (blockedReason) {
             this.waiters.resolve(
@@ -136,7 +128,7 @@ export class RuntimeTerminalWait {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
 
-    const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    const leafWaitText = this.deps.getWaitText(leaf)
     const leafBlockedReason = detectTerminalWaitBlockedReason(leafWaitText)
     if (condition === 'tui-idle' && leafBlockedReason) {
       return buildTerminalWaitBlockedResult(handle, condition, leaf, leafBlockedReason)
@@ -203,11 +195,7 @@ export class RuntimeTerminalWait {
         if (getTerminalState(live.leaf) === 'exited') {
           this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
         } else if (condition === 'tui-idle') {
-          const liveLeafWaitText = buildTerminalWaitText(
-            live.leaf.tailBuffer,
-            live.leaf.tailPartialLine,
-            live.leaf.preview
-          )
+          const liveLeafWaitText = this.deps.getWaitText(live.leaf)
           const blockedReason = detectTerminalWaitBlockedReason(liveLeafWaitText)
           if (blockedReason) {
             this.waiters.resolve(

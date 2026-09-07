@@ -22,6 +22,7 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     let terminal: RuntimeTerminalAgentStatusSnapshot
     try {
       ptyId = this.getTerminalAgentStatusPtyId(handle)
+      await this.terminalAgentStatus.refreshModal(handle, ptyId)
       terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
     } catch {
       return undefined

@@ -11,7 +11,6 @@ import {
   buildTerminalWaitBlockedResult,
   buildTerminalWaitResult
 } from './terminal-wait-results'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
@@ -19,6 +18,7 @@ type RuntimeTerminalIdlePollDependencies = {
   intervalMs: number
   quiescenceMs: number
   getTabTitle(tabId: string): string | null
+  getWaitText(record: RuntimePtyWorktreeRecord | RuntimeLeafRecord): string
   getForegroundProcess(ptyId: string): Promise<string | null> | null
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
@@ -46,7 +46,7 @@ export class RuntimeTerminalIdlePolls {
           this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
           return
         }
-        const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+        const waitText = this.deps.getWaitText(leaf)
         const blockedReason = detectTerminalWaitBlockedReason(waitText)
         if (blockedReason) {
           this.stop(waiter)
@@ -101,7 +101,7 @@ export class RuntimeTerminalIdlePolls {
           this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+        const waitText = this.deps.getWaitText(pty)
         const blockedReason = detectTerminalWaitBlockedReason(waitText)
         if (blockedReason) {
           this.stop(waiter)

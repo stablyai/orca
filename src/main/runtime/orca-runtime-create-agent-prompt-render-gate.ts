@@ -128,7 +128,7 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
     }
   }
 
-  waitForTerminal(
+  async waitForTerminal(
     handle: string,
     options?: {
       condition?: RuntimeTerminalWaitCondition
@@ -136,6 +136,13 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
       signal?: AbortSignal
     }
   ): Promise<RuntimeTerminalWait> {
+    if (options?.condition === 'tui-idle') {
+      const ptyId = this.getTerminalAgentStatusPtyId(handle)
+      await this.terminalAgentStatus.refreshModal(handle, ptyId)
+      if (this.terminalAgentStatus.isModalComposerReady(handle)) {
+        return this.buildTuiIdleProbeResult(handle, null)
+      }
+    }
     return this.terminalWait.wait(handle, options)
   }
 }

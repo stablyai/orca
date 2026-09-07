@@ -28,8 +28,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
   ): Promise<number> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
+    const observationBaseline = this.getAgentPromptActivity(handle, ptyId)
+    await this.terminalAgentStatus.refreshModal(handle, ptyId)
+    this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
-    this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
+    this.assertAgentPromptPermissionSafe(observationBaseline, permissionBaseline)
     const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
     const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')

@@ -103,6 +103,7 @@ export type RuntimeHeadlessTerminal = {
 
 export type RuntimeVisibleTerminalState = {
   lines: string[]
+  codexComposer?: boolean
   draft?: string
   isAlternateScreen: boolean
   sequence: number

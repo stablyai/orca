@@ -1,4 +1,7 @@
-import { detectTerminalComposerDraft } from '../../shared/terminal-composer-draft'
+import {
+  detectTerminalComposerDraft,
+  hasTerminalComposerPlaceholder
+} from '../../shared/terminal-composer-draft'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import { visibleNonBlankTerminalLines } from './terminal-tail-read'
 
@@ -27,6 +30,7 @@ export function projectTerminalTailLines(
 export function projectTerminalVisibleLines(emulator: HeadlessEmulator): {
   lines: string[]
   draft?: string
+  codexComposer: boolean
 } {
   const visible = emulator.getVisibleLines()
   const draft = detectTerminalComposerDraft(emulator.getCursorLineContext())
@@ -38,6 +42,7 @@ export function projectTerminalVisibleLines(emulator: HeadlessEmulator): {
   }
   return {
     lines: visibleNonBlankTerminalLines(visible),
+    codexComposer: hasTerminalComposerPlaceholder(emulator.getCursorLineContext()),
     ...(draft ? { draft: draft.text } : {})
   }
 }
