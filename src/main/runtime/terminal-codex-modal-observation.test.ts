@@ -53,7 +53,7 @@ describe('model modal evidence fences', () => {
     const observation = new TerminalCodexModalObservation()
     const record = {}
     observation.reconcile(record, text, fence, fence, screen)
-    expect(observation.read(record, text, fence)).toBe('')
+    expect(observation.read(record, text, fence)).toBe('Model changed to gpt-6-astra medium')
     expect(observation.read({}, text, fence)).toBe(text)
     expect(observation.read(record, text, { ...fence, generation: 2 })).toBe(text)
     expect(observation.read(record, text, { ...fence, permissionSequence: 5 })).toBe(text)

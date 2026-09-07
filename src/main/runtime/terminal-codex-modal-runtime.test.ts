@@ -83,6 +83,42 @@ describe('Codex model picker observation lifecycle', () => {
     }
   })
 
+  it('keeps the modal retired during an in-place composer paste echo', async () => {
+    const { runtime, handle, writes } = await pane((runtime) => {
+      runtime.onPtyData('pty-prompt', '\x1b[2K\r\x1b[1m›\x1b[0m continue', Date.now())
+    })
+    try {
+      runtime.onPtyData('pty-prompt', PICKER, Date.now())
+      runtime.onPtyData('pty-prompt', COMPOSER, Date.now())
+      await expect(runtime.getTerminalAgentStatus(handle)).resolves.not.toMatchObject({
+        status: 'permission'
+      })
+      await expect(runtime.sendTerminalAgentPrompt(handle, 'continue')).resolves.toMatchObject({
+        accepted: true
+      })
+      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+    } finally {
+      runtime.onPtyExit('pty-prompt', 0)
+    }
+  })
+
+  it('does not treat a closed picker composer as idle while Codex is working', async () => {
+    const { runtime, handle } = await pane()
+    try {
+      runtime.onPtyData('pty-prompt', PICKER, Date.now())
+      runtime.onPtyData('pty-prompt', COMPOSER, Date.now())
+      runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+        status: 'working'
+      })
+      await expect(
+        runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 50 })
+      ).rejects.toThrow('timeout')
+    } finally {
+      runtime.onPtyExit('pty-prompt', 0)
+    }
+  })
+
   it.each([
     ['open picker', PICKER],
     ['actual approval', APPROVAL],

@@ -169,10 +169,13 @@ export class RuntimeTerminalAgentStatusQuery {
     const record = this.deps.getLivePty(handle)?.pty ?? this.deps.getLiveLeaf(handle).leaf
     const text = buildTerminalWaitText(record.tailBuffer, record.tailPartialLine, record.preview)
     const terminal = this.getSnapshot(handle, ptyId)
+    const statuses = [
+      terminal.titleStatus,
+      this.deps.getExplicitStatus(handle)?.status,
+      this.deps.getLifecycleStatus(ptyId)?.status
+    ]
     return (
-      terminal.titleStatus !== 'permission' &&
-      this.deps.getExplicitStatus(handle)?.status !== 'permission' &&
-      this.deps.getLifecycleStatus(ptyId)?.status !== 'permission' &&
+      !statuses.some((status) => status === 'permission' || status === 'working') &&
       this.modal.isReady(record, text, this.deps.getModalFence(ptyId))
     )
   }

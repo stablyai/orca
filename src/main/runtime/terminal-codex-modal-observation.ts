@@ -71,6 +71,12 @@ export class TerminalCodexModalObservation {
     ) {
       return
     }
-    this.retired.set(record, { ...after, prefix: text })
+    // The composer can redraw in place during paste; it is not part of the dismissed modal.
+    const prompt = text.toLowerCase().lastIndexOf('press enter to confirm')
+    const lineEnd = text.indexOf('\n', prompt)
+    this.retired.set(record, {
+      ...after,
+      prefix: text.slice(0, lineEnd === -1 ? text.length : lineEnd + 1)
+    })
   }
 }
