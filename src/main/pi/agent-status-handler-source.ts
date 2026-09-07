@@ -1,4 +1,5 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { getPiAgentStatusBackgroundActivitySourceLines } from './agent-status-background-activity-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
@@ -11,6 +12,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '    // Why: /reload re-registers the active session, but it is not a',
           '    // turn boundary and must not clear the visible status or unread state.',
           "    if (event.reason === 'reload') return",
+          '    resetBackgroundActivity()',
           "    post('session_start')",
           '  })',
           ''
@@ -29,6 +31,12 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
         ]
       : []
   const ownerEnv = kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+
+  const {
+    setup: backgroundActivitySetup,
+    functions: backgroundActivityFunctions,
+    eventHandlers: backgroundEventHandlers
+  } = getPiAgentStatusBackgroundActivitySourceLines(kind)
 
   // Why: OMP suppresses its approval lifecycle unless an extension listens for it,
   // and it is the only signal that the run is parked on a permission prompt rather
@@ -94,16 +102,18 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid) return',
     `  process.env.${ownerEnv} = selfPid`,
+    ...backgroundActivitySetup,
     ...sessionStartHandler,
     `  pi.on('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    '    markLeadAgentActive()',
     "    post('before_agent_start', { prompt: event.prompt ?? '' })",
     '  })',
     '',
     `  pi.on('agent_start', (${bareCtxParams}) => {`,
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
-    '    agentEndReported = false',
+    '    markLeadAgentActive()',
     "    post('agent_start')",
     '  })',
     '',
@@ -150,7 +160,6 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const AGENT_END_IDLE_RECHECK_MS = 25',
     '  const AGENT_END_IDLE_RECHECK_MAX_MS = 250',
     '  let agentSettledSupported = false',
-    '  let agentEndReported = false',
     '  let agentEndIdleRecheckMs = AGENT_END_IDLE_RECHECK_MS',
     '  let pendingAgentEndCheck: ReturnType<typeof setTimeout> | null = null',
     '  let pendingAgentEndContext: { isIdle: () => boolean } | null = null',
@@ -161,25 +170,22 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    pendingAgentEndContext = null',
     '  }',
     '',
-    '  // Why: isIdle flips before agent_settled handlers run, so both paths',
-    '  // share a per-run guard instead of racing duplicate completion posts.',
-    '  function postAgentEndOnce(): void {',
-    '    if (agentEndReported) return',
-    '    agentEndReported = true',
-    "    post('agent_end')",
-    '  }',
-    '',
+    ...backgroundActivityFunctions,
     '  function checkPendingAgentEnd(): void {',
     '    pendingAgentEndCheck = null',
+    '    if (backgroundActivity.generation !== extensionGeneration) {',
+    '      pendingAgentEndContext = null',
+    '      return',
+    '    }',
     '    const ctx = pendingAgentEndContext',
-    '    if (!ctx || agentSettledSupported || agentEndReported) {',
+    '    if (!ctx || agentSettledSupported || backgroundActivity.completionReported) {',
     '      pendingAgentEndContext = null',
     '      return',
     '    }',
     '    try {',
     '      if (ctx.isIdle()) {',
     '        pendingAgentEndContext = null',
-    '        postAgentEndOnce()',
+    '        settleLeadAgent()',
     '        return',
     '      }',
     '    } catch {',
@@ -195,7 +201,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     '    agentSettledSupported = true',
     '    clearPendingAgentEndCheck()',
-    '    postAgentEndOnce()',
+    '    settleLeadAgent()',
     '  })',
     '',
     "  pi.on('agent_end', (event, ctx) => {",
@@ -205,12 +211,12 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '      return',
     '    }',
     '    if (isOmpRuntime()) {',
-    '      postAgentEndOnce()',
+    '      settleLeadAgent()',
     '      return',
     '    }',
     '    if (agentSettledSupported) return',
     "    if (!ctx || typeof ctx.isIdle !== 'function') {",
-    '      postAgentEndOnce()',
+    '      settleLeadAgent()',
     '      return',
     '    }',
     '    clearPendingAgentEndCheck()',
@@ -219,6 +225,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    pendingAgentEndCheck = setTimeout(checkPendingAgentEnd, 0)',
     "    if (typeof pendingAgentEndCheck.unref === 'function') pendingAgentEndCheck.unref()",
     '  })',
+    '',
+    ...backgroundEventHandlers,
+    '  if (backgroundActivity.completionPending && !isEffectivelyWorking()) scheduleDeferredAgentEnd()',
     '}',
     ''
   ]

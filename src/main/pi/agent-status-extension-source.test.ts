@@ -481,12 +481,15 @@ describe('getPiAgentStatusExtensionSource', () => {
     await handlerCall
   })
 
-  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', () => {
+  it('uses runtime shutdown only to retire process event listeners', async () => {
     const harness = createHarness({ kind: 'pi' })
 
-    // Why: Pi emits session_shutdown for reload/new/resume/fork while its PTY
-    // stays alive. agent_end is the only extension event that proves done.
-    expect(harness.handlers.session_shutdown).toBeUndefined()
+    expect(harness.eventListenerCount()).toBe(2)
+    await harness.callHook('session_shutdown')
+
+    // Pi emits shutdown on reload/new/resume/fork; it does not prove turn completion.
+    expect(harness.eventListenerCount()).toBe(0)
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
   it('bounds stalled delivery to one active request and the latest pending status', async () => {

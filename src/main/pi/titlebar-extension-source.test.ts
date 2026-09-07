@@ -18,6 +18,9 @@ type Harness = {
   titles: string[]
   lastTitle: () => string | undefined
   callHook: (name: string, event?: unknown) => Promise<void>
+  emitEvent: (name: string, payload?: unknown) => void
+  eventListenerCount: () => number
+  reload: () => void
 }
 
 const CWD = '/repo/orca-app'
@@ -40,6 +43,7 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
       default?: (pi: {
         on: (name: string, handler: HookHandler) => void
         getSessionName: () => string
+        events: { on: (name: string, handler: (payload?: unknown) => void) => () => void }
       }) => void
     }
   }
@@ -72,12 +76,29 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
   }
 
   const handlers: Record<string, HookHandler> = {}
-  register({
-    on(name: string, handler: HookHandler) {
-      handlers[name] = handler
-    },
-    getSessionName: () => SESSION
-  })
+  const eventHandlers = new Map<string, Set<(payload?: unknown) => void>>()
+  const registerHandlers = (): void => {
+    register({
+      on(name: string, handler: HookHandler) {
+        handlers[name] = handler
+      },
+      getSessionName: () => SESSION,
+      events: {
+        on(name: string, handler: (payload?: unknown) => void) {
+          const listeners = eventHandlers.get(name) ?? new Set()
+          listeners.add(handler)
+          eventHandlers.set(name, listeners)
+          return () => {
+            listeners.delete(handler)
+            if (listeners.size === 0) {
+              eventHandlers.delete(name)
+            }
+          }
+        }
+      }
+    })
+  }
+  registerHandlers()
 
   return {
     handlers,
@@ -89,6 +110,19 @@ function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {
         throw new Error(`no handler registered for ${name}`)
       }
       await handler(event, ctx)
+    },
+    emitEvent: (name, payload) => {
+      for (const handler of eventHandlers.get(name) ?? []) {
+        handler(payload)
+      }
+    },
+    eventListenerCount: () =>
+      [...eventHandlers.values()].reduce((count, listeners) => count + listeners.size, 0),
+    reload: () => {
+      for (const key of Object.keys(handlers)) {
+        delete handlers[key]
+      }
+      registerHandlers()
     }
   }
 }
@@ -121,6 +155,18 @@ describe('getPiTitlebarExtensionSource', () => {
     const titleCountAtSettle = harness.titles.length
     vi.advanceTimersByTime(800)
     expect(harness.titles.length).toBe(titleCountAtSettle)
+  })
+
+  it('stops a working spinner when a non-reload session starts', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    expect(vi.getTimerCount()).toBe(1)
+
+    await harness.callHook('session_start', { reason: 'new' })
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
   })
 
   it('spins for idle auto-compaction and clears it on completion', async () => {
@@ -230,6 +276,71 @@ describe('getPiTitlebarExtensionSource', () => {
 
     idle = true
     await vi.advanceTimersByTimeAsync(200)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+  })
+
+  it('keeps spinning until all background subagents complete', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    harness.emitEvent('subagent:async-started', { id: 'run-1' })
+    harness.emitEvent('subagent:async-started', { id: 'run-2' })
+    harness.emitEvent('subagent:async-started', { id: 'run-2' })
+    await harness.callHook('agent_settled')
+    harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
+    harness.emitEvent('subagent:async-complete', { runId: 'missing' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(vi.getTimerCount()).toBe(1)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+
+    harness.emitEvent('subagent:async-complete', { runId: 'run-2' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+  })
+
+  it('keeps background activity across reload and cancels completion when the parent wakes', async () => {
+    const harness = createHarness()
+
+    expect(harness.eventListenerCount()).toBe(2)
+    await harness.callHook('agent_start')
+    harness.emitEvent('subagent:async-started', { id: 'run-1' })
+    await harness.callHook('agent_settled')
+    await harness.callHook('session_shutdown')
+    expect(harness.eventListenerCount()).toBe(0)
+
+    harness.reload()
+    expect(harness.eventListenerCount()).toBe(2)
+    await harness.callHook('session_start', { reason: 'reload' })
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+
+    harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
+    await harness.callHook('before_agent_start')
+    await vi.advanceTimersByTimeAsync(0)
+    await harness.callHook('agent_start')
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+
+    await harness.callHook('agent_settled')
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+  })
+
+  it('keeps stale process listeners inert when reload has no shutdown callback', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    harness.emitEvent('subagent:async-started', { id: 'run-1' })
+    await harness.callHook('agent_settled')
+    harness.reload()
+    expect(harness.eventListenerCount()).toBe(4)
+
+    await harness.callHook('session_start', { reason: 'reload' })
+    harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
+    await vi.advanceTimersByTimeAsync(80)
+
     expect(vi.getTimerCount()).toBe(0)
     expect(harness.lastTitle()).toBe(IDLE_TITLE)
   })
