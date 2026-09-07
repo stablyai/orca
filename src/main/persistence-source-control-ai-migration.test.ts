@@ -474,7 +474,7 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira', 'odoo'])
   })
 
   it('preserves a deliberate Jira provider opt-out after migration', async () => {
@@ -484,7 +484,8 @@ describe('Store', () => {
       worktreeMeta: {},
       settings: {
         visibleTaskProviders: ['gitlab'],
-        visibleTaskProvidersDefaultedForJira: true
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForOdoo: true
       },
       ui: {},
       githubCache: { pr: {}, issue: {} },
@@ -493,6 +494,72 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
+  })
+
+  // A stored provider list is filtered on load, never extended, so without this
+  // migration a profile written before Odoo existed would never show it — the
+  // provider would just be missing from Tasks with nothing to explain why.
+  it('makes Odoo visible once for a profile saved before it existed', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
+        visibleTaskProvidersDefaultedForJira: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().visibleTaskProviders).toContain('odoo')
+    expect(store.getSettings().visibleTaskProvidersDefaultedForOdoo).toBe(true)
+  })
+
+  it('preserves a deliberate Odoo provider opt-out after migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        visibleTaskProviders: ['github', 'gitlab'],
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForOdoo: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().visibleTaskProviders).not.toContain('odoo')
+  })
+
+  // The flag has to survive the reopen, otherwise every launch re-adds a
+  // provider the user removed on the previous one.
+  it('does not re-add Odoo after the user removes it post-migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
+        visibleTaskProvidersDefaultedForJira: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().visibleTaskProviders).toContain('odoo')
+    store.updateSettings({ visibleTaskProviders: ['github', 'gitlab'] })
+    store.flush()
+
+    const reopened = await createStore()
+    expect(reopened.getSettings().visibleTaskProviders).not.toContain('odoo')
   })
 
   it('normalizes malformed terminal shortcut policy on load', async () => {
@@ -538,7 +605,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('github')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira', 'odoo'])
   })
 
   it('normalizes invalid task provider defaults on load', async () => {
@@ -554,7 +621,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('gitlab')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira', 'odoo'])
   })
 
   it('normalizes persisted open-in applications on load', async () => {
