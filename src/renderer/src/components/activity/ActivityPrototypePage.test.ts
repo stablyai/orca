@@ -12,7 +12,7 @@ import {
   activityThreadMatchesSearchQuery,
   buildActivityEvents,
   buildAgentPaneThreads,
-  groupActivityThreadsByStatus,
+  buildActivityThreadGroups,
   isActivitySearchQueryTooLarge
 } from './ActivityPrototypePage'
 import {
@@ -166,12 +166,12 @@ describe('buildActivityEvents', () => {
       }
     })
     const threads = makeThreads(result)
-    const groups = groupActivityThreadsByStatus(threads)
+    const groups = buildActivityThreadGroups(threads, 'status')
 
     expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('monitoring')
     expect(threads[0].currentAgentState).toBe('monitoring')
     expect(groups[0]).toMatchObject({
-      id: 'monitoring',
+      key: 'monitoring',
       label: 'Monitoring background tasks',
       state: 'monitoring'
     })
@@ -435,14 +435,15 @@ describe('buildActivityEvents', () => {
       now: 5_000
     })
 
-    const groups = groupActivityThreadsByStatus(
+    const groups = buildActivityThreadGroups(
       buildAgentPaneThreads({
         events: result.events,
         liveAgentByPaneKey: result.liveAgentByPaneKey
-      })
+      }),
+      'status'
     )
 
-    expect(groups.map((group) => group.id)).toEqual(['blocked', 'working', 'done'])
+    expect(groups.map((group) => group.key)).toEqual(['blocked', 'working', 'done'])
     expect(groups.map((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
       [PANE_KEY_2],
       [PANE_KEY],

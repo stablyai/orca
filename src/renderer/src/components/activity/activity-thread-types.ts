@@ -17,14 +17,6 @@ export type ActivityHookLiveAgentState = Extract<
   'working' | 'blocked' | 'waiting'
 >
 export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
-export type ActivityStatusGroupId =
-  | 'working'
-  | 'monitoring'
-  | 'blocked'
-  | 'waiting'
-  | 'done'
-  | 'interrupted'
-
 export type ActivityEvent = {
   id: string
   state: ActivityEventState
@@ -69,7 +61,6 @@ export type AgentPaneThread = {
 
 export type ActivityThreadGroup = {
   key: string
-  id?: ActivityStatusGroupId
   label: string
   state?: AgentDotState
   threads: AgentPaneThread[]
