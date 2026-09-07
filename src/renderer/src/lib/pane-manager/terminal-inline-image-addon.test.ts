@@ -3,9 +3,11 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachInlineImages,
   disposeInlineImages,
+  primeTerminalInlineImageAddon,
   resetTerminalInlineImageAddonForTests,
   TERMINAL_INLINE_IMAGE_OPTIONS
 } from './terminal-inline-image-addon'
+import { toPublicPane } from './pane-public-view'
 
 const imageMock = vi.hoisted(() => ({
   dispose: vi.fn(),
@@ -54,6 +56,28 @@ describe('terminal inline image addon', () => {
     attachInlineImages(second)
     expect(second.imageAddon).not.toBeNull()
     expect(imageMock.constructed).toHaveLength(2)
+  })
+
+  // Why: the addon is a parser hook — output parsed before it attaches loses
+  // its images for good — so the boot-time prime must make even the *first*
+  // pane attach synchronously inside openTerminal.
+  it('attaches the first pane synchronously once the boot prime has resolved', async () => {
+    await primeTerminalInlineImageAddon()
+    const pane = createPane()
+    attachInlineImages(pane)
+    expect(pane.imageAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a retained public pane view observe the addon after a lazy attach', async () => {
+    const pane = createPane()
+    const view = toPublicPane(pane)
+    expect(view.imageAddon).toBeNull()
+    attachInlineImages(pane)
+    await flushMicrotasks()
+    expect(view.imageAddon).toBe(pane.imageAddon)
+    disposeInlineImages(pane)
+    expect(view.imageAddon).toBeNull()
   })
 
   it('does not attach to a pane disposed while the chunk was loading', async () => {

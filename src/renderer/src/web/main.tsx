@@ -102,3 +102,6 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
 void import('../lib/pane-manager/pane-webgl-renderer').then((module) =>
   module.primeTerminalWebglAddon()
 )
+void import('../lib/pane-manager/terminal-inline-image-addon').then((module) =>
+  module.primeTerminalInlineImageAddon()
+)

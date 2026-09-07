@@ -9,9 +9,13 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 // protocol, and it answers DA1/CSI t size probes so TUIs can detect support.
 //
 // Why deferred: the addon is ~80 KB and only matters once a terminal opens, so
-// keep it off the boot chunk the same way the WebGL addon is. The load stays
-// eager — openTerminal kicks it off — but the constructor is memoised so every
-// pane after the first attaches synchronously.
+// keep it off the boot chunk the same way the WebGL addon is. Unlike WebGL it
+// hooks the *parser*: an image sequence parsed before the addon attaches is
+// consumed and cannot be replayed. So both renderer entry points prime the
+// load right after first render (see main.tsx / web/main.tsx), which resolves
+// long before the first pane opens; openTerminal then attaches synchronously
+// from the memoised constructor, and the async branch in attachInlineImages is
+// only the fallback for a pane that somehow opens before the prime settled.
 
 export const TERMINAL_INLINE_IMAGE_OPTIONS: Partial<IImageAddonOptions> = {
   sixelSupport: true,
@@ -28,6 +32,9 @@ type ImageAddonConstructor = new (options?: Partial<IImageAddonOptions>) => Imag
 let imageAddonConstructor: ImageAddonConstructor | null = null
 let imageAddonLoad: Promise<ImageAddonConstructor | null> | null = null
 
+/** Start (or reuse) the deferred addon chunk load. Resolves to the constructor,
+ *  or null when the chunk failed — a failure is not memoised so a later call
+ *  retries. Called at renderer boot and, as a fallback, by attachInlineImages. */
 export function primeTerminalInlineImageAddon(): Promise<ImageAddonConstructor | null> {
   if (imageAddonConstructor) {
     return Promise.resolve(imageAddonConstructor)
@@ -50,6 +57,7 @@ export function primeTerminalInlineImageAddon(): Promise<ImageAddonConstructor |
   return imageAddonLoad
 }
 
+/** Construct the addon with Orca's limits and load it into the pane's terminal. */
 function loadInlineImageAddon(pane: ManagedPaneInternal, Ctor: ImageAddonConstructor): void {
   if (pane.imageAddon) {
     return
@@ -87,6 +95,7 @@ export function attachInlineImages(pane: ManagedPaneInternal): void {
   })
 }
 
+/** Release the pane's image storage and invalidate any attach still in flight. */
 export function disposeInlineImages(pane: ManagedPaneInternal): void {
   pane.inlineImageAttachToken = (pane.inlineImageAttachToken ?? 0) + 1
   if (!pane.imageAddon) {

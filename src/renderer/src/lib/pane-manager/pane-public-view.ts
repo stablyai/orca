@@ -11,7 +11,12 @@ export function toPublicPane(pane: ManagedPaneInternal): ManagedPane {
     fitAddon: pane.fitAddon,
     searchAddon: pane.searchAddon,
     serializeAddon: pane.serializeAddon,
-    imageAddon: pane.imageAddon ?? null
+    // Why a getter: the inline-image addon attaches after the chunk resolves,
+    // so a view handed out earlier (onPaneCreated, a retained getActivePane
+    // result) must still observe the addon once it exists.
+    get imageAddon() {
+      return pane.imageAddon ?? null
+    }
   }
 }
 
