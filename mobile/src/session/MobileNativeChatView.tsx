@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  FlatList,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  Pressable,
-  Text,
-  View
-} from 'react-native'
+import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
@@ -21,6 +13,7 @@ import {
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
+import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
@@ -176,9 +169,19 @@ export function MobileNativeChatView({
   // Lift the composer clear of the keyboard, plus the bottom safe-area so it
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-  const [atBottom, setAtBottom] = useState(true)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  const {
+    atBottom,
+    repin,
+    unpin,
+    maybeFollowTail,
+    onScroll,
+    onScrollBeginDrag,
+    onScrollEndDrag,
+    onMomentumScrollBegin,
+    onMomentumScrollEnd
+  } = useMobileNativeChatTailFollow({ listRef, hasMore, loadingEarlier, onLoadEarlier })
   useEffect(
     () => () => {
       if (sendScrollTimerRef.current) {
@@ -203,17 +206,14 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
 
-  // Follow the tail as the conversation grows and keep the newest message above
-  // the keyboard when it opens — but only when already pinned to the bottom, so
-  // we don't yank the user away while they read history. (Also fires on keyboard
-  // close, which is harmless while atBottom.)
+  // Opening the keyboard shrinks the list viewport (via `bottomPad`) without
+  // changing content height, so `onContentSizeChange` never fires — re-follow the
+  // tail on keyboard inset changes to keep the newest message above the composer.
+  const dataLenRef = useRef(data.length)
+  dataLenRef.current = data.length
   useEffect(() => {
-    if (data.length === 0 || !atBottom) {
-      return
-    }
-    const t = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60)
-    return () => clearTimeout(t)
-  }, [data.length, atBottom, keyboardInset])
+    maybeFollowTail(dataLenRef.current)
+  }, [keyboardInset, maybeFollowTail])
 
   const handleSend = useCallback(
     async (text: string): Promise<boolean> => {
@@ -225,7 +225,7 @@ export function MobileNativeChatView({
       // or a stale "Message not sent" sits above the delivered message.
       onClearSendError?.()
       // Always jump to the newest message when the user sends.
-      setAtBottom(true)
+      repin()
       if (sendScrollTimerRef.current) {
         clearTimeout(sendScrollTimerRef.current)
       }
@@ -235,26 +235,19 @@ export function MobileNativeChatView({
       }, 60)
       return true
     },
-    [onSend, onClearSendError]
+    [onSend, onClearSendError, repin]
   )
 
-  const onScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent
-      const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height)
-      setAtBottom(distanceFromBottom < 80)
-      // Near the top — page in older history.
-      if (contentOffset.y < 60 && hasMore && !loadingEarlier) {
-        onLoadEarlier?.()
-      }
+  // Align a single message's top to the top of the viewport. This is an explicit
+  // jump away from the tail, so drop the pin — otherwise the next streaming chunk
+  // re-follows the tail and undoes the user's navigation.
+  const onScrollToMessage = useCallback(
+    (index: number) => {
+      unpin()
+      listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
     },
-    [hasMore, loadingEarlier, onLoadEarlier]
+    [unpin]
   )
-
-  // Align a single message's top to the top of the viewport.
-  const onScrollToMessage = useCallback((index: number) => {
-    listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
-  }, [])
 
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
   // owns them; the bridge lane keeps its three-dot indicator.
@@ -317,12 +310,12 @@ export function MobileNativeChatView({
               // instead of being swallowed by the dismiss gesture.
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
+              onScrollBeginDrag={onScrollBeginDrag}
+              onScrollEndDrag={onScrollEndDrag}
+              onMomentumScrollBegin={onMomentumScrollBegin}
+              onMomentumScrollEnd={onMomentumScrollEnd}
               scrollEventThrottle={32}
-              onContentSizeChange={() => {
-                if (data.length > 0 && atBottom) {
-                  listRef.current?.scrollToEnd({ animated: false })
-                }
-              }}
+              onContentSizeChange={() => maybeFollowTail(data.length)}
               // scrollToIndex can fail before an off-screen row is measured —
               // fall back to an estimated offset, then retry once it's laid out.
               onScrollToIndexFailed={(info) => {
@@ -378,7 +371,13 @@ export function MobileNativeChatView({
             <Pressable
               accessibilityLabel="Scroll to latest"
               style={[styles.fab, styles.fabBottom]}
-              onPress={() => listRef.current?.scrollToEnd({ animated: true })}
+              onPress={() => {
+                // Re-pin before the programmatic scroll: it fires no drag/momentum,
+                // so onScroll never recomputes the pin — without this the FAB sticks
+                // and tail-follow stops tracking new content.
+                repin()
+                listRef.current?.scrollToEnd({ animated: true })
+              }}
             >
               <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
             </Pressable>
