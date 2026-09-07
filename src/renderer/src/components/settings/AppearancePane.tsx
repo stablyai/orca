@@ -147,7 +147,7 @@ export function AppearancePane({
   ]
   const terminalSearchEntries = [
     { title: terminalTitle },
-    ...getTerminalAppearanceSearchEntries({ showWarpImport: !isWebClient })
+    ...getTerminalAppearanceSearchEntries({ showThemeImports: !isWebClient })
   ]
   const windowSearchEntries = [
     {
