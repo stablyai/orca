@@ -247,3 +247,31 @@ predicate. It is unobservable today — the host publishes neither field for a c
 all, so a mirror has nothing to take either way. If the capability-gated publish this section
 anticipates ever lands, narrow them the same way rather than by placement kind: a mirror should
 take a failure it cannot otherwise see, and only the hosting client should refuse it.
+
+## Plugin UI focus (`plugins.reportUiFocus`)
+
+Focus is sampled on the **UI machine**. Plugin workers run on the **runtime
+host**. A paired client forwards the current surface with
+`plugins.reportUiFocus` (optional `kind`, `title`, `worktreeId`, `agentId`,
+`windowFocused`). That is a **new RPC method** — no
+`RUNTIME_PROTOCOL_VERSION` bump. Old hosts reject the call; the client
+ignores that. Old clients never call it, so the host snapshot stays `null`.
+
+The host re-projects every report before plugins see it (Rule 3: do not
+change the published title/path contract). Join keys are optional fields on
+the existing plugin event / `focusedSurface` object (Rule 1 for plugin
+consumers). Loss of contact is `null`, not a guessed kind.
+
+See [plugin-ui-focus.md](./plugin-ui-focus.md) and
+[orca-discord-presence#7](https://github.com/jondmarien/orca-discord-presence/issues/7).
+
+## Plugin sidecar frames (`sidecar.clientHost.v1`)
+
+A host that implements the Orca-5 mailbox advertises `sidecar.clientHost.v1` and
+exposes `sidecar.clientHost.latest`. That is a **new RPC method plus a new
+capability string** — Rule 1 / “do not bump for new methods.” Old clients never
+call the method. The host must not invent a terminal-stream opcode for sidecar
+payloads (Rule 2). Publishing frames is opt-in per plugin (`sidecar` capability)
+and opt-in per client (the caller must advertise `sidecar.clientHost.v1` when it
+sends a capability list). See
+[plugin-sidecar-remote-presence.md](./plugin-sidecar-remote-presence.md).

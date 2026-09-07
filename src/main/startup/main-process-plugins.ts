@@ -21,6 +21,8 @@ import { agentHookServer } from '../agent-hooks/server'
 import { emitPluginWorktreeLifecycle } from './main-process-pty-startup'
 import { mainProcessState as state } from './main-process-state'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { projectPluginAgentContext } from '../../shared/plugins/plugin-workspace-read-context'
+import { readActiveOrcaProfileLabel } from '../plugins/plugin-orca-profile-label'
 
 export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService): Promise<void> {
   const store = state.store
@@ -151,18 +153,32 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   requestBundledPluginBootstrap()
   requestOfficialMarketplaceSeed()
   // v0 plugin event seams: agent status (hook pipeline tap) + worktree
-  // lifecycle (runtime tap). Server-side filtered per plugin subscription.
+  // lifecycle (runtime tap) + UI focus (renderer/RPC + window-blur tap).
+  // Server-side filtered per plugin subscription.
   agentHookServer.subscribeEnrichedStatus((enriched) => {
     // Why: plugins may automate on `working`; restored rows are historical claims, not fresh activity.
     if (enriched.restoredUnconfirmed) {
       return
     }
+    const agent = projectPluginAgentContext({
+      type: enriched.payload.agentType,
+      model: enriched.payload.model,
+      profile: readActiveOrcaProfileLabel(app.getPath('userData'))
+    })
     state.pluginService?.emitEvent('agent.status.changed', {
       worktreeId: enriched.worktreeId ?? null,
       paneKey: enriched.paneKey,
       state: enriched.payload.state,
-      receivedAt: enriched.receivedAt
+      receivedAt: enriched.receivedAt,
+      ...(agent ? { agent } : {})
     })
   })
   runtime.onWorktreeLifecycle(emitPluginWorktreeLifecycle)
+  const clearPluginUiFocusWhenAppBlurs = (): void => {
+    if (BrowserWindow.getFocusedWindow()) {
+      return
+    }
+    state.pluginService?.reportUiFocus({ windowFocused: false })
+  }
+  app.on('browser-window-blur', clearPluginUiFocusWhenAppBlurs)
 }

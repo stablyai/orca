@@ -19,7 +19,9 @@ export const PLUGIN_CAPABILITY_KINDS = [
   'storage',
   'secrets',
   'events:subscribe',
-  'settings:own'
+  'settings:own',
+  'ui:focus',
+  'sidecar'
 ] as const
 
 export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
@@ -33,14 +35,20 @@ export type PluginCapability = z.infer<typeof pluginCapabilitySchema>
 /** Plain-language consent copy per capability. Shown verbatim in the install
  *  preview / consent dialog; keep each line honest about what is enforced. */
 export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string> = {
-  'workspace:read': 'Read the name, branch, and terminal list of your focused worktree',
+  'workspace:read':
+    'Read the name, branch, terminal list, execution-host label, and agent labels of your focused worktree',
   'terminal:send': 'Type text into a terminal you can see (always a specific terminal)',
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
   storage: "Store data in the plugin's own storage folder",
   secrets: "Store and read secrets in the plugin's own encrypted vault",
   'events:subscribe':
     'Get notified when worktrees are created or removed and when agent status changes',
-  'settings:own': "Read and change the plugin's own settings"
+  'settings:own': "Read and change the plugin's own settings",
+  'ui:focus':
+    'Read the focused UI surface (kind, a truncated tab title, and optional worktree/agent join keys). Off unless you grant this permission.',
+  sidecar:
+    'Publish sidecar frames (for example Discord presence) so a paired UI client ' +
+    'can apply them on the machine that has Discord'
 }
 
 /**

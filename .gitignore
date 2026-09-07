@@ -109,6 +109,10 @@ docs/**
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
+!docs/reference/plugin-panel-host-api.md
+!docs/reference/plugin-panel-storage.md
+!docs/reference/plugin-sidecar-remote-presence.md
+!docs/reference/plugin-ui-focus.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/windows-cmd-shim-resolution.md
 !docs/reference/windows-daemon-host-relocation.md

@@ -3,7 +3,7 @@ import {
   structuredCloneMessageBytes,
   type PanelMessageBudget
 } from './plugin-panel-message-budget'
-import type { PluginPanelActionOutcome } from './plugin-panel-bridge'
+import { PANEL_MESSAGE_MAX_BYTES, type PluginPanelActionOutcome } from './plugin-panel-bridge'
 
 export type PluginPanelCallRefusal = 'oversized' | 'rate_limited'
 
@@ -23,6 +23,16 @@ export function admitPluginPanelCall(
   }
   if (refusal === 'rate_limited') {
     return { ok: false, code: 'rate_limited', error: 'too many panel requests' }
+  }
+  return null
+}
+
+/** Size-only check for host→panel results. Rate is already charged on the
+ *  inbound request; a worker-written storage value can still exceed the
+ *  64 KiB panel envelope. */
+export function admitPluginPanelResult(value: unknown): PluginPanelActionOutcome | null {
+  if (structuredCloneMessageBytes(value) > PANEL_MESSAGE_MAX_BYTES) {
+    return { ok: false, code: 'invalid_request', error: 'panel message exceeds the size limit' }
   }
   return null
 }

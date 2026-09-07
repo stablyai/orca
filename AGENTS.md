@@ -72,6 +72,10 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
+## Plugin UI focus
+
+Focused tab titles are identifying. Do not add focus fields or `ui.focus.changed` delivery without the `ui:focus` consent gate. Sample on the UI machine, project on the host, keep titles basename/hostname + 80-byte truncated, and map path-bearing worktree ids to session-scoped opaque tokens before plugins see them. See [`docs/reference/plugin-ui-focus.md`](./docs/reference/plugin-ui-focus.md).
+
 ## Git Binary Compatibility
 
 Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
@@ -89,6 +93,10 @@ When adding or changing a Git command:
 - Never enumerate every ref and then run `git ls-tree -r` or `git show` once per ref. That ref × tree fan-out can retain gigabytes of output before a downstream `sort -u` or search can make progress.
 - Prefer `rg` over the checked-out files for source searches. For history or refs, use a named ref, an explicit namespace/path, `--max-count`, and a bounded output; do not use an unqualified `--all` scan as a first diagnostic.
 - Keep repository-wide commands targeted to the current repository and worktree. If an unbounded scan is genuinely required, measure the ref count first, explain the cost, and get confirmation before running it.
+
+## Plugin Panel Host API
+
+Panel iframes are opaque-origin (`sandbox="allow-scripts"`). Do not invent a parallel host path: flip `panel` on `PLUGIN_HOST_API_V0`, keep identity session-bound, and charge every action to the per-plugin message budget. Settings and storage are plugin-private; secrets stay worker-only. See [`docs/reference/plugin-panel-host-api.md`](./docs/reference/plugin-panel-host-api.md).
 
 ## Git Provider Compatibility
 

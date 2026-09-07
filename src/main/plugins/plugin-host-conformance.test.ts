@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { PLUGIN_HOST_API_V0 } from '../../shared/plugins/plugin-host-api'
+import { buildSidecarPlacement } from '../../shared/plugins/plugin-sidecar-contract'
 import type { PluginCapabilityKind } from '../../shared/plugins/plugin-capabilities'
 import {
   admitPluginPanelCall,
@@ -53,7 +54,16 @@ function createServices(): PluginHostServices {
       getAll: vi.fn().mockReturnValue({ theme: 'dark' }),
       set: vi.fn().mockReturnValue({ ok: true })
     },
-    subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events)
+    subscribeEvents: vi.fn().mockImplementation((_pluginKey, events) => events),
+    readFocusedSurface: vi.fn().mockReturnValue(null),
+    sidecar: {
+      resolvePlacement: vi.fn().mockReturnValue(buildSidecarPlacement(null)),
+      publish: vi.fn().mockReturnValue({
+        accepted: true,
+        delivery: 'stored',
+        placement: buildSidecarPlacement(1)
+      })
+    }
   }
 }
 
@@ -117,12 +127,15 @@ const successParams: Record<string, unknown> = {
   'secrets.delete': { key: 'token' },
   'settings.get': {},
   'settings.set': { key: 'theme', value: 'dark' },
-  'events.subscribe': { events: ['worktree.created'] }
+  'events.subscribe': { events: ['worktree.created'] },
+  'sidecar.resolvePlacement': {},
+  'sidecar.publish': { channel: 'presence', op: 'set', payload: { details: 'Working in Orca' } },
+  'ui.readFocus': {}
 }
 
 describe('plugin host main/relay conformance', () => {
-  it('runs a granted success through both transports for all 13 v0 methods', async () => {
-    expect(PLUGIN_HOST_API_V0).toHaveLength(13)
+  it('runs a granted success through both transports for all 16 v0 methods', async () => {
+    expect(PLUGIN_HOST_API_V0).toHaveLength(16)
     expect(Object.keys(successParams).sort()).toEqual(
       PLUGIN_HOST_API_V0.map((entry) => entry.name).sort()
     )
@@ -143,6 +156,36 @@ describe('plugin host main/relay conformance', () => {
     }
   })
 
+  it('scopes panel settings.get/set to the bound plugin on main and relay', async () => {
+    const otherGetAll = vi.fn().mockReturnValue({ secret: 'nope' })
+    const otherSet = vi.fn().mockReturnValue({ ok: true as const })
+    for (const adapterName of ['desktop-main', 'relay']) {
+      const services = createServices()
+      const resolvePolicy = vi.fn().mockImplementation((pluginKey: string) => {
+        if (pluginKey !== PLUGIN_KEY) {
+          return createPolicy(['settings:own'], {
+            ...services,
+            settings: { getAll: otherGetAll, set: otherSet }
+          })
+        }
+        return createPolicy(['settings:own'], services)
+      })
+      const adapter = createAdapters(resolvePolicy)[adapterName]!
+
+      await expect(
+        adapter({ method: 'settings.set', params: { key: 'theme', value: 'dark' } }, true)
+      ).resolves.toEqual({ ok: true, value: { ok: true } })
+      await expect(adapter({ method: 'settings.get', params: {} }, true)).resolves.toEqual({
+        ok: true,
+        value: { settings: { theme: 'dark' } }
+      })
+      expect(services.settings.set).toHaveBeenCalledWith(PLUGIN_KEY, 'theme', 'dark')
+      expect(services.settings.getAll).toHaveBeenCalledWith(PLUGIN_KEY)
+      expect(otherGetAll).not.toHaveBeenCalled()
+      expect(otherSet).not.toHaveBeenCalled()
+    }
+  })
+
   it('projects workspace context without host paths on main and relay', async () => {
     const resolvePolicy = vi.fn().mockResolvedValue(createPolicy(['workspace:read']))
     for (const adapter of Object.values(createAdapters(resolvePolicy))) {
@@ -157,6 +200,27 @@ describe('plugin host main/relay conformance', () => {
       })
       expect(outcome).not.toHaveProperty('value.path')
       expect(outcome).not.toHaveProperty('value.worktreeId')
+      expect(outcome).not.toHaveProperty('value.focusedSurface')
+    }
+  })
+
+  it('includes focusedSurface on readContext only when ui:focus is granted', async () => {
+    const services = createServices()
+    services.readFocusedSurface = vi.fn().mockReturnValue({ kind: 'editor', title: 'app.ts' })
+    const resolvePolicy = vi
+      .fn()
+      .mockResolvedValue(createPolicy(['workspace:read', 'ui:focus'], services))
+    for (const adapter of Object.values(createAdapters(resolvePolicy))) {
+      const outcome = await adapter({ method: 'workspace.readContext', params: {} }, true)
+      expect(outcome).toEqual({
+        ok: true,
+        value: {
+          branch: 'main',
+          displayName: 'Orca',
+          terminals: [{ id: TERMINAL_ID }],
+          focusedSurface: { kind: 'editor', title: 'app.ts' }
+        }
+      })
     }
   })
 
@@ -182,6 +246,13 @@ describe('plugin host main/relay conformance', () => {
       code: 'capability_denied'
     },
     {
+      name: 'ui.readFocus without ui:focus',
+      request: { method: 'ui.readFocus', params: {} },
+      viaPanel: true,
+      policy: () => createPolicy(['workspace:read']),
+      code: 'capability_denied'
+    },
+    {
       name: 'unknown method',
       request: { method: 'workspace.erase', params: {} },
       viaPanel: false,
@@ -200,9 +271,9 @@ describe('plugin host main/relay conformance', () => {
     },
     {
       name: 'panel-forbidden method',
-      request: { method: 'storage.get', params: { key: 'alpha' } },
+      request: { method: 'secrets.get', params: { key: 'token' } },
       viaPanel: true,
-      policy: () => createPolicy(['storage']),
+      policy: () => createPolicy(['secrets']),
       code: 'panel_forbidden'
     },
     {

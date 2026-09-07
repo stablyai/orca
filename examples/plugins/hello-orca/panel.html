@@ -28,9 +28,18 @@
         cursor: pointer;
         font: inherit;
       }
-      select {
+      select,
+      input {
+        display: block;
         margin: 6px 0;
         max-width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid var(--border, #555);
+        border-radius: 6px;
+        background: var(--input, #1f1f1f);
+        color: var(--foreground, #ddd);
+        font: inherit;
       }
       .status {
         margin-top: 10px;
@@ -42,11 +51,14 @@
   </head>
   <body>
     <h1>Hello Orca 👋</h1>
-    <p>Panel + worker command + events, gated by consent.</p>
+    <p>Panel + worker command + events + own settings, gated by consent.</p>
     <button id="ctx">Read workspace context</button>
     <select id="terms" hidden></select>
     <button id="send" hidden>Type "echo hi from plugin" into selected terminal</button>
     <button id="notify">Show a notification</button>
+    <button id="load-settings">Load settings</button>
+    <input id="greeting" type="text" maxlength="80" placeholder="Greeting to persist" />
+    <button id="save-settings">Save greeting</button>
     <p class="status" id="status"></p>
     <script>
       'use strict'
@@ -118,6 +130,29 @@
           statusEl.textContent = result.ok
             ? 'notification delivered=' + result.value.delivered
             : 'notify failed: ' + (result.error || result.errorCode)
+        })
+      })
+
+      document.getElementById('load-settings').addEventListener('click', function () {
+        call('settings.get').then(function (result) {
+          if (!result.ok) {
+            statusEl.textContent = 'settings.get failed: ' + (result.error || result.errorCode)
+            return
+          }
+          var greeting = result.value && result.value.settings ? result.value.settings.greeting : ''
+          if (typeof greeting === 'string') {
+            document.getElementById('greeting').value = greeting
+          }
+          statusEl.textContent = 'settings=' + JSON.stringify(result.value.settings)
+        })
+      })
+
+      document.getElementById('save-settings').addEventListener('click', function () {
+        var greeting = document.getElementById('greeting').value
+        call('settings.set', { key: 'greeting', value: greeting }).then(function (result) {
+          statusEl.textContent = result.ok
+            ? 'saved greeting'
+            : 'settings.set failed: ' + (result.error || result.errorCode)
         })
       })
     </script>

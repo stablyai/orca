@@ -49,6 +49,9 @@ export const pluginsApi = {
   getLogs: (args: { pluginKey: string }): Promise<PluginHostLogLine[]> =>
     ipcRenderer.invoke('plugins:getLogs', args),
   refresh: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:refresh'),
+  reportUiFocus: (payload) => {
+    ipcRenderer.send('plugins:reportUiFocus', payload)
+  },
   onChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, change: PluginChangeEvent): void =>
       callback(change)

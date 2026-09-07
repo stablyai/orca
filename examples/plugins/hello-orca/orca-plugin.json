@@ -18,6 +18,7 @@
     { "kind": "terminal:send" },
     { "kind": "notifications:show" },
     { "kind": "storage" },
+    { "kind": "settings:own" },
     { "kind": "events:subscribe" }
   ]
 }

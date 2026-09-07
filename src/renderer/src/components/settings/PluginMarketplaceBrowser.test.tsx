@@ -190,7 +190,7 @@ describe('PluginMarketplaceBrowser', () => {
       )
     ).toBe(true)
     expect(document.body.textContent).toContain(
-      'Read the name, branch, and terminal list of your focused worktree'
+      'Read the name, branch, terminal list, execution-host label, and agent labels of your focused worktree'
     )
     expect(document.body.textContent).toContain('full access to your files, network')
     expect(document.querySelector('[role="dialog"]')?.classList).toContain('plugin-security-chrome')

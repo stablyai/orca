@@ -9946,13 +9946,15 @@
           "keepDisabled": "Mantener desactivado",
           "enable": "Activar plugin",
           "capability": {
-            "workspaceRead": "Leer el nombre, la rama y la lista de terminales del worktree seleccionado",
+            "workspaceRead": "Leer el nombre, la rama, la lista de terminales, la etiqueta del host de ejecución y las etiquetas del agente del worktree seleccionado",
             "terminalSend": "Escribir texto en una terminal visible (siempre en una terminal específica)",
             "notificationsShow": "Mostrar notificaciones de escritorio con el nombre del plugin",
             "storage": "Guardar datos en la carpeta de almacenamiento propia del plugin",
             "secrets": "Guardar y leer secretos en la bóveda cifrada propia del plugin",
             "eventsSubscribe": "Recibir avisos cuando se creen o eliminen worktrees y cuando cambie el estado de un agente",
-            "settingsOwn": "Leer y cambiar la configuración propia del plugin"
+            "settingsOwn": "Leer y cambiar la configuración propia del plugin",
+            "uiFocus": "Leer la superficie de IU enfocada (tipo, título de pestaña truncado y claves de correlación opcionales de worktree/agente). Desactivado hasta que concedas este permiso.",
+            "sidecar": "Publicar fotogramas sidecar (por ejemplo, presencia de Discord) para que un cliente de IU emparejado pueda aplicarlos en el equipo que tiene Discord"
           },
           "decisionFailed": "No se pudo guardar la decisión sobre los permisos. Inténtalo de nuevo."
         },

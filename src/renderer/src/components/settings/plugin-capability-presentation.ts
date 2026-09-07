@@ -5,7 +5,7 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
     case 'workspace:read':
       return translate(
         'auto.components.settings.PluginConsentDialog.capability.workspaceRead',
-        'Read the name, branch, and terminal list of your focused worktree'
+        'Read the name, branch, terminal list, execution-host label, and agent labels of your focused worktree'
       )
     case 'terminal:send':
       return translate(
@@ -36,6 +36,17 @@ export function pluginCapabilityDescription(kind: string, fallback: string): str
       return translate(
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         "Read and change the plugin's own settings"
+      )
+    case 'ui:focus':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.uiFocus',
+        'Read the focused UI surface (kind, a truncated tab title, and optional worktree/agent join keys). Off unless you grant this permission.'
+      )
+    case 'sidecar':
+      return translate(
+        'auto.components.settings.PluginConsentDialog.capability.sidecar',
+        'Publish sidecar frames (for example Discord presence) so a paired UI ' +
+          'client can apply them on the machine that has Discord'
       )
     default:
       return fallback

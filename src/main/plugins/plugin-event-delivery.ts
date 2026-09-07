@@ -24,6 +24,12 @@ export function deliverPluginEvent(options: {
     if (isInvalidDiscoveredPlugin(plugin) || !options.isRuntimeApproved(plugin)) {
       continue
     }
+    if (
+      options.event === 'ui.focus.changed' &&
+      !plugin.manifest.capabilities.some((capability) => capability.kind === 'ui:focus')
+    ) {
+      continue
+    }
     const manifestSubscribed = plugin.manifest.contributes.events.some(
       (subscription) => subscription.on === options.event
     )

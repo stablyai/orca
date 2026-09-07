@@ -42,6 +42,24 @@ describe('fingerprintPluginConsent', () => {
     expect(first).toBe(second)
   })
 
+  it('requires re-consent when a plugin adds ui:focus', () => {
+    const withoutFocus = fingerprintPluginConsent({
+      main: 'worker.js',
+      capabilities: [{ kind: 'events:subscribe' }]
+    })
+    const withFocus = fingerprintPluginConsent({
+      main: 'worker.js',
+      capabilities: [{ kind: 'events:subscribe' }, { kind: 'ui:focus' }]
+    })
+    expect(withFocus).not.toBe(withoutFocus)
+    expect(
+      needsReconsent('orca-samples.demo', withFocus, {
+        pluginConsents: { 'orca-samples.demo': withoutFocus },
+        disabledPlugins: []
+      })
+    ).toBe(true)
+  })
+
   it('changes when a panel-only plugin gains a trusted Node worker', () => {
     const panelOnly = fingerprintPluginConsent({ main: undefined, capabilities: [] })
     const withWorker = fingerprintPluginConsent({ main: 'worker.js', capabilities: [] })

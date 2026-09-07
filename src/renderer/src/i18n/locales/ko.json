@@ -9951,13 +9951,15 @@
           "keepDisabled": "비활성화 유지",
           "enable": "플러그인 활성화",
           "capability": {
-            "workspaceRead": "포커스된 워크트리의 이름, 브랜치 및 터미널 목록 읽기",
+            "workspaceRead": "포커스된 워크트리의 이름, 브랜치, 터미널 목록, 실행 호스트 레이블 및 에이전트 레이블 읽기",
             "terminalSend": "보이는 터미널에 텍스트 입력 (항상 특정 터미널)",
             "notificationsShow": "플러그인 이름이 표시된 데스크톱 알림 표시",
             "storage": "플러그인 자체 저장소 폴더에 데이터 저장",
             "secrets": "플러그인 자체 암호화 금고에 비밀 저장 및 읽기",
             "eventsSubscribe": "워크트리가 생성되거나 제거되고 에이전트 상태가 변경될 때 알림 받기",
-            "settingsOwn": "플러그인 자체 설정 읽기 및 변경"
+            "settingsOwn": "플러그인 자체 설정 읽기 및 변경",
+            "uiFocus": "포커스된 UI 표면(종류, 잘린 탭 제목, 선택적 worktree/agent 조인 키)을 읽습니다. 이 권한을 허용하기 전에는 꺼져 있습니다.",
+            "sidecar": "사이드카 프레임(예: Discord 프레즌스)을 게시하여 페어링된 UI 클라이언트가 Discord가 있는 기기에서 적용할 수 있게 합니다"
           },
           "decisionFailed": "권한 결정을 저장할 수 없습니다. 다시 시도하세요."
         },

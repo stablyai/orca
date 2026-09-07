@@ -4,14 +4,26 @@ import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
-  type PluginHostMethodSpec
+  type PluginHostMethodSpec,
+  type PluginWorkspaceAgentContext,
+  type PluginWorkspaceExecutionHost
 } from '../../shared/plugins/plugin-host-api'
+import type { PluginCapabilityKind } from '../../shared/plugins/plugin-capabilities'
+import type { PluginFocusedSurface } from '../../shared/plugins/plugin-focused-surface'
 import type { PluginEventName } from '../../shared/plugins/plugin-manifest'
+import { projectPluginAgentContext } from '../../shared/plugins/plugin-workspace-read-context'
+import type {
+  PluginSidecarPlacement,
+  PluginSidecarPublishParams,
+  PluginSidecarPublishResult
+} from '../../shared/plugins/plugin-sidecar-contract'
 
 export type PluginWorktreeContext = {
   worktreeId: string
   branch: string
   displayName: string
+  executionHost?: PluginWorkspaceExecutionHost | null
+  agent?: PluginWorkspaceAgentContext | null
 }
 
 /** Structural service surface the facade delegates to. Desktop main binds it
@@ -47,13 +59,22 @@ export type PluginHostServices = {
     set(pluginId: string, key: string, value: unknown): { ok: true } | { ok: false; error: string }
   }
   subscribeEvents(pluginId: string, events: PluginEventName[]): PluginEventName[]
+  readFocusedSurface(): PluginFocusedSurface | null
+  sidecar: {
+    resolvePlacement(pluginId: string): PluginSidecarPlacement
+    publish(pluginId: string, input: PluginSidecarPublishParams): PluginSidecarPublishResult
+  }
 }
 
 export type BoundPluginHostMethod = {
   spec: PluginHostMethodSpec
   handler: (
     params: unknown,
-    ctx: { pluginId: string; services: PluginHostServices }
+    ctx: {
+      pluginId: string
+      services: PluginHostServices
+      grantedCapabilities: readonly PluginCapabilityKind[]
+    }
   ) => Promise<unknown>
 }
 
@@ -69,26 +90,42 @@ function definePluginMethod(
 }
 
 const HANDLERS = new Map<string, BoundPluginHostMethod>([
-  definePluginMethod('workspace.readContext', async (_params, { services }) => {
-    const context = await services.resolveActiveWorktreeContext()
-    if (!context) {
-      return null
+  definePluginMethod(
+    'workspace.readContext',
+    async (_params, { services, grantedCapabilities }) => {
+      const context = await services.resolveActiveWorktreeContext()
+      if (!context) {
+        return null
+      }
+      const terminals = await services.listWorktreeTerminals(context.worktreeId)
+      const agent = projectPluginAgentContext(context.agent ?? {})
+      // Why: Orca worktree ids embed provider paths, so the public projection
+      // must select safe fields instead of spreading the internal context.
+      return {
+        branch: context.branch.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
+        displayName: context.displayName.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
+        terminals: terminals
+          .filter(
+            (terminal) =>
+              terminal.id.length > 0 && terminal.id.length <= PLUGIN_TERMINAL_ID_MAX_LENGTH
+          )
+          .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
+          .map((terminal) => ({ id: terminal.id })),
+        ...(context.executionHost
+          ? {
+              executionHost: {
+                kind: context.executionHost.kind,
+                label: context.executionHost.label.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH)
+              }
+            }
+          : {}),
+        ...(agent ? { agent } : {}),
+        ...(grantedCapabilities.includes('ui:focus')
+          ? { focusedSurface: services.readFocusedSurface() }
+          : {})
+      }
     }
-    const terminals = await services.listWorktreeTerminals(context.worktreeId)
-    // Why: Orca worktree ids embed provider paths, so the public projection
-    // must select safe fields instead of spreading the internal context.
-    return {
-      branch: context.branch.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-      displayName: context.displayName.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
-      terminals: terminals
-        .filter(
-          (terminal) =>
-            terminal.id.length > 0 && terminal.id.length <= PLUGIN_TERMINAL_ID_MAX_LENGTH
-        )
-        .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
-        .map((terminal) => ({ id: terminal.id }))
-    }
-  }),
+  ),
   definePluginMethod('terminal.sendText', async (params, { services }) => {
     const { terminalId, text, enter } = params as {
       terminalId: string
@@ -164,9 +201,24 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
     }
     return { ok: true }
   }),
-  definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
-    const { events } = params as { events: PluginEventName[] }
-    return { subscribed: services.subscribeEvents(pluginId, events) }
+  definePluginMethod(
+    'events.subscribe',
+    async (params, { pluginId, services, grantedCapabilities }) => {
+      const { events } = params as { events: PluginEventName[] }
+      const allowed = grantedCapabilities.includes('ui:focus')
+        ? events
+        : events.filter((event) => event !== 'ui.focus.changed')
+      return { subscribed: services.subscribeEvents(pluginId, allowed) }
+    }
+  ),
+  definePluginMethod('sidecar.resolvePlacement', async (_params, { pluginId, services }) => {
+    return services.sidecar.resolvePlacement(pluginId)
+  }),
+  definePluginMethod('sidecar.publish', async (params, { pluginId, services }) => {
+    return services.sidecar.publish(pluginId, params as PluginSidecarPublishParams)
+  }),
+  definePluginMethod('ui.readFocus', async (_params, { services }) => {
+    return { focusedSurface: services.readFocusedSurface() }
   })
 ])
 

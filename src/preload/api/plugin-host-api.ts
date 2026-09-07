@@ -7,6 +7,7 @@ import type { PluginLanguagePackRegistration } from '../../shared/plugins/plugin
 import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
 import type { PluginMarketplaceGitSource } from '../../shared/plugins/plugin-marketplace'
+import type { PluginUiFocusReport } from '../../shared/plugins/plugin-focused-surface'
 
 /** Panel contribution as surfaced by the main-process plugin service. */
 export type PluginHostPanel = {
@@ -186,6 +187,8 @@ export type PluginsApi = {
   getLogs: (args: { pluginKey: string }) => Promise<PluginHostLogLine[]>
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
+  /** Fire-and-forget UI focus sample for local plugin workers. */
+  reportUiFocus: (payload: PluginUiFocusReport) => void
   /** Fires whenever installed plugins, worker states, panels, or content packs change. */
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
 }
