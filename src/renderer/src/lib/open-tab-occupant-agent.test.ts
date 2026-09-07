@@ -110,8 +110,10 @@ describe('resolveOpenTabOccupantAgent', () => {
     ).toBe('grok')
   })
 
-  it('uses the tab-strip title identity when hooks have not reported yet', () => {
-    expect(resolve({ title: 'grok' })).toBe('grok')
+  it('does not guess an occupant from a bare title name', () => {
+    // `grok` is free-text-only evidence; the canonical resolver requires an anchored owner
+    // suffix (for example `Task - grok`) before a title-only fallback can identify a pane.
+    expect(resolve({ title: 'grok' })).toBeNull()
   })
 
   it('does not let a grok mention in the title steal a launched Claude pane', () => {

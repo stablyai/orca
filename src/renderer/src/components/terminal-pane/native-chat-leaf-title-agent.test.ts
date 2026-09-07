@@ -12,7 +12,7 @@ describe('resolveNativeChatLeafTitleAgent', () => {
       resolveNativeChatLeafTitleAgent({
         leafId: 'leaf-2',
         panes,
-        runtimePaneTitlesByPaneId: { 1: 'PowerShell', 2: 'Codex - working' },
+        runtimePaneTitlesByPaneId: { 1: 'PowerShell', 2: '⠋ working - codex' },
         tabLabel: 'PowerShell'
       })
     ).toBe('codex')
@@ -40,14 +40,37 @@ describe('resolveNativeChatLeafTitleAgent', () => {
     ).toBeNull()
   })
 
-  it('falls back to the terminal title in a single pane', () => {
+  it('keeps launch identity over a conflicting single-pane terminal title', () => {
     expect(
       resolveNativeChatLeafTitleAgent({
         leafId: 'leaf-1',
         panes: [panes[0]],
         runtimePaneTitlesByPaneId: {},
-        terminalTitle: 'OpenClaude'
+        terminalTitle: 'Claude Code',
+        launchAgent: 'openclaude'
       })
     ).toBe('openclaude')
+  })
+
+  it('uses anchored title identity when no stronger evidence exists', () => {
+    expect(
+      resolveNativeChatLeafTitleAgent({
+        leafId: 'leaf-1',
+        panes: [panes[0]],
+        runtimePaneTitlesByPaneId: {},
+        terminalTitle: 'Claude Code'
+      })
+    ).toBe('claude')
+  })
+
+  it('rejects a bare free-text title when no stronger evidence exists', () => {
+    expect(
+      resolveNativeChatLeafTitleAgent({
+        leafId: 'leaf-1',
+        panes: [panes[0]],
+        runtimePaneTitlesByPaneId: {},
+        terminalTitle: 'grok'
+      })
+    ).toBeNull()
   })
 })

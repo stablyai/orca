@@ -124,6 +124,25 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows[0].agentType).toBe('claude')
   })
 
+  it('does not resolve retained unknown rows from a bare free-text title', () => {
+    const retained = makeRetained(ORPHAN_PANE_KEY, 'wt-1', 1000, {
+      entry: makeEntry(ORPHAN_PANE_KEY, 1000, {
+        agentType: 'unknown',
+        terminalTitle: 'grok'
+      }),
+      tab: { ...makeTab('tab-orphan'), title: 'grok' },
+      agentType: 'unknown'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [],
+      retained: [retained],
+      now: 2000
+    })
+
+    expect(rows[0].agentType).toBe('unknown')
+  })
+
   it('resolves live unknown rows from the launched tab agent', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'codex', title: 'test-thing-2' })],
@@ -140,7 +159,7 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows[0].agentType).toBe('codex')
   })
 
-  it('prefers an unrelated live title over the launched tab agent for unknown rows', () => {
+  it('keeps the launched tab agent over an unrelated live title for unknown rows', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'omp', title: '\u280b Codex' })],
       entries: [
@@ -153,7 +172,8 @@ describe('buildWorktreeAgentRows', () => {
       now: 2000
     })
 
-    expect(rows[0].agentType).toBe('codex')
+    // A launch record is a fact Orca owns; a title is a decoration channel.
+    expect(rows[0].agentType).toBe('omp')
   })
 
   it('normalizes live Pi-compatible rows from the launched OMP tab agent', () => {

@@ -41,7 +41,7 @@ function titleRowObservation(now: number): AgentStatusObservation {
     tabs: [makeTab('tab-1')],
     entries: [],
     retained: [],
-    runtimePaneTitlesByTabId: { 'tab-1': { 1: '⠋ Codex' } },
+    runtimePaneTitlesByTabId: { 'tab-1': { 1: '⠋ observing - codex' } },
     ptyIdsByTabId: { 'tab-1': ['pty-1'] },
     terminalLayoutsByTabId: { 'tab-1': makeSingleLayout() },
     now

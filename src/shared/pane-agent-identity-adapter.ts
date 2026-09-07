@@ -115,7 +115,15 @@ export type CanonicalPaneAgentIdentity = {
   supersededSources: readonly PaneAgentEvidenceSource[]
 }
 
-/** Authority order, strongest first. This is the only place precedence is expressed. */
+/**
+ * Authority order, strongest first. This is the only place precedence is expressed.
+ *
+ * Launch intentionally outranks completed-hook while run keys are absent: a completed hook is
+ * newer evidence in the abstract, but the optional run-key filter currently treats undefined as
+ * eligible and an unfiltered completed row can belong to a previous occupant of a reused pane;
+ * launch is scoped to how this pane was set up. Once production supplies `launchRun` and
+ * `completedHookRun`, revisit this ordering (the expiry test names the required review).
+ */
 const SOURCE_RANK: readonly PaneAgentEvidenceSource[] = PANE_AGENT_EVIDENCE_SOURCES
 
 /** Exported for the source/rank drift ratchet; the rank is the canonical source list itself. */
@@ -232,27 +240,26 @@ export function resolveCanonicalPaneAgentIdentity(
   if (!hasAuthorityEvidence) {
     if (input.uncoveredFallback) {
       const agent = input.uncoveredFallback.agent
-      // A legacy title parser may have picked the first token from an ambiguous or
-      // free-text-only title. Do not let that compatibility value bypass the canonical
-      // ambiguity fence when the caller marks it as title-only evidence.
-      const rejectTitleFallback =
-        input.uncoveredFallback.titleOnly === true &&
-        ((titleEvidence?.reason === 'free-text-only' &&
-          (titleEvidence.freeTextNames?.length ?? 0) > 1) ||
+      if (input.uncoveredFallback.titleOnly === true) {
+        // Anchored canonical evidence stands on its own. A marker-only claim retains the legacy
+        // parser's false-positive guard, while free text can never be promoted by the fallback.
+        const fallbackConfirmsVendorMarker =
+          titleEvidence?.reason === 'vendor-marker' && agent !== null && agent === titleAgent
+        const acceptedTitleAgent =
+          titleEvidence?.reason === 'anchored' || fallbackConfirmsVendorMarker ? titleAgent : null
+        const titleIsAmbiguous =
           titleEvidence?.reason === 'conflicting-anchored-names' ||
-          titleEvidence?.reason === 'conflicting-vendor-markers')
-      if (rejectTitleFallback) {
+          titleEvidence?.reason === 'conflicting-vendor-markers'
         return {
-          agent: null,
-          source: null,
+          agent: acceptedTitleAgent,
+          source: acceptedTitleAgent === null ? null : 'title',
           coverage: 'uncovered',
-          titleOnly: false,
-          ...(titleEvidence?.reason === 'free-text-only' ? {} : { ambiguousAt: 'title' as const }),
+          titleOnly: acceptedTitleAgent !== null,
+          ...(titleIsAmbiguous ? { ambiguousAt: 'title' as const } : {}),
           supersededSources: []
         }
       }
-      const titleOnly =
-        input.uncoveredFallback.titleOnly ?? (agent !== null && agent === titleAgent)
+      const titleOnly = agent !== null && agent === titleAgent
       return {
         agent,
         source: agent === null ? null : titleOnly ? 'title' : null,

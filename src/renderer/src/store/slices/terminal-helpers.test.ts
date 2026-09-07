@@ -74,7 +74,7 @@ describe('clearTransientTerminalState', () => {
   })
 
   it('uses "Terminal {index+1}" when customTitle is whitespace only', () => {
-    const tab = makeTab({ title: '⠋ codex running', customTitle: '   ' })
+    const tab = makeTab({ title: 'Codex ready', customTitle: '   ' })
     const result = clearTransientTerminalState(tab, 0)
     expect(result.title).toBe('Terminal 1')
   })

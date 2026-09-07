@@ -109,7 +109,7 @@ describe('OpenCode native title tab identity', () => {
   })
 
   it.each(identityScenarios)(
-    'uses native OpenCode identity for a %s tab with stale Claude metadata',
+    'keeps Claude launch identity for a %s tab despite a conflicting OpenCode title',
     (_name, extra) => {
       expect(
         resolveTabAgentFromSignals({
@@ -120,11 +120,11 @@ describe('OpenCode native title tab identity', () => {
           launchAgent: 'claude',
           siblingHookAgent: extra.siblingHookAgent
         })
-      ).toBe('opencode')
+      ).toBe('claude')
     }
   )
 
-  it('reclaims stale Claude identity loaded from a persisted tab', () => {
+  it('keeps persisted Claude launch identity over a conflicting OpenCode title', () => {
     const parsed = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'worktree-1',
@@ -146,7 +146,7 @@ describe('OpenCode native title tab identity', () => {
         hookAgent: null,
         launchAgent: restoredTab.launchAgent
       })
-    ).toBe('opencode')
+    ).toBe('claude')
   })
 
   it('keeps current sleeping Claude ownership over a replayed OpenCode title', () => {
@@ -253,7 +253,7 @@ describe('OpenCode native title tab identity', () => {
         sleepingSessionAgent: 'claude',
         launchAgent: 'claude'
       })
-    ).toBe('codex')
+    ).toBe('claude')
 
     for (const title of [
       'OpenCode ready',
@@ -286,7 +286,7 @@ describe('OpenCode native title tab identity', () => {
       await Promise.resolve()
     })
 
-    expect(latestAgent).toBe('opencode')
+    expect(latestAgent).toBe('claude')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
     expect(getForegroundProcess).not.toHaveBeenCalled()
     const paneKey = makePaneKey('opencode-tab', FOCUSED_LEAF_ID)

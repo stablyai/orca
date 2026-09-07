@@ -112,7 +112,7 @@ describe('#9040 spinner attribution matches named-provider dot/row agreement', (
       title: '⠋ implementing the feature',
       launchAgent: 'claude'
     } satisfies Partial<TerminalTab>
-    const namedTab = { id: 'tab-1', title: 'claude [working]' }
+    const namedTab = { id: 'tab-1', title: '⠋ working - claude' }
 
     expect(getWorktreeStatus([spinnerTab], [], livePtyMap('tab-1'))).toBe('working')
     expect(rowCount(spinnerTab)).toBe(1)

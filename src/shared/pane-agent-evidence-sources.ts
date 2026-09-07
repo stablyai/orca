@@ -4,7 +4,11 @@ export const PANE_AGENT_EVIDENCE_SOURCES = [
   'live-hook',
   /** The pane's foreground process, as read on the execution host. */
   'process',
-  /** Orca launched, resumed, or accepted a command for this agent. A fact Orca owns. */
+  /** Orca launched, resumed, or accepted a command for this agent. A fact Orca owns.
+   *  Why above completed-hook: completed evidence is newer in principle, but production supplies
+   *  neither completedHookRun nor launchRun and undefined runs remain eligible for mixed-version
+   *  compatibility. A completed hook can therefore describe the previous occupant of a reused
+   *  pane, while launch is scoped to how this pane was set up. Revisit when run keys are wired. */
   'launch',
   /** A provider hook from a turn that finished. Still authoritative about identity. */
   'completed-hook',

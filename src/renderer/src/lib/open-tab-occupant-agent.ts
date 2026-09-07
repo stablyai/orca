@@ -3,7 +3,6 @@ import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-ag
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -62,25 +61,20 @@ export function resolveOpenTabOccupantAgent({
   const sleepingSessionAgent = focusedPaneKey
     ? (sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null)
     : null
-  const oscTitle = title?.trim() || ''
-  const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(oscTitle)
-  const fallbackAgentSignal = launchAgent
-    ? explicitTitleAgent === launchAgent
-    : Boolean(explicitTitleAgent || siblingHookAgent)
-
   return resolveTabAgentFromSignals({
     hasObservedAgentSignal: Boolean(
-      hookAgent || focusedCompletedHookAgent || processAgent || fallbackAgentSignal
+      hookAgent || focusedCompletedHookAgent || processAgent || launchAgent || siblingHookAgent
     ),
     // Search does not observe OSC 133;D, so do not apply local-only exit clearing.
     isRemote: true,
-    title: oscTitle,
+    title: title?.trim() || '',
     defaultTitle,
     hookAgent,
     siblingHookAgent,
     focusedCompletedHookAgent,
     siblingCompletedHookAgent,
     processAgent,
+    processProof: process?.processProof,
     processShellForeground: Boolean(process?.shellForeground),
     sleepingSessionAgent,
     launchAgent

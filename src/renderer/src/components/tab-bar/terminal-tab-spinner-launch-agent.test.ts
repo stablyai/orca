@@ -30,7 +30,7 @@ describe('#9040 terminal tab dot attributes spinner titles to the launched agent
   // Control: the named-provider path this must stay at parity with.
   it('reports working for a named-provider title', () => {
     const status = resolveTerminalTabActivityStatus({
-      tab: { id: 'tab-1', title: 'claude [working]' } as TerminalTab,
+      tab: { id: 'tab-1', title: '⠋ working - claude' } as TerminalTab,
       ptyIdsByTabId: { 'tab-1': ['pty-0'] }
     })
 

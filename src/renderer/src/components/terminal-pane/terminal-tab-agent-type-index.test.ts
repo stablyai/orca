@@ -82,7 +82,8 @@ describe('createTerminalTabAgentTypeSelector', () => {
       }
     }
 
-    expect(select({}, 'tab-1', foreground)).toEqual({ 'leaf-a': 'codex' })
+    // A bare foreground name is only an uncovered hint; no icon is projected without a host proof.
+    expect(select({}, 'tab-1', foreground)).toEqual({})
     expect(select({ 'tab-1:leaf-a': entry('claude') }, 'tab-1', foreground)).toEqual({
       'leaf-a': 'claude'
     })
@@ -96,5 +97,24 @@ describe('createTerminalTabAgentTypeSelector', () => {
         'tab-1:leaf-a': { ...foreground['tab-1:leaf-a'], routingRevoked: true }
       })
     ).toEqual({})
+  })
+
+  it('lets a fresh foreground proof outrank a completed hook for the same pane', () => {
+    const select = createTerminalTabAgentTypeSelector()
+    expect(
+      select({ 'tab-1:leaf-a': entry('claude', 'done') }, 'tab-1', {
+        'tab-1:leaf-a': {
+          agent: 'codex',
+          processProof: {
+            agent: 'codex',
+            processIncarnation: 'fixture-process',
+            authorityId: 'fixture-authority',
+            capturedAgeMs: 10,
+            validForMs: 1_000
+          },
+          shellForeground: false
+        }
+      })
+    ).toEqual({ 'leaf-a': 'codex' })
   })
 })

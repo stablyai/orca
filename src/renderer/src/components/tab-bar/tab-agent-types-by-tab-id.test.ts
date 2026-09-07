@@ -28,31 +28,25 @@ function splitLayout(activeLeafId: string | null): TerminalLayoutSnapshot {
 }
 
 describe('selectTabAgentTypesByTabId', () => {
-  it('maps each tab to its first pane agent type, matching findTabAgentEntry', () => {
+  it('maps each tab through canonical sibling evidence when no layout is hydrated', () => {
     const map: Record<string, AgentStatusEntry> = {
       'tab-1:leaf-a': entry({ agentType: 'claude' }),
       'tab-1:leaf-b': entry({ agentType: 'codex' }),
       'tab-2:leaf-a': entry({ agentType: 'codex' })
     }
     const projection = selectTabAgentTypesByTabId(map)
-    expect(projection).toEqual({ 'tab-1': 'claude', 'tab-2': 'codex' })
-
-    // Parity with the lookup it replaces, for every tab.
-    for (const tabId of ['tab-1', 'tab-2', 'tab-missing']) {
-      expect(projection[tabId] ?? null).toBe(findTabAgentEntry(map, tabId)?.agentType ?? null)
-    }
+    // Conflicting sibling agents are ambiguous and must not silently choose
+    // the first insertion-order entry.
+    expect(projection).toEqual({ 'tab-2': 'codex' })
+    expect(findTabAgentEntry(map, 'tab-1')?.agentType).toBe('claude')
   })
 
-  it('a first pane without an agentType yields null even if a later pane has one', () => {
+  it('uses a sole recognized sibling when the first pane has no agentType', () => {
     const map: Record<string, AgentStatusEntry> = {
       'tab-1:leaf-a': entry({ agentType: undefined }),
       'tab-1:leaf-b': entry({ agentType: 'claude' })
     }
-    // First matching pane wins (claims the tab) with no agentType -> null, exactly
-    // like findTabAgentEntry(...)?.agentType ?? null.
-    expect(selectTabAgentTypesByTabId(map)['tab-1'] ?? null).toBe(
-      findTabAgentEntry(map, 'tab-1')?.agentType ?? null
-    )
+    expect(selectTabAgentTypesByTabId(map)['tab-1']).toBe('claude')
   })
 
   it('uses the active split leaf regardless of pane-map insertion order', () => {

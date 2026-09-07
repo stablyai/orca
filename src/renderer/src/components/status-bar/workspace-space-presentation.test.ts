@@ -342,7 +342,7 @@ describe('workspace space presentation helpers', () => {
   it('counts hookless title-derived running agents as active workspace usage', () => {
     const count = countWorkspaceSpaceActiveAgents({
       worktreeId: 'wt',
-      tabs: [{ id: 'tab-1', title: 'Codex working' }],
+      tabs: [{ id: 'tab-1', title: '⠋ working - codex' }],
       agentStatusByPaneKey: {},
       migrationUnsupportedByPtyId: {},
       runtimePaneTitlesByTabId: {},
@@ -356,7 +356,7 @@ describe('workspace space presentation helpers', () => {
   it('does not count title-derived agents when the terminal has no live pty', () => {
     const count = countWorkspaceSpaceActiveAgents({
       worktreeId: 'wt',
-      tabs: [{ id: 'tab-1', title: 'Codex working' }],
+      tabs: [{ id: 'tab-1', title: '⠋ working - codex' }],
       agentStatusByPaneKey: {},
       migrationUnsupportedByPtyId: {},
       runtimePaneTitlesByTabId: {},

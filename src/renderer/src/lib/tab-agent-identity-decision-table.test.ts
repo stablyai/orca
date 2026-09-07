@@ -6,7 +6,7 @@ import {
   resolveCanonicalPaneAgentIdentity,
   type CanonicalPaneAgentIdentity
 } from '../../../shared/pane-agent-identity-adapter'
-import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
+import { resolveShippingTabAgentBaseline } from './tab-agent-identity-shipping-baseline'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 const AGENTS: readonly TuiAgent[] = ['claude', 'codex']
@@ -63,7 +63,7 @@ function realResult(values: readonly (TuiAgent | null)[], title: string, remote:
   const [hook, siblingHook, completed, siblingCompleted, process, sleeping, launch] = values
   // The seven slots model steady-state observations; this runtime memory bit is intentionally
   // held true instead of adding an eighth dimension to the approved 17,496-shape table.
-  return resolveTabAgentFromSignals({
+  return resolveShippingTabAgentBaseline({
     hasObservedAgentSignal: true,
     isRemote: remote,
     title,
@@ -81,6 +81,14 @@ function realResult(values: readonly (TuiAgent | null)[], title: string, remote:
 function runDecisionTable(withProof: boolean) {
   let disagreements = 0
   let flipped = 0
+  const residualShapes: {
+    slots: Record<string, TuiAgent | null>
+    title: string
+    remote: boolean
+    shipping: TuiAgent | null
+    canonical: TuiAgent | null
+    source: string
+  }[] = []
   const breakdown: Breakdown = {
     launch: 0,
     'completed-hook': 0,
@@ -100,6 +108,18 @@ function runDecisionTable(withProof: boolean) {
           if (canonical.source !== null) {
             breakdown[canonical.source] += 1
           }
+          if (canonical.source === 'sibling' || canonical.source === 'title') {
+            const [hook, siblingHook, completed, siblingCompleted, process, sleeping, launch] =
+              values
+            residualShapes.push({
+              slots: { hook, siblingHook, completed, siblingCompleted, process, sleeping, launch },
+              title,
+              remote,
+              shipping: real,
+              canonical: canonical.agent,
+              source: canonical.source
+            })
+          }
         }
         if (!withProof) {
           const proven = canonicalResult(values, title, true)
@@ -116,7 +136,7 @@ function runDecisionTable(withProof: boolean) {
       }
     }
   }
-  return { disagreements, flipped, breakdown }
+  return { disagreements, flipped, breakdown, residualShapes }
 }
 
 describe('renderer ladder decision table', () => {
@@ -127,15 +147,18 @@ describe('renderer ladder decision table', () => {
       shapes: SHAPE_COUNT,
       proofOmitted: proofFree,
       freshProof,
-      flippedByAddingProof: proofFree.flipped
+      flippedByAddingProof: proofFree.flipped,
+      siblingAndTitleResiduals: {
+        proofOmitted: proofFree.residualShapes,
+        freshProof: freshProof.residualShapes
+      }
     }
     writeFileSync(
       join(tmpdir(), 'orca-pane-agent-identity-decision-table-real.json'),
       `${JSON.stringify(result, null, 2)}\n`
     )
-    // Re-derived against resolveTabAgentFromSignals (not a hand-written model). These differ from
-    // the approved 2,520/648 totals and 396/144/72/36 breakdown; see the PR comment.
-    expect(proofFree).toEqual({
+    // Replayed against the real pre-tranche shipping function (not a hand-written model).
+    expect(proofFree).toMatchObject({
       disagreements: 2_622,
       flipped: 1_872,
       breakdown: {
@@ -147,7 +170,7 @@ describe('renderer ladder decision table', () => {
         title: 6
       }
     })
-    expect(freshProof).toEqual({
+    expect(freshProof).toMatchObject({
       disagreements: 658,
       flipped: 0,
       breakdown: {
@@ -159,6 +182,10 @@ describe('renderer ladder decision table', () => {
         title: 2
       }
     })
+    // The concrete sibling/title residuals are written above; keeping their cardinality asserted
+    // prevents an aggregate count from silently hiding a newly introduced shape.
+    expect(proofFree.residualShapes).toHaveLength(60)
+    expect(freshProof.residualShapes).toHaveLength(8)
     expect(proofFree.flipped).toBe(1_872)
   })
 

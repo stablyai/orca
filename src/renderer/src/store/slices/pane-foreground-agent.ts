@@ -1,10 +1,13 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { ForegroundProcessProof } from '../../../../shared/pane-agent-identity-adapter'
 
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
   agent: TuiAgent | null
+  /** Host-stamped process identity; absent reads remain uncovered hints. */
+  processProof?: ForegroundProcessProof | null
   /** True only when fresh provider evidence is safe for input-byte routing. */
   routingTrusted?: boolean
   /** True after exit/input evidence revokes routing until provider confirmation. */
@@ -46,6 +49,7 @@ export const createPaneForegroundAgentSlice: StateCreator<
       if (
         current &&
         current.agent === entry.agent &&
+        current.processProof === entry.processProof &&
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&
         current.routingConfirmationPending === entry.routingConfirmationPending &&

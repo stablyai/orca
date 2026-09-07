@@ -8,6 +8,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { ForegroundProcessProof } from '../../../shared/pane-agent-identity-adapter'
 import {
   resolveLaunchedAgentExitEvidence,
   resolveTabAgentFromSignals
@@ -19,6 +20,13 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 let latestHookAgent: TuiAgent | null | undefined
 const hookRoots: Root[] = []
+const FRESH_AIDER_PROOF: ForegroundProcessProof = {
+  agent: 'aider',
+  processIncarnation: 'fixture-aider',
+  authorityId: 'fixture-authority',
+  capturedAgeMs: 10,
+  validForMs: 1_000
+}
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
   latestHookAgent = useTabAgent(tab)
@@ -43,6 +51,35 @@ async function setPaneForeground(entry: PaneForegroundAgentEntry): Promise<void>
 }
 
 describe('resolveTabAgentFromSignals process identity', () => {
+  it('keeps the launched remote identity across a connection blip and restore', () => {
+    const connected = resolveTabAgentFromSignals({
+      hasObservedAgentSignal: true,
+      isRemote: true,
+      title: '✳ Codex',
+      hookAgent: 'claude',
+      processAgent: 'claude',
+      launchAgent: 'claude'
+    })
+    const blip = resolveTabAgentFromSignals({
+      hasObservedAgentSignal: true,
+      isRemote: true,
+      title: '✳ Codex',
+      hookAgent: null,
+      processAgent: null,
+      launchAgent: 'claude'
+    })
+    const restored = resolveTabAgentFromSignals({
+      hasObservedAgentSignal: false,
+      isRemote: true,
+      title: '✳ Codex',
+      hookAgent: null,
+      processAgent: null,
+      launchAgent: 'claude'
+    })
+    expect([connected, blip, restored]).toEqual(['claude', 'claude', 'claude'])
+    expect([connected, blip, restored]).not.toContain('codex')
+  })
+
   it('ranks the recognized foreground process above title and launch bootstrap', () => {
     expect(
       resolveTabAgentFromSignals({
@@ -51,6 +88,7 @@ describe('resolveTabAgentFromSignals process identity', () => {
         title: '✦ Gemini CLI',
         hookAgent: null,
         processAgent: 'aider',
+        processProof: FRESH_AIDER_PROOF,
         launchAgent: 'codex'
       })
     ).toBe('aider')
@@ -69,9 +107,7 @@ describe('resolveTabAgentFromSignals process identity', () => {
     ).toBe('claude')
   })
 
-  it('suppresses launch identity on shell-foreground evidence despite a stale agent title', () => {
-    // Why: OSC 133;D is process-grade exit proof — a TUI that died without
-    // restoring its title must not keep painting the tab.
+  it('keeps launch identity until the lifecycle effect clears shell-exit evidence', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -82,7 +118,7 @@ describe('resolveTabAgentFromSignals process identity', () => {
         processShellForeground: true,
         launchAgent: 'claude'
       })
-    ).toBeNull()
+    ).toBe('claude')
   })
 
   it('suppresses stuck-title identity once shell foreground is proven on a manual pane', () => {
@@ -191,7 +227,11 @@ describe('useTabAgent process signals', () => {
     await renderHookProbe(baseTab)
     expect(latestHookAgent).toBeNull()
 
-    await setPaneForeground({ agent: 'aider', shellForeground: false })
+    await setPaneForeground({
+      agent: 'aider',
+      processProof: FRESH_AIDER_PROOF,
+      shellForeground: false
+    })
 
     expect(latestHookAgent).toBe('aider')
     expect(clearTabLaunchAgent).not.toHaveBeenCalled()
