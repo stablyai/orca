@@ -52,6 +52,57 @@ describe('buildMobileSessionTabSnapshots', () => {
     expect(restored.snapshotVersion).toBeGreaterThan(initial.snapshotVersion)
   })
 
+  it('publishes a new instance identity when unchanged content is recreated', () => {
+    const worktree = {
+      id: 'wt-1',
+      instanceId: 'old-instance',
+      repoId: 'repo-1'
+    }
+    const base = makeState({
+      worktreesByRepo: { 'repo-1': [worktree] } as unknown as AppState['worktreesByRepo'],
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal 1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const initial = buildMobileSessionTabSnapshots(base)[0]!
+    const recreated = {
+      ...base,
+      worktreesByRepo: {
+        'repo-1': [{ ...worktree, instanceId: 'new-instance' }]
+      } as unknown as AppState['worktreesByRepo']
+    }
+
+    const next = buildMobileSessionTabSnapshots(recreated)[0]!
+
+    expect(initial.worktreeInstanceId).toBe('old-instance')
+    expect(next.worktreeInstanceId).toBe('new-instance')
+    expect(next.snapshotVersion).toBeGreaterThan(initial.snapshotVersion)
+  })
+
+  it('publishes a cross-host id collision without an instance identity', () => {
+    const state = makeState({
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'wt-duplicate', repoId: 'repo-1', hostId: 'local', instanceId: 'local-instance' },
+          {
+            id: 'wt-duplicate',
+            repoId: 'repo-1',
+            hostId: 'ssh:ssh-1',
+            instanceId: 'ssh-instance'
+          }
+        ]
+      } as unknown as AppState['worktreesByRepo'],
+      tabsByWorktree: {
+        'wt-duplicate': [{ id: 'term-1', title: 'Terminal 1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+
+    const snapshots = buildMobileSessionTabSnapshots(state)
+    expect(snapshots).toHaveLength(1)
+    expect(snapshots[0]?.worktree).toBe('wt-duplicate')
+    expect(snapshots[0]?.worktreeInstanceId).toBeUndefined()
+  })
+
   it('publishes browser and editor color + pin state from unified tabs', () => {
     const fileId = '/repo/README.md'
     const state = makeState({

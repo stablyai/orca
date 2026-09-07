@@ -93,6 +93,8 @@ function transport(
     optionSnapshot: [],
     onError: vi.fn(),
     runtime: 'remote',
+    sessionId: 'session-test',
+    runtimeEnvironmentId: null,
     ...overrides
   }
 }

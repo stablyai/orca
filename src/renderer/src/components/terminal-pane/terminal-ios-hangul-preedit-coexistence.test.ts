@@ -190,7 +190,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
       const lifecycle = readFileSync(
         resolve(
           process.cwd(),
-          'src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts'
+          'src/renderer/src/components/terminal-pane/terminal-pane-pane-input.ts'
         ),
         'utf8'
       )

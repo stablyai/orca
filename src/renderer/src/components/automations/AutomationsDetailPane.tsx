@@ -1,8 +1,7 @@
 import React from 'react'
-import { ArrowLeft, Eye, RefreshCw } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { cn } from '@/lib/utils'
 import type {
   Automation,
   ExternalAutomationAction,
@@ -12,7 +11,6 @@ import type {
   AutomationRun
 } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
 import { HermesCronOutputView } from './HermesCronOutputView'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
@@ -28,26 +26,22 @@ import {
   getExternalRunStatusLabel,
   getExternalRunStatusVariant
 } from './external-automation-display'
-import {
-  formatAutomationDateTimeWithRelative,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
-} from './automation-page-parts'
-import { getAutomationRunContent } from './automation-run-content'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationTargetAvailability } from './automation-target-availability'
-import type { AutomationRunViewState } from './automation-run-view-state'
-import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
+import {
+  getAutomationDetailNextTab,
+  shouldHandleAutomationDetailEscapeKey,
+  shouldHandleAutomationDetailTabArrowKey
+} from './automation-detail-tab-navigation'
 import { translate } from '@/i18n/i18n'
 
 type AutomationsDetailPaneProps = {
   selected: Automation | null
   selectedExternal: ExternalAutomationListEntry | null
   selectedExternalRunPage: SelectedExternalRunPage | null
-  selectedAutomationRunPage: AutomationRun | null
   selectedRuns: AutomationRun[]
   /** Set when the selected automation's history read failed; its runs are unknown. */
   selectedRunsNotice: AutomationActionNotice | null
@@ -61,15 +55,10 @@ type AutomationsDetailPaneProps = {
   selectedHostEntry: AutomationHostCatalogEntry | null
   hostLabelById: ReadonlyMap<string, string>
   selectedRunNowAvailability: AutomationTargetAvailability | null
-  selectedAutomationRunPageWorkspaceDisplay: AutomationRunWorkspaceDisplay | null
-  selectedAutomationRunPageViewState: AutomationRunViewState | null
-  canRerunSelectedAutomationRunPage: boolean
-  isSelectedAutomationRunPageRerunPending: boolean
   worktreeMap: ReadonlyMap<string, Worktree>
   fetchExternalAutomationRuns: FetchExternalAutomationRuns
   onActivePaneTabChange: (tab: AutomationPaneTab) => void
   onClearExternalRunPage: () => void
-  onClearAutomationRunPage: () => void
   requestExternalAction: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
@@ -90,8 +79,6 @@ type AutomationsDetailPaneProps = {
   openEditDialog: (automation: Automation) => void
   toggleAutomation: (automation: Automation) => void
   requestDeleteAutomation: (automation: Automation) => void
-  rerunAutomationRun: (automation: Automation, run: AutomationRun) => void
-  openRunWorkspace: (run: AutomationRun) => void
   openAutomationRunPage: (run: AutomationRun) => void
   onBackToList: () => void
   recoverSelectedRuns: (action: AutomationHostRecoveryAction) => void
@@ -101,7 +88,6 @@ export function AutomationsDetailPane({
   selected,
   selectedExternal,
   selectedExternalRunPage,
-  selectedAutomationRunPage,
   selectedRuns,
   selectedRunsNotice,
   activePaneTab,
@@ -113,15 +99,10 @@ export function AutomationsDetailPane({
   selectedHostEntry,
   hostLabelById,
   selectedRunNowAvailability,
-  selectedAutomationRunPageWorkspaceDisplay,
-  selectedAutomationRunPageViewState,
-  canRerunSelectedAutomationRunPage,
-  isSelectedAutomationRunPageRerunPending,
   worktreeMap,
   fetchExternalAutomationRuns,
   onActivePaneTabChange,
   onClearExternalRunPage,
-  onClearAutomationRunPage,
   requestExternalAction,
   openExternalRunPage,
   openEditExternalDialog,
@@ -129,12 +110,51 @@ export function AutomationsDetailPane({
   openEditDialog,
   toggleAutomation,
   requestDeleteAutomation,
-  rerunAutomationRun,
-  openRunWorkspace,
   openAutomationRunPage,
   onBackToList,
   recoverSelectedRuns
 }: AutomationsDetailPaneProps): React.JSX.Element {
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (shouldHandleAutomationDetailEscapeKey(event)) {
+        event.preventDefault()
+        if (selectedExternalRunPage) {
+          onClearExternalRunPage()
+          return
+        }
+        onBackToList()
+        return
+      }
+
+      if (selectedExternal || !selected) {
+        return
+      }
+
+      if (shouldHandleAutomationDetailTabArrowKey(event)) {
+        const nextTab = getAutomationDetailNextTab({
+          currentTab: activePaneTab,
+          key: event.key as 'ArrowLeft' | 'ArrowRight',
+          canAccessRuns: Boolean(selected)
+        })
+        if (nextTab && nextTab !== activePaneTab) {
+          event.preventDefault()
+          onActivePaneTabChange(nextTab)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [
+    activePaneTab,
+    onActivePaneTabChange,
+    onBackToList,
+    onClearExternalRunPage,
+    selected,
+    selectedExternal,
+    selectedExternalRunPage
+  ])
+
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {selectedExternal ? (
@@ -239,76 +259,7 @@ export function AutomationsDetailPane({
           </TabsContent>
 
           <TabsContent value="runs" className="scrollbar-sleek min-h-0 overflow-auto p-5">
-            {selectedAutomationRunPage ? (
-              <AutomationRunPageFrame
-                title={selected?.name ?? selectedAutomationRunPage.title}
-                breadcrumbs={[
-                  formatAutomationDateTimeWithRelative(
-                    selectedAutomationRunPage.scheduledFor,
-                    relativeNow
-                  ),
-                  'Orca',
-                  selectedAutomationRunPageWorkspaceDisplay?.detailLabel ??
-                    translate(
-                      'auto.components.automations.AutomationsPage.noWorkspace',
-                      'No workspace'
-                    )
-                ]}
-                detail={
-                  selectedAutomationRunPage.outputSnapshot?.truncated
-                    ? translate(
-                        'auto.components.automations.AutomationsPage.latestSavedOutput',
-                        'Latest saved output'
-                      )
-                    : null
-                }
-                statusLabel={getAutomationRunStatusLabel(selectedAutomationRunPage.status)}
-                statusVariant={getAutomationRunStatusVariant(selectedAutomationRunPage.status)}
-                actions={
-                  <>
-                    {canRerunSelectedAutomationRunPage && selected ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isSelectedAutomationRunPageRerunPending}
-                        onClick={() => void rerunAutomationRun(selected, selectedAutomationRunPage)}
-                      >
-                        <RefreshCw
-                          className={cn(
-                            'size-3.5',
-                            isSelectedAutomationRunPageRerunPending && 'animate-spin'
-                          )}
-                        />
-                        {translate(
-                          'auto.components.automations.AutomationsPage.295698292f',
-                          'Rerun'
-                        )}
-                      </Button>
-                    ) : null}
-                    {selectedAutomationRunPageViewState ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!selectedAutomationRunPageViewState.canOpen}
-                        onClick={() => openRunWorkspace(selectedAutomationRunPage)}
-                      >
-                        <Eye className="size-3.5" />
-                        {selectedAutomationRunPageViewState.actionLabel}
-                      </Button>
-                    ) : null}
-                  </>
-                }
-                onBack={onClearAutomationRunPage}
-              >
-                <CommentMarkdown
-                  variant="document"
-                  content={getAutomationRunContent(selectedAutomationRunPage)}
-                  className="text-sm leading-relaxed text-foreground"
-                />
-              </AutomationRunPageFrame>
-            ) : selected ? (
+            {selected ? (
               <AutomationRunHistory
                 runs={selectedRuns}
                 automationId={selected.id}

@@ -60,7 +60,9 @@ describe('SSH IPC handlers', () => {
     mockConnectionManager.getConnection.mockReturnValue(undefined)
     mockStore.getSshRemotePtyLeases.mockReturnValue([
       { targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' },
-      { targetId: 'ssh-1', ptyId: 'pty-expired', state: 'expired' }
+      { targetId: 'ssh-1', ptyId: 'pty-expired', state: 'expired' },
+      { targetId: 'ssh-1', ptyId: 'pty-superseded', state: 'expired', supersededBy: 'pty-9' },
+      { targetId: 'ssh-1', ptyId: 'pty-recycled', state: 'expired', relayIdRecycled: true }
     ])
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-2'])
 
@@ -69,11 +71,45 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
     expect(mockForceStopRelayForTarget).toHaveBeenCalledWith(conn, 'ssh-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'pty-1', 'expired')
-    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-      'ssh-1',
-      'pty-expired',
-      'expired'
+    // Every already-`expired` lease is skipped on its raw state, marked or not: reset retires the
+    // routes this force-stop invalidated, and an expired lease has none left to retire. It is also
+    // never upgraded to `terminated` — a killed relay makes its PTYs unreachable, not proven dead.
+    for (const ptyId of ['pty-expired', 'pty-superseded', 'pty-recycled']) {
+      expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', ptyId, 'expired')
+      expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', ptyId, 'terminated')
+    }
+    expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
+  })
+
+  // A force-stop that threw observed nothing about the remote shells, so expiring their leases
+  // would record a verdict Orca never obtained (docs/reference/ssh-execution-boundary.md).
+  it('ssh:resetRelay keeps leases alive when the force-stop never reported a result', async () => {
+    const target: SshTarget = {
+      id: 'ssh-1',
+      label: 'Server',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy'
+    }
+    const conn = {}
+    mockSshStore.getTarget.mockReturnValue(target)
+    mockConnectionManager.connect.mockResolvedValue(conn)
+    mockConnectionManager.getConnection.mockReturnValue(undefined)
+    mockStore.getSshRemotePtyLeases.mockReturnValue([
+      { targetId: 'ssh-1', ptyId: 'pty-1', state: 'detached' },
+      { targetId: 'ssh-1', ptyId: 'pty-2', state: 'attached' }
+    ])
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+    mockForceStopRelayForTarget.mockRejectedValueOnce(new Error('channel closed'))
+
+    await expect(handlers.get('ssh:resetRelay')!(null, { targetId: 'ssh-1' })).rejects.toThrow(
+      'channel closed'
     )
+
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalled()
+    // The local handles are still stale — only the host-side verdict is withheld.
+    expect(clearProviderPtyState).toHaveBeenCalledWith('ssh:ssh-1@@pty-1')
+    expect(deletePtyOwnership).toHaveBeenCalledWith('ssh:ssh-1@@pty-2')
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 

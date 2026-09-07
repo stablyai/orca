@@ -19,6 +19,7 @@ import {
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
 import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
   readonly isDegraded = true
@@ -112,11 +113,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.providerFor(id).write(id, data)
   }
 
-  async writeWithSettlement(id: string, data: string): Promise<boolean> {
-    const provider = this.providerFor(id)
-    return provider.writeWithSettlement
-      ? await provider.writeWithSettlement(id, data)
-      : provider.write(id, data) !== false
+  async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
+    return await this.providerFor(id).writeWithSettlement(id, data)
   }
 
   resize(id: string, cols: number, rows: number): void {

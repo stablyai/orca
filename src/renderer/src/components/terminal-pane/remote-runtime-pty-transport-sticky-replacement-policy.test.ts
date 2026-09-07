@@ -9,6 +9,7 @@ import {
   readyHostSessionInventoryResponse,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-test-harness'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
@@ -160,7 +161,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.isConnected()).toBe(false)
       expect(onPtyExit).not.toHaveBeenCalled()
 
-      await vi.advanceTimersByTimeAsync(44_001)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
       expect(subscribedTerminalHandles()).toHaveLength(3)
     } finally {

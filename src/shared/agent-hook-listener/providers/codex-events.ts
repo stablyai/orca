@@ -49,6 +49,7 @@ export function buildCodexStatusPayload(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     subagents: codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
   })
 }

@@ -9,6 +9,7 @@ import {
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 
 async function runNumstat(
   worktreePath: string,
@@ -56,7 +57,12 @@ export async function attachLineStats(
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
     hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
-    collectUntrackedAdditions(worktreePath, untrackedPaths, options.signal)
+    // Why: git took the guest path, but this read goes straight through Node's own namespace.
+    collectUntrackedAdditions(
+      resolveWorktreeFilesystemPath(worktreePath, options),
+      untrackedPaths,
+      options.signal
+    )
   ])
   for (const entry of entries) {
     const area = entry.area

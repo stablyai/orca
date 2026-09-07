@@ -36,7 +36,9 @@ type CachedAgentForeground = { processName: string; pid: number | null; refreshe
 export type PtyForegroundProcessTracker = {
   recordOutput(data: string): void
   markDead(): void
-  getForegroundProcess(): string | null
+  /** `rawFallback`: node-pty's own name only, with no identity cache and no background
+   *  process-table refresh -- the cheap-tier tick must not fork a full `ps` as a side effect. */
+  getForegroundProcess(options?: { rawFallback?: boolean }): string | null
   confirmForegroundProcess(): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
 }
@@ -213,9 +215,12 @@ export function createPtyForegroundProcessTracker(args: {
       cachedAgentForeground = null
       startupAgentForeground = null
     },
-    getForegroundProcess: () => {
+    getForegroundProcess: (options) => {
       if (args.isDead()) {
         return null
+      }
+      if (options?.rawFallback === true) {
+        return getFallbackProcess()
       }
       try {
         const fallbackProcess = getFallbackProcess()

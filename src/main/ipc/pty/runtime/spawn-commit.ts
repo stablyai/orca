@@ -1,8 +1,7 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
-import { getRelayPtyId } from '../provider/registry'
+import { commitRuntimePtySize } from './spawn-commit-pty-size'
 import {
   shouldSkipCodexHomeEnvForWindowsShell,
   recordCodexPaneAccountForSpawn,
@@ -25,6 +24,7 @@ import {
   requestKindSchema
 } from '../../../../shared/telemetry-events'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
+import { claimSshPaneLease } from '../pane/ssh-pane-lease-claim'
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
@@ -58,6 +58,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     })
   }
   if (ctx.result.agentSessionEnsure?.disposition === 'adopted') {
+    // Why: an adoption is an attach to a live owner by definition, but the SSH relay's adopted
+    // reply omits isReattach; derive it once so the size commit and the reservation agree.
+    const adoptedResult = { ...ctx.result, isReattach: true }
     const owner = ctx.result.agentSessionEnsure.owner
     ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
@@ -71,6 +74,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
       {
         tabId: owner.surface.tabId,
         leafId: owner.surface.leafId,
+        terminalHandle: owner.surface.terminalHandle,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
       }
@@ -86,13 +90,17 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ...(ctx.env ? { launchEnv: ctx.env } : {})
       })
     }
+    // Why: this branch returns before the normal commit site; without this the cache keeps
+    // whatever the caller requested.
+    commitRuntimePtySize(ctx, adoptedResult)
     // Why: the adopted branch returns before the normal settle site, so the
     // reservation must be resolved here or every later spawn for this pane
     // awaits a promise that never settles.
-    resolvePaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, {
-      ...ctx.result,
-      isReattach: true
-    })
+    resolvePaneSpawnReservation(
+      ctx.paneSpawnReservationKey,
+      ctx.paneSpawnReservation,
+      adoptedResult
+    )
     return {
       id: ctx.result.id,
       ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
@@ -113,28 +121,19 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   ) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
-  const relayResultId = getRelayPtyId(args.connectionId, ctx.result.id)
-  const persistSshLease = (): void => {
-    if (!ctx.deps.store || !args.connectionId) {
-      return
-    }
-    // Why: SSH leases keep relay ids for remote reconciliation, while session bindings keep app-facing ids for hydration.
-    ctx.deps.store.upsertSshRemotePtyLease({
-      targetId: args.connectionId,
-      ptyId: relayResultId,
-      ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
-      ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
-      ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
-        ? { leafId: args.leafId }
-        : {}),
-      state: 'attached',
-      lastAttachedAt: Date.now()
+  const persistSshLease = (): void =>
+    claimSshPaneLease({
+      store: ctx.deps.store,
+      connectionId: args.connectionId,
+      ptyId: ctx.result.id,
+      worktreeId: args.worktreeId,
+      tabId: args.tabId,
+      leafId: args.leafId
     })
-  }
   if (!ctx.hostSessionBinding) {
     persistSshLease()
   }
-  ptySizes.set(ctx.result.id, { cols: args.cols, rows: args.rows })
+  commitRuntimePtySize(ctx, ctx.result)
   if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
     ptySizes.delete(ctx.effectiveSessionAppId)
   }
@@ -207,6 +206,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ? {
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
+            ...(args.preAllocatedHandle ? { terminalHandle: args.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }

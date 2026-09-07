@@ -104,6 +104,23 @@ describe('RuntimeHostStatusRow', () => {
     expect(markup).toContain('Disconnect')
   })
 
+  it('renders transport-up runtime-unavailable hosts without implying process death', () => {
+    const { container } = render(
+      <RuntimeHostStatusRow
+        label="OpenClaw"
+        state="runtime-unavailable"
+        detail="status.get refused"
+        onDisconnect={async () => {}}
+      />
+    )
+
+    expect(container.textContent).toContain('Orca unavailable')
+    expect(container.textContent).toContain('SSH transport is connected')
+    expect(container.textContent).toContain('may still be running')
+    expect(container.textContent).toContain('Disconnect')
+    expect(container.textContent).not.toContain('exited')
+  })
+
   it('keeps healthy rows free of a submenu trigger', () => {
     const { container } = render(<RuntimeHostStatusRow label="Dev Box" state="connected" />)
 

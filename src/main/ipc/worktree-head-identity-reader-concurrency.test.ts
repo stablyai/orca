@@ -40,7 +40,7 @@ describe('readGitCommonHeadIdentities concurrency', () => {
   })
 
   it('overlaps linked-worktree metadata reads while preserving listing order', async () => {
-    const identities = await readGitCommonHeadIdentities('/repo/common')
+    const { identities } = await readGitCommonHeadIdentities('/repo/common')
 
     expect(identities).toHaveLength(WORKTREE_COUNT)
     expect(identities.map((identity) => identity.worktreePath)).toEqual(

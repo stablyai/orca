@@ -15,7 +15,69 @@ import type { AppState } from '../../../types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-mutation'
-export async function persistWorktreeMeta(
+
+type PendingDisplayNameWrite = {
+  worktreeId: string
+  executionHostId?: ExecutionHostId
+}
+
+const pendingDisplayNameWrites = new Set<PendingDisplayNameWrite>()
+
+function pendingDisplayNameWriteMatches(
+  write: PendingDisplayNameWrite,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): boolean {
+  return (
+    write.worktreeId === worktreeId &&
+    (write.executionHostId === undefined ||
+      executionHostId === undefined ||
+      write.executionHostId === executionHostId)
+  )
+}
+
+export function isDisplayNamePersistencePending(
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): boolean {
+  for (const write of pendingDisplayNameWrites) {
+    if (pendingDisplayNameWriteMatches(write, worktreeId, executionHostId)) {
+      return true
+    }
+  }
+  return false
+}
+
+export function persistWorktreeMeta(
+  settings: AppState['settings'],
+  worktreeId: string,
+  updates: Partial<WorktreeMeta>,
+  executionHostId?: ExecutionHostId,
+  identityKey?: string
+): Promise<void> {
+  const operation = persistWorktreeMetaUntracked(
+    settings,
+    worktreeId,
+    updates,
+    executionHostId,
+    identityKey
+  )
+  if (!('displayName' in updates)) {
+    return operation
+  }
+  const write: PendingDisplayNameWrite = {
+    worktreeId,
+    executionHostId
+  }
+  pendingDisplayNameWrites.add(write)
+  void operation.then(
+    () => pendingDisplayNameWrites.delete(write),
+    () => pendingDisplayNameWrites.delete(write)
+  )
+  return operation
+}
+
+async function persistWorktreeMetaUntracked(
   settings: AppState['settings'],
   worktreeId: string,
   updates: Partial<WorktreeMeta>,

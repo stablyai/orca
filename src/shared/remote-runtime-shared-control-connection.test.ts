@@ -22,7 +22,10 @@ afterEach(closeSharedControlTestServers)
 describe('RemoteRuntimeSharedControlConnection', () => {
   it('routes multiple one-shot RPCs over one authenticated WebSocket', async () => {
     const server = await createServer()
-    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const states: string[] = []
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing, {
+      onDiagnosticsChanged: ({ state }) => states.push(state)
+    })
 
     const first = await connection.request('worktree.ps', undefined, 1000)
     const second = await connection.request('session.tabs.listAll', null, 1000)
@@ -39,8 +42,9 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       'worktree.ps',
       'session.tabs.listAll'
     ])
-
-    connection.close()
+    expect((connection.close(), states)).toEqual(
+      expect.arrayContaining(['awaiting_ready', 'ready', 'closed'])
+    )
   })
 
   it('preserves orchestration authority fields on shared-control requests', async () => {
@@ -679,7 +683,8 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       pendingRequestCount: 0,
       lastClose: { code: 4001, reason: 'test close' }
     })
-
+    connection.pauseStandingRetry()
+    expect(connection.getDiagnostics()).toMatchObject({ state: 'closed' })
     connection.close()
   })
 })

@@ -67,7 +67,7 @@ function sshCommands() {
     path: '/remote/repo',
     resolveRuntimeFileTarget: vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/remote/repo' },
-      connectionId: 'ssh-1'
+      executionHostId: 'ssh:ssh-1'
     }))
   }).commands
 }

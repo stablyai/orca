@@ -152,7 +152,11 @@ describe('runtime status recheck', () => {
     const getStatus = vi.fn().mockResolvedValue({
       id: 'status.get',
       ok: false,
-      error: { code: 'runtime_unavailable', message: 'offline' },
+      error: {
+        code: 'runtime_unavailable',
+        message: 'offline',
+        data: { remoteControl: status('reconnecting').remoteControl }
+      },
       _meta: { runtimeId: 'rt' }
     })
     const store = createStore(getStatus)
@@ -164,6 +168,11 @@ describe('runtime status recheck', () => {
     await vi.advanceTimersByTimeAsync(3_000)
 
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBeNull()
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.remoteControl).toMatchObject(
+      {
+        state: 'reconnecting'
+      }
+    )
     expect(toast.warning).toHaveBeenCalledOnce()
   })
 })

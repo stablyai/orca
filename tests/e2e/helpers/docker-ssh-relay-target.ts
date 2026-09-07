@@ -211,6 +211,16 @@ export function writeDockerSshRelayTargetFile(
   )
 }
 
+/** Why not `writeDockerSshRelayTargetFile`: that one passes the contents as a shell argument, so a
+ * payload the size of a real repository's path list exceeds ARG_MAX before it reaches the shell. */
+export function copyFileIntoDockerSshRelayTarget(
+  target: DockerSshRelayTarget,
+  localPath: string,
+  remotePath: string
+): void {
+  run('docker', ['cp', localPath, `${target.containerName}:${remotePath}`], { timeoutMs: 120_000 })
+}
+
 export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {
   const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
   if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {

@@ -84,7 +84,8 @@ export async function admitAndRunAgentSessionMutation<TValue>(
       operationId: envelope.clientOperationId,
       outcome: admission.row.outcome,
       reconstruct: () => plan.replay(context, admission.row.outcome),
-      rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context)
+      rerunWhenReplayMissing: plan.rerunWhenReplayMissing?.(context),
+      recoverUnknownFromDurableState: plan.recoverUnknownFromDurableState
     })
     if (replay.decision === 'refuse') {
       return refuseAgentSessionMutation(replay.refusal)

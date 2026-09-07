@@ -20,7 +20,7 @@ import { createRequire } from 'node:module'
 import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
-const targetConfig = readFileSync('config/electron-vite-target.config.ts', 'utf8')
+const targetConfig = readFileSync('config/electron-vite-target.config.cts', 'utf8')
 const devRunner = readFileSync('config/scripts/run-electron-vite-dev.mjs', 'utf8')
 
 type BootstrapProcessMock = EventEmitter & {

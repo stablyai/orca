@@ -30,7 +30,7 @@ const DECORATIVE_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧
 type RuntimeInternals = {
   mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
   ptysById: Map<string, { launchAgent: 'grok-build' | 'pi' | null }>
-  ptyDelayedForegroundSnapshotTitleObservations: Map<string, number>
+  ptyForegroundAgent: { hasDelayedSnapshot: (ptyId: string) => boolean }
   resetTrackedTerminalStateForProviderGeneration: (ptyId: string) => void
 }
 
@@ -680,10 +680,10 @@ describe('real PTY decorative session-tabs fanout', () => {
 
     runtime.onPtyData(ptyId, '\x1b]0;⠋ Pi\x07', Date.now())
     await vi.advanceTimersByTimeAsync(0)
-    expect(internals.ptyDelayedForegroundSnapshotTitleObservations.has(ptyId)).toBe(true)
+    expect(internals.ptyForegroundAgent.hasDelayedSnapshot(ptyId)).toBe(true)
 
     internals.resetTrackedTerminalStateForProviderGeneration(ptyId)
-    expect(internals.ptyDelayedForegroundSnapshotTitleObservations.has(ptyId)).toBe(false)
+    expect(internals.ptyForegroundAgent.hasDelayedSnapshot(ptyId)).toBe(false)
     resolveForegroundProcess(null)
     await vi.advanceTimersByTimeAsync(0)
   })

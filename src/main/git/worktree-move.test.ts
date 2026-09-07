@@ -5,12 +5,14 @@ const {
   gitExecFileAsyncMock,
   gitExecFileSyncMock,
   translateWslOutputPathsMock,
-  moveWorktreeDirectoryToTrashMock
+  moveWorktreeDirectoryToTrashMock,
+  detectSparseCheckoutMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
-  moveWorktreeDirectoryToTrashMock: vi.fn()
+  moveWorktreeDirectoryToTrashMock: vi.fn(),
+  detectSparseCheckoutMock: vi.fn()
 }))
 
 vi.mock('./runner', () => ({
@@ -26,8 +28,17 @@ vi.mock('../worktree-trash', () => ({
   scheduleWorktreeTrashDeletion: vi.fn()
 }))
 
+vi.mock('./worktree-sparse-state', () => ({
+  detectSparseCheckout: detectSparseCheckoutMock,
+  resolveGitCommonDir: vi.fn()
+}))
+
 import { moveWorktree } from './worktree'
 import { registerWorktreeSuiteHooks } from './worktree-test-harness'
+import {
+  __getSparseCheckoutStateCacheSizeForTests,
+  detectSparseCheckoutCached
+} from './worktree-sparse-checkout-cache'
 
 registerWorktreeSuiteHooks()
 
@@ -50,5 +61,28 @@ describe('moveWorktree', () => {
     await expect(moveWorktree('/repo', '/ws/cunner', '/ws/taken')).rejects.toThrow(
       'destination exists'
     )
+  })
+
+  it('drops cached sparse-checkout state for both the old and new path', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+    await detectSparseCheckoutCached('/repo', '/ws/cunner')
+    await detectSparseCheckoutCached('/repo', '/ws/worktree-creation-spinner')
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(2)
+
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await moveWorktree('/repo', '/ws/cunner', '/ws/worktree-creation-spinner')
+
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(0)
+  })
+
+  it('drops cached sparse-checkout state for both paths even when the move fails', async () => {
+    detectSparseCheckoutMock.mockResolvedValue(true)
+    await detectSparseCheckoutCached('/repo', '/ws/cunner')
+    await detectSparseCheckoutCached('/repo', '/ws/taken')
+
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: destination exists'))
+    await expect(moveWorktree('/repo', '/ws/cunner', '/ws/taken')).rejects.toThrow()
+
+    expect(__getSparseCheckoutStateCacheSizeForTests()).toBe(0)
   })
 })
