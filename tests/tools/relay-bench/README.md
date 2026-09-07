@@ -13,21 +13,46 @@ session so it runs outside the React Native bundle.
 `phone-e2ee-desktop-parity.test.mjs` pins that port to the desktop responder
 in `src/main/runtime/rpc/mobile-e2ee-v2-desktop-session.ts`. It runs in the normal unit suite, so
 a change to the transcript encoding, key schedule, or frame layout fails there instead of leaving
-a bench that quietly measures a handshake nobody ships.
+a bench that quietly measures a handshake nobody ships. The four other `*.test.mjs` files in this
+directory cover the invocation guards, the state file, the region verdicts, and pairing-link
+decoding, and none of them opens a socket.
 
 ## Security rules
 
-- The pairing link contains a live invite token and a device token. Treat it as a credential.
-- `state.json` holds the resume token and device token for a real paired desktop. It is written
-  with mode `0600`. Never commit it, paste it, or attach it to an issue. The `.gitignore` in this
-  directory blocks `*.json` and `state*`, but do not rely on that alone.
+- The pairing link contains a live invite token and a device token. Treat it as a credential. `pair`
+  reads it from stdin, or from a file named by `--pairing-url-file`, so it never reaches your shell
+  history or the process argument list. Passing it as an argument is refused.
+- `state.json` holds the resume token and device token for a real paired desktop. Never commit it,
+  paste it, or attach it to an issue. The `.gitignore` in this directory blocks `*.json` and
+  `state*`, but do not rely on that alone.
 - Revoke the bench device when you are done. See "Cleaning up" below.
 - Do not point the bench at a desktop you do not own.
 
 No script here has a production default. Every one of them refuses to open a socket unless
 `ORCA_RELAY_BENCH_LIVE=1` is set, and the two that talk to the director require its origin from
-`--director=<origin>` or `ORCA_RELAY_BENCH_DIRECTOR`. Without those, they print one line of usage
-and exit 2. That keeps an accidental or automated invocation inert instead of live traffic.
+`--director=<origin>` or `ORCA_RELAY_BENCH_DIRECTOR`. Without those, they print usage and exit 2.
+That keeps an accidental or automated invocation inert instead of live traffic.
+
+The guards are in `relay-bench-invocation.mjs` and `relay-bench-state-file.mjs`, and
+`relay-bench-invocation.test.mjs` / `relay-bench-state-file.test.mjs` pin them:
+
+| Guard                     | What it stops                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------ |
+| https-only origins        | An `http:` director or cell, where an on-path observer reads bench credentials |
+| Public-destination check  | A director aiming the harness at your loopback, link-local, or private network |
+| Bounded integer arguments | `--runs=Infinity` and friends, which loop forever and generate relay traffic   |
+| `0600` state file         | An existing state file staying group- or world-readable, or being a symlink    |
+
+A director you name also _supplies_ URLs: the region catalog's probe origins and the cell URL from
+`/v1/resolve`. Those go through the same public-https check as an origin you typed, so a compromised
+or spoofed director cannot turn the harness into a probe of your own network. Region entries whose
+probe origins are all refused report `REFUSED (no allowed probe origin)` rather than being sampled.
+Hostnames are also resolved and checked, which narrows but does not close the DNS rebinding window,
+because `fetch()` resolves again.
+
+State-file handling creates the parent directory before writing, refuses a symlink, and forces
+`0600` on an existing file. The first of those matters most: `pair` writes only after the desktop
+has already provisioned the resume credential, so a failed write loses it.
 
 ## Requirements
 
@@ -73,8 +98,14 @@ The `orca://pair?code=...` value in that output is the pairing link.
 export ORCA_RELAY_BENCH_LIVE=1
 BENCH=tests/tools/relay-bench/relay-phone-connect-bench.mjs
 
-# One-time: dial the invite, provision a resume credential, save the bundle.
-node $BENCH pair '<orca://pair?code=...>' /tmp/relay-bench/state.json
+# One-time: dial the invite, provision a resume credential, save the bundle. The pairing link
+# comes in on stdin so it stays out of your shell history and out of `ps`.
+pbpaste | node $BENCH pair /tmp/relay-bench/state.json
+
+# Or from a file you protect yourself, which `pair` requires to be mode 0600:
+umask 077 && printf '%s' '<orca://pair?code=...>' > /tmp/relay-bench/pair.txt
+node $BENCH pair /tmp/relay-bench/state.json --pairing-url-file=/tmp/relay-bench/pair.txt
+rm /tmp/relay-bench/pair.txt
 
 # Steady-state foreground reconnect, 10 times, 2 s apart, re-resolving the cell each time.
 node $BENCH run /tmp/relay-bench/state.json 10 --resolve --gap=2000
@@ -85,6 +116,10 @@ node $BENCH foreground /tmp/relay-bench/state.json --hold=45000
 # Same, but crossing the relay's ~105 s client silence watchdog.
 node $BENCH foreground /tmp/relay-bench/state.json --hold=120000
 ```
+
+On Linux or Windows, replace `pbpaste` with whatever prints the link to stdout, or use
+`--pairing-url-file`. Every count and duration is a whole number: `runs` and `--rounds` are 1-1000,
+`--gap` and `--hold` are 0-3600000 ms, and anything else exits 2 rather than running unbounded.
 
 The bench reads the director and cell for a resume dial out of `state.json`, which the pairing
 offer supplied, so it takes no `--director`.
@@ -112,10 +147,12 @@ Two supporting scripts:
 - `relay-hop-latency.mjs --cell=<origin> --director=<origin> [--host=<relayHostId>] [--runs=N]`
   measures the infrastructure floor with a throwaway credential: director `/v1/resolve` plus cell
   WebSocket open to `relay-hello`. It needs no pairing, because a cell answers a bogus credential
-  without reaching a desktop. `--host` defaults to an id no desktop owns.
+  without reaching a desktop. `--host` defaults to an id no desktop owns. `openMs` is `null` when
+  the socket never opened, and a director that stalls is reported as a resolve timeout rather than
+  hanging the run loop.
 - `region-probe-replay.mjs --director=<origin> [--rounds=N]` replays the desktop's region
   selection with the same probe, sample count, and spread rule, and prints why each region passed
-  or failed.
+  or failed. A region whose every probe fails reports `UNREACHABLE`, not `ok`.
 
 Both take the director from `--director` or `ORCA_RELAY_BENCH_DIRECTOR`, and both need
 `ORCA_RELAY_BENCH_LIVE=1`:

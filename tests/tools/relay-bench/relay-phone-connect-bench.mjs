@@ -2,9 +2,11 @@
 // desktop through the production relay and prints per-phase timings, so a connect-speed change
 // can be measured from the phone's vantage without building and instrumenting the mobile app.
 //
-//   pair:       node relay-phone-connect-bench.mjs pair '<orca://pair?code=...>' [state.json]
-//               Invite dial over the relay, E2EE, pairing.provisionRelay + pairing.getEndpoints.
-//               Persists the resume credential bundle to state.json (mode 0600, never commit it).
+//   pair:       node relay-phone-connect-bench.mjs pair [state.json] [--pairing-url-file=<path>]
+//               Reads the orca://pair link from stdin, or from a 0600 file, so the live invite
+//               token never lands in shell history or the process argument list. Dials the invite,
+//               runs E2EE, pairing.provisionRelay + pairing.getEndpoints, and persists the resume
+//               credential bundle to state.json (mode 0600, never commit it).
 //   run:        node relay-phone-connect-bench.mjs run [state.json] [runs] [--resolve] [--gap=ms]
 //               Steady-state resume dial N times (what a foreground reconnect does today).
 //   foreground: node relay-phone-connect-bench.mjs foreground [state.json] [--hold=ms]
@@ -13,12 +15,19 @@
 //               retained socket still answers and what a full resume redial costs.
 //
 // See README.md for the dev-app recipe. Run from the repo root so `ws` / `tweetnacl` resolve.
-import { readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { b64url, PhoneE2EE, sha256, utf8 } from './phone-e2ee-v2-session.mjs'
-import { LIVE_ENV_VAR, parseArgs, requireLiveRun } from './relay-bench-invocation.mjs'
+import {
+  classifyPublicHttpsOrigin,
+  LIVE_ENV_VAR,
+  parseArgs,
+  refuse,
+  requireBoundedInteger,
+  requireLiveRun
+} from './relay-bench-invocation.mjs'
+import { readSecretFile, writeSecretFile } from './relay-bench-state-file.mjs'
 
 const require = createRequire(import.meta.url)
 const WebSocket = require('ws')
@@ -27,8 +36,13 @@ const nacl = require('tweetnacl')
 const CAPABILITY_METHOD = 'runtime.clientCapabilities.update'
 const DIAL_TIMEOUT_MS = 30_000
 const RPC_TIMEOUT_MS = 15_000
+// Without this a director that accepts the connection and never answers blocks the benchmark
+// before any dial or RPC deadline has started.
+const RESOLVE_TIMEOUT_MS = 10_000
 const DEFAULT_HOLD_MS = 45_000
 const DEFAULT_STATE_PATH = '/tmp/relay-bench/state.json'
+const MAX_RUNS = 1000
+const MAX_DELAY_MS = 3_600_000
 
 // ---------- one relay dial, phone-shaped ----------
 // Resolves once e2ee_authenticated lands, with timings and an rpc() bound to the live socket.
@@ -53,11 +67,21 @@ export function dialRelay({
     const pending = new Map()
     let nextId = 0
     let settled = false
+    // Cleared on both outcomes: an uncleared 30 s timer keeps Node alive long after the last dial.
+    const dialTimer = setTimeout(() => fail(new Error('dial timeout 30s')), DIAL_TIMEOUT_MS)
+    const clearPending = () => {
+      for (const waiter of pending.values()) {
+        clearTimeout(waiter.timer)
+      }
+      pending.clear()
+    }
     const fail = (err) => {
       if (settled) {
         return
       }
       settled = true
+      clearTimeout(dialTimer)
+      clearPending()
       try {
         ws.terminate()
       } catch {
@@ -65,7 +89,7 @@ export function dialRelay({
       }
       reject(Object.assign(err, { timings, stage }))
     }
-    handle.rpc = (method, params, timeoutMs = DIAL_TIMEOUT_MS) =>
+    handle.rpc = (method, params, timeoutMs = RPC_TIMEOUT_MS) =>
       new Promise((res, rej) => {
         // Without this the send would only surface as a 15 s rpc timeout, which would be
         // indistinguishable from a slow desktop in the foreground-hold measurement.
@@ -81,7 +105,11 @@ export function dialRelay({
         pending.set(id, { res, timer })
         ws.send(e2ee.sealText(JSON.stringify({ id, method, params })))
       })
-    handle.close = () => ws.terminate()
+    handle.close = () => {
+      clearTimeout(dialTimer)
+      clearPending()
+      ws.terminate()
+    }
     handle.socket = ws
     ws.on('open', () => {
       mark('wsOpen')
@@ -135,6 +163,7 @@ export function dialRelay({
           mark('e2eeAuthenticated')
           stage = 'ready'
           settled = true
+          clearTimeout(dialTimer)
           resolve(handle)
           return
         }
@@ -159,6 +188,7 @@ export function dialRelay({
         fail(new Error(`closed ${code} ${reason.toString()}`))
         return
       }
+      clearTimeout(dialTimer)
       for (const waiter of pending.values()) {
         clearTimeout(waiter.timer)
         waiter.res({ ok: false, error: { code: 'closed' } })
@@ -166,24 +196,56 @@ export function dialRelay({
       pending.clear()
     })
     ws.on('error', (err) => fail(err))
-    setTimeout(() => fail(new Error('dial timeout 30s')), DIAL_TIMEOUT_MS)
   })
 }
 
-function decodeOffer(pairingUrl) {
-  const code = pairingUrl.split('code=')[1]
-  return JSON.parse(Buffer.from(code, 'base64url').toString('utf8'))
+/** Parses the pairing link. Every failure here is operator input, so say which part was wrong. */
+export function decodeOffer(pairingUrl) {
+  if (typeof pairingUrl !== 'string' || !pairingUrl.startsWith('orca://pair')) {
+    throw new Error('pairing link must look like orca://pair?code=<base64url>')
+  }
+  const marker = pairingUrl.indexOf('code=')
+  if (marker === -1) {
+    throw new Error('pairing link has no code= parameter')
+  }
+  const code = pairingUrl
+    .slice(marker + 'code='.length)
+    .split('&')[0]
+    .trim()
+  if (!/^[A-Za-z0-9_-]+$/.test(code)) {
+    throw new Error('pairing link code is not base64url')
+  }
+  let offer
+  try {
+    offer = JSON.parse(Buffer.from(code, 'base64url').toString('utf8'))
+  } catch {
+    throw new Error('pairing link code did not decode to JSON')
+  }
+  if (!offer || typeof offer !== 'object' || Array.isArray(offer)) {
+    throw new Error('pairing link code did not decode to an offer object')
+  }
+  return offer
 }
 
 async function resolveCell(relay, resumeToken) {
   const started = performance.now()
-  const res = await fetch(`${relay.directorUrl}/v1/resolve`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ v: 1, relayHostId: relay.relayHostId, resumeToken })
-  })
-  const body = await res.json().catch(() => null)
-  return { ms: Math.round(performance.now() - started), status: res.status, body }
+  try {
+    const res = await fetch(`${relay.directorUrl}/v1/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ v: 1, relayHostId: relay.relayHostId, resumeToken }),
+      signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS)
+    })
+    const body = await res.json().catch(() => null)
+    return { ms: Math.round(performance.now() - started), status: res.status, body }
+  } catch (err) {
+    const timedOut = err.name === 'TimeoutError' || err.cause?.name === 'TimeoutError'
+    return {
+      ms: Math.round(performance.now() - started),
+      status: null,
+      error: timedOut ? `resolve timeout after ${RESOLVE_TIMEOUT_MS} ms` : err.message
+    }
+  }
 }
 
 // ---------- shared phases ----------
@@ -250,17 +312,40 @@ async function resumeDial(state) {
 async function refreshCell(state, row) {
   const resolved = await resolveCell(state.relay, state.resumeToken)
   row.resolve = resolved
-  if (resolved.status === 200) {
-    state.relay = {
-      ...state.relay,
-      cellUrl: resolved.body.cellUrl,
-      assignmentEpoch: resolved.body.assignmentEpoch
-    }
+  if (resolved.status !== 200) {
+    return
+  }
+  // The director names the next destination, so vet it the same way the operator's own --cell
+  // argument is vetted rather than dialing whatever comes back.
+  const verdict = classifyPublicHttpsOrigin(resolved.body?.cellUrl)
+  if (!verdict.ok) {
+    row.resolve = { ...resolved, error: `director named an unusable cell: ${verdict.reason}` }
+    return
+  }
+  state.relay = {
+    ...state.relay,
+    cellUrl: resolved.body.cellUrl,
+    assignmentEpoch: resolved.body.assignmentEpoch
   }
 }
 
 function loadState(statePath) {
-  return JSON.parse(readFileSync(statePath, 'utf8'))
+  const state = JSON.parse(readSecretFile(statePath))
+  for (const field of ['relayHostId', 'cellUrl', 'directorUrl']) {
+    if (!state.relay?.[field]) {
+      throw new Error(`${statePath} has no relay.${field}; re-run pair`)
+    }
+  }
+  for (const [label, value] of [
+    ['relay.cellUrl', state.relay.cellUrl],
+    ['relay.directorUrl', state.relay.directorUrl]
+  ]) {
+    const verdict = classifyPublicHttpsOrigin(value)
+    if (!verdict.ok) {
+      throw new Error(`${statePath} ${label} ${verdict.reason}`)
+    }
+  }
+  return state
 }
 
 // ---------- commands ----------
@@ -270,6 +355,10 @@ async function pair(pairingUrl, statePath) {
     throw new Error('offer has no relay block (desktop relay offline?)')
   }
   const relay = offer.relay
+  const verdict = classifyPublicHttpsOrigin(relay.cellUrl)
+  if (!verdict.ok) {
+    throw new Error(`offer names an unusable cell: ${verdict.reason}`)
+  }
   const resumeToken = b64url(nacl.randomBytes(32))
   const resumeTokenHash = b64url(sha256(utf8(resumeToken)))
   const installReqId = `install-${b64url(nacl.randomBytes(12))}`
@@ -308,7 +397,9 @@ async function pair(pairingUrl, statePath) {
     resumeCredentialVersion: provision.result.currentVersion,
     resumeExpiresAt: provision.result.resumeExpiresAt
   }
-  writeFileSync(statePath, JSON.stringify(state, null, 2), { mode: 0o600 })
+  // The desktop has already burned the provision request, so a failed write loses the credential.
+  // writeSecretFile creates the parent directory and forces 0600 even on an existing file.
+  writeSecretFile(statePath, JSON.stringify(state, null, 2))
   console.log(`saved ${statePath} (secret: never commit or share this file)`)
 }
 
@@ -417,10 +508,57 @@ async function foreground(statePath, opts) {
 // ---------- cli ----------
 const USAGE = [
   `every command dials a real desktop over the production relay, so prefix it with ${LIVE_ENV_VAR}=1:`,
-  "  pair '<orca://pair?code=...>' [state.json]",
+  '  pair [state.json] [--pairing-url-file=<path>]',
+  '      reads the orca://pair link from stdin unless --pairing-url-file names a 0600 file, so',
+  '      the live invite token never enters shell history or the process argument list',
   '  run [state.json] [runs] [--resolve] [--gap=ms]',
   '  foreground [state.json] [--hold=ms] [--resolve] [--force-redial]'
 ].join('\n')
+
+function requireStatePath(value) {
+  if (value === undefined) {
+    return DEFAULT_STATE_PATH
+  }
+  if (value.startsWith('orca://')) {
+    refuse(
+      `the pairing link must not appear in the command line: pipe it on stdin or pass --pairing-url-file=<path>.\n${USAGE}`
+    )
+  }
+  if (!value.trim()) {
+    refuse(`state path must not be empty.\n${USAGE}`)
+  }
+  return value
+}
+
+async function readStdinText() {
+  if (process.stdin.isTTY) {
+    return ''
+  }
+  const chunks = []
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+async function readPairingUrl(options) {
+  const file = options.get('--pairing-url-file')
+  const raw = (file ? readSecretFile(file) : await readStdinText()).trim()
+  if (!raw) {
+    refuse(
+      file
+        ? `${file} is empty; it must hold the orca://pair link.\n${USAGE}`
+        : `no pairing link on stdin. pipe it in, or pass --pairing-url-file=<path>.\n${USAGE}`
+    )
+  }
+  return raw
+}
+
+function refuseExtraPositionals(positional, allowed) {
+  if (positional.length > allowed) {
+    refuse(`unexpected argument ${JSON.stringify(positional[allowed])}.\n${USAGE}`)
+  }
+}
 
 async function main(argv) {
   const [cmd, ...rest] = argv
@@ -429,21 +567,37 @@ async function main(argv) {
     requireLiveRun(`${LIVE_ENV_VAR}=1 node relay-phone-connect-bench.mjs ${cmd} ...`)
   }
   if (cmd === 'pair') {
-    await pair(positional[0], positional[1] ?? DEFAULT_STATE_PATH)
+    refuseExtraPositionals(positional, 1)
+    const statePath = requireStatePath(positional[0])
+    await pair(await readPairingUrl(options), statePath)
     return
   }
   if (cmd === 'run') {
-    await run(positional[0] ?? DEFAULT_STATE_PATH, Number(positional[1] ?? 5), {
-      resolve: flags.has('--resolve'),
-      gapMs: Number(options.get('--gap') ?? 0)
-    })
+    refuseExtraPositionals(positional, 2)
+    await run(
+      requireStatePath(positional[0]),
+      requireBoundedInteger(positional[1], 'runs', USAGE, { min: 1, max: MAX_RUNS, fallback: 5 }),
+      {
+        resolve: flags.has('--resolve'),
+        gapMs: requireBoundedInteger(options.get('--gap'), '--gap', USAGE, {
+          min: 0,
+          max: MAX_DELAY_MS,
+          fallback: 0
+        })
+      }
+    )
     return
   }
   if (cmd === 'foreground') {
-    await foreground(positional[0] ?? DEFAULT_STATE_PATH, {
+    refuseExtraPositionals(positional, 1)
+    await foreground(requireStatePath(positional[0]), {
       resolve: flags.has('--resolve'),
       forceRedial: flags.has('--force-redial'),
-      holdMs: Number(options.get('--hold') ?? DEFAULT_HOLD_MS)
+      holdMs: requireBoundedInteger(options.get('--hold'), '--hold', USAGE, {
+        min: 0,
+        max: MAX_DELAY_MS,
+        fallback: DEFAULT_HOLD_MS
+      })
     })
     return
   }
@@ -452,5 +606,10 @@ async function main(argv) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  await main(process.argv.slice(2))
+  // A bad state file or a refused destination is operator input, not a crash; say what is wrong
+  // without spilling the credential-bearing stack.
+  await main(process.argv.slice(2)).catch((err) => {
+    console.error(err.message)
+    process.exitCode = 1
+  })
 }
