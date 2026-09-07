@@ -38,10 +38,8 @@ export function paneLayoutActions(paneId: string) {
       run: () => recoverWorkspaceLayout(true),
       disabled: !state.closedWorkspaceViews.length && !window.orcaWorkspaceViews
     },
-    { label: 'Open Beside', run: () => state.openAnotherWorkspaceView(paneId) },
     { label: 'Split Right', run: () => state.splitWindowPane(paneId, 'horizontal') },
     { label: 'Split Down', run: () => state.splitWindowPane(paneId, 'vertical') },
-    { label: 'Open Another View', run: () => state.openAnotherWorkspaceView(paneId) },
     {
       label: state.windowPaneLayout?.expandedPaneId ? 'Restore Layout' : 'Expand Pane',
       run: () => state.expandWindowPane(paneId)
@@ -64,12 +62,11 @@ export async function transferPaneViews(
     return
   }
   const pane = useAppStore.getState().windowPaneLayout?.panes[paneId]
-  const viewIds =
-    action.startsWith('Move') || action === 'Open Another View in Window'
-      ? pane?.selectedViewId
-        ? [pane.selectedViewId]
-        : []
-      : undefined
+  const viewIds = action.startsWith('Move')
+    ? pane?.selectedViewId
+      ? [pane.selectedViewId]
+      : []
+    : undefined
   if (viewIds?.length === 0) {
     return
   }
@@ -77,8 +74,7 @@ export async function transferPaneViews(
   const ok = await bridge.transfer({
     destinationId: destination,
     mode: action.endsWith('Panes') ? 'panes' : 'tabs',
-    ...(viewIds ? { viewIds } : {}),
-    ...(action === 'Open Another View in Window' ? { duplicate: true } : {})
+    ...(viewIds ? { viewIds } : {})
   })
   if (!ok) {
     toast.error('The transfer could not be confirmed. Your sessions are still running.')

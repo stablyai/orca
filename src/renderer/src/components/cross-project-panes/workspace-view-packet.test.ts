@@ -6,7 +6,7 @@ import { registerEditorView } from '../editor/editor-view-transfer'
 import { getDiskBaselineSignature } from '../editor/diff-content-signature'
 
 describe('workspace view packets', () => {
-  it('imports into the previewed pane edge instead of the globally active pane', () => {
+  it('does not duplicate a session that is already placed in the destination window', () => {
     const store = createTestStore()
     store.setState({ activeWorktreeId: 'alpha' })
     store.getState().createUnifiedTab('alpha', 'terminal', { executionHostId: 'local' })
@@ -23,11 +23,8 @@ describe('workspace view packets', () => {
       { local: 'owner' },
       { paneId: initial.activePaneId, zone: 'down' }
     )
-    expect(Object.keys(patch.windowPaneLayout!.panes)).toHaveLength(3)
-    expect(patch.windowPaneLayout!.root).toMatchObject({
-      type: 'split',
-      first: { type: 'split', direction: 'vertical' }
-    })
+    expect(Object.keys(patch.windowPaneLayout!.panes)).toHaveLength(2)
+    expect(patch.windowPaneLayout!.root).toMatchObject({ type: 'split' })
   })
   it('resolves primary terminal identity in a secondary window without creating execution', () => {
     const source = createTestStore()

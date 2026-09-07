@@ -213,7 +213,7 @@ it.each([true, false])(
 )
 
 it.each<ExecutionHostId>(['local', 'ssh:build', 'runtime:mirror'])(
-  'keeps a true folder workspace and project group on %s through duplicate, close and reopen',
+  'keeps a true folder workspace and project group on %s through split, close and reopen',
   (host) => {
     const state = useAppStore.getState()
     const worktreeId = folderWorkspaceKey('folder')
@@ -252,11 +252,10 @@ it.each<ExecutionHostId>(['local', 'ssh:build', 'runtime:mirror'])(
         : /Folder project.*Folder workspace.*Folder shell.*SSH.*Build SSH/
     expect(screen.getByLabelText(label, { selector: '[data-pane-context]' })).toBeTruthy()
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Window actions' }), { button: 0 })
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Open Another View' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Split Right' }))
     const panes = screen.getAllByRole('region', { name: 'Workspace pane' })
     expect(panes).toHaveLength(2)
-    expect(screen.getByText('Watching')).toBeTruthy()
-    expect(within(panes[1]).getByText('Active pane')).toBeTruthy()
+    expect(within(panes[1]).getByText('Active')).toBeTruthy()
     expect(screen.queryByText('Connection unverifiable')).toBeNull()
     if (connectionId) {
       act(() =>

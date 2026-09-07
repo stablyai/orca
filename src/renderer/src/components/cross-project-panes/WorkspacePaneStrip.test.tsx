@@ -19,7 +19,7 @@ vi.mock('../tab-bar/TabBar', () => ({
   )
 }))
 afterEach(cleanup)
-it('selects repeated session tabs independently in a combined pane', () => {
+it('keeps distinct sessions selectable without creating repeated placements', () => {
   useAppStore.setState({
     activeWorktreeId: 'project',
     windowPaneLayout: null,
@@ -27,19 +27,14 @@ it('selects repeated session tabs independently in a combined pane', () => {
   })
   const state = useAppStore.getState()
   state.createUnifiedTab('project', 'terminal', { executionHostId: 'local', entityId: 'shell' })
+  state.createUnifiedTab('project', 'terminal', { executionHostId: 'local', entityId: 'copy' })
   state.initializeWindowPanes()
   const initial = useAppStore.getState().windowPaneLayout!
   const pane = initial.panes[initial.activePaneId]
-  const first = initial.views[pane.selectedViewId!]
-  const layout = {
-    ...initial,
-    views: { ...initial.views, copy: { ...first, id: 'copy' } },
-    panes: { [pane.id]: { ...pane, viewIds: [...pane.viewIds, 'copy'] } }
-  }
-  useAppStore.setState({ windowPaneLayout: layout })
-  render(<WorkspacePaneStrip layout={layout} pane={layout.panes[pane.id]} />)
+  render(<WorkspacePaneStrip layout={initial} pane={pane} />)
   expect(new Set(screen.getAllByRole('button').map((button) => button.dataset.id)).size).toBe(2)
   fireEvent.click(screen.getByText('View 1'))
-  useAppStore.getState().synchronizeWindowPaneSelection()
-  expect(useAppStore.getState().windowPaneLayout?.panes[pane.id].selectedViewId).toBe('copy')
+  expect(useAppStore.getState().windowPaneLayout?.panes[pane.id].selectedViewId).toBe(
+    initial.views[pane.viewIds[1]].id
+  )
 })

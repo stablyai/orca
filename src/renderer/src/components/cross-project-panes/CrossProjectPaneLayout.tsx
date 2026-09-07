@@ -23,8 +23,8 @@ export function CrossProjectPaneLayout(): React.JSX.Element | null {
   return (
     <DndContext {...drag}>
       {overlay}
-      <div className="flex flex-col flex-1 min-w-0 min-h-0 border-l border-border">
-        <div className="h-[4px] shrink-0 bg-card" />
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 border-l border-border bg-background p-1.5">
+        <div className="h-1 shrink-0" />
         <SplitNode
           node={root}
           nodePath=""
@@ -52,12 +52,12 @@ export function CrossProjectPaneLayout(): React.JSX.Element | null {
                 aria-label="Workspace pane"
                 data-pane-id={id}
                 data-current={focused}
-                className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden"
+                className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs"
                 onPointerDown={focus}
                 onFocusCapture={focus}
               >
                 <div
-                  className={`flex h-[32px] shrink-0 items-stretch border-b ${focused && layout.root.type === 'split' ? 'border-ring' : 'border-border'} bg-card`}
+                  className={`flex h-[32px] shrink-0 items-stretch rounded-t-lg border-b ${focused && layout.root.type === 'split' ? 'border-ring' : 'border-border'} bg-card`}
                   data-tab-group-strip-id={id}
                 >
                   {reserveCollapsedSidebarHeaderSpace && !sidebarOpen && (

@@ -81,7 +81,7 @@ export async function multiwindowSearchJourney(
   await jump(orcaPage, 'search-draft')
   await draftRow.getByRole('button', { name: 'Open Beside', exact: true }).focus()
   await orcaPage.keyboard.press('Enter')
-  await expect(orcaPage.getByRole('region', { name: 'Workspace pane', exact: true })).toHaveCount(2)
+  await expect(orcaPage.getByRole('region', { name: 'Workspace pane', exact: true })).toHaveCount(1)
   await jump(orcaPage, 'search-draft')
   const placements = orcaPage
     .locator('[data-value^="workspace-view:"]')

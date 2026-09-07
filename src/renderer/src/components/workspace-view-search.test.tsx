@@ -151,7 +151,7 @@ it('renders searchable native placements and routes Enter, Open Here and Open Be
   )
 })
 
-it('discovers repeated views and editors across projects without using control registrations', async () => {
+it('discovers distinct sessions across projects without using control registrations', async () => {
   addPaneProject('alpha', 'Alpha')
   addPaneProject('beta', 'Beta')
   const state = useAppStore.getState()
@@ -168,17 +168,16 @@ it('discovers repeated views and editors across projects without using control r
     paneId: string
     projectName: string
   }[]
-  expect(entries).toHaveLength(4)
+  expect(entries).toHaveLength(3)
   expect(entries.some((entry) => entry.view.contentType === 'editor')).toBe(true)
   expect(new Set(entries.map((entry) => entry.projectName))).toEqual(new Set(['Alpha', 'Beta']))
-  expect(new Set(entries.map((entry) => entry.paneId)).size).toBe(2)
+  expect(new Set(entries.map((entry) => entry.paneId)).size).toBe(1)
 })
 
-it('visits an exact repeated view and rejects stale pane membership', async () => {
+it('visits an exact placed view and rejects stale pane membership', async () => {
   addPaneProject('alpha', 'Alpha')
   const state = useAppStore.getState()
   const original = state.windowPaneLayout!
-  state.openAnotherWorkspaceView(original.activePaneId)
   state.expandWindowPane(useAppStore.getState().windowPaneLayout!.activePaneId)
   useAppStore.setState({ activeView: 'settings' })
   renderHook(useWorkspaceViewTransfer)
@@ -190,7 +189,7 @@ it('visits an exact repeated view and rejects stale pane membership', async () =
     expect(await request('visit', target)).toBe(true)
   })
   expect(useAppStore.getState().windowPaneLayout!.activePaneId).toBe(target.paneId)
-  expect(useAppStore.getState().windowPaneLayout!.expandedPaneId).toBeNull()
+  expect(useAppStore.getState().windowPaneLayout!.expandedPaneId).toBe(target.paneId)
   expect(useAppStore.getState().activeView).toBe('terminal')
   await expect(request('visit', { ...target, viewId: 'closed' })).resolves.toBe(false)
 })
@@ -274,6 +273,6 @@ it('Open Here and Beside import presentation without hijacking or changing sessi
   expect(useAppStore.getState().windowPaneLayout!.panes[original.activePaneId]).toEqual(
     here.panes[original.activePaneId]
   )
-  expect(Object.keys(useAppStore.getState().windowPaneLayout!.views)).toHaveLength(2)
+  expect(Object.keys(useAppStore.getState().windowPaneLayout!.views)).toHaveLength(1)
   expect(useAppStore.getState().unifiedTabsByWorktree).toBe(sessions)
 })

@@ -98,7 +98,7 @@ describe('workspace view continuity', () => {
     transport.detach?.()
     expect(window.api.pty.kill).not.toHaveBeenCalled()
   })
-  it('Open Another View creates an independent pane referencing the existing session', () => {
+  it('does not offer a duplicate view action for an already placed session', () => {
     const state = useAppStore.getState()
     useAppStore.setState({ activeWorktreeId: 'project' })
     state.createUnifiedTab('project', 'terminal', {
@@ -114,18 +114,12 @@ describe('workspace view continuity', () => {
       </TooltipProvider>
     )
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Window actions' }), { button: 0 })
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Open Another View' }))
+    expect(screen.queryByRole('menuitem', { name: 'Open Another View' })).toBeNull()
+    act(() => state.openAnotherWorkspaceView(layout.activePaneId))
     const next = useAppStore.getState().windowPaneLayout!
-    expect(Object.keys(next.panes)).toHaveLength(2)
-    expect(Object.values(next.views).map((view) => view.entityId)).toEqual([
-      'existing-shell',
-      'existing-shell'
-    ])
-    const duplicate = next.views[next.panes[next.activePaneId].selectedViewId!]
-    expect(duplicate.id).not.toBe(original.id)
-    act(() => state.focusWindowPane(next.activePaneId, duplicate.id))
-    expect(useAppStore.getState().windowPaneLayout?.activePaneId).toBe(next.activePaneId)
-    act(() => state.closeWindowPane(next.activePaneId))
+    expect(Object.keys(next.panes)).toHaveLength(1)
+    expect(Object.values(next.views)).toHaveLength(1)
+    expect(next.views[original.id].id).toBe(original.id)
     expect(useAppStore.getState().getTab(original.tabId)).toBeTruthy()
     expect(window.api.pty.spawn).not.toHaveBeenCalled()
     expect(window.api.pty.kill).not.toHaveBeenCalled()

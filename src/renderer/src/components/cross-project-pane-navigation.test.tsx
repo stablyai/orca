@@ -70,7 +70,7 @@ describe('cross-project pane navigation', () => {
     expect(pane.selectedViewId).toBeNull()
     expect(pane.workspace?.worktreeId).toBe('empty-folder')
   })
-  it('selects an already visible session in the active pane as a watching view', async () => {
+  it('selects an already visible session in its existing pane', async () => {
     const { alphaTwo } = seed()
     await mountPanes()
     fireEvent.click(screen.getByRole('button', { name: 'Split Right' }))
@@ -94,7 +94,7 @@ describe('cross-project pane navigation', () => {
     )
     expect(state.activeTabId).toBe(alphaTwo.entityId)
     expect(state.getActiveTab('alpha')?.id).toBe(alphaTwo.id)
-    expect(screen.getAllByText('Watching')).toHaveLength(1)
+    expect(screen.queryByText('Watching')).toBeNull()
   })
   it('honors activateTab when its catalog update selects a session in another pane', async () => {
     const { alphaTwo } = seed()
@@ -105,7 +105,7 @@ describe('cross-project pane navigation', () => {
     const layout = state.windowPaneLayout!
     expect(layout.views[layout.panes[layout.activePaneId].selectedViewId!].tabId).toBe(alphaTwo.id)
     expect(state.getActiveTab('alpha')?.id).toBe(alphaTwo.id)
-    expect(screen.getAllByText('Watching')).toHaveLength(1)
+    expect(screen.queryByText('Watching')).toBeNull()
   })
   it('keeps the expanded pane when selecting another view of an existing session', async () => {
     const { alphaTwo } = seed()
@@ -115,11 +115,12 @@ describe('cross-project pane navigation', () => {
     const layout = useAppStore.getState().windowPaneLayout!
     const pane = layout.panes[layout.activePaneId]
     act(() => useAppStore.getState().expandWindowPane(pane.id))
-    fireEvent.pointerDown(screen.getByText('Alpha second'), { button: 0, clientX: 0, clientY: 0 })
-    fireEvent.pointerUp(window, { clientX: 0, clientY: 0 })
+    act(() => useAppStore.getState().activateTab(alphaTwo.id))
     expect(screen.getAllByRole('region', { name: 'Workspace pane' })).toHaveLength(1)
-    expect(useAppStore.getState().windowPaneLayout?.expandedPaneId).toBe(pane.id)
-    expect(screen.getByText('Watching')).toBeTruthy()
+    expect(useAppStore.getState().windowPaneLayout?.expandedPaneId).toBe(
+      useAppStore.getState().windowPaneLayout?.activePaneId
+    )
+    expect(screen.queryByText('Watching')).toBeNull()
     expect(useAppStore.getState().activeTabId).toBe(alphaTwo.entityId)
   })
   it('projects the active pane selection when sidebar navigation requests a session already shown elsewhere', async () => {
@@ -219,7 +220,7 @@ describe('cross-project pane navigation', () => {
     })
     const panes = screen.getAllByRole('region', { name: 'Workspace pane' })
     expect(within(panes[0]).getByText('Beta shell')).toBeTruthy()
-    expect(within(panes[1]).getByText('Beta shell')).toBeTruthy()
+    expect(within(panes[1]).queryByText('Beta shell')).toBeNull()
   })
   it('renders different projects side by side and routes navigation only to the active pane', async () => {
     const { alpha, beta } = seed()

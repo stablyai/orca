@@ -42,13 +42,7 @@ it('exposes layout actions through a keyboard-accessible menu even without a nat
   mount()
   const tabCount = Object.values(useAppStore.getState().unifiedTabsByWorktree).flat().length
   await openMenu()
-  for (const label of [
-    'Open Beside',
-    'Split Right',
-    'Split Down',
-    'Open Another View',
-    'Expand Pane'
-  ]) {
+  for (const label of ['Split Right', 'Split Down', /Expand Pane|Restore Layout/]) {
     expect(screen.getByRole('menuitem', { name: label })).toBeTruthy()
   }
   fireEvent.click(screen.getByRole('menuitem', { name: 'Split Down' }))
@@ -63,17 +57,17 @@ it('exposes layout actions through a keyboard-accessible menu even without a nat
   expect(window.api.pty.kill).not.toHaveBeenCalled()
 })
 
-it('opens beside as another view of the selected session', async () => {
+it('splits the selected pane without cloning its session', async () => {
   mount()
   const before = useAppStore.getState().windowPaneLayout!
   const selected = before.views[before.panes[before.activePaneId].selectedViewId!]
   await openMenu()
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Open Beside' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Split Right' }))
   const after = useAppStore.getState().windowPaneLayout!
   expect(Object.keys(after.panes)).toHaveLength(2)
   expect(
     Object.values(after.views).filter((view) => view.entityId === selected.entityId)
-  ).toHaveLength(2)
+  ).toHaveLength(1)
 })
 
 it('tab context menus split the clicked view through the presentation action', async () => {

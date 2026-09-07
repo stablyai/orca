@@ -14,7 +14,8 @@ import {
   tabExecutionHost,
   resolveWorkspaceView,
   paneSelectionPatch,
-  workspaceTabKey
+  workspaceTabKey,
+  workspaceSessionKey
 } from '@/store/slices/window-pane-selection'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { buildSplitNode, replaceLeaf } from '@/store/slices/tabs/tabs-layout'
@@ -24,7 +25,6 @@ import {
   type EditorViewTransfer
 } from '../editor/editor-view-transfer'
 import { getDiskBaselineSignature } from '../editor/diff-content-signature'
-
 export type WorkspaceViewPacket = {
   views: {
     view: WorkspaceView
@@ -38,7 +38,6 @@ export type WorkspaceViewPacket = {
     editorMode?: AppState['editorViewMode'][string]
   }[]
 }
-
 export function sessionIdentity(state: AppState, tab: Tab): string {
   if (toVisibleTabType(tab.contentType) === 'editor') {
     const file = state.openFiles.find((file) => file.id === tab.entityId)
@@ -57,7 +56,6 @@ export function sessionIdentity(state: AppState, tab: Tab): string {
   }
   return toHostSessionTabId(tab.contentType === 'terminal' ? tab.entityId : tab.id)
 }
-
 export function captureWorkspaceViews(
   state: AppState,
   ids: string[],
@@ -108,7 +106,6 @@ export function captureWorkspaceViews(
     })
   }
 }
-
 export function findWorkspaceViewSession(
   state: AppState,
   entry: Pick<WorkspaceViewPacket['views'][number], 'view' | 'owner' | 'session'>,
@@ -121,7 +118,6 @@ export function findWorkspaceViewSession(
       sessionIdentity(state, tab) === entry.session
   )
 }
-
 export function importWorkspaceViews(
   state: AppState,
   packet: WorkspaceViewPacket,
@@ -190,7 +186,50 @@ export function importWorkspaceViews(
   const editorDrafts = { ...state.editorDrafts }
   const editorViewMode = { ...state.editorViewMode }
   const openFiles = [...state.openFiles]
+  const applyEditorState = (entry: (typeof resolved)[number]['entry'], tab: Tab) => {
+    if (!entry.file) {
+      return
+    }
+    if (entry.editorMode) {
+      editorViewMode[tab.entityId] = entry.editorMode
+    }
+    const index = openFiles.findIndex((file) => file.id === tab.entityId)
+    if (index === -1) {
+      throw new Error('Session unavailable')
+    }
+    openFiles[index] = {
+      ...openFiles[index],
+      isDirty: entry.file.isDirty,
+      lastKnownDiskSignature: entry.file.lastKnownDiskSignature
+    }
+    if (entry.draft !== undefined) {
+      editorDrafts[tab.entityId] = entry.draft
+    }
+  }
   for (const { entry, tab } of resolved) {
+    const executionHostId = tabExecutionHost(state, tab)!
+    const matchingView = Object.values(layout.views).find(
+      (view) =>
+        workspaceSessionKey(view) ===
+        JSON.stringify([tab.worktreeId, executionHostId, tab.contentType, tab.entityId])
+    )
+    if (matchingView) {
+      const matchingPane = Object.values(layout.panes).find((pane) =>
+        pane.viewIds.includes(matchingView.id)
+      )
+      if (matchingPane) {
+        if (entry.selected) {
+          matchingPane.selectedViewId = matchingView.id
+          layout.activePaneId = matchingPane.id
+        }
+        matchingPane.workspace = matchingView
+        if (mode === 'panes') {
+          paneIds.set(entry.paneId, matchingPane.id)
+        }
+      }
+      applyEditorState(entry, tab)
+      continue
+    }
     let paneId = layout.activePaneId
     if (mode === 'panes') {
       paneId = paneIds.get(entry.paneId) ?? createBrowserUuid()
@@ -211,7 +250,7 @@ export function importWorkspaceViews(
       controlPending: true,
       tabId: tab.id,
       entityId: tab.entityId,
-      executionHostId: tabExecutionHost(state, tab)!
+      executionHostId
     }
     if (entry.editorView) {
       restoreTransferredEditorView(id, entry.editorView)
@@ -224,23 +263,7 @@ export function importWorkspaceViews(
       layout.panes[paneId].selectedViewId = id
     }
     layout.panes[paneId].workspace = layout.views[id]
-    if (entry.file) {
-      if (entry.editorMode) {
-        editorViewMode[tab.entityId] = entry.editorMode
-      }
-      const index = openFiles.findIndex((file) => file.id === tab.entityId)
-      if (index === -1) {
-        throw new Error('Session unavailable')
-      }
-      openFiles[index] = {
-        ...openFiles[index],
-        isDirty: entry.file.isDirty,
-        lastKnownDiskSignature: entry.file.lastKnownDiskSignature
-      }
-      if (entry.draft !== undefined) {
-        editorDrafts[tab.entityId] = entry.draft
-      }
-    }
+    applyEditorState(entry, tab)
   }
   if (mode === 'panes' && paneIds.size) {
     layout.activePaneId = [...paneIds.values()].at(-1)!

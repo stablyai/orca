@@ -87,16 +87,46 @@ export function paneSelectionPatch(
 export function appendWorkspaceViews(
   state: AppState,
   layout: WindowPaneLayout,
-  unplacedOnly = false
+  _unplacedOnly = false
 ): WindowPaneLayout {
   const worktreeId = state.activeWorktreeId
   if (!worktreeId) {
     return layout
   }
-  const pane = layout.panes[layout.activePaneId]
+  const views = { ...layout.views }
+  const canonicalViewBySession = new Map<string, string>()
+  const duplicateViewIds = new Set<string>()
+  for (const [id, view] of Object.entries(views)) {
+    const key = workspaceSessionKey(view)
+    if (canonicalViewBySession.has(key)) {
+      duplicateViewIds.add(id)
+      delete views[id]
+    } else {
+      canonicalViewBySession.set(key, id)
+    }
+  }
+  const normalizedPanes = Object.fromEntries(
+    Object.entries(layout.panes).map(([id, candidate]) => {
+      const viewIds = candidate.viewIds.filter((viewId) => !duplicateViewIds.has(viewId))
+      return [
+        id,
+        {
+          ...candidate,
+          viewIds,
+          selectedViewId:
+            candidate.selectedViewId && !duplicateViewIds.has(candidate.selectedViewId)
+              ? candidate.selectedViewId
+              : (viewIds.at(-1) ?? null)
+        }
+      ]
+    })
+  )
+  const pane = normalizedPanes[layout.activePaneId]
+  if (!pane) {
+    return layout
+  }
   const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const preferred = state.getActiveTab(worktreeId)
-  const views = { ...layout.views }
   const viewIds = [...pane.viewIds]
   const host =
     state.activeWorkspaceExecutionHostId ??
@@ -114,14 +144,15 @@ export function appendWorkspaceViews(
     ) {
       continue
     }
-    if (
-      (unplacedOnly ? Object.keys(views) : viewIds).some(
-        (id) =>
-          views[id].tabId === tab.id &&
-          views[id].worktreeId === worktreeId &&
-          views[id].executionHostId === executionHostId
-      )
-    ) {
+    const sessionKey = workspaceSessionKey({
+      worktreeId,
+      executionHostId,
+      entityId: tab.entityId,
+      contentType: tab.contentType
+    })
+    // A session has one placement across all panes. Different sessions may still
+    // belong to the same project and branch.
+    if (Object.values(views).some((view) => workspaceSessionKey(view) === sessionKey)) {
       continue
     }
     const id = createBrowserUuid()
@@ -139,27 +170,72 @@ export function appendWorkspaceViews(
   const current = views[pane.selectedViewId ?? '']
   const matchesOwner = (view: WorkspaceView) =>
     view.worktreeId === worktreeId && view.executionHostId === host
-  const selectedViewId =
-    (current && current.tabId === preferred?.id && matchesOwner(current) ? current.id : null) ??
-    viewIds.find((id) => views[id].tabId === preferred?.id && matchesOwner(views[id])) ??
-    (pane.selectedViewId && matchesOwner(views[pane.selectedViewId])
-      ? pane.selectedViewId
-      : null) ??
-    viewIds.find((id) => matchesOwner(views[id])) ??
-    null
+  const preferredView = preferred
+    ? Object.values(views).find(
+        (view) =>
+          view.worktreeId === worktreeId &&
+          view.executionHostId === host &&
+          view.tabId === preferred.id
+      )
+    : undefined
+  const preferredPane = preferredView
+    ? Object.values(normalizedPanes).find((candidate) =>
+        candidate.viewIds.includes(preferredView.id)
+      )
+    : undefined
+  const selectedViewId = preferredView
+    ? preferredView.id
+    : ((current && current.tabId === preferred?.id && matchesOwner(current) ? current.id : null) ??
+      viewIds.find((id) => views[id].tabId === preferred?.id && matchesOwner(views[id])) ??
+      (pane.selectedViewId && matchesOwner(views[pane.selectedViewId])
+        ? pane.selectedViewId
+        : null) ??
+      viewIds.find((id) => matchesOwner(views[id])) ??
+      null)
   const workspace = host ? { worktreeId, executionHostId: host } : pane.workspace
+  const selectedPane = preferredPane ?? pane
+  const selectedPaneViewIds = preferredPane ? preferredPane.viewIds : viewIds
+  const selectedPaneWorkspace =
+    preferredPane && preferredView
+      ? { worktreeId: preferredView.worktreeId, executionHostId: preferredView.executionHostId }
+      : workspace
+  const activePaneId = selectedPane.id
+  const nextPane = {
+    ...selectedPane,
+    viewIds: selectedPaneViewIds,
+    selectedViewId: preferredPane ? preferredView!.id : selectedViewId,
+    workspace: selectedPaneWorkspace
+  }
+  const paneUnchanged =
+    selectedPaneViewIds.length === selectedPane.viewIds.length &&
+    selectedPaneViewIds.every((id, index) => selectedPane.viewIds[index] === id) &&
+    nextPane.selectedViewId === selectedPane.selectedViewId &&
+    nextPane.workspace?.worktreeId === selectedPane.workspace?.worktreeId &&
+    nextPane.workspace?.executionHostId === selectedPane.workspace?.executionHostId
+  const expandedPaneId = layout.expandedPaneId
+    ? preferredPane?.id
+      ? selectedPane.id
+      : layout.expandedPaneId
+    : null
   if (
-    viewIds.length === pane.viewIds.length &&
-    selectedViewId === pane.selectedViewId &&
-    workspace?.worktreeId === pane.workspace?.worktreeId &&
-    workspace?.executionHostId === pane.workspace?.executionHostId
+    duplicateViewIds.size === 0 &&
+    activePaneId === layout.activePaneId &&
+    expandedPaneId === layout.expandedPaneId &&
+    paneUnchanged
   ) {
     return layout
   }
+  const panes = { ...normalizedPanes }
+  if (selectedPane.id !== pane.id && viewIds.length !== pane.viewIds.length) {
+    panes[pane.id] = { ...pane, viewIds }
+  }
+  panes[selectedPane.id] = nextPane
   return {
     ...layout,
+    activePaneId,
+    expandedPaneId,
     views,
-    panes: { ...layout.panes, [pane.id]: { ...pane, viewIds, selectedViewId, workspace } }
+    panes
   }
 }
 
@@ -170,12 +246,13 @@ export function workspaceTabKey(
 }
 
 export function sameWorkspaceSession(first: WorkspaceView, second: WorkspaceView): boolean {
-  return (
-    first.worktreeId === second.worktreeId &&
-    first.executionHostId === second.executionHostId &&
-    first.contentType === second.contentType &&
-    first.entityId === second.entityId
-  )
+  return workspaceSessionKey(first) === workspaceSessionKey(second)
+}
+
+export function workspaceSessionKey(
+  view: Pick<WorkspaceView, 'worktreeId' | 'executionHostId' | 'contentType' | 'entityId'>
+): string {
+  return JSON.stringify([view.worktreeId, view.executionHostId, view.contentType, view.entityId])
 }
 
 export function visiblePaneViews(layout: WindowPaneLayout | null | undefined): WorkspaceView[] {

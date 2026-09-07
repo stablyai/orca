@@ -110,32 +110,29 @@ export function WorkspaceLayoutMenuItems({ paneId, viewId }: { paneId: string; v
           >
             Move to New Window
           </DropdownMenuItem>
-          {[
-            'Move to Window',
-            'Combine Windows as Tabs',
-            'Combine Windows as Panes',
-            'Open Another View in Window'
-          ].map((label) => (
-            <DropdownMenuSub key={label}>
-              <DropdownMenuSubTrigger disabled={busy}>{label}</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                {windows.length ? (
-                  windows.map((entry) => (
-                    <DropdownMenuItem
-                      key={entry.id}
-                      onSelect={() => {
-                        void transfer(entry.id, label)
-                      }}
-                    >
-                      {entry.title} ({entry.id})
-                    </DropdownMenuItem>
-                  ))
-                ) : (
-                  <DropdownMenuItem disabled>No other windows</DropdownMenuItem>
-                )}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          ))}
+          {['Move to Window', 'Combine Windows as Tabs', 'Combine Windows as Panes'].map(
+            (label) => (
+              <DropdownMenuSub key={label}>
+                <DropdownMenuSubTrigger disabled={busy}>{label}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {windows.length ? (
+                    windows.map((entry) => (
+                      <DropdownMenuItem
+                        key={entry.id}
+                        onSelect={() => {
+                          void transfer(entry.id, label)
+                        }}
+                      >
+                        {entry.title} ({entry.id})
+                      </DropdownMenuItem>
+                    ))
+                  ) : (
+                    <DropdownMenuItem disabled>No other windows</DropdownMenuItem>
+                  )}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )
+          )}
         </>
       )}
     </>

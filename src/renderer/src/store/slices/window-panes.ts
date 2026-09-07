@@ -115,7 +115,7 @@ export const createWindowPanesSlice: StateCreator<AppState, [], [], WindowPanesS
           windowPaneLayout: {
             ...layout,
             activePaneId: paneId,
-            expandedPaneId: layout.expandedPaneId === paneId ? paneId : null,
+            expandedPaneId: layout.expandedPaneId ? paneId : null,
             panes: { ...layout.panes, [paneId]: { ...pane, selectedViewId } }
           },
           ...paneSelectionPatch(

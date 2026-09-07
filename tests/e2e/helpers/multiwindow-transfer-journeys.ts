@@ -19,7 +19,7 @@ async function transfer(page: Page, destinationId: number, action: string): Prom
 }
 
 export function registerMultiwindowTransferJourneys() {
-  test('duplicate and move terminal views retain the same live shell and hand off control', async ({
+  test('move terminal views retain the same live shell across windows', async ({
     electronApp,
     orcaPage
   }, testInfo) => {
@@ -45,26 +45,10 @@ export function registerMultiwindowTransferJourneys() {
         window.__store!.getState().tabsByWorktree[worktreeId]!.find((tab) => tab.id === id)!.ptyId,
       terminal
     )
-    await orcaPage.getByRole('button', { name: 'Window actions', exact: true }).click()
-    await orcaPage.getByRole('menuitem', { name: 'Open Another View', exact: true }).click()
-    await expect(orcaPage.getByText('Watching', { exact: true })).toHaveCount(1)
-    await expect(orcaPage.locator('[data-watching-terminal-view] .xterm')).toHaveCount(1)
-    await orcaPage.getByRole('button', { name: 'Take Control Here' }).click()
     const secondary = await openWorkspaceWindow(electronApp)
     const destinationId = await secondary.evaluate(() => window.orcaWorkspaceViews!.ready())
     await worktreeRowSurface(secondary, terminal.worktreeId).click()
-    await expect(orcaPage.getByText('Watching', { exact: true })).toHaveCount(1)
-    await expect(secondary.getByText('Watching', { exact: true })).toHaveCount(1)
-    await secondary.getByRole('button', { name: 'Take Control Here' }).click()
-    await expect(orcaPage.getByText('Watching', { exact: true })).toHaveCount(2)
-    await orcaPage.getByRole('button', { name: 'Take Control Here' }).first().click()
-    await expect(orcaPage.getByText('Watching', { exact: true })).toHaveCount(1)
-    await expect(secondary.getByText('Watching', { exact: true })).toHaveCount(1)
     await expectHiddenWorkspaceWindows(electronApp)
-    await orcaPage.screenshot({ path: testInfo.outputPath('terminal-repeated-panes.png') })
-    const before = await orcaPage.evaluate(
-      () => Object.keys(window.__store!.getState().windowPaneLayout!.views).length
-    )
     await transfer(orcaPage, destinationId, 'Move to Window')
     await expect
       .poll(() =>
@@ -72,10 +56,7 @@ export function registerMultiwindowTransferJourneys() {
           () => Object.keys(window.__store!.getState().windowPaneLayout!.views).length
         )
       )
-      .toBe(before - 1)
-    await expect(secondary.getByText('Watching', { exact: true })).toHaveCount(1)
-    await secondary.getByRole('button', { name: 'Take Control Here' }).click()
-    await expect(secondary.getByText('Watching', { exact: true })).toHaveCount(0)
+      .toBe(0)
     await expectHiddenWorkspaceWindows(electronApp)
     await expect(secondary.locator('[data-terminal-overlay-tab-id]:visible .xterm')).toHaveCount(1)
     await secondary.locator('[data-terminal-overlay-tab-id]:visible .xterm-helper-textarea').focus()
@@ -93,29 +74,6 @@ export function registerMultiwindowTransferJourneys() {
       )
       .toBeGreaterThanOrEqual(3)
     await secondary.screenshot({ path: testInfo.outputPath('terminal-moved.png') })
-    const primaryId = await orcaPage.evaluate(() => window.orcaWorkspaceViews!.ready())
-    await transfer(secondary, primaryId, 'Combine Windows as Panes')
-    await expect
-      .poll(() =>
-        secondary.evaluate(
-          () => Object.keys(window.__store!.getState().windowPaneLayout!.views).length
-        )
-      )
-      .toBe(0)
-    await expect(orcaPage.getByRole('region', { name: 'Workspace pane', exact: true })).toHaveCount(
-      3
-    )
-    await expectHiddenWorkspaceWindows(electronApp)
-    await transfer(orcaPage, destinationId, 'Combine Windows as Tabs')
-    await expect
-      .poll(() =>
-        orcaPage.evaluate(
-          () => Object.keys(window.__store!.getState().windowPaneLayout!.views).length
-        )
-      )
-      .toBe(0)
-    await expect(secondary.locator('[data-tab-group-strip-id] [data-tab-id]')).toHaveCount(3)
-    await expectHiddenWorkspaceWindows(electronApp)
     await secondary.evaluate(() => window.api.ui.requestClose())
     expect(
       await orcaPage.evaluate(
@@ -207,13 +165,9 @@ export function registerMultiwindowTransferJourneys() {
       const secondary = await openWorkspaceWindow(electronApp)
       await worktreeRowSurface(secondary, browser.worktreeId).click()
       const destinationId = await secondary.evaluate(() => window.orcaWorkspaceViews!.ready())
-      await transfer(orcaPage, destinationId, 'Open Another View in Window')
-      await expect(secondary.getByAltText('Shared browser view')).toBeVisible()
       await transfer(orcaPage, destinationId, 'Move to Window')
       await expect(orcaPage.locator(`[data-tab-id="${browser.id}"]`)).toHaveCount(0)
       await expect(secondary.getByAltText('Shared browser view')).toBeVisible()
-      await secondary.getByRole('button', { name: 'Take Control Here' }).click()
-      await expect(secondary.getByText('Watching', { exact: true })).toHaveCount(0)
       expect(
         await electronApp.evaluate(
           async ({ webContents }, id) =>
