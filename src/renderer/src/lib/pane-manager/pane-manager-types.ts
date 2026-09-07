@@ -6,6 +6,7 @@ import type { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { WebLinksAddon } from '@xterm/addon-web-links'
 import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
+import type { ImageAddon } from '@xterm/addon-image'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
@@ -114,6 +115,11 @@ export type ManagedPane = {
   fitAddon: FitAddon
   searchAddon: SearchAddon
   serializeAddon: SerializeAddon
+  // Why optional/nullable: the inline-image addon chunk loads lazily after
+  // open(), so the instance only exists once that resolves — and never for a
+  // pane disposed before it did. Exposed so callers (and e2e probes) can read
+  // decoded images by buffer cell.
+  imageAddon?: ImageAddon | null
 }
 
 export type PaneRenderingDiagnostics = {
@@ -167,6 +173,8 @@ export type ManagedPaneInternal = {
   // so the addon instance only exists while the feature is active. A null
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
+  // Bumped by disposePane so an in-flight addon load can tell the pane is gone.
+  inlineImageAttachToken?: number
   fitResizeObserver: ResizeObserver | null
   // Why: fit-element pixel size at the last successful fit; the reveal fit compares
   // against it to tell a real hidden-time resize from a transient cell-metric wobble.
