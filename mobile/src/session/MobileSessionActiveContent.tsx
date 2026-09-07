@@ -74,6 +74,7 @@ export function MobileSessionActiveContent({
     activePendingTerminalTab,
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
+    reconnectViewState,
     showLoadingState,
     showEmptyState,
     keyboardLift,
@@ -81,7 +82,15 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
-  return showLoadingState ? (
+  // Why: the cached strip in the header is the content during a reconnect; the terminal body
+  // cannot be, because replaying stored scrollback into the WebView would double-render once the
+  // live stream replays the same rows. See mobile-session-reconnect-view-state.
+  return reconnectViewState.kind === 'reconnecting-with-cache' ? (
+    <View style={styles.emptyState}>
+      <ActivityIndicator size="small" color={colors.textSecondary} />
+      <Text style={styles.emptyText}>{reconnectViewState.label}</Text>
+    </View>
+  ) : showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
