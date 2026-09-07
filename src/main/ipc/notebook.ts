@@ -4,6 +4,7 @@ import { dirname } from 'node:path'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
+import { admitSelfInitiatedTreeKill } from '../own-chromium-tree-kill-guard'
 
 export type NotebookRunResult = {
   stdout: string
@@ -53,7 +54,8 @@ function appendBounded(capture: BoundedCapture, chunk: Buffer): void {
   capture.truncated = true
 }
 
-function terminateNotebookProcessTree(
+/** Exported for the refusal-fallback test; the timeout path is otherwise unreachable. */
+export function terminateNotebookProcessTree(
   child: ChildProcessWithoutNullStreams
 ): ReturnType<typeof setTimeout> | null {
   if (!child.pid) {
@@ -62,6 +64,18 @@ function terminateNotebookProcessTree(
   }
 
   if (process.platform === 'win32') {
+    if (
+      !admitSelfInitiatedTreeKill({
+        pid: child.pid,
+        site: 'notebook-cell-timeout',
+        scope: 'win-taskkill-tree'
+      })
+    ) {
+      // Refusal blocks the tree walk, not the termination: killing the root by
+      // handle cannot reach a recycled pid, and a timed-out cell must still stop.
+      child.kill()
+      return null
+    }
     try {
       // Why: a timed-out cell can spawn descendants. taskkill /T is the
       // Windows equivalent of terminating the whole process group.

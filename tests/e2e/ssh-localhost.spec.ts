@@ -1,4 +1,7 @@
+import { connectSshTestTarget } from './helpers/ssh-test-target-connection'
 import os from 'node:os'
+import { createSeededTestRepo } from './helpers/seeded-test-repo'
+import { cleanupTestRepository } from './global-teardown'
 
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -151,91 +154,28 @@ test.describe('Localhost SSH', () => {
 
   test('routes a terminal and agent-hook status over localhost SSH', async ({
     orcaPage,
-    testRepoPath
+    registerPostElectronShutdownCleanup
   }) => {
     test.slow()
+    // The relay persists workspace sessions by path across fresh client profiles.
+    const testRepoPath = createSeededTestRepo({ publishPath: false })
+    registerPostElectronShutdownCleanup(async () => cleanupTestRepository(testRepoPath))
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
 
     const target = readLocalhostSshTarget()
-    const remote = await orcaPage.evaluate(
-      async ({ remotePath, target }) => {
-        const store = window.__store
-        if (!store) {
-          throw new Error('Store unavailable')
-        }
-
-        const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
-          void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
-        })
-
-        try {
-          const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
-            target: {
-              ...target,
-              // Why: local-only E2E should not leave a long-lived relay process
-              // behind if the Electron app is killed between cleanup hooks.
-              relayGracePeriodSeconds: 1
-            }
-          })
-          store.getState().recordSshRepoReadoptions(repoReadoptions)
-
-          let state
-          try {
-            state = await window.api.ssh.connect({ targetId: createdTarget.id })
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err)
-            throw new Error(
-              `Failed to connect to localhost SSH target ${target.username}@${target.host || target.configHost}:${target.port}. ` +
-                `Ensure sshd is running and key/agent auth is non-interactive. ${message}`
-            )
-          }
-
-          if (!state || state.status !== 'connected') {
-            throw new Error(`SSH target did not reach connected state: ${JSON.stringify(state)}`)
-          }
-
-          store.getState().setSshConnectionState(createdTarget.id, state)
-          const labels = new Map(store.getState().sshTargetLabels)
-          labels.set(createdTarget.id, createdTarget.label)
-          store.getState().setSshTargetLabels(labels)
-
-          const result = await window.api.repos.addRemote({
-            connectionId: createdTarget.id,
-            remotePath,
-            displayName: 'Localhost SSH E2E'
-          })
-          if ('error' in result) {
-            throw new Error(result.error)
-          }
-
-          await store.getState().fetchRepos()
-          await store.getState().fetchWorktrees(result.repo.id)
-
-          const worktrees = store.getState().worktreesByRepo[result.repo.id] ?? []
-          const worktree =
-            worktrees.find((candidate) => candidate.path === result.repo.path) ?? worktrees[0]
-          if (!worktree) {
-            throw new Error(`No remote worktree found for ${result.repo.path}`)
-          }
-
-          store.getState().setActiveWorktree(worktree.id)
-          if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-            store.getState().createTab(worktree.id)
-          }
-          store.getState().setActiveTabType('terminal')
-
-          return {
-            targetId: createdTarget.id,
-            repoId: result.repo.id,
-            worktreeId: worktree.id
-          }
-        } finally {
-          credentialUnsub()
-        }
-      },
-      { remotePath: testRepoPath, target }
-    )
+    const remote = await connectSshTestTarget(
+      orcaPage,
+      // Limit orphan relay lifetime if the test app exits before cleanup.
+      { ...target, relayGracePeriodSeconds: 1 },
+      { remotePath: testRepoPath, displayName: 'Localhost SSH E2E' }
+    ).catch((error: unknown) => {
+      throw new Error(
+        `Failed to prepare localhost SSH target ${target.username}@${target.host || target.configHost}:${target.port}. ` +
+          `Ensure sshd is running and key/agent auth is non-interactive. ${String(error)}`,
+        { cause: error }
+      )
+    })
 
     await expect(remote.targetId).toBeTruthy()
     await ensureTerminalVisible(orcaPage, 30_000)

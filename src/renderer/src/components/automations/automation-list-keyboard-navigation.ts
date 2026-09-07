@@ -1,4 +1,5 @@
 import type { AutomationListViewItem } from './automation-list-view'
+import type { AutomationPaneTab } from './automation-page-state'
 
 export type AutomationListArrowKey = 'ArrowUp' | 'ArrowDown'
 
@@ -16,6 +17,24 @@ export function shouldHandleAutomationListSearchArrowKey(event: {
 }): boolean {
   return (
     isAutomationListArrowKey(event.key) &&
+    !event.nativeEvent.isComposing &&
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  )
+}
+
+export function shouldHandleAutomationListSearchEnterKey(event: {
+  key: string
+  altKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+  nativeEvent: { isComposing: boolean }
+}): boolean {
+  return (
+    event.key === 'Enter' &&
     !event.nativeEvent.isComposing &&
     !event.altKey &&
     !event.ctrlKey &&
@@ -57,4 +76,50 @@ export function getAutomationListArrowNavigationTarget(args: {
     return items[currentIndex] ?? null
   }
   return items[nextIndex] ?? null
+}
+
+export function getAutomationListEnterNavigationTarget(args: {
+  items: readonly Pick<AutomationListViewItem, 'id' | 'kind'>[]
+  selectedId: string | null
+  selectedExternalKey: string | null
+}): Pick<AutomationListViewItem, 'id' | 'kind'> | null {
+  const { items, selectedId, selectedExternalKey } = args
+  if (items.length === 0) {
+    return null
+  }
+  const currentIndex = findAutomationListSelectionIndex(items, selectedId, selectedExternalKey)
+  if (currentIndex >= 0) {
+    return items[currentIndex] ?? null
+  }
+  return items[0] ?? null
+}
+
+export function activateAutomationListEnterTarget(args: {
+  items: readonly Pick<AutomationListViewItem, 'id' | 'kind'>[]
+  selectedId: string | null
+  selectedExternalKey: string | null
+  selectAutomationRow: (rowKey: string | null) => void
+  selectExternalKey: (externalKey: string | null) => void
+  setActivePaneTab: (tab: AutomationPaneTab) => void
+  onOpenDetail: () => void
+}): void {
+  const target = getAutomationListEnterNavigationTarget(args)
+  if (!target) {
+    return
+  }
+  if (target.kind === 'local') {
+    args.selectExternalKey(null)
+    args.selectAutomationRow(target.id)
+  } else {
+    args.selectAutomationRow(null)
+    args.selectExternalKey(target.id)
+    args.setActivePaneTab('overview')
+  }
+  args.onOpenDetail()
+}
+
+export function createAutomationListEnterHandler(
+  args: Parameters<typeof activateAutomationListEnterTarget>[0]
+): () => void {
+  return () => activateAutomationListEnterTarget(args)
 }

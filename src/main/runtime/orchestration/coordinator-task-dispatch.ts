@@ -132,11 +132,15 @@ export async function dispatchTaskToWorker(params: {
   let gateContext = ''
   if (gates.length > 0) {
     const latest = gates.at(-1)!
-    gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n---\n`
+    gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n\n---\n`
   }
 
   try {
-    await runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
+    await runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext, {
+      acceptQueued: true,
+      observationTimeoutMs: 0,
+      requestId: dispatch.id
+    })
   } catch (err) {
     // Why (#16095): Enter is written before submission is verified, so a stall is only ever an
     // unobserved turn start — never proof the preamble is missing. Failing here would reset the

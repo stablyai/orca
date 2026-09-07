@@ -37,6 +37,65 @@ describe('checks panel concrete content', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 
+  it('renders a durable unlinked state that can relink before PR data refetches', () => {
+    const handleLinkSuppressedPullRequest = vi.fn<() => void>()
+    const model = {
+      activeReview: null,
+      activeWorktree: { id: 'worktree-1' },
+      isFolder: false,
+      linkedPR: null,
+      linkedReviewNumber: null,
+      prNumber: 42,
+      suppressedGitHubPR: 42 as number | null,
+      handleLinkSuppressedPullRequest: handleLinkSuppressedPullRequest as () => void
+    } as ChecksPanelEmptyContentModel
+
+    render(<ChecksPanelEmptyContent model={model} />)
+
+    expect(screen.getByText('Pull request unlinked')).toBeTruthy()
+    expect(screen.getByText(/PR #42 is hidden/)).toBeTruthy()
+    screen.getByRole('button', { name: 'Link PR #42' }).click()
+    expect(handleLinkSuppressedPullRequest).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/Create PR/)).toBeNull()
+  })
+
+  it('does not apply stale suppression to a branch with no matching pull request', () => {
+    const model = {
+      activeReview: null,
+      activeWorktree: { id: 'worktree-1' },
+      branch: 'without-pr',
+      checksPanelHasHardRefreshError: false,
+      checksPanelReviewLookup: 'not_found',
+      checksPanelReviewLookupResult: { openReviewUrl: null },
+      confirmedReadiness: { confirmed: false, needsPush: false },
+      conflictOperation: 'unknown',
+      createComposerOpen: false,
+      detachedHeadDisplay: null,
+      gitStatusInputs: { hasUncommittedChanges: false },
+      gitStatusProbeErrorContextKey: null,
+      hardRefreshError: null,
+      hostedReviewCreateCopy: { providerName: 'GitHub' },
+      hostedReviewCreateProvider: 'github',
+      hostedReviewCreation: null,
+      isFolder: false,
+      isGitHubReviewContext: true,
+      isPublishingBranch: false,
+      linkedGitLabMR: null,
+      linkedPR: null,
+      linkedReviewNumber: null,
+      panelContextKey: 'worktree-1::without-pr',
+      prNumber: null,
+      publishActionHasUncommittedChanges: false,
+      sourceControlAiActionsVisible: false,
+      suppressedGitHubPR: 42
+    } as ChecksPanelEmptyContentModel
+
+    render(<ChecksPanelEmptyContent model={model} />)
+
+    expect(screen.getByText('No pull request found')).toBeTruthy()
+    expect(screen.queryByText('Pull request unlinked')).toBeNull()
+  })
+
   it('renders the active review header and empty check/comment sections with accessible actions', () => {
     const model = {
       activeConnectionId: null,
@@ -95,7 +154,6 @@ describe('checks panel concrete content', () => {
       isFixingChecksWithAI: false,
       isRefreshing: false,
       isResolvingConflictsWithAI: false,
-      linkedPR: null,
       linkedGitLabMR: null,
       pendingCommentResolutionRef: { current: null },
       pr: null,

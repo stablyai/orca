@@ -27,6 +27,27 @@ function makeRepo(overrides: Partial<Repo> & { id: string }): Repo {
   }
 }
 
+function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: string }): Worktree {
+  return {
+    path: '/srv/repo',
+    head: 'abc123',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'Workspace',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    ...overrides
+  }
+}
+
 describe('getConnectionId', () => {
   afterEach(() => {
     useAppStore.setState(initialState, true)
@@ -523,6 +544,132 @@ describe('getConnectionIdFromState', () => {
     }
 
     expect(getConnectionIdFromState(state, 'repo-ssh::/home/neil/repo-feature')).toBe('ssh-2')
+  })
+
+  it('refuses to resolve a connection when duplicate repo rows disagree about the owning host', () => {
+    // Why (#17799): a repo id carried by two rows — one runtime-owned, one holding a
+    // client-owned SSH connection — must not hand the client's connection to the runtime.
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({ id: 'repo-dup', executionHostId: 'runtime:env-a' }),
+        makeRepo({ id: 'repo-dup', connectionId: 'ssh-client' })
+      ],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBeUndefined()
+  })
+
+  it('still resolves duplicate repo rows that agree about the owning host', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same' }),
+        makeRepo({ id: 'repo-dup', connectionId: 'ssh-same', path: '/home/neil/other' })
+      ],
+      worktreesByRepo: {}
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-dup::/home/neil/repo-feature')).toBe('ssh-same')
+  })
+
+  it('never hands a worktree the SSH connection of a different host', () => {
+    // Why (#11163): two SSH hosts, one shared repo id. The worktree names `ssh:m4air`; the only
+    // indexed row belongs to `openclaw`. An id-only fallback after the host lookup misses answers
+    // with the wrong host's connection — "Reconnect openclaw" on an m4air pane, and file reads
+    // routed to a machine that never held the path.
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [makeRepo({ id: 'repo-shared', connectionId: 'openclaw' })],
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: 'repo-shared::/srv/repo',
+            repoId: 'repo-shared',
+            hostId: 'ssh:m4air'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-shared::/srv/repo')).toBe('m4air')
+  })
+
+  it('never hands a runtime-hosted worktree a client-owned SSH connection', () => {
+    // The row is on `ssh:openclaw`, not on the runtime host, so it says nothing about this
+    // worktree. This is the cross-host case, not the nested-SSH one below.
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [makeRepo({ id: 'repo-shared', connectionId: 'openclaw' })],
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: 'repo-shared::/srv/repo',
+            repoId: 'repo-shared',
+            hostId: 'runtime:awin'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-shared::/srv/repo')).toBeNull()
+  })
+
+  it('keeps a runtime host nested SSH target, which decides local readability', () => {
+    // `repoWithFetchedOwner` stamps the runtime host and spreads the nested target through. The
+    // pane pairs it with the environment (`selectRuntimeAwareSshStatus`) for reconnect state, and
+    // `isNativeChatTranscriptLocalReadable` treats a null here as "this client can read it" — so
+    // dropping it would send a transcript read to the wrong machine.
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({
+          id: 'repo-runtime',
+          connectionId: 'ssh-nested',
+          executionHostId: 'runtime:env-a'
+        })
+      ],
+      worktreesByRepo: {
+        'repo-runtime': [
+          makeWorktree({
+            id: 'repo-runtime::/srv/repo',
+            repoId: 'repo-runtime',
+            hostId: 'runtime:env-a',
+            runtimeOwnerEnvironmentId: 'env-a'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-runtime::/srv/repo')).toBe('ssh-nested')
+  })
+
+  it('resolves the row on the SSH host the worktree names when both hosts carry the id', () => {
+    const state: ConnectionContextState = {
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [
+        makeRepo({ id: 'repo-shared', connectionId: 'openclaw' }),
+        makeRepo({ id: 'repo-shared', connectionId: 'm4air', path: '/srv/repo' })
+      ],
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: 'repo-shared::/srv/repo',
+            repoId: 'repo-shared',
+            hostId: 'ssh:m4air'
+          })
+        ]
+      }
+    }
+
+    expect(getConnectionIdFromState(state, 'repo-shared::/srv/repo')).toBe('m4air')
   })
 
   it('indexes immutable worktree and repo snapshots once across repeated selector calls', () => {

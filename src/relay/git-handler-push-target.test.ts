@@ -46,6 +46,17 @@ function gitForConfig(config: {
       }
       return { stdout: `${config.base ?? ''}\n`, stderr: '' }
     }
+    if (args[0] === 'remote' && args[1] === '-v') {
+      return {
+        stdout: (config.remotes ?? [])
+          .flatMap((name) => {
+            const url = config.remoteUrls?.[name] ?? ''
+            return [`${name}\t${url} (fetch)`, `${name}\t${url} (push)`]
+          })
+          .join('\n'),
+        stderr: ''
+      }
+    }
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: `${config.remotes?.join('\n') ?? ''}\n`, stderr: '' }
     }

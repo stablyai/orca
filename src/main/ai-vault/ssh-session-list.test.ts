@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
-import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
+import {
+  createSshDisposalError,
+  SSH_MUX_REQUEST_TIMEOUT_CODE
+} from '../ssh/ssh-channel-multiplexer'
 
 const requestActiveSshAiVaultSessionList = vi.fn()
 const getActiveSshAiVaultHostInfo = vi.fn()
@@ -132,6 +135,24 @@ describe('scanSshAiVaultSessions', () => {
     // A relay that had a fair scan window will not answer faster over the far
     // slower filesystem crawl, so retrying it only stalls the merge.
     requestActiveSshAiVaultSessionList.mockRejectedValue(relayTimeoutError())
+
+    const result = await scanSshAiVaultSessions('dev-box', undefined, {
+      timeoutMs: 20_000,
+      relayTimeoutMs: 15_000
+    })
+
+    expect(scanRemoteAiVaultSessions).not.toHaveBeenCalled()
+    expect(result.issues).toEqual([
+      expect.objectContaining({ executionHostId: 'ssh:dev-box', kind: 'host' })
+    ])
+  })
+
+  it('reports a host issue when the relay link was declared lost on a real scan budget', async () => {
+    // Declaring a wedged link lost trades SSH_MUX_REQUEST_TIMEOUT for CONNECTION_LOST on this leg.
+    // Both are unverifiable, so both must surface as a host issue rather than falling through to a
+    // crawl that would publish an authoritative-looking empty list
+    // (docs/reference/ssh-execution-boundary.md).
+    requestActiveSshAiVaultSessionList.mockRejectedValue(createSshDisposalError('connection_lost'))
 
     const result = await scanSshAiVaultSessions('dev-box', undefined, {
       timeoutMs: 20_000,

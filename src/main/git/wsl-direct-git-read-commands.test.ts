@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
+import { classifyGitCommand, isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
 
 describe('isWslDirectGitReadCommand', () => {
   it.each([
@@ -49,6 +49,8 @@ describe('isWslDirectGitReadCommand', () => {
     [['symbolic-ref', 'HEAD', 'refs/heads/main']],
     [['worktree', 'add', '/tmp/wt']],
     [['branch', '-D', 'feature']],
+    [['branch', '-r', '-d', 'origin/feature']],
+    [['branch', '-rd', 'origin/feature']],
     [['branch', 'newbranch']],
     [[]]
   ])('keeps %j on the login shell', (args) => {
@@ -87,5 +89,74 @@ describe('isWslDirectGitReadCommand', () => {
     [['-c', 'k=v']]
   ])('keeps %j on the login shell behind global options', (args) => {
     expect(isWslDirectGitReadCommand(args)).toBe(false)
+  })
+})
+
+describe('classifyGitCommand', () => {
+  it.each([
+    [['fetch', '--all'], 'network'],
+    [['pull', '--rebase'], 'network'],
+    [['push', 'origin', 'main'], 'network'],
+    [['clone', 'https://example.com/repo.git'], 'network'],
+    [['ls-remote', '--heads', 'origin'], 'network'],
+    [['submodule', 'update', '--init'], 'network'],
+    [['remote', 'update', '--prune'], 'network'],
+    [['-c', 'maintenance.auto=false', 'fetch', '--all'], 'network'],
+    [['-C', '/repo', 'status', '--porcelain=v2'], 'read'],
+    [['status', '--porcelain=v2'], 'read'],
+    [['branch', '--show-current'], 'read'],
+    [['branch', '-r', '-d', 'origin/feature'], 'other'],
+    [['branch', '-rd', 'origin/feature'], 'other'],
+    [['remote', 'get-url', 'origin'], 'read'],
+    [['config', '--get-regexp', String.raw`^remote\.`], 'read'],
+    [['show', '--end-of-options', 'HEAD:file'], 'read'],
+    [['blame', '--', 'file'], 'read'],
+    [['submodule', 'status'], 'read'],
+    [['submodule', 'sync'], 'other'],
+    [['submodule', 'foreach', 'status'], 'other'],
+    [['remote', 'show', 'origin'], 'other'],
+    [['remote', 'add', 'origin', 'url'], 'other'],
+    [['checkout', 'main'], 'other'],
+    [['made-up-command'], 'other'],
+    [[], 'other'],
+    // Unparsed space-separated global values remain fail-safe.
+    [['--git-dir', '/repo/.git', 'log'], 'other'],
+    [['--work-tree', '/repo', 'status'], 'other'],
+    [['-c', 'key=value'], 'other']
+  ] as const)('classifies %j as %s', (args, expected) => {
+    expect(classifyGitCommand(args)).toBe(expected)
+  })
+
+  it.each([
+    [['--version'], 'other'],
+    [['branch', '-a'], 'read'],
+    [['branch', '--show-current'], 'read'],
+    [['check-ref-format', '--branch', 'topic'], 'read'],
+    [['checkout', 'topic'], 'other'],
+    [['commit', '-m', 'message'], 'other'],
+    [['config', '--get', 'remote.origin.url'], 'read'],
+    [['config', '--local', 'key', 'value'], 'other'],
+    [['diff', '--numstat', 'HEAD'], 'read'],
+    [['fetch', '--prune'], 'network'],
+    [['init'], 'other'],
+    [['ls-files', '-z'], 'read'],
+    [['ls-tree', 'HEAD'], 'read'],
+    [['merge', '--abort'], 'other'],
+    [['merge-base', 'HEAD', 'origin/main'], 'read'],
+    [['pull', '--rebase'], 'network'],
+    [['rebase', '--abort'], 'other'],
+    [['remote'], 'read'],
+    [['remote', '-v'], 'read'],
+    [['remote', 'get-url', 'origin'], 'read'],
+    [['restore', '--staged', '--', 'file'], 'other'],
+    [['rev-list', '--count', 'HEAD'], 'read'],
+    [['rev-parse', 'HEAD'], 'read'],
+    [['show', ':file'], 'read'],
+    [['status', '--porcelain=v2'], 'read'],
+    [['update-ref', '-d', 'refs/orca/tmp'], 'other'],
+    [['worktree', 'list', '--porcelain'], 'read'],
+    [['worktree', 'prune'], 'other']
+  ] as const)('covers the production form %j as %s', (args, expected) => {
+    expect(classifyGitCommand(args)).toBe(expected)
   })
 })

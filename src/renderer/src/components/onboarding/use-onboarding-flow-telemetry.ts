@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
@@ -45,7 +45,8 @@ export function useOnboardingFlowTelemetry({
     )
   }, [remappedLastCompletedStep])
 
-  const stepStartedAtRef = useRef<number>(Date.now())
+  const [initialStepStartedAt] = useState(() => Date.now())
+  const stepStartedAtRef = useRef<number>(initialStepStartedAt)
   useEffect(() => {
     stepStartedAtRef.current = Date.now()
     track('onboarding_step_viewed', {

@@ -1,6 +1,6 @@
 // Every browser-tab placement must publish the created tab through one seam. A placement that
 // hand-rolls its own bookkeeping is how a client-placed page once lost its targetGroupId.
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
@@ -91,7 +91,11 @@ function createPublicationHost(registeredTabs: readonly [string, number][] = [['
 }
 
 function browserCommandsSource(): string {
-  return readFileSync(join(__dirname, 'orca-runtime-browser.ts'), 'utf8')
+  return readdirSync(__dirname)
+    .filter((name) => /^runtime-browser-commands-.*\.ts$/.test(name))
+    .sort()
+    .map((name) => readFileSync(join(__dirname, name), 'utf8'))
+    .join('\n')
 }
 
 describe('publishCreatedBrowserSessionTab', () => {

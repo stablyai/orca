@@ -132,6 +132,45 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it('does not recover a pane whose relay reply was an identity mismatch', async () => {
+    // The mismatch suffix means the relay found a LIVE PTY under that id owned by ANOTHER pane, so
+    // it is evidence of presence, not absence. This transport is the only caller of
+    // terminal.recoverPane, so a bare SSH_SESSION_EXPIRED substring test here put a second agent on
+    // one transcript even though main already refuses the respawn on the same reply.
+    const onError = vi.fn()
+    resolvedPaneHandle = 'terminal-mismatch'
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('hub-env', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'pane:1'
+    })
+    transport.attach({
+      existingPtyId: 'remote:hub-env@@terminal-mismatch',
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockClear()
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: {
+        type: 'error',
+        streamId: latestSubscribePayload().streamId,
+        message: 'SSH_SESSION_EXPIRED: pty-1 SSH_PTY_IDENTITY_MISMATCH'
+      }
+    })
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalled())
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.recoverPane' })
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.create' })
+    )
+    expect(transport.getPtyId()).toBe('remote:hub-env@@terminal-mismatch')
+  })
+
   it('fails closed when an older HUB cannot recover an expired SSH pane', async () => {
     const onError = vi.fn()
     resolvedPaneHandle = 'terminal-expired'
@@ -224,7 +263,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     subscriptionCallbacks?.onResponse({
       ok: true,
-      result: { type: 'end', streamId: newStreamId }
+      result: { type: 'end', streamId: newStreamId, verdict: 'exited' }
     })
 
     expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-new')

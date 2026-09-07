@@ -30,6 +30,10 @@ export type TerminalPaneRecoveryReason =
   | 'reattach-unverifiable'
   // A restore was requested for a certified-dead pipeline (reveal path).
   | 'restore-blocked'
+  // A spawn resolved without a PTY id, so the pane is mounted with no transport
+  // binding. pty:data for the old id then lands in the pre-handler buffer, which
+  // ACKs it — main's delivery health stays green while the pane shows nothing.
+  | 'spawn-left-pane-unbound'
 
 type RecoveryRequest = {
   tabId: string
@@ -134,6 +138,12 @@ export function registerTerminalPaneRecoveryInstance(tabId: string): {
       const pendingRetry = pendingRetryByTabId.get(tabId)
       pendingRetry?.requestsByInstanceId.delete(id)
       if (pendingRetry?.requestsByInstanceId.size === 0) {
+        cancelPendingRecoveryRetry(tabId)
+      }
+      const getTab = useAppStore.getState().getTab
+      if (getTab && !getTab(tabId)) {
+        recoveryTimestampsByTabId.delete(tabId)
+        recoveryGenerationByTabId.delete(tabId)
         cancelPendingRecoveryRetry(tabId)
       }
     }

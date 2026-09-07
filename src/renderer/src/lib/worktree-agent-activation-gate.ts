@@ -8,29 +8,31 @@ import {
   type ResumeSleepingAgentSessionsOptions
 } from './resume-sleeping-agent-session'
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
-import { bindLivePtyToExactSurface } from './worktree-agent-live-surface-adoption'
+import {
+  adoptLiveWorkspacePtySurfaces,
+  bindLivePtyToExactSurface,
+  type LiveSurfaceAdoptionStore
+} from './worktree-agent-live-surface-adoption'
+import type { LiveTerminalSurfaceOwnerIndex } from './worktree-live-terminal-surface-owners'
+import { readWorktreeLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
 import { isStructuredAgentSyntheticSleepingRecord } from './structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,
   type StructuredActivationInventory
 } from './worktree-agent-structured-inventory'
 
-type ActivationStore = Pick<
-  ReturnType<typeof useAppStore.getState>,
-  | 'createTab'
-  | 'ptyIdsByTabId'
-  | 'sleepingAgentSessionsByPaneKey'
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'unifiedTabsByWorktree'
-  | 'updateTabPtyId'
-  | 'replaceTerminalLayoutPanePtyId'
->
+type ActivationStore = LiveSurfaceAdoptionStore &
+  Pick<
+    ReturnType<typeof useAppStore.getState>,
+    'sleepingAgentSessionsByPaneKey' | 'unifiedTabsByWorktree'
+  >
 
 type ActivationGateDeps = {
   getState: () => ActivationStore
   awaitReady?: () => Promise<boolean>
   listSessions: () => Promise<PtyListedSession[]>
+  /** Host-recorded PTY→surface ownership; null when the host could not answer. */
+  listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
   hasStructuredSession?: (worktreeId: string) => Promise<boolean | StructuredActivationInventory>
   resume: (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
 }
@@ -85,10 +87,6 @@ function hasStructuredSession(store: ActivationStore, worktreeId: string): boole
   return (store.unifiedTabsByWorktree[worktreeId] ?? []).some(
     (tab) => tab.contentType === 'agent-session'
   )
-}
-
-function ptyIsAlreadyBound(store: ActivationStore, ptyId: string): boolean {
-  return Object.values(store.ptyIdsByTabId).some((ids) => ids.includes(ptyId))
 }
 
 function sessionBelongsToWorkspace(sessionId: string, worktreeId: string): boolean {
@@ -211,19 +209,26 @@ export async function runWorktreeAgentActivationGate(
       return 'blocked'
     }
   }
+  let liveSurfaceAdopted = false
   if (liveWorkspaceSessions.length > 0) {
-    for (const session of liveWorkspaceSessions) {
-      const store = deps.getState()
-      if (ptyIsAlreadyBound(store, session.id)) {
-        continue
-      }
-      store.createTab(worktreeId, undefined, undefined, {
-        initialPtyId: session.id,
-        activate: false,
-        recordInteraction: false
+    // Why: an unreadable census adopts nothing and mints nothing, so reporting 'adopted'
+    // would suppress the caller's seed and leave the workspace with no surface at all —
+    // fail-closed must still leave the user a usable pane (STA-5701).
+    const adoption = await adoptLiveWorkspacePtySurfaces(
+      deps.getState,
+      worktreeId,
+      [...liveWorkspacePtyIds],
+      deps.listSurfaceOwners
+    )
+    liveSurfaceAdopted = adoption.surfaced
+    // A live agent the user can no longer see has to be diagnosable from the console.
+    if (adoption.declinedPtyIds.length > 0) {
+      console.warn('[worktree-activation] live PTYs left without a surface', {
+        worktreeId,
+        declinedPtyIds: adoption.declinedPtyIds
       })
     }
-    if (!workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
+    if (liveSurfaceAdopted && !workspaceHasSleepingAgentSessions(deps.getState(), worktreeId)) {
       return 'adopted'
     }
   }
@@ -239,9 +244,11 @@ export async function runWorktreeAgentActivationGate(
       structuredInventory
     )
   })
+  // 'empty' is the caller's directive — "this gate produced no surface, seed one" — not a
+  // claim the host had nothing; the callers re-check their own seeding guards first.
   return launched > 0
     ? 'resumed'
-    : liveWorkspaceSessions.length > 0
+    : liveSurfaceAdopted
       ? 'adopted'
       : structured
         ? 'structured'
@@ -260,6 +267,7 @@ export function gateWorktreeAgentActivation(
     awaitReady: waitForWorkspaceSessionReady,
     listSessions: () =>
       typeof window === 'undefined' ? Promise.resolve([]) : window.api.pty.listSessions(),
+    listSurfaceOwners: readWorktreeLiveTerminalSurfaceOwners,
     hasStructuredSession: readWorktreeStructuredActivationInventory,
     resume: resumeSleepingAgentSessionsForWorktree
   }).finally(() => {

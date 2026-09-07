@@ -16,6 +16,7 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyManagementApi } from './pty-management-api'
+import type { TerminalProcessInspection } from '../../shared/terminal-process-inspection'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -68,6 +69,8 @@ export type PtyApi = {
     coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
     startupCwdFallback?: { kind: 'worktree'; cwd: string }
     agentResumeUnavailable?: true
+    /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
+    shellReadyArmed?: boolean
   }>
   write: (id: string, data: string) => void
   writeAccepted: (id: string, data: string) => Promise<boolean>
@@ -109,11 +112,14 @@ export type PtyApi = {
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
   hasChildProcesses: (id: string) => Promise<boolean>
   getForegroundProcess: (id: string) => Promise<string | null>
-  inspectProcess: (id: string) => Promise<{
-    foregroundProcess: string | null
-    hasChildProcesses: boolean
-    unavailable?: true
-  }>
+  inspectProcess: (
+    id: string,
+    options?: {
+      expectedIncarnationId?: string
+      scanChildProcesses?: boolean
+      steadyState?: boolean
+    }
+  ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
@@ -204,6 +210,8 @@ export type PtyApi = {
       preserveRendererBinding?: boolean
       /** Which lifetime of `id` died; absent when the execution host predates the field. */
       incarnationId?: string
+      /** Set only when the owning relay disowned this id; never a claim that the process died. */
+      ptySourceDisowned?: true
     }) => void
   ) => () => void
   onSpawned: (callback: (data: { id: string }) => void) => () => void
@@ -211,7 +219,7 @@ export type PtyApi = {
     callback: (data: {
       requestId: string
       ptyId: string
-      opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+      opts?: { scrollbackRows?: number }
     }) => void
   ) => () => void
   onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void

@@ -24,10 +24,15 @@ function createFixture() {
   for (const directory of [workspace, detachedCwd]) {
     writeFileSync(join(directory, 'package.json'), '{"name":"fixture"}\n')
     writeFileSync(join(directory, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
+    writeFileSync(join(directory, 'pnpm-workspace.yaml'), 'packages: []\n')
   }
 
   expect(run('git', ['init', '-q'], { cwd: workspace }).status).toBe(0)
-  expect(run('git', ['add', 'package.json', 'pnpm-lock.yaml'], { cwd: workspace }).status).toBe(0)
+  expect(
+    run('git', ['add', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'], {
+      cwd: workspace
+    }).status
+  ).toBe(0)
 
   const pnpm = join(bin, 'pnpm')
   writeFileSync(pnpm, '#!/bin/sh\nexit 0\n')
@@ -76,7 +81,8 @@ describe('install-node-dependencies action', () => {
 
   it.each([
     ['package.json', '{"name":"changed"}\n'],
-    ['pnpm-lock.yaml', 'lockfileVersion: 9\nchanged: true\n']
+    ['pnpm-lock.yaml', 'lockfileVersion: 9\nchanged: true\n'],
+    ['pnpm-workspace.yaml', 'packages: []\nchanged: true\n']
   ])('rejects a changed %s when the composite step cwd is detached', (file, contents) => {
     const fixture = createFixture()
     try {

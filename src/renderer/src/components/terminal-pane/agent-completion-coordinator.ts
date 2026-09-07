@@ -53,7 +53,7 @@ export function createAgentCompletionCoordinator(
     pollTrackingStarted: false,
     pollTimer: null as ReturnType<typeof setTimeout> | null,
     pollTimerTier: null as 'active' | 'idle' | 'hidden' | 'no-evidence' | null,
-    lastPaneActivityAt: 0,
+    lastPaneActivityAt: null,
     hasAgentRunEvidence: false,
     pendingProcessExitAgent: null as RecognizedAgentProcess | null,
     lastForegroundAgent: null as RecognizedAgentProcess | null,

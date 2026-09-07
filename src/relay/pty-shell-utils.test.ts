@@ -13,7 +13,8 @@ vi.mock('child_process', () => ({
 
 import { resetWindowsProcessRowsSnapshotForTests } from '../main/providers/windows-foreground-process-rows'
 import { __setWindowsProcessTreeLoaderForTests } from '../main/windows/windows-process-table'
-import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot'
+import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot-reader'
+import { inspectPtyChildProcesses, processHasChildren } from './pty-child-process-inspection'
 import {
   getForegroundProcessName,
   isProcessAlive,
@@ -41,6 +42,14 @@ function mockExecFile(
  * Feed the native Windows snapshot. A real snapshot always contains the
  * querying process, and the reader rejects a table without it.
  */
+/** A native reader that answers, but with no snapshot -- an unreadable table, not an empty one. */
+function mockUnreadableWindowsProcessTable(): void {
+  __setWindowsProcessTreeLoaderForTests(() => ({
+    ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+    getAllProcesses: (cb: (value: undefined) => void) => cb(undefined)
+  }))
+}
+
 function mockWindowsProcessTable(
   rows: { pid: number; ppid: number; name: string; commandLine?: string }[]
 ): void {
@@ -299,10 +308,34 @@ describe('resolveDefaultCwd', () => {
 })
 
 describe('getForegroundProcessName', () => {
-  it('returns clear non-wrapper foregrounds without process-table enrichment', async () => {
-    await expect(getForegroundProcessName(100, 'vim')).resolves.toBe('vim')
+  it('keeps a non-agent foreground name when the process table shows no agent', async () => {
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: ['100 99 Ss   zsh -l', '101 100 S+   vim notes.md'].join('\n') }
+        }
+        return new Error('unexpected command')
+      })
 
-    expect(execFileMock).not.toHaveBeenCalled()
+      await expect(getForegroundProcessName(100, 'vim')).resolves.toBe('vim')
+    })
+  })
+
+  it('resolves a macOS p_comm basename to the agent that owns the foreground', async () => {
+    // Why: node-pty reports the native Claude binary as its version directory (`2.1.258`);
+    // answering with that name downgrades agent prompts to unframed chunks (STA-4577).
+    await withProcessPlatform('darwin', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 99 Ss   zsh -l', '101 100 S+   claude --model haiku'].join('\n')
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, '2.1.258')).resolves.toBe('claude')
+    })
   })
 
   it('recognizes SSH relay node-wrapped agents from descendant command lines', async () => {
@@ -457,6 +490,39 @@ describe('getForegroundProcessName', () => {
     })
   })
 
+  it('normalizes a wrapper fallback the process table cannot confirm', async () => {
+    // Why: the table scan must answer null, not the raw node-pty name, so the
+    // ladder still publishes the RECOGNIZED (normalized) identity.
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: ['100 99 Ss   bash -l', '101 100 S+   vim notes.txt'].join('\n') }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, '/opt/homebrew/bin/pi')).resolves.toBe('pi')
+    })
+  })
+
+  it('resolves a duplicated root pid to the FIRST capture row', async () => {
+    // Preserve rows.find() semantics if a malformed table repeats a pid: an argv
+    // newline makes `ps` print a continuation line that can parse as a spurious
+    // row, so the real root (row one) must keep owning the pane's foreground.
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return {
+            stdout: ['100 1 Ss bash', '100 1 Ss+ bash', '101 100 S node /opt/codex'].join('\n')
+          }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(getForegroundProcessName(100, 'bash')).resolves.toBe('codex')
+    })
+  })
+
   it('falls back to the root process command when descendant inspection fails', async () => {
     mockExecFile((_command, args) => {
       if (args[0] === '-axo') {
@@ -466,5 +532,149 @@ describe('getForegroundProcessName', () => {
     })
 
     await expect(getForegroundProcessName(100)).resolves.toBe('bash')
+  })
+})
+
+describe('processHasChildren', () => {
+  // Why these assert on argv, not just the answer: the defect in #13537 was the
+  // cost of the answer. `pgrep -P` forks per pane per poll and opens six procfs
+  // files per host process to resolve one ppid, so the contract worth pinning is
+  // "no fork of its own, and share the foreground lookup's cached table".
+  const PS_TABLE = ['100 1 Ss bash', '101 100 S+ node /opt/codex', '200 1 Ss zsh'].join('\n')
+
+  it('answers from the shared process table without forking pgrep', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: PS_TABLE }
+        }
+        return new Error('unexpected command')
+      })
+
+      await expect(processHasChildren(100)).resolves.toBe(true)
+      await expect(processHasChildren(200)).resolves.toBe(false)
+
+      expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain('pgrep')
+    })
+  })
+
+  it('shares one process-table capture across a burst of panes', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: PS_TABLE }
+        }
+        return new Error('unexpected command')
+      })
+
+      const answers = await Promise.all([
+        processHasChildren(100),
+        processHasChildren(100),
+        processHasChildren(200),
+        getForegroundProcessName(100, 'bash')
+      ])
+
+      expect(answers).toEqual([true, true, false, 'codex'])
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('rescans for a close decision rather than serving a table from inside the TTL', async () => {
+    await withProcessPlatform('linux', async () => {
+      let table = PS_TABLE
+      mockExecFile((_command, args) => {
+        if (args[0] === '-axo') {
+          return { stdout: table }
+        }
+        return new Error('unexpected command')
+      })
+
+      // The poll answers from the cache, which is the whole point of the memo.
+      await expect(processHasChildren(200)).resolves.toBe(false)
+      table = [PS_TABLE, '201 200 S+ npm run build'].join('\n')
+      await expect(processHasChildren(200)).resolves.toBe(false)
+      expect(execFileMock).toHaveBeenCalledTimes(1)
+
+      // A close or cleanup acts on the answer once and destructively, so a
+      // child started inside the 500ms window has to be visible to it.
+      await expect(processHasChildren(200, { fresh: true })).resolves.toBe(true)
+      expect(execFileMock).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('reports an unreadable POSIX table as unverifiable, and still spells it false on the wire', async () => {
+    await withProcessPlatform('linux', async () => {
+      mockExecFile(() => new Error('ps table unavailable'))
+
+      await expect(inspectPtyChildProcesses(100)).resolves.toBe('unverifiable')
+      await expect(processHasChildren(100)).resolves.toBe(false)
+    })
+  })
+})
+
+describe('inspectPtyChildProcesses on Windows', () => {
+  // Why this describe exists: the relay used to `return false` here unconditionally, and a
+  // hardcoded negative is indistinguishable from a measurement. Every close guard reads it as
+  // "nothing is running here", so a Windows SSH pane running a build closed with no prompt.
+  it('walks the process table rather than answering from nothing', async () => {
+    await withProcessPlatform('win32', async () => {
+      mockWindowsProcessTable([
+        { pid: 100, ppid: 99, name: 'cmd.exe', commandLine: 'cmd.exe' },
+        { pid: 101, ppid: 100, name: 'PING.EXE', commandLine: 'ping -n 40 127.0.0.1' }
+      ])
+
+      await expect(inspectPtyChildProcesses(100)).resolves.toBe('children')
+      await expect(processHasChildren(100)).resolves.toBe(true)
+    })
+  })
+
+  it('finds a grandchild the shell backgrounded, not just direct children', async () => {
+    await withProcessPlatform('win32', async () => {
+      mockWindowsProcessTable([
+        { pid: 100, ppid: 99, name: 'cmd.exe', commandLine: 'cmd.exe' },
+        { pid: 101, ppid: 100, name: 'node.exe', commandLine: 'node build.js' },
+        { pid: 102, ppid: 101, name: 'tsc.exe', commandLine: 'tsc --watch' }
+      ])
+
+      await expect(inspectPtyChildProcesses(102)).resolves.toBe('no-children')
+      await expect(inspectPtyChildProcesses(101)).resolves.toBe('children')
+    })
+  })
+
+  it('separates an observed-empty shell from a table it could not read', async () => {
+    await withProcessPlatform('win32', async () => {
+      mockWindowsProcessTable([{ pid: 100, ppid: 99, name: 'cmd.exe', commandLine: 'cmd.exe' }])
+      await expect(inspectPtyChildProcesses(100)).resolves.toBe('no-children')
+
+      resetWindowsProcessRowsSnapshotForTests()
+      mockUnreadableWindowsProcessTable()
+      const alive = vi.spyOn(process, 'kill').mockReturnValue(true as never)
+      try {
+        await expect(inspectPtyChildProcesses(100)).resolves.toBe('unverifiable')
+        // The compatibility boolean keeps spelling unverifiable `false`: it reaches clients that
+        // cannot read the verdict, and they read `true` as "an agent took the PTY, safe to type".
+        await expect(processHasChildren(100)).resolves.toBe(false)
+      } finally {
+        alive.mockRestore()
+      }
+    })
+  })
+
+  it('does not read a missing shell as unverifiable when the kernel says it is gone', async () => {
+    await withProcessPlatform('win32', async () => {
+      // The root is absent from the snapshot, which on its own cannot distinguish a filtered
+      // table from an exited shell. Only ESRCH settles it.
+      mockWindowsProcessTable([{ pid: 900, ppid: 1, name: 'explorer.exe' }])
+      const gone = vi.spyOn(process, 'kill').mockImplementation(() => {
+        const error = new Error('no such process') as NodeJS.ErrnoException
+        error.code = 'ESRCH'
+        throw error
+      })
+      try {
+        await expect(inspectPtyChildProcesses(100)).resolves.toBe('no-children')
+      } finally {
+        gone.mockRestore()
+      }
+    })
   })
 })

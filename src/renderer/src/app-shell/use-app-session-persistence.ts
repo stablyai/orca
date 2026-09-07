@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../store'
 import {
   isDirectSshRemoteWorkspaceApplyInProgress,
@@ -37,42 +36,57 @@ import {
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
   ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
 } from '../../../shared/renderer-shutdown-events'
-import type { RemoteWorkspacePatchResult } from '../../../shared/remote-workspace-types'
+import type { AppState } from '../store/types'
+import { applyRemoteWorkspacePushStatus } from '../hooks/remote-workspace-push-status'
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
 const SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS = 60_000
 
-function applyRemoteWorkspacePatchStatus(
-  targetId: string,
-  result: RemoteWorkspacePatchResult
-): void {
-  const store = useAppStore.getState()
-  if (result.ok) {
-    store.setRemoteWorkspaceSyncStatus(targetId, {
-      phase: 'synced',
-      direction: 'push',
-      revision: result.snapshot.revision,
-      updatedAt: result.snapshot.updatedAt,
-      lastSyncedAt: Date.now(),
-      message: translate('auto.App.332dbfa497', 'Workspace uploaded')
-    })
-    return
-  }
-  store.setRemoteWorkspaceSyncStatus(targetId, {
-    phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
-    direction: 'push',
-    revision: result.snapshot?.revision,
-    updatedAt: result.snapshot?.updatedAt,
-    lastSyncedAt: Date.now(),
-    message:
-      result.message ??
-      (result.reason === 'stale-revision'
-        ? translate(
-            'auto.hooks.useIpcEvents.workspaceChangedOnAnotherDevice',
-            'Workspace changed on another device'
-          )
-        : translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable'))
+type RemoteWorkspaceUploadAuthority = {
+  targetId: string
+  revision: number
+  updatedAt?: number
+  hostObservationToken: string
+}
+
+function captureRemoteWorkspaceUploadAuthorities(
+  state: AppState
+): RemoteWorkspaceUploadAuthority[] {
+  return Array.from(state.remoteWorkspaceHydratedTargetIds).flatMap((targetId) => {
+    const syncStatus = state.remoteWorkspaceSyncStatusByTargetId[targetId]
+    const revision = syncStatus?.revision
+    const hostObservationToken = syncStatus?.hostObservationToken
+    if (
+      syncStatus?.phase === 'conflict' ||
+      typeof revision !== 'number' ||
+      !Number.isSafeInteger(revision) ||
+      revision < 0 ||
+      typeof hostObservationToken !== 'string' ||
+      hostObservationToken.length === 0
+    ) {
+      return []
+    }
+    return [
+      {
+        targetId,
+        revision,
+        updatedAt: syncStatus.updatedAt,
+        hostObservationToken
+      }
+    ]
   })
+}
+
+function remoteWorkspaceUploadAuthorityIsCurrent(
+  state: AppState,
+  authority: RemoteWorkspaceUploadAuthority
+): boolean {
+  const status = state.remoteWorkspaceSyncStatusByTargetId[authority.targetId]
+  return (
+    state.remoteWorkspaceHydratedTargetIds.has(authority.targetId) &&
+    status?.phase !== 'conflict' &&
+    status?.hostObservationToken === authority.hostObservationToken
+  )
 }
 
 /**
@@ -93,26 +107,62 @@ export function useAppSessionPersistence(): void {
         // Why: route each host's worktree-scoped slice to its own partition; return the local write so the remote-workspace upload chain below keeps its ordering.
         const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
         void localWrite
-        const hydratedTargetIds = Array.from(state.remoteWorkspaceHydratedTargetIds).filter(
-          (targetId) => state.remoteWorkspaceSyncStatusByTargetId[targetId]?.phase !== 'conflict'
-        )
-        if (hydratedTargetIds.length > 0) {
-          void localWrite
-            .then(() => window.api.remoteWorkspace?.setForConnectedTargets({ hydratedTargetIds }))
-            .then((results) => {
-              for (const { targetId, result } of results ?? []) {
-                applyRemoteWorkspacePatchStatus(targetId, result)
+        const uploadAuthorities = captureRemoteWorkspaceUploadAuthorities(state)
+        if (uploadAuthorities.length > 0) {
+          void (async () => {
+            try {
+              await localWrite
+              const currentState = useAppStore.getState()
+              const currentAuthorities = uploadAuthorities.filter((authority) =>
+                remoteWorkspaceUploadAuthorityIsCurrent(currentState, authority)
+              )
+              if (currentAuthorities.length === 0) {
+                return
               }
-            })
-            .catch((err) => {
-              for (const targetId of hydratedTargetIds) {
-                useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
+              const hydratedTargetIds = currentAuthorities.map(({ targetId }) => targetId)
+              const expectedRevisionsByTargetId = Object.fromEntries(
+                currentAuthorities.map(({ targetId, revision }) => [targetId, revision])
+              )
+              const expectedHostObservationTokensByTargetId = Object.fromEntries(
+                currentAuthorities.map(({ targetId, hostObservationToken }) => [
+                  targetId,
+                  hostObservationToken
+                ])
+              )
+              const results = await window.api.remoteWorkspace?.setForConnectedTargets({
+                hydratedTargetIds,
+                expectedRevisionsByTargetId,
+                expectedHostObservationTokensByTargetId
+              })
+              const resultState = useAppStore.getState()
+              const currentAuthorityByTargetId = new Map(
+                currentAuthorities.map((authority) => [authority.targetId, authority])
+              )
+              for (const { targetId, result } of results ?? []) {
+                const authority = currentAuthorityByTargetId.get(targetId)
+                if (authority && remoteWorkspaceUploadAuthorityIsCurrent(resultState, authority)) {
+                  applyRemoteWorkspacePushStatus(resultState, targetId, result, authority)
+                }
+              }
+            } catch (err) {
+              const errorState = useAppStore.getState()
+              for (const authority of uploadAuthorities) {
+                if (!remoteWorkspaceUploadAuthorityIsCurrent(errorState, authority)) {
+                  continue
+                }
+                const currentStatus =
+                  errorState.remoteWorkspaceSyncStatusByTargetId[authority.targetId]
+                errorState.setRemoteWorkspaceSyncStatus(authority.targetId, {
                   phase: 'error',
                   direction: 'push',
+                  revision: currentStatus?.revision ?? authority.revision,
+                  updatedAt: currentStatus?.updatedAt ?? authority.updatedAt,
+                  hostObservationToken: authority.hostObservationToken,
                   message: err instanceof Error ? err.message : 'Workspace upload failed'
                 })
               }
-            })
+            }
+          })()
         }
       }
     })

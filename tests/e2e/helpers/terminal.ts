@@ -49,11 +49,11 @@ export async function focusActiveTerminalInput(page: Page): Promise<void> {
           : null
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
+    if (!state || !tabId || !pane) {
       throw new Error('No active terminal pane to focus')
     }
-    state?.setActiveTab(tabId)
-    state?.setActiveTabType('terminal')
+    state.setActiveTab(tabId)
+    state.setActiveTabType('terminal')
     pane.terminal.focus()
     const textarea = pane.container.querySelector(
       '.xterm-helper-textarea'
@@ -99,29 +99,36 @@ export async function waitForPaneIdentitySnapshot(
   page: Page,
   paneCount: number
 ): Promise<PaneIdentitySnapshot> {
-  await expect
-    .poll(
-      async () => {
-        const snapshot = await readPaneIdentitySnapshot(page)
-        return Boolean(
-          snapshot &&
-          snapshot.panes.length === paneCount &&
-          snapshot.panes.every(
-            (pane) =>
-              UUID_RE.test(pane.leafId) &&
-              pane.stablePaneId === pane.leafId &&
-              pane.datasetLeafId === pane.leafId &&
-              pane.ptyId !== null &&
-              snapshot.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+  let latestSnapshot: PaneIdentitySnapshot | null = null
+  try {
+    await expect
+      .poll(
+        async () => {
+          latestSnapshot = await readPaneIdentitySnapshot(page)
+          return Boolean(
+            latestSnapshot &&
+            latestSnapshot.panes.length === paneCount &&
+            latestSnapshot.panes.every(
+              (pane) =>
+                UUID_RE.test(pane.leafId) &&
+                pane.stablePaneId === pane.leafId &&
+                pane.datasetLeafId === pane.leafId &&
+                pane.ptyId !== null &&
+                latestSnapshot?.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+            )
           )
-        )
-      },
-      {
-        timeout: 15_000,
-        message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
-      }
-    )
-    .toBe(true)
+        },
+        {
+          timeout: 15_000,
+          message: 'Split terminal panes did not settle with UUID leaf-keyed PTY bindings'
+        }
+      )
+      .toBe(true)
+  } catch (error) {
+    throw new Error(`Last pane identity snapshot: ${JSON.stringify(latestSnapshot)}`, {
+      cause: error
+    })
+  }
 
   const snapshot = await readPaneIdentitySnapshot(page)
   if (!snapshot) {

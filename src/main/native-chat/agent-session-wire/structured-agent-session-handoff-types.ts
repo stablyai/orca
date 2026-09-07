@@ -49,7 +49,7 @@ export type StructuredAgentSessionHandoffTransport = {
     sessionId: string
     agent?: 'claude' | 'codex'
     adoptedTerminal?: true
-  }): void
+  }): Promise<void> | void
   waitForTuiExit(owner: StructuredTuiOwner): Promise<{ transcriptPath?: string }>
   waitForTuiIdleOrExit(
     owner: StructuredTuiOwner,
@@ -81,6 +81,7 @@ export type StructuredAgentSessionHandoffDeps = {
     fence: number
     transcriptPath?: string
   }) => Promise<void>
+  retryPendingSettlement: (sessionId: string) => Promise<boolean>
   prepareTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
   recoverTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
   activateTuiHistoryCatchup?: (sessionId: string) => Promise<void>

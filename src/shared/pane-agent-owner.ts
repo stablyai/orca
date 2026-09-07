@@ -26,10 +26,32 @@ export type PaneAgentOwnerSignals = {
   sleepingSessionAgent?: AgentType | null
 }
 
+export type ResolvedPaneAgentOwner = {
+  agent: AgentType
+  /** User-selected launch/startup/typed-command identity — not a status frame. */
+  ownerIsLaunch: boolean
+}
+
+const PANE_OWNER_RANK: readonly {
+  key: keyof PaneAgentOwnerSignals
+  ownerIsLaunch: boolean
+}[] = [
+  { key: 'launchAgent', ownerIsLaunch: true },
+  { key: 'startupLaunchAgent', ownerIsLaunch: true },
+  { key: 'initialStatusAgent', ownerIsLaunch: true },
+  { key: 'commandInferredAgent', ownerIsLaunch: true },
+  { key: 'hookAgent', ownerIsLaunch: false },
+  { key: 'siblingHookAgent', ownerIsLaunch: false },
+  { key: 'completedHookAgent', ownerIsLaunch: false },
+  { key: 'siblingCompletedHookAgent', ownerIsLaunch: false },
+  { key: 'sleepingSessionAgent', ownerIsLaunch: false }
+]
+
 /**
- * The single authoritative resolver for "which agent owns this pane", shared by
- * the tab-icon resolver, the terminal-pane display/renderer owner, and the
- * mirrored-tab title owner so they cannot drift apart.
+ * Compatibility owner lookup shared by the existing consumer surfaces.
+ *
+ * Tranche 0 intentionally preserves this pre-migration precedence byte-for-byte; switching
+ * these consumers to canonical evidence belongs to tranche 1.
  *
  * Why this precedence: launch intent is the authoritative bootstrap before any
  * process signal exists, so it leads. Once launch metadata is gone — a mirrored
@@ -42,17 +64,18 @@ export type PaneAgentOwnerSignals = {
  * launch/live-hook above the completed/sleeping records keeps a genuine pane on
  * its real agent and stops a stale record from hijacking it.
  */
+export function resolvePaneAgentOwnerRecord(
+  signals: PaneAgentOwnerSignals
+): ResolvedPaneAgentOwner | null {
+  for (const { key, ownerIsLaunch } of PANE_OWNER_RANK) {
+    const agent = signals[key]
+    if (agent) {
+      return { agent, ownerIsLaunch }
+    }
+  }
+  return null
+}
+
 export function resolvePaneAgentOwner(signals: PaneAgentOwnerSignals): AgentType | null {
-  return (
-    signals.launchAgent ??
-    signals.startupLaunchAgent ??
-    signals.initialStatusAgent ??
-    signals.commandInferredAgent ??
-    signals.hookAgent ??
-    signals.siblingHookAgent ??
-    signals.completedHookAgent ??
-    signals.siblingCompletedHookAgent ??
-    signals.sleepingSessionAgent ??
-    null
-  )
+  return resolvePaneAgentOwnerRecord(signals)?.agent ?? null
 }

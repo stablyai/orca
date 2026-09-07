@@ -10,8 +10,11 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
+  type AgentSessionBackgroundTaskState,
+  type AgentSessionSlashCommand,
   type AgentSessionHandoffStatus,
-  type AgentSessionSubscribeEvent
+  type AgentSessionSubscribeEvent,
+  type AgentSessionTurnActivity
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -33,10 +36,21 @@ type Subscriber = {
   emit: AgentSessionSubscriberEmit
   cursor: AgentJournalCursor
   fence: number
+  commands?: AgentSessionSlashCommand[] | null
+}
+
+export type AgentSessionSubscribersHooks = {
+  readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
+  /** Fires after any publication that can change journal content, whether or not anyone
+   *  is subscribed to the transcript: session lists project status from this same edge. */
+  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
 }
 
 export class AgentSessionSubscribers {
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
+  private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
+
+  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
 
   /** Opens the stream with a bounded tail page or, when the client's cursor
    *  still resolves, with the rows it missed. Returns the disposer. */
@@ -48,6 +62,7 @@ export class AgentSessionSubscribers {
     emit: AgentSessionSubscriberEmit
     cursor?: AgentJournalCursor
     handoff?: AgentSessionHandoffStatus
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
   }): () => void {
     const liveCursor = input.journal.cursor()
     const subscriber: Subscriber = {
@@ -62,7 +77,7 @@ export class AgentSessionSubscribers {
     this.bySession.set(input.sessionId, session)
 
     if (input.cursor) {
-      this.deliver(subscriber, input.journal, input.handoff, true)
+      this.deliver(subscriber, input.journal, input.handoff, true, input.backgroundTasks)
     } else {
       const page = readAgentSessionHydrationPage(input.journal, input.fence)
       this.emit(subscriber, {
@@ -70,7 +85,9 @@ export class AgentSessionSubscribers {
         sessionId: input.sessionId,
         page,
         fence: input.fence,
-        ...(input.handoff ? { handoff: input.handoff } : {})
+        ...(input.handoff ? { handoff: input.handoff } : {}),
+        ...(input.backgroundTasks !== undefined ? { backgroundTasks: input.backgroundTasks } : {}),
+        ...this.activityField(input.sessionId)
       })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
     }
@@ -92,9 +109,23 @@ export class AgentSessionSubscribers {
   }
 
   /** Fan out whatever each subscriber has not yet seen. */
-  publish(sessionId: string, journal: AgentSessionJournal): void {
+  publish(
+    sessionId: string,
+    journal: AgentSessionJournal,
+    activity?: AgentSessionTurnActivity | null
+  ): void {
+    if (activity !== undefined) {
+      if (activity) {
+        this.activityBySession.set(sessionId, activity)
+      } else {
+        this.activityBySession.delete(sessionId)
+      }
+    }
     for (const subscriber of this.subscribers(sessionId)) {
-      this.deliver(subscriber, journal)
+      this.deliver(subscriber, journal, undefined, false, undefined, activity)
+    }
+    if (activity === undefined) {
+      this.hooks.onJournalPublished?.(sessionId, journal)
     }
   }
 
@@ -104,23 +135,46 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     reason: AgentJournalResetReason,
-    fence: number
+    fence: number,
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
   ): void {
     const page = readAgentSessionHydrationPage(journal, fence)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, { type: 'reset', sessionId, reset: reason, page, fence })
+      this.emit(subscriber, {
+        type: 'reset',
+        sessionId,
+        reset: reason,
+        page,
+        fence,
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+        ...this.activityField(sessionId)
+      })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
-  snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
+  snapshot(
+    sessionId: string,
+    journal: AgentSessionJournal,
+    fence: number,
+    backgroundTasks?: AgentSessionBackgroundTaskState | null
+  ): void {
     const page = readAgentSessionHydrationPage(journal, fence)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.emit(subscriber, { type: 'snapshot', sessionId, page, fence })
+      this.emit(subscriber, {
+        type: 'snapshot',
+        sessionId,
+        page,
+        fence,
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+        ...this.activityField(sessionId)
+      })
       subscriber.cursor = page.liveCursor ?? page.window.nextCursor
       subscriber.fence = fence
     }
+    this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   handoff(sessionId: string, fence: number, handoff: AgentSessionHandoffStatus): void {
@@ -141,6 +195,28 @@ export class AgentSessionSubscribers {
     }
   }
 
+  backgroundTasks(
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null,
+    fence: number
+  ): void {
+    for (const subscriber of this.subscribers(sessionId)) {
+      this.emit(subscriber, {
+        type: 'batch',
+        sessionId,
+        batch: {
+          cursor: subscriber.cursor,
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        fence,
+        backgroundTasks: state
+      })
+      subscriber.fence = fence
+    }
+  }
+
   private subscribers(sessionId: string): Subscriber[] {
     return [...(this.bySession.get(sessionId)?.values() ?? [])]
   }
@@ -149,8 +225,16 @@ export class AgentSessionSubscribers {
     subscriber: Subscriber,
     journal: AgentSessionJournal,
     handoff?: AgentSessionHandoffStatus,
-    emitCheckpoint = false
+    emitCheckpoint = false,
+    backgroundTasks?: AgentSessionBackgroundTaskState | null,
+    activity?: AgentSessionTurnActivity | null
   ): void {
+    const publishedActivity =
+      activity !== undefined
+        ? activity
+        : emitCheckpoint
+          ? (this.activityBySession.get(subscriber.sessionId) ?? null)
+          : undefined
     while (true) {
       const result = readAgentSessionHistory(journal, {
         sessionId: subscriber.sessionId,
@@ -166,7 +250,9 @@ export class AgentSessionSubscribers {
           reset: result.reset,
           page,
           fence: subscriber.fence,
-          ...(handoff ? { handoff } : {})
+          ...(handoff ? { handoff } : {}),
+          ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+          ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
         })
         subscriber.cursor = page.liveCursor ?? page.window.nextCursor
         return
@@ -174,7 +260,10 @@ export class AgentSessionSubscribers {
       const page = result.page
       const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
       if (!advanced) {
-        if (handoff || emitCheckpoint) {
+        const commandsChanged =
+          this.hooks.readCommands !== undefined &&
+          (this.hooks.readCommands(subscriber.sessionId) ?? null) !== subscriber.commands
+        if (handoff || emitCheckpoint || publishedActivity !== undefined || commandsChanged) {
           this.emit(subscriber, {
             type: 'batch',
             sessionId: subscriber.sessionId,
@@ -185,7 +274,9 @@ export class AgentSessionSubscribers {
               submissions: []
             },
             fence: subscriber.fence,
-            ...(handoff ? { handoff } : {})
+            ...(handoff ? { handoff } : {}),
+            ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+            ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
           })
         }
         return
@@ -200,7 +291,9 @@ export class AgentSessionSubscribers {
           submissions: page.submissions
         },
         fence: subscriber.fence,
-        ...(handoff ? { handoff } : {})
+        ...(handoff ? { handoff } : {}),
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
+        ...(publishedActivity !== undefined ? { activity: publishedActivity } : {})
       })
       subscriber.cursor = page.window.nextCursor
       if (!page.hasNewer || !this.isActive(subscriber)) {
@@ -209,15 +302,20 @@ export class AgentSessionSubscribers {
     }
   }
 
-  private isActive(subscriber: Subscriber): boolean {
-    return this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
-  }
+  private isActive = (subscriber: Subscriber): boolean =>
+    this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
 
   /** A dead transport cannot be allowed to turn a durable mutation into an
    *  unknown outcome or poison every later publication. */
   private emit(subscriber: Subscriber, event: AgentSessionSubscribeEvent): void {
     try {
-      subscriber.emit(event)
+      const commands = this.hooks.readCommands?.(subscriber.sessionId) ?? null
+      const includeCommands =
+        this.hooks.readCommands !== undefined &&
+        event.type !== 'end' &&
+        (event.type !== 'batch' || commands !== subscriber.commands)
+      subscriber.emit(includeCommands ? { ...event, commands: commands ?? null } : event)
+      subscriber.commands = commands
     } catch {
       this.drop(subscriber)
     }
@@ -229,5 +327,9 @@ export class AgentSessionSubscribers {
     if (session?.size === 0) {
       this.bySession.delete(subscriber.sessionId)
     }
+  }
+
+  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
+    return { activity: this.activityBySession.get(sessionId) ?? null }
   }
 }

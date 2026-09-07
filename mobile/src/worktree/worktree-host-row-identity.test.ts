@@ -60,6 +60,47 @@ describe('host-qualified row display state', () => {
     expect([...retained]).toEqual([getWorktreeRowIdentity(remote)])
   })
 
+  it('keeps first-match behavior when confirmed identities are duplicated', () => {
+    const identity = getWorktreeRowIdentity(row('shared', 'host-a'))
+    const retained = retainLiveSleptWorktreeIdentities(new Set([identity]), [
+      row('shared', 'host-a', { liveTerminalCount: 0 }),
+      row('shared', 'host-a', { liveTerminalCount: 1 })
+    ])
+
+    expect([...retained]).toEqual([])
+  })
+
+  it('indexes confirmed identities once instead of rescanning for every slept row', () => {
+    const rowCount = 64
+    let worktreeIdReads = 0
+    const confirmed = Array.from({ length: rowCount }, (_, index) => {
+      const worktree = {
+        hostId: `host-${index}`,
+        liveTerminalCount: 1
+      } as Worktree
+      Object.defineProperty(worktree, 'worktreeId', {
+        configurable: true,
+        get: () => {
+          worktreeIdReads += 1
+          return `worktree-${index}`
+        }
+      })
+      return worktree
+    })
+    const previous = new Set(
+      Array.from({ length: rowCount }, (_, index) => {
+        const reversed = rowCount - index - 1
+        return `host-${reversed}|worktree-${reversed}`
+      })
+    )
+
+    expect(retainLiveSleptWorktreeIdentities(previous, confirmed)).toBe(previous)
+    const legacyIdentityReads = (rowCount * (rowCount + 1)) / 2
+    expect(legacyIdentityReads).toBe(2_080)
+    expect(worktreeIdReads).toBe(rowCount)
+    expect(legacyIdentityReads - worktreeIdReads).toBe(2_016)
+  })
+
   it('applies active and slept overrides to the matching host row only', () => {
     const local = row('shared', 'host-a')
     const remote = row('shared', 'host-b')

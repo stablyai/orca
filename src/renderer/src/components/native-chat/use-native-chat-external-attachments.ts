@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
@@ -15,7 +15,7 @@ export type UseNativeChatExternalAttachmentsArgs = {
   /** Live composer-disabled state; read at await-resume via a ref so a flip
    *  mid-upload doesn't attach into a guarded composer. */
   disabled: boolean
-  attachResolvedPaths: (paths: string[]) => void
+  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
   setNotice: (notice: string | null) => void
 }
 
@@ -35,7 +35,9 @@ export function useNativeChatExternalAttachments({
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
 } {
   const disabledRef = useRef(disabled)
-  disabledRef.current = disabled
+  useLayoutEffect(() => {
+    disabledRef.current = disabled
+  }, [disabled])
 
   const resolveAttachmentOwner = useCallback(
     () =>
@@ -47,7 +49,7 @@ export function useNativeChatExternalAttachments({
 
   const attachExternalPaths = useCallback(
     (paths: string[]) => {
-      if (paths.length === 0) {
+      if (paths.length === 0 || disabledRef.current) {
         return
       }
       const owner = resolveAttachmentOwner()
@@ -60,7 +62,23 @@ export function useNativeChatExternalAttachments({
         return
       }
       if (owner.kind !== 'ssh') {
-        attachResolvedPaths(paths)
+        void (async () => {
+          const authorizedPaths: string[] = []
+          for (const targetPath of paths) {
+            if (disabledRef.current) {
+              return
+            }
+            try {
+              await window.api.fs.authorizeExternalPath({ targetPath })
+              authorizedPaths.push(targetPath)
+            } catch {
+              // Skip unreadable paths, matching workspace composer drops.
+            }
+          }
+          if (authorizedPaths.length > 0 && !disabledRef.current) {
+            attachResolvedPaths(authorizedPaths)
+          }
+        })()
         return
       }
       void (async () => {
@@ -68,7 +86,7 @@ export function useNativeChatExternalAttachments({
         if (!remotePaths || remotePaths.length === 0 || disabledRef.current) {
           return
         }
-        attachResolvedPaths(remotePaths)
+        attachResolvedPaths(remotePaths, owner.connectionId)
       })()
     },
     [attachResolvedPaths, resolveAttachmentOwner, setNotice]

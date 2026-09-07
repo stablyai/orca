@@ -285,8 +285,9 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     expect(afterPreview.hostSessionBrowserTabs).toEqual(baseline.hostSessionBrowserTabs)
 
     // The chip stands in for the address bar the document page has none of, and keeps naming the
-    // file whatever the document calls itself.
-    const pathChip = page.getByRole('button', { name: 'Copy file path', exact: true })
+    // file whatever the document calls itself. Since STA-5681 the chip is the way into the
+    // editable address bar, so it answers to that name now.
+    const pathChip = page.getByRole('button', { name: 'Edit address', exact: true })
     await expect(pathChip).toBeVisible({ timeout: 30_000 })
     await expect(pathChip).toContainText(FIXTURE_NAME)
     // Below 24rem of chip width the identity row hides whole instead of clipping into slivers;
@@ -581,7 +582,10 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       return { before, after: document.activeElement?.tagName ?? null }
     })
     console.log(`[preview-e2e] before-focus ${JSON.stringify(guestFocus)}`)
-    const confirmationTitle = page.getByRole('heading', { name: 'Open link to example.com?' })
+    const confirmation = page.getByRole('dialog', { name: 'Open link to example.com?' })
+    const confirmationTitle = confirmation.getByRole('heading', {
+      name: 'Open link to example.com?'
+    })
     await expect
       .poll(
         async () => {
@@ -600,8 +604,8 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         }
       )
       .toBe(true)
-    await expect(page.getByText(EXTERNAL_LINK_URL, { exact: true })).toBeVisible()
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(confirmation.getByText(EXTERNAL_LINK_URL, { exact: true })).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
     await expect(confirmationTitle).not.toBeVisible()
     const afterCancel = await readPairedHtmlPreviewInventory(page, inventoryArgs)
     expect({
@@ -619,7 +623,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       }
       await page.mouse.click(point.x, point.y)
       await expect(confirmationTitle).toBeVisible({ timeout: 30_000 })
-      await page.getByRole('button', { name: 'Open link', exact: true }).click()
+      await confirmation.getByRole('button', { name: 'Open link', exact: true }).click()
       await expect
         .poll(
           async () => {

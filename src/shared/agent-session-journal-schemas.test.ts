@@ -189,3 +189,34 @@ describe('forward tolerance', () => {
     ).toBe(true)
   })
 })
+
+describe('optional tool annotations', () => {
+  const body = { kind: 'tool-call', name: 'shell', input: null, state: 'completed' }
+  it('admits old rows and rows with optional annotations without a new kind', () => {
+    expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
+    expect(isAdmissibleAgentJournalItemBody({ ...body, exitCode: 0, durationMs: 0 })).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        ...body,
+        webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
+      })
+    ).toBe(true)
+  })
+  it('admits explicit MCP identity without constraining the raw name', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        ...body,
+        name: 'my_server/ns.tool',
+        mcpIdentity: { server: 'my_server', tool: 'ns.tool' }
+      })
+    ).toBe(true)
+  })
+  it.each([
+    { exitCode: '127' },
+    { exitCode: 1.5 },
+    { durationMs: -1 },
+    { webSearchResults: [null] }
+  ])('rejects malformed annotation %s', (metadata) =>
+    expect(isAdmissibleAgentJournalItemBody({ ...body, ...metadata })).toBe(false)
+  )
+})

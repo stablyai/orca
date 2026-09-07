@@ -89,7 +89,8 @@ $fonts.Families | ForEach-Object { $_.Name }
 
   return execFileText(
     windowsPowerShellPath(),
-    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+    // Why: policy gates script *files*, not -Command, so the switch was a Defender-weighted no-op.
+    ['-NoProfile', '-NonInteractive', '-Command', script],
     8 * 1024 * 1024
   ).then((output) =>
     uniqueSorted(

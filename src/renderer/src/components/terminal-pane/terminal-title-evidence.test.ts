@@ -9,6 +9,10 @@ describe('resolvePaneDisplayTitle', () => {
   it('passes an unowned title through unchanged', () => {
     expect(resolvePaneDisplayTitle('bash', undefined)).toBe('bash')
   })
+
+  it('rewrites an OMP wrapper title through explicit launch Pi ownership', () => {
+    expect(resolvePaneDisplayTitle('\u280b OMP', 'pi', true)).toBe('\u280b Pi')
+  })
 })
 
 describe('resolvePaneTitleDecision', () => {

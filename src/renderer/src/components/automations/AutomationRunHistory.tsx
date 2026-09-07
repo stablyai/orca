@@ -18,6 +18,11 @@ import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-dis
 import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import {
+  getAutomationRunHistoryArrowTarget,
+  isAutomationRunHistoryArrowKey,
+  shouldHandleAutomationRunHistoryKey
+} from './automation-run-history-keyboard-navigation'
 import { translate } from '@/i18n/i18n'
 
 type AutomationRunHistoryProps = {
@@ -38,6 +43,7 @@ export function AutomationRunHistory({
   onRecoverHistory,
   onOpenRun
 }: AutomationRunHistoryProps): React.JSX.Element {
+  const containerRef = React.useRef<HTMLDivElement>(null)
   const [selectedRunState, setSelectedRunState] = useState<{
     automationId: string
     runId: string | null
@@ -54,8 +60,62 @@ export function AutomationRunHistory({
     selectedRunState.automationId === automationId ? selectedRunState.runId : null
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null
 
+  const findRunRow = React.useCallback(
+    (runId: string): HTMLElement | null =>
+      containerRef.current?.querySelector<HTMLElement>(`[data-automation-run-id="${runId}"]`) ??
+      null,
+    []
+  )
+
+  React.useEffect(() => {
+    if (runs.length === 0 || notice) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (!shouldHandleAutomationRunHistoryKey(event)) {
+        return
+      }
+
+      if (event.key === 'Enter') {
+        if (selectedRun) {
+          event.preventDefault()
+          onOpenRun(selectedRun)
+        }
+        return
+      }
+
+      if (isAutomationRunHistoryArrowKey(event.key)) {
+        const targetRun = getAutomationRunHistoryArrowTarget({
+          runs,
+          selectedRunId: selectedRun?.id ?? null,
+          key: event.key
+        })
+        if (targetRun) {
+          event.preventDefault()
+          setSelectedRunState({ automationId, runId: targetRun.id })
+          // Enter is left to the focused control, so focus has to follow the selection.
+          findRunRow(targetRun.id)?.focus?.({ preventScroll: true })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [automationId, findRunRow, notice, onOpenRun, runs, selectedRun])
+
+  React.useEffect(() => {
+    if (!selectedRunId) {
+      return
+    }
+    const element = findRunRow(selectedRunId)
+    if (element && typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'nearest' })
+    }
+  }, [findRunRow, selectedRunId])
+
   return (
-    <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
+    <div ref={containerRef} className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
       <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="text-sm font-medium">
           {translate('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
@@ -94,6 +154,7 @@ export function AutomationRunHistory({
               <button
                 key={run.id}
                 type="button"
+                data-automation-run-id={run.id}
                 data-current={selectedRun?.id === run.id}
                 className={cn(
                   'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
@@ -167,7 +228,7 @@ export function AutomationRunHistory({
               <p className="text-center text-sm text-foreground">
                 {translate(
                   'auto.components.automations.AutomationRunHistory.historyUnavailable',
-                  'Run history could not be loaded for this automation.'
+                  'Run history is unavailable from this host. This does not mean the automation failed or has no runs.'
                 )}
               </p>
               <AutomationOwnerConflictNotice notice={notice} onRecover={onRecoverHistory} />

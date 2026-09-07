@@ -149,3 +149,37 @@ export async function loadTerminalWireBuild(ref: string): Promise<TerminalWireBu
   }
   return loadReleaseBuild(await materializeReleaseCheckout(ref))
 }
+
+/**
+ * The same build with one opcode taken out of its decoder — the shape a peer whose
+ * release predates that opcode has on the wire, without needing a release that
+ * predates it. Production drops a frame whose opcode the receiver cannot decode,
+ * so this is the failure the suite exists to catch, expressed as a build.
+ */
+export function withoutOpcodeSupport(
+  build: TerminalWireBuild,
+  opcodeName: string
+): TerminalWireBuild {
+  const opcode = build.codec.TerminalStreamOpcode[opcodeName]
+  if (typeof opcode !== 'number') {
+    throw new Error(`Build ${build.label} publishes no terminal stream opcode named ${opcodeName}`)
+  }
+  return {
+    ...build,
+    label: `${build.label}-without-${opcodeName}`,
+    codec: {
+      ...build.codec,
+      // Both directions of the reverse-mapped opcode table go, so an observer
+      // names the frame `Opcode<n>` rather than borrowing a name this build lost.
+      TerminalStreamOpcode: Object.fromEntries(
+        Object.entries(build.codec.TerminalStreamOpcode).filter(
+          ([name, value]) => name !== opcodeName && value !== opcodeName
+        )
+      ),
+      decodeTerminalStreamFrame: (bytes) => {
+        const frame = build.codec.decodeTerminalStreamFrame(bytes)
+        return frame && frame.opcode === opcode ? null : frame
+      }
+    }
+  }
+}

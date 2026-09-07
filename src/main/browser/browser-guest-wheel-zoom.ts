@@ -68,17 +68,48 @@ export function setupGuestMouseWheelZoomForwarding(args: {
   browserTabId: string
   guest: Electron.WebContents
   resolveRenderer: ResolveRenderer
+  isViewportPresetActive?: () => boolean
+  canViewportScroll?: (mouse: Electron.MouseWheelInputEvent) => boolean
+  onViewportWheelConsumed?: (deltaX: number, deltaY: number) => void
 }): () => void {
-  const { browserTabId, guest, resolveRenderer } = args
+  const {
+    browserTabId,
+    guest,
+    resolveRenderer,
+    isViewportPresetActive,
+    canViewportScroll,
+    onViewportWheelConsumed
+  } = args
   const handler = (event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
     const direction = resolveGuestMouseWheelZoomDirection(mouse)
-    if (!direction) {
+    if (direction) {
+      // Why: wheel input over a focused webview never reaches renderer DOM handlers, so consume and forward here.
+      event.preventDefault()
+      markGuestWheelZoom(guest, direction)
+      resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
       return
     }
-    // Why: wheel input over a focused webview never reaches renderer DOM handlers, so consume and forward here.
+    if (
+      !isViewportPresetActive?.() ||
+      mouse.type !== 'mouseWheel' ||
+      !canViewportScroll?.(mouse as Electron.MouseWheelInputEvent)
+    ) {
+      return
+    }
+    const { deltaX, deltaY } = mouse as Electron.MouseWheelInputEvent
+    const safeDeltaX = typeof deltaX === 'number' && Number.isFinite(deltaX) ? deltaX : 0
+    const safeDeltaY = typeof deltaY === 'number' && Number.isFinite(deltaY) ? deltaY : 0
+    if (safeDeltaX === 0 && safeDeltaY === 0) {
+      return
+    }
+    // Why: the host owns panning once emulation makes the guest viewport larger than the pane.
     event.preventDefault()
-    markGuestWheelZoom(guest, direction)
-    resolveRenderer(browserTabId)?.send('ui:zoomBrowserPage', direction)
+    onViewportWheelConsumed?.(safeDeltaX, safeDeltaY)
+    resolveRenderer(browserTabId)?.send('ui:scrollBrowserPage', {
+      browserPageId: browserTabId,
+      deltaX: safeDeltaX,
+      deltaY: safeDeltaY
+    })
   }
 
   guest.on('before-mouse-event', handler)
