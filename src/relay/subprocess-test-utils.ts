@@ -99,11 +99,12 @@ export function spawnRelay(
   // Reject on 'close' (all stdio drained) only when the sentinel was never seen; the bounded
   // timer covers a child whose stdio never closes after exit.
   let rejectSentinelAfterClose: (() => void) | null = null
+  let stdioCloseFallback: NodeJS.Timeout | null = null
   proc.once('exit', (code) => {
     if (sentinelResolved) {
       return
     }
-    const fallback = setTimeout(() => {
+    stdioCloseFallback = setTimeout(() => {
       sentinelReject(
         new Error(
           `Relay exited (code=${code}, signal=${proc.signalCode}) before the READY sentinel, ` +
@@ -112,7 +113,6 @@ export function spawnRelay(
       )
     }, 5000)
     rejectSentinelAfterClose = () => {
-      clearTimeout(fallback)
       sentinelReject(
         new Error(
           `Relay exited (code=${code}, signal=${proc.signalCode}) before the READY sentinel.\nstderr:\n${stderrTail}`
@@ -124,8 +124,11 @@ export function spawnRelay(
     stderrTail += stderrDecoder.end()
     if (rejectSentinelAfterClose && !sentinelResolved) {
       rejectSentinelAfterClose()
-      rejectSentinelAfterClose = null
+    } else if (stdioCloseFallback) {
+      clearTimeout(stdioCloseFallback)
     }
+    rejectSentinelAfterClose = null
+    stdioCloseFallback = null
   })
 
   const send = (method: string, params?: Record<string, unknown>): number => {
