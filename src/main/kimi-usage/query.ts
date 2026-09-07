@@ -58,8 +58,8 @@ export function buildKimiUsageSummary(
     totalTokens: 0,
     events: 0
   }
-  const byModel = new Map<string, number>()
-  const byProject = new Map<string, number>()
+  const byModel = new Map<string | null, number>()
+  const byProject = new Map<string | null, number>()
 
   for (const row of filteredDaily) {
     totals.inputTokens += row.inputTokens
@@ -68,10 +68,7 @@ export function buildKimiUsageSummary(
     totals.outputTokens += row.outputTokens
     totals.totalTokens += row.totalTokens
     totals.events += row.eventCount
-    byModel.set(
-      row.model ?? 'Unknown model',
-      (byModel.get(row.model ?? 'Unknown model') ?? 0) + row.totalTokens
-    )
+    byModel.set(row.model, (byModel.get(row.model) ?? 0) + row.totalTokens)
     byProject.set(row.projectLabel, (byProject.get(row.projectLabel) ?? 0) + row.totalTokens)
   }
 
@@ -91,7 +88,7 @@ export function buildKimiUsageSummary(
   }
 }
 
-function getTopKey(values: Map<string, number>): string | null {
+function getTopKey(values: Map<string | null, number>): string | null {
   return [...values.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
 }
 
@@ -132,7 +129,7 @@ export function buildKimiUsageBreakdown(
 
   for (const daily of filteredDaily) {
     const key = kind === 'model' ? (daily.model ?? 'unknown') : daily.projectKey
-    const label = kind === 'model' ? (daily.model ?? 'Unknown model') : daily.projectLabel
+    const label = kind === 'model' ? daily.model : daily.projectLabel
     const existing = rows.get(key) ?? createBreakdownRow(key, label)
     existing.events += daily.eventCount
     existing.inputTokens += daily.inputTokens
@@ -147,7 +144,7 @@ export function buildKimiUsageBreakdown(
   return [...rows.values()].sort((left, right) => right.totalTokens - left.totalTokens)
 }
 
-function createBreakdownRow(key: string, label: string): KimiUsageBreakdownRow {
+function createBreakdownRow(key: string, label: string | null): KimiUsageBreakdownRow {
   return {
     key,
     label,
@@ -199,7 +196,9 @@ export function buildKimiRecentSessions(
       lastActiveAt: session.lastTimestamp,
       durationMinutes: getSessionDurationMinutes(session),
       projectLabel: session.primaryProjectLabel,
+      hasMixedLocations: session.hasMixedLocations,
       model: session.primaryModel,
+      hasMixedModels: session.hasMixedModels,
       events: session.eventCount,
       inputTokens: session.totalInputTokens,
       cachedInputTokens: session.totalCachedInputTokens,

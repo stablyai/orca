@@ -41,7 +41,9 @@ export function KimiUsageDetails({
           topValue={summary?.topModel}
           rows={modelBreakdown.map((row) => ({
             key: row.key,
-            label: row.label,
+            label:
+              row.label ??
+              translate('auto.components.stats.KimiUsageDetails.unknownModel', 'Unknown model'),
             tokens: row.totalTokens,
             sessions: row.sessions,
             eventsOrTurns: row.events
@@ -54,7 +56,12 @@ export function KimiUsageDetails({
           topValue={summary?.topProject}
           rows={projectBreakdown.map((row) => ({
             key: row.key,
-            label: row.label,
+            label:
+              row.label ??
+              translate(
+                'auto.components.stats.KimiUsageDetails.unknownLocation',
+                'Unknown location'
+              ),
             tokens: row.totalTokens,
             sessions: row.sessions,
             eventsOrTurns: row.events

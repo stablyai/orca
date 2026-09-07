@@ -92,7 +92,7 @@ function mergeModelBreakdown(
   }
   target.push({
     modelKey: key,
-    modelLabel: event.model ?? 'Unknown model',
+    modelLabel: event.model,
     eventCount: 1,
     inputTokens: event.inputTokens,
     cachedInputTokens: event.cachedInputTokens,
@@ -122,7 +122,7 @@ function mergeLocationModelBreakdown(
   target.push({
     locationKey: event.projectKey,
     modelKey,
-    modelLabel: event.model ?? 'Unknown model',
+    modelLabel: event.model,
     repoId: event.repoId,
     worktreeId: event.worktreeId,
     eventCount: 1,
@@ -186,14 +186,12 @@ export function finalizeSessions(sessionsById: Map<string, KimiUsageSession>): K
     const primaryLocation = session.locationBreakdown[0] ?? null
     const primaryModel = session.modelBreakdown[0] ?? null
     session.primaryProjectLabel =
-      session.locationBreakdown.length <= 1
-        ? (primaryLocation?.projectLabel ?? 'Unknown location')
-        : 'Multiple locations'
+      session.locationBreakdown.length <= 1 ? (primaryLocation?.projectLabel ?? null) : null
     session.hasMixedLocations = session.locationBreakdown.length > 1
     session.primaryWorktreeId = primaryLocation?.worktreeId ?? null
     session.primaryRepoId = primaryLocation?.repoId ?? null
     session.primaryModel =
-      session.modelBreakdown.length <= 1 ? (primaryModel?.modelLabel ?? null) : 'Mixed models'
+      session.modelBreakdown.length <= 1 ? (primaryModel?.modelLabel ?? null) : null
     session.hasMixedModels = session.modelBreakdown.length > 1
   }
   return [...sessionsById.values()].sort((left, right) =>
@@ -226,7 +224,7 @@ export function sortDailyAggregates(
 ): KimiUsageDailyAggregate[] {
   return dailyAggregates.sort((left, right) =>
     left.day === right.day
-      ? left.projectLabel.localeCompare(right.projectLabel)
+      ? (left.projectLabel ?? '').localeCompare(right.projectLabel ?? '')
       : left.day.localeCompare(right.day)
   )
 }

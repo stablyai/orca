@@ -53,10 +53,29 @@ export function KimiUsageRecentSessionsTable({
                 <td className="px-2 py-2 text-muted-foreground">
                   {formatSessionTime(row.lastActiveAt)}
                 </td>
-                <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
+                <td className="px-2 py-2 text-foreground">
+                  {row.hasMixedLocations
+                    ? translate(
+                        'auto.components.stats.KimiUsageDetails.multipleLocations',
+                        'Multiple locations'
+                      )
+                    : (row.projectLabel ??
+                      translate(
+                        'auto.components.stats.KimiUsageDetails.unknownLocation',
+                        'Unknown location'
+                      ))}
+                </td>
                 <td className="px-2 py-2 text-muted-foreground">
-                  {row.model ??
-                    translate('auto.components.stats.KimiUsageDetails.unknown', 'Unknown')}
+                  {row.hasMixedModels
+                    ? translate(
+                        'auto.components.stats.KimiUsageDetails.mixedModels',
+                        'Mixed models'
+                      )
+                    : (row.model ??
+                      translate(
+                        'auto.components.stats.KimiUsageDetails.unknownModel',
+                        'Unknown model'
+                      ))}
                 </td>
                 <td className="px-2 py-2 text-muted-foreground">{row.events}</td>
                 <td className="px-2 py-2 text-muted-foreground">{formatTokens(row.inputTokens)}</td>

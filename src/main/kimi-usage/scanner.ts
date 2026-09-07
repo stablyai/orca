@@ -46,7 +46,10 @@ export async function scanKimiUsageFiles(
   const pathsToParse: string[] = []
 
   for (const [index, filePath] of files.entries()) {
-    const fileInfo = await getKimiUsageProcessedFileInfo(filePath)
+    const fileInfo = await getKimiUsageProcessedFileInfo(filePath).catch(() => null)
+    if (!fileInfo) {
+      continue
+    }
     const previous = previousByPath.get(filePath)
     const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
     const canReuse =
@@ -102,8 +105,10 @@ async function parseChangedFiles(
         eventOwnerByKey.set(eventKey, filePath)
         return true
       }
-    })
-    parsedByPath.set(filePath, processed)
+    }).catch(() => null)
+    if (processed) {
+      parsedByPath.set(filePath, processed)
+    }
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
       await yieldToEventLoop()
     }

@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { dirname, join } from 'node:path'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import type {
   KimiUsageBreakdownKind,
   KimiUsageBreakdownRow,
@@ -93,10 +93,10 @@ function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>
 
 export class KimiUsageStore {
   private state: KimiUsagePersistedState
-  private readonly store: Store
+  private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>
   private scanPromise: Promise<void> | null = null
 
-  constructor(store: Store) {
+  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
     this.store = store
     this.state = this.load()
   }
@@ -130,7 +130,12 @@ export class KimiUsageStore {
     }
     const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
     writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    renameSync(tmpFile, usageFile)
+    try {
+      renameSync(tmpFile, usageFile)
+    } catch (error) {
+      rmSync(tmpFile, { force: true })
+      throw error
+    }
   }
 
   async setEnabled(enabled: boolean): Promise<KimiUsageScanState> {

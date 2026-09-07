@@ -9,7 +9,7 @@
 
 export type KimiUsageLocationBreakdown = {
   locationKey: string
-  projectLabel: string
+  projectLabel: string | null
   repoId: string | null
   worktreeId: string | null
   eventCount: number
@@ -22,7 +22,7 @@ export type KimiUsageLocationBreakdown = {
 
 export type KimiUsageModelBreakdown = {
   modelKey: string
-  modelLabel: string
+  modelLabel: string | null
   eventCount: number
   inputTokens: number
   cachedInputTokens: number
@@ -34,7 +34,7 @@ export type KimiUsageModelBreakdown = {
 export type KimiUsageLocationModelBreakdown = {
   locationKey: string
   modelKey: string
-  modelLabel: string
+  modelLabel: string | null
   repoId: string | null
   worktreeId: string | null
   eventCount: number
@@ -51,7 +51,7 @@ export type KimiUsageSession = {
   lastTimestamp: string
   primaryModel: string | null
   hasMixedModels: boolean
-  primaryProjectLabel: string
+  primaryProjectLabel: string | null
   hasMixedLocations: boolean
   primaryWorktreeId: string | null
   primaryRepoId: string | null
@@ -70,7 +70,7 @@ export type KimiUsageDailyAggregate = {
   day: string
   model: string | null
   projectKey: string
-  projectLabel: string
+  projectLabel: string | null
   repoId: string | null
   worktreeId: string | null
   eventCount: number
@@ -118,7 +118,7 @@ export type KimiUsageParsedEvent = {
 export type KimiUsageAttributedEvent = KimiUsageParsedEvent & {
   day: string
   projectKey: string
-  projectLabel: string
+  projectLabel: string | null
   repoId: string | null
   worktreeId: string | null
 }

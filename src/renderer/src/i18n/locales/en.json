@@ -4401,7 +4401,11 @@
           "input": "Input",
           "output": "Output",
           "total": "Total",
-          "unknown": "Unknown"
+          "unknown": "Unknown",
+          "unknownModel": "Unknown model",
+          "mixedModels": "Mixed models",
+          "unknownLocation": "Unknown location",
+          "multipleLocations": "Multiple locations"
         },
         "KimiUsagePane": {
           "scopeOrca": "Orca worktrees only",

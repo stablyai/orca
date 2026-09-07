@@ -37,7 +37,7 @@ export type KimiUsageDailyPoint = {
 
 export type KimiUsageBreakdownRow = {
   key: string
-  label: string
+  label: string | null
   sessions: number
   events: number
   inputTokens: number
@@ -51,8 +51,10 @@ export type KimiUsageSessionRow = {
   sessionId: string
   lastActiveAt: string
   durationMinutes: number
-  projectLabel: string
+  projectLabel: string | null
+  hasMixedLocations: boolean
   model: string | null
+  hasMixedModels: boolean
   events: number
   inputTokens: number
   cachedInputTokens: number

@@ -209,6 +209,75 @@ describe('attributeKimiUsageEvent', () => {
     const attributed = await attributeKimiUsageEvent(event, makeWorktrees())
     expect(attributed).toBeNull()
   })
+  it('prefers an exact worktree match over an earlier containing match', async () => {
+    const worktrees = [
+      {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        path: '/workspace/repo',
+        displayName: 'Repo',
+        canonicalPath: '/workspace/repo'
+      },
+      {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo/nested',
+        path: '/workspace/repo/nested',
+        displayName: 'Nested',
+        canonicalPath: '/workspace/repo/nested'
+      }
+    ]
+    const event = {
+      sessionId: SESSION_ID,
+      timestamp: '2026-07-31T03:00:00.000Z',
+      eventKey: 'key-1',
+      model: 'bigmodel/glm-5.2',
+      cwd: '/workspace/repo/nested',
+      inputTokens: 100,
+      cachedInputTokens: 0,
+      cacheCreationTokens: 0,
+      outputTokens: 50,
+      totalTokens: 150
+    }
+
+    const attributed = await attributeKimiUsageEvent(event, worktrees)
+
+    expect(attributed?.worktreeId).toBe('repo-1::/workspace/repo/nested')
+    expect(attributed?.projectLabel).toBe('Nested')
+  })
+  it('prefers the most specific containing worktree', async () => {
+    const worktrees = [
+      {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        path: '/workspace/repo',
+        displayName: 'Repo',
+        canonicalPath: '/workspace/repo'
+      },
+      {
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo/nested',
+        path: '/workspace/repo/nested',
+        displayName: 'Nested',
+        canonicalPath: '/workspace/repo/nested'
+      }
+    ]
+    const event = {
+      sessionId: SESSION_ID,
+      timestamp: '2026-07-31T03:00:00.000Z',
+      eventKey: 'key-1',
+      model: 'bigmodel/glm-5.2',
+      cwd: '/workspace/repo/nested/src',
+      inputTokens: 100,
+      cachedInputTokens: 0,
+      cacheCreationTokens: 0,
+      outputTokens: 50,
+      totalTokens: 150
+    }
+
+    const attributed = await attributeKimiUsageEvent(event, worktrees)
+
+    expect(attributed?.worktreeId).toBe('repo-1::/workspace/repo/nested')
+  })
 })
 
 describe('parseKimiUsageFile', () => {

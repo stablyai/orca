@@ -25,7 +25,7 @@ import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { KimiUsageDetails } from './KimiUsageDetails'
 import { StatCard } from './StatCard'
 import { formatTokens, formatUpdatedAt } from './usage-formatters'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: KimiUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: KimiUsageScope; label: string }[] = [
@@ -269,7 +269,7 @@ export function KimiUsagePane(): React.JSX.Element {
             />
             <StatCard
               label={translate('auto.components.stats.KimiUsagePane.sessions', 'Sessions / Events')}
-              value={`${(summary?.sessions ?? 0).toLocaleString()} / ${(summary?.events ?? 0).toLocaleString()}`}
+              value={`${(summary?.sessions ?? 0).toLocaleString(getIntlLocale())} / ${(summary?.events ?? 0).toLocaleString(getIntlLocale())}`}
               icon={<FolderKanban className="size-4" />}
             />
           </div>

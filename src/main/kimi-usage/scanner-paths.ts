@@ -114,15 +114,15 @@ export async function buildWorktreesWithCanonicalPaths(
   return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
 }
 
-function getDefaultProjectLabel(cwd: string | null): string {
+function getDefaultProjectLabel(cwd: string | null): string | null {
   if (!cwd) {
-    return 'Unknown location'
+    return null
   }
   const parts = cwd.replace(/\\/g, '/').split('/').filter(Boolean)
   if (parts.length >= 2) {
     return parts.slice(-2).join('/')
   }
-  return parts.at(-1) ?? cwd
+  return parts.at(-1) ?? null
 }
 
 function isContainingPath(candidatePath: string, targetPath: string): boolean {
@@ -150,15 +150,22 @@ function findContainingWorktree(
   worktrees: (KimiUsageWorktreeRef & { canonicalPath: string })[]
 ): KimiUsageWorktreeRef | null {
   const normalizedCwd = normalizeFsPath(cwd)
+  const exact = worktrees.find((worktree) =>
+    areWorktreePathsEqual(worktree.canonicalPath, normalizedCwd)
+  )
+  if (exact) {
+    return exact
+  }
+  let best: (KimiUsageWorktreeRef & { canonicalPath: string }) | null = null
   for (const worktree of worktrees) {
-    if (areWorktreePathsEqual(worktree.canonicalPath, normalizedCwd)) {
-      return worktree
-    }
-    if (isContainingPath(worktree.canonicalPath, normalizedCwd)) {
-      return worktree
+    if (
+      isContainingPath(worktree.canonicalPath, normalizedCwd) &&
+      (!best || worktree.canonicalPath.length > best.canonicalPath.length)
+    ) {
+      best = worktree
     }
   }
-  return null
+  return best
 }
 
 export async function attributeKimiUsageEvent(
