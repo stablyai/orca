@@ -11,6 +11,7 @@ const SHA512 = createHash('sha512').update(FILE_CONTENT).digest('base64')
 describe('serve update artifact capture', () => {
   let tempRoot: string
   let downloadDir: string
+  let savedCacheRoot: string | undefined
 
   beforeEach(async () => {
     vi.resetModules()
@@ -19,11 +20,18 @@ describe('serve update artifact capture', () => {
     const updaterDir = path.join(cacheRoot, 'orca-updater')
     downloadDir = path.join(updaterDir, 'pending')
     await fsp.mkdir(downloadDir, { recursive: true })
+    // Why capture-and-restore, not delete: process.env is shared by the vitest
+    // worker, and later tests must see the cache root they started with.
+    savedCacheRoot = process.env.XDG_CACHE_HOME
     process.env.XDG_CACHE_HOME = cacheRoot
   })
 
   afterEach(async () => {
-    delete process.env.XDG_CACHE_HOME
+    if (savedCacheRoot === undefined) {
+      delete process.env.XDG_CACHE_HOME
+    } else {
+      process.env.XDG_CACHE_HOME = savedCacheRoot
+    }
     await fsp.rm(tempRoot, { recursive: true, force: true })
   })
 
@@ -98,16 +106,18 @@ describe('serve update artifact capture', () => {
     const { captureServeUpdateAppImage } = await import('./serve-update-artifact-capture')
     const evilRoot = path.join(tempRoot, 'evil')
     await fsp.mkdir(evilRoot, { recursive: true })
-    const artifactPath = path.join(evilRoot, 'orca-1.4.198.AppImage')
-    await fsp.writeFile(artifactPath, FILE_CONTENT)
+    await fsp.writeFile(path.join(evilRoot, 'orca-1.4.198.AppImage'), FILE_CONTENT)
     // Same-uid attacker swaps the pending directory for a symlink at the real
-    // cache location: realpath must walk through it and reject the escape.
+    // cache location: realpath must walk through it and reject the escape. The
+    // requested path goes THROUGH the symlink — lexically inside the cache —
+    // so the lexical check alone cannot reject it and the realpath containment
+    // control is what fires.
     const realPending = path.join(tempRoot, 'cache', 'orca-updater', 'pending')
     await fsp.rm(realPending, { recursive: true })
     await fsp.symlink(evilRoot, realPending)
     const result = await captureServeUpdateAppImage({
       version: '1.4.198',
-      downloadedFile: artifactPath,
+      downloadedFile: path.join(realPending, 'orca-1.4.198.AppImage'),
       files: [{ url: 'orca-1.4.198.AppImage', sha512: SHA512 }]
     })
     expect(result).toEqual({ ok: false, reason: 'not-regular' })

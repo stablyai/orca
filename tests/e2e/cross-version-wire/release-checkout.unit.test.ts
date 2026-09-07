@@ -138,8 +138,9 @@ async function compiledHarnessModuleUrl(): Promise<string> {
   })
   // Why this directory and not a scratch tmpdir: the compiled module derives REPO_ROOT
   // from its own `import.meta.dirname` (three levels up), so it must sit at the same
-  // depth inside the repo. The gitignored checkout cache is exactly that.
-  const compileDir = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts', '.compiled')
+  // depth inside the repo. The gitignored checkout cache root is exactly that — one
+  // level shallower than the sibling `.compiled` dir would resolve REPO_ROOT to `tests/`.
+  const compileDir = join(REPO_ROOT, 'tests', 'e2e', '.cross-version-checkouts')
   mkdirSync(compileDir, { recursive: true })
   const harnessPath = join(compileDir, 'release-checkout-compiled.mjs')
   writeFileSync(harnessPath, result.outputFiles[0]!.text)
