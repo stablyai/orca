@@ -9,7 +9,8 @@ export function createGlobalSettingsFixture(
 ): GlobalSettings {
   return {
     ...buildDefaultSettings({
-      workspaceDir: '/tmp/orca-test-workspaces',
+      // Callers supply the real directory; no platform-specific default belongs here.
+      workspaceDir: overrides.workspaceDir ?? '',
       appFontFamily: 'Geist',
       editorAutoSaveDelayMs: 1000,
       primarySelectionMiddleClickPaste: false,

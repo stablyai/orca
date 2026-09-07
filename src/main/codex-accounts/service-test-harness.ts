@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { createGlobalSettingsFixture } from '../../shared/global-settings-test-fixture'
+import { createCodexAccountSettings } from './codex-account-settings-fixture'
 import type { CodexResetCreditAttemptLedger } from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexRateLimitHomeResolution } from './runtime-home-service'
 
@@ -37,40 +37,7 @@ export function registerCodexAccountsTestHomes(): void {
 }
 
 export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
-  const appFontFamily = overrides.appFontFamily ?? 'Geist'
-  const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
-  const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
-  return createGlobalSettingsFixture({
-    workspaceDir: testState.fakeHomeDir,
-    // Why: these deviate from buildDefaultSettings; kept so existing assertions hold.
-    nestWorkspaces: false,
-    autoRenameBranchFromWork: false,
-    terminalCursorBlink: false,
-    terminalThemeDark: 'orca-dark',
-    terminalDividerColorDark: '#000000',
-    terminalUseSeparateLightTheme: false,
-    terminalThemeLight: 'orca-light',
-    terminalDividerColorLight: '#ffffff',
-    terminalPaneOpacityTransitionMs: 150,
-    terminalDividerThicknessPx: 1,
-    setupScriptLaunchMode: 'split-vertical',
-    localAccountRuntime: 'host',
-    floatingTerminalEnabled: false,
-    terminalMacOptionAsAlt: 'false',
-    terminalMacOptionAsAltMigrated: true,
-    experimentalActivity: true,
-    terminalWindowsPowerShellImplementation: 'powershell.exe',
-    ...overrides,
-    diffWordWrap: overrides.diffWordWrap ?? false,
-    diffShowWhitespace: overrides.diffShowWhitespace ?? false,
-    localWindowsRuntimeDefault: overrides.localWindowsRuntimeDefault ?? {
-      kind: 'windows-host'
-    },
-    leftSidebarAppearanceMode: overrides.leftSidebarAppearanceMode ?? 'default',
-    appFontFamily,
-    agentStatusHooksEnabled,
-    tabAutoGenerateTitle
-  })
+  return createCodexAccountSettings(testState.fakeHomeDir, overrides)
 }
 
 export function createStore(settings: GlobalSettings) {
