@@ -56,7 +56,6 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
   protected abstract setupEventRouting(): void
   protected abstract scheduleCheckpointTimer(): void
   protected abstract stopCheckpointTimer(): void
-  protected abstract stopCheckpointTimerIfIdle(): void
   protected abstract recordAuthenticatedIdentity(): void
   protected abstract runExclusiveCheckpoint(
     operation: () => Promise<void>,
@@ -68,7 +67,6 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     sessionId: string,
     operation: () => Promise<T>
   ): Promise<T>
-  protected abstract clearSessionAwaitingDaemonRecovery(sessionId: string): void
   protected abstract reconnectAfterWriteFailure(): void
   protected abstract checkpointSessions(
     sessionIds: Iterable<string>,

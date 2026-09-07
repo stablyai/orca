@@ -62,6 +62,61 @@ describe('Claude hook normalization', () => {
     expect(result?.payload.lastAssistantMessage).toBe('tests passed')
   })
 
+  it('flags a PostToolUse preview as tool output so native chat will not show it as the reply', () => {
+    // Regression: a Bash result rendered verbatim as an immortal "assistant" bubble in
+    // mobile native chat. The status card still gets the preview; only its provenance is new.
+    const result = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'cat lifecycle.ts' },
+        tool_response: { content: [{ type: 'text', text: 'Exit code 1\nimport { Foo }' }] }
+      }),
+      'production'
+    )
+    expect(result?.payload.lastAssistantMessage).toBe('Exit code 1\nimport { Foo }')
+    expect(result?.payload.lastAssistantMessageIsToolOutput).toBe(true)
+  })
+
+  it('flags a PostToolUseFailure preview as tool output', () => {
+    const result = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PostToolUseFailure',
+        tool_name: 'Write',
+        error: 'file is read-only'
+      }),
+      'production'
+    )
+    expect(result?.payload.lastAssistantMessage).toBe('file is read-only')
+    expect(result?.payload.lastAssistantMessageIsToolOutput).toBe(true)
+  })
+
+  it('leaves real assistant prose at Stop unflagged', () => {
+    _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'ls' },
+        tool_response: { content: [{ type: 'text', text: 'a.ts b.ts' }] }
+      }),
+      'production'
+    )
+    // The prose turn must not inherit the previous tool result's flag.
+    const stopped = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'Stop',
+        last_assistant_message: 'Here are the files.'
+      }),
+      'production'
+    )
+    expect(stopped?.payload.lastAssistantMessage).toBe('Here are the files.')
+    expect(stopped?.payload.lastAssistantMessageIsToolOutput).toBeUndefined()
+  })
+
   it('PostToolUse for Grep surfaces the search pattern', () => {
     const result = _internals.normalizeHookPayload(
       'claude',

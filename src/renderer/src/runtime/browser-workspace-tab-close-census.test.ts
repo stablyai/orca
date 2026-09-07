@@ -25,60 +25,6 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
   why: string
 }[] = [
   {
-    path: 'src/renderer/src/components/Terminal.tsx',
-    closeBrowserTabMentions: 8,
-    reasonCarryingCloseCalls: 3,
-    planReasonForwardings: 2,
-    routesThroughPlan: true,
-    why: 'handleCloseBrowserTab (legacy tab bar + Cmd/Ctrl+W) and closeTabBarTabs (bulk close).'
-  },
-  {
-    path: 'src/renderer/src/components/tab-group/useTabGroupTabCloseCommands.ts',
-    closeBrowserTabMentions: 4,
-    reasonCarryingCloseCalls: 1,
-    planReasonForwardings: 1,
-    routesThroughPlan: true,
-    why: 'closeBrowserItem, shared by the split-pane strip X (closeItem) and bulk close (closeMany).'
-  },
-  {
-    path: 'src/renderer/src/hooks/ipc-events/tab-lifecycle-ipc-bridge.ts',
-    closeBrowserTabMentions: 2,
-    reasonCarryingCloseCalls: 1,
-    planReasonForwardings: 1,
-    routesThroughPlan: true,
-    why:
-      'onCloseActiveTab is the local menu close and routes through the plan. Its other close is ' +
-      'the ownerless fallback, which has no worktree for the plan to reason about.'
-  },
-  {
-    path: 'src/renderer/src/hooks/ipc-events/browser-request-ipc-bridge.ts',
-    closeBrowserTabMentions: 3,
-    reasonCarryingCloseCalls: 0,
-    planReasonForwardings: 0,
-    routesThroughPlan: false,
-    why:
-      'onRequestTabClose and the bridge-keyed closes answer a close the HOST asked for, so ' +
-      'consulting the plan would echo a session.tabs.close back at the requester.'
-  },
-  {
-    path: 'src/renderer/src/hooks/ipc-events/session-tab-ipc-bridge.ts',
-    closeBrowserTabMentions: 2,
-    reasonCarryingCloseCalls: 0,
-    planReasonForwardings: 0,
-    routesThroughPlan: false,
-    why: 'onCloseSessionTab and onSessionTabCloseRequest are the host asking; same echo carve-out.'
-  },
-  {
-    path: 'src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx',
-    closeBrowserTabMentions: 6,
-    reasonCarryingCloseCalls: 0,
-    planReasonForwardings: 0,
-    routesThroughPlan: false,
-    why:
-      'The floating workspace is never host-mirrored — applyWebSessionTabsSnapshot returns state ' +
-      'unchanged for FLOATING_TERMINAL_WORKTREE_ID — so its browser tabs have no remote owner.'
-  },
-  {
     path: 'src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-lifecycle.ts',
     closeBrowserTabMentions: 4,
     reasonCarryingCloseCalls: 0,
@@ -87,15 +33,84 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
     why: 'Mirrors a page the host already retired; a plan-driven close would echo it back.'
   },
   {
-    path: 'src/renderer/src/runtime/web-runtime-browser-tab-staging.ts',
-    closeBrowserTabMentions: 1,
+    path: 'src/renderer/src/components/floating-terminal/use-floating-terminal-close-actions.ts',
+    closeBrowserTabMentions: 6,
     reasonCarryingCloseCalls: 0,
     planReasonForwardings: 0,
     routesThroughPlan: false,
-    why:
-      'Unwinds rows this client minted for a create that never landed — there is no host page. ' +
-      'Skipping the funnel also skips its parked-chrome release; the edit-session microtask fence ' +
-      'and the deferred-navigation TTL collect those.'
+    why: 'Floating workspace tabs are local-only and have no remote owner to reconcile.'
+  },
+  {
+    path: 'src/renderer/src/components/floating-terminal/use-floating-terminal-panel-store-state.ts',
+    closeBrowserTabMentions: 3,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'Passes the local floating-panel close action through its controller.'
+  },
+  {
+    path: 'src/renderer/src/components/tab-group/useTabGroupTabCloseCommands.ts',
+    closeBrowserTabMentions: 4,
+    reasonCarryingCloseCalls: 1,
+    planReasonForwardings: 1,
+    routesThroughPlan: true,
+    why: 'closeBrowserItem, shared by the split-pane strip X and bulk close commands.'
+  },
+  {
+    path: 'src/renderer/src/components/use-terminal-bulk-close-actions.ts',
+    closeBrowserTabMentions: 3,
+    reasonCarryingCloseCalls: 1,
+    planReasonForwardings: 1,
+    routesThroughPlan: true,
+    why: 'Bulk terminal-tab teardown plans browser ownership before local cleanup.'
+  },
+  {
+    path: 'src/renderer/src/components/use-terminal-close-actions.ts',
+    closeBrowserTabMentions: 4,
+    reasonCarryingCloseCalls: 2,
+    planReasonForwardings: 1,
+    routesThroughPlan: true,
+    why: 'Terminal close callbacks route browser ownership through the shared plan.'
+  },
+  {
+    path: 'src/renderer/src/components/use-terminal-keyboard-shortcuts.ts',
+    closeBrowserTabMentions: 2,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'Keyboard shortcut wiring forwards the local close action.'
+  },
+  {
+    path: 'src/renderer/src/components/use-terminal-workspace-store-bindings.ts',
+    closeBrowserTabMentions: 3,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'Store binding exposes the close action to terminal controllers.'
+  },
+  {
+    path: 'src/renderer/src/hooks/ipc-events/browser-request-ipc-bridge.ts',
+    closeBrowserTabMentions: 3,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'Host-requested closes are applied locally without echoing a close request.'
+  },
+  {
+    path: 'src/renderer/src/hooks/ipc-events/session-tab-ipc-bridge.ts',
+    closeBrowserTabMentions: 2,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'Host session-tab requests are applied locally without echo.'
+  },
+  {
+    path: 'src/renderer/src/hooks/ipc-events/tab-lifecycle-ipc-bridge.ts',
+    closeBrowserTabMentions: 2,
+    reasonCarryingCloseCalls: 1,
+    planReasonForwardings: 1,
+    routesThroughPlan: true,
+    why: 'The local menu close routes through the shared ownership plan; host fallback has no owner.'
   },
   {
     path: 'src/renderer/src/runtime/browser-workspace-tab-close.ts',
@@ -103,21 +118,31 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
     reasonCarryingCloseCalls: 0,
     planReasonForwardings: 0,
     routesThroughPlan: true,
-    why:
-      'The funnel itself. Its one close is the disavowal fallback: when every owning host answers ' +
-      'that it has no such tab, nobody is left to retract the mirror through sync, so the funnel ' +
-      'finishes the teardown. No cleanup reason because a disavowed page was never staged.'
+    why: 'The funnel disavowal fallback completes teardown when every owning host denies the tab.'
   },
   {
-    path: 'src/renderer/src/store/slices/browser.ts',
+    path: 'src/renderer/src/runtime/web-runtime-browser-tab-staging.ts',
+    closeBrowserTabMentions: 1,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'Rolls back a client-staged row for a create that never reached a host page.'
+  },
+  {
+    path: 'src/renderer/src/store/slices/browser/browser-close-actions.ts',
     closeBrowserTabMentions: 3,
     reasonCarryingCloseCalls: 0,
     planReasonForwardings: 0,
     routesThroughPlan: false,
-    why:
-      'shutdownWorktreeBrowsers tears the whole worktree down; the slice is the seam itself. Same ' +
-      'carve-out for parked chrome as the staging rollback, and page ids are unique so a later ' +
-      "page cannot pick up a dead one's entry."
+    why: 'Slice-owned shutdown tears down every browser row directly.'
+  },
+  {
+    path: 'src/renderer/src/store/slices/browser/browser-slice-contract.ts',
+    closeBrowserTabMentions: 1,
+    reasonCarryingCloseCalls: 0,
+    planReasonForwardings: 0,
+    routesThroughPlan: false,
+    why: 'The extracted slice contract declares the close action consumed by browser controllers.'
   }
 ]
 

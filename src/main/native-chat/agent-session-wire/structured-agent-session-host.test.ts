@@ -12,10 +12,8 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../agent-session-journal/journal-store'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -31,6 +29,8 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
+
+const journals = createTrackedJournalOpener()
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -99,7 +99,7 @@ async function attach(): Promise<AgentSessionRecord | null> {
 async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
   const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
   const journalDir = journalDirectoryFor(root, { workspaceId: 'workspace-1', sessionId: SESSION })
-  const journal = await openAgentSessionJournal({
+  const journal = await journals.open({
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -159,6 +159,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await host.flushAllStreamedEvents()
   await rm(root, { recursive: true, force: true })
 })
@@ -382,6 +383,9 @@ describe('send', () => {
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
     await expect(host.send(CALLER, params)).rejects.toThrow('journal resolve failed')
+    expect(journal.submissions()).toMatchObject([
+      { clientMessageId: params.envelope.clientOperationId, dispatchState: 'unknown' }
+    ])
     expect(
       store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
         ?.outcome
@@ -449,7 +453,7 @@ describe('send', () => {
 })
 
 describe('cancel', () => {
-  it('records the outcome as a status item keyed by the operation id', async () => {
+  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
     await attach()
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
@@ -459,7 +463,7 @@ describe('cancel', () => {
     const page = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items[0]?.body).toMatchObject({
       kind: 'status',
-      text: 'Turn cancelled.'
+      text: 'Cancellation requested.'
     })
     expect(JSON.stringify(page.ok && page.page.items[0]?.body)).not.toContain('turn-1')
   })

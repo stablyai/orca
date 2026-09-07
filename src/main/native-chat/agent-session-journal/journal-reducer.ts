@@ -9,7 +9,6 @@
 
 import type {
   AgentJournalAcceptanceReceipt,
-  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission
@@ -21,10 +20,13 @@ import {
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import type { JournalRow } from './journal-row-schema'
 
+export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
+
 export type JournalReducerState = {
   sessionId: string
   epoch: string
   lastSequence: number
+  lastActivityAt: number
   /** Lowest sequence still individually replayable; rows below it were compacted. */
   oldestSequence: number
   highestFence: number
@@ -36,6 +38,7 @@ export type JournalReducerState = {
   /** Provider item id → the submission slot that adopted it. Stops an accepted
    *  echo from appending a second copy of the user's own message. */
   aliases: Map<string, string>
+  appliedSettlementIds: Set<string>
 }
 
 export function createJournalReducerState(sessionId: string, epoch: string): JournalReducerState {
@@ -43,13 +46,15 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     sessionId,
     epoch,
     lastSequence: 0,
+    lastActivityAt: 0,
     oldestSequence: 1,
     highestFence: 0,
     items: new Map(),
     tombstones: new Map(),
     submissions: new Map(),
     receipts: new Map(),
-    aliases: new Map()
+    aliases: new Map(),
+    appliedSettlementIds: new Set()
   }
 }
 
@@ -59,6 +64,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   if (row.kind === 'epoch') {
     return
   }
+  state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
   if (row.kind === 'item') {
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
     upsertItem(state, itemId, row.revision, {
@@ -75,11 +81,47 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     removeItem(state, resolveItemId(state, row.itemId), row.revision)
     return
   }
+  if (row.kind === 'lifecycle-batch') {
+    if (state.appliedSettlementIds.has(row.settlementId)) {
+      return
+    }
+    for (const mutation of row.mutations) {
+      if (mutation.kind === 'item') {
+        const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
+        upsertItem(state, itemId, mutation.revision, {
+          itemId,
+          revision: mutation.revision,
+          body: mutation.body,
+          sequence: row.seq,
+          observedAt: row.ts,
+          ...(row.recovered ? { recovered: row.recovered } : {})
+        })
+      } else {
+        removeItem(state, resolveItemId(state, mutation.itemId), mutation.revision)
+      }
+    }
+    rememberAppliedSettlementId(state, row.settlementId)
+    return
+  }
   if (row.kind === 'submission') {
     applySubmission(state, row)
     return
   }
   applyDispatch(state, row)
+}
+
+export function rememberAppliedSettlementId(
+  state: JournalReducerState,
+  settlementId: string
+): void {
+  state.appliedSettlementIds.add(settlementId)
+  while (state.appliedSettlementIds.size > MAX_JOURNAL_APPLIED_SETTLEMENT_IDS) {
+    const oldest = state.appliedSettlementIds.values().next().value
+    if (oldest === undefined) {
+      return
+    }
+    state.appliedSettlementIds.delete(oldest)
+  }
 }
 
 export function resolveJournalItemId(
@@ -151,7 +193,17 @@ function upsertItem(
   // so letting a revision advance it makes the row jump past everything that
   // landed in between — the provider's own echo of a send revises the submission
   // row, which relocated the user's bubble below later rows.
-  state.items.set(itemId, { ...next, sequence: existing.sequence, observedAt: existing.observedAt })
+  const submitted =
+    existing.body.kind === 'message' &&
+    existing.body.role === 'user' &&
+    parseAgentJournalItemKey(itemId)?.provider === 'orca'
+  state.items.set(itemId, {
+    ...next,
+    // Provider history may normalize text or omit local attachments from the original send.
+    body: submitted ? existing.body : next.body,
+    sequence: existing.sequence,
+    observedAt: existing.observedAt
+  })
   state.tombstones.delete(itemId)
 }
 
@@ -231,27 +283,4 @@ export function renderJournalState(state: JournalReducerState): AgentJournalSnap
     items,
     submissions: [...state.submissions.values()].sort((a, b) => a.submittedAt - b.submittedAt)
   }
-}
-
-/** Blob digests one body points at. A retained row can outlive its render item
- *  (a tombstone drops the item), so compaction reads rows through this too. */
-export function blobDigestsInBody(body: AgentJournalItemBody, into: Set<string>): void {
-  if (body.kind === 'tool-call' && body.output?.truncated) {
-    into.add(body.output.digest)
-  }
-  if (body.kind === 'diff' && body.patch.truncated) {
-    into.add(body.patch.digest)
-  }
-  if (body.kind === 'status' && body.providerFrame?.payload.truncated) {
-    into.add(body.providerFrame.payload.digest)
-  }
-}
-
-/** Digests referenced by live rows, so compaction knows which blobs to keep. */
-export function referencedBlobDigests(state: JournalReducerState): Set<string> {
-  const digests = new Set<string>()
-  for (const item of state.items.values()) {
-    blobDigestsInBody(item.body, digests)
-  }
-  return digests
 }

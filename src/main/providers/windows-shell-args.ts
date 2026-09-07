@@ -14,7 +14,8 @@ import {
 } from '../powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
 
-const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
+/** cmd.exe's own documented ceiling; callers that go through sshd budget below it. */
+export const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
 const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
@@ -202,6 +203,7 @@ export function resolveWindowsShellLaunchArgs(
     const powerShellCommand = getPowerShellEncodedCommand(nativeCwd, startupCommand)
     // Why: foreground-process status on Windows depends on OSC 133 C/D, and
     // PowerShell needs a prompt/readline bootstrap after profiles finish.
+    // Why base64 and not -Command: see powershell-osc133-bootstrap.ts (MDE review).
     return {
       shellArgs: ['-NoLogo', '-NoExit', '-EncodedCommand', powerShellCommand.encodedCommand],
       ...(powerShellCommand.startupCommandDeliveredInShellArgs

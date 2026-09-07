@@ -16,7 +16,7 @@ const openModal = vi.fn()
 const openTaskPage = vi.fn()
 const updateWorktreeMeta = vi.fn()
 const recordFeatureInteraction = vi.fn()
-const setWorkspacePortScan = vi.fn()
+const replaceWorkspacePortScans = vi.fn()
 const setWorkspacePortScanRefreshing = vi.fn()
 const cacheTimerMocks = vi.hoisted(() => ({
   usePromptCacheCountdownStartedAt: vi.fn()
@@ -52,7 +52,7 @@ vi.mock('@/store', () => ({
       recordFeatureInteraction,
       remoteBranchConflictByWorktreeId: {},
       setRemoteBrowserPageHandle: vi.fn(),
-      setWorkspacePortScan,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing,
       settings,
       sshConnectionStates: new Map(),
@@ -584,6 +584,26 @@ describe('WorktreeCard compact hover details', () => {
       false
     )
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  })
+
+  it('keeps unlink available for an auto-detected PR in the identity hover', async () => {
+    settings = { compactWorktreeCards: true, experimentalNewWorktreeCardStyle: true }
+    const worktree = makeWorktree()
+    hostedReviewCache = {
+      'local::repo-1::feature/local-branch': {
+        data: makeHostedReview({ url: '' }),
+        fetchedAt: Date.now(),
+        linkedReviewHintKey: 'github:456',
+        branchLookupGitHubPRNumber: 456
+      }
+    }
+    const { default: WorktreeCard } = await import('./WorktreeCard')
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />
+    )
+
+    expect(markup).toContain('More PR actions')
   })
 
   it('suppresses the aggregate cache timer when compact inline agents are visible', async () => {

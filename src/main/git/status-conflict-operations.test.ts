@@ -147,4 +147,100 @@ describe('detectConflictOperation', () => {
 
     await expect(detectConflictOperation('/repo')).resolves.toBe('unknown')
   })
+
+  // Both cases below assert the probed prefix rather than the joined string so they exercise
+  // Win32 pointer resolution on every host, where `path.join` still uses the host separator.
+  it('probes the drive spelling of a drvfs gitdir pointer on Windows', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: /mnt/c/Users/me/repo/.git/worktrees/feature\n')
+    accessMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    try {
+      await expect(detectConflictOperation(String.raw`C:\Users\me\repo\feature`)).resolves.toBe(
+        'unknown'
+      )
+      for (const [target] of accessMock.mock.calls) {
+        expect(target).toContain(String.raw`C:\Users\me\repo\.git\worktrees\feature`)
+      }
+      expect(accessMock).toHaveBeenCalledTimes(4)
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // The worktree path itself can be guest-spelled (git in the distro reports it that way), so the
+  // gitfile read has to be translated too or it ENOENTs before any pointer resolution happens.
+  it('reads the gitfile at the host spelling of a guest-spelled worktree', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: /mnt/c/Users/me/repo/.git/worktrees/feature\n')
+    accessMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    try {
+      await expect(detectConflictOperation('/mnt/c/Users/me/repo/feature')).resolves.toBe('unknown')
+      expect(readFileMock).toHaveBeenCalledTimes(1)
+      expect(readFileMock.mock.calls[0][0]).toContain(String.raw`C:\Users\me\repo\feature`)
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // A plain clone inside the distro has a `.git` directory, so the gitfile read fails and the
+  // markers are probed under the worktree itself — that fallback needs the host spelling too.
+  it('probes a directory .git under the distro share when the caller names one', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockRejectedValue(Object.assign(new Error('EISDIR'), { code: 'EISDIR' }))
+    accessMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    try {
+      await expect(
+        detectConflictOperation('/home/me/repo/feature', { wslDistro: 'Ubuntu' })
+      ).resolves.toBe('unknown')
+      expect(readFileMock.mock.calls[0][0]).toContain(
+        String.raw`\\wsl.localhost\Ubuntu\home\me\repo\feature`
+      )
+      for (const [target] of accessMock.mock.calls) {
+        expect(target).toContain(String.raw`\\wsl.localhost\Ubuntu\home\me\repo\feature`)
+      }
+      expect(accessMock).toHaveBeenCalledTimes(4)
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // `git worktree repair --relative-paths` (2.48+) writes `gitdir: ../../..`, which the guest
+  // spelling of the worktree would resolve drive-relative on Win32.
+  it('resolves a relative gitdir pointer against the host spelling of the worktree', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: ../.git/worktrees/feature\n')
+    accessMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    try {
+      await expect(detectConflictOperation('/mnt/c/Users/me/repo/feature')).resolves.toBe('unknown')
+      for (const [target] of accessMock.mock.calls) {
+        expect(target).toContain(String.raw`C:\Users\me\repo\.git\worktrees\feature`)
+      }
+      expect(accessMock).toHaveBeenCalledTimes(4)
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('probes the distro UNC share when the caller names one', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    readFileMock.mockResolvedValue('gitdir: /home/me/repo/.git/worktrees/feature\n')
+    accessMock.mockImplementation(async (target: string) =>
+      target.includes(String.raw`\\wsl.localhost\Ubuntu\home\me\repo\.git\worktrees\feature`) &&
+      target.endsWith('MERGE_HEAD')
+        ? undefined
+        : Promise.reject(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+    )
+
+    try {
+      await expect(
+        detectConflictOperation(String.raw`C:\Users\me\repo\feature`, { wslDistro: 'Ubuntu' })
+      ).resolves.toBe('merge')
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
 })

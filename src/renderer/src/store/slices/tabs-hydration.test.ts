@@ -414,9 +414,9 @@ describe('buildHydratedTabState – legacy format', () => {
     // Why: editor owner migration re-stamped a tab id a sibling record already
     // held. Two rows under one id repeat a React key and strand a ghost row.
     const duplicateId = 'editor:wt%3A%3Alungfish:env-a:FINAL-REPORT.md'
-    const editorTab = (id: string, sortOrder: number) => ({
+    const editorTab = (id: string, entityId: string, sortOrder: number) => ({
       id,
-      entityId: 'editor:wt%3A%3Alungfish:env-b:FINAL-REPORT.md',
+      entityId,
       groupId: 'g1',
       worktreeId: 'w1',
       contentType: 'editor' as const,
@@ -429,7 +429,11 @@ describe('buildHydratedTabState – legacy format', () => {
     const session: WorkspaceSessionState = {
       ...makeBaseSession(),
       unifiedTabs: {
-        w1: [editorTab('t-unique', 0), editorTab(duplicateId, 1), editorTab(duplicateId, 2)]
+        w1: [
+          editorTab('t-unique', 'editor:wt%3A%3Alungfish:env-c:FINAL-REPORT.md', 0),
+          editorTab(duplicateId, 'editor:wt%3A%3Alungfish:env-b:FINAL-REPORT.md', 1),
+          editorTab(duplicateId, 'editor:wt%3A%3Alungfish:env-b:FINAL-REPORT.md', 2)
+        ]
       },
       tabGroups: {
         w1: [

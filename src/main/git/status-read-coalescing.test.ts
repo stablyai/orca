@@ -71,15 +71,19 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
 
-  it('opts status reads into direct WSL Git without changing mutation options', async () => {
+  it('preserves status admission through the direct WSL stream without changing mutation options', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
 
-    await getStatus('/repo', { wslDistro: 'Ubuntu' })
+    await getStatus('/repo', { wslDistro: 'Ubuntu', admissionTier: 'interactive' })
     await stageFile('/repo', 'src/file.ts', { wslDistro: 'Ubuntu' })
 
     expect(gitStreamOptionsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ preferWslDirectGit: true, wslDistro: 'Ubuntu' })
+      expect.objectContaining({
+        admissionTier: 'interactive',
+        preferWslDirectGit: true,
+        wslDistro: 'Ubuntu'
+      })
     )
     const addOptions = gitExecFileAsyncMock.mock.calls.find(([args]) =>
       (args as string[]).includes('add')
@@ -290,16 +294,18 @@ describe('getStatus', () => {
       getStatus('/other-repo'),
       getStatus('/repo', { wslDistro: 'Ubuntu' }),
       getStatus('/repo', { includeIgnored: true }),
+      getStatus('/repo', { includeLineStats: false }),
       getStatus('/repo', { reuseLineStats: true }),
       getStatus('/repo', { bypassEffectiveUpstreamNegativeCache: true }),
       getStatus('/repo', { limit: 1 }),
-      getStatus('/repo', { sharedLinkPaths: ['node_modules'] })
+      getStatus('/repo', { sharedLinkPaths: ['node_modules'] }),
+      getStatus('/repo', { admissionTier: 'interactive' })
     ]
 
-    await vi.waitFor(() => expect(statusCommandCalls).toBe(8))
+    await vi.waitFor(() => expect(statusCommandCalls).toBe(10))
     releases.splice(0).forEach((release) => release())
     await Promise.all(reads)
-    expect(statusCommandCalls).toBe(8)
+    expect(statusCommandCalls).toBe(10)
   })
 
   it('clears in-flight status reads when a mutation runs', async () => {

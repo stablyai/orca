@@ -61,7 +61,8 @@ describe('desktop relay E2EE integration', () => {
   })
 
   it('splices a simulated phone through CloudRelayTransport with real NaCl E2EE v2', async () => {
-    const relay = new WebSocketServer({ port: 0, perMessageDeflate: false })
+    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    const relay = new WebSocketServer({ host: '127.0.0.1', port: 0, perMessageDeflate: false })
     servers.push(relay)
     await new Promise<void>((resolve) => relay.once('listening', resolve))
     const address = relay.address()

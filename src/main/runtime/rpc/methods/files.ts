@@ -93,8 +93,13 @@ const FileSearch = WorktreeSelector.extend({
   maxResults: z.number().int().positive().optional()
 })
 
+// Why: `maxResults` is a new optional field (wire rule 1) — an older host strips it and keeps its
+// own default. It existed only on the Electron IPC hop, so "the client names its cap and a full page
+// means there is more" was true for desktop and merely incidental for web and mobile, which were
+// saved by `remoteFileContentBudget` defaulting the cap inside `listRuntimeFiles`.
 const FileListAll = WorktreeSelector.extend({
-  excludePaths: z.array(z.string()).optional()
+  excludePaths: z.array(z.string()).optional(),
+  maxResults: z.number().int().positive().optional()
 })
 
 const FileUnwatch = z.object({
@@ -236,6 +241,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
       const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
       return runtime.listRuntimeFiles(params.worktree, {
         excludePaths: params.excludePaths,
+        ...(params.maxResults === undefined ? {} : { maxResults: params.maxResults }),
         ...(signal === undefined ? {} : { signal }),
         ...(maxContentBytes === undefined ? {} : { maxContentBytes })
       })

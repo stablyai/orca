@@ -63,6 +63,11 @@ export function nonInteractiveGitEnv(
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
   const next = promptGuardGitEnv(env, platform)
+  if (platform === 'win32') {
+    // Why: without it wsl.exe writes its OWN failures ("no distribution with the supplied name") as
+    // UTF-16LE (#9010), which is how a dead distro reached telemetry as an error with no text.
+    next.WSL_UTF8 = '1'
+  }
   if (!next.GIT_SSH_COMMAND) {
     next.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes'
     if (platform === 'win32') {

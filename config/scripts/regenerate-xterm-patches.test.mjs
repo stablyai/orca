@@ -5,25 +5,29 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  CHECKOUT_DIFF_FLAGS,
-  PNPM_DIFF_FLAGS,
   assertBuildStepsAllowed,
   assertPublishedCommit,
-  assertSourceDerivationsAgree,
   assertSourcemapPolicy,
-  firstDifferenceIndex,
-  formatCheckFailure,
+  lockfileHasPatchEntry,
   lockfilePatchHashIsStale,
-  normalizePnpmDiff,
   patchHash,
-  pnpmDiffEnvironment,
   readLockfilePatchHash,
   readLockfileResolutionHashes,
-  sourceHunks,
-  splitPatchEntries,
   stampVersionSource,
   updateLockfilePatchHash
 } from './regenerate-xterm-patches.mjs'
+import {
+  CHECKOUT_DIFF_FLAGS,
+  PNPM_DIFF_FLAGS,
+  assertSourceDerivationsAgree,
+  firstDifferenceIndex,
+  formatCheckFailure,
+  normalizePnpmDiff,
+  pnpmDiffEnvironment,
+  selectPatchEntries,
+  sourceHunks,
+  splitPatchEntries
+} from './xterm-patch-text.mjs'
 
 // Only the tests need to slice the generated half out of a patch; the generator
 // reads `generatedPaths` directly where it compares against the pristine build.
@@ -98,6 +102,8 @@ describe('pnpm diff format', () => {
     expect(PNPM_DIFF_FLAGS).toEqual([
       '-c',
       'core.safecrlf=false',
+      '-c',
+      'core.quotePath=false',
       'diff',
       '--src-prefix=a/',
       '--dst-prefix=b/',
@@ -107,18 +113,18 @@ describe('pnpm diff format', () => {
       '--no-index',
       '--text',
       '--no-ext-diff',
-      '--no-color'
+      '--no-color',
+      '--'
     ])
   })
 
-  it('blanks the config-bearing environment variables', () => {
+  it('matches pnpm git config isolation', () => {
     const environment = pnpmDiffEnvironment({ PATH: '/usr/bin', HOME: '/Users/someone' })
     expect(environment).toMatchObject({
       PATH: '/usr/bin',
       GIT_CONFIG_NOSYSTEM: '1',
-      HOME: '',
-      XDG_CONFIG_HOME: '',
-      USERPROFILE: ''
+      GIT_CONFIG_GLOBAL: '/dev/null',
+      HOME: '/Users/someone'
     })
   })
 
@@ -276,9 +282,19 @@ describe('source derivation agreement', () => {
   })
 
   it('diffs the checkout with pnpm formatting so the two halves stay comparable', () => {
-    expect(CHECKOUT_DIFF_FLAGS).toEqual(PNPM_DIFF_FLAGS.filter((flag) => flag !== '--no-index'))
+    expect(CHECKOUT_DIFF_FLAGS.filter((flag) => flag !== '--relative')).toEqual(
+      PNPM_DIFF_FLAGS.filter((flag) => flag !== '--no-index')
+    )
     expect(CHECKOUT_DIFF_FLAGS).toContain('--full-index')
     expect(CHECKOUT_DIFF_FLAGS).not.toContain('--no-index')
+  })
+
+  it('passes --relative as a flag, not as a pathspec', () => {
+    // After `--` git reads it as a path, silently leaving addon diffs rooted at the
+    // repo instead of the package, which drops every source hunk from the patch.
+    expect(CHECKOUT_DIFF_FLAGS.indexOf('--relative')).toBeLessThan(
+      CHECKOUT_DIFF_FLAGS.indexOf('--')
+    )
   })
 })
 
@@ -350,12 +366,8 @@ describe('manifest guards', () => {
 describe('lockfile coupling', () => {
   const lockfile = [
     'patchedDependencies:',
-    "  '@xterm/xterm@6.1.0-beta.287':",
-    `    hash: ${'0'.repeat(64)}`,
-    '    path: config/patches/@xterm__xterm@6.1.0-beta.287.patch',
-    '  node-pty@1.1.0:',
-    `    hash: ${'1'.repeat(64)}`,
-    '    path: config/patches/node-pty@1.1.0.patch',
+    `  '@xterm/xterm@6.1.0-beta.287': ${'0'.repeat(64)}`,
+    `  node-pty@1.1.0: ${'1'.repeat(64)}`,
     'snapshots:',
     `  '@xterm/addon-fit@0.12.0-beta.287(@xterm/xterm@6.1.0-beta.287(patch_hash=${'0'.repeat(64)}))':`,
     `      '@xterm/xterm': 6.1.0-beta.287(patch_hash=${'0'.repeat(64)})`,
@@ -396,7 +408,10 @@ describe('lockfile coupling', () => {
 
   it('reports a lockfile stale in its resolution keys alone', () => {
     const key = '@xterm/xterm@6.1.0-beta.287'
-    const halfUpdated = lockfile.replace(`hash: ${'0'.repeat(64)}`, `hash: ${'a'.repeat(64)}`)
+    const halfUpdated = lockfile.replace(
+      `'@xterm/xterm@6.1.0-beta.287': ${'0'.repeat(64)}`,
+      `'@xterm/xterm@6.1.0-beta.287': ${'a'.repeat(64)}`
+    )
 
     expect(readLockfilePatchHash(halfUpdated, key)).toBe('a'.repeat(64))
     expect(lockfilePatchHashIsStale(halfUpdated, key, 'a'.repeat(64))).toBe(true)
@@ -407,6 +422,13 @@ describe('lockfile coupling', () => {
     expect(() => readLockfilePatchHash(lockfile, '@xterm/addon-webgl@0.20.0-beta.286')).toThrow(
       /no patchedDependencies entry/
     )
+  })
+
+  it('reports a missing key without throwing, which is the state mid version bump', () => {
+    // A bump renames the key, so --write has nothing to rewrite until pnpm install
+    // creates it. Aborting there would strand the run before the later packages.
+    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.287')).toBe(true)
+    expect(lockfileHasPatchEntry(lockfile, '@xterm/xterm@6.1.0-beta.303')).toBe(false)
   })
 })
 
@@ -434,18 +456,20 @@ describe('check-mode reporting', () => {
 // These run without network or a build, so ordinary `pnpm test` catches the two
 // desyncs that would otherwise only surface in the heavy xterm_patch_sync job.
 describe('committed xterm patch artifacts', () => {
-  it('normalizes Chromium font-weight serialization in every WebGL runtime copy', async () => {
-    const patch = await readFile(
-      path.join(REPO_ROOT, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
-      'utf8'
-    )
-    expect(patch).not.toMatch(/desiredWeight !== '400'|orcaProbeWeight!=="400"/)
-    expect(
-      patch.match(/(?:actualWeightToken === 'normal'|orcaActualWeightToken==="normal")/g)
-    ).toHaveLength(3)
-    expect(
-      patch.match(/(?:actualWeight !== desiredWeight|orcaActualWeight!==orcaProbeWeight)/g)
-    ).toHaveLength(3)
+  it('carries the font-weight probe into every WebGL runtime copy', async () => {
+    const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
+    const webgl = manifest.packages.find((entry) => entry.name === '@xterm/addon-webgl')
+    const patch = await readFile(path.join(REPO_ROOT, webgl.patch), 'utf8')
+    // The ESM and CJS bundles mangle locals differently, so anchor on the global the
+    // renderer diagnostics read; a copy missing it reports a font mismatch as a repaint bug.
+    for (const file of ['src/TextureAtlas.ts', 'lib/addon-webgl.js', 'lib/addon-webgl.mjs']) {
+      const stanza = selectPatchEntries(patch, (candidate) => candidate === file)
+      expect(stanza, file).not.toBe('')
+      expect(stanza, file).toContain('__orcaAtlasFontProbe')
+    }
+    // The probe must compare the rasterized weight against the requested one; comparing
+    // against a literal '400' would call every non-default weight a mismatch.
+    expect(sourceHunks(patch)).toContain('actual === desired')
   })
 
   it('records the lockfile hash pnpm derives from the patch file', async () => {

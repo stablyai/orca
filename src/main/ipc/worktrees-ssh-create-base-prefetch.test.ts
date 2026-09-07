@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getSshGitProviderMock, getActiveMultiplexerMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 
+function missingShowRefError(): Error & { code: number } {
+  return Object.assign(new Error('missing exact ref'), { code: 1 })
+}
+
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
@@ -104,6 +108,9 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
+        }
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
@@ -175,6 +182,9 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
+        }
         if (args[0] === 'for-each-ref') {
           return { stdout: '', stderr: '' }
         }
@@ -243,6 +253,9 @@ describe('registerWorktreeHandlers', () => {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         return { stdout: '', stderr: '' }
       }),
@@ -313,6 +326,9 @@ describe('registerWorktreeHandlers', () => {
         }
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/master^{commit}')) {
           throw new Error('missing stale base')
@@ -386,6 +402,9 @@ describe('registerWorktreeHandlers', () => {
         }
         if (args[0] === 'remote') {
           return { stdout: 'team\norigin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
           return { stdout: 'main-sha\n', stderr: '' }
@@ -463,6 +482,9 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return pendingRemoteList
         }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
+        }
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
@@ -528,6 +550,9 @@ describe('registerWorktreeHandlers', () => {
       exec: vi.fn().mockImplementation(async (args: string[]) => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'show-ref') {
+          throw missingShowRefError()
         }
         return { stdout: '', stderr: '' }
       }),

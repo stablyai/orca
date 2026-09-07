@@ -11,7 +11,7 @@ export type MobileTerminalTabMountRequest = {
 }
 
 type MobileTerminalTabMountOptions = {
-  isTabMounted?: (tabId: string) => boolean
+  isTabMounted?: (tabId: string, worktreeId?: string) => boolean
 }
 
 /** Why: exact-tab planning prevents a stale ptyId from mounting every saved xterm (#8597). */
@@ -37,7 +37,7 @@ export function planMobileTerminalTabMount(
       : null
   // Why: replaying the background-mount event for a live pane restarts its
   // three-second hidden measurement window on every mobile reconnect.
-  return tabId && !options.isTabMounted?.(tabId)
+  return tabId && !options.isTabMounted?.(tabId, request.worktreeId)
     ? { worktreeId: request.worktreeId, tabIds: [tabId] }
     : null
 }

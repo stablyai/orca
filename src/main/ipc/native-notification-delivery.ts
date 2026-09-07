@@ -4,6 +4,8 @@ import type {
   NotificationDispatchResult,
   NotificationSettings
 } from '../../shared/notification-settings-types'
+import { safelyRevealWindow } from '../window/focus-existing-window'
+import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { buildNotificationOptions } from './notification-options'
@@ -79,14 +81,10 @@ export function deliverNativeNotification(
       if (!win || win.isDestroyed()) {
         return
       }
-      if (process.platform === 'darwin') {
+      if (process.platform === 'darwin' && !isBackgroundLaunch()) {
         app.focus({ steal: true })
       }
-      if (win.isMinimized()) {
-        win.restore()
-      }
-      win.show()
-      win.focus()
+      safelyRevealWindow(win)
       win.webContents.send('ui:activateWorktree', {
         repoId,
         worktreeId: args.worktreeId

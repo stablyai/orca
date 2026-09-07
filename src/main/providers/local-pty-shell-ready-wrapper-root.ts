@@ -6,7 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { statSync } from 'node:fs'
 import { resolveShellWrapperRoot } from '../shell-wrapper-content-address'
-import { buildLocalShellReadyWrapperFiles } from './local-pty-shell-ready-wrapper-fileset'
+import {
+  buildLocalShellReadyWrapperFiles,
+  getLocalShellReadyWrapperPaths
+} from './local-pty-shell-ready-wrapper-fileset'
 
 export { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 
@@ -45,8 +48,10 @@ export function getShellReadyWrapperRoot(): string {
   return cachedShellReadyWrapperRoot.root
 }
 
-export function getRequiredShellReadyWrapperPaths(root = getShellReadyWrapperRoot()): string[] {
-  return buildLocalShellReadyWrapperFiles(root).map(([path]) => path)
+export function getRequiredShellReadyWrapperPaths(
+  root = getShellReadyWrapperRoot()
+): readonly string[] {
+  return getLocalShellReadyWrapperPaths(root)
 }
 
 /**

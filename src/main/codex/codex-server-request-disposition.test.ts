@@ -78,7 +78,7 @@ describe('Codex blocking server request dispositions', () => {
     )
   })
 
-  it('cancels a malformed interactive request instead of using method-not-found', () => {
+  it('refuses a malformed interactive request instead of inventing an answer', () => {
     const { registry, connection } = harness()
 
     disposeCodexServerRequest(registry, connection, {
@@ -87,7 +87,12 @@ describe('Codex blocking server request dispositions', () => {
       params: {}
     })
 
-    expect(connection.respond).toHaveBeenCalledWith(4, { decision: 'cancel' })
+    expect(connection.respond).not.toHaveBeenCalled()
+    expect(connection.respondWithError).toHaveBeenCalledWith(
+      4,
+      -32001,
+      'Orca could not model item/commandExecution/requestApproval as a durable prompt'
+    )
   })
 
   it('enumerates every server request in the negotiated stable schema', () => {

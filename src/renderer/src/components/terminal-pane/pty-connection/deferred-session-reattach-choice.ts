@@ -70,7 +70,7 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     ? session.buildColdRestoreAgentResumeStartup()
     : null
   if (sleptRemoteRuntimeSessionId) {
-    session.deps.syncPanePtyLayoutBinding(session.pane.id, null)
+    session.syncPanePtyLayoutBinding(null)
     session.deps.clearTabPtyId(session.deps.tabId, sleptRemoteRuntimeSessionId)
   }
   const currentTabLivePtyIds = storeSnapshot.ptyIdsByTabId[session.deps.tabId] ?? []

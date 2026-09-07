@@ -16,3 +16,8 @@ export const BrowserTabCreateParams = z.object({
   targetGroupId: OptionalString,
   placement: BrowserPageCreationPlacement.optional()
 })
+
+export const BrowserOpenUrlParams = z.object({
+  url: z.url(),
+  worktree: z.string().min(1)
+})

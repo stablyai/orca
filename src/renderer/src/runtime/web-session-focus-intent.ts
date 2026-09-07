@@ -164,10 +164,12 @@ export function clearWebSessionFocusIntent(owner: WebSessionIntentOwner, worktre
 export function clearWebSessionFocusIntentIfMatches(
   owner: WebSessionIntentOwner,
   worktreeId: string,
-  hostTabId: string
+  hostTabId: string,
+  leafId?: string
 ): void {
   const key = focusIntentPartitionKey(owner, worktreeId)
-  if (pendingFocusByOwnerAndWorktree.get(key)?.hostTabId === hostTabId) {
+  const intent = pendingFocusByOwnerAndWorktree.get(key)
+  if (intent?.hostTabId === hostTabId && (leafId === undefined || intent.leafId === leafId)) {
     pendingFocusByOwnerAndWorktree.delete(key)
   }
 }

@@ -32,6 +32,9 @@ export async function createBlankWorkspace(args: {
         repo: `id:${args.repoId}`,
         setupDecision: args.setupDecision,
         name,
+        ...(args.nameWasGenerated
+          ? { displayNameKind: 'generated' as const }
+          : { displayName: args.baseName, displayNameKind: 'user' as const }),
         ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),
         ...agentLaunchCreateFields(args.createdWithAgentId)
       }

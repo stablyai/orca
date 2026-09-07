@@ -1,3 +1,5 @@
+import { setVisibleSessionId } from './agent-session-visible-tab-index'
+import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 /** Durable single-writer session records and their operation ledger. */
 
 import {
@@ -115,9 +117,32 @@ export class AgentSessionRecordStore {
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
+  listVisibleSessionIds = (): string[] =>
+    [...this.state.visibleSessionIds].filter((sessionId) => this.state.records.has(sessionId))
+
+  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
+    present: this.state.visibleSessionIdsIndexPresent,
+    sessionIds: this.listVisibleSessionIds()
+  })
+
+  /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
+  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
+    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
+  }
+
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
+  }
+
+  setConversationCommand(
+    sessionId: string,
+    fence: number,
+    command: NonNullable<AgentSessionRecord['conversationCommand']>
+  ): Promise<void> {
+    return this.transact(() =>
+      commitConversationCommandRecord(this.state, sessionId, fence, command)
+    )
   }
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */
@@ -229,7 +254,9 @@ export class AgentSessionRecordStore {
     probe: AgentSessionOwnerProbe
     now: number
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
+    return this.mutate(args.sessionId, (record) =>
+      evictAgentSessionOwner({ ...args, record, journalSettlement: 'required' })
+    )
   }
 
   async transitionHandoff(

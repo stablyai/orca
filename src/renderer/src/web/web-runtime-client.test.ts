@@ -14,6 +14,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
@@ -86,6 +87,7 @@ describe('WebRuntimeClient', () => {
       clientCapabilities: [
         SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
         AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+        WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
         WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
         WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
       ]
@@ -656,7 +658,8 @@ describe('WebRuntimeClient', () => {
     vi.stubGlobal('WebSocket', WebSocket)
     const serverKeys = generateKeyPair()
     const frame = new Uint8Array([9, 8, 7])
-    const wss = new WebSocketServer({ port: 0 })
+    // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
     const sockets = new Set<WebSocket>()
     wss.on('connection', (socket) => {
       sockets.add(socket)

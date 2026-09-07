@@ -10,7 +10,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import {
   applyJournalRow,
   createJournalReducerState,
-  referencedBlobDigests,
+  MAX_JOURNAL_APPLIED_SETTLEMENT_IDS,
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
@@ -207,10 +207,45 @@ describe('submission and dispatch state machine', () => {
     const items = renderJournalState(state).items
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
-    // The echo updates content in place; the bubble keeps its original slot.
+    // The echo advances the revision; the submitted bubble keeps its original slot.
     expect(items[0]?.sequence).toBe(1)
     expect(items[0]?.revision).toBe(1)
   })
+
+  it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
+    'preserves submitted text and attachments when %s is restored',
+    (providerItemId) => {
+      const body: AgentJournalMessageItem = {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: '/example-skill inspect this' },
+          { type: 'image-ref', path: '/tmp/original.png' }
+        ]
+      }
+      const state = fold([
+        { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+        {
+          kind: 'dispatch',
+          clientMessageId: 'cm_1',
+          state: 'accepted',
+          providerItemId,
+          reason: null,
+          ...base(2)
+        },
+        {
+          kind: 'item',
+          itemId: providerItemId,
+          revision: 1,
+          body: userText('# Expanded skill instructions'),
+          ...base(3)
+        }
+      ])
+      expect(renderJournalState(state).items).toEqual([
+        expect.objectContaining({ itemId: agentJournalSubmissionKey('cm_1'), body, revision: 1 })
+      ])
+    }
+  )
 
   it('adopts a provider echo that arrives before dispatch settles', () => {
     const body = userText('early echo')
@@ -361,55 +396,20 @@ describe('submission and dispatch state machine', () => {
   })
 })
 
-describe('blob retention', () => {
-  it('reports the digests live rows still reference', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      {
-        kind: 'item',
-        itemId: 'inline',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'y', byteLength: 1, digest: 'digest-b', truncated: false }
-        },
-        ...base(2)
-      }
-    ])
-    expect([...referencedBlobDigests(state)]).toEqual(['digest-a'])
-  })
-
-  it('stops referencing a digest once its item is tombstoned', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'diff',
-          path: 'a.ts',
-          patch: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      { kind: 'tombstone', itemId: 'tool', revision: 2, ...base(2) }
-    ])
-    expect(referencedBlobDigests(state).size).toBe(0)
+describe('lifecycle settlement deduplication', () => {
+  it('retains only the newest bounded settlement ids', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    for (let index = 0; index <= MAX_JOURNAL_APPLIED_SETTLEMENT_IDS; index += 1) {
+      applyJournalRow(state, {
+        kind: 'lifecycle-batch',
+        settlementId: `settlement-${index}`,
+        mutations: [{ kind: 'tombstone', itemId: 'item', revision: index + 1 }],
+        ...base(index + 1)
+      })
+    }
+    expect(state.appliedSettlementIds.size).toBe(MAX_JOURNAL_APPLIED_SETTLEMENT_IDS)
+    expect(state.appliedSettlementIds.has('settlement-0')).toBe(false)
+    expect(state.appliedSettlementIds.has('settlement-1')).toBe(true)
   })
 })
 

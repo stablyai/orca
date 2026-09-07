@@ -24,13 +24,15 @@ truth. Everything else is derived from it by
 `config/scripts/regenerate-xterm-patches.mjs`, which is pinned to the exact
 upstream commit the published tarball was built from.
 
-This policy covers `@xterm/xterm` only. The addon patches
-(`@xterm/addon-webgl`, `@xterm/addon-serialize`) are still hand-edited bundles
-and are tracked separately; see [Known Gaps](#known-gaps).
+`@xterm/addon-webgl`, `@xterm/addon-search` and `@xterm/addon-serialize` are
+generated the same way, from their own source patches under
+`config/patches/xterm-src/`. Their entries differ only in `packageDir` and build
+steps; everything below applies to all four. `@xterm/addon-ligatures` is the one
+patch still written by hand — see [Known Gaps](#known-gaps).
 
 ## Rules
 
-1. Never edit `config/patches/@xterm__xterm@<version>.patch`. Edit the source
+1. Never edit `config/patches/@xterm__*@<version>.patch`. Edit the source
    patch and regenerate.
 2. Never edit `lib/` inside a patched `node_modules` tree and re-run
    `pnpm patch-commit`. That is how bundle hunks stop matching their sources.
@@ -51,14 +53,16 @@ and are tracked separately; see [Known Gaps](#known-gaps).
    patch hash in two places — `patchedDependencies` and every resolution key that
    depends on the patched package — and on a warm store it will leave the
    resolution keys at their previous value while reporting success. That installs
-   locally and drifts on CI's cold store. Always finish on step 4, and if it
-   reports a stale hash after an install, rerun `--write`.
+   locally and drifts on CI's cold store. For a version bump, follow the **Version
+   Bumps** workflow through step 5 (the final `--check`); if it reports a stale hash
+   after an install, rerun `--write`. For a source-only edit, the four-step workflow
+   above ends at `--check`.
 
 ## Workflow
 
 ```sh
 # 1. Edit the source hunks.
-$EDITOR config/patches/xterm-src/@xterm__xterm@6.1.0-beta.287.src.patch
+$EDITOR config/patches/xterm-src/@xterm__xterm@6.1.0-beta.303.src.patch
 
 # 2. Rebuild the bundle hunks, the full patch, and the lockfile hash.
 node config/scripts/regenerate-xterm-patches.mjs --write
@@ -77,8 +81,18 @@ any run it is left at the pinned commit with the source patch applied:
 ```sh
 node config/scripts/regenerate-xterm-patches.mjs --check --work-dir=/tmp/xterm
 $EDITOR /tmp/xterm/upstream/src/browser/input/CompositionHelper.ts
-git -C /tmp/xterm/upstream diff -- src/ > config/patches/xterm-src/@xterm__xterm@6.1.0-beta.287.src.patch
+git -C /tmp/xterm/upstream diff -- src/ > config/patches/xterm-src/@xterm__xterm@6.1.0-beta.303.src.patch
 node config/scripts/regenerate-xterm-patches.mjs --write --work-dir=/tmp/xterm
+```
+
+For an addon, edit under `addons/<name>/` and take the diff from that directory
+with `--relative`, so the patch is rooted at the package the way the published
+tarball is:
+
+```sh
+$EDITOR /tmp/xterm/upstream/addons/addon-webgl/src/TextureAtlas.ts
+git -C /tmp/xterm/upstream/addons/addon-webgl diff --relative -- src/ \
+  > config/patches/xterm-src/@xterm__addon-webgl@0.20.0-beta.299.src.patch
 ```
 
 `--write` rewrites the source patch into the canonical form it would emit on a
@@ -106,6 +120,18 @@ commit would still produce a plausible-looking 7 MB patch.
 Upstream's publish path is `npm ci` → stamp `Version.ts` → `npm run package`.
 `npm run package` runs webpack for `lib/xterm.js` and then, via `postpackage`,
 `bin/esbuild_all.mjs --prod` for `lib/xterm.mjs`.
+
+An addon needs three steps, in this order, and the first is easy to miss:
+
+1. **root `npm run build`.** The addon's own `npm run build` is
+   `tsgo -p .` against a tsconfig whose `files` and `include` are both empty and
+   which only lists project references. In `-p` mode tsgo does not build
+   references, so it succeeds while emitting nothing, and the addon's webpack
+   then fails on a missing `./out/`. The root build is what populates it.
+2. **addon `npm run package`** — the addon's own webpack, which emits the CJS
+   `lib/addon-*.js`. The root `package` script never builds this.
+3. **root `npm run esbuild-package`** — `bin/esbuild_all.mjs --prod`, which emits
+   the ESM `lib/addon-*.mjs` for every addon at once.
 
 **Do not run `npm run setup` after the packaging build.** `setup` is the
 development esbuild pass with `minify: false`. Running it afterwards overwrites
@@ -171,7 +197,29 @@ error naming it. Recovery is to move the pin to the next upstream commit whose
 published bundles, and regenerate. The committed patch keeps working the whole
 time — only regeneration is blocked, so this is never an outage.
 
+## Patch Path Rooting
+
+A published tarball is rooted at the package, so an addon's patch names
+`src/TextureAtlas.ts`, not `addons/addon-webgl/src/TextureAtlas.ts`. Two places
+have to agree with that, and both fail silently if they do not:
+
+- The checkout diff passes `--relative`, which must sit **before** the `--`
+  separator in `CHECKOUT_DIFF_FLAGS`. After it, git reads it as a pathspec and
+  keeps repo-root-relative paths, and every source hunk then falls out of the
+  emitted patch.
+- `git apply` runs from the repo root with `--directory=<packageDir>`. Run from
+  a subdirectory instead, git still resolves patch paths from the repo root,
+  skips every hunk, and **exits 0**. The generator guards this by failing when
+  applying a source patch leaves the checkout unchanged.
+
 ## Version Bumps
+
+Upstream publishes each package only when its own output changes, so the four
+packages carry different beta numbers while sharing one commit — at the time of
+writing `@xterm/xterm@6.1.0-beta.303` and `@xterm/headless@6.1.0-beta.302` are
+both built from `d3e32b3`. Match on `package.json.commit`, never on the version
+string; `xterm-user-scrolling-contract.test.ts` asserts that pairing for
+headless and core.
 
 Bumping `@xterm/xterm` is:
 
@@ -182,6 +230,9 @@ Bumping `@xterm/xterm` is:
    `package.json`, and `toolchain` to whatever the new `package-lock.json`
    resolves.
 4. `node config/scripts/regenerate-xterm-patches.mjs --write`.
+5. `pnpm install`, then `--check`. On a bump the lockfile has no entry under the
+   new key yet, so `--write` reports the gap and leaves the hash to `pnpm
+install`; `--check` is what proves the two agree afterwards.
 
 Step 4 is where a real upstream conflict shows up: `git apply` of the source
 patch fails against the new tree. Resolve it in the checkout, re-diff, and
@@ -220,25 +271,22 @@ no build, so they run in the ordinary test shards.
 
 ## Known Gaps
 
-`@xterm/addon-webgl` and `@xterm/addon-serialize` are still hand-edited minified
-bundles. Their patches carry a literal `/* PATCH(orca): ... */` comment inside
-minified code and parser round-trip artifacts, and neither patch touches its
-`.map` file, so both addons currently ship sourcemaps whose offsets do not match
-the shipped bundle — the defect `sourcemaps.policy` rules out for `@xterm/xterm`
-and which folding them into this manifest would also fix.
+`@xterm/addon-ligatures` is still patched by hand, and can stay that way: the
+patch is a fifteen-line `package.json` edit that repoints `module` and adds an
+`exports` block, touching no bundle and no sourcemap. Nothing about it is
+generated, so there is nothing for this harness to verify.
 
-Both addons do build from the pinned commit: the registry stamps
-`53a98a720ae4a973e384fa2440880d09537132f3` on `addon-webgl@0.20.0-beta.286` and
-`addon-serialize@0.15.0-beta.287` alike, despite the mismatched version numbers.
-On 2026-08-17 their published `lib/*.mjs` and `lib/*.mjs.map` reproduced byte for
-byte from that commit. That was a one-off measurement, not an invariant: no check
-in this repo re-runs it, so treat it as a starting point to re-measure rather than
-as something the harness holds true.
+The addons were folded into this manifest on 2026-08-29. Before that they were
+hand-edited minified bundles carrying a literal `/* PATCH(orca): ... */` comment
+inside minified code, parser round-trip artifacts (`!0` printed back as `true`,
+locals renamed `i` → `i5`), and no `.map` hunks at all — so both shipped
+sourcemaps whose offsets did not match the bundle beside them. All four
+`@xterm/addon-webgl` artifacts and all four `@xterm/addon-serialize` artifacts
+now reproduce byte for byte from the pinned commit, which is what closed it.
 
-What blocks folding them in is the other half of their published output. Both
-also ship a CJS `lib/addon-*.js`, and the root `package` script does not build
-it — upstream's webpack entry is core's `Terminal.js` only, and `postpackage`
-emits ESM. So a manifest entry for either addon needs a build step this harness
-does not have, and the CJS halves are **unverified**: nothing here has yet
-reproduced them from source. Until that exists, folding them in would emit a
-patch whose CJS stanza came from the current hand-edited bundle.
+The one thing still unproven is that this holds across upstream revisions rather
+than at this commit. `addon-serialize.js.map` did not reproduce on the first
+attempt here; the cause was a stale `out/` from a wrong build order, not
+upstream nondeterminism, and it reproduced exactly once the root build ran
+first. Treat a future non-reproducing artifact as a build-order bug until proven
+otherwise.

@@ -15,6 +15,8 @@ import {
 } from './project-group-header-drag-contract'
 import { createProjectGroupHeaderDragSession } from './project-group-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
+import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
 
 // Why pointer events instead of HTML5 DnD: Project Group rows are virtualized
 // and may unmount while scrolling; cached row-model indices keep drops stable.
@@ -114,20 +116,7 @@ export function useProjectGroupHeaderDrag({
         // capture may already be released (pointercancel, element unmounted)
       }
       if (session.promoted) {
-        const handleEl = session.handleEl
-        const swallow = (event: MouseEvent): void => {
-          const target = event.target as Node | null
-          if (target && handleEl.contains(target)) {
-            event.stopPropagation()
-            event.preventDefault()
-          }
-          window.removeEventListener('click', swallow, true)
-        }
-        window.addEventListener('click', swallow, true)
-        clickSwallowTimeoutRef.current = setTimeout(() => {
-          window.removeEventListener('click', swallow, true)
-          clickSwallowTimeoutRef.current = null
-        }, 0)
+        clickSwallowTimeoutRef.current = swallowNextClickOnDragHandle(session.handleEl)
       }
       const sidebarDropIndex =
         commit && session.promoted && latestDropIndexRef.current !== null
@@ -197,6 +186,10 @@ export function useProjectGroupHeaderDrag({
     const onPointerMove = (event: PointerEvent): void => {
       const session = dragSessionRef.current
       if (!session || event.pointerId !== session.pointerId) {
+        return
+      }
+      if (hasPointerBeenReleased(event)) {
+        endDrag(false)
         return
       }
       session.latestPointerY = event.clientY

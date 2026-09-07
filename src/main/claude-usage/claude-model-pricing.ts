@@ -37,13 +37,13 @@ const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25, cacheWrite1h: 10 },
   'claude-opus-4-1': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75, cacheWrite1h: 30 },
   'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75, cacheWrite1h: 30 },
+  // Claude 4.6 and later keep standard rates across the full 1M context window.
   'claude-sonnet-4-6': {
     input: 3,
     output: 15,
     cacheRead: 0.3,
     cacheWrite: 3.75,
-    cacheWrite1h: 6,
-    ...SONNET_LONG_CONTEXT_PRICING
+    cacheWrite1h: 6
   },
   'claude-sonnet-4-5': {
     input: 3,

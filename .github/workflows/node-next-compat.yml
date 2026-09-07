@@ -14,7 +14,24 @@ permissions:
   contents: read
 
 jobs:
+  # A cold cache would otherwise make all eight Node 26 shards compile the same native addons.
+  test_native_cache:
+    name: prepare test native cache node 26
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: '26'
+
   test:
+    needs: [test_native_cache]
     uses: ./.github/workflows/unit-tests.yml
     with:
       node_versions: '["26"]'

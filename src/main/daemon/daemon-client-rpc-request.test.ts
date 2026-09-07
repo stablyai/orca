@@ -21,7 +21,64 @@ function addSiblingRequest(pendingRequests: DaemonPendingRequests, reject: () =>
 
 describe('requestDaemonRpc', () => {
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.useRealTimers()
+  })
+
+  it('keeps the daemon attach guard behind the client timeout window', async () => {
+    const pendingRequests = new DaemonPendingRequests()
+    const abort = new AbortController()
+    const write = vi.fn()
+    const request = requestDaemonRpc({
+      socket: { write } as unknown as Socket,
+      pendingRequests,
+      id: 'req-1',
+      type: 'createOrAttach',
+      payload: { sessionId: 'guarded-spawn' },
+      timeoutMs: 30_000,
+      signal: abort.signal,
+      unmatchedCancelGraceMs: 5_000,
+      onCreateCancellationFailure: vi.fn(),
+      settleCreateCancellation: vi.fn(async () => ({ canceled: true }))
+    })
+
+    expect(JSON.parse(String(write.mock.calls[0]?.[0]))).toMatchObject({
+      payload: { sessionId: 'guarded-spawn', cancelAfterMs: 35_000 }
+    })
+    abort.abort()
+    await expect(request).rejects.toThrow('client_disconnected')
+  })
+
+  it('classifies a cancellation delivered after an overdue timeout as a timeout', async () => {
+    vi.useFakeTimers()
+    const monotonicNow = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const pendingRequests = new DaemonPendingRequests()
+    const settleCreateCancellation = vi.fn(() => new Promise<{ canceled: boolean }>(() => {}))
+    const request = requestDaemonRpc({
+      socket: { write: vi.fn() } as unknown as Socket,
+      pendingRequests,
+      id: 'req-1',
+      type: 'createOrAttach',
+      payload: { sessionId: 'deadline-spawn' },
+      timeoutMs: 10,
+      unmatchedCancelGraceMs: 5,
+      onCreateCancellationFailure: vi.fn(),
+      settleCreateCancellation
+    })
+    const rejected = expect(request).rejects.toMatchObject({
+      name: 'DaemonRequestTimeoutError',
+      message: 'Request createOrAttach timed out after 10ms'
+    })
+
+    monotonicNow.mockReturnValue(16)
+    pendingRequests.settle({
+      id: 'req-1',
+      ok: false,
+      error: 'Attach canceled for session deadline-spawn'
+    })
+
+    await rejected
+    expect(settleCreateCancellation).not.toHaveBeenCalled()
   })
 
   it('keeps a completed spawn result when cancellation arrives too late', async () => {

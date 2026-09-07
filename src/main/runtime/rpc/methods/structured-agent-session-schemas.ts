@@ -12,6 +12,8 @@ import {
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 
 const MAX_ID_LENGTH = 512
+// Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
+const MAX_RESPONSE_OPTION_ID_LENGTH = 1024
 const MAX_PROMPT_BYTES = 256 * 1024
 const MAX_BLOCKS = 64
 const MAX_OPTION_LABEL = 512
@@ -21,11 +23,11 @@ export const SessionId = z
   .max(MAX_ID_LENGTH)
   .refine(isAgentSessionId, 'Invalid agent session id')
 
-const Identifier = (message: string) =>
+const Identifier = (message: string, maxLength = MAX_ID_LENGTH) =>
   z
     .string()
     .min(1, message)
-    .max(MAX_ID_LENGTH, message)
+    .max(maxLength, message)
     .refine((value) => value === value.trim(), message)
 
 export const JournalCursor = z
@@ -94,11 +96,21 @@ export const AttachParams = z
   })
   .strict()
 
+/** An identity, and nothing the host would otherwise read off disk. A transcript path or account
+ *  home here would let a client choose which file this host imports and which credential directory
+ *  the provider child launches against; both are derived host-side from this id instead. */
+const ResumeSource = z
+  .object({
+    providerSessionId: Identifier('Invalid provider session id')
+  })
+  .strict()
+
 export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['claude', 'codex']),
+    resumeFrom: ResumeSource.optional()
   })
   .strict()
 
@@ -107,7 +119,7 @@ export const CreateParams = z.union([AttachParams, CreateIntentParams])
 export const CreateSupportParams = z
   .object({
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
+    agent: z.enum(['claude', 'codex'])
   })
   .strict()
 
@@ -149,8 +161,16 @@ export const SendParams = z
   .strict()
 
 export const CancelParams = z
-  .object({ envelope: MutationEnvelope, turnId: Identifier('Invalid turn id') })
+  .object({
+    envelope: MutationEnvelope,
+    turnId: Identifier('Invalid turn id'),
+    scope: z.literal('background-tasks').optional(),
+    taskId: Identifier('Invalid task id').optional()
+  })
   .strict()
+  .refine((value) => value.taskId === undefined || value.scope === 'background-tasks', {
+    message: 'A task id requires background-task scope'
+  })
 
 export const RespondParams = z
   .object({
@@ -158,7 +178,7 @@ export const RespondParams = z
     itemId: Identifier('Invalid item id'),
     /** Compare-and-set: the revision the client had on screen. */
     expectedRevision: z.number().int().positive(),
-    optionId: Identifier('Invalid option id')
+    optionId: Identifier('Invalid option id', MAX_RESPONSE_OPTION_ID_LENGTH)
   })
   .strict()
 
@@ -170,7 +190,23 @@ export const SetOptionParams = z
   })
   .strict()
 
+export const HandoffParams = z
+  .object({
+    envelope: MutationEnvelope,
+    direction: z.enum(['to-tui', 'to-native']),
+    mode: z.enum(['now', 'after-turn', 'stop-turn']),
+    action: z.enum(['start', 'cancel-queued', 'retry', 'recover']).optional()
+  })
+  .strict()
+
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+
+export const ConversationCommandParams = z
+  .object({
+    envelope: MutationEnvelope,
+    command: z.enum(['clear', 'compact'])
+  })
+  .strict()
 
 /** One surface's claim on one session. The id names the surface, not the client: two chat views
  *  looking at the same session are two holders, and either leaving must not release
@@ -201,3 +237,11 @@ export const UnsubscribeParams = z
 
 /** Read-only owner classification retained for restart safety; mutation handoff is separate. */
 export const HandoffStatusParams = z.object({ sessionId: SessionId }).strict()
+
+export const RewindParams = z
+  .object({
+    envelope: MutationEnvelope,
+    itemId: Identifier('Invalid item id', 4096),
+    expectedEpoch: Identifier('Invalid journal epoch')
+  })
+  .strict()
