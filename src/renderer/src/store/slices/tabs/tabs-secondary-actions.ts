@@ -6,7 +6,13 @@ import { findSiblingGroupId, updateSplitRatio } from './tabs-layout'
 export function createTabsSecondaryActions(
   set: TabsSliceSet,
   get: TabsSliceGet
-): Pick<TabsSlice, 'copyUnifiedTabToGroup' | 'mergeGroupIntoSibling' | 'setTabGroupSplitRatio'> {
+): Pick<
+  TabsSlice,
+  | 'copyUnifiedTabToGroup'
+  | 'mergeGroupIntoSibling'
+  | 'setTabGroupSplitRatio'
+  | 'setDiffColumnGroupId'
+> {
   return {
     copyUnifiedTabToGroup: (tabId, targetGroupId, init) => {
       const foundTab = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)
@@ -89,6 +95,19 @@ export function createTabsSecondaryActions(
           }
         }
       })
+    },
+
+    setDiffColumnGroupId: (worktreeId, groupId) => {
+      set((state) =>
+        state.diffColumnGroupIdByWorktree[worktreeId] === groupId
+          ? state
+          : {
+              diffColumnGroupIdByWorktree: {
+                ...state.diffColumnGroupIdByWorktree,
+                [worktreeId]: groupId
+              }
+            }
+      )
     }
   }
 }

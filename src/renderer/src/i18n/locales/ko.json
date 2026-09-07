@@ -6166,7 +6166,9 @@
           "compareAgainstUpstreamTitle": "기본 비교 기준",
           "compareAgainstUpstreamDescription": "소스 제어가 커밋된 변경 사항 비교에 기본으로 사용할 기준을 선택합니다. 브랜치 업스트림은 현재 브랜치를 자동으로 따라가며, 업스트림이 없으면 저장소 기본 브랜치로 돌아갑니다. 비교 기준은 해당 worktree의 Git 패널에서 worktree별로 변경할 수 있습니다. Pull Request 및 리베이스 대상은 변경되지 않습니다.",
           "compareBaseRepositoryDefault": "저장소 기본값",
-          "compareBaseBranchUpstream": "브랜치 업스트림"
+          "compareBaseBranchUpstream": "브랜치 업스트림",
+          "openDiffsInSideSplitTitle": "측면 분할에서 Diff 열기",
+          "openDiffsInSideSplitDescription": "소스 제어 Diff 미리 보기를 활성 탭 그룹을 덮지 않고 현재 탭 옆의 전용 분할 창에서 엽니다. 변경된 파일을 클릭하면 해당 분할 창의 미리 보기가 계속 재사용됩니다."
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "이 컴퓨터에서 굵게 표시 결함 캡처 제스처를 활성화합니다. {{samplingShortcut}}하면 샘플링 버스트가 시작되고, {{captureShortcut}}하면 창 증거를 디스크에 캡처합니다.",
@@ -8452,7 +8454,17 @@
             "defaultCompareBase": "기본 비교 기준",
             "defaultBranch": "기본 브랜치",
             "repositoryDefault": "저장소 기본값",
-            "branchUpstream": "브랜치 업스트림"
+            "branchUpstream": "브랜치 업스트림",
+            "openDiffsInSideSplitTitle": "측면 분할에서 Diff 열기",
+            "openDiffsInSideSplitDescription": "소스 제어 Diff 미리 보기를 활성 탭 그룹을 덮지 않고 현재 탭 옆의 전용 분할 창에서 엽니다. 변경된 파일을 클릭하면 해당 분할 창의 미리 보기가 계속 재사용됩니다.",
+            "diffSplit": "Diff 분할",
+            "sideSplit": "측면 분할",
+            "splitRight": "오른쪽으로 분할",
+            "previewSplit": "미리 보기 분할",
+            "diffPreview": "Diff 미리 보기",
+            "openDiff": "Diff 열기",
+            "reviewLayout": "검토 레이아웃",
+            "tabGroup": "탭 그룹"
           }
         },
         "input": {
@@ -10834,7 +10846,8 @@
             "a4e93c21d7": "현재 브랜치: {{value0}}",
             "c7d4e2f801": "베이스 ref 변경: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "검토 세부 정보를 생성할 수 없습니다. PR 생성을 다시 시도하세요."
+            "createPrIntentGenerateDetailsFailed": "검토 세부 정보를 생성할 수 없습니다. PR 생성을 다시 시도하세요.",
+            "openDiffsInSideSplit": "측면 분할에서 Diff 열기"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

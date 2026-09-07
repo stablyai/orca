@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -20,7 +21,9 @@ export function SourceControlHeaderOverflowMenu({
   onRefreshBranchCompare,
   branchCompareRefreshDisabled,
   diffCommentCount,
-  onExpandNotes
+  onExpandNotes,
+  openDiffsInSideSplit,
+  onToggleOpenDiffsInSideSplit
 }: {
   sourceControlViewMode: SourceControlViewMode
   viewModeToggleDisabled: boolean
@@ -30,6 +33,8 @@ export function SourceControlHeaderOverflowMenu({
   branchCompareRefreshDisabled: boolean
   diffCommentCount: number
   onExpandNotes: () => void
+  openDiffsInSideSplit: boolean
+  onToggleOpenDiffsInSideSplit: () => void
 }): React.JSX.Element {
   const viewModeLabel =
     sourceControlViewMode === 'tree'
@@ -73,6 +78,16 @@ export function SourceControlHeaderOverflowMenu({
           )}
           {viewModeLabel}
         </DropdownMenuItem>
+        {/* Why: reachable from the panel under review; Settings is a long trip for this. */}
+        <DropdownMenuCheckboxItem
+          checked={openDiffsInSideSplit}
+          onCheckedChange={onToggleOpenDiffsInSideSplit}
+        >
+          {translate(
+            'auto.components.right.sidebar.SourceControl.openDiffsInSideSplit',
+            'Open diffs in a side split'
+          )}
+        </DropdownMenuCheckboxItem>
         <DropdownMenuItem onSelect={onChangeBaseRef}>
           <Settings2 className="size-3.5" />
           {translate('auto.components.right.sidebar.SourceControl.476b77745b', 'Change Base Ref')}…

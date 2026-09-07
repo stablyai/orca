@@ -6198,7 +6198,9 @@
           "compareAgainstUpstreamTitle": "既定の比較ベース",
           "compareAgainstUpstreamDescription": "ソース管理がコミット済み変更の比較に既定で使うベースを選択します。ブランチの upstream は現在のブランチに自動的に追従し、upstream がない場合はリポジトリの既定ブランチにフォールバックします。比較ベースは各ワークツリーの Git パネルからワークツリーごとに変更できます。Pull Request やリベースの対象は変更されません。",
           "compareBaseRepositoryDefault": "リポジトリ既定",
-          "compareBaseBranchUpstream": "ブランチの upstream"
+          "compareBaseBranchUpstream": "ブランチの upstream",
+          "openDiffsInSideSplitTitle": "差分をサイド分割で開く",
+          "openDiffsInSideSplitDescription": "ソース管理の差分プレビューを、アクティブなタブグループを覆わず、現在のタブの横にある専用の分割ペインで開きます。変更されたファイルを切り替えても、その分割ペインのプレビューが再利用されます。"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "このマシンで太字グリッチのキャプチャジェスチャーを有効にします。{{samplingShortcut}} でサンプリングバーストを開始し、{{captureShortcut}} でペインの証拠をディスクに保存します。",
@@ -8484,7 +8486,17 @@
             "defaultCompareBase": "既定の比較ベース",
             "defaultBranch": "デフォルトブランチ",
             "repositoryDefault": "リポジトリ既定",
-            "branchUpstream": "ブランチ upstream"
+            "branchUpstream": "ブランチ upstream",
+            "openDiffsInSideSplitTitle": "差分をサイド分割で開く",
+            "openDiffsInSideSplitDescription": "ソース管理の差分プレビューを、アクティブなタブグループを覆わず、現在のタブの横にある専用の分割ペインで開きます。変更されたファイルを切り替えても、その分割ペインのプレビューが再利用されます。",
+            "diffSplit": "差分分割",
+            "sideSplit": "サイド分割",
+            "splitRight": "右に分割",
+            "previewSplit": "プレビュー分割",
+            "diffPreview": "差分プレビュー",
+            "openDiff": "差分を開く",
+            "reviewLayout": "レビューレイアウト",
+            "tabGroup": "タブグループ"
           }
         },
         "input": {
@@ -10791,7 +10803,8 @@
             "a4e93c21d7": "現在のブランチ: {{value0}}",
             "c7d4e2f801": "ベース ref を変更: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。"
+            "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。",
+            "openDiffsInSideSplit": "差分をサイド分割で開く"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",

@@ -121,5 +121,35 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate(
+      'auto.components.settings.git.search.openDiffsInSideSplitTitle',
+      'Open Diffs in a Side Split'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.openDiffsInSideSplitDescription',
+      'Source Control diff previews open in a dedicated split beside your current tabs instead of covering the active tab group. Clicking through changed files keeps recycling the preview in that split.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.diffSplit', 'diff split'),
+      ...translateSearchKeyword('auto.components.settings.git.search.sideSplit', 'side split'),
+      ...translateSearchKeyword('auto.components.settings.git.search.splitRight', 'split right'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.previewSplit',
+        'preview split'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.diffPreview', 'diff preview'),
+      ...translateSearchKeyword('auto.components.settings.git.search.openDiff', 'open diff'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.reviewLayout',
+        'review layout'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.tabGroup', 'tab group'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.sourceControl',
+        'source control'
+      )
+    ]
+  },
   ...getAutoRenameBranchSearchEntries()
 ])

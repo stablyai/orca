@@ -6994,7 +6994,9 @@
           "compareAgainstUpstreamTitle": "Base de comparaison par défaut",
           "compareAgainstUpstreamDescription": "Choisissez la base que le contrôle de code source utilise par défaut pour comparer les changements commités. L'amont de la branche suit automatiquement la branche courante et revient à la branche par défaut du dépôt en l'absence d'amont. Vous pouvez toujours changer la base de comparaison d'un worktree depuis son panneau Git. Les cibles de pull request et de rebase ne changent pas.",
           "compareBaseRepositoryDefault": "Valeur par défaut du dépôt",
-          "compareBaseBranchUpstream": "Amont de la branche"
+          "compareBaseBranchUpstream": "Amont de la branche",
+          "openDiffsInSideSplitTitle": "Ouvrir les différences dans un volet latéral",
+          "openDiffsInSideSplitDescription": "Les aperçus des différences du contrôle de code source s’ouvrent dans un volet dédié à côté des onglets actuels, sans recouvrir le groupe d’onglets actif. Lorsque vous parcourez les fichiers modifiés, l’aperçu de ce volet est réutilisé."
         },
         "InputPane": {
           "db15068196": "Activé par défaut sur Linux et macOS. Linux utilise le presse-papiers de sélection du système ; les autres plateformes utilisent un tampon privé.",
@@ -9310,7 +9312,17 @@
             "upstream": "upstream",
             "localChanges": "modifications locales",
             "originMaster": "origin/master",
-            "committedChanges": "modifications committées"
+            "committedChanges": "modifications committées",
+            "openDiffsInSideSplitTitle": "Ouvrir les différences dans un volet latéral",
+            "openDiffsInSideSplitDescription": "Les aperçus des différences du contrôle de code source s’ouvrent dans un volet dédié à côté des onglets actuels, sans recouvrir le groupe d’onglets actif. Lorsque vous parcourez les fichiers modifiés, l’aperçu de ce volet est réutilisé.",
+            "diffSplit": "volet de différences",
+            "sideSplit": "volet latéral",
+            "splitRight": "diviser à droite",
+            "previewSplit": "volet d’aperçu",
+            "diffPreview": "aperçu des différences",
+            "openDiff": "ouvrir les différences",
+            "reviewLayout": "disposition de révision",
+            "tabGroup": "groupe d’onglets"
           }
         },
         "input": {
@@ -11845,7 +11857,8 @@
             "a4e93c21d7": "Branche actuelle : {{value0}}",
             "c7d4e2f801": "Modifier la ref de base : {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "Impossible de générer les détails de revue. Réessayez Créer une PR."
+            "createPrIntentGenerateDetailsFailed": "Impossible de générer les détails de revue. Réessayez Créer une PR.",
+            "openDiffsInSideSplit": "Ouvrir les différences dans un volet latéral"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",

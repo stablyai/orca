@@ -6209,7 +6209,9 @@
           "compareAgainstUpstreamTitle": "默认对比基准",
           "compareAgainstUpstreamDescription": "选择源代码管理在比较已提交变更时默认使用的基准。分支上游会自动跟随当前分支；如果没有上游，则回退到仓库默认分支。你仍然可以在对应 worktree 的 Git 面板中按 worktree 更改对比基准。Pull Request 和变基目标不会改变。",
           "compareBaseRepositoryDefault": "仓库默认",
-          "compareBaseBranchUpstream": "分支上游"
+          "compareBaseBranchUpstream": "分支上游",
+          "openDiffsInSideSplitTitle": "在侧边分栏中打开差异",
+          "openDiffsInSideSplitDescription": "源代码管理的差异预览会在当前标签页旁的专用分栏中打开，而不会覆盖活动标签组。浏览不同的已更改文件时，会持续复用该分栏中的预览。"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "在本机启用粗体故障捕获手势：{{samplingShortcut}} 开始采样突发；{{captureShortcut}} 将窗格证据捕获到磁盘。",
@@ -8495,7 +8497,17 @@
             "defaultCompareBase": "默认对比基准",
             "defaultBranch": "默认分支",
             "repositoryDefault": "仓库默认",
-            "branchUpstream": "分支上游"
+            "branchUpstream": "分支上游",
+            "openDiffsInSideSplitTitle": "在侧边分栏中打开差异",
+            "openDiffsInSideSplitDescription": "源代码管理的差异预览会在当前标签页旁的专用分栏中打开，而不会覆盖活动标签组。浏览不同的已更改文件时，会持续复用该分栏中的预览。",
+            "diffSplit": "差异分栏",
+            "sideSplit": "侧边分栏",
+            "splitRight": "向右分栏",
+            "previewSplit": "预览分栏",
+            "diffPreview": "差异预览",
+            "openDiff": "打开差异",
+            "reviewLayout": "审查布局",
+            "tabGroup": "标签组"
           }
         },
         "input": {
@@ -10847,7 +10859,8 @@
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。"
+            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。",
+            "openDiffsInSideSplit": "在侧边分栏中打开差异"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",

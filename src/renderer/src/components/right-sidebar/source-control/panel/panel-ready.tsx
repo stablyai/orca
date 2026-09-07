@@ -32,12 +32,14 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     handleOpenComment,
     handleRelinkSuppressedGitHubPR,
     handleSourceControlKeyDown,
+    handleToggleOpenDiffsInSideSplit,
     handleToggleSourceControlViewMode,
     hostedReview,
     isCreatePrIntentInFlight,
     isCreatingPr,
     isExecutingBulk,
     manualReviewUrl,
+    openDiffsInSideSplit,
     openHostedReviewInChecks,
     prGenerating,
     refreshBranchCompare,
@@ -85,6 +87,8 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           branchCompareRefreshDisabled={!branchSummary || branchSummary.status === 'loading'}
           diffCommentCount={diffCommentCount}
           onExpandNotes={() => setDiffCommentsExpanded(true)}
+          openDiffsInSideSplit={openDiffsInSideSplit}
+          onToggleOpenDiffsInSideSplit={handleToggleOpenDiffsInSideSplit}
           branchSummary={branchSummary}
           branchLineTotal={branchLineTotal}
           compareBaseRef={compareBaseRef}

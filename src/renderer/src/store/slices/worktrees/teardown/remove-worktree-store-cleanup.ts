@@ -94,6 +94,7 @@ export function applyRemoveWorktreeSuccessState(
       activeTabTypeByWorktree: omitByWorktree(s.activeTabTypeByWorktree),
       rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree),
       activeTabIdByWorktree: omitByWorktree(s.activeTabIdByWorktree),
+      diffColumnGroupIdByWorktree: omitByWorktree(s.diffColumnGroupIdByWorktree),
       // Why: the tab strip persists visual order per worktree; drop the entry so stale tab IDs aren't retained.
       tabBarOrderByWorktree: omitByWorktree(s.tabBarOrderByWorktree),
       pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),

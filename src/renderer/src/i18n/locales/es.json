@@ -6176,7 +6176,9 @@
           "compareAgainstUpstreamTitle": "Base de comparación predeterminada",
           "compareAgainstUpstreamDescription": "Elige qué base usa Control de código fuente de forma predeterminada para las comparaciones de cambios confirmados. El upstream de la rama sigue automáticamente la rama actual y recurre a la rama predeterminada del repositorio cuando no hay upstream. Aun así, puedes cambiar la base de comparación por worktree desde el panel Git de ese worktree. Los objetivos de Pull Request y rebase no cambian.",
           "compareBaseRepositoryDefault": "Predeterminada del repositorio",
-          "compareBaseBranchUpstream": "Upstream de la rama"
+          "compareBaseBranchUpstream": "Upstream de la rama",
+          "openDiffsInSideSplitTitle": "Abrir diferencias en una división lateral",
+          "openDiffsInSideSplitDescription": "Las vistas previas de diferencias de Control de código fuente se abren en una división dedicada junto a las pestañas actuales, sin cubrir el grupo de pestañas activo. Al recorrer los archivos modificados, se reutiliza la vista previa de esa división."
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Activa los gestos de captura del fallo de negrita en esta máquina: {{samplingShortcut}} inicia una ráfaga de muestreo; {{captureShortcut}} captura evidencia del panel en disco.",
@@ -8462,7 +8464,17 @@
             "defaultCompareBase": "base de comparación predeterminada",
             "defaultBranch": "rama predeterminada",
             "repositoryDefault": "predeterminada del repositorio",
-            "branchUpstream": "upstream de la rama"
+            "branchUpstream": "upstream de la rama",
+            "openDiffsInSideSplitTitle": "Abrir diferencias en una división lateral",
+            "openDiffsInSideSplitDescription": "Las vistas previas de diferencias de Control de código fuente se abren en una división dedicada junto a las pestañas actuales, sin cubrir el grupo de pestañas activo. Al recorrer los archivos modificados, se reutiliza la vista previa de esa división.",
+            "diffSplit": "división de diferencias",
+            "sideSplit": "división lateral",
+            "splitRight": "dividir a la derecha",
+            "previewSplit": "división de vista previa",
+            "diffPreview": "vista previa de diferencias",
+            "openDiff": "abrir diferencias",
+            "reviewLayout": "diseño de revisión",
+            "tabGroup": "grupo de pestañas"
           }
         },
         "input": {
@@ -10791,7 +10803,8 @@
             "a4e93c21d7": "Rama actual: {{value0}}",
             "c7d4e2f801": "Cambiar ref base: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR."
+            "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR.",
+            "openDiffsInSideSplit": "Abrir diferencias en una división lateral"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",

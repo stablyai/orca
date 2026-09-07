@@ -15,6 +15,8 @@ export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
+  // Why: recorded rather than inferred per open, so the diff column stops following focus. Not persisted; a stale id fails the caller's liveness check.
+  diffColumnGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   createUnifiedTab: (
     worktreeId: string,
@@ -99,6 +101,7 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setUnifiedTabColor: (tabId: string, color: string | null) => void
+  setDiffColumnGroupId: (worktreeId: string, groupId: string) => void
   pinTab: (tabId: string) => void
   unpinTab: (tabId: string) => void
   closeOtherTabs: (tabId: string) => string[]
