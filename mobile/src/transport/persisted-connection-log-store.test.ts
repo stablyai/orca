@@ -24,8 +24,10 @@ describe('persisted connection log store', () => {
   })
 
   // 'negotiating' is not a dial stage and 'confirming' is a dial stage rather than a
-  // connection state; the report echoes the name, so neither may survive.
-  it('rehydrates well-formed phase timings and drops names outside their enum', async () => {
+  // connection state; the report echoes the name, so neither may survive. A negative
+  // duration is corruption too: producers clamp at 0, and the report sums these, so a
+  // negative would subtract from a dial total.
+  it('rehydrates well-formed phase timings and drops corrupt names and durations', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(
       JSON.stringify([
         {
@@ -62,6 +64,27 @@ describe('persisted connection log store', () => {
           level: 'info',
           message: 'Something else',
           timing: { kind: 'wall-clock', name: 'connecting', ms: 12, complete: true }
+        },
+        {
+          id: 'stage-negative-ms',
+          ts: 985,
+          level: 'info',
+          message: 'Relay dial stage opening finished',
+          timing: { kind: 'relay-dial-stage', name: 'opening', ms: -1, complete: true }
+        },
+        {
+          id: 'state-negative-ms',
+          ts: 990,
+          level: 'info',
+          message: 'Connection state connecting → connected',
+          timing: { kind: 'connection-state', name: 'connecting', ms: -0.5, complete: true }
+        },
+        {
+          id: 'stage-zero-ms',
+          ts: 995,
+          level: 'info',
+          message: 'Relay dial stage confirming finished',
+          timing: { kind: 'relay-dial-stage', name: 'confirming', ms: 0, complete: true }
         }
       ])
     )
@@ -70,7 +93,11 @@ describe('persisted connection log store', () => {
 
     await connectionLogStore.hydrate('host-timings')
 
-    expect(connectionLogStore.get('host-timings').map((entry) => entry.id)).toEqual(['stage-ok'])
+    // 0 survives: a stage the dial passed through instantly is real, not corruption.
+    expect(connectionLogStore.get('host-timings').map((entry) => entry.id)).toEqual([
+      'stage-ok',
+      'stage-zero-ms'
+    ])
     expect(connectionLogStore.get('host-timings')[0]!.timing).toEqual({
       kind: 'relay-dial-stage',
       name: 'awaiting-hello',

@@ -80,7 +80,8 @@ function isConnectionLogEntry(value: unknown): value is ConnectionLogEntry {
 
 // Why: the report echoes the phase name and formats the duration directly, so a
 // corrupted stored timing must not reach it. The name is checked against the closed
-// enum for its kind, not just "is a string".
+// enum for its kind, not just "is a string", and the duration must be one a producer
+// could have written — `elapsedMs` clamps at 0, so a negative is corruption.
 function isConnectionLogTiming(value: unknown): value is ConnectionLogTiming {
   if (!value || typeof value !== 'object') {
     return false
@@ -95,6 +96,7 @@ function isConnectionLogTiming(value: unknown): value is ConnectionLogTiming {
     Object.hasOwn(names, timing.name) &&
     typeof timing.ms === 'number' &&
     Number.isFinite(timing.ms) &&
+    timing.ms >= 0 &&
     typeof timing.complete === 'boolean'
   )
 }
