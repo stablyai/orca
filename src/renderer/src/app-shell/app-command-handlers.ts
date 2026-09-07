@@ -4,6 +4,7 @@ import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-termin
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
+import { applySidebarActivityToggle } from '../components/sidebar/sidebar-activity-toggle'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
@@ -158,6 +159,13 @@ export function createAppCommandHandlers(
           if (nextShowSleeping) {
             store.setSidebarOpen(true)
           }
+        })
+    ],
+    [
+      'sidebar.activity.toggle',
+      () =>
+        claim('sidebar.activity.toggle', () => {
+          applySidebarActivityToggle(useAppStore.getState())
         })
     ],
     [

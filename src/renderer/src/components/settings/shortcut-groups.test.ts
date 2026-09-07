@@ -39,6 +39,16 @@ describe('shortcut groups', () => {
     )
   })
 
+  it('exposes the activity view toggle as a customizable Global row', () => {
+    const global = groupDefinitions([]).find((group) => group.title === 'Global')
+
+    expect(global?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'sidebar.activity.toggle', title: 'Toggle Activity View' })
+      ])
+    )
+  })
+
   it('reports a plugin default that shadows a built-in shortcut', () => {
     const command: ActivePluginCommand = {
       pluginKey: 'orca-samples.tasks',
