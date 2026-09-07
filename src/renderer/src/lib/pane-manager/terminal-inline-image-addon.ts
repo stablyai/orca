@@ -17,6 +17,16 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 // from the memoised constructor, and the async branch in attachInlineImages is
 // only the fallback for a pane that somehow opens before the prime settled.
 
+// DA1 identity: the addon registers its own primary-DA (`CSI c`) reply
+// (`\x1b[?62;4;9;22c`, advertising SIXEL). xterm dispatches CSI handlers
+// most-recently-registered first, and Orca installs its own DA1 responder
+// (installTerminalCapabilityReplyHandlers, with the replay guard and the
+// ConPTY variant) at PTY connect — after openTerminal attached this addon —
+// so Orca's `\x1b[?1;2c` keeps winning and the terminal identity does not
+// change. Consequence: TUIs that autodetect SIXEL purely from DA1 (yazi,
+// chafa) still see no SIXEL flag; advertising it means updating every DA1
+// responder and reply-echo filter (renderer, daemon startup, ConPTY) in one
+// coherent change, which is a follow-up, not something to leak from here.
 export const TERMINAL_INLINE_IMAGE_OPTIONS: Partial<IImageAddonOptions> = {
   sixelSupport: true,
   iipSupport: true,
