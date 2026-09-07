@@ -148,6 +148,56 @@ describe('runtime status recheck', () => {
     })
   })
 
+  it('re-probes a host recorded unreachable until it answers again', async () => {
+    // A boot probe that failed while the host was asleep must not outlive the outage:
+    // nothing else re-asks, because the client-event subscription set is gated on a truthy status.
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce(unavailableResponse())
+      .mockResolvedValue(response(status('ready')))
+    const store = createStore(getStatus)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(getStatus).toHaveBeenCalledWith({
+      selector: 'env-a',
+      timeoutMs: 10_000,
+      observeOnly: true
+    })
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(
+      store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.remoteControl
+    ).toMatchObject({ state: 'ready' })
+
+    const callsAtRecovery = getStatus.mock.calls.length
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(getStatus).toHaveBeenCalledTimes(callsAtRecovery)
+  })
+
+  it('stops re-probing a manually disconnected host', async () => {
+    // The probe short-circuits locally for these, so retrying only burns a timer forever.
+    const getStatus = vi.fn().mockResolvedValue({
+      id: 'runtime.manualDisconnect',
+      ok: false,
+      error: {
+        code: 'runtime_manually_disconnected',
+        message: 'Runtime environment is manually disconnected.'
+      },
+      _meta: { runtimeId: 'rt' }
+    })
+    const store = createStore(getStatus)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(getStatus).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(getStatus).toHaveBeenCalledOnce()
+  })
+
   it('keeps setter side effects when a recheck discovers disconnection', async () => {
     const getStatus = vi.fn().mockResolvedValue({
       id: 'status.get',
@@ -210,6 +260,15 @@ function status(
       lastError: null
     }
   } as RuntimeStatus
+}
+
+function unavailableResponse() {
+  return {
+    id: 'status.get',
+    ok: false as const,
+    error: { code: 'runtime_unavailable', message: 'offline' },
+    _meta: { runtimeId: 'rt' }
+  }
 }
 
 function response(result: RuntimeStatus) {
