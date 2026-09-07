@@ -6,10 +6,13 @@ import { getDaemonLogFilePath } from '../observability/logs-directory'
 import { DaemonClient } from './client'
 import { daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
+// From the definition, not daemon-spawner's re-export: many suites mock daemon-spawner, and
+// reaching through it for a symbol they have no reason to stub breaks them.
+import { getDaemonRuntimeDirPath } from './daemon-runtime-paths'
 import { PROTOCOL_VERSION, type ListSessionsResult } from './types'
 
 export function getDaemonRuntimeDir(): string {
-  const dir = join(getAppEnvironment().getPath('userData'), 'daemon')
+  const dir = getDaemonRuntimeDirPath(getAppEnvironment().getPath('userData'))
   mkdirSync(dir, { recursive: true })
   return dir
 }

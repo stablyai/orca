@@ -28,6 +28,10 @@ import {
   OrcadInstanceLockError,
   type OrcadInstanceLock
 } from './orcad-instance-lock'
+import {
+  assertDaemonSocketPathFits,
+  OrcadDaemonSocketPathError
+} from './orcad-daemon-socket-preflight'
 
 let runOrcadQuitHandlers = (): void => {}
 
@@ -107,6 +111,9 @@ export type OrcadHandle = {
 export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandle> {
   installOrcadHostAdapters()
   const userDataPath = resolveUserDataPath()
+  // Why ahead of the lock: this reads nothing and creates nothing, and refusing a root that
+  // cannot host a daemon socket should not first take a lock on it.
+  assertDaemonSocketPathFits(userDataPath)
   // Why before anything else touches the root: the profile index, the store and the daemon
   // runtime dir all live under it, and two orcads sharing them corrupt state silently. This
   // is also the last point at which refusing costs nothing.
@@ -318,10 +325,10 @@ export function parseArgs(argv: string[]): OrcadOptions {
 /**
  * Exit codes a supervisor can act on. Closed set — see docs/reference/orcad-operations.md.
  *
- * `ORCAD_EXIT_CONFIGURATION` is the load-bearing one: a data root owned by someone else, or
- * held by another orcad, is not fixed by restarting. Restarting on it is the crash-loop the
- * supervision contract has to prevent, so systemd's `RestartPreventExitStatus` needs a code
- * that means "do not retry" and nothing else does.
+ * `ORCAD_EXIT_CONFIGURATION` is the load-bearing one: a data root owned by someone else, held
+ * by another orcad, or too long to hold a daemon socket, is not fixed by restarting.
+ * Restarting on it is the crash-loop the supervision contract has to prevent, so systemd's
+ * `RestartPreventExitStatus` needs a code that means "do not retry" and nothing else does.
  */
 export const ORCAD_EXIT_OK = 0
 export const ORCAD_EXIT_FAILED = 1
@@ -331,7 +338,9 @@ export const ORCAD_EXIT_CONFIGURATION = 78
 export const ORCAD_SHUTDOWN_DEADLINE_MS = 15_000
 
 export function resolveOrcadExitCode(error: unknown): number {
-  return error instanceof OrcadInstanceLockError || error instanceof OrcadBindAddressError
+  return error instanceof OrcadInstanceLockError ||
+    error instanceof OrcadBindAddressError ||
+    error instanceof OrcadDaemonSocketPathError
     ? ORCAD_EXIT_CONFIGURATION
     : ORCAD_EXIT_FAILED
 }
