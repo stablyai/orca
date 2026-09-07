@@ -32,6 +32,7 @@ describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
     asyncStorage.removeItem.mockClear()
+    asyncStorage.setItem.mockReset().mockResolvedValue(undefined)
     resetHostNotificationSessionsForTests()
     resetSessionTabStripCacheForTests()
   })
@@ -115,5 +116,20 @@ describe('host removal lifecycle', () => {
     await vi.waitFor(() => expect(readCachedSessionTabStrip(removed)).toBeNull())
 
     expect(readCachedSessionTabStrip(kept)?.tabs).toHaveLength(1)
+  })
+  it('finishes the removal even when the cached tab strip write fails', async () => {
+    // The metadata removal has already committed and the client is closed by this
+    // point, so a cache write that fails must be reported, not thrown: surfacing it
+    // as a failed removal would leave the user staring at a host that is really gone.
+    removeHostMock.mockResolvedValue(undefined)
+    asyncStorage.setItem.mockRejectedValue(new Error('storage full'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const closeHostClient = vi.fn()
+
+    await expect(removeHostAndCloseClient('host-1', closeHostClient)).resolves.toBeUndefined()
+
+    expect(closeHostClient).toHaveBeenCalledWith('host-1')
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 })

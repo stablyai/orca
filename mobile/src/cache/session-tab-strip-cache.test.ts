@@ -279,4 +279,92 @@ describe('session tab strip cache', () => {
 
     expect(lastWrittenFile().workspaces).toEqual([])
   })
+  it('rejects a deletion whose write never landed, rather than reporting it as done', async () => {
+    // A resolved delete over a failed write leaves the forgotten host's tab titles in
+    // plaintext on disk while every caller believes they are gone.
+    const hostA = getSessionTabStripCacheKey('host-a', 'wt-1')
+    saveCachedSessionTabStrip(hostA, preview('tab-a'))
+    await vi.advanceTimersByTimeAsync(300)
+    asyncStorage.setItem.mockRejectedValue(new Error('storage full'))
+
+    await expect(deleteCachedSessionTabStripForHost('host-a')).rejects.toThrow('storage full')
+  })
+
+  it('keeps a debounced save best effort, so one failed write cannot reject unowned', async () => {
+    asyncStorage.setItem.mockRejectedValue(new Error('storage full'))
+    saveCachedSessionTabStrip(getSessionTabStripCacheKey('host-a', 'wt-1'), preview('tab-a'))
+
+    // No throw and no unhandled rejection: the write is fire-and-forget by design.
+    await vi.advanceTimersByTimeAsync(300)
+    expect(asyncStorage.setItem).toHaveBeenCalledOnce()
+  })
+
+  it('refuses a save for the host it is in the middle of forgetting', async () => {
+    const hostA = getSessionTabStripCacheKey('host-a', 'wt-1')
+    saveCachedSessionTabStrip(hostA, preview('tab-a'))
+    await vi.advanceTimersByTimeAsync(300)
+
+    let releaseWrite!: () => void
+    asyncStorage.setItem.mockImplementationOnce(
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseWrite = () => resolve()
+        })
+    )
+    const deletion = deleteCachedSessionTabStripForHost('host-a')
+    // The purge has run and its write is on the wire; a snapshot queued for the
+    // workspace the user just unpaired now lands in that window.
+    await vi.advanceTimersByTimeAsync(0)
+    saveCachedSessionTabStrip(hostA, preview('tab-a2'))
+    releaseWrite()
+    await deletion
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(readCachedSessionTabStrip(hostA)).toBeNull()
+    expect(lastWrittenFile().workspaces).toEqual([])
+  })
+
+  it('cannot be talked back into a host whose deletion write failed', async () => {
+    const hostA = getSessionTabStripCacheKey('host-a', 'wt-1')
+    saveCachedSessionTabStrip(hostA, preview('tab-a'))
+    await vi.advanceTimersByTimeAsync(300)
+    asyncStorage.setItem.mockRejectedValueOnce(new Error('storage full'))
+
+    await expect(deleteCachedSessionTabStripForHost('host-a')).rejects.toThrow('storage full')
+    const writesSoFar = asyncStorage.setItem.mock.calls.length
+
+    saveCachedSessionTabStrip(hostA, preview('tab-a3'))
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(readCachedSessionTabStrip(hostA)).toBeNull()
+    expect(asyncStorage.setItem).toHaveBeenCalledTimes(writesSoFar)
+  })
+  it('lets a debounced write that already snapshotted the removed host land first', async () => {
+    // The tombstone stops new saves, but a debounced write that fired a moment earlier
+    // built its blob from the map as it was and is still on the wire. Writing over it
+    // concurrently leaves which blob lands last up to storage.
+    const hostA = getSessionTabStripCacheKey('host-a', 'wt-1')
+    const hostB = getSessionTabStripCacheKey('host-b', 'wt-1')
+    saveCachedSessionTabStrip(hostA, preview('tab-a'))
+    saveCachedSessionTabStrip(hostB, preview('tab-b'))
+
+    let releaseDebounced!: () => void
+    asyncStorage.setItem.mockImplementationOnce(
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseDebounced = () => resolve()
+        })
+    )
+    await vi.advanceTimersByTimeAsync(300)
+
+    const deletion = deleteCachedSessionTabStripForHost('host-a')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(asyncStorage.setItem).toHaveBeenCalledOnce()
+
+    releaseDebounced()
+    await deletion
+
+    expect(asyncStorage.setItem).toHaveBeenCalledTimes(2)
+    expect(lastWrittenFile().workspaces.map((w) => w.key)).toEqual([hostB])
+  })
 })
