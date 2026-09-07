@@ -8,7 +8,7 @@ import {
   normalizePaneKeySet,
   paneKeyMatchesAnyTabPrefix,
   retainedAgentEntryFromLive
-} from './agent-status-pane-helpers'
+} from './agent-status-pane-key-tab-binding'
 import {
   carryOverAutomaticResumeBlock,
   isValidCompletedAgentHibernationEntry,
@@ -17,7 +17,7 @@ import {
   normalizeSleepingAgentSessionCollectOptions,
   sleepingRecordFromEntry,
   type CollectSleepingAgentSessionRecordsOptions
-} from './agent-status-recovery-helpers'
+} from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
 

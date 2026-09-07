@@ -7,8 +7,10 @@ import {
 } from '../../providers/ssh-git-dispatch'
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import { validateGitRelativeFilePath } from '../filesystem-path-containment'
-import { validateFullGitObjectId } from './filesystem-worktree-helpers'
+import {
+  validateFullGitObjectId,
+  validateGitRelativeFilePath
+} from '../filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 
 export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerContext): void {

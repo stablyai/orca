@@ -153,8 +153,15 @@ export const hostScreenPrimaryStyles = StyleSheet.create({
   toolbarIconDisabled: {
     opacity: 0.6
   },
-  toolbarIconButton: {
+  searchToggle: {
     padding: spacing.xs
+  },
+  searchBar: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel
   },
   centered: {
     flex: 1,

@@ -290,6 +290,7 @@ describe('updater', () => {
       })
     })
 
+    autoUpdaterMock.emit('download-progress', { percent: 100 })
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
 
     // Why: on macOS install commits only once Squirrel is ready; mark it ready so this test covers the post-commit path on all platforms.

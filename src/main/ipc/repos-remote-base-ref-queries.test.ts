@@ -51,7 +51,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     // Reset exec so a newly added test doesn't inherit the previous test's exec mock.
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('returns { defaultBaseRef, remoteCount: 0 } for folder-mode repos', async () => {
@@ -235,7 +235,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     mockStore.getRepo.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('returns [] for a folder-mode repo without invoking the relay', async () => {

@@ -1,4 +1,8 @@
-import { ghApiPart1 } from './gh-bridge-part-1'
-import { ghApiPart2 } from './gh-bridge-part-2'
+import type { PreloadApi } from '../api-types'
+import { ghPullRequestsAndWorkItemsApi } from './gh-bridge-pull-requests-and-work-items'
+import { ghMutationsAndProjectsApi } from './gh-bridge-mutations-and-projects'
 
-export const ghApi = { ...ghApiPart1, ...ghApiPart2 }
+export const ghApi = {
+  ...ghPullRequestsAndWorkItemsApi,
+  ...ghMutationsAndProjectsApi
+} satisfies PreloadApi['gh']

@@ -108,6 +108,15 @@ export const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<st
 export const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
 export const sessionTabsTrackingGenerationByEnvironment = new Map<string, number>()
 export const lastHostTerminalTabCountByWorktree = new Map<string, number>()
+export const MAX_TRACKED_SESSION_TABS_INVENTORY_OMISSIONS = 512
+export type SessionTabsInventoryOmissionObservation = {
+  fingerprint: string
+  observations: number
+}
+export const sessionTabsInventoryOmissionsByWorktree = new Map<
+  string,
+  SessionTabsInventoryOmissionObservation
+>()
 export const hostSessionTabIdByLocalKey = new Map<string, string>()
 export const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
@@ -190,9 +199,11 @@ export type WebSessionTabsSyncState = Pick<
     Pick<
       AppState,
       | 'acknowledgedAgentsByPaneKey'
+      | 'activityClearedAtByPaneKey'
       | 'agentLaunchConfigByPaneKey'
       | 'automaticAgentResumeClaimsByTabId'
       | 'migrationUnsupportedByPtyId'
+      | 'manuallyUnreadTurnsByPaneKey'
       | 'paneForegroundAgentByPaneKey'
       | 'pendingStartupByTabId'
       | 'recentlyClosedAgentStatusTabIds'

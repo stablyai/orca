@@ -6,6 +6,7 @@ import type {
   SpeechModelState,
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
+import type { PreloadApi } from '../api-types'
 
 export const speechApi = {
   getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
@@ -78,4 +79,4 @@ export const speechApi = {
     ipcRenderer.on('speech:error', listener)
     return () => ipcRenderer.removeListener('speech:error', listener)
   }
-}
+} satisfies PreloadApi['speech']

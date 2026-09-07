@@ -20,7 +20,7 @@ import {
   MAX_TEXT_FILE_SIZE,
   PREVIEWABLE_BINARY_MIME_TYPES,
   readLocalLogSnapshot
-} from './filesystem-file-helpers'
+} from './filesystem-file-content-inspection'
 
 export function registerFilesystemReadHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

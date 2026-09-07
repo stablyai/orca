@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import type { PreloadApi } from '../api-types'
 
 export const statsApi = {
   getSummary: (): Promise<{
@@ -7,4 +8,4 @@ export const statsApi = {
     totalAgentTimeMs: number
     firstEventAt: number | null
   }> => ipcRenderer.invoke('stats:summary')
-}
+} satisfies PreloadApi['stats']

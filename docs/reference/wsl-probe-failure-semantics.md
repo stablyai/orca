@@ -35,11 +35,11 @@ silent, and indistinguishable from the real thing.
 
 Three instances so far:
 
-| Where | What the user saw | Status |
-| --- | --- | --- |
-| Preflight CLI probes | Caching the result would have pinned "git not installed" until relaunch | Bounded entry ([#17350](https://github.com/stablyai/orca/pull/17350)) |
-| `glab auth status` fallback into WSL | Idle VM woken repeatedly for users who never touch GitLab | Open ([#8941](https://github.com/stablyai/orca/issues/8941)) |
-| `listRunningWslDistrosAsync` | Fails closed to `[]` with no last-known-good, polled every 2s — a persistently broken `wsl.exe` makes every WSL session vanish app-wide | Open (PR #17072 review) |
+| Where                                | What the user saw                                                                                                                       | Status                                                                |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Preflight CLI probes                 | Caching the result would have pinned "git not installed" until relaunch                                                                 | Bounded entry ([#17350](https://github.com/stablyai/orca/pull/17350)) |
+| `glab auth status` fallback into WSL | Idle VM woken repeatedly for users who never touch GitLab                                                                               | Open ([#8941](https://github.com/stablyai/orca/issues/8941))          |
+| `listRunningWslDistrosAsync`         | Fails closed to `[]` with no last-known-good, polled every 2s — a persistently broken `wsl.exe` makes every WSL session vanish app-wide | Open (PR #17072 review)                                               |
 
 ## What to do instead
 

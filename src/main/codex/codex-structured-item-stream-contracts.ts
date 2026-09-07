@@ -24,7 +24,6 @@ export type CodexItemStreamState = {
 export type CodexPendingItemPatch = {
   identity: AgentJournalItemIdentity
   body: NonNullable<ReturnType<typeof codexJournalItem>['body']>
-  blobs: ReturnType<typeof codexJournalItem>['blobs']
 }
 
 export type CodexStructuredItemStreamAdmission =

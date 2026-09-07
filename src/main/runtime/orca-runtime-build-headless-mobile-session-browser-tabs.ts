@@ -81,13 +81,15 @@ export class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRu
   protected commitHeadlessTerminalTabRetirement(
     worktreeId: string,
     parentTabId: string,
-    options: { allowMissing?: boolean } = {}
+    options: { allowMissing?: boolean; force?: boolean } = {}
   ): string[] {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession || !this.store.flushOrThrow) {
       throw new Error('workspace_session_unavailable')
     }
-    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId)
+    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId, {
+      force: options.force
+    })
     if (result.pinned) {
       throw new Error('terminal_tab_pinned')
     }

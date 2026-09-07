@@ -34,7 +34,6 @@ export function UpdateCard(): React.JSX.Element | null {
   const [installError, setInstallError] = useState<string | null>(null)
   const [compatibilityRelaunching, setCompatibilityRelaunching] = useState(false)
   const [compatibilitySetupError, setCompatibilitySetupError] = useState<string | null>(null)
-  const [errorDismissed, setErrorDismissed] = useState(false)
   const [autoDismissed, setAutoDismissed] = useState(false)
   const [exiting, setExiting] = useState(false)
   const isLocalBuild = status.source === 'local'
@@ -64,9 +63,6 @@ export function UpdateCard(): React.JSX.Element | null {
     }
     if (exiting) {
       setExiting(false)
-    }
-    if (errorDismissed) {
-      setErrorDismissed(false)
     }
   }
 
@@ -115,7 +111,6 @@ export function UpdateCard(): React.JSX.Element | null {
       hasStartedDownload: hasStartedDownload.current,
       updateUserInitiatedCycle,
       autoDismissed,
-      errorDismissed,
       collapsed
     })
   ) {
@@ -130,13 +125,6 @@ export function UpdateCard(): React.JSX.Element | null {
     void window.api.updater.download()
   }
   const handleClose = (): void => {
-    if (status.state === 'error') {
-      setErrorDismissed(true)
-      if (cachedVersion) {
-        dismissUpdate(cachedVersion)
-      }
-      return
-    }
     dismissUpdate()
   }
   const handleInstallRetry = (): void => {
@@ -177,7 +165,6 @@ export function UpdateCard(): React.JSX.Element | null {
     status.state === 'error' && status.recovery?.kind === 'linux-package-install'
       ? { recovery: status.recovery, diagnostic: status.message }
       : null
-
   const handleDismissWithAnimation = (): void => {
     if (prefersReducedMotion) {
       handleClose()
@@ -230,7 +217,6 @@ export function UpdateCard(): React.JSX.Element | null {
       errorCard={errorCard}
       linuxPackageRecovery={linuxPackageRecovery}
       isLocalBuild={isLocalBuild}
-      cachedVersion={cachedVersion}
       hasStartedDownload={hasStartedDownload.current}
       prefersReducedMotion={prefersReducedMotion}
       mediaFailed={mediaFailed}
@@ -250,7 +236,8 @@ export function UpdateCard(): React.JSX.Element | null {
       ? 'animate-update-card-exit'
       : 'animate-update-card-enter'
   const showReassurance =
-    !reassuranceSeen && (status.state === 'available' || status.state === 'downloading')
+    !reassuranceSeen &&
+    ((status.state === 'available' && !status.externallyManaged) || status.state === 'downloading')
   return (
     <div
       ref={cardRootRef}

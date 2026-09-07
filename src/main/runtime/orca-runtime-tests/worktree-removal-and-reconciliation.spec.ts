@@ -376,7 +376,18 @@ describe('OrcaRuntimeService', () => {
         TEST_REPO_PATH,
         'runtime-wsl',
         'origin/main',
-        { wslDistro: 'Ubuntu' }
+        { wslDistro: 'Ubuntu' },
+        expect.any(Function)
+      )
+      // Why: the lazy adoption callback is only invoked when the conflict probe
+      // sees a local ref, so drive it here to prove adoption also routes via WSL.
+      const adoptLocalBranch = vi
+        .mocked(getBranchConflictKind)
+        .mock.calls.findLast((call) => call[1] === 'runtime-wsl')?.[4]
+      await expect(adoptLocalBranch?.()).resolves.toBe(false)
+      expect(gitSpy).toHaveBeenCalledWith(
+        ['rev-parse', '--verify', '--quiet', 'refs/heads/runtime-wsl^{commit}'],
+        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
       )
       expect(getPRForBranchMock).toHaveBeenCalledWith(
         TEST_REPO_PATH,
@@ -404,27 +415,36 @@ describe('OrcaRuntimeService', () => {
           wslDistro: 'Ubuntu'
         }
       )
-      expect(gitSpy).toHaveBeenCalledWith(
+      // Why: a fork remote is deferred to first push/pull/fetch/fast-forward
+      // (#17828) instead of being added/fetched at create time, so the create
+      // path must not run check-ref-format, the fork fetch, or set-upstream-to
+      // -- the metadata is persisted untouched for on-demand materialization.
+      expect(gitSpy).not.toHaveBeenCalledWith(
         ['check-ref-format', '--branch', 'contributor/runtime-wsl'],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        expect.anything()
       )
-      expect(gitSpy).toHaveBeenCalledWith(
+      expect(gitSpy).not.toHaveBeenCalledWith(
         [
           'fetch',
           'pr-contributor-orca',
           '+refs/heads/contributor/runtime-wsl*:refs/remotes/pr-contributor-orca/contributor/runtime-wsl*'
         ],
-        { cwd: TEST_REPO_PATH, wslDistro: 'Ubuntu' }
+        expect.anything()
       )
-      expect(gitSpy).toHaveBeenCalledWith(
+      expect(gitSpy).not.toHaveBeenCalledWith(
         [
           'branch',
           '--set-upstream-to',
           'pr-contributor-orca/contributor/runtime-wsl',
           'runtime-wsl'
         ],
-        { cwd: createdWorktree.path, wslDistro: 'Ubuntu' }
+        expect.anything()
       )
+      expect(result.worktree.pushTarget).toEqual({
+        remoteName: 'pr-contributor-orca',
+        branchName: 'contributor/runtime-wsl',
+        remoteUrl: 'git@github.com:contributor/orca.git'
+      })
       expect(listWorktrees).toHaveBeenCalledWith(TEST_REPO_PATH, { wslDistro: 'Ubuntu' })
     } finally {
       gitSpy.mockRestore()

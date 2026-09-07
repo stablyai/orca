@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 
 // The in-WebView JS lives in terminal-webview-html.ts; the RN wrapper in
 // TerminalWebView.tsx. Concatenate both so assertions resolve regardless of file.
@@ -8,16 +9,7 @@ const source =
   readFileSync(new URL('./terminal-webview-pending-messages.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-url-tap.ts', import.meta.url), 'utf8') +
   readFileSync(new URL('./terminal-webview-tap-dispatch-injected.ts', import.meta.url), 'utf8') +
-  readFileSync(new URL('./terminal-webview-html.ts', import.meta.url), 'utf8') +
-  Array.from({ length: 10 }, (_, index) =>
-    readFileSync(
-      new URL(
-        `./terminal-webview-html/fragment-${String(index + 1).padStart(2, '0')}.ts`,
-        import.meta.url
-      ),
-      'utf8'
-    )
-  ).join('')
+  readTerminalWebViewHtmlSource()
 const sessionSource = readFileSync(
   new URL('../session/use-mobile-session-terminal-input.ts', import.meta.url),
   'utf8'

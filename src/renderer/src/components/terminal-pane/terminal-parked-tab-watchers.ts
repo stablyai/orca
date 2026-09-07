@@ -244,6 +244,93 @@ function disposeClosedParkedTabWatchers(
   disposeParkedTabWatchers(tabId)
 }
 
+/** One workspace's rendered parked verdict, as the batch pass consumes it. */
+export type ParkedTerminalTabWatcherSyncEntry = {
+  tabs: readonly ParkableTerminalTabModel[]
+  parkedTabIds: ReadonlySet<string>
+  /** Parked-equivalent tabs whose pane has not restored the current title. */
+  restoreTitleOnStartTabIds?: ReadonlySet<string>
+}
+
+function startOrReconcileParkedTabWatchers(
+  worktreeId: string,
+  entry: ParkedTerminalTabWatcherSyncEntry
+): void {
+  for (const tab of entry.tabs) {
+    if (!entry.parkedTabIds.has(tab.id)) {
+      continue
+    }
+    const watcherEntry = parkedWatchersByTabId.get(tab.id)
+    const restoreTitleOnRegister = entry.restoreTitleOnStartTabIds?.has(tab.id) === true
+    if (watcherEntry) {
+      reconcileParkedTabWatchers(worktreeId, tab, watcherEntry, restoreTitleOnRegister)
+    } else {
+      startParkedTabWatchers(worktreeId, tab, restoreTitleOnRegister)
+    }
+  }
+}
+
+/**
+ * Reconciles watchers for every rendered workspace in one pass.
+ *
+ * Why batched: the per-worktree entry point scans both registries in full, so
+ * the terminal host calling it once per workspace made a single effect fire
+ * cost surfaces x registry map iterations. Walking each registry once and then
+ * doing the per-tab start/reconcile pass is O(registry + tabs) instead.
+ *
+ * The dispose/start decisions are identical: registry entries are keyed by tab
+ * id and every tab belongs to exactly one worktree, so hoisting the dispose and
+ * capture-cleanup sweeps ahead of every start only reorders work across
+ * disjoint tab sets.
+ */
+export function syncParkedTerminalTabWatchersForWorkspaces(
+  entriesByWorktreeId: ReadonlyMap<string, ParkedTerminalTabWatcherSyncEntry>
+): void {
+  if (entriesByWorktreeId.size === 0) {
+    return
+  }
+  // Why lazy: only worktrees that actually own a registry row need the id set,
+  // so an idle profile allocates none of them.
+  const liveTabIdsByWorktreeId = new Map<string, ReadonlySet<string>>()
+  const liveTabIdsFor = (worktreeId: string): ReadonlySet<string> | null => {
+    const cached = liveTabIdsByWorktreeId.get(worktreeId)
+    if (cached) {
+      return cached
+    }
+    const entry = entriesByWorktreeId.get(worktreeId)
+    if (!entry) {
+      return null
+    }
+    const liveTabIds = new Set(entry.tabs.map((tab) => tab.id))
+    liveTabIdsByWorktreeId.set(worktreeId, liveTabIds)
+    return liveTabIds
+  }
+  for (const [tabId, watcherEntry] of parkedWatchersByTabId) {
+    const entry = entriesByWorktreeId.get(watcherEntry.worktreeId)
+    if (!entry) {
+      continue
+    }
+    const liveTabIds = liveTabIdsFor(watcherEntry.worktreeId)
+    if (!liveTabIds?.has(tabId)) {
+      disposeClosedParkedTabWatchers(tabId, watcherEntry)
+      continue
+    }
+    if (!entry.parkedTabIds.has(tabId) && watcherEntry.disposersByPtyId.size > 0) {
+      disposeParkedTabWatchers(tabId)
+    }
+  }
+  // Why: closed tabs never park/reveal again; drop captures to keep the registry bounded.
+  for (const [tabId, capture] of capturedPanesByTabId) {
+    const liveTabIds = liveTabIdsFor(capture.worktreeId)
+    if (liveTabIds && !liveTabIds.has(tabId)) {
+      capturedPanesByTabId.delete(tabId)
+    }
+  }
+  for (const [worktreeId, entry] of entriesByWorktreeId) {
+    startOrReconcileParkedTabWatchers(worktreeId, entry)
+  }
+}
+
 /**
  * Reconciles watchers for one worktree against its rendered parked set.
  * Run from an effect keyed on committed render state so disposal shares the
@@ -256,35 +343,18 @@ export function syncParkedTerminalTabWatchers(args: {
   /** Parked-equivalent tabs whose pane has not restored the current title. */
   restoreTitleOnStartTabIds?: ReadonlySet<string>
 }): void {
-  const liveTabIds = new Set(args.tabs.map((tab) => tab.id))
-  for (const [tabId, entry] of parkedWatchersByTabId) {
-    if (entry.worktreeId !== args.worktreeId) {
-      continue
-    }
-    if (!liveTabIds.has(tabId)) {
-      disposeClosedParkedTabWatchers(tabId, entry)
-      continue
-    }
-    if (!args.parkedTabIds.has(tabId) && entry.disposersByPtyId.size > 0) {
-      disposeParkedTabWatchers(tabId)
-    }
-  }
-  // Why: closed tabs never park/reveal again; drop captures to keep the registry bounded.
-  for (const [tabId, capture] of capturedPanesByTabId) {
-    if (capture.worktreeId === args.worktreeId && !liveTabIds.has(tabId)) {
-      capturedPanesByTabId.delete(tabId)
-    }
-  }
-  for (const tab of args.tabs) {
-    if (!args.parkedTabIds.has(tab.id)) {
-      continue
-    }
-    const entry = parkedWatchersByTabId.get(tab.id)
-    const restoreTitleOnRegister = args.restoreTitleOnStartTabIds?.has(tab.id) === true
-    if (entry) {
-      reconcileParkedTabWatchers(args.worktreeId, tab, entry, restoreTitleOnRegister)
-    } else {
-      startParkedTabWatchers(args.worktreeId, tab, restoreTitleOnRegister)
-    }
-  }
+  syncParkedTerminalTabWatchersForWorkspaces(
+    new Map([
+      [
+        args.worktreeId,
+        {
+          tabs: args.tabs,
+          parkedTabIds: args.parkedTabIds,
+          ...(args.restoreTitleOnStartTabIds
+            ? { restoreTitleOnStartTabIds: args.restoreTitleOnStartTabIds }
+            : {})
+        }
+      ]
+    ])
+  )
 }

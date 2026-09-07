@@ -17,6 +17,8 @@ import type {
   TerminalTab
 } from '../../../../shared/terminal-tab-types'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
+import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
@@ -164,8 +166,11 @@ export function buildWorktreeAgentRows(args: {
     }
   }
 
+  const ptyIdsByTabId = args.ptyIdsByTabId ?? {}
+
   for (const tab of args.tabs) {
     const explicitEntries = entriesByTabId.get(tab.id) ?? []
+    const hasLivePty = tabHasLivePty(ptyIdsByTabId, tab.id)
     for (const entry of explicitEntries) {
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
       const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
@@ -181,7 +186,7 @@ export function buildWorktreeAgentRows(args: {
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
         rowSource: 'live',
-        state: shouldDecay ? 'idle' : rowEntry.state,
+        state: shouldDecay ? resolveDecayedAgentRowState(rowEntry, hasLivePty) : rowEntry.state,
         startedAt
       })
       rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))
@@ -223,7 +228,11 @@ export function buildWorktreeAgentRows(args: {
       tab,
       agentType: resolveRowAgentType(rowEntry, tab),
       rowSource: 'live',
-      state: shouldDecay ? 'idle' : rowEntry.state,
+      // Why: this row's tab is synthesized because no tab for it exists in this renderer,
+      // so there is no live-PTY evidence to hold — the decay destination is always `idle`.
+      state: shouldDecay
+        ? resolveDecayedAgentRowState(rowEntry, tabHasLivePty(ptyIdsByTabId, tab.id))
+        : rowEntry.state,
       startedAt
     })
     rows.push(...buildSubagentChildRows({ parentEntry: rowEntry, tab, parentIsFresh: isFresh }))

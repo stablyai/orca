@@ -10,6 +10,7 @@ import type {
 } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import type {
@@ -26,6 +27,8 @@ import { RuntimeAccountController } from './runtime-account-controller'
 import { RuntimeMobileSpeechCatalog } from './runtime-mobile-speech-catalog'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
+import { addRemoteRepoFromPath } from '../ipc/repos/remote-repo-registration'
+import type { Store } from '../persistence'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
 import { RuntimeNestedRepoImport } from './runtime-nested-repo-import'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
@@ -38,6 +41,7 @@ import { RuntimeRepositoryForkBackfill } from './runtime-repository-fork-backfil
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 import { RuntimeAiVaultCommands } from './runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
+import { teardownFolderWorkspacePtys } from './folder-workspace-pty-teardown'
 
 export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
   protected readonly preservedBranchCleanup = new RuntimePreservedBranchCleanup(() =>
@@ -61,6 +65,10 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected terminalSideEffectConsumerAvailable = false
 
   protected readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
+
+  protected readonly readObservedAgentStatusPaneIdentityFn: (
+    paneKey: string
+  ) => ObservedAgentStatusPaneIdentity
 
   protected readonly getAgentProviderSessionSnapshotFn: (() => AgentStatusIpcPayload[]) | null
 
@@ -128,7 +136,8 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     new RuntimeLegacyWorkerTerminalRecoveryPersistence(
       () => this.store,
       () => this.getOrchestrationDb(),
-      (worktreeId) => this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+      (worktreeId) => this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId),
+      (paneKey, blocked) => this.notifier?.setLegacyWorkerTerminalResumeFence?.(paneKey, blocked)
     )
 
   protected readonly legacyWorkerRecovery = new RuntimeLegacyWorkerTerminalRecoveryController({
@@ -193,6 +202,17 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     listRepos: () => this.listRepos(),
     addRepo: (path, kind, hostId) =>
       (this as RuntimeCommandSurfaceHost<this>).addRepo(path, kind, hostId),
+    addRemoteRepo: async (remote) => {
+      // The same registration the desktop IPC handler uses, so both surfaces agree on SSH hosts.
+      const result = await addRemoteRepoFromPath(this.requireStore() as unknown as Store, remote)
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(result.repo.id)
+      this.notifyReposChanged()
+      return result.repo
+    },
     cloneRepo: (url, destination, hostId) =>
       (this as RuntimeCommandSurfaceHost<this>).cloneRepo(url, destination, hostId),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
@@ -203,7 +223,24 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
   protected readonly projectGroups = new RuntimeProjectGroupController({
     getStore: () => this.store,
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    notifyReposChanged: () => this.notifyReposChanged()
+    notifyReposChanged: () => this.notifyReposChanged(),
+    resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
+    teardownFolderWorkspacePtys: (worktreeId, connectionId) =>
+      teardownFolderWorkspacePtys(
+        {
+          runtime: this,
+          getSshProvider: this.getSshProviderFn,
+          getLocalProvider: () => this.getLocalProvider(),
+          onPtyStopped: this.onPtyStopped
+        },
+        worktreeId,
+        connectionId
+      ),
+    cleanupRemovedFolderWorkspaceState: (worktreeId) => {
+      if (this.store) {
+        this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
+      }
+    }
   })
 
   protected readonly nestedRepoImport = new RuntimeNestedRepoImport({

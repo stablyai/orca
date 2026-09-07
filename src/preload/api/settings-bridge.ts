@@ -4,22 +4,20 @@ import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
 } from '../../shared/terminal-custom-themes'
+import type { PreloadApi } from '../api-types'
 
 export const settingsApi = {
-  get: (): Promise<unknown> => ipcRenderer.invoke('settings:get'),
+  get: () => ipcRenderer.invoke('settings:get'),
 
   // Why: blocking read for the few startup decisions (terminal side-effect authority) that can't wait for async hydration. Call sparingly.
-  getSync: (): unknown => ipcRenderer.sendSync('settings:get-sync'),
+  getSync: () => ipcRenderer.sendSync('settings:get-sync'),
 
-  set: (args: Record<string, unknown>): Promise<unknown> =>
-    ipcRenderer.invoke('settings:set', args),
+  set: (args: Record<string, unknown>) => ipcRenderer.invoke('settings:set', args),
 
-  setActiveRuntimeEnvironmentPreference: (args: {
-    environmentId: string | null
-  }): Promise<unknown> =>
+  setActiveRuntimeEnvironmentPreference: (args: { environmentId: string | null }) =>
     ipcRenderer.invoke('settings:set-active-runtime-environment-preference', args),
 
-  updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }): Promise<unknown> =>
+  updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) =>
     ipcRenderer.invoke('settings:update-pr-bot-author-override', args),
 
   listFonts: (): Promise<string[]> => ipcRenderer.invoke('settings:listFonts'),
@@ -36,4 +34,4 @@ export const settingsApi = {
     ipcRenderer.on('settings:changed', listener)
     return () => ipcRenderer.removeListener('settings:changed', listener)
   }
-}
+} satisfies PreloadApi['settings']

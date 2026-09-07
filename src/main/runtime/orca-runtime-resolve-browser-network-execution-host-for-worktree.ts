@@ -10,6 +10,7 @@ import {
 import { resolveRuntimeBrowserNetworkExecutionHost } from './runtime-browser-network-execution-host'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
+import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
@@ -23,6 +24,7 @@ import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from './runtime-worktree-selection'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 import { WorktreeIdRequiresFullPathError } from './runtime-worktree-lineage-resolution'
+import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 
 export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
   protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
@@ -123,12 +125,29 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     const parsed = parseWorkspaceKey(workspaceSelector)
     const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
-    const repo = this.store?.getRepo(worktree.repoId) ?? null
+    // Why: `getRepo(id)` is host-blind and the same repo id can exist on local, SSH and runtime
+    // hosts. Reading `connectionId` off an arbitrary row reports "local" for a remote worktree and
+    // spawns its PTY on the client with the remote cwd (#11163). Loss of a usable answer is
+    // `unresolved`, never `local`.
+    const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
+    if (resolution.kind === 'ambiguous') {
+      throw new Error('worktree_execution_host_unresolved')
+    }
+    // Metadata only (display name, hook settings); the routing decision is `resolution.connectionId`.
+    const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
+    triggerTerminalSpawnPushTargetMaterialization(
+      worktree.path,
+      worktree.pushTarget,
+      repo,
+      this.store,
+      worktree.repoId,
+      worktree.id
+    )
     return {
       scope: {
         id: worktree.id,
         path: worktree.path,
-        connectionId: repo?.connectionId ?? null,
+        connectionId: resolution.connectionId,
         repo,
         folderWorkspace: null
       },

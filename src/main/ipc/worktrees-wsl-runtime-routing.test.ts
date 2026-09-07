@@ -17,6 +17,7 @@ import {
   gitExecFileAsyncMock
 } from './worktrees-test-module-mocks'
 import { handlers, harnessRepo, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { materializeWorktreePushTargetRemote } from './worktree-remote'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import {
   createdWorktreeList,
@@ -243,7 +244,11 @@ describe('registerWorktreeHandlers', () => {
     expectEveryGitCallRoutedTo('Ubuntu')
   })
 
-  it('routes fork push target setup through the selected WSL project runtime', async () => {
+  // Was "routes fork push target setup ... through create": create used to mint the
+  // fork remote (and route it to the selected WSL distro) unconditionally. It now
+  // defers to first sync (#17828) -- split in two so each half stays true to a single
+  // claim: create stays a no-op even for a WSL-routed repo, sync still routes to the distro.
+  it('does not mint a fork remote at create time for a WSL-routed worktree', async () => {
     mockSelectedWslProjectRuntime()
     listWorktreesMock.mockResolvedValue([
       {
@@ -266,6 +271,43 @@ describe('registerWorktreeHandlers', () => {
       }
     })
 
+    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0] as string[])
+    expect(calls).not.toContainEqual(['check-ref-format', '--branch', 'contributor/wsl-fork'])
+    expect(calls.some((args) => args[0] === 'remote' && args[1] === 'add')).toBe(false)
+    expect(calls.some((args) => args[0] === 'fetch')).toBe(false)
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        pushTarget: {
+          remoteName: 'pr-contributor-orca',
+          branchName: 'contributor/wsl-fork',
+          remoteUrl: 'git@github.com:contributor/orca.git'
+        }
+      })
+    )
+  })
+
+  // Companion to the deferral test above: `materializeWorktreePushTargetRemote` is
+  // exactly what `git:push`/`git:pull`'s local dispatch calls (with the repo's resolved
+  // wslDistro) before syncing, so this is "first sync" without needing that IPC handler
+  // registered in this harness.
+  it('routes fork push target materialization through the selected WSL project runtime', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    const target = {
+      remoteName: 'pr-contributor-orca',
+      branchName: 'contributor/wsl-fork',
+      remoteUrl: 'git@github.com:contributor/orca.git'
+    }
+
+    const result = await materializeWorktreePushTargetRemote(
+      '/workspace/repo',
+      target,
+      undefined,
+      undefined,
+      { wslDistro: 'Ubuntu' }
+    )
+
+    expect(result).toEqual({ ...target, remoteCreated: true })
     const wslRoutingOptions = { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['check-ref-format', '--branch', 'contributor/wsl-fork'],
@@ -304,17 +346,28 @@ describe('registerWorktreeHandlers', () => {
       wslRoutingOptions
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['config', 'remote.pr-contributor-orca.orca-created', 'true'],
+      wslRoutingOptions
+    )
+    // Why: the mint's fetch is the one call in this sequence that talks to the network --
+    // bounded the same as the deferred short-circuit's fetch (see DEFERRED_PUSH_TARGET_FETCH_TIMEOUT_MS)
+    // so a hung credential prompt can't wedge it forever. Every other call here is local-only
+    // and stays untimed, per `wslRoutingOptions` above.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
         'pr-contributor-orca',
         '+refs/heads/contributor/wsl-fork*:refs/remotes/pr-contributor-orca/contributor/wsl-fork*'
       ],
-      wslRoutingOptions
+      { ...wslRoutingOptions, timeout: expect.any(Number) }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/wsl-fork', 'wsl-fork'],
-      { cwd: '/workspace/wsl-fork', wslDistro: 'Ubuntu' }
+    // wslDistro threaded through every subprocess this materialize made, not just the adds.
+    const distros = new Set(
+      gitExecFileAsyncMock.mock.calls.map(
+        ([, options]) => (options as { wslDistro?: string } | undefined)?.wslDistro
+      )
     )
+    expect(distros).toEqual(new Set(['Ubuntu']))
   })
 
   it('routes selected PR branch conflict lookup through the selected WSL project runtime', async () => {

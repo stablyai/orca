@@ -3,6 +3,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload
 } from '../../shared/terminal-preview'
+import type { PreloadApi } from '../api-types'
 
 export const terminalPreviewApi = {
   connect: (
@@ -30,4 +31,4 @@ export const terminalPreviewApi = {
     ipcRenderer.on('terminalPreview:data', listener)
     return () => ipcRenderer.removeListener('terminalPreview:data', listener)
   }
-}
+} satisfies PreloadApi['terminalPreview']

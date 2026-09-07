@@ -3,6 +3,7 @@ import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { ptySizes } from '../delivery/visibility-state'
+import { shouldSeedPreAttachPtySize } from '../delivery/attached-pty-size'
 import { CODEX_HOME_ENV_KEYS } from '../host-env/codex-home'
 import {
   mergePtyEnvDeletions,
@@ -110,7 +111,17 @@ export async function buildRuntimePtySpawnOptions(
     ctx.effectiveSessionAppId !== undefined ? ptySizes.get(ctx.effectiveSessionAppId) : undefined
   if (ctx.sessionId !== undefined) {
     ctx.spawnOptions.sessionId = ctx.sessionId
-    ptySizes.set(ctx.effectiveSessionAppId ?? ctx.sessionId, { cols: args.cols, rows: args.rows })
+    if (
+      shouldSeedPreAttachPtySize({
+        isFreshSessionId: ctx.isNewDaemonSession,
+        hasCachedSize: ctx.hadSessionSizeBeforeAttach,
+        // Why false: runtime callers (CLI, headless serve) have no hidden pane to report, so a
+        // cached size is the only source that can outrank their requested grid here.
+        requestIsUnmeasured: false
+      })
+    ) {
+      ptySizes.set(ctx.effectiveSessionAppId ?? ctx.sessionId, { cols: args.cols, rows: args.rows })
+    }
   }
   ctx.materializedPaneKey = ctx.hostSessionBinding
     ? makePaneKey(ctx.hostSessionBinding.tabId, ctx.hostSessionBinding.leafId)

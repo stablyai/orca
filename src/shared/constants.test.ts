@@ -181,4 +181,9 @@ describe('MiniMax defaults', () => {
     expect(settings.minimaxGroupId).toBe('')
     expect(settings.minimaxUsageModels).toBe('general')
   })
+
+  it('defaults the MiniMax endpoint to overseas', () => {
+    const settings = getDefaultSettings('/tmp')
+    expect(settings.minimaxEndpoint).toBe('overseas')
+  })
 })

@@ -2,9 +2,15 @@ import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
 import { iterateNulDelimitedFields } from './nul-delimited-fields'
 
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
+const GIT_HISTORY_LEGACY_DECORATION_SEPARATOR = ','
 
+// Why %D too: %(decorate:…) is Git 2.43+, and older Git echoes it verbatim and exits zero.
+// Callers must pass --decorate=full; both fields emit short names otherwise, which parse to no refs.
 export const GIT_HISTORY_COMMIT_FORMAT =
-  '%H%n%aN%n%aE%n%at%n%ct%n%P%n%(decorate:prefix=,suffix=,separator=%x1f)%n%B'
+  '%H%n%aN%n%aE%n%at%n%ct%n%P%n%(decorate:prefix=,suffix=,separator=%x1f)%n%D%n%B'
+
+// Why exact-match: no ref name may contain the \x1f an old Git echoes here.
+const UNEXPANDED_DECORATE_PLACEHOLDER = `%(decorate:prefix=,suffix=,separator=${GIT_HISTORY_DECORATION_SEPARATOR})`
 
 export function shortGitHash(hash: string): string {
   return hash.slice(0, 7)
@@ -15,17 +21,18 @@ function commitSubject(message: string): string {
   return firstLine || '(no commit message)'
 }
 
-function parseGitDecorationRefs(raw: string, revision: string): GitHistoryItemRef[] {
+function parseGitDecorationRefs(
+  raw: string,
+  revision: string,
+  separator: string
+): GitHistoryItemRef[] {
   if (!raw.trim()) {
     return []
   }
 
   const refs: GitHistoryItemRef[] = []
-  // Why: Git permits commas in ref names, so Orca's git log format uses a
-  // control-character separator that Git ref names cannot contain.
-  const parts = raw.includes(GIT_HISTORY_DECORATION_SEPARATOR)
-    ? raw.split(GIT_HISTORY_DECORATION_SEPARATOR)
-    : raw.split(',')
+  // Why passed in: a lone decoration carries no separator, so sniffing `raw` split `feat,one`.
+  const parts = raw.split(separator)
 
   for (const part of parts) {
     const ref = part.trim()
@@ -115,8 +122,10 @@ export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
     const authorEmail = lines[2] ?? ''
     const authorDateSeconds = Number.parseInt(lines[3] ?? '', 10)
     const parents = (lines[5] ?? '').trim()
-    const decorations = lines[6] ?? ''
-    const message = lines.slice(7).join('\n').replace(/\n$/, '')
+    const decorateField = lines[6] ?? ''
+    const isLegacyGit = decorateField === UNEXPANDED_DECORATE_PLACEHOLDER
+    const decorations = isLegacyGit ? (lines[7] ?? '') : decorateField
+    const message = lines.slice(8).join('\n').replace(/\n$/, '')
 
     items.push({
       id: hash,
@@ -127,7 +136,11 @@ export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
       authorEmail: authorEmail || undefined,
       displayId: shortGitHash(hash),
       timestamp: Number.isFinite(authorDateSeconds) ? authorDateSeconds * 1000 : undefined,
-      references: parseGitDecorationRefs(decorations, hash)
+      references: parseGitDecorationRefs(
+        decorations,
+        hash,
+        isLegacyGit ? GIT_HISTORY_LEGACY_DECORATION_SEPARATOR : GIT_HISTORY_DECORATION_SEPARATOR
+      )
     })
   }
   return items

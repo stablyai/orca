@@ -9,10 +9,6 @@ import {
 const TASK_PAGE_SOURCE = readTaskPageSourceFamily()
 const WORKSPACE_ACTIONS_SOURCE = readTaskPageSource('use-task-page-workspace-actions.ts')
 const COMPOSER_ACTIONS_SOURCE = readTaskPageSource('use-task-page-composer-actions.ts')
-const USE_ITEM_ACTIONS_SOURCE = readFileSync(
-  join(__dirname, 'task-page/hooks/use-task-page-use-item-actions.ts'),
-  'utf8'
-)
 const PROJECT_VIEW_SOURCE = readFileSync(
   join(__dirname, 'github-project', 'ProjectViewWrapper.tsx'),
   'utf8'
@@ -79,7 +75,7 @@ describe('TaskPage workspace creation source boundaries', () => {
     expect(section).toContain("recordFeatureInteraction('github-tasks')")
     expect(section).toContain('openComposerForItem(item)')
     expect(section).not.toContain('createGitHubWorkItemWorkspaceInBackground')
-    expect(USE_ITEM_ACTIONS_SOURCE).not.toContain('@/lib/github-work-item-background-create')
+    expect(WORKSPACE_ACTIONS_SOURCE).not.toContain('@/lib/github-work-item-background-create')
     expect(TASK_PAGE_SOURCE).not.toContain('@/lib/github-work-item-background-create')
   })
 
@@ -118,11 +114,8 @@ describe('TaskPage workspace creation source boundaries', () => {
   })
 
   it('uses the shared composer handler from GitHub detail and start-new actions', () => {
-    const detail = readFileSync(join(__dirname, 'task-page/github/github-detail-host.tsx'), 'utf8')
-    const actions = readFileSync(
-      join(__dirname, 'task-page/github/github-work-item-row-actions.tsx'),
-      'utf8'
-    )
+    const detail = readFileSync(join(__dirname, 'task-page/Content.tsx'), 'utf8')
+    const actions = readFileSync(join(__dirname, 'task-page/github/Rows.tsx'), 'utf8')
     expect(detail.match(/onUse=\{\(item\) => \{/g)).toHaveLength(2)
     expect(actions.match(/onSelect=\{\(\) => handleUseWorkItem\(item\)\}/g)).toHaveLength(2)
   })

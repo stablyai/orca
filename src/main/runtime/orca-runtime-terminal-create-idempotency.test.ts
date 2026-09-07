@@ -10,14 +10,18 @@ type CreateRun = (
   preAllocatedHandle: string | undefined
 ) => Promise<RuntimeTerminalCreate>
 
-function createRuntimeForDedupe(listProcesses = vi.fn(async (): Promise<PtyProcessInfo[]> => [])) {
+function createRuntimeForDedupe(
+  listProcesses = vi.fn(async (): Promise<PtyProcessInfo[]> => []),
+  scope: { connectionId?: string | null } = {}
+) {
   const handleByPtyId = new Map<string, string>()
   const runtime = Object.create(OrcaRuntimeService.prototype) as OrcaRuntimeService
   Object.assign(runtime, {
     terminalCreateIdempotency: new RemoteRuntimeTerminalCreateIdempotency(),
     ptyController: { listProcesses },
     resolveTerminalWorkspaceLaunchScope: vi.fn(async (selector: string) => ({
-      id: selector.startsWith('id:') ? selector.slice(3) : selector
+      id: selector.startsWith('id:') ? selector.slice(3) : selector,
+      ...scope
     })),
     adoptControllerTerminalHandle: vi.fn((ptyId: string, handle: string) => {
       handleByPtyId.set(ptyId, handle)
@@ -251,5 +255,128 @@ describe('terminal create idempotency', () => {
         createdTerminal('terminal-2')
       )
     ).resolves.toEqual(createdTerminal('terminal-2'))
+  })
+})
+
+// Mirrors listProcessesFromRuntimeController: `undefined` aggregates every provider and
+// silently drops a non-answering SSH host, `null` is local-only, a string is host-scoped
+// and rethrows the host's failure.
+function createHostScopedInventory(hosts: {
+  local?: PtyProcessInfo[]
+  ssh?: Record<string, PtyProcessInfo[] | 'unreachable'>
+}) {
+  const local = hosts.local ?? []
+  const ssh = hosts.ssh ?? {}
+  return vi.fn(async (connectionId?: string | null): Promise<PtyProcessInfo[]> => {
+    if (connectionId === null) {
+      return local
+    }
+    if (typeof connectionId === 'string') {
+      const host = ssh[connectionId]
+      if (host === undefined || host === 'unreachable') {
+        throw new Error('ssh relay did not answer')
+      }
+      return host
+    }
+    return [
+      ...local,
+      ...Object.values(ssh)
+        .filter((sessions): sessions is PtyProcessInfo[] => sessions !== 'unreachable')
+        .flat()
+    ]
+  })
+}
+
+function remoteSession(handle: string | undefined, worktreeId = 'worktree-1'): PtyProcessInfo {
+  return {
+    id: `${worktreeId}@@session-a`,
+    cwd: '/remote/workspace',
+    title: 'claude',
+    worktreeId,
+    ...(handle ? { terminalHandle: handle } : {})
+  }
+}
+
+describe('terminal create reconciliation scopes inventory to the owning execution host', () => {
+  it('reports runtime_unavailable instead of spawning a duplicate when the owning relay cannot answer', async () => {
+    const listProcesses = createHostScopedInventory({
+      // The first create's shell is alive on ssh-1; the relay simply cannot be asked about it.
+      ssh: { 'ssh-1': 'unreachable', 'ssh-2': [remoteSession(undefined, 'worktree-9')] }
+    })
+    const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: 'ssh-1' })
+    const create = vi.fn<CreateRun>()
+
+    await expect(
+      runtime.dedupeTerminalCreate('device-a', 'id:worktree-1', 'mutation-1', true, create)
+    ).rejects.toThrow('runtime_unavailable')
+    expect(create).not.toHaveBeenCalled()
+    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('adopts the original PTY from the owning host listing', async () => {
+    const handle = deriveRemoteRuntimeTerminalCreateHandle('device-a', 'worktree-1', 'mutation-1')
+    const listProcesses = createHostScopedInventory({ ssh: { 'ssh-1': [remoteSession(handle)] } })
+    const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: 'ssh-1' })
+    const create = vi.fn<CreateRun>()
+
+    await expect(
+      runtime.dedupeTerminalCreate('device-a', 'id:worktree-1', 'mutation-1', true, create)
+    ).resolves.toMatchObject({ handle, ptyId: 'worktree-1@@session-a' })
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('still creates a fresh terminal when the owning host authoritatively lacks the handle', async () => {
+    const listProcesses = createHostScopedInventory({
+      ssh: { 'ssh-1': [remoteSession(undefined, 'worktree-other')] }
+    })
+    const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: 'ssh-1' })
+    const create = vi.fn<CreateRun>(async (_selector, handle) =>
+      createdTerminal(handle ?? 'missing')
+    )
+
+    const result = await runtime.dedupeTerminalCreate(
+      'device-a',
+      'id:worktree-1',
+      'mutation-1',
+      true,
+      create
+    )
+
+    expect(create).toHaveBeenCalledWith('id:worktree-1', result.handle)
+    expect(listProcesses).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('scopes the listing to the local host for a workspace with no connection', async () => {
+    const handle = deriveRemoteRuntimeTerminalCreateHandle('device-a', 'worktree-1', 'mutation-1')
+    const listProcesses = createHostScopedInventory({
+      local: [{ ...remoteSession(handle), cwd: '/local/workspace', title: 'pwsh' }]
+    })
+    const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: null })
+    const create = vi.fn<CreateRun>()
+
+    await expect(
+      runtime.dedupeTerminalCreate('device-a', 'id:worktree-1', 'mutation-1', true, create)
+    ).resolves.toMatchObject({ handle, ptyId: 'worktree-1@@session-a' })
+    expect(listProcesses).toHaveBeenCalledWith(null)
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('scopes the listing to the local host for a folder workspace with no connection', async () => {
+    const listProcesses = createHostScopedInventory({})
+    const { runtime } = createRuntimeForDedupe(listProcesses, { connectionId: null })
+    const create = vi.fn<CreateRun>(async (_selector, handle) =>
+      createdTerminal(handle ?? 'missing', 'folder:folder-1')
+    )
+
+    const result = await runtime.dedupeTerminalCreate(
+      'device-a',
+      'id:folder:folder-1',
+      'mutation-1',
+      true,
+      create
+    )
+
+    expect(create).toHaveBeenCalledWith('id:folder:folder-1', result.handle)
+    expect(listProcesses).toHaveBeenCalledWith(null)
   })
 })

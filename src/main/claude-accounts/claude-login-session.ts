@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { toWindowsWslPath } from '../wsl'
@@ -96,8 +96,15 @@ async function createTemporaryClaudeConfigDir(
   location: ClaudeManagedAuthLocation
 ): Promise<ClaudeCommandConfig> {
   if (location.managedAuthRuntime !== 'wsl') {
+    const created = mkdtempSync(join(tmpdir(), 'orca-claude-login-'))
+    let windowsPath = created
+    try {
+      windowsPath = realpathSync(created)
+    } catch {
+      // Keep the mkdtemp path if the temp root cannot be resolved.
+    }
     return {
-      windowsPath: mkdtempSync(join(tmpdir(), 'orca-claude-login-')),
+      windowsPath,
       linuxPath: null,
       wslDistro: null
     }

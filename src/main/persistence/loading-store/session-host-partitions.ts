@@ -9,10 +9,12 @@ import {
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
 import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
+import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import {
   removeWorkspaceSessionOwner,
   workspaceSessionPartitionIdsForHost
@@ -132,6 +134,9 @@ export function removeWorkspaceSessionOwnerInPartition(
   if (!session) {
     return
   }
+  // Why: a session was the last thing pinning some dangling metadata row; releasing it is the
+  // evidence the metadata prune waits for, and there is no other signal that it happened (#17775).
+  invalidateLocalWorktreeMetadataPruneInputs()
   if (resolved === LOCAL_EXECUTION_HOST_ID) {
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession = session
   } else {
@@ -186,11 +191,16 @@ export function setHostWorkspaceSession(
       executionHostId: hostId
     }
   )
-  const pruned = pruneWorkspaceSessionBrowserHistory(
-    pruneLocalTerminalScrollbackBuffers(
-      session,
-      owner[sessionHostPartitionOperationsContext].runtime.state.repos
-    )
+  // Why here too: the load-side drop only survives until the next full snapshot write. A renderer
+  // or runtime payload that still carries local's globals would re-inject them into this partition.
+  const pruned = withoutRedundantGlobalFields(
+    pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(
+        session,
+        owner[sessionHostPartitionOperationsContext].runtime.state.repos
+      )
+    ),
+    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession
   )
   owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
     ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,

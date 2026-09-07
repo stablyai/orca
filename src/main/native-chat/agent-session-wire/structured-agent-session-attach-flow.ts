@@ -26,6 +26,7 @@ import type { AgentSessionRecordStore } from '../../runtime/agent-session-record
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
+  AgentSessionAcquisitionRootExitObservedError,
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError,
@@ -35,6 +36,10 @@ import type { StructuredAgentSessionEventSink } from './structured-agent-session
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import { readAgentSessionHydrationPage } from './agent-session-history-page'
+import {
+  importAdoptedTranscript,
+  prepareAdoptedTranscript
+} from './structured-agent-session-adopted-import'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
@@ -58,8 +63,9 @@ export type AttachFlowInput = {
   onAcquiring?: () => Promise<void> | void
   /** Settles writes already captured by the superseded journal before opening another. */
   beforeJournalOpen?: () => Promise<void> | void
-  /** Removes any partial host publication after journal attachment fails. */
-  onAttachFailed?: () => void
+  /** Removes any partial host publication after journal attachment fails, and
+   *  closes the journal handle of the map entry it drops. Awaited: see eviction. */
+  onAttachFailed?: () => Promise<void>
 }
 
 export async function performAttach(
@@ -76,6 +82,12 @@ export async function performAttach(
   let acquisitionGeneration: string | null = null
   let reservedRecord: AgentSessionRecord | null = null
   let replayed = false
+  const preparedTranscript = store.getRecord(sessionId)
+    ? { ok: true as const, items: null }
+    : await prepareAdoptedTranscript(params)
+  if (!preparedTranscript.ok) {
+    return preparedTranscript
+  }
   try {
     const reserved = await store.reserveOwner(
       reserveRequestFor({
@@ -118,7 +130,9 @@ export async function performAttach(
         ? 'processless'
         : error instanceof AgentSessionAcquisitionExitUnprovenError
           ? 'unproven'
-          : 'exit-proven'
+          : error instanceof AgentSessionAcquisitionRootExitObservedError
+            ? 'root-exit-observed'
+            : 'exit-proven'
       const outcome =
         error instanceof AgentSessionAcquisitionExitUnprovenError
           ? {
@@ -177,6 +191,7 @@ export async function performAttach(
       journalRoot: input.journalRoot,
       adapter: input.adapter
     })
+    await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
     await input.onAttached(attached, acquisitionGeneration)
     await store.recordOperationOutcome({
       callerKey: input.callerKey,
@@ -208,15 +223,21 @@ async function settlePostAcquisitionAttachFailure(
   cause: unknown
 ): Promise<never> {
   let cleanupError: unknown = cause
-  let exitProof: 'exit-proven' | 'unproven' = 'unproven'
+  let exitProof: 'exit-proven' | 'root-exit-observed' | 'unproven' = 'unproven'
   try {
     await rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, cause)
   } catch (error) {
     cleanupError = error
     exitProof =
-      error instanceof AgentSessionAcquisitionExitUnprovenError ? 'unproven' : 'exit-proven'
+      error instanceof AgentSessionAcquisitionExitUnprovenError
+        ? 'unproven'
+        : error instanceof AgentSessionAcquisitionRootExitObservedError
+          ? 'root-exit-observed'
+          : 'exit-proven'
   }
-  input.onAttachFailed?.()
+  // Why: the close is awaited so the map entry is gone only once its handle is
+  // released, but a failed close must not also cost the store settlement below.
+  await Promise.resolve(input.onAttachFailed?.()).catch(() => undefined)
   try {
     await input.store.settleFailedPostAcquisitionAttachment({
       sessionId: record.sessionId,

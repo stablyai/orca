@@ -38,6 +38,9 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.lastOscTitleEpochMs = observedAtEpochMs
       pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
+      if (prevStatus === 'working' && agentStatus === null) {
+        this.confirmPtyAgentExit(ptyId, true)
+      }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
       }
@@ -78,6 +81,11 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         ptyRecordChanged = false
         this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
       }
+    }
+    if (agentStatus === 'working' || agentStatus === 'permission') {
+      this.orchestrationMailboxPointerDelivery.observeAgentWorking(ptyId)
+    } else if (agentStatus === 'idle') {
+      this.orchestrationMailboxPointerDelivery.observeAgentIdle(ptyId)
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Why: keep the latest OSC title on the leaf so worktree.ps can
@@ -139,6 +147,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
+    this.clearAgentPromptCorrelationForPty(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
     const pty = this.ptysById.get(ptyId)
     if (pty) {

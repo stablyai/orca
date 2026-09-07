@@ -9,6 +9,7 @@ import type {
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../runtime-environment-subscriptions'
+import type { PreloadApi } from '../api-types'
 
 export const runtimeApi = {
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
@@ -141,4 +142,4 @@ export const runtimeApi = {
     ipcRenderer.on('runtime:clientHostedBrowserRowsChanged', listener)
     return () => ipcRenderer.removeListener('runtime:clientHostedBrowserRowsChanged', listener)
   }
-}
+} satisfies PreloadApi['runtime']

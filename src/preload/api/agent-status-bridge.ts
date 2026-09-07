@@ -1,11 +1,13 @@
 import { ipcRenderer } from 'electron'
 import type {
+  AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-question-answered-intent'
+import type { PreloadApi } from '../api-types'
 
 export const agentStatusApi = {
   /** Listen for agent status updates forwarded from native hook receivers. */
@@ -59,11 +61,27 @@ export const agentStatusApi = {
     ipcRenderer.on('agentStatus:legacyWorkerTerminalRecovery', listener)
     return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)
   },
+  onLegacyWorkerTerminalResumeFence: (
+    callback: (data: { paneKey: string; blocked: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { paneKey: string; blocked: boolean }
+    ) => callback(data)
+    ipcRenderer.on('agentStatus:legacyWorkerTerminalResumeFence', listener)
+    return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalResumeFence', listener)
+  },
   getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>
     ipcRenderer.invoke('agentStatus:getMigrationUnsupportedSnapshot'),
   /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
   drop: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:drop', paneKey)
+  },
+  dropPersisted: (identity: AgentStatusCacheIdentity): void => {
+    ipcRenderer.send('agentStatus:dropPersisted', identity)
+  },
+  dropPersistedBatch: (identities: readonly AgentStatusCacheIdentity[]): void => {
+    ipcRenderer.send('agentStatus:dropPersistedBatch', identities)
   },
   reconcileEndedProcess: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
@@ -85,4 +103,4 @@ export const agentStatusApi = {
   }): void => {
     ipcRenderer.send('agentStatus:transferPaneAuthority', args)
   }
-}
+} satisfies PreloadApi['agentStatus']

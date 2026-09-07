@@ -54,7 +54,7 @@ export type PtyRuntimeControllerDeps = {
   ) => string | undefined
   requestSerializedBuffer: (
     ptyId: string,
-    opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+    opts?: { scrollbackRows?: number }
   ) => Promise<{
     data: string
     cols: number

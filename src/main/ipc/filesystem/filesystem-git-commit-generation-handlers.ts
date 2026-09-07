@@ -23,7 +23,7 @@ import {
   getLocalAgentRuntimeTarget,
   getLocalTextGenerationTarget,
   getRepoForSourceControlAi
-} from './filesystem-worktree-helpers'
+} from './filesystem-source-control-ai-targets'
 
 export function registerFilesystemGitCommitGenerationHandlers(
   context: FilesystemHandlerContext

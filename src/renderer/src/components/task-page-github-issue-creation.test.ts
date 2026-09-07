@@ -3,8 +3,12 @@ import { readTaskPageSource } from './task-page-source-family.test-support'
 import { readFileSync } from 'node:fs'
 
 const taskPageSource = readTaskPageSource('use-task-page-github-issue-creation.ts')
-const newIssueStateSource = readFileSync(
-  new URL('./task-page/hooks/use-task-page-github-new-issue-state.ts', import.meta.url),
+const newIssueDraftSource = readFileSync(
+  new URL('./use-task-page-github-issue-draft.ts', import.meta.url),
+  'utf8'
+)
+const newIssueRepoResetSource = readFileSync(
+  new URL('./task-page-new-issue-draft.ts', import.meta.url),
   'utf8'
 )
 
@@ -18,8 +22,12 @@ function issueCreationSection(): string {
 
 describe('TaskPage GitHub issue creation', () => {
   it('keeps issue creation targeted to the first selected repo on a fresh mount', () => {
-    expect(newIssueStateSource).toContain('(selectedRepos[0]?.id ?? null)')
-    expect(newIssueStateSource).toContain('newIssueRepoId !== null')
+    expect(newIssueDraftSource).toContain(
+      'selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null'
+    )
+    // Why: a repo leaving the selection mid-draft must reset to the first selected repo.
+    expect(newIssueRepoResetSource).toContain('newIssueRepoId === null')
+    expect(newIssueRepoResetSource).toContain('return { repoId: selectedRepoIds[0] ?? null }')
   })
 
   it('covers the complete remote oversized-body recovery timeout envelope', () => {

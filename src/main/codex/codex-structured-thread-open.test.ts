@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  CODEX_APP_SERVER_MAX_RECORD_BYTES,
   CodexAppServerFrameSizeError,
   CodexAppServerRequestError,
   type CodexAppServerConnection
@@ -105,7 +104,7 @@ describe('openCodexThread', () => {
     expect(oversizedRequest).toHaveBeenCalledOnce()
   })
 
-  it('refuses an oversized fallback result returned by a connection double', async () => {
+  it('accepts a fallback result beyond the daemon wire limit', async () => {
     const request = vi.fn(async (_method: string, params?: Record<string, unknown>) => {
       if (params?.excludeTurns) {
         throw new CodexAppServerRequestError(
@@ -117,9 +116,7 @@ describe('openCodexThread', () => {
       return {
         thread: {
           id: 'thread-1',
-          turns: [
-            { id: 'turn-1', items: [{ output: 'x'.repeat(CODEX_APP_SERVER_MAX_RECORD_BYTES) }] }
-          ]
+          turns: [{ id: 'turn-1', items: [{ output: 'x'.repeat(16 * 1024 * 1024 + 1) }] }]
         }
       }
     })
@@ -130,7 +127,7 @@ describe('openCodexThread', () => {
         { cwd: '/workspace', resumeThreadId: 'thread-1' },
         2_000
       )
-    ).rejects.toBeInstanceOf(CodexAppServerFrameSizeError)
+    ).resolves.toMatchObject({ threadId: 'thread-1' })
     expect(request).toHaveBeenCalledTimes(2)
   })
 })

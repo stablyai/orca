@@ -9,7 +9,7 @@ import {
   isFileActiveEditorSurface,
   isMobileFileDiffSource,
   isUnifiedTabActiveInActiveGroup
-} from './mobile-session-tab-helpers'
+} from './mobile-session-surfaces'
 
 export function buildMobileMarkdownTab(
   inputs: MobileSessionWorktreeInputs,

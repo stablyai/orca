@@ -5,6 +5,7 @@ export class LogicalClientConnectionPath {
   private recovery: MobileConnectionPath | null = null
   private recoveryAttempt = 0
   private pairingRejected = false
+  private hostSignedOut = false
   private readonly listeners = new Set<() => void>()
 
   constructor(private readonly isConnected: () => boolean) {}
@@ -35,12 +36,23 @@ export class LogicalClientConnectionPath {
     })
   }
 
+  isHostSignedOut(): boolean {
+    return this.hostSignedOut
+  }
+
+  setHostSignedOut(signedOut: boolean): void {
+    this.update(() => {
+      this.hostSignedOut = signedOut
+    })
+  }
+
   clearAfterConnected(): void {
     this.migration = null
     this.recovery = null
     this.recoveryAttempt = 0
     // Why: an authenticated session is the desktop accepting this device.
     this.pairingRejected = false
+    this.hostSignedOut = false
   }
 
   setRecovery(path: MobileConnectionPath | null, attempt?: number): void {
@@ -69,11 +81,13 @@ export class LogicalClientConnectionPath {
     const previousPath = this.pending()
     const previousAttempt = this.reconnectAttempt(0)
     const previousRejected = this.pairingRejected
+    const previousSignedOut = this.hostSignedOut
     apply()
     if (
       previousPath === this.pending() &&
       previousAttempt === this.reconnectAttempt(0) &&
-      previousRejected === this.pairingRejected
+      previousRejected === this.pairingRejected &&
+      previousSignedOut === this.hostSignedOut
     ) {
       return
     }

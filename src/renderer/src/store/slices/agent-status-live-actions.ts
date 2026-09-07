@@ -9,14 +9,16 @@ import type {
 import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   buildAgentStatusLiveEntry,
-  type AgentStatusLiveEntryBuild
+  type AgentStatusLiveEntryBuild,
+  type AgentStatusLiveEntryRejection
 } from './agent-status-live-entry-builder'
 import { reduceAgentStatusLiveUpdate } from './agent-status-live-reducer'
+import type { FreshnessLiveEntryDelta } from './agent-status-freshness-scheduler'
 import {
   agentStatusTabAlreadyHasProtectedOrGeneratedTitle,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
-} from './agent-status-pane-helpers'
+} from './agent-status-pane-key-tab-binding'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -27,8 +29,14 @@ import {
 export function createAgentStatusLiveActions(
   runtime: AgentStatusRuntime
 ): Pick<AgentStatusSlice, 'setAgentStatus' | 'setAgentStatuses' | 'transactAgentStatuses'> {
-  const { get, set, applyGeneratedTabTitleUpdate, requestFreshness, transactAgentStatuses } =
-    runtime
+  const {
+    get,
+    set,
+    applyGeneratedTabTitleUpdate,
+    freshness,
+    requestFreshness,
+    transactAgentStatuses
+  } = runtime
   const setAgentStatus = (
     rawPaneKey: string,
     payload: AgentStatusPayload,
@@ -49,7 +57,8 @@ export function createAgentStatusLiveActions(
     ) {
       return
     }
-    let built: AgentStatusLiveEntryBuild | null = null
+    let built: AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null = null
+    let liveEntryDelta: FreshnessLiveEntryDelta | null = null
     set((state) => {
       built = buildAgentStatusLiveEntry({
         state,
@@ -61,14 +70,31 @@ export function createAgentStatusLiveActions(
         metadata,
         updatedAt
       })
-      return built ? reduceAgentStatusLiveUpdate(state, built, updatedAt) : state
+      if (!built.entry) {
+        return state
+      }
+      const previousEntries = state.agentStatusByPaneKey
+      const reduction = reduceAgentStatusLiveUpdate(state, built, updatedAt)
+      liveEntryDelta = {
+        previousEntries,
+        nextEntries: reduction.patch.agentStatusByPaneKey ?? previousEntries,
+        nextEntry: built.entry,
+        replacedEntry: previousEntries[built.entry.paneKey],
+        evictedEntries: reduction.evictedEntries
+      }
+      return reduction.patch
     })
+    if (liveEntryDelta) {
+      freshness.noteLiveEntryDelta(liveEntryDelta)
+    }
     // Zustand's updater runs synchronously, but TypeScript cannot observe the closure assignment.
-    const builtResult = built as AgentStatusLiveEntryBuild | null
-    if (!builtResult) {
-      // Keep standalone calls' deferred freshness contract even when a stale
-      // event is rejected by the reducer.
-      requestFreshness(false)
+    const builtResult = built as AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection | null
+    if (!builtResult?.entry) {
+      // Keep standalone calls' deferred freshness contract when a stale event is rejected, but a
+      // suppressed inherited-terminal frame returns without buying the deferred O(entries) scan.
+      if (builtResult?.reason !== 'suppressed-inherited-terminal') {
+        requestFreshness(false)
+      }
       return
     }
     const { entry } = builtResult

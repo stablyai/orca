@@ -1,15 +1,15 @@
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type { AgentLaunchConfigRegistryEntry } from './agent-status-contract'
-import { copyLaunchConfig, sleepingRecordFromEntry } from './agent-status-recovery-helpers'
+import { copyLaunchConfig, sleepingRecordFromEntry } from './agent-status-sleeping-records'
 import {
   getLaunchConfigForEntry,
+  getLaunchConfigForStatusMetadata,
   launchConfigRegistryEntriesEqual,
   normalizeLaunchConfigRegistrationMetadata,
   registryEntryMatchesStatus
 } from './agent-status-launch-config'
-import { getLaunchConfigForStatusMetadata } from './agent-status-map-helpers'
-import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-helpers'
+import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 
 export function createAgentStatusLaunchActions(
   runtime: AgentStatusRuntime

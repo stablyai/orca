@@ -65,7 +65,9 @@ export function TaskPageOdooPanel({ onHide }: TaskPageOdooPanelProps): React.JSX
 
   // A starred saved filter is what the panel opens on, so it has to seed the
   // initial state rather than be applied after the first read fires.
-  const initialSavedFilters = useRef(readOrSeedSavedOdooTicketFilters(odooPresetLabel)).current
+  const initialSavedFiltersRef = useRef<OdooSavedTicketFilter[]>(undefined!)
+  initialSavedFiltersRef.current ??= readOrSeedSavedOdooTicketFilters(odooPresetLabel)
+  const initialSavedFilters = initialSavedFiltersRef.current
   const initialDefault = getDefaultSavedOdooTicketFilter(initialSavedFilters)
   const [preset, setPreset] = useState<OdooTicketFilter>(initialDefault?.preset ?? 'assigned')
   const [searchInput, setSearchInput] = useState('')

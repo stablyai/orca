@@ -43,4 +43,8 @@ export class DirectConnectionLog {
       { code: 'liveness-timeout' }
     )
   }
+
+  connected = (): void => {
+    this.emit('success', 'Authenticated', 'Channel ready for RPC', { code: 'direct-connected' })
+  }
 }

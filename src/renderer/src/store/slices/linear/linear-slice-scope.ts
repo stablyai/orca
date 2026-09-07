@@ -10,11 +10,7 @@ import {
   type LinearIssueAttributeFilter
 } from '../../../../../shared/linear/issue-attribute-filter'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import {
-  getLinearCacheGeneration,
-  getLinearMutationGeneration,
-  linearRequestState
-} from './linear-slice-request-state'
+import { getLinearCacheGeneration, getLinearMutationGeneration } from './linear-slice-request-state'
 
 export function normalizeListAttributeFilter(
   attributeFilter?: LinearIssueAttributeFilter | null
@@ -77,26 +73,4 @@ export function getLinearReadScope(
 
 export function scopedLinearCacheKey(scope: LinearReadScope, key: string): string {
   return scope.cachePrefix ? `${scope.cachePrefix}::${key}` : key
-}
-
-/** Read the current request generation without exposing mutable implementation details. */
-export function linearReadGenerationSnapshot(): {
-  cacheGeneration: number
-  mutationGeneration: number
-} {
-  return {
-    cacheGeneration: getLinearCacheGeneration(),
-    mutationGeneration: getLinearMutationGeneration()
-  }
-}
-
-/** Keep the status request handle private to the request-state module. */
-export function getInflightStatusRequest(): { contextKey: string; promise: Promise<void> } | null {
-  return linearRequestState.inflightStatusRequest
-}
-
-export function setInflightStatusRequest(
-  request: { contextKey: string; promise: Promise<void> } | null
-): void {
-  linearRequestState.inflightStatusRequest = request
 }

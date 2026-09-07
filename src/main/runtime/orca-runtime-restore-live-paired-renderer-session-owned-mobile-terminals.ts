@@ -39,7 +39,7 @@ export class OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals
         continue
       }
       if (!existing) {
-        this.mobileSessionTabsByWorktree.set(targetWorktreeId, {
+        this.storeMobileSessionSnapshot(targetWorktreeId, {
           worktree: targetWorktreeId,
           publicationEpoch: `renderer-rescue:${Date.now().toString(36)}`,
           snapshotVersion: 0,

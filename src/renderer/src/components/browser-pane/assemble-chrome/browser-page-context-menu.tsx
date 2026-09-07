@@ -187,7 +187,8 @@ export function BrowserPageContextMenu({
               className={MENU_ITEM_CLASS}
               onClick={() => {
                 createBrowserTab(worktreeId, contextMenu.linkUrl!, {
-                  title: contextMenu.linkUrl!
+                  title: contextMenu.linkUrl!,
+                  activate: false
                 })
                 closeMenu()
               }}

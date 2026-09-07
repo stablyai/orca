@@ -1,16 +1,28 @@
 import type { AppState } from '../types'
-import { capLiveAgentStatusesInPlace, classifyPaneKeyLiveness } from './agent-status-pane-helpers'
-import { removePaneKeys } from './agent-status-map-helpers'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  capLiveAgentStatusesInPlace,
+  classifyPaneKeyLiveness,
+  countLiveAgentStatuses,
+  noteLiveAgentStatusCount
+} from './agent-status-capacity-eviction'
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { recoveryRecordMatches } from './agent-status-recovery-equivalence'
 import type { AgentStatusLiveEntryBuild } from './agent-status-live-entry-builder'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
+
+export type AgentStatusLiveUpdateReduction = {
+  patch: Partial<AppState>
+  /** Rows the cap dropped, so freshness can move its cached minimum without a full rescan. */
+  evictedEntries: AgentStatusEntry[]
+}
 
 /** Apply the map changes associated with an accepted live status row. */
 export function reduceAgentStatusLiveUpdate(
   state: AppState,
   build: AgentStatusLiveEntryBuild,
   updatedAt: number
-): Partial<AppState> {
+): AgentStatusLiveUpdateReduction {
   const {
     entry,
     existingSleepingRecord,
@@ -72,20 +84,32 @@ export function reduceAgentStatusLiveUpdate(
     nextSleepingAgentSessions = { ...state.sleepingAgentSessionsByPaneKey }
     delete nextSleepingAgentSessions[paneKey]
   }
-  const nextLive = { ...state.agentStatusByPaneKey, [paneKey]: entry }
+  const previousLive = state.agentStatusByPaneKey
+  const nextLive = { ...previousLive, [paneKey]: entry }
+  const nextLiveCount = countLiveAgentStatuses(previousLive) + (paneKey in previousLive ? 0 : 1)
   const evictedPaneKeys = capLiveAgentStatusesInPlace(
     nextLive,
     paneKey,
     () => classifyPaneKeyLiveness(state),
-    updatedAt
+    updatedAt,
+    undefined,
+    nextLiveCount
   )
+  noteLiveAgentStatusCount(nextLive, nextLiveCount - evictedPaneKeys.length)
   const evictedOrphans = evictedPaneKeys.length > 0
+  const evictedEntries: AgentStatusEntry[] = []
   if (evictedOrphans) {
     const evicted = new Set(evictedPaneKeys)
+    for (const evictedPaneKey of evictedPaneKeys) {
+      const evictedEntry = previousLive[evictedPaneKey]
+      if (evictedEntry) {
+        evictedEntries.push(evictedEntry)
+      }
+    }
     nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evicted)
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
-  return {
+  const patch: Partial<AppState> = {
     agentStatusByPaneKey: nextLive,
     retainedAgentsByPaneKey: nextRetainedAgents,
     sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
@@ -101,4 +125,5 @@ export function reduceAgentStatusLiveUpdate(
         ? state.sortEpoch + 1
         : state.sortEpoch
   }
+  return { patch, evictedEntries }
 }

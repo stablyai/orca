@@ -3,7 +3,6 @@ import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
 import { useAppStore } from '../store'
-import { ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT } from './editor/editor-autosave'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -20,9 +19,15 @@ import {
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import {
+  ensureClientCreationActionAllowed,
+  showClientCreationActionError
+} from '@/lib/client-creation-action-error'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
+import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
 export function handleTerminalWorkspaceKeyDown(
@@ -101,14 +106,26 @@ export function handleTerminalWorkspaceKeyDown(
   if (!event.repeat && matchShortcut('tab.reopenClosed')) {
     event.preventDefault()
     notifyTerminalCapture('tab.reopenClosed')
-    useAppStore.getState().reopenClosedTab(activeWorktreeId)
+    try {
+      useAppStore.getState().reopenClosedTab(activeWorktreeId)
+    } catch (error) {
+      showClientCreationActionError(error)
+    }
     return
   }
   if (!event.repeat && matchShortcut('tab.newBrowser')) {
     event.preventDefault()
     notifyTerminalCapture('tab.newBrowser')
+    const browserWorkspaceId = floatingWorkspaceFocused
+      ? FLOATING_TERMINAL_WORKTREE_ID
+      : activeWorktreeId
+    if (!ensureClientCreationActionAllowed(browserWorkspaceId, 'managed-browser')) {
+      return
+    }
     if (floatingWorkspaceFocused) {
-      void createFloatingWorkspaceBrowserTab(useAppStore.getState())
+      void createFloatingWorkspaceBrowserTab(useAppStore.getState()).catch(
+        showClientCreationActionError
+      )
       return
     }
     handleNewBrowserTab()
@@ -117,41 +134,23 @@ export function handleTerminalWorkspaceKeyDown(
   if (!event.repeat && mobileEmulatorEnabled && matchShortcut('tab.newSimulator')) {
     event.preventDefault()
     notifyTerminalCapture('tab.newSimulator')
+    if (!ensureClientCreationActionAllowed(activeWorktreeId, 'mobile-emulator')) {
+      return
+    }
     if (!floatingWorkspaceFocused) {
       handleNewSimulatorTab()
     }
     return
   }
-  if (!event.repeat && matchShortcut('editor.save')) {
-    const target = event.target as HTMLElement | null
-    const inEditor =
-      target?.closest('.monaco-editor, [contenteditable]') !== null ||
-      target?.closest('textarea:not(.xterm-helper-textarea), input') !== null
-    if (!inEditor) {
-      const state = useAppStore.getState()
-      if (state.activeTabType === 'editor' && state.activeFileId) {
-        event.preventDefault()
-        notifyTerminalCapture('editor.save')
-        window.dispatchEvent(new Event(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT))
-        return
-      }
-    }
-  }
-  if (!event.repeat && matchShortcut('editor.toggleWordWrap')) {
-    const state = useAppStore.getState()
-    if (state.activeTabType === 'editor' && state.activeFileId) {
-      event.preventDefault()
-      notifyTerminalCapture('editor.toggleWordWrap')
-      const activeFile = state.openFiles.find((file) => file.id === state.activeFileId)
-      if (activeFile?.mode === 'diff') {
-        const wrapOn = state.settings?.diffWordWrap === true
-        void state.updateSettings({ diffWordWrap: !wrapOn })
-      } else {
-        const wrapOn = state.settings?.editorWordWrap !== false
-        void state.updateSettings({ editorWordWrap: !wrapOn })
-      }
-      return
-    }
+  if (
+    handleTerminalWorkspaceEditorShortcut({
+      event,
+      floatingWorkspaceFocused,
+      matchShortcut,
+      notifyTerminalCapture
+    })
+  ) {
+    return
   }
   if (!event.repeat && matchShortcut('tab.newMarkdown')) {
     event.preventDefault()

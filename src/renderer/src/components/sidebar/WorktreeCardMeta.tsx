@@ -4,7 +4,6 @@ import { ExternalLink, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
-import CommentMarkdown from './CommentMarkdown'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 import {
   WorktreeCardDetailSection,
@@ -31,6 +30,10 @@ import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection
 import { WorktreeCardLinearDetailSection } from './WorktreeCardLinearDetailSection'
 import { WorktreeCardOdooDetailSection } from './WorktreeCardOdooDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
+import { CommentMarkdownAsync, preloadCommentMarkdown } from './comment-markdown-lazy'
+
+const COMMENT_MARKDOWN_CLASS_NAME =
+  'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -187,7 +190,12 @@ export function WorktreeCardDetailsHover({
       openDelay={openDelay}
       closeDelay={closeDelay}
     >
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardTrigger
+        asChild
+        onPointerEnter={hasComment(comment) ? preloadCommentMarkdown : undefined}
+      >
+        {children}
+      </HoverCardTrigger>
       <HoverCardContent
         side="right"
         align="start"
@@ -316,9 +324,11 @@ export function WorktreeCardDetailsHover({
                 }
               />
               <WorktreeCardDetailSectionContent className="space-y-2">
-                <CommentMarkdown
+                <CommentMarkdownAsync
                   content={comment ?? ''}
-                  className="text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1"
+                  className={COMMENT_MARKDOWN_CLASS_NAME}
+                  // Mirrors remark-breaks so the fallback keeps the note's line count.
+                  fallbackClassName="whitespace-pre-wrap"
                 />
               </WorktreeCardDetailSectionContent>
             </WorktreeCardDetailSection>

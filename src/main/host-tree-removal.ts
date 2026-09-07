@@ -1,10 +1,12 @@
 // Why: every recursive host delete Orca performs (worktrees, terminal history, quarantined recovery
-// generations) hits the same Windows stickiness — AV/indexers/late handle releases surface transient
-// EBUSY/ENOTEMPTY/EPERM on a tree Node just emptied. One helper so no call site forgets the retries.
+// generations) hits the same two hazards, so one helper exists so no call site forgets either.
+// Windows stickiness — AV/indexers/late handle releases surface transient EBUSY/ENOTEMPTY/EPERM on a
+// tree Node just emptied — and Electron's asar shim, which strands any tree holding a `*.asar`
+// (see `asar-transparent-fs`).
 
-import { rm } from 'node:fs/promises'
 import { win32 } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { rm } from './asar-transparent-fs'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
 import { isWslUncPath } from '../shared/wsl-paths'
 import { transientLockRemovalOptions } from '../shared/windows-transient-lock-removal'

@@ -79,7 +79,8 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     const changedMobileWorktrees = this.syncMobileSessionTabs(
       graph.mobileSessionTabs,
       graph.unchangedMobileSessionWorktrees,
-      mobileSessionResyncWorktrees
+      mobileSessionResyncWorktrees,
+      rendererGeneration
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()
@@ -88,6 +89,13 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // keep live CLI handles usable while the UI graph rebuilds.
     const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
     for (const leaf of lifecycleLeaves) {
+      if (leaf.ptyId) {
+        if (leaf.parked) {
+          this.orchestrationMailboxPointerDelivery.markPtyColdParked(leaf.ptyId)
+        } else {
+          this.orchestrationMailboxPointerDelivery.clearPtyColdParked(leaf.ptyId)
+        }
+      }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
       const ptyId =
@@ -161,6 +169,11 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     for (const oldLeafKey of this.leaves.keys()) {
       if (!nextLeaves.has(oldLeafKey)) {
         const oldLeaf = this.leaves.get(oldLeafKey)
+        if (oldLeaf?.ptyId && !nextPtyIds.has(oldLeaf.ptyId)) {
+          // A cold-parked PTY remains alive without a graph leaf; hold its
+          // staged Enter until a live idle frame authorizes submission.
+          this.orchestrationMailboxPointerDelivery.markPtyColdParked(oldLeaf.ptyId)
+        }
         const retainedIncarnation = oldLeaf?.ptyId
           ? this.handleByPtyIncarnation.get(oldLeaf.ptyId)
           : undefined
@@ -237,7 +250,7 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
       // the PTY touch path does) or the re-emitted payload — e.g. the
       // pending-handle → ready flip — is discarded and the client stays stale.
       // The accepted-renderer tracking is untouched: this is a main-local bump.
-      this.mobileSessionTabsByWorktree.set(worktreeId, {
+      this.storeMobileSessionSnapshot(worktreeId, {
         ...stored,
         snapshotVersion: stored.snapshotVersion + 1
       })

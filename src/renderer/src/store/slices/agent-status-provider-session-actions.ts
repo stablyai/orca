@@ -17,10 +17,10 @@ import {
   findAgentPaneWorktreeId,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
-} from './agent-status-pane-helpers'
-import { removePaneKeys } from './agent-status-map-helpers'
+} from './agent-status-pane-key-tab-binding'
+import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { registryEntryMatchesStatus } from './agent-status-launch-config'
-import { copyLaunchConfig } from './agent-status-recovery-helpers'
+import { copyLaunchConfig } from './agent-status-sleeping-records'
 
 export function createAgentStatusProviderSessionActions(
   runtime: AgentStatusRuntime
@@ -134,6 +134,7 @@ export function createAgentStatusProviderSessionActions(
         if (nextRetained !== s.retainedAgentsByPaneKey) {
           delete nextRetained[paneKey]
         }
+        const retiredPaneKeys = new Set([paneKey])
         // Why: on identity mismatch the sleeping record drops its launch config, so clear the stale
         // registry entry too, else a later return to the old identity reuses stale args/env.
         let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
@@ -159,12 +160,11 @@ export function createAgentStatusProviderSessionActions(
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           acknowledgedAgentsByPaneKey: removePaneKeys(
             s.acknowledgedAgentsByPaneKey,
-            new Set([paneKey])
+            retiredPaneKeys
           ),
-          unreadAgentCompletionPanes: removePaneKeys(
-            s.unreadAgentCompletionPanes,
-            new Set([paneKey])
-          ),
+          // Why the cleared-at/manual-unread maps stay: the pane survives this transition, so a
+          // repeat heartbeat would resurrect cleared history. They are swept on pane retirement.
+          unreadAgentCompletionPanes: removePaneKeys(s.unreadAgentCompletionPanes, retiredPaneKeys),
           agentStatusEpoch: removedLiveStatus ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: removedLiveStatus ? s.sortEpoch + 1 : s.sortEpoch
         }

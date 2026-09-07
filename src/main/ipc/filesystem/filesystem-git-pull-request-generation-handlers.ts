@@ -27,7 +27,7 @@ import {
   getLocalAgentRuntimeTarget,
   getLocalTextGenerationTarget,
   getRepoForSourceControlAi
-} from './filesystem-worktree-helpers'
+} from './filesystem-source-control-ai-targets'
 
 export function registerFilesystemGitPullRequestGenerationHandlers(
   context: FilesystemHandlerContext

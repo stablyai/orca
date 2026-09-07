@@ -32,7 +32,10 @@ export type WorkspaceHydrationPatch = Pick<
   | 'worktreeNavHistoryIndex'
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
->
+> &
+  // Why partial: only a cold read carries the contested-host shadow; a scoped re-hydration must
+  // leave the store's copy alone rather than replace it with an empty one.
+  Partial<Pick<AppState, 'contestedHostWorkspaceSessions' | 'contestedPrimaryHostBySessionKey'>>
 
 export function replaceHydratedRecordKeys<T>(
   current: Record<string, T>,

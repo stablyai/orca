@@ -4,6 +4,7 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../../shared/rate-limit-types'
+import type { PreloadApi } from '../api-types'
 
 export const rateLimitsApi = {
   get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
@@ -27,4 +28,4 @@ export const rateLimitsApi = {
     ipcRenderer.on('rateLimits:update', listener)
     return () => ipcRenderer.removeListener('rateLimits:update', listener)
   }
-}
+} satisfies PreloadApi['rateLimits']

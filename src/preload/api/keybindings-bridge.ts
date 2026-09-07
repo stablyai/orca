@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings'
+import type { PreloadApi } from '../api-types'
 
 export const keybindingsApi = {
   get: (): Promise<KeybindingFileSnapshot> => ipcRenderer.invoke('keybindings:get'),
@@ -17,4 +18,4 @@ export const keybindingsApi = {
     ipcRenderer.on('keybindings:changed', listener)
     return () => ipcRenderer.removeListener('keybindings:changed', listener)
   }
-}
+} satisfies PreloadApi['keybindings']

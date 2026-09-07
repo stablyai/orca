@@ -1,5 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { randomUUID } from 'node:crypto'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -96,6 +98,24 @@ export class OrcaRuntimeWithRuntimeId {
 
   protected mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
 
+  /** Single host writer for mobile session snapshots; versions are total-order stamps. */
+  protected storeMobileSessionSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
+      snapshot = replaceConversationInSnapshot(snapshot, replacement)
+    }
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const snapshotVersion = existing
+      ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
+      : snapshot.snapshotVersion
+    const stamped =
+      snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
+    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    return stamped
+  }
+
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
 
   protected structuredAgentSessionStartupRestorePromise: Promise<void> | null = null
@@ -123,6 +143,20 @@ export class OrcaRuntimeWithRuntimeId {
       rendererVersion: number
       rendererTabCount: number
       rendererTabIdentityKeys: ReadonlySet<string>
+    }
+  >()
+
+  // Why: worktree ids are path-derived and get recreated, so a renderer frame
+  // that raced the delete must be rejected by the removed occupant's identity.
+  // Entries are cleared once a snapshot carrying the successor's instanceId
+  // is accepted; identity-less frames are fenced by renderer generation.
+  protected readonly removedMobileSessionWorktreeIds = new Map<
+    string,
+    {
+      removedPublicationEpoch?: string
+      // Why: a rejected frame is still "published" on the renderer side, so a
+      // later unchanged-list mention must not spiral into resync requests.
+      rejectedPublication?: boolean
     }
   >()
 

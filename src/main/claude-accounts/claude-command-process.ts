@@ -1,4 +1,4 @@
-import { spawnProcess, type ChildProcessHandle } from '../../shared/child-process/run-process'
+import { spawnProcess } from '../../shared/child-process/run-process'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import {
   buildWindowsHostInteractiveLoginSpawn,
@@ -6,9 +6,9 @@ import {
 } from '../../shared/windows-interactive-login-spawn'
 import { resolveClaudeCommand } from '../codex-cli/command'
 import { buildWindowsCommandInvocation } from './windows-command-invocation'
+import { terminateClaudeProcess } from './claude-login-process-termination'
 
 const MAX_COMMAND_OUTPUT_CHARS = 4_000
-const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
 const CLAUDE_AUTH_DENIED_PATTERN =
   /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
 
@@ -188,6 +188,14 @@ type ClaudeSpawnConfig = {
   windowsVerbatimArguments: boolean
 }
 
+function claudeConfigDirEnv(configDir: string): NodeJS.ProcessEnv {
+  return {
+    CLAUDE_CONFIG_DIR: configDir,
+    // Why: Claude Code 2.1.220+ hashes this for the Keychain service name.
+    CLAUDE_SECURESTORAGE_CONFIG_DIR: configDir
+  }
+}
+
 function resolveClaudeInvocation(
   args: string[],
   configDir: ClaudeCommandConfig,
@@ -200,7 +208,7 @@ function resolveClaudeInvocation(
         args: interactiveLogin.args,
         env: withCliRuntimeOnPath(hostClaudeCommand(), {
           ...process.env,
-          CLAUDE_CONFIG_DIR: configDir.windowsPath
+          ...claudeConfigDirEnv(configDir.windowsPath)
         }),
         windowsVerbatimArguments: false
       }
@@ -213,7 +221,7 @@ function resolveClaudeInvocation(
             '--exec',
             'bash',
             '-lc',
-            `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
+            `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; export CLAUDE_SECURESTORAGE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
           ],
           env: process.env,
           windowsVerbatimArguments: false
@@ -223,7 +231,7 @@ function resolveClaudeInvocation(
             ...buildWindowsCommandInvocation(hostClaudeCommand(), args),
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...process.env,
-              CLAUDE_CONFIG_DIR: configDir.windowsPath
+              ...claudeConfigDirEnv(configDir.windowsPath)
             })
           }
         : {
@@ -231,72 +239,9 @@ function resolveClaudeInvocation(
             args,
             env: withCliRuntimeOnPath(hostClaudeCommand(), {
               ...process.env,
-              CLAUDE_CONFIG_DIR: configDir.windowsPath
+              ...claudeConfigDirEnv(configDir.windowsPath)
             }),
             windowsVerbatimArguments: false
           }
   return spawnConfig
-}
-
-function terminateClaudeProcess(
-  child: ChildProcessHandle,
-  interactiveLogin: WindowsHostInteractiveLoginSpawn | null,
-  afterKill: () => void
-): void {
-  const killWindowsTree = (windowsTerminationPid: number): void => {
-    const taskkill = spawnProcess({
-      program: 'taskkill.exe',
-      args: ['/pid', String(windowsTerminationPid), '/t', '/f'],
-      stdio: 'ignore'
-    })
-    let finished = false
-    const finish = (succeeded: boolean): void => {
-      if (finished) {
-        return
-      }
-      finished = true
-      clearTimeout(taskkillTimeout)
-      if (!succeeded) {
-        child.kill()
-      }
-      afterKill()
-    }
-    const taskkillTimeout = setTimeout(() => {
-      taskkill.kill()
-      finish(false)
-    }, WINDOWS_TASKKILL_TIMEOUT_MS)
-    taskkill.once('error', () => finish(false))
-    taskkill.once('close', (code) => finish(code === 0))
-  }
-  if (process.platform === 'win32') {
-    // The wrapper's own PID never owns the login tree, so prefer the relayed PID.
-    const resolveTerminationPid = interactiveLogin?.waitForTerminationPid
-      ? interactiveLogin.waitForTerminationPid()
-      : Promise.resolve(interactiveLogin?.getTerminationPid?.() ?? child.pid ?? null)
-    void resolveTerminationPid
-      .then((windowsTerminationPid) => {
-        if (windowsTerminationPid) {
-          killWindowsTree(windowsTerminationPid)
-          return
-        }
-        child.kill()
-        afterKill()
-      })
-      .catch(() => {
-        child.kill()
-        afterKill()
-      })
-    return
-  }
-  if (child.pid) {
-    try {
-      process.kill(-child.pid)
-      afterKill()
-      return
-    } catch {
-      // The direct child remains the only safe fallback when group lookup fails.
-    }
-  }
-  child.kill()
-  afterKill()
 }

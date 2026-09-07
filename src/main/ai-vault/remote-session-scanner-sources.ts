@@ -16,7 +16,7 @@ import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-tra
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
-import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
+import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
 import type {
   RemoteParserOptions,
@@ -216,16 +216,7 @@ function remoteCodexSources(
         executionHostId: context.executionHostId,
         executionHostPlatform: context.hostPlatform.os,
         signal: context.signal,
-        readIndexedTitle: async (sessionId) =>
-          (
-            await remoteCodexIndexTitles({
-              provider: context.provider,
-              codexHome,
-              hostPlatform,
-              titleCaches: context.titleCaches,
-              signal: context.signal
-            })
-          ).get(sessionId) ?? null
+        readIndexedTitle: remoteCodexIndexedTitleReader(codexHome, context)
       })
   }))
 }

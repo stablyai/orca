@@ -10,12 +10,12 @@ import {
   boundRecentlyRetiredAgentStatusPaneKeys,
   movePaneKeyedRecord,
   removePaneKeys
-} from './agent-status-map-helpers'
+} from './agent-status-pane-keyed-records'
 import {
   getLeafIdFromPaneKey,
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
-} from './agent-status-pane-helpers'
+} from './agent-status-pane-key-tab-binding'
 
 export function createAgentStatusAuthorityActions(
   runtime: AgentStatusRuntime
@@ -70,6 +70,14 @@ export function createAgentStatusAuthorityActions(
           ),
           acknowledgedAgentsByPaneKey: removePaneKeys(
             s.acknowledgedAgentsByPaneKey,
+            retiredPaneKeySet
+          ),
+          activityClearedAtByPaneKey: removePaneKeys(
+            s.activityClearedAtByPaneKey,
+            retiredPaneKeySet
+          ),
+          manuallyUnreadTurnsByPaneKey: removePaneKeys(
+            s.manuallyUnreadTurnsByPaneKey,
             retiredPaneKeySet
           ),
           paneForegroundAgentByPaneKey: removePaneKeys(
@@ -199,6 +207,8 @@ export function createAgentStatusAuthorityActions(
           })
         ),
         acknowledgedAgentsByPaneKey: movePaneKeyedRecord(s.acknowledgedAgentsByPaneKey, from, to),
+        activityClearedAtByPaneKey: movePaneKeyedRecord(s.activityClearedAtByPaneKey, from, to),
+        manuallyUnreadTurnsByPaneKey: movePaneKeyedRecord(s.manuallyUnreadTurnsByPaneKey, from, to),
         paneForegroundAgentByPaneKey: movePaneKeyedRecord(s.paneForegroundAgentByPaneKey, from, to),
         unreadTerminalPanes: movePaneKeyedRecord(s.unreadTerminalPanes, from, to),
         unreadAgentCompletionPanes: movePaneKeyedRecord(s.unreadAgentCompletionPanes, from, to),
