@@ -1,5 +1,5 @@
 import { net, session, type Session } from 'electron'
-import type { MiniMaxEndpoint } from '../../shared/global-settings-types'
+import type { MiniMaxEndpoint } from '../../../shared/global-settings-types'
 
 const MINIMAX_USAGE_PATH = '/v1/api/openplatform/coding_plan/remains'
 const MINIMAX_OVERSEAS_BASE = 'https://platform.minimax.io'

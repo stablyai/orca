@@ -1,4 +1,4 @@
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits, RateLimitWindow } from '../../../shared/rate-limit-types'
 
 // Why: pure data-shape helpers for the MiniMax Coding Plan API. Lives in its
 // own file so both minimax-fetcher.ts (transport) and minimax-fetcher-parse.ts

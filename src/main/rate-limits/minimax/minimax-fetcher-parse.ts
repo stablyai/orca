@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import {
   logMiniMaxFetchFailure,
   redactMiniMaxSecret,
