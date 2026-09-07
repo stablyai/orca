@@ -1,4 +1,5 @@
-import { BrowserWindow, Menu, app } from 'electron'
+import { createWindowMenu } from './app-menu-window'
+import { BrowserWindow, Menu, app, screen } from 'electron'
 import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -24,18 +25,19 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
 }
 
 type RegisterAppMenuOptions = {
-  onOpenSettings: () => void
+  onNewWindow?: () => void
+  onOpenSettings: (window?: Electron.BaseWindow | null) => void
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
-  onZoomIn: () => void
-  onZoomOut: () => void
-  onZoomReset: () => void
-  onToggleLeftSidebar: () => void
-  onToggleRightSidebar: () => void
-  onToggleAppearance: (key: AppearanceMenuKey) => void
+  onZoomIn: (window?: Electron.BaseWindow | null) => void
+  onZoomOut: (window?: Electron.BaseWindow | null) => void
+  onZoomReset: (window?: Electron.BaseWindow | null) => void
+  onToggleLeftSidebar: (window?: Electron.BaseWindow | null) => void
+  onToggleRightSidebar: (window?: Electron.BaseWindow | null) => void
+  onToggleAppearance: (key: AppearanceMenuKey, window?: Electron.BaseWindow | null) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
   // Why: the macOS app-menu title. Passed the per-branch dev label since
@@ -115,7 +117,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 
   const settingsItem: Electron.MenuItemConstructorOptions = {
     label: `${translateMain('menu.settings', 'Settings')}\t${shortcutLabel('app.settings')}`,
-    click: () => onOpenSettings()
+    click: (_item, window) => onOpenSettings(window)
   }
 
   const featureTourItem: Electron.MenuItemConstructorOptions = {
@@ -228,18 +230,18 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         // fire. Sidebar open/closed lives in the renderer store (non-persisted),
         // so we forward a toggle request rather than mirroring state in main.
         label: `${translateMain('menu.toggleLeftSidebar', 'Toggle Left Sidebar')}\t${shortcutLabel('sidebar.left.toggle')}`,
-        click: () => onToggleLeftSidebar()
+        click: (_item, window) => onToggleLeftSidebar(window)
       },
       {
         // Why: display-only shortcut hint for the same reason as above.
         label: `${translateMain('menu.toggleRightSidebar', 'Toggle Right Sidebar')}\t${shortcutLabel('sidebar.right.toggle')}`,
-        click: () => onToggleRightSidebar()
+        click: (_item, window) => onToggleRightSidebar(window)
       },
       {
         label: translateMain('menu.showStatusBar', 'Show Status Bar'),
         type: 'checkbox',
         checked: appearance.statusBarVisible,
-        click: () => onToggleAppearance('statusBarVisible')
+        click: (_item, window) => onToggleAppearance('statusBarVisible', window)
       },
       { type: 'separator' },
       {
@@ -284,15 +286,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       {
         label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,
-        click: () => onZoomReset()
+        click: (_item, window) => onZoomReset(window)
       },
       {
         label: `${translateMain('menu.zoomIn', 'Zoom In')}\t${shortcutLabel('zoom.in')}`,
-        click: () => onZoomIn()
+        click: (_item, window) => onZoomIn(window)
       },
       {
         label: `${translateMain('menu.zoomOut', 'Zoom Out')}\t${shortcutLabel('zoom.out')}`,
-        click: () => onZoomOut()
+        click: (_item, window) => onZoomOut(window)
       },
       { type: 'separator' },
       {
@@ -308,11 +310,6 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       { type: 'separator' },
       appearanceSubmenu
     ]
-  }
-
-  const windowMenu: Electron.MenuItemConstructorOptions = {
-    label: translateMain('menu.window', 'Window'),
-    submenu: [{ role: 'minimize' }, { role: 'zoom' }]
   }
 
   const helpMenu: Electron.MenuItemConstructorOptions = {
@@ -337,7 +334,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ...(isMac ? [] : [fileMenu]),
     editMenu,
     viewMenu,
-    windowMenu,
+    createWindowMenu(options.onNewWindow),
     helpMenu
   ]
 
@@ -347,6 +344,16 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
 let lastRegisterOptions: RegisterAppMenuOptions | null = null
 
 export function registerAppMenu(options: RegisterAppMenuOptions): void {
+  if (!lastRegisterOptions) {
+    screen.on('display-added', rebuildAppMenu)
+    screen.on('display-removed', rebuildAppMenu)
+    screen.on('display-metrics-changed', rebuildAppMenu)
+    app.once('will-quit', () => {
+      screen.removeListener('display-added', rebuildAppMenu)
+      screen.removeListener('display-removed', rebuildAppMenu)
+      screen.removeListener('display-metrics-changed', rebuildAppMenu)
+    })
+  }
   lastRegisterOptions = options
   buildAndApplyMenu(options)
 }

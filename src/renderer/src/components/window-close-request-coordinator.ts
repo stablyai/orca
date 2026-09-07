@@ -10,6 +10,12 @@
 // save/discard instead of being silently vetoed by a beforeunload handler.
 
 import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
+import { toast } from 'sonner'
+import { prepareRendererForAppRestart } from '../../../shared/renderer-restart-preparation'
+import {
+  ORCA_APP_RESTART_STARTED_EVENT,
+  ORCA_APP_RESTART_ABORTED_EVENT
+} from '../../../shared/updater-renderer-events'
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 
@@ -79,6 +85,21 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
   closeInFlight = true
   try {
     if (!(await runWindowCloseGuards())) {
+      return
+    }
+    if (window.orcaWorkspaceWindowNative && !data.isQuitting) {
+      try {
+        await prepareRendererForAppRestart(window, {
+          startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
+          abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+          awaitCheckpoint: () => window.api.app.awaitBeforeUnloadCheckpoint()
+        })
+        window.api.ui.confirmWindowClose()
+      } catch (error) {
+        toast.error(
+          `Window close canceled: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
       return
     }
   } finally {

@@ -4,11 +4,19 @@ import { createMacAppActivationHandler } from './macos-app-activation'
 
 function makeWindow(destroyed = false): BrowserWindow {
   return {
-    isDestroyed: vi.fn(() => destroyed)
+    isDestroyed: vi.fn(() => destroyed),
+    isVisible: vi.fn(() => true)
   } as unknown as BrowserWindow
 }
 
 describe('createMacAppActivationHandler', () => {
+  it('requests activation for a retained hidden primary', () => {
+    const requestActivation = vi.fn()
+    const window = makeWindow()
+    vi.mocked(window.isVisible).mockReturnValue(false)
+    createMacAppActivationHandler({ getWindow: () => window, requestActivation })()
+    expect(requestActivation).toHaveBeenCalledOnce()
+  })
   it('leaves an existing window to native macOS activation', () => {
     const requestActivation = vi.fn()
     const handler = createMacAppActivationHandler({

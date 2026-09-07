@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import EmulatorPane from './EmulatorPane'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import { usePaneOverlayAssignments } from '../cross-project-panes/use-pane-overlay-assignments'
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -62,6 +63,7 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
   worktreeId: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
+  const presentation = usePaneOverlayAssignments(worktreeId)
   const { unifiedTabs, groups } = useAppStore(
     useShallow((state) => ({
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
@@ -70,8 +72,9 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
-    [focusGroup, worktreeId]
+    (groupId: string) =>
+      presentation.assignments ? presentation.focus(groupId) : focusGroup(worktreeId, groupId),
+    [focusGroup, worktreeId, presentation]
   )
 
   const groupActiveTabById = useMemo(() => {
@@ -90,13 +93,16 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
   return (
     <>
       {simulatorTabs.map((tab) => {
-        const isActiveInGroup = groupActiveTabById[tab.groupId] === tab.id
+        const placement = presentation.assignments?.get(tab.id)
+        const isActiveInGroup = presentation.assignments
+          ? placement?.isActiveInGroup
+          : groupActiveTabById[tab.groupId] === tab.id
         const isActive = Boolean(isWorktreeActive && isActiveInGroup)
         return (
           <SimulatorOverlaySlot
             key={tab.id}
             tab={tab}
-            groupId={tab.groupId}
+            groupId={presentation.assignments ? placement?.groupId : tab.groupId}
             isActive={isActive}
             onFocusOwningGroup={focusOwningGroup}
           />

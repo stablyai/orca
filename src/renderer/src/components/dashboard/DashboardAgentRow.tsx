@@ -59,6 +59,8 @@ type Props = {
   childAgentCount?: number
   childAgentsExpanded?: boolean
   onToggleChildAgents?: () => void
+  /** Retained completed rows are history, not live navigation targets. */
+  isPassive?: boolean
   // Why: leaf siblings reserve the chevron gutter so state dots align.
   reserveDisclosureGutter?: boolean
   // Why: chevron indentation replaces fixed-offset lineage connector art.
@@ -82,6 +84,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   childAgentCount,
   childAgentsExpanded = false,
   onToggleChildAgents,
+  isPassive = false,
   reserveDisclosureGutter = false,
   hideLineageConnectors = false,
   sendTargetStatus,
@@ -100,10 +103,13 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      if (isPassive) {
+        return
+      }
       // Why: subagent rows have no pane of their own, so focus the spawning parent's pane.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
     },
-    [onActivate, agent.tab.id, agent.activationPaneKey, agent.paneKey]
+    [agent.activationPaneKey, agent.paneKey, agent.tab.id, isPassive, onActivate]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -186,7 +192,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         'group/agent-row relative flex flex-col -ml-2 py-1',
         isLineageChild ? 'pl-5 pr-2' : 'px-2',
         // Why: hover wash stays softer than the enclosing card's highlight.
-        'cursor-pointer rounded-sm worktree-agent-row-hover',
+        !isPassive && 'cursor-pointer',
+        isPassive ? 'cursor-default' : 'worktree-agent-row-hover',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
@@ -194,6 +201,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       )}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      aria-disabled={isPassive ? 'true' : undefined}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
@@ -289,6 +297,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           expanded={expanded}
           hideExpand={hideExpand}
           hideDismiss={agent.rowSource === 'subagent'}
+          alwaysShowDismiss={isPassive || agent.state === 'done'}
           sendTargetStatus={sendTargetStatus}
           onDismiss={onDismiss}
           onToggleExpanded={handleToggleExpanded}

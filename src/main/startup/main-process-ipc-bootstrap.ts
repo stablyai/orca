@@ -3,8 +3,20 @@ import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
 import { resolveOpenedMarkdownDocuments } from './os-opened-markdown-files'
+import { registerWorkspaceWindowNativeBridge } from '../window/workspace-window-native-bridge'
+import { registerWorkspaceWindowBrowserStream } from '../window/workspace-window-browser-stream'
+import { registerWorkspaceViewIpc } from '../window/workspace-view-ipc'
+import { openNewWorkspaceWindow } from './main-window-actions'
+import { registerWorkspaceWindowPresentationStorage } from '../window/workspace-window-presentation-storage'
 
 export function registerMainProcessIpcHandlers(): void {
+  registerWorkspaceWindowNativeBridge()
+  registerWorkspaceWindowPresentationStorage(() => state.store!)
+  registerWorkspaceViewIpc(() => state.mainWindow, openNewWorkspaceWindow)
+  registerWorkspaceWindowBrowserStream(
+    () => state.runtime,
+    () => state.mainWindow
+  )
   ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
     await Promise.all([
       state.firstWindowStartupServicesReady,

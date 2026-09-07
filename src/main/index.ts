@@ -5,7 +5,10 @@ import {
   focusExistingWindow as focusExistingWindowAction,
   setMainWindowOpener
 } from './startup/main-window-actions'
-import { openMainWindow as openMainWindowController } from './startup/main-window-controller'
+import {
+  openMainWindow as openMainWindowController,
+  type OpenMainWindowOptions
+} from './startup/main-window-controller'
 import { mainProcessState as state } from './startup/main-process-state'
 import { runMainProcessPreflight } from './startup/main-process-preflight'
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
@@ -14,7 +17,7 @@ import { installMainProcessQuitHandlers } from './startup/main-process-quit'
 import { shouldActivateDesktopForSecondInstance } from './startup/single-instance-lock'
 import { resolveOpenedMarkdownDocuments } from './startup/os-opened-markdown-files'
 
-function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+function openMainWindow(options: OpenMainWindowOptions = {}): BrowserWindow {
   return openMainWindowController(options)
 }
 

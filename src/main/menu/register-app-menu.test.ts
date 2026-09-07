@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { screen, app } from 'electron'
 
 const {
   buildFromTemplateMock,
@@ -15,6 +16,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  screen: { on: vi.fn(), removeListener: vi.fn(), getAllDisplays: vi.fn(() => []) },
   BrowserWindow: {
     getFocusedWindow: getFocusedWindowMock
   },
@@ -24,6 +26,7 @@ vi.mock('electron', () => ({
     sendActionToFirstResponder: sendActionToFirstResponderMock
   },
   app: {
+    once: vi.fn(),
     name: 'Orca'
   },
   webContents: {
@@ -37,6 +40,7 @@ const isMac = process.platform === 'darwin'
 
 function buildMenuOptions() {
   return {
+    onNewWindow: vi.fn(),
     onCheckForUpdates: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenSetupGuide: vi.fn(),
@@ -72,6 +76,69 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('refreshes monitor destinations when the display topology changes', () => {
+    registerAppMenu(buildMenuOptions())
+    const listener = vi
+      .mocked(screen.on)
+      .mock.calls.find((call) => String(call[0]) === 'display-added')?.[1]
+    expect(listener).toBeTypeOf('function')
+    const count = buildFromTemplateMock.mock.calls.length
+    listener!({} as never, {} as never)
+    expect(buildFromTemplateMock).toHaveBeenCalledTimes(count + 1)
+    const dispose = vi
+      .mocked(app.once)
+      .mock.calls.find((call) => String(call[0]) === 'will-quit')?.[1]
+    expect(dispose).toBeTypeOf('function')
+    dispose!()
+    expect(screen.removeListener).toHaveBeenCalledTimes(3)
+  })
+  it('routes layout recovery to the native menu invoker and exposes monitor recovery', () => {
+    registerAppMenu(buildMenuOptions())
+    const submenu = getSubmenu(getTemplate(), 'Window')
+    const target = { webContents: { send: vi.fn() } }
+    const undo = submenu.find((item) => item.label === 'Undo Layout Change')
+    const reopen = submenu.find((item) => item.label === 'Reopen Closed View')
+    expect(undo).toBeDefined()
+    expect(reopen).toBeDefined()
+    undo!.click!({} as never, target as never, {} as never)
+    reopen!.click!({} as never, target as never, {} as never)
+    expect(target.webContents.send).toHaveBeenCalledWith(
+      'workspaceViews:request',
+      expect.any(String),
+      'undo-layout',
+      {}
+    )
+    expect(target.webContents.send).toHaveBeenCalledWith(
+      'workspaceViews:request',
+      expect.any(String),
+      'reopen-view',
+      {}
+    )
+    expect(submenu.some((item) => item.label === 'Move to Monitor')).toBe(true)
+    expect(submenu.some((item) => item.label === 'Bring All Windows to This Monitor')).toBe(true)
+  })
+  it('passes the invoking window to navigation and zoom menu callbacks', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+    const target = {} as Electron.BaseWindow
+    const template = getTemplate()
+    const file = getSubmenu(template, isMac ? 'Orca' : 'File')
+    const view = getSubmenu(template, 'View')
+    const appearance = getSubmenu(view, 'Appearance')
+    for (const [items, label, callback] of [
+      [file, 'Settings', options.onOpenSettings],
+      [view, 'Zoom In', options.onZoomIn],
+      [view, 'Zoom Out', options.onZoomOut],
+      [view, 'Reset Size', options.onZoomReset],
+      [appearance, 'Toggle Left Sidebar', options.onToggleLeftSidebar],
+      [appearance, 'Toggle Right Sidebar', options.onToggleRightSidebar]
+    ] as const) {
+      const item = items.find((entry) => entry.label?.startsWith(label))
+      expect(item).toBeDefined()
+      item!.click!({} as never, target, {} as never)
+      expect(callback).toHaveBeenCalledWith(target)
+    }
+  })
   it('toggles missing default-on appearance settings from visible to hidden', () => {
     expect(getNextDefaultOnAppearanceSettingValue(undefined)).toBe(false)
     expect(getNextDefaultOnAppearanceSettingValue(true)).toBe(false)
@@ -89,6 +156,19 @@ describe('registerAppMenu', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('opens a new full window from the Window menu', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const newWindow = getSubmenu(getTemplate(), 'Window').find(
+      (item) => item.label === 'New Window'
+    )
+    newWindow?.click?.({} as never, {} as never, {} as never)
+
+    expect(newWindow?.accelerator).toBe('CmdOrCtrl+Shift+N')
+    expect(options.onNewWindow).toHaveBeenCalledTimes(1)
   })
 
   it('shows reload shortcuts as policy-routed menu hints', () => {

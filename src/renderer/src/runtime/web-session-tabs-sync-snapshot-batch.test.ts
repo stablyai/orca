@@ -3,6 +3,7 @@ import { posix as pathPosix } from 'node:path'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
@@ -336,7 +337,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       '/repo/local-only.ts',
       '/repo/a.ts',
       '/repo/bystander-2.ts',
-      '/repo/a.ts',
+      buildOwnedEditorFileId('/repo/a.ts', WT, ENV),
       '/repo/b.ts'
     ])
     expect(
@@ -348,9 +349,8 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(batched.openFiles.some((file) => file.id === '/repo/second.ts')).toBe(false)
   })
 
-  it('seeds a mirrored editor file from the first duplicate open file, as find() did', () => {
-    // Why: two entries share (worktree, id) and differ only in a field the mirrored
-    // file inherits, so which duplicate seeds the spread is observable.
+  it('seeds a mirrored editor file only from the matching owner among duplicate paths', () => {
+    // Identical paths on different hosts must retain their own disk baselines.
     const duplicate = (signature: string, environmentId: string | null): OpenFile =>
       ({
         id: '/repo/dup.ts',
@@ -385,7 +385,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     for (const label of ['single', 'batch'] as const) {
       resetWebSessionTabsSnapshotFreshnessForTests()
       const state = makeState({
-        openFiles: [duplicate('winner', 'other-env'), duplicate('loser', ENV)]
+        openFiles: [duplicate('foreign-baseline', 'other-env'), duplicate('own-baseline', ENV)]
       })
       const patch = (
         label === 'single'
@@ -393,9 +393,10 @@ describe('applyWebSessionTabsSnapshot', () => {
           : applyWebSessionTabsSnapshots(state, [snapshot], ENV, NOW)
       ) as Partial<WebSessionTabsSyncState>
       const mirrored = patch.openFiles?.find(
-        (file) => file.id === '/repo/dup.ts' && file.runtimeEnvironmentId === ENV
+        (file) => file.filePath === '/repo/dup.ts' && file.runtimeEnvironmentId === ENV
       )
-      expect(mirrored?.lastKnownDiskSignature, label).toBe('winner')
+      expect(mirrored?.lastKnownDiskSignature, label).toBe('own-baseline')
+      expect(mirrored?.id, label).toBe(buildOwnedEditorFileId('/repo/dup.ts', WT, ENV))
     }
   })
 
@@ -589,7 +590,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(batched.openFiles).toEqual(sequential.openFiles)
     expect(
       batched.openFiles
-        .filter((file) => file.id === '/repo/b.ts')
+        .filter((file) => file.filePath === '/repo/b.ts')
         .map((file) => file.lastKnownDiskSignature)
     ).toEqual(['sig-other-env', 'sig-this-env'])
   })

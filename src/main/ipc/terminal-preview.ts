@@ -12,6 +12,8 @@ import {
 } from './terminal-preview-output-stream'
 
 const PREVIEW_ID_MAX_LENGTH = 4096
+const subscriptionKey = (ptyId: string, viewId?: string): string =>
+  JSON.stringify([ptyId, viewId ?? null])
 
 function isValidPtyId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= PREVIEW_ID_MAX_LENGTH
@@ -55,8 +57,9 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
 
   const removeSubscription = (subscription: TerminalPreviewOutputStream): void => {
     const perPty = subscriptionsByContents.get(subscription.contents.id)
-    if (perPty?.get(subscription.ptyId) === subscription) {
-      perPty.delete(subscription.ptyId)
+    const key = subscriptionKey(subscription.ptyId, subscription.viewId)
+    if (perPty?.get(key) === subscription) {
+      perPty.delete(key)
     }
   }
 
@@ -88,20 +91,22 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:connect',
     async (
       event,
-      args: { ptyId?: unknown; opts?: { scrollbackRows?: unknown } }
+      args: { ptyId?: unknown; opts?: { scrollbackRows?: unknown; viewId?: string } }
     ): Promise<TerminalPreviewConnectResult> => {
       if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
         return { snapshot: null, replay: [] }
       }
       const ptyId = args.ptyId
       const perPty = subscriptionsFor(event.sender)
-      perPty.get(ptyId)?.dispose()
+      const key = subscriptionKey(ptyId, args.opts?.viewId)
+      perPty.get(key)?.dispose()
 
       const subscription = new TerminalPreviewOutputStream(
         event.sender,
         ptyId,
         runtime.registerRawTerminalViewSubscriber(ptyId),
-        removeSubscription
+        removeSubscription,
+        args.opts?.viewId
       )
       const unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data, meta) =>
         subscription.append(data, meta)
@@ -121,7 +126,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         unsubscribeData()
         unsubscribeResize()
       })
-      perPty.set(ptyId, subscription)
+      perPty.set(key, subscription)
 
       const requestedRows = args.opts?.scrollbackRows
       const scrollbackRows =
@@ -178,7 +183,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
 
   ipcMain.handle(
     'terminalPreview:ack',
-    (event, args: { ptyId?: unknown; bytes?: unknown }): void => {
+    (event, args: { ptyId?: unknown; bytes?: unknown; viewId?: string }): void => {
       if (
         !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
@@ -189,7 +194,10 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       ) {
         return
       }
-      subscriptionsByContents.get(event.sender.id)?.get(args.ptyId)?.acknowledge(args.bytes)
+      subscriptionsByContents
+        .get(event.sender.id)
+        ?.get(subscriptionKey(args.ptyId, args.viewId))
+        ?.acknowledge(args.bytes)
     }
   )
 
@@ -250,11 +258,19 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     }
   )
 
-  ipcMain.handle('terminalPreview:unsubscribe', (event, args: { ptyId?: unknown }): void => {
-    if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
-      return
+  ipcMain.handle(
+    'terminalPreview:unsubscribe',
+    (event, args: { ptyId?: unknown; viewId?: string }): void => {
+      if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+        return
+      }
+      subscriptionsByContents
+        .get(event.sender.id)
+        ?.get(subscriptionKey(args.ptyId, args.viewId))
+        ?.dispose()
+      if (!args.viewId) {
+        releaseFitClaim(event.sender.id, args.ptyId)
+      }
     }
-    subscriptionsByContents.get(event.sender.id)?.get(args.ptyId)?.dispose()
-    releaseFitClaim(event.sender.id, args.ptyId)
-  })
+  )
 }

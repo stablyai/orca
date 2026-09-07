@@ -1,3 +1,4 @@
+import type { WorkspaceWindowNativeBridge } from '../../../../preload/api/workspace-window-native-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { legacyBaseRefSearchResult } from '../../../../shared/base-ref-search-result'
 import type { Repo } from '../../../../shared/repo-types'
@@ -10,6 +11,16 @@ import {
 } from './web-runtime-calls'
 import { assertActiveEnvironment, invalidateRuntimeWorktreeCaches } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
+import { WORKSPACE_WINDOW_NATIVE_BRIDGE_KEY } from '../../../../shared/workspace-window-native-bridge'
+
+function getWorkspaceWindowNativeBridge(): WorkspaceWindowNativeBridge | undefined {
+  return (
+    window as unknown as Record<
+      typeof WORKSPACE_WINDOW_NATIVE_BRIDGE_KEY,
+      WorkspaceWindowNativeBridge | undefined
+    >
+  )[WORKSPACE_WINDOW_NATIVE_BRIDGE_KEY]
+}
 
 export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
@@ -45,9 +56,9 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       })
       return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
     },
-    pickFolder: () => Promise.resolve(null),
-    pickFolders: () => Promise.resolve([]),
-    pickDirectory: () => Promise.resolve(null),
+    pickFolder: () => getWorkspaceWindowNativeBridge()?.pickFolder() ?? Promise.resolve(null),
+    pickFolders: () => getWorkspaceWindowNativeBridge()?.pickFolders() ?? Promise.resolve([]),
+    pickDirectory: () => getWorkspaceWindowNativeBridge()?.pickDirectory() ?? Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ repo: Repo }>(

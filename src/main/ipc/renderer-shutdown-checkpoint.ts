@@ -14,7 +14,7 @@ export type ShutdownCheckpointResult = { ok: boolean }
 /** Matches the will-quit teardown budget so a stalled disk can't strand a restart. */
 export const SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS = 20_000
 
-function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointResult> {
+export function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointResult> {
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | null = null
   const deadline = new Promise<ShutdownCheckpointResult>((resolve) => {

@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ProjectAccentMark } from '../repo/ProjectAccentMark'
 import { basename, normalizeRelativePath } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
@@ -80,7 +81,7 @@ export default function EditorFileTab({
     // Why: split groups can duplicate the same open file into multiple visible
     // tabs. Using the unified tab ID keeps each rendered tab draggable as a
     // distinct item instead of collapsing every copy onto the file entity ID.
-    id: file.tabId ?? file.id,
+    id: dragData?.workspaceViewId ?? file.tabId ?? file.id,
     data: dragData
   })
 
@@ -234,6 +235,8 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
+      aria-label={dragData.projectContext?.label}
+      data-project-label={dragData.projectContext?.projectName || undefined}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
@@ -264,6 +267,12 @@ export default function EditorFileTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {dragData.projectContext?.projectName && (
+        <span className="inline-flex max-w-32 items-center gap-1 truncate pr-1.5 text-muted-foreground">
+          <ProjectAccentMark color={dragData.projectContext.accentColor} />
+          <span className="truncate">{dragData.projectContext.projectName}</span>
+        </span>
+      )}
       {isConflictReview ? (
         <ShieldAlert
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}
@@ -400,7 +409,7 @@ export default function EditorFileTab({
               sideOffset={6}
               className="max-w-80 whitespace-normal break-words text-left"
             >
-              {tabLabel}
+              {dragData.projectContext?.label ?? tabLabel}
             </TooltipContent>
           </Tooltip>
         )}

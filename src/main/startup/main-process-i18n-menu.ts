@@ -10,6 +10,7 @@ import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store
 import { mainProcessState as state } from './main-process-state'
 import {
   openSettingsFromSystemMenu,
+  openNewWorkspaceWindow,
   runUserInitiatedUpdateCheck,
   sendOpenCrashReport,
   sendOpenFeatureTour,
@@ -26,8 +27,15 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   await ensureMainI18n()
   await setMainUiLanguage(store.getSettings().uiLanguage)
   logStartupMilestone('i18n-ready')
+  const menuTarget = (window?: Electron.BaseWindow | null): BrowserWindow | null =>
+    window instanceof BrowserWindow
+      ? window
+      : (BrowserWindow.getFocusedWindow() ?? state.mainWindow)
   registerAppMenu({
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
+    onNewWindow: () => {
+      openNewWorkspaceWindow()
+    },
     onCheckForUpdates: (options) => {
       ensureAutoUpdaterConfigured()
       runUserInitiatedUpdateCheck(options)
@@ -38,7 +46,7 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       }
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
-    onOpenSettings: openSettingsFromSystemMenu,
+    onOpenSettings: (window) => openSettingsFromSystemMenu(menuTarget(window)),
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')
       sendOpenSetupGuide(targetWindow instanceof BrowserWindow ? targetWindow : null)
@@ -54,27 +62,27 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     },
     // Why: menu zoom must act on the window the user is looking at — routing to
     // the main window while the dashboard pop-out is focused zooms behind it.
-    onZoomIn: () => {
-      if (!zoomDashboardPopoutIfFocused('in')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'in')
+    onZoomIn: (window) => {
+      if (!zoomDashboardPopoutIfFocused('in', window)) {
+        menuTarget(window)?.webContents.send('terminal:zoom', 'in')
       }
     },
-    onZoomOut: () => {
-      if (!zoomDashboardPopoutIfFocused('out')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'out')
+    onZoomOut: (window) => {
+      if (!zoomDashboardPopoutIfFocused('out', window)) {
+        menuTarget(window)?.webContents.send('terminal:zoom', 'out')
       }
     },
-    onZoomReset: () => {
-      if (!zoomDashboardPopoutIfFocused('reset')) {
-        state.mainWindow?.webContents.send('terminal:zoom', 'reset')
+    onZoomReset: (window) => {
+      if (!zoomDashboardPopoutIfFocused('reset', window)) {
+        menuTarget(window)?.webContents.send('terminal:zoom', 'reset')
       }
     },
-    onToggleLeftSidebar: () => state.mainWindow?.webContents.send('ui:toggleLeftSidebar'),
-    onToggleRightSidebar: () => state.mainWindow?.webContents.send('ui:toggleRightSidebar'),
-    onToggleAppearance: (key) => {
+    onToggleLeftSidebar: (window) => menuTarget(window)?.webContents.send('ui:toggleLeftSidebar'),
+    onToggleRightSidebar: (window) => menuTarget(window)?.webContents.send('ui:toggleRightSidebar'),
+    onToggleAppearance: (key, window) => {
       if (key === 'statusBarVisible') {
         // Why: status bar visibility lives in persisted UI state (not settings) and the renderer owns the toggle — forward the event, let it flip + store.
-        state.mainWindow?.webContents.send('ui:toggleStatusBar')
+        menuTarget(window)?.webContents.send('ui:toggleStatusBar')
         return
       }
       const current = store.getSettings()

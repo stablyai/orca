@@ -92,7 +92,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
 
     const updateRect = (): void => {
       const overlay = overlayRef.current
-      const parent = overlay?.parentElement
+      const parent = overlay?.offsetParent ?? overlay?.parentElement
       const body = findBody()
       if (!parent || !body) {
         setMeasuredFallbackRect(null)
@@ -120,7 +120,7 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
 
     updateRect()
     const body = findBody()
-    const parent = overlayRef.current?.parentElement
+    const parent = overlayRef.current?.offsetParent ?? overlayRef.current?.parentElement
     const resizeObserver = new ResizeObserver(updateRect)
     if (body) {
       resizeObserver.observe(body)

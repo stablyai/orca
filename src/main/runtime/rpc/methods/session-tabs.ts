@@ -17,15 +17,25 @@ import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
+import { sessionWindowMethods } from './session-window-methods'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
+    handler: async (
+      params,
+      {
+        runtime,
+        pairedDeviceId,
+        clientNavigationId = pairedDeviceId,
+        clientKind,
+        clientCapabilities
+      }
+    ) => {
       await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
       return projectSessionTabsForClient(
-        await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
+        await runtime.listMobileSessionTabs(params.worktree, clientNavigationId),
         clientKind,
         clientCapabilities,
         isStructuredNativeChatEnabled(runtime)
@@ -45,7 +55,10 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.createTerminal',
     params: CreateTerminalTab,
-    handler: async (params, { runtime, signal, clientKind, pairedDeviceId }) => {
+    handler: async (
+      params,
+      { runtime, signal, clientKind, pairedDeviceId, clientNavigationId = pairedDeviceId }
+    ) => {
       if (params.command) {
         await assertLegacyAiVaultResumeCommandAllowed(params.command, () =>
           runtime.ensureStructuredAgentSessionHost()
@@ -67,7 +80,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         ...(params.viewMode ? { viewMode: params.viewMode } : {}),
         activate: params.activate,
         select: params.select,
-        clientNavigationId: pairedDeviceId,
+        clientNavigationId,
         navigation: resolveRuntimeNavigationTarget({
           navigation: params.navigation,
           clientKind
@@ -84,7 +97,16 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     params: WorktreeTabSelector,
     handler: async (
       params,
-      { runtime, connectionId, requestId, pairedDeviceId, clientKind, clientCapabilities },
+      {
+        runtime,
+        connectionId,
+        requestId,
+        pairedDeviceId,
+        clientNavigationId = pairedDeviceId,
+        subscriptionNamespace,
+        clientKind,
+        clientCapabilities
+      },
       emit
     ) => {
       let subscribedWorktree: string | null = null
@@ -92,12 +114,12 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       let closed = false
       let initialized = false
       await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
-      const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+      const initial = await runtime.listMobileSessionTabs(params.worktree, clientNavigationId)
       if (closed) {
         return
       }
       subscribedWorktree = initial.worktree
-      const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:${subscribedWorktree}`
+      const cleanupPrefix = `session.tabs:${subscriptionNamespace ?? connectionId ?? 'local'}:${subscribedWorktree}`
       const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
       // Why: shared-control can carry multiple subscribers for one worktree on
       // one socket; include the RPC id so one subscriber cannot evict another.
@@ -141,7 +163,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
             )
           })
         }
-      }, pairedDeviceId)
+      }, clientNavigationId)
       if (closed) {
         unsubscribe()
       }
@@ -150,9 +172,18 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.unsubscribe',
     params: SessionTabsUnsubscribe,
-    handler: async (params, { runtime, connectionId, pairedDeviceId }) => {
-      const snapshot = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
-      const connection = connectionId ?? 'local'
+    handler: async (
+      params,
+      {
+        runtime,
+        connectionId,
+        pairedDeviceId,
+        clientNavigationId = pairedDeviceId,
+        subscriptionNamespace
+      }
+    ) => {
+      const snapshot = await runtime.listMobileSessionTabs(params.worktree, clientNavigationId)
+      const connection = subscriptionNamespace ?? connectionId ?? 'local'
       if (params.subscriptionId) {
         runtime.cleanupSubscription(
           `session.tabs:${connection}:${snapshot.worktree}:${params.subscriptionId}`
@@ -180,8 +211,8 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         subscriptionId: z.string().min(1).optional()
       })
       .nullish(),
-    handler: async (params, { runtime, connectionId }) => {
-      const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
+    handler: async (params, { runtime, connectionId, subscriptionNamespace }) => {
+      const cleanupPrefix = `session.tabs:${subscriptionNamespace ?? connectionId ?? 'local'}:*`
       if (params?.subscriptionId) {
         runtime.cleanupSubscription(`${cleanupPrefix}:${params.subscriptionId}`)
         return { unsubscribed: true }
@@ -193,3 +224,5 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   }),
   ...SESSION_TAB_MARKDOWN_METHODS
 ]
+
+SESSION_TAB_METHODS.push(...sessionWindowMethods(SESSION_TAB_METHODS))

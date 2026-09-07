@@ -156,6 +156,53 @@ afterEach(async () => {
 })
 
 describe('SkillsPage', () => {
+  it.each([true, false])(
+    'reveals skill files using their discovery owner (local=%s)',
+    async (local) => {
+      const discover = vi.fn().mockResolvedValue(discoveryResult(['alpha']))
+      const call = vi.fn(
+        async (args: { method: string }) =>
+          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
+            id: 'skills',
+            ok: true,
+            result: discoveryResult(['alpha'])
+          }
+      )
+      const openInFileManager = vi.fn().mockResolvedValue({ ok: true })
+      Object.defineProperty(window, 'api', {
+        configurable: true,
+        value: {
+          skills: skillsApi(discover),
+          runtimeEnvironments: { call },
+          shell: { openInFileManager },
+          settings: { detectAgents: vi.fn().mockResolvedValue([]) }
+        }
+      })
+      setRuntimeOwner('configured')
+      if (local) {
+        useAppStore.setState({
+          runtimeEnvironments: [{ id: 'bootstrap' }, { id: 'configured' }] as never
+        })
+      }
+      await renderPage()
+      await flushMicrotasks()
+      await act(async () => {
+        fireEvent.click(skillRow('alpha'))
+      })
+      const reveal = [...document.querySelectorAll('button')].find(
+        (button) => button.textContent?.trim() === 'Reveal file'
+      )!
+      expect(reveal).toBeDefined()
+      await act(async () => {
+        fireEvent.click(reveal)
+      })
+      expect(openInFileManager).toHaveBeenCalledWith(
+        skill('alpha').skillFilePath,
+        local ? { kind: 'local-artifact' } : { kind: 'workspace', runtimeId: null }
+      )
+    }
+  )
+
   it('uses platform-neutral Escape navigation without stealing editable input Escape', async () => {
     const closeSkillsPage = vi.fn()
     const discover = vi.fn().mockResolvedValue(discoveryResult(['alpha']))

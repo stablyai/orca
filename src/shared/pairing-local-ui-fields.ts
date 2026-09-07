@@ -20,7 +20,10 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsReadFilter',
   'agentsGroupBy',
   'activityClearedAtByPaneKey',
-  'manuallyUnreadTurnsByPaneKey'
+  'manuallyUnreadTurnsByPaneKey',
+  'workspaceWindowIds',
+  'workspaceWindowPlacements',
+  'windowPaneLayout'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 export type PairingLocalUiField = (typeof PAIRING_LOCAL_UI_FIELDS)[number]

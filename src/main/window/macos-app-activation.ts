@@ -7,7 +7,7 @@ export function createMacAppActivationHandler(options: {
   return () => {
     const window = options.getWindow()
     // Why: re-focusing an existing macOS window can race its scene-backed Space transition.
-    if (!window || window.isDestroyed()) {
+    if (!window || window.isDestroyed() || !window.isVisible()) {
       options.requestActivation()
     }
   }

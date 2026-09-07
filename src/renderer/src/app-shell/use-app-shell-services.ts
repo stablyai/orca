@@ -17,6 +17,8 @@ import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/os
 import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync'
 import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
 import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
+import { useWorkspaceViewTransfer } from '../components/cross-project-panes/use-workspace-view-transfer'
+import { useWindowPaneNavigation } from '../components/cross-project-panes/use-window-pane-navigation'
 
 /**
  * App-level subscriptions that must outlive any individual surface. Each one is here because
@@ -32,6 +34,8 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
 
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
+  useWorkspaceViewTransfer()
+  useWindowPaneNavigation()
   useLocalStructuredSessionTabsSync()
   // Subscribe to IPC push events
   useIpcEvents()

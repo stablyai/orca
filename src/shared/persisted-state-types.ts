@@ -48,6 +48,7 @@ export type PersistedMobileClientTabSelections = Record<
 
 // ─── Persistence shape ──────────────────────────────────────────────
 export type PersistedState = {
+  workspaceWindowPresentationStorage?: Record<string, Record<string, string>>
   schemaVersion: number
   repos: Repo[]
   projects: Project[]

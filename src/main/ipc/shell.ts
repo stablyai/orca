@@ -1,4 +1,9 @@
-import { ipcMain, shell, dialog } from 'electron'
+import { shell, dialog } from 'electron'
+import {
+  createWorkspaceWindowShellScope,
+  registerWorkspaceWindowShellHandler as handle
+} from '../window/workspace-window-shell-routing'
+import type { ShellPathScope, ShellRuntimeScope } from '../../preload/api/shell-api'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,15 +50,11 @@ async function validateLocalPathTarget(
   return { ok: true, path: normalizedPath }
 }
 
-function hasActiveRuntime(store: Store): boolean {
-  return Boolean(store.getSettings().activeRuntimeEnvironmentId?.trim())
-}
-
 async function openInFileManager(
-  store: Store,
-  pathValue: string
+  pathValue: string,
+  remoteRuntime: boolean
 ): Promise<ShellOpenLocalPathResult> {
-  if (hasActiveRuntime(store)) {
+  if (remoteRuntime) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
   const target = await validateLocalPathTarget(pathValue)
@@ -72,9 +73,10 @@ async function openInFileManager(
 
 async function openInExternalEditor(
   store: Store,
-  request: ShellOpenExternalEditorRequest
+  request: ShellOpenExternalEditorRequest,
+  remoteRuntime: boolean
 ): Promise<ShellOpenExternalEditorResult> {
-  if (hasActiveRuntime(store)) {
+  if (remoteRuntime) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
 
@@ -135,25 +137,37 @@ async function openWithSystemDefault(pathValue: string): Promise<boolean> {
   }
 }
 
-export function registerShellHandlers(store: Store): void {
-  ipcMain.handle('shell:openPath', async (_event, path: string): Promise<void> => {
-    // Why: keep the legacy fire-and-forget renderer contract while reusing the
-    // same absolute/existing path validation as the explicit file-manager API.
-    void (await openInFileManager(store, path))
-  })
+export function registerShellHandlers(
+  store: Store,
+  getRuntimeId: () => string | null = () => null
+): void {
+  const { remoteRuntime, remotePath } = createWorkspaceWindowShellScope(store, getRuntimeId)
+  handle(
+    'shell:openPath',
+    async (_event, path: string, runtimeId?: ShellRuntimeScope): Promise<void> => {
+      // Why: keep the legacy fire-and-forget renderer contract while reusing the
+      // same absolute/existing path validation as the explicit file-manager API.
+      void (await openInFileManager(path, remoteRuntime(runtimeId)))
+    }
+  )
 
-  ipcMain.handle(
+  handle(
     'shell:openInFileManager',
-    (_event, path: string): Promise<ShellOpenLocalPathResult> => openInFileManager(store, path)
+    (_event, path: string, runtimeId?: ShellRuntimeScope): Promise<ShellOpenLocalPathResult> =>
+      openInFileManager(path, remoteRuntime(runtimeId))
   )
 
-  ipcMain.handle(
+  handle(
     'shell:openInExternalEditor',
-    (_event, request: ShellOpenExternalEditorRequest): Promise<ShellOpenExternalEditorResult> =>
-      openInExternalEditor(store, request)
+    (
+      _event,
+      request: ShellOpenExternalEditorRequest,
+      runtimeId?: ShellRuntimeScope
+    ): Promise<ShellOpenExternalEditorResult> =>
+      openInExternalEditor(store, request, remoteRuntime(runtimeId))
   )
 
-  ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
+  handle('shell:openUrl', (_event, rawUrl: string) => {
     let parsed: URL
     try {
       parsed = new URL(rawUrl)
@@ -168,11 +182,20 @@ export function registerShellHandlers(store: Store): void {
     return shell.openExternal(parsed.toString())
   })
 
-  ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
-    return openWithSystemDefault(filePath)
-  })
+  handle(
+    'shell:openFilePath',
+    async (_event, filePath: string, scope?: ShellPathScope): Promise<boolean> => {
+      if (remotePath(scope)) {
+        return false
+      }
+      return openWithSystemDefault(filePath)
+    }
+  )
 
-  ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
+  handle('shell:openFileUri', async (_event, rawUri: string, scope?: ShellPathScope) => {
+    if (remotePath(scope)) {
+      return
+    }
     let parsed: URL
     try {
       parsed = new URL(rawUri)
@@ -204,11 +227,17 @@ export function registerShellHandlers(store: Store): void {
     await openWithSystemDefault(target.path)
   })
 
-  ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {
-    return pathExists(filePath)
-  })
+  handle(
+    'shell:pathExists',
+    async (_event, filePath: string, scope?: ShellPathScope): Promise<boolean> => {
+      if (remotePath(scope)) {
+        return false
+      }
+      return pathExists(filePath)
+    }
+  )
 
-  ipcMain.handle(
+  handle(
     'shell:pickDirectory',
     async (_event, args: { defaultPath?: string }): Promise<string | null> => {
       const result = await dialog.showOpenDialog({
@@ -226,7 +255,7 @@ export function registerShellHandlers(store: Store): void {
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,
   // so we use the native OS dialog to let the user pick any attachment file.
-  ipcMain.handle('shell:pickAttachment', async (): Promise<string | null> => {
+  handle('shell:pickAttachment', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile']
     })
@@ -238,7 +267,7 @@ export function registerShellHandlers(store: Store): void {
 
   // Why: window.prompt() and <input type="file"> are unreliable in Electron,
   // so we use the native OS dialog to let the user pick an image file.
-  ipcMain.handle('shell:pickImage', async (): Promise<string | null> => {
+  handle('shell:pickImage', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [
@@ -251,7 +280,7 @@ export function registerShellHandlers(store: Store): void {
     return result.filePaths[0]
   })
 
-  ipcMain.handle(
+  handle(
     'shell:pickRepoIconImage',
     async (): Promise<{ dataUrl: string; fileName: string } | null> => {
       const result = await dialog.showOpenDialog({
@@ -282,7 +311,7 @@ export function registerShellHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('shell:pickAudio', async (): Promise<string | null> => {
+  handle('shell:pickAudio', async (): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
@@ -296,9 +325,16 @@ export function registerShellHandlers(store: Store): void {
   // Why: copying a picked image next to the markdown file lets us insert a
   // relative path (e.g. `![](image.png)`) instead of embedding base64,
   // keeping markdown files small and portable.
-  ipcMain.handle(
+  handle(
     'shell:copyFile',
-    async (_event, args: { srcPath: string; destPath: string }): Promise<void> => {
+    async (
+      _event,
+      args: { srcPath: string; destPath: string },
+      scope?: ShellPathScope
+    ): Promise<void> => {
+      if (remotePath(scope)) {
+        throw new Error('remote-runtime-unsupported')
+      }
       const src = normalize(args.srcPath)
       const dest = normalize(args.destPath)
       if (!isAbsolute(src) || !isAbsolute(dest)) {

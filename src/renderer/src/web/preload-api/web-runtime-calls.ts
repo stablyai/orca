@@ -54,6 +54,12 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   params?: unknown,
   timeoutMs?: number
 ): Promise<RuntimeRpcResponse<TResult>> {
+  const native = window.orcaWorkspaceWindowNative?.runtimeEnvironments
+  if (native && selector !== requireActiveEnvironment().id && selector !== 'active') {
+    return native.call({ selector, method, params, timeoutMs }) as Promise<
+      RuntimeRpcResponse<TResult>
+    >
+  }
   const environment = resolveEnvironment(selector)
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)

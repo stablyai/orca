@@ -1,4 +1,5 @@
 import type { MutableRefObject } from 'react'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import { toast } from 'sonner'
@@ -124,6 +125,7 @@ export function handleRichMarkdownEditorClick({
   }
   if (event.shiftKey) {
     openMarkdownLinkInClientOs({
+      worktreeId,
       href,
       filePath,
       runtimeEnvironmentId,
@@ -182,6 +184,7 @@ function getClickedLinkHref(view: EditorView, pos: number): string {
 }
 
 function openMarkdownLinkInClientOs({
+  worktreeId,
   href,
   filePath,
   worktreeRoot,
@@ -189,6 +192,7 @@ function openMarkdownLinkInClientOs({
   sourceOwner,
   settings
 }: {
+  worktreeId: string
   href: string
   filePath: string
   worktreeRoot: string | null
@@ -223,20 +227,24 @@ function openMarkdownLinkInClientOs({
     return
   }
   if (classified.kind === 'markdown') {
-    void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
-      if (!exists) {
-        toast.error(
-          translate(
-            'auto.components.editor.rich.markdown.editor.click.routing.2d5fb9335d',
-            'File not found: {{value0}}',
-            { value0: classified.relativePath }
+    void getWorkspaceShellApi({ worktreeId, runtimeEnvironmentId })
+      .pathExists(classified.absolutePath)
+      .then((exists) => {
+        if (!exists) {
+          toast.error(
+            translate(
+              'auto.components.editor.rich.markdown.editor.click.routing.2d5fb9335d',
+              'File not found: {{value0}}',
+              { value0: classified.relativePath }
+            )
           )
+          return
+        }
+        void getWorkspaceShellApi({ worktreeId, runtimeEnvironmentId }).openFileUri(
+          toFileUrlForOsEscape(classified.absolutePath)
         )
-        return
-      }
-      void window.api.shell.openFileUri(toFileUrlForOsEscape(classified.absolutePath))
-    })
+      })
     return
   }
-  void window.api.shell.openFileUri(classified.uri)
+  void getWorkspaceShellApi({ worktreeId, runtimeEnvironmentId }).openFileUri(classified.uri)
 }

@@ -1,4 +1,5 @@
 import type { ReleaseChannel } from './release-channel'
+import type { WindowPaneLayout } from './window-pane-types'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
@@ -27,6 +28,7 @@ import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automation-host-filter'
 
 export type PersistedUIState = {
+  windowPaneLayout?: WindowPaneLayout | null
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
   /** Active top-level view at save time, restored on relaunch; sanitized to 'terminal' if unknown or now-gated. */
@@ -171,6 +173,13 @@ export type PersistedUIState = {
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
+  /** Secondary full-window identities retained across app restarts. */
+  workspaceWindowIds?: string[]
+  /** Monitor-aware placement for each secondary full window. */
+  workspaceWindowPlacements?: Record<
+    string,
+    { bounds: { x: number; y: number; width: number; height: number }; maximized: boolean }
+  >
   /** Saved bounds for the pop-out dashboard window so it restores to its last
    *  position/size. Independent of the main window's bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null

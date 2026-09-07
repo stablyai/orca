@@ -141,7 +141,7 @@ function ResizeHandle({
   )
 }
 
-function SplitNode({
+export function SplitNode({
   node,
   nodePath,
   worktreeId,
@@ -156,7 +156,9 @@ function SplitNode({
   suppressRightBorder,
   suppressBottomBorder,
   isTabDragActive,
-  hoveredTabInsertion
+  hoveredTabInsertion,
+  renderPane,
+  onSplitRatioChange
 }: {
   node: TabGroupLayoutNode
   nodePath: string
@@ -173,11 +175,16 @@ function SplitNode({
   suppressBottomBorder: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
+  renderPane?: (paneId: string, reserveCollapsedSidebarHeaderSpace: boolean) => React.ReactNode
+  onSplitRatioChange?: (path: string, ratio: number) => void
 }): React.JSX.Element {
   const setTabGroupSplitRatio = useAppStore((state) => state.setTabGroupSplitRatio)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   if (node.type === 'leaf') {
+    if (renderPane) {
+      return <>{renderPane(node.groupId, touchesTopEdge && touchesLeftEdge)}</>
+    }
     return (
       <TabGroupPanel
         groupId={node.groupId}
@@ -232,12 +239,18 @@ function SplitNode({
           suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
+          renderPane={renderPane}
+          onSplitRatioChange={onSplitRatioChange}
         />
       </div>
       <ResizeHandle
         direction={node.direction}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
-        onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}
+        onRatioChange={(nextRatio) =>
+          onSplitRatioChange
+            ? onSplitRatioChange(nodePath, nextRatio)
+            : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
+        }
       />
       <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>
         <SplitNode
@@ -256,6 +269,8 @@ function SplitNode({
           suppressBottomBorder={suppressBottomBorder}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
+          renderPane={renderPane}
+          onSplitRatioChange={onSplitRatioChange}
         />
       </div>
     </div>

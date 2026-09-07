@@ -9,6 +9,7 @@ import type { PersistedUIState } from '../../../../shared/persisted-ui-state-typ
  * writer persists only the fields this client actually changed since then.
  */
 export type PersistedUIWriteBaseline = {
+  windowPaneLayout?: PersistedUIState['windowPaneLayout']
   sidebarWidth: number
   rightSidebarOpen: boolean
   rightSidebarTab: PersistedUIState['rightSidebarTab']
@@ -38,6 +39,7 @@ export type PersistedUIWriteBaseline = {
 // type but forgotten here would silently never persist again — the exact bug class
 // this module exists to close (see ui-state-schema-parity.ts for the same lesson).
 const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
+  windowPaneLayout: true,
   sidebarWidth: true,
   rightSidebarOpen: true,
   rightSidebarTab: true,

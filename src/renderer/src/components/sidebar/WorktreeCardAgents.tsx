@@ -269,6 +269,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onActivate={
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }
+          isPassive={agent.rowSource === 'retained'}
           now={now}
           // Why: bold the row until the user visits its tab (useAutoAckViewedAgent auto-acks on focus, muting it).
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
@@ -327,6 +328,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         <CompactAgentRow
           agent={agent}
           now={now}
+          onDismiss={handleDismissAgent}
+          isPassive={agent.rowSource === 'retained'}
           onActivate={
             agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
           }

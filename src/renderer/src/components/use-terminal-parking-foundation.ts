@@ -19,6 +19,7 @@ import {
 import type { TerminalEditorCloseController } from './use-terminal-editor-close-dialog-actions'
 
 export function useTerminalParkingFoundation(controller: TerminalEditorCloseController) {
+  const hasWindowPanes = useAppStore((s) => Boolean(s.windowPaneLayout))
   const {
     activeTabId,
     activeTabIdByWorktree,
@@ -37,7 +38,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
     activeTabId,
     activeTabType,
     setActiveTab,
-    tabs,
+    tabs: hasWindowPanes ? [] : tabs,
     activeTabIdByWorktree,
     renderedActiveWorktreeId
   })

@@ -40,6 +40,9 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
+  if (tabs.length === 0 && renderableTabCount > 0) {
+    return
+  }
   if (tabs.length > 0 && renderableTabCount === 0) {
     return
   }

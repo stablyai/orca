@@ -26,6 +26,7 @@ import {
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
 import { useEditorPanelSave } from './useEditorPanelSave'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -291,7 +292,10 @@ function EditorPanelInner({
       showLocalPathOpenBlockedToast()
       return
     }
-    window.api.shell.openPath(activeFile.filePath)
+    void getWorkspaceShellApi({
+      worktreeId: activeFile.worktreeId,
+      runtimeEnvironmentId: activeFile.runtimeEnvironmentId
+    }).openPath(activeFile.filePath)
   }
   const disableRenameBrowse = Boolean(
     settingsForRuntimeOwner(

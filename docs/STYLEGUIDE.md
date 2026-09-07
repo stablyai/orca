@@ -45,6 +45,10 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 
 The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
 
+### Project identity accents
+
+Reuse the owning repo setup's saved `badgeColor` and existing project customization picker; preserve each host's preference. Neutral (`DEFAULT_REPO_BADGE_COLOR`) disables accents. `ProjectAccentMark` renders the same quiet rectangular mark beside sidebar, pane-context and mixed-tab project names; names and icons remain required. The canonical `.project-accent-mark` role mixes the saved color using `--project-accent-mix` (light/dark), independently of status tokens. Never color pane backgrounds or reuse session `tab.color` for project identity.
+
 ### Git decoration colors
 
 For diff status, file-tree decorations, and the changes view, use the git decoration tokens (mirroring VS Code's palette so users transferring from VS Code aren't surprised):

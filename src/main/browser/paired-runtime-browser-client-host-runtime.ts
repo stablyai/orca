@@ -60,6 +60,10 @@ type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart & {
 }
 
 let activeOrcaProfileId: string | null = null
+
+export function findLocalClientHostedBrowserPage(runtimeId: string, browserPageId: string) {
+  return browserClientHosts.findPage(runtimeId, browserPageId)
+}
 /** Route identity of each live client host, for storage operations without a page. */
 const clientHostRouteIdentities = new Map<string, ClientHostRouteIdentity>()
 

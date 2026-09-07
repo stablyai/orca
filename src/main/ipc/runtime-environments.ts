@@ -1,3 +1,5 @@
+import { registerWorkspaceWindowRuntimeHandler } from '../window/workspace-window-runtime-routing'
+import { authorizeWorkspaceWindowEvent } from '../window/workspace-window-native-bridge'
 import { app, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { resolveEnvironment } from '../../shared/runtime-environment-store'
@@ -83,8 +85,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   resetSharedControlSupport()
   for (const channel of RUNTIME_ENVIRONMENT_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
+    ipcMain.removeHandler(`workspaceWindow:${channel}`)
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
+  ipcMain.removeAllListeners('workspaceWindow:runtimeEnvironments:subscriptionBinary')
 
   registerRuntimeEnvironmentConnectivityHandlers({
     store,
@@ -97,7 +101,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
   })
   registerRuntimeEnvironmentRecoveryHandler()
   registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:subscribe',
     async (
       event,
@@ -238,7 +242,7 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       return { subscriptionId, requestId: subscription.requestId }
     }
   )
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:unsubscribe',
     (event, args: { subscriptionId: string }): { unsubscribed: boolean } => {
       const subscription = remoteRuntimeSubscriptions.get(args.subscriptionId)
@@ -250,6 +254,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
       return { unsubscribed: true }
     }
   )
+  ipcMain.on('workspaceWindow:runtimeEnvironments:subscriptionBinary', (event, args) => {
+    authorizeWorkspaceWindowEvent(event as Electron.IpcMainInvokeEvent)
+    ipcMain.emit('runtimeEnvironments:subscriptionBinary', event, args)
+  })
   ipcMain.on(
     'runtimeEnvironments:subscriptionBinary',
     (event, args: { subscriptionId?: unknown; bytes?: unknown }) => {

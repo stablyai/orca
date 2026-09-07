@@ -45,6 +45,16 @@ export type PtyBindingSourceExpectation = {
 /** Concrete composition root for profile persistence. */
 // oxlint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- Store installs the exact concrete domain class descriptors and contexts below
 export class Store {
+  getWorkspaceWindowPresentation(windowId: string, key: string): string | null {
+    return this.state.workspaceWindowPresentationStorage?.[windowId]?.[key] ?? null
+  }
+
+  setWorkspaceWindowPresentation(windowId: string, key: string, value: string): void {
+    const windows = (this.state.workspaceWindowPresentationStorage ??= {})
+    const storage = (windows[windowId] ??= {})
+    storage[key] = value
+    scheduleSave(this.domains.scheduling)
+  }
   private readonly runtime: StoreRuntimeState
   private readonly domains: StoreDomains
   private readonly state: PersistedState

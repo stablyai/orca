@@ -73,7 +73,8 @@ export class TerminalPreviewOutputStream {
     readonly contents: WebContents,
     readonly ptyId: string,
     private readonly releaseRawView: () => void,
-    private readonly onDispose: (stream: TerminalPreviewOutputStream) => void
+    private readonly onDispose: (stream: TerminalPreviewOutputStream) => void,
+    readonly viewId?: string
   ) {}
 
   get disposed(): boolean {
@@ -175,7 +176,10 @@ export class TerminalPreviewOutputStream {
       return false
     }
     try {
-      this.contents.send('terminalPreview:data', payload)
+      this.contents.send(
+        'terminalPreview:data',
+        this.viewId ? { ...payload, viewId: this.viewId } : payload
+      )
       return true
     } catch {
       this.dispose()

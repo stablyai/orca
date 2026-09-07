@@ -1,4 +1,7 @@
-import type { BrowserClientHostLeaseAuthority } from '../../shared/browser-client-host-protocol'
+import type {
+  BrowserClientHostLeaseAuthority,
+  BrowserClientHostedPageInventory
+} from '../../shared/browser-client-host-protocol'
 
 export type PairedRuntimeBrowserClientHostStart = {
   environmentId: string
@@ -7,6 +10,7 @@ export type PairedRuntimeBrowserClientHostStart = {
 }
 
 type RegisteredBrowserClientHost<Start> = {
+  findPage?(browserPageId: string): BrowserClientHostedPageInventory | null
   start(): Promise<BrowserClientHostLeaseAuthority>
   replaceAuthority(input: Start): Promise<BrowserClientHostLeaseAuthority>
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
@@ -37,6 +41,19 @@ export class PairedRuntimeBrowserClientHostRegistry<
   private closed = false
 
   constructor(private readonly options: PairedRuntimeBrowserClientHostRegistryOptions<Start>) {}
+
+  findPage(runtimeId: string, browserPageId: string): BrowserClientHostedPageInventory | null {
+    for (const host of this.hosts.values()) {
+      if (host.cleanupPending || host.authorityRuntimeId !== runtimeId) {
+        continue
+      }
+      const page = host.composition.findPage?.(browserPageId)
+      if (page?.authorityRuntimeId === runtimeId) {
+        return page
+      }
+    }
+    return null
+  }
 
   start(input: Start): Promise<BrowserClientHostLeaseAuthority> {
     if (this.closed) {

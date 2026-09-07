@@ -48,7 +48,11 @@ type SubscriptionCallbacks = {
 export function shouldRouteCallBySupport(method: string): boolean {
   // Snapshot recovery must stay available while shared-control streams reconnect after a restart.
   return (
-    method !== 'status.get' && method !== 'session.tabs.list' && method !== 'session.tabs.listAll'
+    method !== 'status.get' &&
+    method !== 'session.tabs.list' &&
+    method !== 'session.tabs.listAll' &&
+    method !== 'session.window.tabs.list' &&
+    method !== 'session.window.tabs.listAll'
   )
 }
 
@@ -60,6 +64,8 @@ export function shouldRouteSubscriptionBySupport(method: string): boolean {
     method === 'runtime.clientEvents.subscribe' ||
     method === 'session.tabs.subscribe' ||
     method === 'session.tabs.subscribeAll' ||
+    method === 'session.window.tabs.subscribe' ||
+    method === 'session.window.tabs.subscribeAll' ||
     method === 'accounts.subscribe' ||
     method === 'notifications.subscribe' ||
     method === 'files.watch'

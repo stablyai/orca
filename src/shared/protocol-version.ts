@@ -120,6 +120,7 @@ export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentia
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
+export const SESSION_WINDOW_NAVIGATION_CAPABILITY = 'session-tabs.window-navigation.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
@@ -208,6 +209,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 ] as const
 
 export const RUNTIME_CAPABILITIES = [
+  SESSION_WINDOW_NAVIGATION_CAPABILITY,
   'runtime.status.compat.v1',
   'runtime.environments.v1',
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY,

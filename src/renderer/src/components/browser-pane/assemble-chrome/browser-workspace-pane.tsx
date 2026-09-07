@@ -116,7 +116,8 @@ export default function BrowserPane({
     // for a client-placed page. It mounts quiet on the client pane until adoption fills it in.
     const restoredClientHosted = environmentHandle?.restoredClientHosted === true
     return activeBrowserPage ? (
-      clientPlacement || stagedClientHosted || restoredClientHosted ? (
+      !window.orcaWorkspaceWindowNative &&
+      (clientPlacement || stagedClientHosted || restoredClientHosted) ? (
         <ClientHostedBrowserPagePane
           key={`${activeBrowserRuntimeEnvironmentId}:${activeBrowserPage.id}`}
           browserTab={activeBrowserPage}

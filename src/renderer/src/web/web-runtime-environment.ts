@@ -2,6 +2,7 @@ import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-envi
 import type { WebPairingOffer } from './web-pairing'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
+import { WORKSPACE_WINDOW_RUNTIME_IDENTITY_KEY } from '../../../shared/workspace-window-presentation-storage'
 
 export type StoredWebRuntimeEnvironment = Omit<PublicKnownRuntimeEnvironment, 'endpoints'> & {
   compatibleEnvironmentIds?: string[]
@@ -70,7 +71,17 @@ export function createStoredWebRuntimeEnvironment(args: {
   previousEnvironment?: StoredWebRuntimeEnvironment | null
   connectionDependency?: 'ssh-tunnel'
 }): StoredWebRuntimeEnvironment {
-  const id = `web-${createBrowserUuid()}`
+  const native = window.orcaWorkspaceWindowNative
+  const key = `${WORKSPACE_WINDOW_RUNTIME_IDENTITY_KEY}${native?.localRuntimeId}:${args.offer.publicKeyB64}`
+  const priorId =
+    native &&
+    args.previousEnvironment?.endpoints.some(
+      (endpoint) => endpoint.publicKeyB64 === args.offer.publicKeyB64
+    )
+      ? args.previousEnvironment.id
+      : undefined
+  const id = native?.presentationStorage?.getItem(key) ?? priorId ?? `web-${createBrowserUuid()}`
+  native?.presentationStorage?.setItem(key, id)
   const now = Date.now()
   const compatibleEnvironmentIds = getCompatibleEnvironmentIds(args.previousEnvironment, args.offer)
   return {

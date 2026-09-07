@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { registerWorkspaceWindowFileTransferHandler } from '../../window/workspace-window-file-transfer-handlers'
+import { BrowserWindow, dialog } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, writeFile } from 'node:fs/promises'
 import { getRuntimePathBasename } from '../../../shared/cross-platform-path'
@@ -26,7 +27,7 @@ function validateRequiredString(value: unknown, label: string): string {
 export function registerFilesystemDownloadHandlers(context: FilesystemHandlerContext): void {
   const { downloadSessions, closeDownloadSession, cleanupDownloadSessionsForSender } = context
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:downloadFile',
     async (
       event,
@@ -72,7 +73,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
 
   registerFilesystemDownloadFolderHandlers()
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:saveDownloadedFile',
     async (
       event,
@@ -111,7 +112,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:startDownloadedFile',
     async (
       event,
@@ -160,7 +161,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:appendDownloadedFileChunk',
     async (
       _event,
@@ -177,7 +178,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:finishDownloadedFile',
     async (
       _event,
@@ -205,7 +206,7 @@ export function registerFilesystemDownloadHandlers(context: FilesystemHandlerCon
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:cancelDownloadedFile',
     async (_event, args: { transferId?: string }): Promise<{ ok: true }> => {
       const transferId = validateRequiredString(args?.transferId, 'transferId')

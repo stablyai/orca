@@ -2,6 +2,7 @@ import type { AppState } from '../../../types'
 import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
 import type { PersistedOpenFile } from '../../../../../../shared/workspace-session-state-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import {
@@ -102,9 +103,9 @@ export function areStringArraysEqual(
 }
 
 export function migrateHydratedEditorTabsAndGroups(
-  state: Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>,
+  state: Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree' | 'windowPaneLayout'>,
   migrationsByWorktree: Record<string, Map<string, string>>
-): Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>> {
+): Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree' | 'windowPaneLayout'>> {
   let tabsChanged = false
   let groupsChanged = false
   const nextUnifiedTabsByWorktree: Record<string, Tab[]> = { ...state.unifiedTabsByWorktree }
@@ -177,7 +178,29 @@ export function migrateHydratedEditorTabsAndGroups(
     })
   }
 
+  const layout = state.windowPaneLayout
+  let viewsChanged = false
+  const views =
+    layout &&
+    Object.fromEntries(
+      Object.entries(layout.views).map(([id, view]) => {
+        const tabs = state.unifiedTabsByWorktree[view.worktreeId] ?? []
+        const index = tabs.findIndex(
+          (tab) =>
+            tab.id === view.tabId &&
+            tab.entityId === view.entityId &&
+            (normalizeExecutionHostId(tab.executionHostId) ?? 'local') === view.executionHostId
+        )
+        const next = index === -1 ? undefined : nextUnifiedTabsByWorktree[view.worktreeId]?.[index]
+        if (!next || (next.id === view.tabId && next.entityId === view.entityId)) {
+          return [id, view]
+        }
+        viewsChanged = true
+        return [id, { ...view, tabId: next.id, entityId: next.entityId }]
+      })
+    )
   return {
+    ...(viewsChanged && layout && views ? { windowPaneLayout: { ...layout, views } } : {}),
     ...(tabsChanged ? { unifiedTabsByWorktree: nextUnifiedTabsByWorktree } : {}),
     ...(groupsChanged ? { groupsByWorktree: nextGroupsByWorktree } : {})
   }

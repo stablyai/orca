@@ -122,6 +122,8 @@ export function assertActiveEnvironment(environmentId: string): void {
   }
 }
 
+import { noteWorkspaceWindowRuntimeEnvironment } from '../../lib/workspace-window-runtime-scope'
+
 export function updateEnvironmentFromResponse(
   environment: StoredWebRuntimeEnvironment,
   response: RuntimeRpcResponse<unknown>
@@ -130,6 +132,7 @@ export function updateEnvironmentFromResponse(
     return
   }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
+  noteWorkspaceWindowRuntimeEnvironment(environment.id, runtimeId)
   const pairedDeviceId =
     response.ok &&
     typeof response.result === 'object' &&

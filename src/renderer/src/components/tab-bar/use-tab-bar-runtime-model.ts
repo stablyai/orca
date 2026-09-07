@@ -91,10 +91,12 @@ export type TabBarRuntimeModel = {
 
 export function useTabBarRuntimeModel({
   worktreeId,
-  groupId
+  groupId,
+  presentationTabs
 }: {
   worktreeId: string
   groupId?: string
+  presentationTabs?: readonly (Tab & { presentationId?: string })[]
 }): TabBarRuntimeModel {
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
@@ -114,7 +116,8 @@ export function useTabBarRuntimeModel({
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
-  const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
+  const catalogTabs = useAppStore((s) => s.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS)
+  const unifiedTabs = presentationTabs ?? catalogTabs
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
@@ -231,8 +234,8 @@ export function useTabBarRuntimeModel({
   const resolvedGroupId = groupId ?? activeGroupIdForWorktree ?? worktreeId
   const statusByRelativePath = useMemo(() => buildStatusMap(gitStatusEntries), [gitStatusEntries])
   const unifiedTabByVisibleId = useMemo(
-    () => createUnifiedTabLookup(unifiedTabs, resolvedGroupId),
-    [resolvedGroupId, unifiedTabs]
+    () => createUnifiedTabLookup(unifiedTabs, presentationTabs ? undefined : resolvedGroupId),
+    [resolvedGroupId, unifiedTabs, presentationTabs]
   )
   const workspaceHasSimulatorTab = useMemo(
     () => unifiedTabs.some((tab) => tab.contentType === 'simulator'),

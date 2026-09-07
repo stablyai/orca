@@ -26,6 +26,8 @@ export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSp
 )
 export const powerMonitorOnMock: MainWindowSpy = vi.fn()
 export const powerMonitorRemoveListenerMock: MainWindowSpy = vi.fn()
+export const screenOnMock: MainWindowSpy = vi.fn()
+export const screenRemoveListenerMock: MainWindowSpy = vi.fn()
 export const routePartitionAllowedMock: Mock<(partition: string) => boolean> = vi.fn(() => false)
 export const isMock = { dev: false }
 export const macosTahoeMock = { value: false }
@@ -53,8 +55,11 @@ export type ElectronModuleMock = {
   nativeTheme: { shouldUseDarkColors: boolean }
   powerMonitor: { on: MainWindowSpy; removeListener: MainWindowSpy }
   screen: {
+    getAllDisplays: () => Electron.Display[]
     getPrimaryDisplay: () => { workAreaSize: { width: number; height: number } }
     getDisplayMatching: () => { scaleFactor: number }
+    on: MainWindowSpy
+    removeListener: MainWindowSpy
   }
   shell: { openExternal: MainWindowSpy }
 }
@@ -78,8 +83,17 @@ export function electronModuleMock(): ElectronModuleMock {
     nativeTheme: { shouldUseDarkColors: false },
     powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
     screen: {
+      getAllDisplays: () => [
+        {
+          id: 1,
+          scaleFactor: 1,
+          workArea: { x: 0, y: 0, width: 1440, height: 900 }
+        } as Electron.Display
+      ],
       getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } }),
-      getDisplayMatching: () => ({ scaleFactor: 2 })
+      getDisplayMatching: () => ({ scaleFactor: 2 }),
+      on: screenOnMock,
+      removeListener: screenRemoveListenerMock
     },
     shell: { openExternal: openExternalMock }
   }
@@ -127,6 +141,8 @@ export function resetMainWindowMocks(): void {
   notificationShowMock.mockClear()
   powerMonitorOnMock.mockReset()
   powerMonitorRemoveListenerMock.mockReset()
+  screenOnMock.mockReset()
+  screenRemoveListenerMock.mockReset()
   routePartitionAllowedMock.mockReset()
   routePartitionAllowedMock.mockReturnValue(false)
   isMock.dev = false

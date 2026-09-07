@@ -22,7 +22,11 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onOpenFileTab,
     onPinFile
   } = props
-  const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
+  const runtime = useTabBarRuntimeModel({
+    worktreeId,
+    groupId,
+    presentationTabs: props.presentationTabs
+  })
   const createMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
