@@ -1,3 +1,4 @@
+import { recoverInterruptedCompaction } from './structured-compaction-recovery'
 // The host's attach, lifted out of the host class.
 //
 // Attach is the one operation that touches every collaborator the host owns — the lease
@@ -123,6 +124,7 @@ export function attachStructuredAgentSession(
           hasProviderChild: true,
           acquisitionGeneration: acquisitionGeneration ?? previous?.acquisitionGeneration ?? null
         })
+        await recoverInterruptedCompaction(context.deps.store, sessionId, attached.journal, fence)
         if (attached.recovery) {
           context.subscribers.reset(sessionId, attached.journal, attached.recovery.reset, fence)
         } else if (previousFence !== undefined && previousFence !== fence) {

@@ -1,8 +1,31 @@
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 
 describe('getOrcaElectronLaunchArgs', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each([
+    ['linux', 'true', true, true],
+    ['linux', undefined, true, false],
+    ['linux', 'true', false, false],
+    ['darwin', 'true', true, false],
+    ['win32', 'true', true, false]
+  ] as const)(
+    'scopes software WebGL to Linux CI headful launches: %s/%s/%s',
+    (platform, ci, headful, enabled) => {
+      vi.stubGlobal('process', { ...process, platform, env: { ...process.env, CI: ci } })
+      const args = getOrcaElectronLaunchArgs(join('orca', 'out', 'main', 'index.js'), headful)
+      expect(args.includes('--use-gl=angle')).toBe(enabled)
+      expect(args.includes('--use-angle=swiftshader')).toBe(enabled)
+      expect(args.includes('--enable-unsafe-swiftshader')).toBe(enabled)
+      if (enabled) {
+        expect(args).toContain('--disable-gpu-sandbox')
+        expect(args).not.toContain('--disable-gpu')
+      }
+    }
+  )
+
   it('launches the package root that owns the compiled main entry', () => {
     const root = join('workspace', 'orca')
     const mainPath = join(root, 'out', 'main', 'index.js')

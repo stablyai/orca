@@ -35,6 +35,12 @@ export function applyRemoveWorktreeSuccessState(
       }
     }
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
+    // Why guarded: a removed worktree usually has no open file, and an unconditional
+    // filter would hand openFiles a new identity anyway — the sibling purge path
+    // already does this.
+    const nextOpenFiles = s.openFiles.some((f) => f.worktreeId === worktreeId)
+      ? s.openFiles.filter((f) => f.worktreeId !== worktreeId)
+      : s.openFiles
     // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
@@ -79,7 +85,7 @@ export function applyRemoveWorktreeSuccessState(
         ? null
         : s.activeWorkspaceExecutionHostId,
       activeTabId: s.activeTabId && tabIds.has(s.activeTabId) ? null : s.activeTabId,
-      openFiles: s.openFiles.filter((f) => f.worktreeId !== worktreeId),
+      openFiles: nextOpenFiles,
       browserTabsByWorktree: omitByWorktree(s.browserTabsByWorktree),
       // Why: closeBrowserTab records a Cmd+Shift+T undo snapshot, but a deleted worktree's tabs can't be restored; purge it.
       recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),

@@ -17,7 +17,6 @@ export function TerminalPaneNativeChatPortal({
     chatPaneOwnsTabWideLaunchDraft,
     chatPanePtyId,
     chatPaneResolvedAgent,
-    chatPaneDispatchStatus,
     contextMenu,
     effectiveChatViewMode,
     expandedPaneId,
@@ -77,7 +76,6 @@ export function TerminalPaneNativeChatPortal({
           isVisible={isRendererVisible}
           target={structuredChatTarget}
           contextMenuActions={contextMenuActions}
-          orchestrationDispatchStatus={chatPaneDispatchStatus}
         />
       ) : (
         <NativeChatView
@@ -91,7 +89,6 @@ export function TerminalPaneNativeChatPortal({
           onSwitchToTerminal={switchNativeChatToTerminal}
           readTerminalScreen={readNativeChatTerminalScreen}
           contextMenuActions={contextMenuActions}
-          orchestrationDispatchStatus={chatPaneDispatchStatus}
         />
       )}
     </div>,

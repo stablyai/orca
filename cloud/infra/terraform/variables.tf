@@ -245,7 +245,7 @@ variable "relay_regional_placement_enabled" {
 
 variable "relay_region_rehome_source_cell_ids" {
   type        = set(string)
-  description = "Reviewed US Relay cells allowed to advertise and accept the regional rehome source protocol."
+  description = "Reviewed Relay cells, in any configured region, allowed to advertise and accept the regional rehome source protocol."
   default     = []
 }
 

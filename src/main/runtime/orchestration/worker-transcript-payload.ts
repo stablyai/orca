@@ -64,6 +64,35 @@ export function boundWorkerTranscriptMessages(
   return { messages: bounded, limited: state.clipped, warnings: [...state.warnings] }
 }
 
+/**
+ * The same per-message bounding, accumulated NEWEST-first.
+ *
+ * `boundWorkerTranscriptMessages` keeps the head, which is right for a forward page and wrong for
+ * an archive: the evidence anyone reads a released worker back for is its final answer, so the
+ * tail is what must survive the budget.
+ */
+export function boundWorkerTranscriptTail(
+  messages: readonly NativeChatMessage[],
+  maxBytes: number
+): { messages: NativeChatMessage[]; limited: boolean; warnings: string[] } {
+  const state: TranscriptBoundState = { warnings: new Set<string>(), clipped: false }
+  const keptReversed: NativeChatMessage[] = []
+  let bytes = 2
+  let limited = false
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const next = boundMessage(messages[index]!, undefined, state)
+    const serializedBytes = Buffer.byteLength(JSON.stringify(next), 'utf8') + 1
+    if (keptReversed.length > 0 && bytes + serializedBytes > maxBytes) {
+      limited = true
+      break
+    }
+    keptReversed.push(next)
+    bytes += serializedBytes
+  }
+  keptReversed.reverse()
+  return { messages: keptReversed, limited, warnings: [...state.warnings] }
+}
+
 function boundMessage(
   message: NativeChatMessage,
   transcriptPath: string | undefined,

@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import pg from 'pg'
+import { RELAY_REGIONS } from '@orca-cloud/relay-contract'
 import {
   emptyPostgresPoolPressureCounts,
   PostgresPoolPressure,
@@ -23,6 +24,14 @@ function setLocalLockTimeout(milliseconds: number): string {
   }
   return `SET LOCAL lock_timeout = '${milliseconds}ms'`
 }
+
+// Region CHECK lists come from the contract so a new region cannot leave a
+// column rejecting values the rest of the relay already accepts.
+const REGION_LIST = RELAY_REGIONS.map((region) => `'${region}'`).join(', ')
+
+// A host that was just moved is not a candidate again for this long, so a
+// desktop whose region probe flips cannot walk itself back and forth.
+export const REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS = 7 * 24 * 60 * 60_000
 
 export type SqlRow = Record<string, unknown>
 export type RelayLockOptions = {
@@ -181,7 +190,7 @@ CREATE TABLE IF NOT EXISTS relay_assignment_region_preferences (
   user_id TEXT NOT NULL,
   relay_host_id TEXT NOT NULL,
   preferred_region TEXT NOT NULL
-    CHECK (preferred_region IN ('us-central1', 'asia-east2')),
+    CHECK (preferred_region IN (${REGION_LIST})),
   observed_at BIGINT NOT NULL,
   PRIMARY KEY (user_id, relay_host_id)
 );
@@ -204,6 +213,8 @@ CREATE TABLE IF NOT EXISTS relay_region_rehome_control (
   not_before BIGINT NOT NULL,
   rate_per_minute BIGINT NOT NULL,
   preference_max_age_ms BIGINT NOT NULL,
+  host_cooldown_ms BIGINT NOT NULL
+    DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS},
   drain_grace_ms BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
@@ -212,7 +223,9 @@ CREATE TABLE IF NOT EXISTS relay_region_rehome_attempts (
   attempt_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   relay_host_id TEXT NOT NULL,
-  preferred_region TEXT NOT NULL CHECK (preferred_region = 'asia-east2'),
+  preferred_region TEXT NOT NULL
+    CONSTRAINT relay_region_rehome_attempts_preferred_region_valid
+    CHECK (preferred_region IN (${REGION_LIST})),
   source_cell_id TEXT NOT NULL,
   source_cell_incarnation TEXT NOT NULL,
   target_cell_id TEXT NOT NULL,
@@ -234,6 +247,8 @@ CREATE TABLE IF NOT EXISTS relay_region_rehome_attempts (
 );
 CREATE INDEX IF NOT EXISTS relay_region_rehome_attempts_pending
   ON relay_region_rehome_attempts(drain_receipt_at, last_send_attempt_at, completed_at, aborted_at);
+CREATE INDEX IF NOT EXISTS relay_region_rehome_attempts_host_recency
+  ON relay_region_rehome_attempts(user_id, relay_host_id, created_at);
 
 CREATE TABLE IF NOT EXISTS relay_cells (
   cell_id TEXT PRIMARY KEY,
@@ -248,7 +263,7 @@ CREATE TABLE IF NOT EXISTS relay_cells (
 
 CREATE TABLE IF NOT EXISTS relay_cell_regions (
   cell_id TEXT PRIMARY KEY,
-  region TEXT NOT NULL CHECK (region IN ('us-central1', 'asia-east2'))
+  region TEXT NOT NULL CHECK (region IN (${REGION_LIST}))
 );
 
 CREATE TABLE IF NOT EXISTS relay_cell_admission (
@@ -579,6 +594,21 @@ CREATE TABLE IF NOT EXISTS relay_audit_events (
 );
 CREATE INDEX IF NOT EXISTS relay_audit_events_at ON relay_audit_events(at);
 `
+
+// Rehoming is bidirectional, but tables created before that carry the
+// original single-region column check. The old constraint is the one Postgres
+// auto-named; the replacement is named, so both statements are no-ops on a
+// database the current schema created and neither can drop the other.
+export const POSTGRES_SCHEMA_MIGRATIONS = [
+  `ALTER TABLE relay_region_rehome_attempts
+     DROP CONSTRAINT IF EXISTS relay_region_rehome_attempts_preferred_region_check`,
+  `ALTER TABLE relay_region_rehome_attempts
+     ADD CONSTRAINT relay_region_rehome_attempts_preferred_region_valid
+     CHECK (preferred_region IN (${REGION_LIST}))`,
+  `ALTER TABLE relay_region_rehome_control
+     ADD COLUMN IF NOT EXISTS host_cooldown_ms BIGINT NOT NULL
+     DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS}`
+]
 
 function postgresSql(sql: string): string {
   let index = 0
@@ -1009,7 +1039,10 @@ async function applySchemaOnUntimedPool(
   const database = new PostgresDatabase(pool)
   try {
     await applyPostgresSchema(
-      SCHEMA.split(';').filter((statement) => statement.trim()),
+      [
+        ...SCHEMA.split(';').filter((statement) => statement.trim()),
+        ...POSTGRES_SCHEMA_MIGRATIONS
+      ],
       async (statement) => await database.query(statement)
     )
   } finally {

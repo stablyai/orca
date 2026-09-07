@@ -25,6 +25,9 @@ function mergeBatch(
   }
   return {
     type: 'batch',
+    ...(right.commands !== undefined || left.commands !== undefined
+      ? { commands: right.commands !== undefined ? right.commands : left.commands }
+      : {}),
     sessionId: right.sessionId,
     batch: {
       cursor: right.batch.cursor,

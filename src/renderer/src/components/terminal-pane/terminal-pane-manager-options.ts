@@ -1,4 +1,5 @@
 import type { IDisposable } from '@xterm/xterm'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
@@ -176,6 +177,8 @@ export function createTerminalPaneManagerOptions(
     formatLinkTooltip: (paneId, url, hint) =>
       formatTerminalUrlTooltip(url, hint, context.getHttpLinkSourceOwnerForPane(paneId)),
     initialRenderingSuspended: !isVisibleRef.current,
+    // Reopening the floating panel must rebuild silently corrupted glyph atlases.
+    retainHiddenWebgl: worktreeId !== FLOATING_TERMINAL_WORKTREE_ID,
     terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
     debugLabel: `tab:${tabId}/wt:${worktreeId}`
   }

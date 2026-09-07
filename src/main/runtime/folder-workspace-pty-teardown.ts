@@ -29,6 +29,9 @@ export async function teardownFolderWorkspacePtys(
     ...(connectionId ? { resolvedConnectionId: connectionId } : {}),
     localProvider: ptyProvider,
     onPtyStopped: deps.onPtyStopped ?? undefined,
+    // A structured session is on no PTY surface, so the sweeps above leave it attached to a
+    // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
+    closeStructuredSessions: true,
     ...(connectionId
       ? { includeProviderInventory: Boolean(sshPtyProvider), includeLocalRegistry: false }
       : {})

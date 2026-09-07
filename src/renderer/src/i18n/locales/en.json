@@ -3904,7 +3904,14 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "minimax": {
+              "expired": {
+                "label": "Sign-in expired",
+                "apiKey": "MiniMax API key expired. Replace it in Settings.",
+                "cookie": "MiniMax session cookie expired. Replace it in Settings."
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -5781,7 +5788,8 @@
               "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
-              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold."
+              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.",
+              "runningAgentSession": "This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold."
             }
           }
         },
@@ -6415,7 +6423,6 @@
           "8d61637a77": "MiniMax cookie saved.",
           "b43e761fe5": "MiniMax cookie update failed.",
           "5d63bbfbec": "MiniMax",
-          "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
           "21d6eb141e": "MiniMax Session Cookie",
           "33bba5ad83": "Paste your MiniMax session cookie for local rate-limit fetching.",
           "73ea15f24b": "Saved",
@@ -6423,7 +6430,6 @@
           "566d9a99ab": "_token=…; minimax_group_id_v2=…",
           "f38b9cc4bd": "Replace",
           "590a3130f9": "Save",
-          "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
           "9dd50d3f75": "Advanced",
           "174fb408f9": "Leave these defaults alone unless MiniMax usage refresh points at the wrong workspace or model.",
           "bf160bb6c0": "Group ID override",
@@ -6434,14 +6440,11 @@
           "3c92b0d31c": "general",
           "0d8e77bc40": "Open console",
           "0b8c1c7e02": "Stored locally",
-          "1fd1b1b6b4": "Cookie not set",
-          "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "43d7a45b97": "How to copy",
           "b8a4f21c3e": "Paste the Cookie header from DevTools",
           "53f7b8c7a2": "Last refresh: {{value0}}",
           "31d24a4e87": "Cookie expires when you sign out in the browser.",
           "3a30aaf526": "just now",
-          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
           "24560fe830": "Open DevTools.",
           "4cab0fa42d": "Go to the Network tab and enable Preserve log.",
           "bee4e63e1c": "Reload the page.",
@@ -6449,7 +6452,6 @@
           "435df0ee51": "Under Request Headers, copy the Cookie value.",
           "7492fb3bba": "Paste it here and click Save.",
           "9fec52de4b": "How to copy the cookie",
-          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
           "remoteServerFallback": "the remote server",
           "loadAccountsFailed": "Could not load provider accounts.",
           "remoteScopeAccounts": "Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.",
@@ -6464,7 +6466,31 @@
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
           "codexConfigSyncManagedHomeUnavailable": "Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.",
-          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
+          "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+          "d6f1b9b6a2": "MiniMax API key is required.",
+          "7c5d8a4e1b": "MiniMax API key was not saved.",
+          "4d2c7b9e83": "MiniMax API key saved.",
+          "f8a4b9d210": "MiniMax endpoint",
+          "0b3a9f6c2e": "Pick the host that matches your account. Both overseas (platform.minimax.io) and China (platform.minimaxi.com) accept either a session cookie or an API key.",
+          "83b6a1f7c4": "MiniMax API key",
+          "4f2c8a7e1b": "Paste your MiniMax API key",
+          "a7b1e3c5d2": "Forget key",
+          "usageTracking": "Configure MiniMax usage tracking for your account.",
+          "credentialsNotSet": "Credentials not set",
+          "selectedEndpointStorage": "Stored locally and sent to the selected MiniMax endpoint for usage refreshes.",
+          "endpointOverseas": "Overseas (platform.minimax.io)",
+          "endpointChina": "China (platform.minimaxi.com)",
+          "openSelectedConsole": "Open {{url}} in your browser and sign in.",
+          "cookieSelectedEndpoint": "Stored locally and sent to the selected MiniMax endpoint for usage refreshes.",
+          "copySelectedConsoleCookie": "Open the selected console, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
+          "apiKeySelectedEndpoint": "Paste the API key from your MiniMax console → API keys. Stored locally and sent to the selected MiniMax endpoint for usage refreshes. The API key takes priority over the cookie.",
+          "apiKeyInstructions": "Copy the API key from your MiniMax console → API keys. A saved API key takes priority over the cookie; use Forget key to switch back to the cookie.",
+          "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
+          "1fd1b1b6b4": "Cookie not set",
+          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
+          "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
+          "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -8843,14 +8869,18 @@
             "b84a5b0c8a": "Choose whether provider accounts are inspected and added on this device or in WSL.",
             "d09fb5ca92": "Account Location",
             "733f9e2a93": "MiniMax Usage",
-            "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching.",
+            "f8374c3151": "Configure MiniMax usage tracking. Pick the overseas or China endpoint, then paste a session cookie or save an API key that works on either host.",
             "f4a8c2e1b7": "Grok (xAI) Usage",
             "e3b7d1f9a2": "OAuth sign-in via Grok CLI (grok login) for weekly credit usage.",
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
             "a9f3d7b5c8": "login",
-            "d16378a88f": "minimax"
+            "d16378a88f": "minimax",
+            "b2c4e7f1a8": "endpoint",
+            "3a9b6d2c4e": "api key",
+            "5d8f1a3b7c": "china",
+            "7e2a4b8c1d": "overseas"
           }
         },
         "advanced": {
@@ -11042,7 +11072,9 @@
           "e6dadc1e2b": "Monthly usage",
           "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
           "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
-          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
+          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed.",
+          "0bb18642b7": "Usage",
+          "a8f4139350": "Grok reported no usage percentage for this account."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
@@ -12994,7 +13026,10 @@
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
-            "sessionDeleteFailed": "Couldn't delete the session"
+            "sessionDeleteFailed": "Couldn't delete the session",
+            "resumeInChatConflict": "Another chat is already holding this conversation.",
+            "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
+            "resumeInChatFailed": "Could not resume this session in a new chat."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -13130,7 +13165,8 @@
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
-            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca."
+            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
+            "resumeInNewChat": "Resume in New Chat"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -17090,11 +17126,6 @@
         "deny": "Deny"
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
-      "orchestrationPaused": {
-        "label": "Orchestration paused",
-        "message": "Structured Chat blocks terminal prompts and sends. Orchestration messages remain queued; switch to Terminal, then check the Orca inbox with",
-        "command": "orca orchestration check"
-      },
       "structuredSessionCloseFailed": "Could not close this chat session",
       "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
       "structuredSessionLaunchPending": "Starting {{value0}} chat…",
@@ -17133,7 +17164,11 @@
       },
       "structuredSessionFellBackToTerminal": "Structured chat isn't available",
       "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
-      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
+      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details.",
+      "conversationCommand": {
+        "pendingWork": "Wait for pending work and messages to finish before using this command.",
+        "unconfirmed": "Conversation operation was not confirmed."
+      }
     },
     "tab": {
       "bar": {

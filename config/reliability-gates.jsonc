@@ -11,6 +11,75 @@
   },
   "gates": [
     {
+      "id": "terminal-performance.padded-fullscreen-redraw",
+      "title": "Fullscreen redraw padding does not stall terminal delivery",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "runtime-unit-and-electron-cdp",
+      "surfaces": ["terminal transcript preview", "fullscreen TUI scrolling"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon"],
+      "coverageNotes": "The trim operation is platform-independent and preserves the same spaces/tabs policy for all providers. Real Pi 0.84.2 was exercised in a hidden macOS Electron renderer through CDP using a folder workspace.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/14770"],
+      "invariant": "Transcript preview trimming preserves internal whitespace and terminal read contents without quadratic main-process work on padded fullscreen redraws.",
+      "oracle": "Preserve 32,000 spaces before a marker while trimming trailing spaces/tabs in both retained-row and carried-prefix redraw paths; four redraws must finish within 500 ms. Existing tail equivalence tests preserve cursor, retention, and pagination behavior.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/terminal-tail-whitespace.test.ts src/main/runtime/terminal-tail-buffer.test.ts src/main/runtime/retained-tail-redraw-window.equivalence.test.ts"
+      ],
+      "testFiles": [
+        "src/main/runtime/terminal-tail-whitespace.test.ts",
+        "src/main/runtime/terminal-tail-buffer.test.ts",
+        "src/main/runtime/retained-tail-redraw-window.equivalence.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/terminal-tail-whitespace.test.ts",
+          "assertions": [
+            "handles padded redraws across %i retained rows without stalling",
+            "preserves terminal text while trimming spaces and tabs: %j"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-06",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/terminal-tail-whitespace.test.ts src/main/runtime/terminal-tail-buffer.test.ts src/main/runtime/retained-tail-redraw-window.equivalence.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.96,
+          "summary": "17 tests passed. Before the fix both padding budget cases failed, taking approximately 1.7 seconds each."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Three unit test files; padding cases allow 500 ms for four redraws."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Initial local red/green validation; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Both padding budget cases fail with regex trimming and pass with the existing linear trim. A 60-event CDP wheel stream in Pi fullscreen had about 2.1 seconds of output tail before the fix and 14 ms after rebuilding."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The main CPU profile attributed 3.1 seconds to redraw-row whitespace trimming. Reusing the linear trim adds no timers, caches, provider calls, or output dropping."
+      },
+      "knownGaps": [
+        "The user manually compared the fixed dev app with production and confirmed improved responsiveness. A live Terminal.app comparison was not exercised; timing measurements used CDP wheel events.",
+        "Linux, Windows, and live SSH rendering were not exercised; the shared trimming behavior is covered by unit tests."
+      ],
+      "promotionCriteria": [
+        "Complete CI soak requirements and retain the padding budget and tail equivalence oracles."
+      ],
+      "demotionRule": "Keep experimental until CI soak is stable; investigate any budget failure without weakening transcript preservation."
+    },
+    {
       "id": "ssh.localhost-terminal-agent-hooks",
       "title": "Localhost SSH terminal and agent hooks reach the owning pane",
       "maturity": "experimental",
@@ -18573,6 +18642,97 @@
         "Other released version pairs remain untested; not a required PR check."
       ],
       "demotionRule": "Keep experimental if any direction skips or fails; do not extend timeouts or retry to green."
+    },
+    {
+      "id": "terminal-input.native-wayland-hangul-digit",
+      "title": "Native Wayland Hangul terminating digits reach the PTY exactly once",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "electron-native-ime-e2e",
+      "surfaces": [
+        "native Hangul composition",
+        "Wayland terminal input"
+      ],
+      "platforms": [
+        "linux"
+      ],
+      "providers": [
+        "local"
+      ],
+      "coveredPlatforms": [
+        "linux"
+      ],
+      "coveredProviders": [
+        "local"
+      ],
+      "coverageNotes": "Ubuntu 22.04 nested GNOME and IBus Hangul drive three complete native executions in GitHub Actions. GNOME owns IBus; daemon and CLI share its default config discovery path.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/19174"
+      ],
+      "invariant": "Typing d k 1 Return through native IBus Hangul delivers exactly 아1 followed by newline without missing, duplicate, or reordered characters.",
+      "oracle": "Three executions each assert three exact UTF-8 PTY lines. Verify the exact Playwright title, zero skips/retries, each individual native composition receipt, and the nested launch Wayland flag.",
+      "commands": [
+        "gh workflow run terminal-ime-e2e.yml",
+        "gh run view 34074017928 --log",
+        "pnpm exec playwright test --config tests/playwright.config.ts tests/e2e/terminal-hangul-terminating-digit-native.spec.ts --project=electron-headful --workers=1 --repeat-each=3 --retries=0 --reporter=list,json",
+        "ORCA_BACKGROUND_LAUNCH=1 node_modules/.bin/vitest run --config config/vitest.config.ts config/scripts/terminal-ime-e2e-workflow.test.mjs"
+      ],
+      "testFiles": [
+        "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts",
+        "config/scripts/terminal-ime-e2e-workflow.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-hangul-terminating-digit-native.spec.ts",
+          "assertions": [
+            "a digit typed right after a Hangul syllable reaches the pty"
+          ]
+        },
+        {
+          "file": "config/scripts/terminal-ime-e2e-workflow.test.mjs",
+          "assertions": [
+            "runs native Wayland independently with CJK fonts and retained evidence"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-07",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "gh run view 34074017928 --log",
+          "result": "passed",
+          "summary": "Permanent runner passed three native executions, nine exact lines and zero skips/retries. Downloaded participation report and all three engagement receipts verified; compositor cleanup reported no remaining group members. Independent X11 job passed.",
+          "durationSeconds": 76.61
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 1500,
+        "scope": "CI job timeout including installation/build; measured p95 not established"
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Earlier diagnostic repetition had one unexplained missing Hangul commit. GNOME-owned diagnostic and corrected permanent runner each passed 3/3. Long-term soak is missing."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Original exact-byte assertions retained. Permanent startup failed until the GNOME config-discovery mismatch was corrected. No intentional production regression was introduced."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "CI-only harness; no application runtime changes."
+      },
+      "promotionCriteria": [
+        "Collect 100 soak runs across 14 days with no unexplained flakes.",
+        "Exercise native Wayland desktops beyond nested GNOME before broadening the claim."
+      ],
+      "knownGaps": [
+        "Only Hangul terminating digits; no native candidate-selection or other input-method coverage claim.",
+        "No macOS, Windows, SSH terminal, packaged build, or mixed-version claim.",
+        "Default config paths are shared with GNOME on a disposable hosted CI runner; nested mode refuses non-GitHub-Actions execution."
+      ],
+      "demotionRule": "Keep experimental on unexplained failures; retain exact bytes and participation checks without retries, skips, or longer deadlines."
     }
   ]
 }

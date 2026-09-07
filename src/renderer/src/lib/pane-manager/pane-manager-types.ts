@@ -77,6 +77,7 @@ export type PaneManagerOptions = {
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
   initialRenderingSuspended?: boolean
+  retainHiddenWebgl?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal
   // helpers log warnings that are hard to correlate without knowing which

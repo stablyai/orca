@@ -3,6 +3,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import {
@@ -83,30 +84,11 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
         }
         if (data.afterTabId) {
-          const createdUnifiedTab = useAppStore
+          const createdUnifiedTabId = useAppStore
             .getState()
-            .unifiedTabsByWorktree[worktreeId]?.find((item) => item.entityId === tab.id)
-          const anchorUnifiedTab = useAppStore
-            .getState()
-            .unifiedTabsByWorktree[worktreeId]?.find((item) => item.id === data.afterTabId)
-          if (
-            createdUnifiedTab &&
-            anchorUnifiedTab &&
-            createdUnifiedTab.groupId === anchorUnifiedTab.groupId
-          ) {
-            const group = useAppStore
-              .getState()
-              .groupsByWorktree[worktreeId]?.find((item) => item.id === createdUnifiedTab.groupId)
-            const order = (group?.tabOrder ?? []).filter((id) => id !== createdUnifiedTab.id)
-            const anchorIndex = order.indexOf(anchorUnifiedTab.id)
-            order.splice(
-              anchorIndex === -1 ? order.length : anchorIndex + 1,
-              0,
-              createdUnifiedTab.id
-            )
-            useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order, {
-              recordInteraction: false
-            })
+            .unifiedTabsByWorktree[worktreeId]?.find((item) => item.entityId === tab.id)?.id
+          if (createdUnifiedTabId) {
+            insertUnifiedTabAfterAnchor(worktreeId, createdUnifiedTabId, data.afterTabId)
           }
         }
         if (shouldActivate) {

@@ -46,6 +46,14 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
+    const compact = this.owner(input.sessionId).compact
+    if (!compact) {
+      throw new Error('Compaction is unavailable for this provider.')
+    }
+    return compact(input)
+  }
+
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 
@@ -59,6 +67,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
     sessionId
   ) => this.owners.get(sessionId)?.backgroundTaskState?.(sessionId)
+
+  readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
+    this.owners.get(sessionId)?.readCommands?.(sessionId)
 
   answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (input) =>
     this.owner(input.sessionId).answerPrompt(input)

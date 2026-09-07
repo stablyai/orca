@@ -6,7 +6,8 @@ import type {
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
@@ -88,7 +89,8 @@ export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): b
 
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: AgentSessionHandleProvider,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionLaunchIntent {
   const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
   const state = useAppStore.getState()
@@ -107,6 +109,7 @@ export function createStructuredAgentSessionLaunchIntent(
       sessionId,
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
+      ...(resumeFrom ? { resumeFrom } : {}),
       randomUuid: () => crypto.randomUUID()
     })
   }

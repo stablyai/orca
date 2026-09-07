@@ -252,6 +252,7 @@ export async function acquireClaudeSession({
     const publication = createClaudeSessionPublication({
       connection,
       init,
+      initialization,
       claudeConfigDir: launch.claudeConfigDir,
       leafUuid: observedLeafUuid,
       fence: input.fence,

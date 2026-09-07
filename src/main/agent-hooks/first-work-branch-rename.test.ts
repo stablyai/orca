@@ -102,6 +102,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       const items: AgentJournalRenderItem[] = []
       const journal = {
         snapshot: () => ({ items }),
+        lastActivityAt: () => 1,
         isReadOnly: false
       } as unknown as AgentSessionJournal
       const pending: Promise<void>[] = []
@@ -173,6 +174,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     })
     const journal = {
       isReadOnly: false,
+      lastActivityAt: () => 1,
       snapshot: () => ({
         items: [
           { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },

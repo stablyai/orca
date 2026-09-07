@@ -96,11 +96,21 @@ export const AttachParams = z
   })
   .strict()
 
+/** An identity, and nothing the host would otherwise read off disk. A transcript path or account
+ *  home here would let a client choose which file this host imports and which credential directory
+ *  the provider child launches against; both are derived host-side from this id instead. */
+const ResumeSource = z
+  .object({
+    providerSessionId: Identifier('Invalid provider session id')
+  })
+  .strict()
+
 export const CreateIntentParams = z
   .object({
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
-    agent: z.enum(['claude', 'codex'])
+    agent: z.enum(['claude', 'codex']),
+    resumeFrom: ResumeSource.optional()
   })
   .strict()
 
@@ -190,6 +200,13 @@ export const HandoffParams = z
   .strict()
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
+
+export const ConversationCommandParams = z
+  .object({
+    envelope: MutationEnvelope,
+    command: z.enum(['clear', 'compact'])
+  })
+  .strict()
 
 /** One surface's claim on one session. The id names the surface, not the client: two chat views
  *  looking at the same session are two holders, and either leaving must not release

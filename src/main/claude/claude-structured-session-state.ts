@@ -14,6 +14,7 @@ import { cancelProcessAcquisition } from '../../shared/child-process/cancel-proc
 import { randomUUID } from 'node:crypto'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
 export type ClaudeAuthDiagnostic = {
   apiKeySourceConfigured: boolean
@@ -138,6 +139,9 @@ export type ClaudeSession = {
   /** Provider uuid of the most recently admitted turn, if one is active. */
   activeTurnId?: string
   backgroundTasks: ClaudeBackgroundTaskTracker
+  /** The `/` surface the CLI reports for itself; seeded from init, kept current
+   *  by later init and `commands_changed` frames. */
+  commands: ClaudeSlashCommandCatalog
   /** Monotonic fence advanced when a dispatch starts, including unresolved dispatches. */
   dispatchSequence: number
   /** Dispatch sequence that admitted activeTurnId. */

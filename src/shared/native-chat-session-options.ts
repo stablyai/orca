@@ -1,3 +1,5 @@
+import type { AgentType } from './agent-status-types'
+
 export type SessionOptionValue = string | boolean
 
 export type SessionOptionSelectChoice = {
@@ -74,6 +76,19 @@ export type PersistedNativeChatSessionOptions = Partial<
     }
   >
 >
+
+export type NativeChatSessionOptionSettingsMutation =
+  | {
+      type: 'apply-picks'
+      agent: AgentType
+      picks: readonly {
+        modelId: string
+        optionId: string
+        value: SessionOptionValue
+        adoptModelAsLaunchDefault?: boolean
+      }[]
+    }
+  | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
 export type SessionOptionsSurface = {
   getSnapshot(): SessionOptionDescriptor[]

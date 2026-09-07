@@ -30,6 +30,9 @@ import {
   ASSIGNMENT_CONNECTION_HEADROOM_QUERY
 } from './assignment-connection-headroom-query.js'
 import { AssignmentIdentityQueue } from './assignment-identity-queue.js'
+import {
+  REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
+} from './database.js'
 import type { RelayCellConfig } from './config.js'
 import type {
   RelayDatabase,
@@ -121,7 +124,7 @@ export type RelayAssignmentMigration = AssignmentIdentity & {
 
 export type RegionalRehomeAttempt = AssignmentIdentity & {
   attemptId: string
-  preferredRegion: 'asia-east2'
+  preferredRegion: RelayRegion
   sourceCellId: string
   sourceCellUrl: string
   sourceCellIncarnation: string
@@ -151,6 +154,7 @@ export type RegionalRehomeControl = {
   notBefore: number
   ratePerMinute: number
   preferenceMaxAgeMs: number
+  hostCooldownMs: number
   drainGraceMs: number
 }
 
@@ -4921,6 +4925,7 @@ export class RelayAssignmentStore {
     notBefore: number
     ratePerMinute: number
     preferenceMaxAgeMs: number
+    hostCooldownMs: number
     drainGraceMs: number
   }): Promise<RegionalRehomeControl> {
     if (!Number.isSafeInteger(input.expectedGeneration) || input.expectedGeneration < 0) {
@@ -4938,6 +4943,13 @@ export class RelayAssignmentStore {
       input.preferenceMaxAgeMs > 30 * 24 * 60 * 60_000
     ) {
       throw new Error('invalid_regional_rehome_preference_age')
+    }
+    if (
+      !Number.isSafeInteger(input.hostCooldownMs) ||
+      input.hostCooldownMs < 60_000 ||
+      input.hostCooldownMs > 30 * 24 * 60 * 60_000
+    ) {
+      throw new Error('invalid_regional_rehome_host_cooldown')
     }
     if (
       !Number.isSafeInteger(input.drainGraceMs) ||
@@ -4967,14 +4979,15 @@ export class RelayAssignmentStore {
       await transaction.query(
         `UPDATE relay_region_rehome_control
          SET generation = generation + 1, enabled = ?, not_before = ?,
-             rate_per_minute = ?, preference_max_age_ms = ?, drain_grace_ms = ?,
-             updated_at = ?
+             rate_per_minute = ?, preference_max_age_ms = ?, host_cooldown_ms = ?,
+             drain_grace_ms = ?, updated_at = ?
          WHERE control_id = 'global'`,
         [
           input.enabled ? 1 : 0,
           input.notBefore,
           input.ratePerMinute,
           input.preferenceMaxAgeMs,
+          input.hostCooldownMs,
           input.drainGraceMs,
           now
         ]
@@ -5006,10 +5019,17 @@ export class RelayAssignmentStore {
     await database.query(
       `INSERT INTO relay_region_rehome_control
        (control_id, generation, enabled, observation_started_at, not_before,
-        rate_per_minute, preference_max_age_ms, drain_grace_ms, updated_at)
-       VALUES ('global', 0, 0, ?, 0, 10, ?, ?, ?)
+        rate_per_minute, preference_max_age_ms, host_cooldown_ms, drain_grace_ms,
+        updated_at)
+       VALUES ('global', 0, 0, ?, 0, 10, ?, ?, ?, ?)
        ON CONFLICT (control_id) DO NOTHING`,
-      [now, 24 * 60 * 60_000, 60 * 60_000, now]
+      [
+        now,
+        24 * 60 * 60_000,
+        REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS,
+        60 * 60_000,
+        now
+      ]
     )
   }
 
@@ -5017,6 +5037,9 @@ export class RelayAssignmentStore {
     return await this.readRegionalRehomeFleetSafety(this.database, this.now())
   }
 
+  // The rehome fleet is every general cell that can be drained: those are the
+  // sources and, because a host must be movable back out again, the only legal
+  // targets. The region join stays so a cell with no region row is excluded.
   private async readRegionalRehomeFleetSafety(
     database: RelayDatabase,
     now: number
@@ -5037,10 +5060,7 @@ export class RelayAssignmentStore {
          ON safety.cell_id = runtime.cell_id
         AND safety.cell_incarnation = runtime.cell_incarnation
        WHERE cell.enabled = 1 AND admission.admission_state = 'general'
-         AND (
-           region.region = 'asia-east2' OR
-           (region.region = 'us-central1' AND capability.regional_rehome_protocol >= 1)
-         )`
+         AND capability.regional_rehome_protocol >= 1`
     )
     const valid = rows.filter(
       (row) =>
@@ -5119,6 +5139,10 @@ export class RelayAssignmentStore {
       }
       const intervalMs = Math.ceil(60_000 / integer(control, 'rate_per_minute'))
       const preferenceCutoff = now - integer(control, 'preference_max_age_ms')
+      // A host that was rehomed recently is left alone whichever way its
+      // preference now points: a flapping region probe must not walk one host
+      // back and forth across an ocean.
+      const cooldownCutoff = now - integer(control, 'host_cooldown_ms')
       await transaction.query(
         `INSERT INTO relay_region_rehome_worker_state
          (worker_id, next_dispatch_at, paused_until, consecutive_failures, updated_at)
@@ -5284,9 +5308,8 @@ export class RelayAssignmentStore {
          JOIN relay_cell_capabilities capability
            ON capability.cell_id = runtime.cell_id
           AND capability.cell_incarnation = runtime.cell_incarnation
-         WHERE preference.preferred_region = 'asia-east2'
+         WHERE preference.preferred_region <> region.region
            AND preference.observed_at >= ?
-           AND region.region = 'us-central1'
            AND admission.admission_state = 'general'
            AND runtime.ready = 1 AND runtime.last_heartbeat_at > ?
            AND capability.regional_rehome_protocol >= 1
@@ -5306,9 +5329,38 @@ export class RelayAssignmentStore {
                AND migration.relay_host_id = assignment.relay_host_id
                AND migration.completed_at IS NULL AND migration.aborted_at IS NULL
            )
+           AND NOT EXISTS (
+             SELECT 1 FROM relay_region_rehome_attempts recent
+             WHERE recent.user_id = preference.user_id
+               AND recent.relay_host_id = preference.relay_host_id
+               AND recent.created_at > ?
+           )
+           AND EXISTS (
+             SELECT 1 FROM relay_cell_regions target_region
+             JOIN relay_cells target_cell ON target_cell.cell_id = target_region.cell_id
+             JOIN relay_cell_admission target_admission
+               ON target_admission.cell_id = target_region.cell_id
+             JOIN relay_cell_runtime target_runtime
+               ON target_runtime.cell_id = target_region.cell_id
+             JOIN relay_cell_capabilities target_capability
+               ON target_capability.cell_id = target_runtime.cell_id
+              AND target_capability.cell_incarnation = target_runtime.cell_incarnation
+             WHERE target_region.region = preference.preferred_region
+               AND target_cell.enabled = 1
+               AND target_admission.admission_state = 'general'
+               AND target_runtime.ready = 1
+               AND target_runtime.last_heartbeat_at > ?
+               AND target_capability.regional_rehome_protocol >= 1
+           )
          ORDER BY preference.observed_at, preference.user_id, preference.relay_host_id
          LIMIT 10`,
-        [preferenceCutoff, now - this.heartbeatTtlMs, now]
+        [
+          preferenceCutoff,
+          now - this.heartbeatTtlMs,
+          now,
+          cooldownCutoff,
+          now - this.heartbeatTtlMs
+        ]
       )
       candidatesTotal = candidates.length
       for (const candidate of candidates) {
@@ -5320,6 +5372,7 @@ export class RelayAssignmentStore {
           sourceCellId: text(candidate, 'source_cell_id'),
           assignmentEpoch: integer(candidate, 'assignment_epoch'),
           preferenceCutoff,
+          cooldownCutoff,
           drainGraceMs: integer(control, 'drain_grace_ms'),
           processSafety: effectiveProcessSafety,
           worker,
@@ -5374,6 +5427,7 @@ export class RelayAssignmentStore {
       sourceCellId: string
       assignmentEpoch: number
       preferenceCutoff: number
+      cooldownCutoff: number
       drainGraceMs: number
       processSafety: RegionalRehomeSafetySnapshot
       worker: SqlRow
@@ -5397,14 +5451,11 @@ export class RelayAssignmentStore {
         [input.identity.userId, input.identity.relayHostId]
       )
     )[0]
-    if (
-      !preference ||
-      text(preference, 'preferred_region') !== 'asia-east2' ||
-      integer(preference, 'observed_at') < input.preferenceCutoff
-    ) {
+    if (!preference || integer(preference, 'observed_at') < input.preferenceCutoff) {
       input.skips.push({ reason: 'candidate_stale' })
       return null
     }
+    const preferredRegion = relayRegion(preference, 'preferred_region')
     const activeMigration = await transaction.queryLocked(
       `SELECT assignment_epoch FROM relay_assignment_migrations
        WHERE user_id = ? AND relay_host_id = ?
@@ -5413,6 +5464,18 @@ export class RelayAssignmentStore {
     )
     if (activeMigration.length > 0) {
       input.skips.push({ reason: 'candidate_stale' })
+      return null
+    }
+    // Re-read under the claim: an attempt committed between the scan and here
+    // would otherwise start a second move for the same host.
+    const recentAttempt = await transaction.query(
+      `SELECT 1 FROM relay_region_rehome_attempts
+       WHERE user_id = ? AND relay_host_id = ? AND created_at > ?
+       LIMIT 1`,
+      [input.identity.userId, input.identity.relayHostId, input.cooldownCutoff]
+    )
+    if (recentAttempt.length > 0) {
+      input.skips.push({ reason: 'host_cooldown' })
       return null
     }
     const activityLeases = await this.lockAssignmentActivities(transaction, input.identity)
@@ -5469,11 +5532,17 @@ export class RelayAssignmentStore {
       )
       return null
     }
+    // The preference read under lock can now agree with the cell the host is
+    // already on: nothing to move, in either direction.
+    if (regions.get(input.sourceCellId) === preferredRegion) {
+      input.skips.push({ reason: 'candidate_stale' })
+      return null
+    }
     if (
       !source ||
       integer(source, 'enabled') !== 1 ||
       admission.get(input.sourceCellId) !== 'general' ||
-      regions.get(input.sourceCellId) !== RELAY_DEFAULT_REGION ||
+      regions.get(input.sourceCellId) === undefined ||
       !sourceRuntime ||
       integer(sourceRuntime, 'ready') !== 1 ||
       integer(sourceRuntime, 'last_heartbeat_at') <= input.now - this.heartbeatTtlMs ||
@@ -5502,17 +5571,25 @@ export class RelayAssignmentStore {
       return null
     }
     const connectionHeadroom = await this.connectionHeadroomByCell(transaction)
+    // A target must be drainable too, or the host lands somewhere it can never
+    // be rehomed out of again -- the trap this bidirectional move exists to undo.
     const eligibleTargets = cells.filter((row) => {
       const cellId = text(row, 'cell_id')
       const runtime = runtimes.find((candidate) => text(candidate, 'cell_id') === cellId)
+      const capability = capabilities.find(
+        (candidate) => text(candidate, 'cell_id') === cellId
+      )
       return (
         cellId !== input.sourceCellId &&
         integer(row, 'enabled') === 1 &&
         admission.get(cellId) === 'general' &&
-        regions.get(cellId) === 'asia-east2' &&
+        regions.get(cellId) === preferredRegion &&
         runtime !== undefined &&
         integer(runtime, 'ready') === 1 &&
-        integer(runtime, 'last_heartbeat_at') > input.now - this.heartbeatTtlMs
+        integer(runtime, 'last_heartbeat_at') > input.now - this.heartbeatTtlMs &&
+        capability !== undefined &&
+        text(capability, 'cell_incarnation') === text(runtime, 'cell_incarnation') &&
+        integer(capability, 'regional_rehome_protocol') >= 1
       )
     })
     const targetIsClean = (row: SqlRow): boolean => {
@@ -5668,12 +5745,13 @@ export class RelayAssignmentStore {
         drain_grace_ms, send_attempts, last_send_attempt_at,
         drain_receipt_at, drain_outcome, completed_at, aborted_at,
         created_at, updated_at)
-       VALUES (?, ?, ?, 'asia-east2', ?, ?, ?, ?, ?, ?, ?, 0, NULL,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL,
          NULL, NULL, NULL, NULL, ?, ?)`,
       [
         attemptId,
         input.identity.userId,
         input.identity.relayHostId,
+        preferredRegion,
         input.sourceCellId,
         text(sourceRuntime, 'cell_incarnation'),
         targetCellId,
@@ -5688,7 +5766,7 @@ export class RelayAssignmentStore {
     return {
       ...input.identity,
       attemptId,
-      preferredRegion: 'asia-east2',
+      preferredRegion,
       sourceCellId: input.sourceCellId,
       sourceCellUrl: text(source, 'cell_url'),
       sourceCellIncarnation: text(sourceRuntime, 'cell_incarnation'),
@@ -8101,7 +8179,7 @@ function regionalRehomeAttempt(row: SqlRow): RegionalRehomeAttempt {
     attemptId: text(row, 'attempt_id'),
     userId: text(row, 'user_id'),
     relayHostId: text(row, 'relay_host_id'),
-    preferredRegion: 'asia-east2',
+    preferredRegion: relayRegion(row, 'preferred_region'),
     sourceCellId: text(row, 'source_cell_id'),
     sourceCellUrl: text(row, 'source_cell_url'),
     sourceCellIncarnation: text(row, 'source_cell_incarnation'),
@@ -8122,6 +8200,7 @@ function regionalRehomeControl(row: SqlRow): RegionalRehomeControl {
     notBefore: integer(row, 'not_before'),
     ratePerMinute: integer(row, 'rate_per_minute'),
     preferenceMaxAgeMs: integer(row, 'preference_max_age_ms'),
+    hostCooldownMs: integer(row, 'host_cooldown_ms'),
     drainGraceMs: integer(row, 'drain_grace_ms')
   }
 }
@@ -8161,10 +8240,9 @@ function regionalRehomeFleetSafetyFromInventory(input: {
     return (
       integer(row, 'enabled') === 1 &&
       input.admission.get(cellId) === 'general' &&
-      (input.regions.get(cellId) === 'asia-east2' ||
-        (input.regions.get(cellId) === RELAY_DEFAULT_REGION &&
-          capability !== undefined &&
-          integer(capability, 'regional_rehome_protocol') >= 1))
+      input.regions.get(cellId) !== undefined &&
+      capability !== undefined &&
+      integer(capability, 'regional_rehome_protocol') >= 1
     )
   })
   const valid = required.flatMap((row) => {
@@ -8231,6 +8309,7 @@ function regionalRehomeFleetSafetyFailure(
 type RegionalRehomeCandidateSkip = {
   reason:
     | 'candidate_stale'
+    | 'host_cooldown'
     | 'source_ineligible'
     | 'source_unclean'
     | 'source_control_inactive'

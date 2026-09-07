@@ -71,7 +71,29 @@ export function sendStructuredAgentSessionTurn(
     beforeRun?: () => void
   }
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
-  return mutate(context, caller, params.envelope, sendPlan(params))
+  const plan = sendPlan(params)
+  return mutate(context, caller, params.envelope, {
+    ...plan,
+    run: (ctx) => {
+      const command = context.deps.store.getRecord(ctx.sessionId)?.conversationCommand
+      if (
+        command &&
+        ((command.state === 'unknown' && command.phase === 'prepared') ||
+          (command.command === 'clear' && command.replacementSessionId))
+      ) {
+        return Promise.resolve({
+          ok: false,
+          refusal: {
+            code: 'agent_session_operation_invalid',
+            message: command.replacementSessionId
+              ? 'This conversation has been cleared. Use the current conversation.'
+              : 'The conversation operation is unconfirmed.'
+          }
+        })
+      }
+      return plan.run(ctx)
+    }
+  })
 }
 
 export function cancelStructuredAgentSessionTurn(
@@ -84,7 +106,17 @@ export function cancelStructuredAgentSessionTurn(
     taskId?: string
   }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
-  return mutate(context, caller, params.envelope, cancelPlan(params))
+  const command = context.deps.store.getRecord(params.envelope.sessionId)?.conversationCommand
+  // Interrupts must reach a provider while the command awaits its terminal frame.
+  const cancellationContext =
+    command?.command === 'compact' && command.phase === 'prepared'
+      ? {
+          ...context,
+          serialize: <T>(sessionId: string, task: () => Promise<T>) =>
+            context.serialize(`compact-cancel:${sessionId}`, task)
+        }
+      : context
+  return mutate(cancellationContext, caller, params.envelope, cancelPlan(params))
 }
 
 export function respondToStructuredAgentSessionPrompt(
@@ -118,7 +150,11 @@ export function readStructuredAgentSessionOptions(
     if (!context.deps.adapter.readOptions) {
       throw new Error('structured_agent_session_options_unsupported')
     }
-    return context.deps.adapter.readOptions({ sessionId, fence: session.fence })
+    const options = await context.deps.adapter.readOptions({ sessionId, fence: session.fence })
+    return {
+      ...options,
+      conversationCommands: context.deps.adapter.compact ? ['clear', 'compact'] : ['clear']
+    }
   })
 }
 

@@ -38,6 +38,47 @@ export const CHEAP_PS_ARGS = (
     : ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=']
 ) as readonly string[]
 
+/**
+ * Shell-proof tier: job control plus argv, dropping only the columns the shell predicate never
+ * reads — macOS `tty=` (0.29s of the 0.34s on a 1,900-process Mac) and the start marker. Enough
+ * to name a pane's foreground process; never enough to correlate a pid across captures.
+ */
+export const SHELL_FOREGROUND_PS_ARGS = [
+  '-axo',
+  'pid=,ppid=,pgid=,tpgid=,stat=,command='
+] as readonly string[]
+
+/**
+ * Parse a {@link SHELL_FOREGROUND_PS_ARGS} capture, anchored to exactly those columns.
+ * Not {@link parseProcessTableRows}: with no `tty=` to absorb it, that parser's optional
+ * tty/start pair eats the head of an argv shaped `python 3 app.py`, and a command-less zombie
+ * row parses into a garbage pid/stat pair.
+ *
+ * Lenient per row like its siblings, but a capture yielding none is unreadable rather than a
+ * machine with no processes: the shell proof must not read that as "the shell is gone".
+ */
+export function parseShellForegroundRows(stdout: string): ProcessTableRow[] {
+  const rows: ProcessTableRow[] = []
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const match = rawLine.trim().match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/)
+    const pid = match ? Number(match[1]) : 0
+    if (match && Number.isSafeInteger(pid) && pid > 0) {
+      rows.push({
+        pid,
+        ppid: Number(match[2]),
+        pgid: Number(match[3]),
+        tpgid: Number(match[4]),
+        stat: match[5],
+        command: match[6]
+      })
+    }
+  }
+  if (rows.length === 0) {
+    throw new ProcessTableCaptureError('empty_capture')
+  }
+  return rows
+}
+
 export type CheapProcessTableRow = {
   pid: number
   ppid: number

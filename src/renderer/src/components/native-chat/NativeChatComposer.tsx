@@ -1,9 +1,7 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from 'react'
+import { forwardRef, useCallback, useImperativeHandle, useState } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { structuredSlashCommands } from '../../../../shared/structured-agent-session-composer'
 import {
   applyMentionSuggestion,
   EMPTY_HISTORY,
@@ -22,6 +20,7 @@ import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import { useNativeChatDictationActions } from './use-native-chat-dictation-actions'
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
+import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
@@ -109,10 +108,9 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       dictationState === 'listening' ||
       dictationState === 'stopping'
 
-    const agentCommands = useMemo(
-      () =>
-        structuredTransport ? structuredSlashCommands(agent) : getVerifiedNativeChatCommands(agent),
-      [agent, structuredTransport]
+    const { agentCommands, sessionSkillNames } = useNativeChatComposerCatalog(
+      agent,
+      structuredTransport
     )
     const picker = useNativeChatPickerState({
       agent,
@@ -121,6 +119,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draft,
       caret,
       agentCommands,
+      sessionSkillNames,
       textareaRef,
       setDraft,
       setCaret,
@@ -244,6 +243,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
+      draft,
       imageAttachments,
       structuredTransport,
       clearImageAttachments,

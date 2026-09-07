@@ -90,6 +90,24 @@ export async function importLegacyTranscriptIntoJournal(input: {
   fence: number
   options?: LegacyImportOptions
 }): Promise<LegacyImportResult> {
+  const prepared = await prepareLegacyTranscriptImport(input)
+  if (!prepared.ok) {
+    return prepared
+  }
+  // An empty import must preserve any existing repair anchor and disclosure.
+  if (prepared.items.length === 0) {
+    const current = input.journal.cursor()
+    return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
+  }
+  const cursor = await input.journal.replaceEpochItems('legacy_import', input.fence, prepared.items)
+  return { ok: true, epoch: cursor.epoch, cursor, imported: prepared.items.length, replaced: true }
+}
+
+export async function prepareLegacyTranscriptImport(input: {
+  agent: AgentType
+  sessionId: string
+  options?: LegacyImportOptions
+}): Promise<{ ok: true; items: JournalReplacementItem[] } | { ok: false; error: string }> {
   const options = input.options ?? {}
   const limits = options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
   const transcriptAgent = resolveNativeChatTranscriptAgent(input.agent)
@@ -145,22 +163,7 @@ export async function importLegacyTranscriptIntoJournal(input: {
       observedAt: message.timestamp ?? undefined
     })
   }
-  // A transcript that decodes to nothing reconstructs nothing, and an empty
-  // replacement is not a harmless no-op: it would delete the repair's anchor and
-  // its disclosure, leaving nothing to ask for the history again. The epoch
-  // stands so a later read can still rebuild it.
-  if (replacement.length === 0) {
-    const current = input.journal.cursor()
-    return { ok: true, epoch: current.epoch, cursor: current, imported: 0, replaced: false }
-  }
-  const cursor = await input.journal.replaceEpochItems('legacy_import', input.fence, replacement)
-  return {
-    ok: true,
-    epoch: cursor.epoch,
-    cursor,
-    imported: decoded.messages.length,
-    replaced: true
-  }
+  return { ok: true, items: replacement }
 }
 
 const TRANSCRIPT_DECODERS = {

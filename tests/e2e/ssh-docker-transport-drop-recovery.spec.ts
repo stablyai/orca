@@ -163,10 +163,7 @@ test.describe('SSH transport drop recovery', () => {
     }
   })
 
-  // #18018: local authority-aware recovery still loses the flooded pane's relay channel.
-  test.fixme('stays bounded when a disconnected shell floods its pty', async ({
-    orcaPage
-  }, testInfo) => {
+  test('stays bounded when a disconnected shell floods its pty', async ({ orcaPage }, testInfo) => {
     test.slow()
     // Timeouts here are deliberately generous: this guards memory, not latency. A 48MB flood plus a
     // reconnect lands near 60s wall-clock end to end, so a 60s bind timeout was marginal and made
