@@ -156,13 +156,15 @@ export function resolveCodexUsageDelta(
 }
 
 export function buildCodexUsageEventKey(
+  rootThreadId: string | null | undefined,
   totalUsage: CodexUsageRawUsage | null,
   lastUsage: CodexUsageRawUsage | null
 ): string {
   // Why: fork/resume rollouts copy token_count records into new files, but Codex
   // rewrites copied record timestamps to the fork creation time while preserving
-  // monotonic token usage snapshots and deltas. Key only on the usage tuples so
-  // copied history dedupes across forks even when timestamps are rewritten (#19139).
+  // monotonic token usage snapshots and deltas. Key on root thread identity and
+  // token usage tuples so copied history dedupes across forks even when timestamps
+  // are rewritten (#19139), while preventing collisions between unrelated sessions.
   const tupleOf = (usage: CodexUsageRawUsage | null): string =>
     usage
       ? [
@@ -173,5 +175,5 @@ export function buildCodexUsageEventKey(
           usage.totalTokens
         ].join(',')
       : ''
-  return [tupleOf(totalUsage), tupleOf(lastUsage)].join('|')
+  return [rootThreadId ?? '', tupleOf(totalUsage), tupleOf(lastUsage)].join('|')
 }

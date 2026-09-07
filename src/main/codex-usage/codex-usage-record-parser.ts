@@ -15,6 +15,7 @@ type CodexUsageRawRecord = {
 
 export type CodexUsageParseContext = {
   sessionId: string
+  rootThreadId?: string | null
   sessionCwd: string | null
   currentCwd: string | null
   currentModel: string | null
@@ -77,6 +78,10 @@ export function parseCodexUsageRecord(
 
   if (parsed.type === 'session_meta') {
     context.sessionId = extractString(parsed.payload.id) ?? context.sessionId
+    const rootThreadId = extractString(parsed.payload.session_id)
+    if (rootThreadId) {
+      context.rootThreadId = rootThreadId
+    }
     context.sessionCwd = extractString(parsed.payload.cwd)
     if (!context.currentCwd && context.sessionCwd) {
       context.currentCwd = context.sessionCwd
@@ -148,7 +153,7 @@ export function parseCodexUsageRecord(
   return {
     sessionId: context.sessionId,
     timestamp: parsed.timestamp,
-    eventKey: buildCodexUsageEventKey(totalUsage, lastUsage),
+    eventKey: buildCodexUsageEventKey(context.rootThreadId, totalUsage, lastUsage),
     cwd: context.currentCwd ?? context.sessionCwd,
     model: resolvedModel,
     hasInferredPricing,

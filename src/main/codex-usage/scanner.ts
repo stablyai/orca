@@ -80,6 +80,7 @@ export async function parseCodexUsageFile(
   const events: CodexUsageAttributedEvent[] = []
   const context: CodexUsageParseContext = {
     sessionId: basename(filePath, '.jsonl'),
+    rootThreadId: null,
     sessionCwd: null,
     currentCwd: null,
     currentModel: null,

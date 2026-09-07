@@ -554,6 +554,38 @@ describe('listCodexSessionFiles', () => {
     expect(result.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
   })
 
+  it('does not collide identical usage events from unrelated root sessions', async () => {
+    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+    mkdirSync(sessionsDir, { recursive: true })
+    const session1Path = join(sessionsDir, 'aaaa-session-1.jsonl')
+    const session2Path = join(sessionsDir, 'bbbb-session-2.jsonl')
+    const session1Content = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { session_id: 'thread-1', id: 'session-1', cwd: join(fakeHomeDir, 'repo') }
+      })}\n`,
+      usageRecord('2026-05-26T12:00:00.000Z', 10)
+    ].join('')
+    // Completely unrelated session with identical token usage (e.g. standard system prompt)
+    const session2Content = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { session_id: 'thread-2', id: 'session-2', cwd: join(fakeHomeDir, 'repo') }
+      })}\n`,
+      usageRecord('2026-05-26T12:00:00.000Z', 10)
+    ].join('')
+    writeFileSync(session1Path, session1Content, 'utf-8')
+    writeFileSync(session2Path, session2Content, 'utf-8')
+
+    const result = await scanCodexUsageFiles([], [])
+    expect(
+      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(20)
+    expect(result.processedFiles[0]?.ownedEventKeys).toHaveLength(1)
+    expect(result.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
+    expect(result.processedFiles[1]?.hasDeferredClaims).toBe(false)
+  })
+
   it('reclaims copied token events when the owning original file is deleted', async () => {
     const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
     mkdirSync(sessionsDir, { recursive: true })
