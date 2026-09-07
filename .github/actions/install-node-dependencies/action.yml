@@ -77,14 +77,6 @@ runs:
             ;;
         esac
 
-    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
-    - name: Use external node-gyp
-      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
-      shell: bash
-      run: |
-        npm install -g node-gyp@11.5.0
-        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
     - name: Prepare dependency install
       shell: bash
       run: |
@@ -174,6 +166,22 @@ runs:
           node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
           node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
         key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+
+    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    - name: Use external node-gyp
+      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+        NATIVE_CACHE_HIT: ${{ steps.native-cache-restore.outputs.cache-hit || steps.native-cache-restore-only.outputs.cache-hit }}
+      run: |
+        # A cache hit can contain unusable addons; probe before skipping the rebuild toolchain.
+        if [ "$NATIVE_RUNTIME" = node ] && [ "$NATIVE_CACHE_HIT" = true ] &&
+          node config/scripts/ensure-native-runtime.mjs --check-only; then
+          exit 0
+        fi
+        npm install -g node-gyp@11.5.0
+        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
     - name: Prepare native runtime
       if: inputs.native-runtime != 'none'

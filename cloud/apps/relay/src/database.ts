@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import pg from 'pg'
+import { RELAY_REGIONS } from '@orca-cloud/relay-contract'
 import {
   emptyPostgresPoolPressureCounts,
   PostgresPoolPressure,
@@ -23,6 +24,14 @@ function setLocalLockTimeout(milliseconds: number): string {
   }
   return `SET LOCAL lock_timeout = '${milliseconds}ms'`
 }
+
+// Region CHECK lists come from the contract so a new region cannot leave a
+// column rejecting values the rest of the relay already accepts.
+const REGION_LIST = RELAY_REGIONS.map((region) => `'${region}'`).join(', ')
+
+// A host that was just moved is not a candidate again for this long, so a
+// desktop whose region probe flips cannot walk itself back and forth.
+export const REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS = 7 * 24 * 60 * 60_000
 
 export type SqlRow = Record<string, unknown>
 export type RelayLockOptions = {
@@ -181,7 +190,7 @@ CREATE TABLE IF NOT EXISTS relay_assignment_region_preferences (
   user_id TEXT NOT NULL,
   relay_host_id TEXT NOT NULL,
   preferred_region TEXT NOT NULL
-    CHECK (preferred_region IN ('us-central1', 'asia-east2')),
+    CHECK (preferred_region IN (${REGION_LIST})),
   observed_at BIGINT NOT NULL,
   PRIMARY KEY (user_id, relay_host_id)
 );
@@ -204,6 +213,8 @@ CREATE TABLE IF NOT EXISTS relay_region_rehome_control (
   not_before BIGINT NOT NULL,
   rate_per_minute BIGINT NOT NULL,
   preference_max_age_ms BIGINT NOT NULL,
+  host_cooldown_ms BIGINT NOT NULL
+    DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS},
   drain_grace_ms BIGINT NOT NULL,
   updated_at BIGINT NOT NULL
 );
@@ -212,7 +223,9 @@ CREATE TABLE IF NOT EXISTS relay_region_rehome_attempts (
   attempt_id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   relay_host_id TEXT NOT NULL,
-  preferred_region TEXT NOT NULL CHECK (preferred_region = 'asia-east2'),
+  preferred_region TEXT NOT NULL
+    CONSTRAINT relay_region_rehome_attempts_preferred_region_valid
+    CHECK (preferred_region IN (${REGION_LIST})),
   source_cell_id TEXT NOT NULL,
   source_cell_incarnation TEXT NOT NULL,
   target_cell_id TEXT NOT NULL,
@@ -234,6 +247,8 @@ CREATE TABLE IF NOT EXISTS relay_region_rehome_attempts (
 );
 CREATE INDEX IF NOT EXISTS relay_region_rehome_attempts_pending
   ON relay_region_rehome_attempts(drain_receipt_at, last_send_attempt_at, completed_at, aborted_at);
+CREATE INDEX IF NOT EXISTS relay_region_rehome_attempts_host_recency
+  ON relay_region_rehome_attempts(user_id, relay_host_id, created_at);
 
 CREATE TABLE IF NOT EXISTS relay_cells (
   cell_id TEXT PRIMARY KEY,
@@ -248,7 +263,7 @@ CREATE TABLE IF NOT EXISTS relay_cells (
 
 CREATE TABLE IF NOT EXISTS relay_cell_regions (
   cell_id TEXT PRIMARY KEY,
-  region TEXT NOT NULL CHECK (region IN ('us-central1', 'asia-east2'))
+  region TEXT NOT NULL CHECK (region IN (${REGION_LIST}))
 );
 
 CREATE TABLE IF NOT EXISTS relay_cell_admission (
@@ -580,6 +595,21 @@ CREATE TABLE IF NOT EXISTS relay_audit_events (
 CREATE INDEX IF NOT EXISTS relay_audit_events_at ON relay_audit_events(at);
 `
 
+// Rehoming is bidirectional, but tables created before that carry the
+// original single-region column check. The old constraint is the one Postgres
+// auto-named; the replacement is named, so both statements are no-ops on a
+// database the current schema created and neither can drop the other.
+export const POSTGRES_SCHEMA_MIGRATIONS = [
+  `ALTER TABLE relay_region_rehome_attempts
+     DROP CONSTRAINT IF EXISTS relay_region_rehome_attempts_preferred_region_check`,
+  `ALTER TABLE relay_region_rehome_attempts
+     ADD CONSTRAINT relay_region_rehome_attempts_preferred_region_valid
+     CHECK (preferred_region IN (${REGION_LIST}))`,
+  `ALTER TABLE relay_region_rehome_control
+     ADD COLUMN IF NOT EXISTS host_cooldown_ms BIGINT NOT NULL
+     DEFAULT ${REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS}`
+]
+
 function postgresSql(sql: string): string {
   let index = 0
   return sql.replace(/\?/g, () => `$${++index}`)
@@ -796,12 +826,34 @@ class PostgresTransaction implements RelayDatabase {
 const POSTGRES_TRANSACTION_ATTEMPTS = 3
 const POSTGRES_RETRY_MAX_DELAY_MS = 25
 const POSTGRES_CONNECTION_TIMEOUT_MS = 2_000
-const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
+// Derivation: a control renewal must land inside its own 30s tick
+// (RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2), and a transaction gets
+// POSTGRES_TRANSACTION_ATTEMPTS tries, so the worst case a renewal can spend in
+// Postgres is attempts * timeout. 5s keeps that at 15s, half the tick, and still
+// leaves room for the connect timeout above.
+export const POSTGRES_STATEMENT_TIMEOUT_MS = 5_000
 const POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS = 5_000
+
+export function relayPostgresStatementTimeoutMs(
+  env: NodeJS.ProcessEnv = process.env
+): number {
+  const configured = env.ORCA_RELAY_POSTGRES_STATEMENT_TIMEOUT_MS
+  if (configured === undefined || configured === '') return POSTGRES_STATEMENT_TIMEOUT_MS
+  const milliseconds = Number(configured)
+  // 0 is PostgreSQL's "no timeout"; refusing it keeps the deadline this exists
+  // to enforce from being disabled by a typo in an environment variable.
+  if (!Number.isInteger(milliseconds) || milliseconds < 1) {
+    throw new Error('invalid_statement_timeout')
+  }
+  return milliseconds
+}
 
 function retryablePostgresTransactionError(error: unknown): boolean {
   const code = String((error as { code?: unknown }).code)
-  return code === '40P01' || code === '40001' || code === '55P03'
+  // 57014 is the pool statement_timeout firing. It aborts the transaction the
+  // same way a lock timeout does, so it belongs on the bounded retry path
+  // rather than surfacing as a terminal failure to the caller.
+  return code === '40P01' || code === '40001' || code === '55P03' || code === '57014'
 }
 
 export function isRelayDatabaseTransientError(error: unknown): boolean {
@@ -963,11 +1015,39 @@ async function applySchema(database: RelayDatabase): Promise<void> {
   }
 }
 
-async function applySchemaWithPostgresRetries(database: RelayDatabase): Promise<void> {
-  await applyPostgresSchema(
-    SCHEMA.split(';').filter((statement) => statement.trim()),
-    async (statement) => await database.query(statement)
-  )
+// Why: DDL is not a request. A CREATE INDEX on a grown table legitimately runs
+// longer than the request statement_timeout, and inheriting that timeout would
+// make every startup fail at the same statement instead of finishing once. One
+// short-lived connection of its own, ended before the serving pool opens, keeps
+// the untimed session off the request path entirely.
+async function applySchemaOnUntimedPool(
+  databaseUrl: string,
+  applicationName: string | undefined
+): Promise<void> {
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 1,
+    application_name: applicationName ? `${applicationName}/schema` : undefined,
+    connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
+    statement_timeout: 0,
+    // Kept: a DDL blocked behind another director's ACCESS EXCLUSIVE lock must
+    // yield to the bounded schema retry instead of holding the connection.
+    lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
+    idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
+  })
+  absorbPostgresIdleClientErrors(pool)
+  const database = new PostgresDatabase(pool)
+  try {
+    await applyPostgresSchema(
+      [
+        ...SCHEMA.split(';').filter((statement) => statement.trim()),
+        ...POSTGRES_SCHEMA_MIGRATIONS
+      ],
+      async (statement) => await database.query(statement)
+    )
+  } finally {
+    await database.close().catch(() => undefined)
+  }
 }
 
 async function backfillRelayCellRegions(database: RelayDatabase): Promise<void> {
@@ -983,15 +1063,17 @@ export async function openRelayDatabase(input: {
   dataDir: string
   poolMax?: number
   applicationName?: string
+  statementTimeoutMs?: number
 }): Promise<RelayDatabase> {
   let database: RelayDatabase
   if (input.databaseUrl) {
+    await applySchemaOnUntimedPool(input.databaseUrl, input.applicationName)
     const pool = new pg.Pool({
       connectionString: input.databaseUrl,
       max: input.poolMax ?? 10,
       application_name: input.applicationName,
       connectionTimeoutMillis: POSTGRES_CONNECTION_TIMEOUT_MS,
-      statement_timeout: POSTGRES_STATEMENT_TIMEOUT_MS,
+      statement_timeout: input.statementTimeoutMs ?? relayPostgresStatementTimeoutMs(),
       lock_timeout: POSTGRES_LOCK_TIMEOUT_MS,
       idle_in_transaction_session_timeout: POSTGRES_IDLE_TRANSACTION_TIMEOUT_MS
     })
@@ -1004,8 +1086,7 @@ export async function openRelayDatabase(input: {
     database = new SqliteDatabase(sqlite)
   }
   try {
-    if (input.databaseUrl) await applySchemaWithPostgresRetries(database)
-    else await applySchema(database)
+    if (!input.databaseUrl) await applySchema(database)
     await backfillRelayCellRegions(database)
     return database
   } catch (error) {

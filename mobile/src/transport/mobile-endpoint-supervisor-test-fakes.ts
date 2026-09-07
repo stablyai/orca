@@ -134,10 +134,22 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     }
   })
   isPairingRejected = () => this.pairingRejected
+  private hostSignedOut = false
+  setHostSignedOut = vi.fn((signedOut: boolean) => {
+    if (this.hostSignedOut === signedOut) {
+      return
+    }
+    this.hostSignedOut = signedOut
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isHostSignedOut = () => this.hostSignedOut
   // Mirrors LogicalClientConnectionPath.clearAfterConnected.
   publishState(state: ConnectionState): void {
     if (state === 'connected') {
       this.pairingRejected = false
+      this.hostSignedOut = false
     }
     super.publishState(state)
   }

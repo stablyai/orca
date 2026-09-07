@@ -15,6 +15,8 @@ type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   onChildTerminated?: () => void
   admissionTier?: GitAdmissionTier
   createTimeoutError?: () => Error
+  /** Called once when the deadline — not an abort — is what ended the process. */
+  onDeadlineKill?: () => void
 }
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -53,6 +55,9 @@ export async function execFileCaptureToTermination(
     !options.signal?.aborted
   ) {
     return { stdout, stderr }
+  }
+  if (result.timedOut && !options.signal?.aborted) {
+    options.onDeadlineKill?.()
   }
   const error = result.timedOut
     ? (options.createTimeoutError?.() ?? new Error(`${command} timed out.`))

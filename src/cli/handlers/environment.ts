@@ -50,10 +50,19 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       kind: 'ssh' as const,
       name: target.label,
       id: target.id,
-      selector: `--host ssh:${target.id}`
+      selector: `--host ssh:${target.id}`,
+      ...(target.connected === undefined ? {} : { connected: target.connected }),
+      ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
+      ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
     }))
     const hosts = [
-      { kind: 'local' as const, name: 'this machine', id: 'local', selector: '--host local' },
+      {
+        kind: 'local' as const,
+        name: 'this machine',
+        id: 'local',
+        selector: '--host local',
+        platform: process.platform
+      },
       ...sshTargets,
       ...environments
     ]

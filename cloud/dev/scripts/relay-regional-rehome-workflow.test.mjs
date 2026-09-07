@@ -73,7 +73,10 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
     job,
     /--rollback-image "\$\{DESIRED_IMAGE\}" \\\n {16}--rehome-director-service-account "\$\{DIRECTOR_RUNTIME_SERVICE_ACCOUNT\}"/
   )
-  assert.match(job, /host-drain \\\n {14}\| jq -e '\.changes == 2' >\/dev\/null/)
+  assert.match(
+    job,
+    /host-drain \\\n {16}--regional-rehome-protocol "\$\{DESIRED_REHOME_PROTOCOL\}" \\\n {14}\| jq -e '\.changes == 2' >\/dev\/null/
+  )
   assert.match(job, /resume requires the isolated migration-only cell/)
   assert.match(job, /test "\$\{TARGET_INCARNATION\}" = "\$\{SOURCE_INCARNATION\}"/)
   assert.match(job, /\(.regionalRehomeProtocol \/\/ 0\) == \$protocol/)
@@ -92,7 +95,11 @@ test('same-cap wrapper is reusable, canary-bound, and sequential', () => {
   // age checks must scale by wave or cell_2+ can never pass; the bound's
   // per-wave step is the cell job timeout, so the two must move together.
   assert.match(job, /--required-migration-policy strict \\\n            --wave-index "\$\{WAVE_INDEX\}"/)
-  assert.match(job, /dry-run\.state\.json" \\\n            --wave-index "\$\{WAVE_INDEX\}" "\$\{RETRY_ARGS\[@\]\}"/)
+  // Wave 0 must retry freshness-only failures too: one Cloud Monitoring publish
+  // lag at the sample instant is not health evidence, and single-shot wave 0
+  // failed a whole batch on a series that was fresh again a minute later.
+  assert.match(job, /dry-run\.state\.json" \\\n            --wave-index "\$\{WAVE_INDEX\}" --retry-freshness/)
+  assert.doesNotMatch(job, /RETRY_ARGS/)
   assert.match(job, /timeout-minutes: 75/)
   // Both age gates step by the cell job timeout above; the constant is
   // duplicated across the two languages, so pin each copy to it.

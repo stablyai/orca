@@ -106,7 +106,7 @@ export async function acquireCodexStructuredSession(input: {
         command: launch.command,
         args: launch.args,
         cwd: launch.cwd,
-        env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken)
+        env: buildCodexStructuredChildEnvironment(launch, acquireInput.spawnToken, sessionId)
       },
       {
         onNotification: (method, params) =>
@@ -192,6 +192,8 @@ export async function acquireCodexStructuredSession(input: {
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
       threadId: opened.threadId,
       historyPath: opened.historyPath,
+      historyMode: opened.historyMode,
+      activeTurnIds: new Set(),
       prompts: acquisition.prompts,
       options: restoredCodexSessionOptions(acquireInput.options),
       reportedOptions: reportedCodexThreadOptions(opened),

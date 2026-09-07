@@ -12,6 +12,12 @@ const TARGET = 'ssh-target'
 const TAB_ID = 'tab-candidacy'
 
 type LeaseReader = {
+  workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate: (
+    session: { terminalLayoutsByTabId?: Record<string, unknown> },
+    worktreeId: string,
+    tabs: { id: string; ptyId: string | null }[]
+  ) => boolean
+  collectRecentExpiredSshLeaseTabIds: (worktreeId: string) => ReadonlySet<string>
   getRecentExpiredSshLease: (
     worktreeId: string,
     tabId: string,
@@ -86,5 +92,46 @@ describe('recent expired SSH lease candidacy', () => {
       'pty-2'
     )
     expect(reader.hasRecentExpiredSshLeasePane(TEST_WORKTREE_ID, pane)).toBe(true)
+  })
+
+  it('collects the same tabs the per-tab reader reports, in one sweep of the leases', () => {
+    const leases = [leaseFor('pty-1', { supersededBy: 'pty-2' }), leaseFor('pty-2')]
+    let sweeps = 0
+    const reader = new OrcaRuntimeService({
+      ...store,
+      getSshRemotePtyLeases: () => {
+        sweeps += 1
+        return leases
+      }
+    }) as unknown as LeaseReader
+    const tabs = Array.from({ length: 8 }, (_, index) => ({
+      id: index === 7 ? TAB_ID : `tab-${index}`,
+      ptyId: null
+    }))
+
+    expect(
+      reader.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
+        { terminalLayoutsByTabId: {} },
+        TEST_WORKTREE_ID,
+        tabs
+      )
+    ).toBe(true)
+    // One sweep answers all eight tabs; the per-tab reader used to sweep once per tab.
+    expect(sweeps).toBe(1)
+    expect([...reader.collectRecentExpiredSshLeaseTabIds(TEST_WORKTREE_ID)]).toEqual([TAB_ID])
+  })
+
+  it('reports no candidate when no lease names any of the worktree tabs', () => {
+    const reader = readerWithLeases([
+      leaseFor('pty-1', { tabId: 'somewhere-else', leafId: undefined })
+    ])
+
+    expect(
+      reader.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(
+        { terminalLayoutsByTabId: {} },
+        TEST_WORKTREE_ID,
+        [{ id: TAB_ID, ptyId: null }]
+      )
+    ).toBe(false)
   })
 })

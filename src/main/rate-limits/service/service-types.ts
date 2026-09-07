@@ -50,6 +50,8 @@ export type MiniMaxRateLimitConfig = {
   sessionCookie: string
   groupId: string
   models: string
+  endpoint: 'overseas' | 'cn'
+  apiKey: string
 }
 
 export type MiniMaxResolvedConfig = {

@@ -186,6 +186,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ),
           agentsShowChildAgents: ui.agentsShowChildAgents === true,
           agentsCompactMode: ui.agentsCompactMode !== false,
+          agentsShowSearch: ui.agentsShowSearch !== false,
           agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
           agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),

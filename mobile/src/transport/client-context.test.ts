@@ -533,12 +533,12 @@ describe('useAllHostClients', () => {
       await Promise.resolve()
     })
     act(() => client.emitPendingPath('relay'))
-    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: false })
+    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: false, hostSignedOut: false })
 
     // Why: the desktop refusing the credential is a status-only change — no
     // transport state moves, so only the connection-path signal can carry it.
     act(() => client.emitPairingRejected(true))
-    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: true })
+    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: true, hostSignedOut: false })
 
     act(() => renderer.unmount())
   })

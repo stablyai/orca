@@ -4,6 +4,12 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 
 ## Electron UI Validation
 
+Always run tests and agent-launched apps in the background with `ORCA_BACKGROUND_LAUNCH=1`.
+Never steal monitor focus or reveal test windows: no `show()`, `showInactive()`, `bringToFront()`,
+`app.focus()`, or OS activation. Use CDP screenshots of hidden renderers. Keep native-focus and
+visible-window tests paused on the user's desktop; run them on an isolated display or CI.
+Rebuild modified launch-policy code before running an app; stale build wrappers are not safe.
+
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 
 # Style
@@ -47,23 +53,12 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 - **Shortcut labels in UI**: Display `⌘` / `⇧` on Mac and `Ctrl+` / `Shift+` on other platforms.
 - **File paths**: Use `path.join` or Electron/Node path utilities — never assume `/` or `\`.
 - **Windows setup scripts**: the setup/issue-command runner is a `.cmd` batch file unless the script starts with a `#!` line — never derive that from the user's terminal-shell preference, and never launch a `.cmd` runner with a bare `cmd.exe /c` from a Git Bash pane (MSYS rewrites the `/c`). See [`docs/reference/windows-setup-shell.md`](./docs/reference/windows-setup-shell.md).
-- **Windows child processes**: start them through `runProcess`/`spawnProcess` in `src/shared/child-process/` — never `child_process` directly. It pins `windowsHide`, refuses `shell: true`, and encodes `.cmd`/`.bat` arguments so neither `CommandLineToArgvW` nor `cmd.exe` mangles them. A ratchet test fails on any new direct import.
+- **Windows child processes**: start them through `runProcess`/`spawnProcess` in `src/shared/child-process/` — never `child_process` directly. It pins `windowsHide`, refuses `shell: true`, and encodes `.cmd`/`.bat` arguments so neither `CommandLineToArgvW` nor `cmd.exe` mangles them. A ratchet test fails on any new direct import. Recognised npm/pnpm `.cmd` shims are resolved to their real target so the spawn skips `cmd.exe` entirely; see [`docs/reference/windows-cmd-shim-resolution.md`](./docs/reference/windows-cmd-shim-resolution.md) before adding a shim shape or debugging one.
 - **Windows process enumeration**: read the table through `src/main/windows/windows-process-table.ts`, never by forking `powershell.exe`. See [`docs/reference/windows-process-enumeration.md`](./docs/reference/windows-process-enumeration.md).
+- **Windows daemon-host relocation**: the terminal daemon runs from a copy of the app runtime under `%LOCALAPPDATA%`, which is what survives an auto-update. Before touching that copy, its exe name, or the NSIS uninstall macro, read [`docs/reference/windows-daemon-host-relocation.md`](./docs/reference/windows-daemon-host-relocation.md).
 - **Windows EDR signal**: don't add `-ExecutionPolicy Bypass`, `-EncodedCommand`, `cmd.exe /c` with escaped free text, per-operation interpreter spawning, or runtime `Add-Type` compilation without reading [`docs/reference/windows-edr-posture.md`](./docs/reference/windows-edr-posture.md) first — behavioural EDR scores each of those, and being signed does not clear them.
 - **WSL commands**: build argv with `buildWslExecArgs` (always `--exec` — under `--`, `wsl.exe` expands `$name` in every argument and silently rewrites the script), and fence anything whose stdout you parse with `buildWslCapturedLoginShellCommand`, because the interactive login shell prints the distro banner to stdout. See [`docs/reference/wsl-command-execution.md`](./docs/reference/wsl-command-execution.md).
 - **Linux native modules**: keep the glibc floor at Ubuntu 20.04 / glibc 2.31. A module compiled from source on a newer runner can reference symbol versions absent on the floor and crash the app on startup. See [`docs/reference/linux-glibc-compatibility.md`](./docs/reference/linux-glibc-compatibility.md); packaging fails if a bundled native binary needs newer glibc.
-
-## Localization (i18n)
-
-All user-facing copy is localized. `src/renderer/src/i18n/locales/en.json` is the source of truth; the `zh`, `ja`, `ko`, and `es` catalogs mirror its keys. Strings reach the UI through `translate('auto.<key>', 'English fallback')` — never hardcode display text.
-
-When you touch user-facing copy, keep all five catalogs in sync:
-
-- **New strings** — wrap them in `translate(...)` with an English fallback, run `pnpm sync:localization-catalog` to register the keys in `en.json` and add placeholders to every other locale, then `pnpm bootstrap:<locale>-catalog` (e.g. `bootstrap:ja-catalog`) to translate the placeholders.
-- **Reworded strings** — changing the value of an existing key updates only `en.json`. The other locales keep the key with its old translation, and **the lint checks will not catch this**: `verify:localization-catalog` enforces key _parity_, not translation _freshness_. Update the same key in `zh/ja/ko/es` by hand, or re-translate it via `bootstrap:<locale>-catalog`.
-- **Removed strings** — delete the key from _every_ locale; the parity check rejects a key that exists in one catalog but not another.
-
-Before pushing copy changes, run `pnpm verify:localization-catalog` and `pnpm verify:localization-coverage` (both also run in `pnpm lint`).
 
 ## SSH Use Case
 

@@ -44,6 +44,7 @@ function sample(at: number): IncidentSample {
     expectedSelector: selector,
     cells: [{
       cellId,
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'general'

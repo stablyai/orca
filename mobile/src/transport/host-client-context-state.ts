@@ -89,8 +89,14 @@ export function createHostClientSelectors(
     getPendingPath: (hostId: string): MobileConnectionPath | null =>
       clientPendingPath(entries.get(hostId)?.client),
     isPairingRejected: (hostId: string): boolean =>
-      clientPairingRejected(entries.get(hostId)?.client)
+      clientPairingRejected(entries.get(hostId)?.client),
+    isHostSignedOut: (hostId: string): boolean => clientHostSignedOut(entries.get(hostId)?.client)
   }
+}
+
+export function clientHostSignedOut(client: RpcClient | undefined): boolean {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.isHostSignedOut?.() ?? false
 }
 
 export function clientPairingRejected(client: RpcClient | undefined): boolean {

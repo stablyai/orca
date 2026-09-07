@@ -14,6 +14,8 @@ import type {
 } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
+import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
@@ -167,4 +169,13 @@ export type RuntimeProviderSnapshotReadOptions = {
   timeoutMs?: number
   retireOnTimeout?: boolean
   visibleScreenOnly?: boolean
+}
+
+/** Agent-prompt writes add the correlation inputs a queued-acceptance receipt needs. */
+export type RuntimeAgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
+  /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */
+  acceptQueued?: boolean
+  observationTimeoutMs?: number
+  requestId?: string
+  onInputAccepted?: (send: RuntimeTerminalSend) => void
 }

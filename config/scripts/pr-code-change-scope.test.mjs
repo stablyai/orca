@@ -414,10 +414,11 @@ describe('PR Checks skip wiring', () => {
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
-    expect(prWorkflow.jobs['e2e-paths'].needs).toEqual(['code_paths'])
-    expect(prWorkflow.jobs['e2e-paths'].if).toBe(
-      "github.event.pull_request.draft != true && needs.code_paths.outputs.should_run == 'true'"
+    const filter = prWorkflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')
+    expect(filter.if).toBe(
+      "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
+    expect(prWorkflow.jobs['e2e-paths']).toBeUndefined()
   })
 
   it('lets verify pass skipped jobs the classifier turned off', () => {

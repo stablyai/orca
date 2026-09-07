@@ -13,6 +13,8 @@ export type MobileChatQuestion = {
    *  parallel to `options`. Null where the option was a plain bullet. Used to
    *  echo the exact choice the agent listed back to the terminal. */
   optionTokens: (string | null)[]
+  /** Per-option secondary text from structured prompts, parallel to `options`. */
+  optionDescriptions?: (string | undefined)[]
   /** Opaque prefix used when free-text answers must target a specific prompt. */
   freeTextToken?: string
 }
@@ -130,6 +132,48 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   }
 }
 
+function formatQuestionOptionAtIndex(question: MobileChatQuestion, index: number): string | null {
+  if (!Number.isInteger(index) || index < 0 || index >= question.options.length) {
+    return null
+  }
+  const label = question.options[index]
+  if (label == null || label.trim().length === 0) {
+    return null
+  }
+  const token = question.optionTokens[index]
+  return token != null && token.length > 0 ? token : label
+}
+
+function formatQuestionAnswerPartsByIndexes(
+  question: MobileChatQuestion,
+  selectedIndexes: number[]
+): string[] {
+  return selectedIndexes
+    .map((index) => formatQuestionOptionAtIndex(question, index))
+    .filter((part): part is string => part != null && part.trim().length > 0)
+}
+
+export function formatQuestionAnswerByIndexes(
+  question: MobileChatQuestion,
+  selectedIndexes: number[]
+): string {
+  const parts = formatQuestionAnswerPartsByIndexes(question, selectedIndexes)
+  return parts.join(question.multiSelect ? ', ' : ' ')
+}
+
+export function formatQuestionAnswerWithOtherByIndexes(
+  question: MobileChatQuestion,
+  selectedIndexes: number[],
+  text: string
+): string {
+  const parts = formatQuestionAnswerPartsByIndexes(question, selectedIndexes)
+  const other = formatQuestionFreeTextAnswer(question, text)
+  if (other.length > 0) {
+    parts.push(other)
+  }
+  return parts.join(question.multiSelect ? ', ' : ' ')
+}
+
 /**
  * Build the text to send to the agent terminal for the selected option(s).
  * Convention: echo the option's leading marker (number/letter) when the list had
@@ -150,8 +194,7 @@ export function formatQuestionAnswer(question: MobileChatQuestion, selected: str
       // Free-text / unknown entry: pass the user's text straight through.
       return label
     }
-    const token = question.optionTokens[index]
-    return token != null && token.length > 0 ? token : label
+    return formatQuestionOptionAtIndex(question, index) ?? label
   })
 
   return parts.join(question.multiSelect ? ', ' : ' ')

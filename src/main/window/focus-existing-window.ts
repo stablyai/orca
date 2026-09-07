@@ -1,5 +1,9 @@
 import type { App, BrowserWindow } from 'electron'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 
 type FocusTimer = (callback: () => void, ms: number) => unknown
 
@@ -9,6 +13,8 @@ export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
   getWindow: () => BrowserWindow | null
   openWindow: () => BrowserWindow
+  /** False while some other path must own the first window; the reopen is dropped, not queued. */
+  canOpenWindow?: () => boolean
   platform?: NodeJS.Platform
   setTimeout?: FocusTimer
   warn?: (message: string, error?: unknown) => void
@@ -32,7 +38,7 @@ function safelyFocusApp(app: Pick<App, 'focus'>): void {
 }
 
 export function safelyRevealWindow(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
+  if (window.isDestroyed() || isWindowlessLaunch()) {
     return
   }
   if (window.isMinimized()) {
@@ -143,7 +149,7 @@ export function focusExistingMainWindow(
   let openedWindow = false
 
   if (!window || window.isDestroyed()) {
-    if (!opts.app.isReady()) {
+    if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
     window = openWindowWithRetry(opts, platform, setTimer, 1)

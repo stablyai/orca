@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
 import type {
   AgentSessionCancelResult,
-  AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../src/shared/agent-session-wire'
-import type {
-  SessionOptionDescriptor,
-  SessionOptionsSurface,
-  SessionOptionValue
-} from '../../../src/shared/native-chat-session-options'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
@@ -21,9 +16,7 @@ import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
   projectStructuredPermission,
-  projectStructuredQuestion,
-  structuredApprovalResponseTarget,
-  structuredQuestionResponseTarget
+  projectStructuredQuestion
 } from './mobile-structured-agent-prompts'
 import {
   requestStructuredAgentSessionMutation,
@@ -36,11 +29,12 @@ import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
+import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 
 type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
 
-type StructuredMobileSession = {
+type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> & {
   session: MobileNativeChatSession
   isWorking: boolean
   turnId: string | null
@@ -53,13 +47,8 @@ type StructuredMobileSession = {
   cancel: () => void
   permission: MobileChatPermission | null
   question: MobileChatQuestion | null
-  optionSnapshot: SessionOptionDescriptor[]
-  optionSurface: SessionOptionsSurface
-  pendingOptionId: string | null
   respondPermission: (optionId: string) => Promise<boolean>
   respondQuestion: (answer: string) => Promise<boolean>
-  setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
-  invokeStructuredOption: (id: string) => Promise<boolean>
 }
 
 export function useMobileStructuredAgentSession(args: {
@@ -76,6 +65,7 @@ export function useMobileStructuredAgentSession(args: {
   const { agent, client, connected, sessionId, sourceIdentity = '', enabled, onSendError } = args
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
+  const commandPendingRef = useRef(false)
   useEffect(() => () => operationIdsRef.current.clear(), [])
   const retainOperationId = (key: string, operationId?: string): string =>
     retainStructuredOpId(operationIdsRef.current, key, operationId)
@@ -127,6 +117,8 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   const {
+    conversationCommands,
+    optionPickerRequest,
     invokeStructuredOption,
     optionSnapshot,
     optionSurface,
@@ -163,6 +155,33 @@ export function useMobileStructuredAgentSession(args: {
         return 'rejected'
       }
       const sendAttachments = attachments ?? []
+      const commandOutcome = await dispatchMobileStructuredCommand({
+        text,
+        hasAttachments: Boolean(sendAttachments.length || images?.length),
+        client,
+        sessionId,
+        fence: currentFence,
+        sessionKey,
+        pending: commandPendingRef,
+        operationIds: operationIdsRef.current,
+        controller: {
+          agent: agent === 'claude' ? 'claude' : 'codex',
+          snapshot: optionSnapshot,
+          setOption: setStructuredOption,
+          invokeAction: invokeStructuredOption,
+          conversationCommands
+        },
+        canRun: () =>
+          !activeStructuredAgentSessionTurnId(stateRef.current.items) &&
+          !stateRef.current.items.some(
+            (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
+          ),
+        onError: onSendError,
+        timeoutMs
+      })
+      if (commandOutcome !== null) {
+        return commandOutcome
+      }
       const body = structuredAgentSessionSendBody(text, sendAttachments)
       if (body.blocks.length === 0) {
         return 'rejected'
@@ -193,54 +212,26 @@ export function useMobileStructuredAgentSession(args: {
       onSendError(result.message === 'Request not sent' ? 'Message not sent' : result.message)
       return 'rejected'
     },
-    [client, enabled, onSendError, sessionId, sessionKey]
+    [
+      agent,
+      client,
+      conversationCommands,
+      enabled,
+      invokeStructuredOption,
+      onSendError,
+      optionSnapshot,
+      sessionId,
+      sessionKey,
+      setStructuredOption
+    ]
   )
 
-  const respondPermission = useCallback(
-    async (optionId: string): Promise<boolean> => {
-      const target = structuredApprovalResponseTarget(
-        optionId,
-        stateRef.current.items.find(pendingStructuredApproval) ?? null
-      )
-      if (!target) {
-        return false
-      }
-      const result = await mutate<AgentSessionPromptResult>(
-        'agentSession.respondToApproval',
-        'agentSession.respondTo:approval',
-        target
-      )
-      if (result.status === 'unknown') {
-        onSendError('Response unconfirmed — check chat before retrying')
-        return false
-      }
-      return result.status === 'accepted'
-    },
-    [mutate, onSendError]
-  )
-
-  const respondQuestion = useCallback(
-    async (answer: string): Promise<boolean> => {
-      const target = structuredQuestionResponseTarget(
-        answer,
-        stateRef.current.items.find(pendingStructuredQuestion) ?? null
-      )
-      if (!target) {
-        return false
-      }
-      const result = await mutate<AgentSessionPromptResult>(
-        'agentSession.respondToQuestion',
-        'agentSession.respondTo:question',
-        target
-      )
-      if (result.status === 'unknown') {
-        onSendError('Answer unconfirmed — check chat before retrying')
-        return false
-      }
-      return result.status === 'accepted'
-    },
-    [mutate, onSendError]
-  )
+  const { groupedDraft, respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
+    stateRef,
+    sessionKey,
+    mutate,
+    onSendError
+  })
 
   const cancel = useCallback(() => {
     const current = stateRef.current
@@ -289,6 +280,8 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   return {
+    conversationCommands,
+    optionPickerRequest,
     session: {
       messages,
       status,
@@ -303,7 +296,7 @@ export function useMobileStructuredAgentSession(args: {
     sendWithOutcome,
     cancel,
     permission: projectStructuredPermission(approvalPrompt),
-    question: projectStructuredQuestion(questionPrompt),
+    question: projectStructuredQuestion(questionPrompt, groupedDraft),
     optionSnapshot,
     optionSurface,
     pendingOptionId,

@@ -50,6 +50,8 @@ const StateSchema = z.object({
   continuityEvents: z.array(z.object({
     recordedAt: z.string(),
     windowSequence: z.number().int().nonnegative(),
+    // Pre-2026-09-05 state files predate tolerated freshness gaps.
+    tolerated: z.boolean().default(false),
     failures: z.array(z.object({
       code: z.string(),
       source: z.enum(['active-probe', 'cloud-monitoring', 'relay-logs', 'director-admin']),

@@ -49,6 +49,12 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
   sources = next
 }
 
+/** The extra Codex homes session discovery scans. Anything that decides what a listed row may be
+ *  resumed from must read the same set, or a row can be listed and then refuse to resume. */
+export function configuredAdditionalCodexHomePaths(): readonly string[] {
+  return sources.getAdditionalCodexHomePaths?.() ?? []
+}
+
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
   options: { signal?: AbortSignal } = {}

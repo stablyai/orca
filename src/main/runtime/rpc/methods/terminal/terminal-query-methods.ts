@@ -1,6 +1,7 @@
 import { defineMethod, type RpcAnyMethod } from '../../core'
 import {
   TerminalHandle,
+  TerminalInspectProcess,
   TerminalListParams,
   TerminalRead,
   TerminalRecoverPane,
@@ -24,7 +25,10 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
     name: 'terminal.resolveActive',
     params: TerminalResolveActive,
     handler: async (params, { runtime }) => ({
-      handle: await runtime.resolveActiveTerminal(params.worktree)
+      handle: await runtime.resolveActiveTerminal(
+        params.worktree,
+        params.requireUnambiguous ? { requireUnambiguous: true } : {}
+      )
     })
   }),
   defineMethod({
@@ -53,6 +57,15 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    // Read-only identity probe. Deliberately NOT `terminal.show`: this one resolves a structured
+    // worker too, and must therefore never hand back anything that looks writable.
+    name: 'terminal.resolveIdentity',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      identity: runtime.resolveTerminalIdentity(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.read',
     params: TerminalRead,
     handler: async (params, { runtime }) => ({
@@ -65,15 +78,21 @@ export const TERMINAL_QUERY_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'terminal.inspectProcess',
-    params: TerminalHandle,
-    handler: async (params, { runtime }) => ({
-      process: await runtime.inspectTerminalProcess(
-        params.terminal,
-        params.expectedIncarnationId
+    params: TerminalInspectProcess,
+    handler: async (params, { runtime }) => {
+      const options = {
+        ...(params.expectedIncarnationId
           ? { expectedIncarnationId: params.expectedIncarnationId }
-          : undefined
-      )
-    })
+          : {}),
+        ...(params.scanChildProcesses === true ? { scanChildProcesses: true } : {})
+      }
+      return {
+        process: await runtime.inspectTerminalProcess(
+          params.terminal,
+          Object.keys(options).length > 0 ? options : undefined
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'terminal.isRunningAgent',

@@ -284,6 +284,42 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     db.close()
   }
 
+  const retained = invokeCompiledCli(userDataDir, [
+    'orchestration',
+    'worker-release',
+    '--dispatch',
+    dispatch.result.dispatch!.id,
+    '--json'
+  ])
+  expect(retained.status).toBe(0)
+  expect(JSON.parse(retained.stdout)).toMatchObject({
+    ok: true,
+    result: { state: 'retained', reason: 'external_terminal', processAction: 'none' }
+  })
+  const recovery = new Database(path.join(userDataDir, 'orchestration.db'))
+  try {
+    expect(
+      recovery
+        .prepare(
+          'SELECT ownership_state, release_state FROM worker_terminal_resources WHERE owner_dispatch_id = ?'
+        )
+        .get(dispatch.result.dispatch!.id)
+    ).toEqual({ ownership_state: 'external', release_state: 'retained' })
+    // Seed the owned, abandoned recovery state after separately proving completion and external retention.
+    recovery
+      .prepare(
+        "UPDATE worker_terminal_resources SET ownership_state = 'owned', retained_reason = 'user_requested' WHERE owner_dispatch_id = ?"
+      )
+      .run(dispatch.result.dispatch!.id)
+    recovery
+      .prepare(
+        "UPDATE worker_dispatches SET state = 'abandoned', stage = 'abandoned' WHERE dispatch_id = ?"
+      )
+      .run(dispatch.result.dispatch!.id)
+  } finally {
+    recovery.close()
+  }
+
   const released = invokeCompiledCli(userDataDir, [
     'orchestration',
     'worker-release',

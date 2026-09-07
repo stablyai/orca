@@ -3,6 +3,7 @@ import { CircleAlert, Loader2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 
 export function MobileRelayMintFailureNotice({
@@ -23,6 +24,10 @@ export function MobileRelayMintFailureNotice({
   busy?: boolean
 }): React.JSX.Element {
   const providerMissing = failure.stage === 'provider_missing'
+  // Why: a revoked cloud session fails every mint; "retry or use LAN" hides the one action that works.
+  const reconnectRequired = useAppStore(
+    (state) => state.orcaProfileAuthStatus?.state === 'reconnect-required'
+  )
   const [showBusyFeedback, setShowBusyFeedback] = useState(false)
   useEffect(() => {
     if (!busy) {
@@ -43,10 +48,15 @@ export function MobileRelayMintFailureNotice({
           'auto.components.mobile.MobileRelayMintFailureNotice.unavailableTitle',
           'Orca Relay isn’t available on this desktop.'
         )
-      : translate(
-          'auto.components.mobile.MobileRelayMintFailureNotice.title',
-          'Couldn’t create a Relay pairing code.'
-        )
+      : reconnectRequired
+        ? translate(
+            'auto.components.mobile.MobileRelayMintFailureNotice.reconnectTitle',
+            'Your Orca account session expired.'
+          )
+        : translate(
+            'auto.components.mobile.MobileRelayMintFailureNotice.title',
+            'Couldn’t create a Relay pairing code.'
+          )
   const body = visibleBusy
     ? translate(
         'auto.components.mobile.MobileRelayMintFailureNotice.retryingBody',
@@ -57,10 +67,15 @@ export function MobileRelayMintFailureNotice({
           'auto.components.mobile.MobileRelayMintFailureNotice.unavailableBody',
           'Use LAN to pair over Tailscale or the same Wi‑Fi.'
         )
-      : translate(
-          'auto.components.mobile.MobileRelayMintFailureNotice.body',
-          'Retry, or use LAN to pair over Tailscale or the same Wi‑Fi.'
-        )
+      : reconnectRequired
+        ? translate(
+            'auto.components.mobile.MobileRelayMintFailureNotice.reconnectBody',
+            'Sign in again to use Orca Relay, or use LAN to pair over Tailscale or the same Wi‑Fi.'
+          )
+        : translate(
+            'auto.components.mobile.MobileRelayMintFailureNotice.body',
+            'Retry, or use LAN to pair over Tailscale or the same Wi‑Fi.'
+          )
 
   return (
     <div
@@ -90,7 +105,7 @@ export function MobileRelayMintFailureNotice({
           <Button type="button" size={compact ? 'xs' : 'sm'} onClick={onUseLan}>
             {translate('auto.components.mobile.MobileRelayMintFailureNotice.useLan', 'Use LAN')}
           </Button>
-          {!providerMissing ? (
+          {!providerMissing && !reconnectRequired ? (
             <Button
               type="button"
               size={compact ? 'xs' : 'sm'}

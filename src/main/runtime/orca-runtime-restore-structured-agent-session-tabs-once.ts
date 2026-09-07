@@ -1,6 +1,9 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
 import { OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript } from './orca-runtime-resolve-recovered-structured-tui-transcript'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
+import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
@@ -24,6 +27,25 @@ import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 
 export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript {
+  async replaceStructuredAgentSessionTab(replacement: ConversationReplacement): Promise<void> {
+    const prior = this.mobileSessionTabsByWorktree.get(replacement.workspaceId)
+    const next = prior ? replaceConversationInSnapshot(prior, replacement) : null
+    if (next && next !== prior) {
+      const stored = this.storeMobileSessionSnapshot(replacement.workspaceId, next)
+      this.emitMobileSessionTabsSnapshot(stored)
+    } else if (
+      !prior?.tabs.some(
+        (tab) => tab.type === 'agent-session' && tab.sessionId === replacement.sessionId
+      )
+    ) {
+      await this.publishStructuredAgentSessionTab({
+        ...replacement,
+        replacesSessionId: replacement.sourceSessionId,
+        activate: false
+      })
+    }
+  }
+
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
@@ -44,8 +66,11 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       })
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
+    for (const replacement of host?.conversationReplacements?.() ?? []) {
+      await this.replaceStructuredAgentSessionTab(replacement)
+    }
     for (const session of host?.listSessionTabs() ?? []) {
-      if (session.agent !== 'codex') {
+      if (session.agent !== 'codex' && session.agent !== 'claude') {
         continue
       }
       let sessionId = session.sessionId
@@ -54,7 +79,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       }
       await this.publishStructuredAgentSessionTab({
         ...session,
-        agent: 'codex',
+        agent: session.agent,
         sessionId,
         activate: false,
         notify: false
@@ -65,9 +90,10 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
-    agent: 'codex'
+    agent: 'claude' | 'codex'
     activate: boolean
     notify?: boolean
+    replacesSessionId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
@@ -76,6 +102,8 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
+      // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
+      // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
       if (!input.activate) {
         return
       }
@@ -105,8 +133,9 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: 'Codex Chat',
+      title: defaultAgentChatLabel(input.agent),
       sessionId: input.sessionId,
+      ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,
       isActive: input.activate
     }
@@ -153,7 +182,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
 
   async inspectTerminalProcess(
     terminalSelector: string,
-    options?: { expectedIncarnationId?: string }
+    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
   ): Promise<PtyProcessInspection> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
     if (!leaf?.ptyId || !this.ptyController) {

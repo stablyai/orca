@@ -105,12 +105,17 @@ export class DaemonRequestRouter {
         return {
           foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
         }
-      case 'inspectProcess':
-        return request.payload.expectedIncarnationId
-          ? this.options.host.inspectProcess(request.payload.sessionId, {
-              expectedIncarnationId: request.payload.expectedIncarnationId
-            })
+      case 'inspectProcess': {
+        const options = {
+          ...(request.payload.expectedIncarnationId
+            ? { expectedIncarnationId: request.payload.expectedIncarnationId }
+            : {}),
+          ...(request.payload.steadyState === true ? { steadyState: true } : {})
+        }
+        return Object.keys(options).length > 0
+          ? this.options.host.inspectProcess(request.payload.sessionId, options)
           : this.options.host.inspectProcess(request.payload.sessionId)
+      }
       case 'confirmForegroundProcess':
         return {
           foregroundProcess: await this.options.host.confirmForegroundProcess(

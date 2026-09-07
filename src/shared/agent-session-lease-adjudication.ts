@@ -47,11 +47,20 @@ export type AgentSessionAcquisitionDecision =
 
 export type AgentSessionRestartAdjudication =
   | { disposition: 'readopt' }
+  /** A journal settlement latch survives restart without changing its handoff stage. */
+  | { disposition: 'settlement-pending' }
   /** Nothing is outstanding — no owner, no reservation. Clear any latched stage; the fence stays. */
   | { disposition: 'free'; reason: string }
   | { disposition: 'evicted'; nextFence: number; evidence: AgentSessionDeathEvidence }
   | { disposition: 'recovering'; stage: AgentSessionHandoffStage; reason: string }
   | { disposition: 'conflicted'; reason: string }
+
+export function agentSessionRestartEvictionSettlementId(
+  lease: Pick<AgentSessionLease, 'sessionId'>,
+  eviction: Extract<AgentSessionRestartAdjudication, { disposition: 'evicted' }>
+): string {
+  return `restart-eviction:${lease.sessionId}:${eviction.nextFence}`
+}
 
 /** Stages that can legally admit a new owner at all; the rest have an owner or no evidence. */
 const STAGES_ADMITTING_NEW_OWNER: ReadonlySet<AgentSessionHandoffStage> = new Set([
@@ -201,11 +210,7 @@ export function adjudicateAgentSessionRestart(args: {
     if (lease.settlementRetryRequired) {
       // A watched provider death can leave terminal rows unsettled. This latch is not owner
       // uncertainty and must survive restart until the journal settlement is durably accepted.
-      return {
-        disposition: 'recovering',
-        stage: 'recovering',
-        reason: 'provider-exit settlement requires retry'
-      }
+      return { disposition: 'settlement-pending' }
     }
     if (lease.reservedSpawnToken === null && lease.claimStatus !== 'reserved') {
       // Why: the spawn token is minted before the child and is the only thing a child could be

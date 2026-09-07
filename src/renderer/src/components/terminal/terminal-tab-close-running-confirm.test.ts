@@ -87,10 +87,12 @@ function visibleRequest() {
   return useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
 }
 
+// Drains pending microtasks. The probe resolves through several await points (per-pty inspect,
+// the batch join, the deadline race), so this flushes generously rather than counting ticks.
 async function settleProbe(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
-  await Promise.resolve()
+  for (let tick = 0; tick < 12; tick += 1) {
+    await Promise.resolve()
+  }
 }
 
 describe('closeTerminalTab running-process confirmation', () => {

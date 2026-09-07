@@ -58,6 +58,7 @@ type SortableTabProps = {
   isChatView?: boolean
   /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
+  canSplitTerminal?: boolean
 }
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -86,7 +87,8 @@ export default function SortableTab({
   includeTopTabBorder = true,
   canToggleViewMode = false,
   isChatView = false,
-  onToggleViewMode
+  onToggleViewMode,
+  canSplitTerminal = true
 }: SortableTabProps): React.JSX.Element {
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore((s) =>
@@ -399,6 +401,7 @@ export default function SortableTab({
         canToggleViewMode={canToggleViewMode}
         isChatView={isChatView}
         onToggleViewMode={onToggleViewMode}
+        canSplitTerminal={canSplitTerminal}
       />
     </>
   )

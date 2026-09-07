@@ -533,10 +533,14 @@ describe('OrcaRuntimeService', () => {
       branchNameOverride: 'feature/something'
     })
 
+    // Why: an explicit branch override adopts the local branch before the conflict
+    // probe, so no lazy adoption callback is handed to getBranchConflictKind.
     expect(getBranchConflictKind).toHaveBeenCalledWith(
       TEST_REPO_PATH,
       'feature/something',
-      'origin/feature/something'
+      'origin/feature/something',
+      {},
+      undefined
     )
     expect(addWorktree).toHaveBeenCalledWith(
       TEST_REPO_PATH,

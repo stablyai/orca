@@ -266,6 +266,7 @@ export function renderTabBarItems({
           onSetTabColor={onSetTabColor}
           onTogglePin={() => togglePinned(item)}
           onToggleExpand={() => {}}
+          canSplitTerminal={false}
           dragData={dragData}
           dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
           includeTopTabBorder={includeTopTabBorder}

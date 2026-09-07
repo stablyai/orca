@@ -5,6 +5,7 @@ import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
 
 // ── Tasks ──
@@ -79,8 +80,12 @@ export function createTask(
       runId,
       depsJson
     )
-  return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
+  return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as TaskRow
 }
+
+// Why wildcard-free: SyncDatabase refuses to cache any statement containing `*`, so a `SELECT *`
+// here recompiles on every call — including the hot dispatch lookups and the coordinator poll.
+const TASK_COLUMN_LIST = selectColumns(TASK_COLUMNS)
 
 // Why: hoisted and wildcard-free so the per-publish lineage lookup hits the SyncDatabase statement cache.
 const TASK_RUNTIME_LINEAGE_SQL = `SELECT ${selectColumns(TASK_COLUMNS, 't')},
@@ -113,7 +118,9 @@ export function getTask(
   dispatchRunId?: string
 ): TaskRow | TaskRuntimeLineageRow | undefined {
   if (dispatchRunId === undefined) {
-    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined
+    return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as
+      | TaskRow
+      | undefined
   }
   return this.db.prepare(TASK_RUNTIME_LINEAGE_SQL).get(dispatchRunId, id) as
     | TaskRuntimeLineageRow
@@ -128,20 +135,26 @@ export function listTasks(
   const runParams: Database.BindValue[] = filter?.runId ? [filter.runId] : []
   if (filter?.ready) {
     return this.db
-      .prepare(`SELECT * FROM tasks WHERE ${runWhere}status = 'ready' ORDER BY created_at`)
+      .prepare(
+        `SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE ${runWhere}status = 'ready' ORDER BY created_at`
+      )
       .all(...runParams) as TaskRow[]
   }
   if (filter?.status) {
     return this.db
-      .prepare(`SELECT * FROM tasks WHERE ${runWhere}status = ? ORDER BY created_at`)
+      .prepare(
+        `SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE ${runWhere}status = ? ORDER BY created_at`
+      )
       .all(...runParams, filter.status) as TaskRow[]
   }
   if (filter?.runId) {
     return this.db
-      .prepare('SELECT * FROM tasks WHERE run_id = ? ORDER BY created_at')
+      .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE run_id = ? ORDER BY created_at`)
       .all(filter.runId) as TaskRow[]
   }
-  return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
+  return this.db
+    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks ORDER BY created_at`)
+    .all() as TaskRow[]
 }
 
 // Why: the correlated indexed lookup avoids materializing every retained Dispatch before filtering Tasks.
@@ -195,7 +208,7 @@ export function listTasksWithDispatch(
 // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
 export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string): void {
   const candidates = this.db
-    .prepare("SELECT * FROM tasks WHERE status = 'pending'")
+    .prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE status = 'pending'`)
     .all() as TaskRow[]
 
   for (const task of candidates) {
@@ -209,7 +222,12 @@ export function promoteReadyTasks(this: OrchestrationDb, completedTaskId: string
       return dep?.status === 'completed'
     })
     if (allDepsCompleted) {
-      this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
+      transitionLifecycleWithDb(this.db, {
+        entity: 'task',
+        id: task.id,
+        from: 'pending',
+        to: 'ready'
+      })
     }
   }
 }

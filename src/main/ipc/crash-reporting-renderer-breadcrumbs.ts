@@ -49,6 +49,7 @@ function recordRendererBreadcrumbTrace(
 const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
 const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
 const REACT_COMMIT_CASCADE_BREADCRUMB = 'react_commit_cascade'
+const REPLAY_GUARD_WEDGED_BREADCRUMB = 'terminal_replay_guard_wedged_release'
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
@@ -56,6 +57,7 @@ const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   DUPLICATE_TAB_OWNER_BREADCRUMB,
   PARK_VERDICT_CHURN_BREADCRUMB,
   REACT_COMMIT_CASCADE_BREADCRUMB,
+  REPLAY_GUARD_WEDGED_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
@@ -69,6 +71,11 @@ const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
 // 30-entry ring to two such bursts. `suppressedSinceLast` keeps the pane count
 // — the only signal these carry — in one slot.
 const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_exhausted'])
+// Why: the 30-slot ring is the scarce sink; the durable span stream is not. For
+// bounded-rate pane telemetry whose multiplicity is the whole signal, spans are the
+// only place a burst survives the restart that clears the ring, so coalesce the ring
+// but keep every event's span.
+const PER_EVENT_TRACED_COALESCED_BREADCRUMB_NAMES = new Set([REPLAY_GUARD_WEDGED_BREADCRUMB])
 
 function rendererBreadcrumbCoalesceKey(
   name: string,
@@ -76,6 +83,13 @@ function rendererBreadcrumbCoalesceKey(
 ): string | undefined {
   if (NAME_ONLY_COALESCED_BREADCRUMB_NAMES.has(name)) {
     return name
+  }
+  // Why presence and not value: `ptyId`/`tabIdHash` are absent on the restore call
+  // site (layout-serialization restoreScrollbackBuffers) and present on reattach, so
+  // their presence is the call-site identity a mixed burst would otherwise lose. Four
+  // slots per storm at most, regardless of pane count.
+  if (name === REPLAY_GUARD_WEDGED_BREADCRUMB) {
+    return `${name}:${data?.ptyId ? 'pty' : ''}:${data?.tabIdHash ? 'tab' : ''}`
   }
   // Why trigger and not name alone: `burst` means damping engaged a commit
   // short of React #185, `window` means slow benign churn. Collapsing them
@@ -191,9 +205,13 @@ export function recordRendererBreadcrumbFromRenderer(
       minIntervalMs: RENDERER_BREADCRUMB_COALESCE_MS,
       ...(origin ? { origin } : {})
     })
-    // Why: tracing every suppressed duplicate would preserve the same
-    // serialization and disk churn that breadcrumb coalescing removes.
-    if (coalesceResult) {
+    if (PER_EVENT_TRACED_COALESCED_BREADCRUMB_NAMES.has(args.name)) {
+      // Why the raw data: every event already gets its own span, so folding the ring's
+      // running count in here would double-count in any span-stream total.
+      recordRendererBreadcrumbTrace(args.name, data)
+    } else if (coalesceResult) {
+      // Why gated: tracing every suppressed duplicate would preserve the same
+      // serialization and disk churn that breadcrumb coalescing removes.
       recordRendererBreadcrumbTrace(
         args.name,
         coalesceResult.suppressedSinceLast > 0

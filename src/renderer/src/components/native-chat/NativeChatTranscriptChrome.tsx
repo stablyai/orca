@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
 import type { NativeChatBlock } from '../../../../shared/native-chat-types'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { nativeChatProviderFrameSummary } from '../../../../shared/native-chat-provider-frame-summary'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import {
@@ -244,10 +245,12 @@ export function NativeChatImageAttachments({
 
 export function NativeChatAgentControls({
   markdown,
+  timestamp,
   onScrollToTop,
   className
 }: {
   markdown: string
+  timestamp: number | null
   onScrollToTop: () => void
   className?: string
 }): React.JSX.Element {
@@ -266,6 +269,7 @@ export function NativeChatAgentControls({
       >
         <ArrowUp className="size-3.5" />
       </button>
+      <NativeChatMessageTimestamp timestamp={timestamp} />
     </div>
   )
 }

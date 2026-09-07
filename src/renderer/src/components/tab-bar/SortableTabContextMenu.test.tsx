@@ -250,6 +250,13 @@ describe('SortableTabContextMenu', () => {
     })
   })
 
+  it('hides terminal-only split actions for structured chat tabs', () => {
+    const { container } = renderMenu({ canSplitTerminal: false })
+
+    expect(container.textContent).toContain('Move Tab to Split')
+    expect(container.textContent).not.toContain('Split terminal')
+  })
+
   it('routes the directional close actions to their handlers with the tab id', () => {
     const onCloseOthers = vi.fn()
     const onCloseToRight = vi.fn()

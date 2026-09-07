@@ -138,7 +138,7 @@ export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Da
 export async function inspectRuntimeTerminalProcess(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  options?: { expectedIncarnationId?: string }
+  options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
 ): Promise<RuntimeTerminalProcessInspection> {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
@@ -148,7 +148,7 @@ export async function inspectRuntimeTerminalProcess(
   const remote = isRemoteInspectionPtyId(ptyId)
   if (target.kind !== 'environment' || !terminal) {
     try {
-      const result = await (options?.expectedIncarnationId
+      const result = await (options
         ? window.api.pty.inspectProcess(ptyId, options)
         : window.api.pty.inspectProcess(ptyId))
       return normalizeInspectionResult(result, remote)
@@ -169,7 +169,11 @@ export async function inspectRuntimeTerminalProcess(
         terminal,
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
-          : {})
+          : {}),
+        // Why forwarded: the close guards pass this so the host pays for a real child-process read.
+        // Dropped here, the host declines to scan and answers `unverifiable`, which the guard reads
+        // as running work -- a confirmation dialog on every idle close of a remote Windows pane.
+        ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       },
       { timeoutMs: 15_000 }
     )

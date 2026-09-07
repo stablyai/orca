@@ -137,14 +137,17 @@ describe('mobile + Codex tab creation routing', () => {
     expect(scope.setActiveSessionTabId).toHaveBeenCalledWith('terminal-tab-1')
   })
 
-  it('falls back to a terminal when structured creation is refused', async () => {
+  it('falls back to a terminal when structured creation is definitively refused', async () => {
     const client = clientReturning(
       { ok: true, result: { supported: true } },
       {
         ok: true,
         result: {
           ok: false,
-          refusal: { code: 'agent_session_ownership_unknown', message: 'provider unavailable' }
+          refusal: {
+            code: 'structured_agent_session_unsupported',
+            message: 'provider unavailable'
+          }
         }
       },
       terminalCreateResponse()
@@ -228,4 +231,34 @@ describe('mobile + Codex tab creation routing', () => {
     expect(scope.setCreateError).toHaveBeenCalledWith('still unknown')
     expect(scope.showToast).toHaveBeenCalledWith('still unknown', 1800)
   })
+
+  it.each(['agent_session_operation_unknown', 'runtime_error', 'future_unknown_code'])(
+    'does not create a legacy sibling after a top-level %s response',
+    async (code) => {
+      const client = clientReturning(
+        { ok: true, result: { supported: true } },
+        { ok: false, error: { code, message: 'create outcome ambiguous' } }
+      )
+      const scope = createScope(client)
+      let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+      function Harness() {
+        actions = useMobileSessionTerminalCreateActions(scope as never)
+        return null
+      }
+      await act(async () => {
+        renderer = create(createElement(Harness))
+      })
+      await act(async () => {
+        await actions?.handleCreateTerminal('codex')
+      })
+
+      const sendRequest = client.sendRequest as unknown as ReturnType<typeof vi.fn>
+      expect(sendRequest.mock.calls.map(([method]) => method)).toEqual([
+        'agentSession.createSupport',
+        'agentSession.create'
+      ])
+      expect(scope.setCreateError).toHaveBeenCalledWith('create outcome ambiguous')
+      expect(scope.showToast).toHaveBeenCalledWith('create outcome ambiguous', 1800)
+    }
+  )
 })

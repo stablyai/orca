@@ -14,13 +14,13 @@ async function setCustomGenerator(page: Page, scriptPath: string): Promise<void>
     }
     await store.getState().updateSettings({
       activeRuntimeEnvironmentId: null,
-      commitMessageAi: {
-        ...currentSettings.commitMessageAi,
+      sourceControlAi: {
         enabled: true,
         agentId: 'custom' as const,
         selectedModelByAgent: {},
         selectedThinkingByModel: {},
-        customPrompt: '',
+        instructionsByOperation: {},
+        actions: {},
         customAgentCommand: `node ${JSON.stringify(scriptPath)}`
       }
     })

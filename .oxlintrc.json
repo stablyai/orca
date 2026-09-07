@@ -3,6 +3,10 @@
   "plugins": ["typescript", "react", "react-hooks", "react-perf", "unicorn"],
   "jsPlugins": [
     {
+      "name": "sort-comparator-performance",
+      "specifier": "./config/oxlint-plugins/sort-comparator-performance.mjs"
+    },
+    {
       "name": "mobile-pairing",
       "specifier": "./config/oxlint-plugins/mobile-pairing-qrcode-import.mjs"
     },
@@ -23,6 +27,7 @@
     "correctness": "error"
   },
   "rules": {
+    "sort-comparator-performance/no-repeated-collator": "warn",
     "app-store-performance/require-selector": "error",
     "app-store-performance/no-identity-selector": "error",
     "app-store-performance/no-fresh-selector-result": "error",

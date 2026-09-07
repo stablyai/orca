@@ -48,10 +48,13 @@ import {
 } from './use-native-chat-context-menu'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
-import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
+import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
+import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
-import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
+import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
 
 /** Renders the bridge UI after NativeChatSessionGate resolves its agent session. */
 export function NativeChatResolvedView({
@@ -65,14 +68,14 @@ export function NativeChatResolvedView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions,
-  orchestrationDispatchStatus
+  contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
+  const keybindings = useAppStore((s) => s.keybindings)
   const session = useNativeChatRetainedSession({
     paneKey,
     agent,
@@ -131,6 +134,10 @@ export function NativeChatResolvedView({
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     onSwitchToTerminal,
+    splitShortcutLabels: {
+      right: formatShortcutLabel('terminal.splitRight', keybindings),
+      down: formatShortcutLabel('terminal.splitDown', keybindings)
+    },
     actions: {
       onPaste: pasteClipboardIntoComposer,
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
@@ -313,7 +320,11 @@ export function NativeChatResolvedView({
     setPending(writePendingSendCache(pendingScope, []))
     interactiveSend.cancel()
   }, [interactiveSend, pendingScope])
-  const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
+  const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
+    fileLinkContext,
+    rootRef,
+    { sessionId, isVisible }
+  )
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
@@ -337,6 +348,19 @@ export function NativeChatResolvedView({
         }
       }}
       onKeyDownCapture={(event) => {
+        const splitDirection = event.repeat
+          ? null
+          : matchNativeChatSplitShortcut(event, getShortcutPlatform(), keybindings)
+        if (splitDirection && contextMenuActions) {
+          event.preventDefault()
+          event.stopPropagation()
+          if (splitDirection === 'right') {
+            contextMenuActions.onSplitRight()
+          } else {
+            contextMenuActions.onSplitDown()
+          }
+          return
+        }
         // Backspace/Delete outside an input focuses the composer (like typing)
         // but inserts nothing — let the now-focused field handle the keystroke.
         if (shouldFocusNativeChatComposerFromEditingKey(event)) {
@@ -357,7 +381,6 @@ export function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
-      <NativeChatOrchestrationPausedNotice dispatchStatus={orchestrationDispatchStatus} />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
@@ -373,7 +396,7 @@ export function NativeChatResolvedView({
             fontScale={fontScale.scale}
             workingStartedAt={hookWorkingEpoch}
             showTurnStatus={false}
-            onLinkClick={nativeChatFileLinkClick}
+            onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
           />
@@ -413,6 +436,7 @@ export function NativeChatResolvedView({
         />
       )}
       {contextMenu.menu}
+      <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>
   )
 }

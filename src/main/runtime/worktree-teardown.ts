@@ -1,15 +1,23 @@
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
-import { listRegisteredPtys } from '../memory/pty-registry'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import {
   isUnstoppedPtyRemovalError,
+  RUNNING_AGENT_SESSION_REMOVAL_PREFIX,
+  UNSTOPPED_PTY_DETAIL_SEPARATOR,
   WORKTREE_TEARDOWN_FORCE_HINT,
   WORKTREE_TEARDOWN_TIMEOUT_PREFIX
 } from '../../shared/worktree/removal'
 import { settleBeforeDeadline } from './settle-before-deadline'
+import {
+  clearStoppedPtyState,
+  sweepProviderByPrefix,
+  sweepRegistryForWorktree
+} from './worktree-pty-surface-sweeps'
+import {
+  closeStructuredSessionsForWorktree,
+  describeLiveStructuredSessions,
+  listLiveStructuredSessionsForWorktree
+} from './structured-session-worktree-teardown'
 import { createWorktreeSweepTracker, settleSweepsForForcedRemoval } from './forced-sweep-settlement'
 import {
   describeError,
@@ -17,10 +25,6 @@ import {
   describeUnstoppedPtys,
   resolveUnstoppedPtyVerdict
 } from './unstopped-pty-verification'
-
-// Why: normal inventories still coalesce into one process scan, while a stale
-// or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
-const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
@@ -38,28 +42,28 @@ export type WorktreeTeardownDeps = {
   allowUnverifiedStop?: boolean
   includeProviderInventory?: boolean
   includeLocalRegistry?: boolean
+  /**
+   * Close structured agent sessions best-effort, for a destructive removal that does NOT require
+   * PTY-stop proof — the folder-workspace paths, which sweep and kill PTYs the same way.
+   *
+   * Separate from `requirePhysicalStop` because the two questions are different: that one asks
+   * whether a stop must be PROVEN before files are touched, and it is what licenses a refusal.
+   * Reconciliation sweeps set neither; they repair state and must never close anything.
+   */
+  closeStructuredSessions?: boolean
 }
 
 export type WorktreeTeardownResult = {
   runtimeStopped: number
   providerStopped: number
   registryStopped: number
+  /** Structured agent sessions closed by the force path; absent when none were found. */
+  structuredStopped?: number
 }
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
-// Why: keep each bounded stop RPC settling before the sweep deadline itself, so
-// a wedged provider surfaces as a stop failure rather than as the outer timeout.
-// (The recheck this margin once also reserved time for now runs on its own
-// budget — see verifyUnstoppedPtys — because sharing this one wedged #11960.)
-export const WORKTREE_TEARDOWN_RPC_MARGIN_MS = 500
-
-// Absolute deadline (epoch ms) threaded into provider RPCs on the destructive
-// path; each RPC leaf converts it to the remaining time when it actually issues,
-// so sequential RPCs share one budget without any relative-timeout bookkeeping.
-export function teardownRpcDeadline(sweepDeadline: number): number {
-  return sweepDeadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS
-}
+export { WORKTREE_TEARDOWN_RPC_MARGIN_MS, teardownRpcDeadline } from './worktree-teardown-deadline'
 
 /**
  * Kills every PTY we can prove belongs to `worktreeId`, across all three
@@ -95,6 +99,11 @@ export async function killAllProcessesForWorktree(
   const deadlineError = new Error(
     `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} ${worktreeId}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
   )
+  // FIRST, and before a single PTY sweep starts: a structured agent session is registered on none
+  // of the three surfaces below, so all three answered zero and removal deleted the checkout out
+  // from under a running provider child. Refusing costs nothing when there are none, and the check
+  // is synchronous, so a destructive removal fails fast instead of after the whole sweep budget.
+  const structuredStopped = await sweepStructuredSessions(worktreeId, deps, deadline, deadlineError)
   const sweeps = createWorktreeSweepTracker()
   const stopAttempts = new Map<string, Promise<boolean>>()
   const stopPty = (
@@ -245,7 +254,10 @@ export async function killAllProcessesForWorktree(
       }
     } else {
       const summary = describeUnstoppedPtys(worktreeId, failedPtyIds, verdict)
-      if (!deps.allowUnverifiedStop) {
+      // Only a proof-requiring removal may refuse. A folder-workspace removal shares its root, so no
+      // checkout disappears under the child — the harm is a session left pointing at a workspace Orca
+      // has forgotten — and one of those paths is a never-throw forget, which a refusal would wedge.
+      if (deps.requirePhysicalStop && !deps.allowUnverifiedStop) {
         throw new Error(`${summary}. ${WORKTREE_TEARDOWN_FORCE_HINT}`)
       }
       // Why: force is the documented escape hatch, so removal continues — but the
@@ -256,122 +268,68 @@ export async function killAllProcessesForWorktree(
     }
   }
 
-  return { runtimeStopped: runtimeResult.stopped, providerStopped, registryStopped }
-}
-
-async function sweepProviderByPrefix(
-  worktreeId: string,
-  provider: IPtyProvider,
-  deadline: number,
-  stopPty: (
-    ptyId: string,
-    stop: () => Promise<boolean>
-  ) => Promise<{ stopped: boolean; owner: boolean }>,
-  onPtyStopped?: (ptyId: string) => void,
-  failClosed = false
-): Promise<number> {
-  const prefix = `${worktreeId}@@`
-  // Why (#10252): the cwd fallback only proves ownership when the filesystem path
-  // is the *whole* worktree path. A folder-workspace instance strips its
-  // `::workspace:<uuid>` suffix to a checkout dir shared with sibling instances,
-  // so leave the fallback unset whenever stripping shortened the path — else
-  // deleting one instance would sweep the others.
-  const fullWorktreePath = splitWorktreeId(worktreeId)?.worktreePath
-  const cwdFallbackPath =
-    splitWorktreeIdForFilesystem(worktreeId)?.worktreePath === fullWorktreePath
-      ? fullWorktreePath
-      : undefined
-  const rpcDeadline = teardownRpcDeadline(deadline)
-  const sessions = failClosed
-    ? await provider.listProcesses({ deadlineMs: rpcDeadline })
-    : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
-  const ownedSessions = sessions.filter((session) => {
-    // Why: older daemon/relay process rows may omit cwd; their established ID
-    // and authoritative worktree ownership must remain usable during teardown.
-    const cwdOwned =
-      cwdFallbackPath !== undefined &&
-      session.worktreeId === undefined &&
-      typeof session.cwd === 'string' &&
-      session.cwd.length > 0 &&
-      isPathInsideOrEqual(cwdFallbackPath, session.cwd)
-    return session.id.startsWith(prefix) || session.worktreeId === worktreeId || cwdOwned
-  })
-  // Why: agent shutdown snapshots coalesce only when requests begin together;
-  // bounded concurrency avoids serial process scans without unbounded fanout.
-  const stopped = await mapWithConcurrency(
-    ownedSessions,
-    WORKTREE_TEARDOWN_CONCURRENCY,
-    async (session) => {
-      if (Date.now() >= deadline) {
-        return 0
-      }
-      const stopResult = await stopPty(session.id, async () => {
-        if (Date.now() >= deadline) {
-          return false
-        }
-        try {
-          await provider.shutdown(session.id, { immediate: true, deadlineMs: rpcDeadline })
-          return Date.now() < deadline
-        } catch {
-          return false
-        }
-      })
-      if (stopResult.owner && Date.now() < deadline) {
-        clearStoppedPtyState(session.id, onPtyStopped)
-        return 1
-      }
-      return 0
-    }
-  )
-  return stopped.reduce<number>((count, value) => count + value, 0)
-}
-
-async function sweepRegistryForWorktree(
-  worktreeId: string,
-  localProvider: IPtyProvider,
-  deadline: number,
-  stopPty: (
-    ptyId: string,
-    stop: () => Promise<boolean>
-  ) => Promise<{ stopped: boolean; owner: boolean }>,
-  onPtyStopped?: (ptyId: string) => void
-): Promise<number> {
-  const rpcDeadline = teardownRpcDeadline(deadline)
-  const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
-  const stopped = await mapWithConcurrency(
-    entries,
-    WORKTREE_TEARDOWN_CONCURRENCY,
-    async (entry) => {
-      if (Date.now() >= deadline) {
-        return 0
-      }
-      const stopResult = await stopPty(entry.ptyId, async () => {
-        if (Date.now() >= deadline) {
-          return false
-        }
-        try {
-          await localProvider.shutdown(entry.ptyId, { immediate: true, deadlineMs: rpcDeadline })
-          return Date.now() < deadline
-        } catch {
-          return false
-        }
-      })
-      if (stopResult.owner && Date.now() < deadline) {
-        clearStoppedPtyState(entry.ptyId, onPtyStopped)
-        return 1
-      }
-      return 0
-    }
-  )
-  return stopped.reduce<number>((count, value) => count + value, 0)
-}
-
-function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {
-  try {
-    // Why: daemon shutdown does not always fan a local pty:exit event back
-    // through pty.ts, but removed worktrees must immediately drop memory rows.
-    onPtyStopped?.(ptyId)
-  } catch {
-    /* cleanup is best-effort and must not block git-level removal */
+  return {
+    runtimeStopped: runtimeResult.stopped,
+    providerStopped,
+    registryStopped,
+    ...(structuredStopped > 0 ? { structuredStopped } : {})
   }
+}
+
+/**
+ * The fourth sweep: structured agent sessions bound to this worktree.
+ *
+ * Refuses rather than auto-closing on the ordinary destructive path. `worktree rm` is the verb
+ * that deletes a user's work, and a running agent session is exactly the thing they would want to
+ * be told about before it goes — the same bargain the unstopped-PTY gate already strikes, using
+ * the same `--force` escape hatch. Force closes them properly instead of orphaning a child against
+ * a `cwd` that is about to disappear.
+ *
+ * Two callers participate, for different reasons. A proof-requiring removal (`requirePhysicalStop`)
+ * refuses, then closes under force. A folder-workspace removal (`closeStructuredSessions`) closes
+ * best-effort without refusing: it shares its root so no checkout vanishes under the child, and one
+ * of those paths is a never-throw forget that a refusal would wedge. Reconciliation sweeps set
+ * neither — they repair state, delete nothing, and must never close a session.
+ */
+async function sweepStructuredSessions(
+  worktreeId: string,
+  deps: WorktreeTeardownDeps,
+  deadline: number,
+  deadlineError: Error
+): Promise<number> {
+  if (!deps.requirePhysicalStop && !deps.closeStructuredSessions) {
+    return 0
+  }
+  const live = listLiveStructuredSessionsForWorktree(worktreeId)
+  if (live.length === 0) {
+    return 0
+  }
+  // Only a proof-requiring removal may refuse. A folder-workspace removal shares its root, so no
+  // checkout disappears under the child — the harm is a session left pointing at a workspace Orca
+  // has forgotten — and one of those paths is a never-throw forget, which a refusal would wedge.
+  if (deps.requirePhysicalStop && !deps.allowUnverifiedStop) {
+    // The prefix is what the desktop classifier matches on; without it the toast shows raw CLI
+    // wording and hides the Force Delete button — the #11960 dead end this file already documents.
+    throw new Error(
+      `${RUNNING_AGENT_SESSION_REMOVAL_PREFIX} ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeLiveStructuredSessions(live)}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
+    )
+  }
+  // Raced against the same sweep budget every PTY surface is bounded by: `host.close` awaits a
+  // provider round trip, and a wedged one would otherwise hang `worktree rm --force` forever with
+  // no timeout error at all. On expiry the force path reports the timeout exactly as the PTY
+  // sweeps do rather than proceeding as if the sessions had closed.
+  const { closed, unstopped } = await settleBeforeDeadline(
+    () => closeStructuredSessionsForWorktree(worktreeId, deps.runtime),
+    { closed: 0, unstopped: live },
+    deadline,
+    deadlineError
+  )
+  if (unstopped.length > 0) {
+    // Force is the documented escape hatch, so removal continues — but say so, because the child
+    // outliving its `cwd` is the failure this sweep exists to make visible.
+    console.warn(
+      `[worktree-teardown] forcing removal of ${worktreeId} with ${describeLiveStructuredSessions(unstopped)} still attached`
+    )
+  }
+  return closed
 }

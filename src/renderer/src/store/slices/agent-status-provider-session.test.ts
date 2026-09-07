@@ -16,6 +16,27 @@ function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
 }
 
 describe('recordAgentProviderSession', () => {
+  it('does not capture a structured native owner for terminal resume on restart', () => {
+    const store = createTestStore()
+    const paneKey = 'structured-tab:leaf-1'
+    const providerSession = { key: 'session_id' as const, id: 'provider-session-uuid' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'keep going', agentType: 'claude' },
+        'Claude Chat',
+        undefined,
+        { tabId: 'structured-tab', worktreeId: 'wt-1' },
+        { providerSession, terminalResumeEligible: false }
+      )
+    store.getState().captureAllSleepingAgentSessions('quit')
+
+    expect(store.getState().agentStatusByPaneKey[paneKey]?.providerSession).toEqual(providerSession)
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
+
   it('preserves the root session while a child permission hook moves Codex to waiting', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'root-session' }

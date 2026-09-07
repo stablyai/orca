@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { resolveDismissedOnboardingFolderAgentLaunch } from '@/lib/onboarding-folder-agent-startup'
@@ -202,13 +203,16 @@ export function createRepoAddActions(
             ...(launch.startup ? { startup: launch.startup } : {}),
             ...(launch.route === 'structured-native-chat' ? { providesInitialSurface: true } : {})
           })
-          if (launch.route === 'structured-native-chat' && launch.agent === 'codex') {
-            const [{ startStructuredCodexLaunch }, { StructuredAgentSessionCreateRefusalError }] =
+          if (
+            launch.route === 'structured-native-chat' &&
+            isAgentSessionHandleProvider(launch.agent)
+          ) {
+            const [{ startStructuredAgentLaunch }, { StructuredAgentSessionCreateRefusalError }] =
               await Promise.all([
                 import('@/lib/structured-agent-session-launch'),
-                import('@/lib/launch-structured-codex-session')
+                import('@/lib/launch-structured-agent-session')
               ])
-            const structured = startStructuredCodexLaunch(folderWorktree.id)
+            const structured = startStructuredAgentLaunch(folderWorktree.id, launch.agent)
             const fallback = structured.claimDefinitiveRefusalFallback(() => {
               activateAndRevealWorktree(folderWorktree.id, {
                 sidebarRevealBehavior: 'auto',

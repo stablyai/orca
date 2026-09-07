@@ -161,9 +161,9 @@ export function isStructuredAgentSessionRecoveryTicketCurrent(
 }
 
 export async function retryUnexpectedExitSettlement(input: {
-  context: StructuredAgentSessionUnexpectedExitContext
+  context: Pick<StructuredAgentSessionUnexpectedExitContext, 'onBarrierError'>
   event: UnexpectedExitLifecycleEvent
-  session: StructuredAgentSessionHostSession
+  session: Pick<StructuredAgentSessionHostSession, 'journal' | 'fence'>
   stableSettlementId: string
 }): Promise<boolean> {
   try {
@@ -189,7 +189,7 @@ export async function retryUnexpectedExitSettlement(input: {
 
 function unexpectedExitFallbackMutations(
   event: UnexpectedExitLifecycleEvent,
-  session: StructuredAgentSessionHostSession,
+  session: Pick<StructuredAgentSessionHostSession, 'journal'>,
   stableSettlementId: string
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []

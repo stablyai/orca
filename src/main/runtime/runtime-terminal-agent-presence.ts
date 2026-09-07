@@ -20,6 +20,8 @@ const WRAPPER_RETRY_INTERVAL_MS = 150
 const WRAPPER_RETRY_TIMEOUT_MS = 6_500
 
 type RuntimeTerminalAgentPresenceDependencies = {
+  /** A structured agent session of this runtime; it has no pane, so no PTY probe can see it. */
+  isLiveStructuredAgent?(handle: string): boolean
   getLivePty(handle: string): RuntimePtyWorktreeRecord | null
   getLiveLeaf(handle: string): RuntimeLeafRecord
   getPrimaryLeaf(ptyId: string): RuntimeLeafRecord | null
@@ -41,6 +43,13 @@ export class RuntimeTerminalAgentPresence {
     handle: string,
     options: RuntimeTerminalAgentPresenceOptions = {}
   ): Promise<boolean> {
+    // Before every PTY probe below, because none of them can answer for a session that has no
+    // pane: `getLiveLeaf` threw, the catch turned that into `false`, and a coordinator running
+    // `dispatch --inject` concluded its structured worker was a bare shell — `no_agent_detected`.
+    // A structured session IS the agent; there is no foreground process to recognise.
+    if (this.deps.isLiveStructuredAgent?.(handle)) {
+      return true
+    }
     try {
       const pty = this.deps.getLivePty(handle)
       if (pty) {

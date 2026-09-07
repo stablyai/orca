@@ -17,17 +17,17 @@ import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-go
 import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-sibling-correlation'
 import {
   findSelfInitiatedTreeKills,
-  installProcessTreeKillBreadcrumbObserver,
   recordRefusedOwnChromiumTreeKill,
   recordSelfInitiatedTreeKill,
   resetSelfInitiatedTreeKillLogForTest,
   selfInitiatedTreeKillDetails
 } from './self-initiated-tree-kill-log'
 import {
-  notifyProcessTreeKill,
-  setProcessTreeKillObserver
-} from '../../shared/child-process/process-tree-kill-observer'
+  admitProcessTreeKill,
+  setProcessTreeKillGate
+} from '../../shared/child-process/process-tree-kill-gate'
 import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+import { installMainProcessTreeKillGate } from '../own-chromium-tree-kill-guard'
 import { _resetTracerForTests, setActiveSink } from '../observability/tracer'
 
 /** The field shape: renderer, `reason=killed exitCode=1`, win32 (#G2). */
@@ -252,12 +252,90 @@ describe('self-initiated tree kill breadcrumb', () => {
     expect(String(details.selfInitiatedKills)).toContain('more)')
   })
 
-  it('records a kill issued through the shared runProcess choke point', () => {
-    installProcessTreeKillBreadcrumbObserver()
+  it('keeps the pid-addressed kill when a window-close burst overruns the ring', () => {
+    // Review probe: one taskkill, then 32 routine Job Object teardowns. Under
+    // plain FIFO the discriminating entry is evicted and the persisted detail
+    // becomes byte-identical to the external-kill arm.
+    const goneAt = 5_000_000
+    recordSelfInitiatedTreeKill({
+      pid: 4242,
+      site: 'pty-descendant-sweep',
+      scope: 'win-taskkill-tree',
+      at: goneAt - 4_000
+    })
+    for (let index = 0; index < 32; index += 1) {
+      recordSelfInitiatedTreeKill({
+        pid: 6000 + index,
+        site: 'windows-pty-job-teardown',
+        scope: 'win-pty-job',
+        at: goneAt - 100
+      })
+    }
 
-    notifyProcessTreeKill({ pid: 3131, site: 'run-process-tree', scope: 'posix-process-group' })
+    const details = selfInitiatedTreeKillDetails(goneAt)
+
+    expect(details.selfInitiatedTreeKillCount).toBe(1)
+    expect(details.selfInitiatedGroupKillCount).toBe(31)
+    expect(String(details.selfInitiatedKills)).toMatch(
+      /^win-taskkill-tree\/pty-descendant-sweep\/pid4242 -4000ms/
+    )
+  })
+
+  it('keeps the newest teardown when a session has saturated the ring with pid kills', () => {
+    // Review probe, the mirror of the case above: 32 session-old taskkills (six
+    // routine families feed them) then the Job Object teardown 50ms before the
+    // death. A scope-preference eviction with no floor splices the entry it just
+    // pushed, and `{}` is byte-identical to the external-kill arm.
+    const goneAt = 5_000_000
+    for (let index = 0; index < 32; index += 1) {
+      recordSelfInitiatedTreeKill({
+        pid: 6000 + index,
+        site: 'pty-descendant-sweep',
+        scope: 'win-taskkill-tree',
+        at: goneAt - 600_000 + index * 1_000
+      })
+    }
+    recordSelfInitiatedTreeKill({
+      pid: 7777,
+      site: 'windows-pty-job-teardown',
+      scope: 'win-pty-job',
+      at: goneAt - 50
+    })
+
+    const details = selfInitiatedTreeKillDetails(goneAt)
+
+    expect(details.selfInitiatedGroupKillCount).toBe(1)
+    expect(String(details.selfInitiatedKills)).toContain(
+      'win-pty-job/windows-pty-job-teardown/pid7777 -50ms'
+    )
+  })
+
+  it('evicts the oldest pid kill, not the newest, once every candidate is pid-addressed', () => {
+    const goneAt = 5_000_000
+    for (let index = 0; index < 33; index += 1) {
+      recordSelfInitiatedTreeKill({
+        pid: 6000 + index,
+        site: 'git-command-tree-kill',
+        scope: 'win-taskkill-tree',
+        at: goneAt - 1_000
+      })
+    }
+
+    const pids = findSelfInitiatedTreeKills(goneAt).map((kill) => kill.pid)
+
+    expect(pids).toHaveLength(32)
+    expect(pids).toContain(6032)
+    expect(pids).not.toContain(6000)
+  })
+
+  it('records a kill issued through the shared runProcess choke point', () => {
+    installMainProcessTreeKillGate()
+
+    expect(
+      admitProcessTreeKill({ pid: 3131, site: 'run-process-tree', scope: 'posix-process-group' })
+    ).toBe(true)
 
     expect(findSelfInitiatedTreeKills(Date.now()).map((kill) => kill.pid)).toEqual([3131])
-    setProcessTreeKillObserver(null)
+    setProcessTreeKillGate(null)
   })
 })

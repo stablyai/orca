@@ -503,12 +503,19 @@ describePostgres('PostgreSQL transaction recovery', () => {
     const directorLockOrder: string[] = []
     const assignmentDatabase = new TransactionProbeDatabase(database, async (phase, sql) => {
       if (phase === 'before') {
-        if (sql.includes('FROM relay_assignments WHERE user_id = ?')) {
+        // Only locked statements reach this hook, so classifying the pin read
+        // is what proves it stays unlocked: if it ever grows a FOR UPDATE it
+        // shows up in the order below instead of silently joining the queue.
+        if (sql.includes('SELECT cell_id FROM relay_assignments')) {
+          directorLockOrder.push('pin-read')
+        } else if (sql.includes('FROM relay_assignments WHERE user_id = ?')) {
           directorLockOrder.push('assignment')
         } else if (sql.includes('FROM relay_assignment_activity_leases')) {
           directorLockOrder.push('activity')
         } else if (sql.includes('FROM relay_cells ORDER BY')) {
           directorLockOrder.push('cell-inventory')
+        } else if (sql.includes('FROM relay_cells WHERE cell_id IN')) {
+          directorLockOrder.push('cell-rows')
         } else if (sql.includes('FROM relay_cells WHERE cell_id = ?')) {
           directorLockOrder.push('cell')
         }
@@ -530,11 +537,14 @@ describePostgres('PostgreSQL transaction recovery', () => {
     })
     await expect(legacyTransaction).resolves.toBeUndefined()
     expect(assignmentDatabase.attempts).toBe(2)
+    // The retry still takes a cell row before the assignment row — the order
+    // that avoids the legacy cycle — but only the pinned row, never the
+    // inventory.
     expect(directorLockOrder).toEqual([
       'assignment',
       'activity',
       'cell',
-      'cell-inventory',
+      'cell-rows',
       'assignment',
       'activity'
     ])

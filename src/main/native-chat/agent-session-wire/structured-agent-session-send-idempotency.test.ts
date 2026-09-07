@@ -4,17 +4,19 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
+
+const journals = createTrackedJournalOpener()
 
 let root: string
 let journal: AgentSessionJournal
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-send-idempotency-'))
-  journal = await openAgentSessionJournal({
+  journal = await journals.open({
     identity: {
       sessionId: 'session-1',
       workspaceId: 'workspace-1',
@@ -27,6 +29,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 

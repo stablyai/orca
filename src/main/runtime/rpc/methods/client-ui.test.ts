@@ -35,6 +35,7 @@ describe('client UI RPC methods', () => {
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn',
       githubProjects: {
         pinned: [
           {
@@ -133,6 +134,7 @@ describe('client UI RPC methods', () => {
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -157,6 +159,7 @@ describe('client UI RPC methods', () => {
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects

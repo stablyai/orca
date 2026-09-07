@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fakes = vi.hoisted(() => ({
   configs: [] as Array<Record<string, unknown>>,
-  query: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+  // Pool construction and pool shutdown interleaved, so "the schema pool is
+  // gone before the serving pool opens" is checkable rather than assumed.
+  lifecycle: [] as string[],
+  query: vi.fn(async (_sql: string) => ({ rows: [], rowCount: 0 })),
   release: vi.fn(),
   end: vi.fn(async () => undefined)
 }))
@@ -13,19 +16,40 @@ vi.mock('pg', () => ({
       totalCount = 1
       idleCount = 1
       waitingCount = 0
-      end = fakes.end
       on = vi.fn()
       connect = vi.fn(async () => ({ query: fakes.query, release: fakes.release }))
+      private readonly label: string
 
       constructor(config: Record<string, unknown>) {
         fakes.configs.push(config)
+        this.label = `max=${String(config.max)} statement_timeout=${String(config.statement_timeout)}`
+        fakes.lifecycle.push(`open ${this.label}`)
+      }
+
+      async end(): Promise<void> {
+        fakes.lifecycle.push(`end ${this.label}`)
+        await fakes.end()
       }
     }
   }
 }))
 
-import { openRelayDatabase } from './database.js'
+import {
+  openRelayDatabase,
+  POSTGRES_SCHEMA_MIGRATIONS,
+  relayPostgresStatementTimeoutMs
+} from './database.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
+
+const SCHEMA_POOL = {
+  max: 1,
+  application_name: 'orca-relay/director/director/schema',
+  connectionTimeoutMillis: 2_000,
+  // Why: DDL must not inherit the request deadline.
+  statement_timeout: 0,
+  lock_timeout: 1_000,
+  idle_in_transaction_session_timeout: 5_000
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -34,9 +58,11 @@ afterEach(() => {
 describe('PostgreSQL relay deadlines', () => {
   beforeEach(() => {
     fakes.configs.length = 0
+    fakes.lifecycle.length = 0
     fakes.query.mockClear()
     fakes.release.mockClear()
     fakes.end.mockClear()
+    delete process.env.ORCA_RELAY_POSTGRES_STATEMENT_TIMEOUT_MS
   })
 
   it('bounds pool acquisition, statements, locks, and abandoned transactions', async () => {
@@ -48,6 +74,7 @@ describe('PostgreSQL relay deadlines', () => {
     })
 
     expect(fakes.configs).toEqual([
+      expect.objectContaining(SCHEMA_POOL),
       expect.objectContaining({
         max: 3,
         application_name: 'orca-relay/director/director',
@@ -57,6 +84,112 @@ describe('PostgreSQL relay deadlines', () => {
         idle_in_transaction_session_timeout: 5_000
       })
     ])
+    await database.close()
+  })
+
+  // Why: an untimed session left open would be a standing way for request work
+  // to escape the deadline this whole pool config exists to enforce.
+  it('closes the untimed schema pool before the serving pool opens', async () => {
+    const database = await openRelayDatabase({
+      databaseUrl: 'postgresql://relay:secret@127.0.0.1:5432/relay',
+      dataDir: './unused',
+      poolMax: 3,
+      applicationName: 'orca-relay/director/director'
+    })
+
+    expect(fakes.lifecycle).toEqual([
+      'open max=1 statement_timeout=0',
+      'end max=1 statement_timeout=0',
+      'open max=3 statement_timeout=5000'
+    ])
+    await database.close()
+  })
+
+  it('applies the schema on the untimed pool, never on the serving one', async () => {
+    fakes.query.mockClear()
+    const ddl: string[] = []
+    fakes.query.mockImplementation(async (sql: string) => {
+      // Every statement issued before the serving pool exists is schema work.
+      if (fakes.lifecycle.length === 1) ddl.push(sql)
+      return { rows: [], rowCount: 0 }
+    })
+    const database = await openRelayDatabase({
+      databaseUrl: 'postgresql://relay:secret@127.0.0.1:5432/relay',
+      dataDir: './unused'
+    })
+
+    expect(ddl.length).toBeGreaterThan(0)
+    // Statements can open with a leading `--` rationale comment.
+    const body = (statement: string): string =>
+      statement.replace(/^(?:\s*--[^\n]*\n)*\s*/, '')
+    expect(
+      ddl.every((statement) => /^(?:CREATE|ALTER TABLE)\b/i.test(body(statement)))
+    ).toBe(true)
+    // The backfill is DML, so it stays on the deadline-bearing serving pool.
+    expect(ddl.some((statement) => statement.includes('INSERT INTO'))).toBe(false)
+    await database.close()
+  })
+
+  it('takes the serving statement deadline from the environment', async () => {
+    process.env.ORCA_RELAY_POSTGRES_STATEMENT_TIMEOUT_MS = '2500'
+
+    const database = await openRelayDatabase({
+      databaseUrl: 'postgresql://relay:secret@127.0.0.1:5432/relay',
+      dataDir: './unused'
+    })
+
+    expect(fakes.configs).toEqual([
+      expect.objectContaining({ statement_timeout: 0 }),
+      expect.objectContaining({ statement_timeout: 2_500 })
+    ])
+    await database.close()
+  })
+
+  it.each(['0', '-1', '2.5', 'soon', ' '])(
+    'refuses %s as a statement deadline instead of running unbounded',
+    (value) => {
+      expect(() =>
+        relayPostgresStatementTimeoutMs({ ORCA_RELAY_POSTGRES_STATEMENT_TIMEOUT_MS: value })
+      ).toThrow('invalid_statement_timeout')
+    }
+  )
+
+  it.each([undefined, ''])('defaults to 5s when the environment says %s', (value) => {
+    expect(
+      relayPostgresStatementTimeoutMs(
+        value === undefined ? {} : { ORCA_RELAY_POSTGRES_STATEMENT_TIMEOUT_MS: value }
+      )
+    ).toBe(5_000)
+  })
+
+  // Why: a statement deadline that reaches the caller as a crash converts a
+  // transient stall into a failed assignment. It aborts the transaction exactly
+  // as a lock timeout does, so it belongs on the same bounded retry.
+  it('retries a statement timeout on a fresh client', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const database = await openRelayDatabase({
+      databaseUrl: 'postgresql://relay:secret@127.0.0.1:5432/relay',
+      dataDir: './unused'
+    })
+    let attempts = 0
+
+    const result = await database.transaction(async (transaction) => {
+      attempts += 1
+      if (attempts === 1) {
+        await transaction.query('SELECT 1')
+        throw Object.assign(new Error('canceling statement due to statement timeout'), {
+          code: '57014'
+        })
+      }
+      return 'committed'
+    })
+
+    expect(result).toBe('committed')
+    expect(attempts).toBe(2)
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"orca_relay_postgres_transaction_retry"')
+    )
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"code":"57014"'))
     await database.close()
   })
 })
@@ -134,6 +267,54 @@ describe('PostgreSQL schema startup', () => {
     await applyPostgresSchema([statement], query, { wait: async () => undefined })
 
     expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats an existing constraint as an applied ADD CONSTRAINT', async () => {
+    // Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, and a retry would only
+    // repeat 42710, so a re-run and a concurrent startup both move on.
+    const error = Object.assign(new Error('already exists'), { code: '42710' })
+    const query = vi
+      .fn<(statement: string) => Promise<unknown>>()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue(undefined)
+    const pause = vi.fn(async () => undefined)
+
+    await applyPostgresSchema(
+      ['ALTER TABLE test ADD CONSTRAINT test_check CHECK (id > 0)', 'CREATE TABLE test2'],
+      query,
+      { wait: pause }
+    )
+
+    expect(pause).not.toHaveBeenCalled()
+    expect(query).toHaveBeenCalledTimes(2)
+    expect(query).toHaveBeenLastCalledWith('CREATE TABLE test2')
+  })
+
+  it('recognises every shipped ADD CONSTRAINT migration as re-runnable', async () => {
+    // Guards the statement text against the pattern that classifies it.
+    const shipped = POSTGRES_SCHEMA_MIGRATIONS.filter((statement) =>
+      statement.includes('ADD CONSTRAINT')
+    )
+    expect(shipped.length).toBeGreaterThan(0)
+    const error = Object.assign(new Error('already exists'), { code: '42710' })
+    const query = vi.fn<(statement: string) => Promise<unknown>>().mockRejectedValue(error)
+
+    await applyPostgresSchema(shipped, query, { wait: async () => undefined })
+
+    expect(query).toHaveBeenCalledTimes(shipped.length)
+  })
+
+  it('still fails an ADD CONSTRAINT that violates existing rows', async () => {
+    const error = Object.assign(new Error('check violation'), { code: '23514' })
+    const query = vi.fn<(statement: string) => Promise<unknown>>().mockRejectedValue(error)
+
+    await expect(
+      applyPostgresSchema(
+        ['ALTER TABLE test ADD CONSTRAINT test_check CHECK (id > 0)'],
+        query,
+        { wait: async () => undefined }
+      )
+    ).rejects.toBe(error)
   })
 
   it.each([
