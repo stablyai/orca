@@ -24,6 +24,7 @@ export function parseArgs(argv) {
   return { flags, options, positional }
 }
 
+/** @returns {never} */
 export function refuse(message) {
   console.error(message)
   process.exit(2)
