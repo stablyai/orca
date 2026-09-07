@@ -1,3 +1,4 @@
+import { deleteCachedSessionTabStripForHost } from '../cache/session-tab-strip-cache'
 import { deleteHostDeviceToken } from './host-device-token-store'
 import {
   clearHostCredentialWriteRevision,
@@ -48,6 +49,13 @@ export function createUnpairedHostCredentialDeletion(dependencies: DeletionDepen
     }
     assertWriteRevisionUnchanged(hostId, writeRevision)
     await deleteMobileRelayDirectUpgradeJournal(hostId)
+    if (await shouldSkip(hostId, writeRevision)) {
+      return
+    }
+    assertWriteRevisionUnchanged(hostId, writeRevision)
+    // The cached tab strip is not a credential, but it is host-scoped plaintext that outlives
+    // the pairing unless this sweep takes it too.
+    await deleteCachedSessionTabStripForHost(hostId)
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }

@@ -102,6 +102,11 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent'
   },
+  // Why: a cached row is inert until the reconnect lands, so it carries the same de-emphasis as
+  // the disabled tab-bar buttons beside it rather than passing for a live tab.
+  tabPreview: {
+    opacity: 0.45
+  },
   tabActive: {
     // Neutral grey underline, matching the desktop terminal tab's active
     // indicator (a muted foreground/card mix), not a blue accent.

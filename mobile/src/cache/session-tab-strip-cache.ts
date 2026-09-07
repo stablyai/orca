@@ -1,11 +1,18 @@
 // Why: reconnecting to a workspace the phone opened a minute ago tears the session screen back
 // to an empty strip and a spinner, even though the tab list it is about to be handed is the one
-// it just displayed. Persist the drawn fields of the strip per workspace so a reconnect paints
-// the known tabs immediately and swaps in live rows under the same keys.
+// it just displayed. Persist the shape of the strip per workspace so a reconnect paints the
+// known tabs immediately and swaps in live rows under the same keys.
+//
+// This file is the authority on what reaches plaintext storage, not its callers: every entry is
+// rebuilt field by field on the way in, and shell-controlled titles are replaced with fixed
+// labels here rather than trusted to have been scrubbed upstream.
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type {
-  MobileSessionTabStripEntry,
-  MobileSessionTabStripPreview
+import { sha256 } from '@noble/hashes/sha256'
+import {
+  getPersistableTabStripTitle,
+  isDrawableTabStripType,
+  type MobileSessionTabStripEntry,
+  type MobileSessionTabStripPreview
 } from '../session/mobile-session-tab-strip-entries'
 
 const STORAGE_KEY = 'orca:session-tab-strip:v1'
@@ -15,6 +22,9 @@ const MAX_WORKSPACES = 12
 const MAX_TABS_PER_WORKSPACE = 24
 const MAX_TITLE_LENGTH = 64
 const WRITE_DEBOUNCE_MS = 250
+// 128 bits of a digest: far past collision range for a dozen workspaces, and short enough that
+// the stored blob stays small.
+const WORKSPACE_DIGEST_LENGTH = 32
 
 type StoredWorkspace = { key: string; preview: MobileSessionTabStripPreview }
 type StoredFile = { workspaces: StoredWorkspace[] }
@@ -24,6 +34,11 @@ let memoryCache: Map<string, MobileSessionTabStripPreview> | null = null
 let loadPromise: Promise<Map<string, MobileSessionTabStripPreview>> | null = null
 let writeTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * A workspace id ends in a filesystem path, so it is digested rather than stored. The host id
+ * stays readable because forgetting a host has to be able to find that host's rows, and because
+ * host ids already key several other entries in this store.
+ */
 export function getSessionTabStripCacheKey(
   hostId: string | undefined,
   worktreeId: string | undefined
@@ -31,9 +46,7 @@ export function getSessionTabStripCacheKey(
   if (!hostId || !worktreeId) {
     return null
   }
-  // A worktree id ends in a filesystem path, which on Linux and macOS may hold any byte except
-  // NUL — so join through JSON rather than pick a separator and hope.
-  return JSON.stringify([hostId, worktreeId])
+  return JSON.stringify([hostId, digestWorkspaceId(worktreeId)])
 }
 
 /** Whatever this process already knows, with no await — so a revisit paints on the first frame. */
@@ -78,6 +91,29 @@ export function saveCachedSessionTabStrip(
   scheduleWrite(cache)
 }
 
+/**
+ * Drop every workspace belonging to a host the user has unpaired. Both the in-memory rows and
+ * the stored blob have to go: leaving either behind means the next save for any other host
+ * serializes the forgotten host's tabs straight back to disk.
+ */
+export async function deleteCachedSessionTabStripForHost(hostId: string): Promise<void> {
+  // Load first so the rewrite below preserves other hosts. If storage is unreadable we still
+  // rewrite, which can cost another host its rows — the wrong direction for a cache, the right
+  // one for a deletion the user asked for.
+  const cache = await loadFile()
+  // Deleting the entry the iterator is standing on is well-defined for a Map.
+  for (const key of cache.keys()) {
+    if (readHostIdFromKey(key) === hostId) {
+      cache.delete(key)
+    }
+  }
+  if (writeTimer) {
+    clearTimeout(writeTimer)
+    writeTimer = null
+  }
+  await writeFile(cache)
+}
+
 export function resetSessionTabStripCacheForTests(): void {
   if (writeTimer) {
     clearTimeout(writeTimer)
@@ -85,6 +121,24 @@ export function resetSessionTabStripCacheForTests(): void {
   }
   memoryCache = null
   loadPromise = null
+}
+
+function digestWorkspaceId(worktreeId: string): string {
+  const digest = sha256(new TextEncoder().encode(worktreeId))
+  let hex = ''
+  for (const byte of digest) {
+    hex += byte.toString(16).padStart(2, '0')
+  }
+  return hex.slice(0, WORKSPACE_DIGEST_LENGTH)
+}
+
+function readHostIdFromKey(key: string): string | null {
+  try {
+    const parsed = JSON.parse(key) as unknown
+    return Array.isArray(parsed) && typeof parsed[0] === 'string' ? parsed[0] : null
+  } catch {
+    return null
+  }
 }
 
 async function loadFile(): Promise<Map<string, MobileSessionTabStripPreview>> {
@@ -134,9 +188,13 @@ function scheduleWrite(cache: Map<string, MobileSessionTabStripPreview>): void {
   }
   writeTimer = setTimeout(() => {
     writeTimer = null
-    const workspaces: StoredWorkspace[] = [...cache].map(([key, preview]) => ({ key, preview }))
-    void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ workspaces })).catch(() => {})
+    void writeFile(cache)
   }, WRITE_DEBOUNCE_MS)
+}
+
+async function writeFile(cache: Map<string, MobileSessionTabStripPreview>): Promise<void> {
+  const workspaces: StoredWorkspace[] = [...cache].map(([key, preview]) => ({ key, preview }))
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ workspaces })).catch(() => {})
 }
 
 // Rebuilt field by field so a field later added to the live tab type cannot ride into storage
@@ -144,14 +202,19 @@ function scheduleWrite(cache: Map<string, MobileSessionTabStripPreview>): void {
 function redactPreview(preview: MobileSessionTabStripPreview): MobileSessionTabStripPreview {
   const tabs: MobileSessionTabStripEntry[] = []
   for (const tab of preview.tabs ?? []) {
-    if (typeof tab?.id !== 'string' || typeof tab.type !== 'string') {
+    if (typeof tab?.id !== 'string' || !isDrawableTabStripType(tab.type)) {
       continue
     }
+    const agentId = typeof tab.agentId === 'string' ? tab.agentId : null
+    const title = typeof tab.title === 'string' ? tab.title : ''
     tabs.push({
       id: tab.id,
       type: tab.type,
-      title: typeof tab.title === 'string' ? tab.title.slice(0, MAX_TITLE_LENGTH) : '',
-      agentId: typeof tab.agentId === 'string' ? tab.agentId : null
+      title: getPersistableTabStripTitle({ type: tab.type, title, agentId }).slice(
+        0,
+        MAX_TITLE_LENGTH
+      ),
+      agentId
     })
     if (tabs.length === MAX_TABS_PER_WORKSPACE) {
       break

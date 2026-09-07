@@ -138,7 +138,11 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             {tabStripRows.map(({ entry, isActive, tab }) => (
               <Pressable
                 key={entry.id}
-                style={[styles.tab, isActive && styles.tabActive]}
+                style={[
+                  styles.tab,
+                  isActive && styles.tabActive,
+                  tab === null && styles.tabPreview
+                ]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
                   tabLayoutsRef.current.set(entry.id, { x, width })
