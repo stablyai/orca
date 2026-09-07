@@ -66,14 +66,16 @@ export function createFolderWorkspaceCatalogActions(
       const applyCatalog = (
         catalog: FetchedFolderWorkspaceCatalog,
         fence: HostCatalogFence
-      ): void => {
+      ): boolean => {
         if (!isHostCatalogFenceCurrent(get, fence)) {
-          return
+          return false
         }
+        let applied = false
         set((current) => {
           if (!isHostCatalogFenceCurrent(get, fence)) {
             return current
           }
+          applied = true
           folderWorkspaceUpdates.recordCatalogReplacement(
             getFolderWorkspaceCatalogReplacementIdentities(
               catalog,
@@ -93,10 +95,16 @@ export function createFolderWorkspaceCatalogActions(
               : { folderWorkspacePathStatuses: {} })
           }
         })
+        return applied
       }
 
-      const hydratedFolderWorkspaceHostIds = new Set<ExecutionHostId>()
+      const hydratedFolderWorkspaceFences = new Map<ExecutionHostId, HostCatalogFence>()
       const clearRestoredOwnersForHydratedHosts = (): void => {
+        const hydratedFolderWorkspaceHostIds = new Set(
+          [...hydratedFolderWorkspaceFences]
+            .filter(([, fence]) => isHostCatalogFenceCurrent(get, fence))
+            .map(([hostId]) => hostId)
+        )
         set((s) => ({
           restoredRuntimeHostIdByWorkspaceSessionKey: clearRestoredFolderWorkspaceSessionOwners(
             s.restoredRuntimeHostIdByWorkspaceSessionKey,
@@ -109,8 +117,9 @@ export function createFolderWorkspaceCatalogActions(
         const target = { kind: 'local' as const }
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
         const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
-        applyCatalog(catalog, fence)
-        hydratedFolderWorkspaceHostIds.add(catalog.hostId)
+        if (applyCatalog(catalog, fence)) {
+          hydratedFolderWorkspaceFences.set(catalog.hostId, fence)
+        }
       } catch (err) {
         console.error('Failed to fetch local folder workspaces for all-host load:', err)
       }
@@ -129,8 +138,9 @@ export function createFolderWorkspaceCatalogActions(
           const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
           try {
             const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
-            applyCatalog(catalog, fence)
-            hydratedFolderWorkspaceHostIds.add(catalog.hostId)
+            if (applyCatalog(catalog, fence)) {
+              hydratedFolderWorkspaceFences.set(catalog.hostId, fence)
+            }
           } catch (err) {
             console.warn(
               `Skipped folder workspaces for runtime environment ${environment.id}:`,

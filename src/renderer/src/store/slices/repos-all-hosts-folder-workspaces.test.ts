@@ -164,6 +164,29 @@ beforeEach(() => {
 })
 
 describe('all-host folder workspace startup catalogs', () => {
+  it('retains restored owners when a superseded catalog finishes before its replacement', async () => {
+    const { promise: firstCatalog, resolve: resolveFirst } =
+      Promise.withResolvers<FolderWorkspace[]>()
+    const { promise: secondCatalog, resolve: resolveSecond } =
+      Promise.withResolvers<FolderWorkspace[]>()
+    folderWorkspacesList.mockReturnValueOnce(firstCatalog).mockReturnValueOnce(secondCatalog)
+    const store = createTestStore()
+    const key = folderWorkspaceKey('local-folder')
+    store.setState({ restoredRuntimeHostIdByWorkspaceSessionKey: { [key]: 'local' } })
+    const first = store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+    const second = store.getState().fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
+    resolveFirst([])
+    await first
+    try {
+      expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
+        [key]: 'local'
+      })
+    } finally {
+      resolveSecond([localFolderWorkspace])
+      await second
+    }
+  })
+
   it('loads project groups and folder workspaces for every host', async () => {
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
