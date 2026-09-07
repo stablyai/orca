@@ -65,6 +65,7 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
     renewed: this.renewed,
     resumeExpiresAt: this.resumeExpiry
   })
+  whenResumeConfirmed = () => Promise.resolve()
   getFailure = () => this.failure
 }
 

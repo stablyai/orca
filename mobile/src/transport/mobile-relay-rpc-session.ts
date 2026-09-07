@@ -17,9 +17,13 @@ import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
-const RELAY_PROBE_TIMEOUT_MS = 4_000
-const RELAY_MISSED_PROBE_LIMIT = 2
-const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
+// Ordinary foreground checks: two 4s misses, at most one voluntary probe per 10s.
+const RELAY_PROBE = { timeoutMs: 4_000, missedProbeLimit: 2, minIntervalMs: 10_000 }
+// A socket that died while the process was suspended must be admitted before the
+// user reads the screen as broken: one 2s probe on resume, no second chance.
+const RELAY_RESUME_PROBE = { timeoutMs: 2_000, missedProbeLimit: 1 }
+// Foreground-only sweep so a silently-dead relay surfaces without a user action.
+const RELAY_IDLE_PROBE_MS = 25_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
@@ -29,6 +33,10 @@ export type MobileRelayRpcSession = RpcClient &
     getAttachDeadlineAt(): number | null
     getResumeExpiresAt(): number | null
     getResumeConfirmation(): DeviceResumeConfirmed | null
+    // Settles once the resume confirm has answered or failed the session. Never
+    // rejects. Anyone reading getResumeConfirmation()/getResumeExpiresAt() must
+    // await it: 'connected' is published at authentication, ahead of the confirm.
+    whenResumeConfirmed(): Promise<void>
     getFailure(): Error | null
   }
 
@@ -40,6 +48,8 @@ export function connectMobileRelayRpcSession(args: {
   deviceToken: string
   desktopPublicKeyB64: string
   requestTimeoutMs?: number
+  // Gates the idle liveness sweep; a backgrounded app must not spend probes.
+  isForeground?: () => boolean
   createSocket?: (url: string) => WebSocket
   onHostCloseReason?: (reason: RelayHostCloseReason) => void
   onLog?: ConnectionLogSink
@@ -52,6 +62,7 @@ export function connectMobileRelayRpcSession(args: {
   let attachDeadlineAt: number | null = null
   let resumeExpiresAt: number | null = null
   let resumeConfirmation: DeviceResumeConfirmed | null = null
+  let resumeConfirmed: Promise<void> | null = null
   let failure: Error | null = null
   let closed = false
   let logSequence = 0
@@ -86,7 +97,7 @@ export function connectMobileRelayRpcSession(args: {
       dialStage.advance('handshaking')
       publishState('handshaking')
     },
-    onAuthenticated: () => void confirmResume(),
+    onAuthenticated: () => publishAuthenticated(),
     onText: (plaintext) => {
       livenessWatchdog.noteAuthenticatedInbound(livenessIdentity)
       handleText(plaintext)
@@ -125,7 +136,7 @@ export function connectMobileRelayRpcSession(args: {
     },
     notifyForeground: (reason) => {
       if (state === 'connected' && reason !== 'network-change') {
-        livenessWatchdog.probeNow(livenessIdentity)
+        livenessWatchdog.probeNow(livenessIdentity, reason === 'app-resume' ? 'resume' : 'nudge')
       }
     },
     close() {
@@ -144,14 +155,18 @@ export function connectMobileRelayRpcSession(args: {
     getAttachDeadlineAt: () => attachDeadlineAt,
     getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
+    whenResumeConfirmed: () => resumeConfirmed ?? Promise.resolve(),
     getFailure: () => failure
   }
   const livenessWatchdog = new RpcSessionLivenessWatchdog({
     transport: 'relay',
-    idleProbeMs: null,
-    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
-    missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
-    voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
+    idleProbeMs: RELAY_IDLE_PROBE_MS,
+    probeTimeoutMs: RELAY_PROBE.timeoutMs,
+    missedProbeLimit: RELAY_PROBE.missedProbeLimit,
+    voluntaryProbeMinIntervalMs: RELAY_PROBE.minIntervalMs,
+    urgentProbeTimeoutMs: RELAY_RESUME_PROBE.timeoutMs,
+    urgentMissedProbeLimit: RELAY_RESUME_PROBE.missedProbeLimit,
+    shouldIdleProbe: () => args.isForeground?.() ?? true,
     sendProbe: () =>
       state === 'connected' &&
       sendFrame({ id: pending.nextId(), method: 'status.get', params: undefined }),
@@ -170,8 +185,28 @@ export function connectMobileRelayRpcSession(args: {
   })
   return client
 
-  async function confirmResume(): Promise<void> {
+  // Why: the transport carries traffic the moment E2EE authenticates. The resume
+  // confirm and the capability advisory ride it concurrently instead of putting
+  // two serialized round trips in front of 'connected'.
+  function publishAuthenticated(): void {
+    if (closed) {
+      return
+    }
     dialStage.advance('confirming')
+    resumeConfirmed = confirmResume()
+    // Why: an unanswered advisory says nothing, but a frame that never reached the
+    // wire proves the socket cannot carry traffic — that alone still fails.
+    void settleMobileRuntimeCapabilities((method, params) =>
+      sendRpc(method, params, requestTimeoutMs, true)
+    ).catch((error: unknown) => fail(asError(error)))
+    lastConnectedAt = Date.now()
+    livenessWatchdog.start(livenessIdentity)
+    publishState('connected')
+  }
+
+  // Off the critical path but never optional: a failed confirm or a relayHostId
+  // that is not ours still fails the session, only later than it used to.
+  async function confirmResume(): Promise<void> {
     try {
       const response = await sendRpc(
         'pairing.getEndpoints',
@@ -188,13 +223,6 @@ export function connectMobileRelayRpcSession(args: {
       }
       resumeConfirmation = result.resumeConfirmation
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
-      lastConnectedAt = Date.now()
-      // Why: an unanswered advisory must not keep a slow relay from ever reaching connected.
-      await settleMobileRuntimeCapabilities((method, params) =>
-        sendRpc(method, params, requestTimeoutMs, true)
-      )
-      livenessWatchdog.start(livenessIdentity)
-      publishState('connected')
     } catch (error) {
       fail(asError(error))
     }

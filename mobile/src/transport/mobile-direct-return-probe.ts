@@ -26,6 +26,7 @@ export class DirectReturnProbe {
       host: () => HostProfile
       canSchedule: () => boolean
       canAttempt: () => boolean
+      // Takes the supervisor's operation mutex, now held for the cutover only.
       beginOperation: () => void
       migrate: (
         client: RpcClient,
@@ -70,9 +71,12 @@ export class DirectReturnProbe {
     }
     const controller = new AbortController()
     this.activeProbe = controller
-    this.hooks.beginOperation()
+    let owned = false
     let successful: Awaited<ReturnType<typeof openAuthenticatedDirectEndpoint>> = null
     try {
+      // Why: the dial is a pure observation on its own socket — holding the
+      // supervisor's mutex across its 12s budget stalled every relay recovery
+      // that landed during a foreground return. Only the cutover needs the mutex.
       successful = await openAuthenticatedDirectEndpoint(
         this.hooks.host(),
         this.deps.openDirect,
@@ -90,6 +94,14 @@ export class DirectReturnProbe {
         successful.client.close()
         return
       }
+      if (!this.hooks.canAttempt()) {
+        // A relay dial owns the mutex; the streak survives, so the next probe
+        // promotes direct instead of this one.
+        successful.client.close()
+        return
+      }
+      this.hooks.beginOperation()
+      owned = true
       const candidate = successful
       // Migration owns the candidate, including closing it if cutover is canceled.
       successful = null
@@ -109,9 +121,11 @@ export class DirectReturnProbe {
     } finally {
       this.activeProbe = null
       successful?.client.close()
-      // Why: a relay drop or backoff timer can arrive while the probe owns the
+      // Why: a relay drop or backoff timer can arrive while the cutover owns the
       // operation mutex; afterProbe releases it and replays deferred recovery.
-      this.hooks.afterProbe()
+      if (owned) {
+        this.hooks.afterProbe()
+      }
       this.schedule()
     }
   }

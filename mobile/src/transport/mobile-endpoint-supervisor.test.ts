@@ -189,6 +189,7 @@ describe('mobile endpoint supervisor', () => {
       resolved,
       expect.any(Object),
       expect.any(String),
+      expect.any(Function),
       expect.any(Function)
     )
     expect(deps.saveHost).toHaveBeenCalledWith(
@@ -562,6 +563,7 @@ describe('mobile endpoint supervisor', () => {
       relay,
       expect.objectContaining({ version: 3 }),
       expect.any(String),
+      expect.any(Function),
       expect.any(Function)
     )
     supervisor.stop()
@@ -610,6 +612,7 @@ describe('mobile endpoint supervisor', () => {
       relay,
       expect.objectContaining({ version: 3 }),
       expect.any(String),
+      expect.any(Function),
       expect.any(Function)
     )
     supervisor.stop()

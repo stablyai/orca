@@ -110,7 +110,8 @@ export class MobileRelaySessionEstablisher {
         if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
           args.logical.setHostSignedOut(true)
         }
-      }
+      },
+      args.isForeground
     )
     try {
       // Why: backgrounding or a direct winner withdraws this dial before cutover.

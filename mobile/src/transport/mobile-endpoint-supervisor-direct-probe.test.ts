@@ -48,4 +48,59 @@ describe('mobile endpoint supervisor direct probe', () => {
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })
+
+  it('recovers the relay at once while the probe is still dialing direct', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    // A black-holed LAN endpoint: the dial sits unanswered for its whole 12s budget.
+    const direct = new FakeSession('connecting')
+    const openRelay = vi.fn(() => new FakeRelaySession('connected'))
+    const deps = dependencies({ openDirect: vi.fn(() => direct), openRelay })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(deps.openDirect).toHaveBeenCalledOnce()
+    logical.publishState('disconnected')
+    await vi.advanceTimersByTimeAsync(0)
+
+    // Why: the dial is a pure observation, so it no longer owns the operation
+    // mutex — recovery does not wait out the probe's budget.
+    expect(openRelay).toHaveBeenCalledOnce()
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('replays a relay recovery that landed while the direct cutover owned the mutex', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const openRelay = vi.fn(() => new FakeRelaySession('connected'))
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('connected')), openRelay })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+    await supervisor.start()
+
+    let release!: () => void
+    const cutover = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    // The candidate loses the cutover, so the logical client stays on the relay path.
+    logical.migrateTo.mockImplementationOnce(async (candidate) => {
+      await cutover
+      candidate.close()
+    })
+    // Three authenticated probes plus the observation and dwell windows.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(logical.migrateTo).toHaveBeenCalledOnce()
+
+    logical.publishState('disconnected')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).not.toHaveBeenCalled()
+
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+
+    // The queued request is replayed by afterProbe, never dropped.
+    expect(openRelay).toHaveBeenCalledOnce()
+    expect(logical.getState()).toBe('connected')
+    supervisor.stop()
+  })
 })
