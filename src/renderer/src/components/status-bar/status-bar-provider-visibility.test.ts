@@ -373,7 +373,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          kiro: null
         },
         usageSettings()
       )

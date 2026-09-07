@@ -45,6 +45,25 @@ export function formatTimeAgo(ts: number): string {
   return `${hours}h ago`
 }
 
+export function formatRateLimitResetLabel(
+  window: RateLimitWindow,
+  now: number = Date.now()
+): string | null {
+  if (window.resetsAt) {
+    return formatResetCountdown(window.resetsAt - now)
+  }
+  if (window.resetDescription) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(window.resetDescription)) {
+      return translate('auto.components.status.bar.tooltip.resetOnDate', 'Resets on {{value0}}', {
+        value0: window.resetDescription
+      })
+    }
+    // Producers may already send human-readable values ("Thu", "2:30 PM").
+    return window.resetDescription
+  }
+  return null
+}
+
 // Re-export so existing tooltip consumers/tests keep their import path; the
 // implementation is shared with mobile in src/shared/rate-limit-reset-format.
 export { formatResetCountdown }
@@ -96,6 +115,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
+  }
+  if (provider === 'kiro') {
+    return <AgentIcon agent="kiro" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -220,7 +242,7 @@ function ProviderRateLimitWindowSection({
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const resetLabel = formatRateLimitResetLabel(window, now)
 
   return (
     <div className="space-y-1">
