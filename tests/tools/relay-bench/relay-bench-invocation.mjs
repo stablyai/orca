@@ -205,10 +205,6 @@ export function isPublicIpAddress(host) {
   return null
 }
 
-/**
- * Literal-address vetting for a URL this harness is about to fetch. Returns the normalized origin
- * or the reason it is refused. A DNS name still needs resolvesToPublicAddress().
- */
 // WHATWG keeps the brackets on an IPv6 hostname, and a trailing dot is the same name.
 function normalizeHostname(hostname) {
   return hostname
@@ -217,6 +213,10 @@ function normalizeHostname(hostname) {
     .replace(/\.$/, '')
 }
 
+/**
+ * Literal-address vetting for a URL this harness is about to fetch. Returns the normalized origin
+ * or the reason it is refused. A DNS name still needs resolvesToPublicAddress().
+ */
 export function classifyPublicHttpsOrigin(value) {
   if (typeof value !== 'string' || !value) {
     return { ok: false, reason: 'missing origin' }
