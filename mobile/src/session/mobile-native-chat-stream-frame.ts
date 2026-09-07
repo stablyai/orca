@@ -7,6 +7,10 @@ export type MobileNativeChatStreamFrame = {
   messages?: NativeChatMessage[]
   hasMore?: boolean
   beforeOffset?: number
+  /** Snapshot only: no transcript file exists behind this window yet (the agent
+   *  has not flushed, or was never prompted). The empty list is real enough to
+   *  render, but it is not a settled read of the session's history. */
+  pending?: boolean
   error?: string
   message?: string
 }
@@ -24,6 +28,9 @@ export type AppliedMobileNativeChatFrame =
        *  snapshot, or a replay snapshot disjoint from local history) — the
        *  caller must reset its paging window/cursor to the frame's. */
       windowReplaced?: boolean
+      /** The transcript behind this window does not exist yet: show it, but keep
+       *  the read open — the real snapshot follows on the same subscription. */
+      pending?: boolean
     }
 
 function replayRetainedTailStart(
@@ -80,6 +87,7 @@ export function applyMobileNativeChatStreamFrame(args: {
   if (!Array.isArray(frame.messages)) {
     return { kind: 'ignored' }
   }
+  const pending = frame.type === 'snapshot' && frame.pending === true
   const replayStartIndex =
     frame.type === 'snapshot' && !replaceSnapshot && merger.list.length > 0
       ? replayRetainedTailStart(merger, frame.messages, frame.hasMore)
@@ -91,6 +99,7 @@ export function applyMobileNativeChatStreamFrame(args: {
       messages: merger.list,
       hasMore: frame.hasMore,
       windowReplaced: true,
+      ...(pending ? { pending: true } : {}),
       ...(frame.beforeOffset == null ? {} : { beforeOffset: frame.beforeOffset })
     }
   }
@@ -101,6 +110,7 @@ export function applyMobileNativeChatStreamFrame(args: {
   return {
     kind: 'messages',
     messages,
+    ...(pending ? { pending: true } : {}),
     // Why: once the bounded live window drops its oldest row, the snapshot's
     // byte cursor no longer describes the oldest retained message.
     ...(cursorInvalidated ? { cursorInvalidated: true } : {}),

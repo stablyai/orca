@@ -1,0 +1,43 @@
+import type { ChecksPanelContextState } from './use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
+
+export type ChecksPanelReviewStateInput = Pick<
+  ChecksPanelContextState,
+  | 'activeReview'
+  | 'fallbackGitHubPRNumber'
+  | 'hostedReview'
+  | 'isFolder'
+  | 'linkedAzureDevOpsPR'
+  | 'linkedBitbucketPR'
+  | 'linkedGiteaPR'
+  | 'linkedGitLabMR'
+  | 'linkedPR'
+  | 'linkedReviewNumber'
+  | 'pr'
+  | 'prCacheKey'
+  | 'prRefreshStateNow'
+  | 'prCachedHasPR'
+  | 'prNumber'
+  | 'refreshContextKey'
+> &
+  Pick<
+    ChecksPanelControllerState,
+    | 'activeWorktree'
+    | 'activeWorktreeId'
+    | 'activeWorktreePath'
+    | 'branch'
+    | 'fetchUpstreamStatus'
+    | 'gitStatusInvalidation'
+    | 'gitStatusSnapshot'
+    | 'hardRefreshError'
+    | 'hostedReviewCreationSnapshot'
+    | 'localExecutionScope'
+    | 'panelContextKey'
+    | 'prGenerationRecords'
+    | 'remoteStatusInvalidation'
+    | 'repo'
+    | 'repoConnectionId'
+    | 'runtimeEnvironmentId'
+    | 'settings'
+    | 'updatePullRequestGenerationRecord'
+  >

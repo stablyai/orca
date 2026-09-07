@@ -3,8 +3,7 @@ import {
   getWorkspaceCleanupAgentRank,
   getWorkspaceCleanupBlockerSeverity,
   getWorkspaceCleanupGitRank,
-  getWorkspaceCleanupReviewRank,
-  getWorkspaceCleanupTierRank
+  getWorkspaceCleanupReviewRank
 } from '../../../../shared/workspace-cleanup-facet-rankings'
 import type {
   WorkspaceCleanupSortDirectionState,
@@ -161,8 +160,6 @@ function compareNatural(
       )
     case 'local-context':
       return left.localContextCount - right.localContextCount
-    case 'tier':
-      return getWorkspaceCleanupTierRank(left.tier) - getWorkspaceCleanupTierRank(right.tier)
     case 'blocker-count':
       return (
         left.blockerCount - right.blockerCount ||

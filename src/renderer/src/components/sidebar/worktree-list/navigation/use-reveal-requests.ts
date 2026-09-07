@@ -1,4 +1,7 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { Crosshair } from 'lucide-react'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
@@ -6,6 +9,8 @@ import {
 } from '@/lib/scroll-to-current-workspace-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeGroupBy } from '../grouping/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
 
@@ -14,9 +19,11 @@ import { getKnownSidebarWorktreeById } from './folder-reveal'
 export function useSidebarRevealRequests(args: {
   groupBy: WorktreeGroupBy
   renderedSidebarRowKeys: ReadonlySet<string>
-  renderedWorktreeIds: readonly string[]
+  renderedWorktreeIdentities: readonly string[]
   currentSidebarWorktreeId: string | null
+  currentSidebarExecutionHostId: ExecutionHostId | null
   worktreeMap: Map<string, Worktree>
+  worktrees: readonly Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
   hasFilters: boolean
   clearFilters: () => void
@@ -24,9 +31,11 @@ export function useSidebarRevealRequests(args: {
   const {
     groupBy,
     renderedSidebarRowKeys,
-    renderedWorktreeIds,
+    renderedWorktreeIdentities,
     currentSidebarWorktreeId,
+    currentSidebarExecutionHostId,
     worktreeMap,
+    worktrees,
     folderWorkspaces,
     hasFilters,
     clearFilters
@@ -35,6 +44,12 @@ export function useSidebarRevealRequests(args: {
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
   const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
   const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
+  const confirm = useConfirmationDialog()
+  const confirmationPending = useRef(false)
+  const latestArgs = useRef(args)
+  useLayoutEffect(() => {
+    latestArgs.current = args
+  })
 
   useEffect(() => {
     if (!pendingRevealSidebarRow) {
@@ -62,7 +77,7 @@ export function useSidebarRevealRequests(args: {
   ])
 
   const handleRevealCurrentWorkspaceRequest = useCallback(
-    (event: Event) => {
+    async (event: Event) => {
       const detail =
         event instanceof CustomEvent
           ? (event.detail as ScrollToCurrentWorkspaceRevealRequestDetail | undefined)
@@ -84,29 +99,70 @@ export function useSidebarRevealRequests(args: {
       const activeWorktree = getKnownSidebarWorktreeById(
         currentSidebarWorktreeId,
         worktreeMap,
-        folderWorkspaces
+        folderWorkspaces,
+        worktrees,
+        currentSidebarExecutionHostId
       )
       if (!activeWorktree || activeWorktree.isArchived) {
         return
       }
-      if (!renderedWorktreeIds.includes(currentSidebarWorktreeId)) {
-        // Why: the reveal action must show the current workspace, so relax filters that hide it first.
-        clearFilters()
+      const currentIdentity = composeWorktreeHostIdentity(
+        currentSidebarExecutionHostId ?? undefined,
+        currentSidebarWorktreeId
+      )
+      if (hasFilters && !renderedWorktreeIdentities.includes(currentIdentity)) {
+        if (confirmationPending.current) {
+          return
+        }
+        confirmationPending.current = true
+        let confirmed: boolean
+        try {
+          confirmed = await confirm({
+            icon: Crosshair,
+            initialFocus: 'confirm',
+            cancelVariant: 'ghost',
+            title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
+            description: translate(
+              'sidebar.revealFiltered.description',
+              'The active workspace is hidden in the sidebar. Revealing it will clear your sidebar filters.'
+            ),
+            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Clear filters and reveal'),
+            cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
+          })
+        } finally {
+          confirmationPending.current = false
+        }
+        const latest = latestArgs.current
+        // A workspace switch while the dialog is open must not clear filters for a stale target.
+        if (
+          !confirmed ||
+          latest.currentSidebarWorktreeId !== currentSidebarWorktreeId ||
+          latest.currentSidebarExecutionHostId !== currentSidebarExecutionHostId
+        ) {
+          return
+        }
+        if (latest.hasFilters && !latest.renderedWorktreeIdentities.includes(currentIdentity)) {
+          latest.clearFilters()
+        }
       }
       revealWorktreeInSidebar(currentSidebarWorktreeId, {
         behavior: 'smooth',
         highlight: true,
-        beginRename: (detail as { beginRename?: boolean } | undefined)?.beginRename === true
+        beginRename: (detail as { beginRename?: boolean } | undefined)?.beginRename === true,
+        executionHostId: currentSidebarExecutionHostId ?? undefined
       })
     },
     [
-      clearFilters,
+      confirm,
+      hasFilters,
       currentSidebarWorktreeId,
+      currentSidebarExecutionHostId,
       folderWorkspaces,
       revealSidebarRow,
-      renderedWorktreeIds,
+      renderedWorktreeIdentities,
       revealWorktreeInSidebar,
-      worktreeMap
+      worktreeMap,
+      worktrees
     ]
   )
 

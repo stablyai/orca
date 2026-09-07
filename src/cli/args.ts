@@ -1,6 +1,12 @@
 import { RuntimeClientError } from './runtime/types'
 import { unknownCommandData, unknownFlagData } from './command-suggestion'
 import { specPaths, type CommandSpec } from './command-spec'
+import {
+  CLI_BOOLEAN_FLAGS,
+  CLI_GLOBAL_FLAGS,
+  CLI_GLOBAL_VALUE_FLAGS,
+  findCliCommandIndex
+} from '../shared/cli-argument-boundary'
 
 export { specPaths }
 export type { CommandSpec }
@@ -11,50 +17,9 @@ export type ParsedArgs = {
   positionalFlagConflicts?: string[]
 }
 
-export const GLOBAL_FLAGS = ['help', 'json', 'pairing-code', 'environment']
-const GLOBAL_VALUE_FLAGS = new Set(['pairing-code', 'environment'])
-export const BOOLEAN_FLAGS = new Set([
-  'all',
-  'attachments',
-  'children',
-  'comments',
-  'connect',
-  'current',
-  'dry-run',
-  'enter',
-  'focus',
-  'force',
-  'full',
-  'help',
-  'inject',
-  'include-archived',
-  'include-visual-layouts',
-  'interrupt',
-  'json',
-  'local',
-  'messages',
-  'me',
-  'mobile',
-  'mobile-pairing',
-  'no-pairing',
-  'parent-current',
-  'provision',
-  'ready',
-  'recipe-json',
-  'relations',
-  'reinstall',
-  'restore-window',
-  'return-preamble',
-  'run-hooks',
-  'show-profile',
-  'staged',
-  'tab',
-  'tasks',
-  'text-stdin',
-  'unread',
-  'value-stdin',
-  'wait'
-])
+export const GLOBAL_FLAGS = CLI_GLOBAL_FLAGS
+const GLOBAL_VALUE_FLAGS = new Set(CLI_GLOBAL_VALUE_FLAGS)
+export const BOOLEAN_FLAGS = CLI_BOOLEAN_FLAGS
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
@@ -68,25 +33,10 @@ function setFlagValue(flags: Map<string, string | boolean>, name: string, value:
   flags.set(name, value)
 }
 
-function commandPathStartsAt(argv: string[], tokenIndex: number, path: string[]): boolean {
-  let cursor = tokenIndex
-  for (const part of path) {
-    while (argv[cursor]?.startsWith('--')) {
-      const assignment = argv[cursor].slice(2)
-      const flag = assignment.split('=', 1)[0]
-      cursor += assignment.includes('=') || BOOLEAN_FLAGS.has(flag) ? 1 : 2
-    }
-    if (argv[cursor] !== part) {
-      return false
-    }
-    cursor += 1
-  }
-  return true
-}
-
 export function parseArgs(argv: string[], commandPaths?: readonly string[][]): ParsedArgs {
   const commandPath: string[] = []
   const flags = new Map<string, string | boolean>()
+  const commandIndex = findCliCommandIndex(argv, commandPaths ?? [])
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
@@ -111,9 +61,7 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
       continue
     }
     // Why: a pre-command flag must not consume a registry-resolvable command path.
-    const startsCommandAt = (tokenIndex: number): boolean =>
-      commandPaths?.some((path) => commandPathStartsAt(argv, tokenIndex, path)) ?? false
-    if (commandPath.length === 0 && startsCommandAt(i + 1) && !startsCommandAt(i + 2)) {
+    if (commandPath.length === 0 && i + 1 === commandIndex) {
       flags.set(flag, true)
       continue
     }
@@ -205,6 +153,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'artifacts',
         'automations',
         'project',
+        'host',
         'repo',
         'worktree',
         'terminal',

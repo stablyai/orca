@@ -22,6 +22,8 @@ export type MobileApi = {
     | {
         available: true
         qrDataUrl: string | null
+        /** Natural bitmap width and height in pixels. */
+        qrSize: number | null
         qrError?: 'encoding_failed'
         pairingUrl: string
         /** Null when no direct address was advertised — the QR pairs over Relay alone. */

@@ -3,7 +3,8 @@ import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
   type NativeChatMessage,
-  type NativeChatSession
+  type NativeChatSession,
+  type NativeChatTurnLifecycle
 } from '../../../../shared/native-chat-types'
 import {
   applyAppend,
@@ -39,6 +40,8 @@ export type UseNativeChatLiveSessionArgs = {
 
 /** A live session plus the older-history pagination controls the view needs. */
 export type NativeChatLiveSession = NativeChatSession & {
+  /** Latest provider turn boundary, used to settle orphaned running tool rows. */
+  transcriptLifecycle?: NativeChatTurnLifecycle
   /** True when an older page may still exist (the last read filled the window). */
   hasMore: boolean
   /** Whether an older-history page is currently loading. */
@@ -62,12 +65,24 @@ function nextSubscriptionId(): string {
 }
 
 // Why: a new session's transcript can take minutes to appear on disk (#8401).
-const NOTFOUND_RETRY_WINDOW_MS = 60_000
+// Only a guess at the flush delay — a host that reports the transcript pending
+// overrides it outright. Exported for tests.
+export const NOTFOUND_RETRY_WINDOW_MS = 60_000
 
 export type ReadState =
   | { phase: 'loading' }
+  /** The host reported no transcript behind this window yet: rendered, but not a
+   *  settled read, so nothing may treat the empty list as real history. */
+  | { phase: 'awaiting' }
   | { phase: 'ready'; messages: NativeChatMessage[] }
   | { phase: 'error'; error: string }
+
+/** True while no transcript read has settled — 'loading' and 'awaiting' alike.
+ *  Consumers that must not act on `messages` as real history use this, not a
+ *  bare `!== 'ready'`, which would also swallow the error surface. */
+export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): boolean {
+  return phase === 'loading' || phase === 'awaiting'
+}
 
 /**
  * Renderer hook that streams a NativeChatSession for a pane: windowed
@@ -102,7 +117,8 @@ export function useNativeChatLiveSession(
   // Appended messages accumulate separately from the snapshot so pagination doesn't lose in-flight appends; merged by id and capped to the read window (#6).
   const [appended, setAppended] = useState<NativeChatMessage[]>([])
   // Id-dedup merger backing `appended`; caches the id→index map so each live frame costs O(incoming), not O(existing) (#18).
-  const appendMergerRef = useRef(createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY))
+  const appendMergerRef = useRef<ReturnType<typeof createNativeChatMerger>>(undefined!)
+  appendMergerRef.current ??= createNativeChatMerger(NATIVE_CHAT_SOURCE_PRIORITY)
 
   const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 
@@ -156,6 +172,9 @@ export function useNativeChatLiveSession(
     let cancelled = false
     // Set by the first authoritative frame so the readSession seed below can't clobber a live snapshot.
     let frameArrived = false
+    // Set once the host reports no transcript on disk yet, which makes a notFound
+    // read known-good news rather than a failure worth surfacing.
+    let transcriptPending = false
     const retryTimer = createNativeChatReadRetryTimer()
     const retryStartedAt = Date.now()
     // Re-bound as a const: TS drops the `!sessionId` narrowing inside the hoisted nested function.
@@ -171,7 +190,7 @@ export function useNativeChatLiveSession(
 
     // Independent initial seed in case subscribe never delivers a snapshot; applied only until an authoritative frame lands so a live snapshot wins.
     function loadSession(attempt: number): void {
-      if (!latestEnabled.current || frameArrived) {
+      if (!latestEnabled.current || frameArrived || transcriptPending) {
         return
       }
       void transport
@@ -181,10 +200,16 @@ export function useNativeChatLiveSession(
             return
           }
           if (result && 'error' in result) {
-            // A not-yet-flushed transcript: stay in 'loading' and retry with backoff instead of a permanent error (#8401).
-            if (result.notFound && Date.now() - retryStartedAt < NOTFOUND_RETRY_WINDOW_MS) {
-              retryTimer.schedule(attempt, () => loadSession(attempt + 1))
-              return
+            if (result.notFound) {
+              // The live stream owns recovery once it confirms the missing file;
+              // an older host gets the bounded seed retry as its fallback.
+              if (transcriptPending) {
+                return
+              }
+              if (Date.now() - retryStartedAt < NOTFOUND_RETRY_WINDOW_MS) {
+                retryTimer.schedule(attempt, () => loadSession(attempt + 1))
+                return
+              }
             }
             setRead({ phase: 'error', error: result.error })
             return
@@ -224,6 +249,17 @@ export function useNativeChatLiveSession(
           if ('error' in frame && frame.error) {
             // Why: an error frame carries no transcript, so it must not consume the seed — a healthy read still has to repair the pane.
             setRead({ phase: 'error', error: frame.error })
+            return
+          }
+          if (frame.type === 'snapshot' && frame.pending === true) {
+            // No transcript exists yet (an agent that hasn't flushed, or was never
+            // prompted). Move off 'loading' so the view stops spinning, but keep
+            // an in-flight seed and appended tail eligible — this is not a read.
+            transcriptPending = true
+            // The live resolve-poll stream now owns the eventual initial drain;
+            // stop duplicating its filesystem probes forever from the renderer.
+            retryTimer.cancel()
+            setRead({ phase: 'awaiting' })
             return
           }
           frameArrived = true

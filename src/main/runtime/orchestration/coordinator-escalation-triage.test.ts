@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { applyEscalationToDispatch } from './coordinator-escalation-triage'
 import { OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 describe('coordinator escalation authority', () => {
   let db: OrchestrationDb
@@ -12,13 +13,14 @@ describe('coordinator escalation authority', () => {
   it('rejects an escalation targeting another active Dispatch', () => {
     db = new OrchestrationDb(':memory:')
     const attackerTask = db.createTask({ spec: 'attacker assignment' })
-    const attacker = db.createDispatchContext(
+    const attacker = createRootDispatch(
+      db,
       attackerTask.id,
       'term_attacker',
       'tab_attacker:leaf_attacker'
     )
     const victimTask = db.createTask({ spec: 'victim assignment' })
-    const victim = db.createDispatchContext(victimTask.id, 'term_victim')
+    const victim = createRootDispatch(db, victimTask.id, 'term_victim')
     const logs: string[] = []
 
     applyEscalationToDispatch(
@@ -42,7 +44,7 @@ describe('coordinator escalation authority', () => {
   it('accepts the canonical sender of an imported federated Dispatch', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'remote escalation target' })
-    const dispatch = db.createDispatchContext(task.id, 'remote-worker')
+    const dispatch = createRootDispatch(db, task.id, 'remote-worker')
 
     applyEscalationToDispatch(
       db,

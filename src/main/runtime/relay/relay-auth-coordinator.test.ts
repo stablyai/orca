@@ -26,7 +26,7 @@ describe('RelayAuthCoordinator', () => {
       onStatus: (status) => statuses.push(status)
     })
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     expect(openBroker).not.toHaveBeenCalled()
     expect(statuses.at(-1)).toBe('standby')
   })
@@ -43,10 +43,10 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 250
     })
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     demanded = true
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
     await vi.waitFor(() => expect(statuses.at(-1)).toBe('standby'))
@@ -65,7 +65,7 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 20
     })
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
     demanded = true
@@ -85,10 +85,10 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 10_000
     })
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     current = { ...context, identity: { ...context.identity, profileId: 'profile-2' } }
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     expect(broker.closeNow).toHaveBeenCalledOnce()
   })
 

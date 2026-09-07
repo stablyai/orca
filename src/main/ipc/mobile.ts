@@ -132,6 +132,7 @@ export function registerMobileHandlers(
       return {
         available: true as const,
         qrDataUrl: qr.ok ? qr.qrDataUrl : null,
+        qrSize: qr.ok ? qr.qrSize : null,
         ...(!qr.ok ? { qrError: qr.reason } : {}),
         pairingUrl: offer.pairingUrl,
         // Why: with nothing advertised the offer's endpoint is the loopback fallback, which points at

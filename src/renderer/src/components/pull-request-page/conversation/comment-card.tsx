@@ -12,6 +12,7 @@ import {
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { CommentCodeContext } from '@/components/github/CommentCodeContext'
 import { CommentReactions } from '@/components/github/CommentReactions'
+import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { translate } from '@/i18n/i18n'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
@@ -62,15 +63,12 @@ export function ConversationCommentCard({
       )}
     >
       <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
-        {comment.authorAvatarUrl ? (
-          <img
-            src={comment.authorAvatarUrl}
-            alt={comment.author}
-            className="size-5 shrink-0 rounded-full"
-          />
-        ) : (
-          <div className="size-5 shrink-0 rounded-full bg-muted" />
-        )}
+        <GitHubUserAvatar
+          login={comment.author}
+          avatarUrl={comment.authorAvatarUrl}
+          title={comment.author}
+          className="size-5"
+        />
         <span
           className={cn(
             'min-w-0 truncate text-[13px] font-semibold',

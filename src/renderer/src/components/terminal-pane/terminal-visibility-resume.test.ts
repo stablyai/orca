@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   recoverVisibleTerminalWindowWake,
@@ -7,6 +7,13 @@ import {
 
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn()
+}))
+const presentPaneViewport = vi.fn()
+const presentPaneViewportPreservingSynchronizedOutput = vi.fn()
+vi.mock('@/lib/pane-manager/pane-webgl-renderer', () => ({
+  presentPaneViewport: (pane: unknown) => presentPaneViewport(pane),
+  presentPaneViewportPreservingSynchronizedOutput: (pane: unknown) =>
+    presentPaneViewportPreservingSynchronizedOutput(pane)
 }))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: vi.fn(),
@@ -20,10 +27,6 @@ vi.mock('./pane-helpers', () => ({
   fitAndFocusPanes: vi.fn(),
   fitPanes: vi.fn(),
   focusActivePane: vi.fn()
-}))
-const scheduleTabRevealWebglAtlasRecovery = vi.fn()
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
 }))
 const flushDeferredPaneMetricOptionsIfMeasurable = vi.fn((_pane: unknown) => false)
 vi.mock('@/lib/pane-manager/pane-fit', () => ({
@@ -67,6 +70,7 @@ function resumeArgs(manager: FakeManager, shouldUseLightTabResume: boolean) {
   return {
     manager: manager as never as PaneManager,
     isActive: true,
+    isChatViewMode: false,
     wasVisible: false,
     shouldUseLightTabResume,
     captureViewportPositions: vi.fn(() => new Map()),
@@ -77,18 +81,23 @@ function resumeArgs(manager: FakeManager, shouldUseLightTabResume: boolean) {
 describe('resumeTerminalVisibility reveal repaint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    repairPaneWebglCanvasDprMismatch.mockReturnValue(false)
   })
 
-  it('schedules a pane-scoped repaint on a light tab reveal', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('schedules an atlas-preserving present on a light tab reveal', () => {
     // The light path is the "click the tab that was not open" gesture: it has
     // no rendering resume or fit, so without this repaint a hidden-while-
     // working pane keeps compositing pre-hide pixels.
     const manager = createManager()
     resumeTerminalVisibility(resumeArgs(manager, true))
 
-    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(1)
     expect(manager.resumeRendering).not.toHaveBeenCalled()
-    expect(scheduleTabRevealWebglAtlasRecovery).toHaveBeenCalledTimes(1)
   })
 
   it('captures native trim movement before enforcing viewport intent', async () => {
@@ -147,12 +156,77 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(flushDeferredPaneMetricOptionsIfMeasurable).not.toHaveBeenCalled()
   })
 
+  it('rebuilds the atlas synchronously when a heavy reveal repaired a dpr mismatch', async () => {
+    // A repaired backing store leaves the shared atlas holding glyphs rasterized
+    // at the old dpr. Waiting two frames for the settled rebuild would paint
+    // those wrong-size glyphs first, so this path stays synchronous.
+    const pane = { terminal: {} }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([pane])
+    repairPaneWebglCanvasDprMismatch.mockReturnValueOnce(true)
+    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
+      await import('@/lib/pane-manager/pane-manager-registry')
+    )
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledWith(pane)
+    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
+    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledWith('visibility-resume-dpr')
+    expect(presentPaneViewportPreservingSynchronizedOutput).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+  })
+
+  it('presents immediately on a heavy reveal so no pre-hide pixels survive the settle', async () => {
+    // Without this present the canvas composites pre-hide pixels until the
+    // settled rebuild lands two frames later, which under load is not two frames.
+    const pane = { terminal: {} }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([pane])
+    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
+      await import('@/lib/pane-manager/pane-manager-registry')
+    )
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(presentPaneViewportPreservingSynchronizedOutput).toHaveBeenCalledWith(pane)
+    // The expensive registry-wide rebuild is still deferred to the settled frame.
+    expect(resetAndRefreshAllTerminalWebglAtlases).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+  })
+
   it('does not fit on a light tab reveal', () => {
     const manager = createManager()
     resumeTerminalVisibility(resumeArgs(manager, true))
 
     expect(manager.fitAllRevealedPanes).not.toHaveBeenCalled()
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['light', true],
+    ['heavy', false]
+  ])('does not focus the covered terminal on a %s chat reveal', async (_path, lightResume) => {
+    const manager = createManager()
+    const args = resumeArgs(manager, lightResume)
+    args.isChatViewMode = true
+    const { focusActivePane } = vi.mocked(await import('./pane-helpers'))
+
+    resumeTerminalVisibility(args)
+
+    expect(focusActivePane).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['light', true],
+    ['heavy', false]
+  ])('keeps focusing an active terminal on a %s reveal', async (_path, lightResume) => {
+    const manager = createManager()
+    const { focusActivePane } = vi.mocked(await import('./pane-helpers'))
+
+    resumeTerminalVisibility(resumeArgs(manager, lightResume))
+
+    expect(focusActivePane).toHaveBeenCalledWith(manager)
   })
 
   it('checks each pane for a stale WebGL backing on a light tab reveal', () => {
@@ -186,11 +260,48 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
       isActive: true,
+      isChatViewMode: false,
       clearGlyphAtlases: false
     })
 
     expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('does not focus the covered terminal during chat window-wake recovery', async () => {
+    const manager = createManager()
+    const { focusActivePane } = vi.mocked(await import('./pane-helpers'))
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      isChatViewMode: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(focusActivePane).not.toHaveBeenCalled()
+  })
+
+  it('repairs WebGL canvas backing-store dpr on window wake', () => {
+    // Clamshell undock: dpr changes while the pane stayed "visible" with a
+    // stale backing store; tab-reveal is not in the path.
+    const first = { terminal: { name: 'pane-a' } }
+    const second = { terminal: { name: 'pane-b' } }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([first, second])
+    repairPaneWebglCanvasDprMismatch.mockReturnValueOnce(true)
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      isChatViewMode: false,
+      clearGlyphAtlases: false
+    })
+
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledTimes(2)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(1, first)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(2, second)
+    expect(presentPaneViewport).toHaveBeenCalledWith(first)
   })
 
   it('latches viewport intent before refocus recovery flushes streaming output', async () => {
@@ -207,6 +318,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
       isActive: true,
+      isChatViewMode: false,
       clearGlyphAtlases: false
     })
 
@@ -246,6 +358,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
       isActive: true,
+      isChatViewMode: false,
       clearGlyphAtlases: false
     })
 
@@ -262,6 +375,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
       isActive: true,
+      isChatViewMode: false,
       clearGlyphAtlases: false
     })
 
@@ -273,6 +387,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
       isActive: false,
+      isChatViewMode: false,
       clearGlyphAtlases: true
     })
 
@@ -288,6 +403,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
       isActive: false,
+      isChatViewMode: false,
       clearGlyphAtlases: true
     })
 
@@ -308,6 +424,7 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     recoverVisibleTerminalWindowWake({
       manager: manager as never as PaneManager,
       isActive: false,
+      isChatViewMode: false,
       clearGlyphAtlases: false
     })
 

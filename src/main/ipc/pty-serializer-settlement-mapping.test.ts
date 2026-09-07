@@ -108,9 +108,11 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -211,11 +213,13 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(() => {
         throw new Error('disk full')
       }),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
 
     try {
@@ -408,6 +412,7 @@ describe('registerPtyHandlers', () => {
     const destroyedListeners: (() => void)[] = []
     const sender = {
       id: 42,
+      isDestroyed: () => false,
       once: vi.fn((event: string, listener: () => void) => {
         if (event === 'destroyed') {
           destroyedListeners.push(listener)
@@ -421,6 +426,20 @@ describe('registerPtyHandlers', () => {
     expect(destroyedListeners).toHaveLength(1)
     destroyedListeners[0]()
     expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+  })
+  it('does not retain a serializer declaration from an already-destroyed renderer', async () => {
+    registerPtyHandlers(mainWindow as never)
+    const paneKey = makePaneKey('tab-dead', '77777777-7777-4777-8777-777777777777')
+    const sender = {
+      id: 43,
+      isDestroyed: () => true,
+      once: vi.fn()
+    }
+
+    await handlers.get('pty:declarePendingPaneSerializer')!({ sender }, { paneKey })
+
+    expect(hasPendingRendererSerializerForPaneKey(paneKey)).toBe(false)
+    expect(sender.once).not.toHaveBeenCalled()
   })
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {

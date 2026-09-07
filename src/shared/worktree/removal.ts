@@ -1,4 +1,5 @@
-import type { GitWorktreeInfo } from './types'
+import type { ExecutionHostId } from '../execution-host'
+import type { GitWorktreeInfo, Worktree } from './types'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
@@ -121,4 +122,34 @@ export function classifyWorktreeForceDeleteReason(
     return 'dirty'
   }
   return null
+}
+
+// ─── Host qualification (STA-4343) ───────────────────────────────────
+//
+// A workspace id is `repoId::path` with no host component, so the local host, an
+// SSH host and a paired runtime can all publish the SAME id. The same repo at the
+// same path on two hosts is TWO workspaces, never one — removing by that id alone
+// destroys whichever checkout routing happens to pick, and routing prefers the
+// ACTIVE workspace's host, which is usually not the row the user confirmed.
+//
+// So a destructive removal travels as a host-qualified target and is ROUTED to
+// the confirmed host. Making the field required (not optional) is the point: a
+// future delete entry point cannot be written unguarded without a type error.
+
+/**
+ * Identity for a destructive workspace removal.
+ *
+ * `executionHostId` is required but nullable on purpose: `null` states that the
+ * confirmed row itself declares no host (a pre-host-qualified snapshot row), so
+ * a caller has to make that claim deliberately instead of omitting the field.
+ */
+export type WorktreeRemovalTarget = {
+  id: string
+  executionHostId: ExecutionHostId | null
+}
+
+export function toWorktreeRemovalTarget(
+  worktree: Pick<Worktree, 'id' | 'hostId'>
+): WorktreeRemovalTarget {
+  return { id: worktree.id, executionHostId: worktree.hostId ?? null }
 }

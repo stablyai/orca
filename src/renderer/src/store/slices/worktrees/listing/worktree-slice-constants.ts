@@ -2,6 +2,10 @@
 export const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
 export const WORKTREE_REMOVAL_AMBIGUOUS_ERROR =
   'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
+// Why (STA-4343): the confirmed row names the host to delete on. If the route
+// no longer lands there, deleting anyway destroys another host's workspace.
+export const WORKTREE_REMOVAL_HOST_CHANGED_ERROR =
+  'This workspace is no longer on the host you confirmed. Refresh and review it again.'
 export const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 export const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 export const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180

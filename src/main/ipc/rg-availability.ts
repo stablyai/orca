@@ -1,4 +1,8 @@
 import { wslAwareSpawn } from '../git/runner'
+import {
+  isTransientRipgrepSpawnError,
+  RipgrepLaunchFailureError
+} from '../../shared/ripgrep-process-availability'
 
 const RG_AVAILABILITY_TIMEOUT_MS = 5000
 
@@ -14,16 +18,34 @@ const RG_AVAILABILITY_TIMEOUT_MS = 5000
 // while a positive cache could mask an rg that was uninstalled or broken
 // mid-session.
 
-export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promise<boolean> {
-  return new Promise((resolve) => {
+export function checkRgAvailable(
+  searchPath?: string,
+  wslDistro?: string,
+  options: { rejectTransientLaunchFailure?: boolean } = {}
+): Promise<boolean> {
+  return new Promise((resolve, reject) => {
     let settled = false
     // Why: pass cwd plus project-runtime distro so WSL projects are checked
     // inside their distro even when the search root is a Windows path.
-    const child = wslAwareSpawn('rg', ['--version'], {
-      ...(searchPath ? { cwd: searchPath } : {}),
-      ...(wslDistro ? { wslDistro } : {}),
-      stdio: 'ignore'
-    })
+    let child: ReturnType<typeof wslAwareSpawn>
+    try {
+      child = wslAwareSpawn('rg', ['--version'], {
+        ...(searchPath ? { cwd: searchPath } : {}),
+        ...(wslDistro ? { wslDistro } : {}),
+        stdio: 'ignore'
+      })
+    } catch (error) {
+      if (options.rejectTransientLaunchFailure && isTransientRipgrepSpawnError(error)) {
+        reject(
+          new RipgrepLaunchFailureError(
+            `rg availability check failed to start (${(error as NodeJS.ErrnoException).code})`
+          )
+        )
+      } else {
+        resolve(false)
+      }
+      return
+    }
     let timeout: ReturnType<typeof setTimeout>
 
     const cleanup = (): void => {
@@ -44,7 +66,22 @@ export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promi
       resolve(available)
     }
 
-    const onError = (): void => settle(false)
+    const rejectLaunchFailure = (error: NodeJS.ErrnoException): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      reject(new RipgrepLaunchFailureError(`rg availability check failed to start (${error.code})`))
+    }
+
+    const onError = (error: NodeJS.ErrnoException): void => {
+      if (options.rejectTransientLaunchFailure && isTransientRipgrepSpawnError(error)) {
+        rejectLaunchFailure(error)
+        return
+      }
+      settle(false)
+    }
     const onClose = (code: number | null): void => settle(code === 0)
 
     child.once('error', onError)

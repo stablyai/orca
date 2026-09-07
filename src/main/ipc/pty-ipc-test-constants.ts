@@ -13,6 +13,7 @@ export type PlatformGatedTest = (
 
 export const isWindowsHost = process.platform === 'win32'
 export const posixOnlyIt: PlatformGatedTest = isWindowsHost ? it.skip : it
+export const TEST_MANAGED_ROOT = isWindowsHost ? 'C:\\managed' : '/managed'
 export const BUNDLED_RESOURCES_PATH = join('/tmp', 'orca-bundled-resources')
 // Why: this suite forces darwin before every test, including on Linux CI.
 export const BUNDLED_CLI_PATH = getBundledLauncherPath('darwin', BUNDLED_RESOURCES_PATH) as string

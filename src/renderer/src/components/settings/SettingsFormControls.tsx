@@ -265,10 +265,12 @@ type NumberFieldProps = {
   value: number
   defaultValue?: number
   min: number
-  max: number
+  max?: number
   step?: number
+  integer?: boolean
   onChange: (value: number) => void
   suffix?: string
+  className?: string
 }
 
 export function ColorField({
@@ -312,8 +314,10 @@ export function NumberField({
   min,
   max,
   step = 1,
+  integer = false,
   onChange,
-  suffix
+  suffix,
+  className
 }: NumberFieldProps): React.JSX.Element {
   const [draft, setDraft] = useState(Number.isFinite(value) ? String(value) : '')
   const [prevValue, setPrevValue] = useState(value)
@@ -332,8 +336,8 @@ export function NumberField({
       return
     }
     const next = Number(trimmed)
-    if (Number.isFinite(next)) {
-      const clamped = Math.min(max, Math.max(min, next))
+    if (Number.isFinite(next) && (!integer || Number.isSafeInteger(next))) {
+      const clamped = max === undefined ? Math.max(min, next) : Math.min(max, Math.max(min, next))
       onChange(clamped)
       setDraft(String(clamped))
     } else {
@@ -344,6 +348,7 @@ export function NumberField({
 
   return (
     <SettingsRow
+      className={className}
       label={label}
       description={
         <>
@@ -363,6 +368,7 @@ export function NumberField({
             min={min}
             max={max}
             step={step}
+            aria-label={label}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onBlur={commit}

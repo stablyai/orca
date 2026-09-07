@@ -20,7 +20,11 @@ import {
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 import { extractSkillBundleArchive } from './skill-bundle-extraction'
-import { observeSkillPackage, type ObservedSkillPackage } from './skill-package-identity'
+import {
+  observedSkillPackagesMatch,
+  observeSkillPackage,
+  type ObservedSkillPackage
+} from './skill-package-identity'
 import { writeSkillTarGzip, type SkillTarWriteEntry } from './skill-package-tar'
 import { startSkillPhaseOperation } from './skill-operation-observability'
 
@@ -41,23 +45,6 @@ export type CreatedSkillBundle = {
 export type SkillBundleCreationDependencies = { afterSourcesObserved?: () => Promise<void> }
 
 const SOURCE_OBSERVATION_CONCURRENCY = 4
-
-function observationsMatch(left: ObservedSkillPackage, right: ObservedSkillPackage): boolean {
-  return (
-    left.files.length === right.files.length &&
-    left.files.every((file, index) => {
-      const other = right.files[index]
-      return (
-        file.path === other.path &&
-        file.size === other.size &&
-        file.executable === other.executable &&
-        file.classification === other.classification &&
-        file.exactSha256 === other.exactSha256 &&
-        file.identitySha256 === other.identitySha256
-      )
-    })
-  )
-}
 
 function bundleEntry(input: {
   id: string
@@ -104,7 +91,7 @@ async function stageSkill(input: {
     process.platform,
     process.platform === 'win32'
   )
-  if (!observationsMatch(input.sourceObservation, stagedObservation)) {
+  if (!observedSkillPackagesMatch(input.sourceObservation, stagedObservation)) {
     throw new Error('skill-package-source-changed-during-staging')
   }
   const stagedSummary = summarizeSkillMarkdown(

@@ -1,6 +1,7 @@
 import type React from 'react'
 import type { AppState } from '@/store/types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RenderRow } from '../listing/render-row'
 import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler-cache'
 import type { SidebarRevealHighlight } from '../navigation/use-reveal-highlight'
@@ -41,7 +42,7 @@ type BuildArgs = {
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onRowPointerDown: (
     event: React.PointerEvent<HTMLDivElement>,
-    worktreeId: string,
+    worktree: Worktree,
     rowKey: string
   ) => void
 }
@@ -119,6 +120,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       worktreePointerDragRef: runtime.worktreePointerDragRef,
       nativeLineageDropTargetId: runtime.nativeLineageDropTargetId,
       activeWorktreeId: props.activeWorktreeId,
+      activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
       currentWorktreeId: props.currentWorktreeId,
       highlightedRevealRowKey: reveal.highlightedRevealRowKey,
       selectedWorktreeIds: props.selectedWorktreeIds,

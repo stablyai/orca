@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { dirname, join } from 'node:path'
 import { getOrcaManagedCodexHomePath } from './codex-home-paths'
 import { normalizeCodexProjectPathForLookup } from './config-toml-trust'
@@ -40,13 +41,22 @@ export function getCodexTrustGrantHomeKey(runtimeHomePath: string): string {
   return normalizeCodexProjectPathForLookup(runtimeHomePath)
 }
 
-function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
+/**
+ * `null` means the ledger could not be READ, which is different from an absent
+ * or corrupt one. A write derived from `empty` persists a file containing only
+ * the home being written, destroying every other home's grants — so the write
+ * paths refuse on `null` while the read path keeps degrading.
+ */
+function readLedgerFileOrNull(ledgerPath: string): CodexTrustGrantLedgerFile | null {
   const empty: CodexTrustGrantLedgerFile = { version: 1, homes: {} }
-  if (!existsSync(ledgerPath)) {
-    return empty
+  let rawLedger: string
+  try {
+    rawLedger = readFileSync(ledgerPath, 'utf-8')
+  } catch (error) {
+    return isDefinitiveAbsence(error) ? empty : null
   }
   try {
-    const parsed: unknown = JSON.parse(readFileSync(ledgerPath, 'utf-8'))
+    const parsed: unknown = JSON.parse(rawLedger)
     if (
       !parsed ||
       typeof parsed !== 'object' ||
@@ -65,6 +75,11 @@ function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
     // block hook install.
     return empty
   }
+}
+
+/** Corrupt or absent still degrades to empty — rebuilding those IS the intent. */
+function readLedgerFile(ledgerPath: string): CodexTrustGrantLedgerFile {
+  return readLedgerFileOrNull(ledgerPath) ?? { version: 1, homes: {} }
 }
 
 function persistLedgerFile(ledgerPath: string, file: CodexTrustGrantLedgerFile): void {
@@ -94,7 +109,13 @@ export function writeCodexTrustGrantLedgerHome(
   home: CodexTrustGrantLedgerHome,
   ledgerPath = getCodexTrustGrantLedgerPath()
 ): void {
-  const file = readLedgerFile(ledgerPath)
+  const file = readLedgerFileOrNull(ledgerPath)
+  if (!file) {
+    // Why: writing a file derived from `empty` would drop every other home's
+    // grants, and those homes would then be re-prompted for trust they had
+    // already granted. Skip this write; the next grant retries.
+    return
+  }
   file.homes[getCodexTrustGrantHomeKey(runtimeHomePath)] = home
   persistLedgerFile(ledgerPath, file)
 }

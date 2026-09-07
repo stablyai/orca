@@ -51,8 +51,7 @@ describe('ProviderSegment monthly window', () => {
       <ProviderSegment p={grokMonthlyLimits('ok')} compact={false} display="used" mode="compact" />
     )
 
-    // Why: 43200 min = 30d; formatWindowLabel returns "30d" so the chip label lines up.
-    expect(markup).toMatch(/30d[\s\S]*?25%/)
+    expect(markup).toContain('25% used 30d')
   })
 
   it('shows monthly data while fetching instead of the loading placeholder', async () => {
@@ -67,13 +66,13 @@ describe('ProviderSegment monthly window', () => {
       />
     )
 
-    expect(markup).toMatch(/30d[\s\S]*?25%/)
+    expect(markup).toContain('25% used 30d')
     expect(markup).not.toContain('···')
   })
 
-  it('prefers the session window in compact mode (#14264)', async () => {
-    // Why: session resets every 5h vs weekly 7d — its countdown is more actionable even when a longer window is at higher consumption.
+  it('shows only the highest-used window when several windows exist', async () => {
     const { ProviderSegment } = await import('./StatusBar')
+
     const limits: ProviderRateLimits = {
       provider: 'opencode-go',
       session: windowOf(10, 300),
@@ -87,10 +86,9 @@ describe('ProviderSegment monthly window', () => {
       <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
     )
 
-    expect(markup).toMatch(/5h[\s\S]*?10%/)
-    // Why: only the session chip renders so the footer stays single-line.
-    expect(markup).not.toMatch(/wk[\s\S]*?20%/)
-    expect(markup).not.toMatch(/30d[\s\S]*?30%/)
+    expect(markup).toContain('30% used 30d')
+    expect(markup).not.toContain('10% used')
+    expect(markup).not.toContain('20% used')
   })
 
   it('selects a named bucket as the tightest provider window', async () => {
@@ -112,13 +110,13 @@ describe('ProviderSegment monthly window', () => {
       <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
     )
 
-    // Why: named buckets keep their model name on the chip (a "5h" label for Pro/Flash reads as noise).
-    expect(markup).toMatch(/Pro[\s\S]*?80%/)
-    expect(markup).not.toMatch(/Flash[\s\S]*?25%/)
+    expect(markup).toContain('80% used Pro')
+    expect(markup).not.toContain('25% used')
   })
 
-  // Why: chip switched from reset-countdown ("2h 33m") to duration ("5h") for cross-provider consistency (#14264). Popover still shows countdown.
-  it('shows the duration label on the chip when resetsAt is known (#14264 supersedes repro-8378)', async () => {
+  // Why: #8378 — status-bar chip showed fixed window size ("5h") while the
+  // usage popup showed remaining time for the same resetsAt.
+  it('shows remaining session time on the chip when resetsAt is known (repro-8378)', async () => {
     const { ProviderSegment } = await import('./StatusBar')
     const now = 1_700_000_000_000
     const dateNow = vi.spyOn(Date, 'now').mockReturnValue(now)
@@ -137,17 +135,17 @@ describe('ProviderSegment monthly window', () => {
         <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
       )
 
-      // Why: 42% / 300-min window -> "5h [bar] 42%". Reset countdown still lives in the popover.
-      expect(markup).toMatch(/5h[\s\S]*?42%/)
+      expect(markup).toContain('42% used 2h 33m')
+      expect(markup).not.toContain('5h')
       // The consolidated footer intentionally renders only the tightest window.
-      expect(markup).not.toMatch(/wk[\s\S]*?10%/)
+      expect(markup).not.toContain('10% used')
+      expect(markup).not.toContain('wk')
     } finally {
       dateNow.mockRestore()
     }
   })
 
-  it('renders the bar on the tightest window in both modes', async () => {
-    // Why: #14264 — each chip is "label [bar] percent" in both modes; the difference is just how many windows render.
+  it('shows the footer bar only in verbose mode', async () => {
     const { ProviderSegment } = await import('./StatusBar')
     const limits = grokMonthlyLimits('ok')
 
@@ -159,7 +157,7 @@ describe('ProviderSegment monthly window', () => {
     )
 
     expect(verbose).toContain('data-usage-bar')
-    expect(compact).toContain('data-usage-bar')
+    expect(compact).not.toContain('data-usage-bar')
   })
 
   it('restores every inline window in verbose mode', async () => {
@@ -179,9 +177,9 @@ describe('ProviderSegment monthly window', () => {
       <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
     )
 
-    expect(markup).toMatch(/5h[\s\S]*?10%/)
-    expect(markup).toMatch(/wk[\s\S]*?20%/)
-    expect(markup).toMatch(/Fable[\s\S]*?30%/)
+    expect(markup).toContain('10% used 5h')
+    expect(markup).toContain('20% used wk')
+    expect(markup).toContain('30% used Fable')
     expect(markup).not.toContain('40% used')
   })
 })

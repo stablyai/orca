@@ -598,8 +598,7 @@ describe('web settings preload API', () => {
               settings: {
                 minimaxGroupId: 'group-42',
                 minimaxUsageModels: 'general,abab6.5',
-                minimaxEndpoint: 'cn',
-                minimaxApiKeyConfigured: true
+                minimaxEndpoint: 'cn'
               }
             },
             _meta: { runtimeId: 'runtime-1' }
@@ -620,17 +619,14 @@ describe('web settings preload API', () => {
       minimaxGroupId?: string
       minimaxUsageModels?: string
       minimaxEndpoint?: string
-      minimaxApiKeyConfigured?: boolean
     }
 
     expect(settings.minimaxGroupId).toBe('group-42')
     expect(settings.minimaxUsageModels).toBe('general,abab6.5')
     expect(settings.minimaxEndpoint).toBe('cn')
-    expect(settings.minimaxApiKeyConfigured).toBe(true)
     expect(stored.minimaxGroupId).toBe('group-42')
     expect(stored.minimaxUsageModels).toBe('general,abab6.5')
     expect(stored.minimaxEndpoint).toBe('cn')
-    expect(stored.minimaxApiKeyConfigured).toBe(true)
     expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
   })
 
@@ -752,8 +748,7 @@ describe('web settings preload API', () => {
               settings: {
                 minimaxGroupId: 'group-42',
                 minimaxUsageModels: 'general,abab6.5',
-                minimaxEndpoint: 'cn',
-                minimaxApiKeyConfigured: true
+                minimaxEndpoint: 'cn'
               }
             },
             _meta: { runtimeId: 'runtime-1' }
@@ -772,33 +767,28 @@ describe('web settings preload API', () => {
     const settings = await globals.window.api.settings.set({
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
-      minimaxEndpoint: 'cn',
-      minimaxApiKeyConfigured: true
+      minimaxEndpoint: 'cn'
     })
 
     const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
       minimaxGroupId?: string
       minimaxUsageModels?: string
       minimaxEndpoint?: string
-      minimaxApiKeyConfigured?: boolean
     }
 
     expect(settings.minimaxGroupId).toBe('group-42')
     expect(settings.minimaxUsageModels).toBe('general,abab6.5')
     expect(settings.minimaxEndpoint).toBe('cn')
-    expect(settings.minimaxApiKeyConfigured).toBe(true)
     expect(stored.minimaxGroupId).toBe('group-42')
     expect(stored.minimaxUsageModels).toBe('general,abab6.5')
     expect(stored.minimaxEndpoint).toBe('cn')
-    expect(stored.minimaxApiKeyConfigured).toBe(true)
     expect(runtimeCalls).toEqual([
       {
         method: 'settings.update',
         params: {
           minimaxGroupId: 'group-42',
           minimaxUsageModels: 'general,abab6.5',
-          minimaxEndpoint: 'cn',
-          minimaxApiKeyConfigured: true
+          minimaxEndpoint: 'cn'
         }
       }
     ])

@@ -1,18 +1,11 @@
 import { net, session, type Session } from 'electron'
 import type { MiniMaxEndpoint } from '../../shared/global-settings-types'
 
-// Why: MiniMax operates two Coding Plan usage endpoints — overseas and CN.
-// Both accept cookie auth and Bearer (API key) auth, so the only thing
-// that changes between the two is the host URL. Pinning the URLs in one
-// place keeps auth and routing in sync.
 const MINIMAX_USAGE_PATH = '/v1/api/openplatform/coding_plan/remains'
 const MINIMAX_OVERSEAS_BASE = 'https://platform.minimax.io'
 const MINIMAX_CN_BASE = 'https://www.minimaxi.com'
 
 export function getMiniMaxEndpointUrl(endpoint: MiniMaxEndpoint): string {
-  // Why: returned as a string rather than a { base, path } object so call
-  // sites can pass it straight to net.fetch. Joining the path avoids the
-  // caller accidentally double-skipping or double-applying the slash.
   if (endpoint === 'cn') {
     return `${MINIMAX_CN_BASE}${MINIMAX_USAGE_PATH}`
   }
@@ -234,10 +227,6 @@ export async function fetchMiniMaxWithManualCookieHeader(args: {
   }
 }
 
-/**
- * Fetch MiniMax usage with a Bearer (API key) token. Works on both
- * overseas and CN endpoints — the key never leaves the renderer.
- */
 export async function fetchMiniMaxWithApiKey(args: {
   apiKey: string
   endpoint: string

@@ -16,6 +16,7 @@ function logRecord({
   hash,
   parents = [],
   decorations = '',
+  legacyDecorations = '',
   message,
   author = 'Ada Lovelace',
   timestamp = 1_700_000_000
@@ -23,6 +24,7 @@ function logRecord({
   hash: string
   parents?: string[]
   decorations?: string
+  legacyDecorations?: string
   message: string
   author?: string
   timestamp?: number
@@ -35,6 +37,7 @@ function logRecord({
     String(timestamp),
     parents.join(' '),
     decorations,
+    legacyDecorations,
     message
   ].join('\n')}\0`
 }
@@ -94,8 +97,12 @@ describe('git history parsing', () => {
     const stdout = logRecord({
       hash: HEAD_OID,
       parents: [BASE_OID],
-      decorations:
-        'HEAD -> refs/heads/feature, refs/remotes/origin/HEAD -> refs/remotes/origin/feature, refs/remotes/origin/feature, tag: refs/tags/v1.0.0',
+      decorations: [
+        'HEAD -> refs/heads/feature',
+        'refs/remotes/origin/HEAD -> refs/remotes/origin/feature',
+        'refs/remotes/origin/feature',
+        'tag: refs/tags/v1.0.0'
+      ].join(DECORATION_SEPARATOR),
       message: 'feat: add graph\n\nbody line'
     })
 
@@ -114,6 +121,39 @@ describe('git history parsing', () => {
       ['refs/heads/feature', 'feature', 'branches'],
       ['refs/remotes/origin/feature', 'origin/feature', 'remote branches'],
       ['refs/tags/v1.0.0', 'v1.0.0', 'tags']
+    ])
+  })
+
+  it('falls back to %D decorations when Git predates the %(decorate:…) placeholder', () => {
+    // Why: Git < 2.43 echoes the placeholder and exits zero (#15507).
+    const stdout = logRecord({
+      hash: HEAD_OID,
+      decorations: `%(decorate:prefix=,suffix=,separator=${DECORATION_SEPARATOR})`,
+      legacyDecorations: 'HEAD -> refs/heads/feature, tag: refs/tags/v1.0.0',
+      message: 'feat: add graph'
+    })
+
+    const [item] = parseGitHistoryLog(stdout)
+
+    expect(item?.subject).toBe('feat: add graph')
+    expect(item?.references?.map((ref) => [ref.id, ref.name, ref.category])).toEqual([
+      ['refs/heads/feature', 'feature', 'branches'],
+      ['refs/tags/v1.0.0', 'v1.0.0', 'tags']
+    ])
+  })
+
+  it('keeps a comma inside a lone decoration, which carries no separator', () => {
+    // Why: a lone decoration carries no separator, so sniffing for \x1f split it in two.
+    const stdout = logRecord({
+      hash: HEAD_OID,
+      decorations: 'HEAD -> refs/heads/feat,one',
+      message: 'initial'
+    })
+
+    const [item] = parseGitHistoryLog(stdout)
+
+    expect(item?.references?.map((ref) => [ref.id, ref.name])).toEqual([
+      ['refs/heads/feat,one', 'feat,one']
     ])
   })
 

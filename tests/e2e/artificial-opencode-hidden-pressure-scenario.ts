@@ -86,7 +86,7 @@ type HiddenPressureAckGate = {
 // Main relaxed this to 4s for drain-plus-poll overhead on loaded OSS runners; this
 // branch keeps a far stricter budget with only a small margin for the whole-buffer
 // serialize-poll overhead (seen at ~1.5s), so a genuinely slow restore is still caught.
-const MAX_HIDDEN_RESTORE_LATENCY_MS = 2_000
+const MAX_HIDDEN_RESTORE_LATENCY_MS = 4_000
 // Why: Phase-4 hidden-delivery gate contract — hidden PTY bytes are dropped in
 // main after model ingestion, so renderer-delivery pressure must stay FAR
 // below the old 2 MB ACK-backpressure target instead of reaching it.

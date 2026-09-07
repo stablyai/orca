@@ -53,4 +53,33 @@ describe('WebGL diagnostics → freeze breadcrumb ring', () => {
       kind: 'webgl-context-restore'
     })
   })
+
+  it('bounds atlas mismatch storm IPC while retaining the local occurrence count', () => {
+    vi.useFakeTimers()
+    try {
+      for (let mismatch = 0; mismatch < 10_000; mismatch++) {
+        recordTerminalWebglDiagnostic('atlas-font-probe-mismatch', {
+          desired: '550',
+          actual: '700 14px Menlo'
+        })
+      }
+
+      expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(1)
+      expect(getTerminalFreezeBreadcrumbs()).toEqual([
+        expect.objectContaining({ kind: 'atlas-font-probe-mismatch', repeats: 10_000 })
+      ])
+
+      vi.advanceTimersByTime(30_000)
+      recordTerminalWebglDiagnostic('atlas-font-probe-mismatch', {
+        desired: '550',
+        actual: '700 14px Menlo'
+      })
+      expect(recordRendererCrashBreadcrumb).toHaveBeenLastCalledWith(
+        'terminal_webgl_diagnostic',
+        expect.objectContaining({ rendererSuppressedSinceLast: 9_999 })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

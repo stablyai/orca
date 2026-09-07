@@ -94,7 +94,11 @@ export async function parseMiniMaxUsageResponse(
   }
   let payload: MiniMaxUsageResponse
   try {
-    payload = (await fetchResult.response.json()) as MiniMaxUsageResponse
+    const value: unknown = await fetchResult.response.json()
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return makeMiniMaxError('Invalid MiniMax usage response', 'parse')
+    }
+    payload = value
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Invalid MiniMax usage response'
     return makeMiniMaxError(redactMiniMaxSecret(message), 'parse')

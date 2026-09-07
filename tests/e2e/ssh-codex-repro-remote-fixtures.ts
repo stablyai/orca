@@ -135,7 +135,7 @@ async function insertCodexHistory(frame) {
     const phase = String(frame).padStart(4, '0') + '.' + index
     await write('\\r\\n')
     await write(\`\\x1b[48;2;72;72;72m\\x1b[K\`)
-    await write(\`\\x1b[38;2;220;220;220;48;2;72;72;72m\${pad('gpt-5.5 high · ~/code/pr-12250-migration-compare-move-baseprice-claim · /ps to view · /stop to close ' + phase, width)}\\x1b[0m\`)
+    await write(\`\\x1b[38;2;220;220;220;48;2;72;72;72m\${pad('gpt-5.5 high · ' + phase + ' · ~/code/pr-12250-migration-compare-move-baseprice-claim · /ps to view · /stop to close', width)}\\x1b[0m\`)
   }
   await write('\\x1b[r')
   await write(\`\\x1b[\${viewportBottom};1H\`)
@@ -176,7 +176,7 @@ for (let frame = 0; frame < ${REMOTE_CODEX_FIXTURE_FRAMES}; frame += 1) {
     await reverseIndexCodexHistory(frame)
   }
   if (frame % 9 === 0) {
-    await grayScrollLine(\`gpt-5.5 high · ~/code/pr-12250-migration-compare-move-baseprice-claim · /ps to view · /stop to close \${frame}\`)
+    await grayScrollLine(\`gpt-5.5 high · \${frame} · ~/code/pr-12250-migration-compare-move-baseprice-claim · /ps to view · /stop to close\`)
   }
   await sleep(${REMOTE_CODEX_FIXTURE_FRAME_DELAY_MS})
 }

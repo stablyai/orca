@@ -1,23 +1,11 @@
+import { CLI_BOOLEAN_FLAGS } from '../../shared/cli-argument-boundary'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
+import {
+  isOrchestrationRetryRequestId,
+  RETRY_REQUEST_ID_GUIDANCE,
+  VALUELESS_RETRY_REQUEST_GUIDANCE
+} from '../../shared/orchestration-retry-request-id'
 
-const REMOTE_BOOLEAN_FLAGS = new Set([
-  'all',
-  'attachments',
-  'children',
-  'comments',
-  'current',
-  'full',
-  'help',
-  'inject',
-  'include-archived',
-  'include-visual-layouts',
-  'json',
-  'me',
-  'relations',
-  'parent-current',
-  'unread',
-  'wait'
-])
 const REPEATED_FLAG_SEPARATOR = '\u0000'
 const REPEATABLE_REMOTE_STRING_FLAGS = new Set(['label'])
 
@@ -77,6 +65,27 @@ export function optionalRemoteCliString(
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+/**
+ * The relay shim parses its own argv, so it cannot inherit the CLI's valued-flag guards. A
+ * `--retry-request` the shell emptied parses as `true`, and letting that fall through to
+ * `undefined` mints a fresh mutation identity and re-applies the mutation (#15180).
+ */
+export function readRemoteRetryRequestFlag(
+  flags: Map<string, string | boolean>
+): string | undefined {
+  const value = flags.get('retry-request')
+  if (value === undefined) {
+    return undefined
+  }
+  if (value === true) {
+    throw new RemoteCliArgumentError('invalid_argument', VALUELESS_RETRY_REQUEST_GUIDANCE)
+  }
+  if (!isOrchestrationRetryRequestId(value)) {
+    throw new RemoteCliArgumentError('invalid_argument', RETRY_REQUEST_ID_GUIDANCE)
+  }
+  return value
+}
+
 export function optionalRemoteCliNumber(
   flags: Map<string, string | boolean>,
   name: string
@@ -95,7 +104,7 @@ export function optionalRemoteCliNumber(
 function isRemoteBooleanFlag(flag: string, commandPath: string[]): boolean {
   // Why: Android launch already uses --activity <name>; only Linear issue reads use it as a boolean.
   return (
-    REMOTE_BOOLEAN_FLAGS.has(flag) ||
+    CLI_BOOLEAN_FLAGS.has(flag) ||
     (flag === 'activity' && commandPath[0] === 'linear' && commandPath[1] === 'issue')
   )
 }

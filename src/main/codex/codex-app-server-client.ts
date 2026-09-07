@@ -41,8 +41,8 @@ export type CodexGrantedHookTrust = {
   trustedHash: string
 }
 
-/** Closed verify-failure taxonomy — crosses the grant-bridge JSON envelope, so
- *  telemetry never has to parse the free-form `reason` diagnostics string. */
+/** Closed verify-failure taxonomy, so telemetry never has to parse the
+ *  free-form `reason` diagnostics string. */
 export type CodexTrustGrantSessionVerifyClass =
   | 'list-mismatch'
   | 'post-grant-untrusted'

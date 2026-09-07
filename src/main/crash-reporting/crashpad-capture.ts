@@ -38,8 +38,9 @@ type DumpCandidate = {
   readonly size: number
 }
 
-// Why: `app.getPath('crashDumps')` is derived from userData, which shifts when
-// app.setName runs at whenReady. Snapshot where Crashpad was actually pointed.
+// Why: `app.getPath('crashDumps')` is derived from userData, which shifts when app.setName runs
+// (at whenReady for packaged builds; before startCrashpadCapture in dev). Snapshot where Crashpad
+// was actually pointed.
 let crashpadDumpDirectory: string | null = null
 let captureStarted = false
 let captureStartedAtMs: number | null = null

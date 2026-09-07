@@ -1,19 +1,17 @@
 ---
 name: computer-use
 description: >-
-  Use Orca's computer-use CLI to inspect and operate local desktop app windows
-  through accessibility trees, screenshots, and safe UI actions. Use for
-  desktop app interaction: list apps/windows, get app state, read visible UI,
-  click controls, type, press keys, scroll, drag, set values, or perform
-  accessibility actions. Also use for browser windows, webviews, Orca app UI,
-  or other desktop UI. Triggers include "computer use", "orca computer", "read
-  Spotify", "read Slack", "control/click/read in a desktop app", and "get app
-  state".
+  Use Orca's computer-use CLI for OS/window-level inspection and input in visible
+  local app windows. Use when a task must read or operate a native app or an
+  external browser window (for example, Chrome, Edge, or Safari) or an app
+  webview. Do not use for Orca's embedded browser or page-only browser
+  automation. Use `orca-cli` for Orca's embedded pages and a page-automation
+  tool such as Playwright or CDP for external pages.
 ---
 
 # Computer Use
 
-Use this skill for desktop UI through `orca computer`. When the requested target is a website or web app, operate the desktop browser app/window that contains the page.
+Use this skill for desktop UI through `orca computer`. For a website or web app, use it only when the page is in an external desktop browser window that needs desktop-level control. Do not use it for page-only automation: use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages.
 
 ## Preconditions
 
@@ -25,7 +23,7 @@ Use this skill for desktop UI through `orca computer`. When the requested target
   name a specific shell. Replace it with that chosen executable before running the command;
   do not create a shell variable or run `ORCA` literally. Blocks that name no shell are
   intentionally shell-neutral for POSIX shells, PowerShell, and cmd.exe.
-- Prefer `--json`. Screenshot bytes are omitted from JSON and written to `screenshot.path`.
+- Prefer `--json`; see Screenshots below for image output.
 - Do not push, submit forms, send messages, buy items, delete data, change account settings, or expose secrets unless the user explicitly asked for that action.
 - If an app contains sensitive content, read only what the user requested.
 
@@ -94,6 +92,11 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 ## Action Rules
 
+- Read every action's verification separately from whether its provider call succeeded:
+  - `verified` means the changed value was read back.
+  - `unverified (accessibility action unasserted)` means the accessibility call succeeded but no post-state assertion was made.
+  - `unverified (synthetic input)` means input was fired into the void and is unverifiable.
+  - Missing verification metadata is unverified, including responses from older runtimes.
 - Prefer semantic actions: `set-value` for editable fields, `click` for controls, `perform-secondary-action` only for listed action names.
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
@@ -105,7 +108,12 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 ## Screenshots
 
-`get-app-state` returns tree+screenshot. Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
+`get-app-state` and actions request screenshots by default unless `--no-screenshot` is
+passed. A successful `--json` capture is normally saved at `result.screenshot.path`; if that
+path is absent, use the inline base64 `result.screenshot.data`. Pretty output does not save
+images.
+
+Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
 
 Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 
@@ -154,4 +162,4 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 
 ## Next Action
 
-Confirm Orca status unless already checked, then run `ORCA computer capabilities --json`. For website or web-app targets such as Gmail, identify the desktop browser app/window that contains the page, then get that target app state with `ORCA computer get-app-state --app <app> --json`.
+Confirm Orca status unless already checked, then run `ORCA computer capabilities --json`. For external browser targets such as Gmail, identify the desktop browser app/window that contains the page, then get that target app state with `ORCA computer get-app-state --app <app> --json`.

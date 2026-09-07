@@ -8,8 +8,12 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-import { registerLegacyPaneKeyAliasesForTab } from './pane-identity-migration'
+import { isTerminalLeafId, parsePaneKey } from '../../../shared/stable-pane-id'
+import { findCrossHostPaneTabIds, withoutPaneTabIds } from './cross-host-pane-tab-ids'
+import {
+  createLazyTerminalTabLookup,
+  registerLegacyPaneKeyAliasesForTab
+} from './pane-identity-migration'
 import { normalizeTerminalLayoutSnapshotForPersistence } from './terminal-layout-normalization'
 import {
   legacyMigrationUnsupportedRowsToAliasEntries,
@@ -18,10 +22,22 @@ import {
   migrationUnsupportedEntriesEqual,
   normalizeLegacyPaneKeyAliasEntries
 } from './pane-alias-normalization'
+import {
+  remapAcknowledgedAgentPaneKeys,
+  remapActivityClearedAtPaneKeys,
+  remapManuallyUnreadTurnPaneKeys
+} from './pane-key-remapping'
+
+export {
+  remapAcknowledgedAgentPaneKeys,
+  remapActivityClearedAtPaneKeys,
+  remapManuallyUnreadTurnPaneKeys
+} from './pane-key-remapping'
 
 export function normalizeWorkspaceSessionPaneIdentities(
   session: WorkspaceSessionState,
-  priorLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
+  priorLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {},
+  options: { skipAliasTabIds?: ReadonlySet<string> } = {}
 ): {
   session: WorkspaceSessionState
   changed: boolean
@@ -38,6 +54,7 @@ export function normalizeWorkspaceSessionPaneIdentities(
   const migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[] = []
   const legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
   const terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
+  let tabsById: ReturnType<typeof createLazyTerminalTabLookup> | null = null
   for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
     const normalized = normalizeTerminalLayoutSnapshotForPersistence(
       layout,
@@ -45,16 +62,19 @@ export function normalizeWorkspaceSessionPaneIdentities(
     )
     terminalLayoutsByTabId[tabId] = normalized.snapshot
     leafIdByInputLeafIdByTabId.set(tabId, normalized.leafIdByInputLeafId)
-    const tabAliasEntries = registerLegacyPaneKeyAliasesForTab({
-      session,
-      tabId,
-      inputLayout: layout,
-      normalizedLayout: normalized.snapshot,
-      leafIdByInputLeafId: normalized.leafIdByInputLeafId
-    })
-    // Why: old split layouts can generate enough alias rows to exceed V8's argument limit if spread into push().
-    for (const entry of tabAliasEntries) {
-      legacyPaneKeyAliasEntries.push(entry)
+    if (!options.skipAliasTabIds?.has(tabId)) {
+      tabsById ??= createLazyTerminalTabLookup(session)
+      const tabAliasEntries = registerLegacyPaneKeyAliasesForTab({
+        tabId,
+        tab: tabsById.get(tabId),
+        inputLayout: layout,
+        normalizedLayout: normalized.snapshot,
+        leafIdByInputLeafId: normalized.leafIdByInputLeafId
+      })
+      // Why: old split layouts can generate enough alias rows to exceed V8's argument limit if spread into push().
+      for (const entry of tabAliasEntries) {
+        legacyPaneKeyAliasEntries.push(entry)
+      }
     }
     const leafIdByPtyId = new Map<string, string>()
     const duplicatePtyIds = new Set<string>()
@@ -149,7 +169,14 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
   migrationUnsupportedEntries: MigrationUnsupportedPtyEntry[]
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
 } {
-  const normalizedSession = normalizeWorkspaceSessionPaneIdentities(state.workspaceSession, {})
+  const crossHostTabIds = findCrossHostPaneTabIds(state)
+  const normalizedSession = normalizeWorkspaceSessionPaneIdentities(
+    state.workspaceSession,
+    {},
+    {
+      skipAliasTabIds: crossHostTabIds
+    }
+  )
   let acknowledgementLeafIdByInputLeafIdByTabId = normalizedSession.leafIdByInputLeafIdByTabId
   const remapsByHostId = new Map<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>([
     [LOCAL_EXECUTION_HOST_ID, normalizedSession]
@@ -169,7 +196,13 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
       if (!hostSession) {
         continue
       }
-      const normalizedHostSession = normalizeWorkspaceSessionPaneIdentities(hostSession, {})
+      const normalizedHostSession = normalizeWorkspaceSessionPaneIdentities(
+        hostSession,
+        {},
+        {
+          skipAliasTabIds: crossHostTabIds
+        }
+      )
       normalizedHostSessions[hostId] = normalizedHostSession.session
       remapsByHostId.set(hostId, normalizedHostSession)
       acknowledgementLeafIdByInputLeafIdByTabId = mergeAcknowledgementLeafIdMapsByTabId(
@@ -192,10 +225,19 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     ...legacyMigrationUnsupportedRowsToAliasEntries(state.migrationUnsupportedPtyEntries ?? []),
     ...normalizedSession.legacyPaneKeyAliasEntries,
     ...hostSessionLegacyPaneKeyAliasEntries
-  ])
+    // Rows an older build wrote for a now-colliding tab id would keep the ambiguous routing alive.
+  ]).filter((entry) => !crossHostTabIds.has(parsePaneKey(entry.stablePaneKey)?.tabId ?? ''))
   const remappedAcknowledgements = remapAcknowledgedAgentPaneKeys(
     state.ui?.acknowledgedAgentsByPaneKey,
-    acknowledgementLeafIdByInputLeafIdByTabId
+    withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
+  )
+  const remappedActivityCutoffs = remapActivityClearedAtPaneKeys(
+    state.ui?.activityClearedAtByPaneKey,
+    withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
+  )
+  const remappedManualUnread = remapManuallyUnreadTurnPaneKeys(
+    state.ui?.manuallyUnreadTurnsByPaneKey,
+    withoutPaneTabIds(acknowledgementLeafIdByInputLeafIdByTabId, crossHostTabIds)
   )
   const migrationUnsupportedChanged = !migrationUnsupportedEntriesEqual(
     state.migrationUnsupportedPtyEntries ?? [],
@@ -211,7 +253,9 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     !remappedLeases.changed &&
     !migrationUnsupportedChanged &&
     !legacyAliasesChanged &&
-    !remappedAcknowledgements.changed
+    !remappedAcknowledgements.changed &&
+    !remappedActivityCutoffs.changed &&
+    !remappedManualUnread.changed
   ) {
     return {
       state,
@@ -228,11 +272,21 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
       sshRemotePtyLeases: remappedLeases.leases,
       migrationUnsupportedPtyEntries: mergedMigrationUnsupportedEntries,
       legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries,
-      ...(remappedAcknowledgements.changed
+      ...(remappedAcknowledgements.changed ||
+      remappedActivityCutoffs.changed ||
+      remappedManualUnread.changed
         ? {
             ui: {
               ...state.ui,
-              acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements
+              ...(remappedAcknowledgements.changed
+                ? { acknowledgedAgentsByPaneKey: remappedAcknowledgements.acknowledgements }
+                : {}),
+              ...(remappedActivityCutoffs.changed
+                ? { activityClearedAtByPaneKey: remappedActivityCutoffs.cutoffs }
+                : {}),
+              ...(remappedManualUnread.changed
+                ? { manuallyUnreadTurnsByPaneKey: remappedManualUnread.turns }
+                : {})
             }
           }
         : {})
@@ -241,51 +295,4 @@ export function normalizePersistedPaneIdentityState(state: PersistedState): {
     migrationUnsupportedEntries: mergedMigrationUnsupportedEntries,
     legacyPaneKeyAliasEntries: mergedLegacyPaneKeyAliasEntries
   }
-}
-
-export function remapAcknowledgedAgentPaneKeys(
-  acknowledgements: PersistedState['ui']['acknowledgedAgentsByPaneKey'],
-  leafIdByInputLeafIdByTabId: Map<string, Map<string, string>>
-): { acknowledgements: PersistedState['ui']['acknowledgedAgentsByPaneKey']; changed: boolean } {
-  if (!acknowledgements || Object.keys(acknowledgements).length === 0) {
-    return { acknowledgements, changed: false }
-  }
-
-  let changed = false
-  const next: NonNullable<PersistedState['ui']['acknowledgedAgentsByPaneKey']> = {}
-  const setAcknowledgement = (paneKey: string, acknowledgedAt: number): void => {
-    const existing = next[paneKey]
-    next[paneKey] = existing === undefined ? acknowledgedAt : Math.max(existing, acknowledgedAt)
-  }
-  for (const [paneKey, acknowledgedAt] of Object.entries(acknowledgements)) {
-    const parsed = parsePaneKey(paneKey)
-    if (parsed) {
-      setAcknowledgement(paneKey, acknowledgedAt)
-      continue
-    }
-
-    const delimiter = paneKey.indexOf(':')
-    if (delimiter <= 0 || delimiter === paneKey.length - 1) {
-      setAcknowledgement(paneKey, acknowledgedAt)
-      continue
-    }
-
-    const tabId = paneKey.slice(0, delimiter)
-    const legacyLeafId = paneKey.slice(delimiter + 1)
-    const remappedLeafId = leafIdByInputLeafIdByTabId.get(tabId)?.get(legacyLeafId)
-    if (!remappedLeafId || !isTerminalLeafId(remappedLeafId)) {
-      setAcknowledgement(paneKey, acknowledgedAt)
-      continue
-    }
-
-    try {
-      // Why: when a legacy leaf is promoted to a UUID, carry the read marker over so seen rows don't come back unread.
-      setAcknowledgement(makePaneKey(tabId, remappedLeafId), acknowledgedAt)
-      changed = true
-    } catch {
-      setAcknowledgement(paneKey, acknowledgedAt)
-    }
-  }
-
-  return { acknowledgements: next, changed }
 }

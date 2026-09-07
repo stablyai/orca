@@ -3,6 +3,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   createMobileNativeChatStreamingGate,
   deriveMobileNativeChatStreaming,
+  mobileNativeChatStreamPreview,
   type MobileNativeChatStreamingGate
 } from './mobile-native-chat-streaming-gate'
 
@@ -32,6 +33,40 @@ function run(ticks: { folded: NativeChatMessage[]; text?: string; live?: boolean
   }
   return { gate, results }
 }
+
+describe('mobileNativeChatStreamPreview', () => {
+  it('drops a preview the provider flagged as tool output', () => {
+    // Regression: a Bash result was published as `lastAssistantMessage` for the status
+    // card, then rendered here as an un-collapsed assistant bubble that no catch-up rule
+    // could retire, so it sat in the chat for the rest of the turn.
+    expect(
+      mobileNativeChatStreamPreview(
+        {
+          lastAssistantMessage: 'Exit code 1\nimport { Foo }',
+          lastAssistantMessageIsToolOutput: true
+        },
+        true
+      )
+    ).toBeUndefined()
+  })
+
+  it('passes assistant prose through while working', () => {
+    expect(mobileNativeChatStreamPreview({ lastAssistantMessage: 'Working on it' }, true)).toBe(
+      'Working on it'
+    )
+  })
+
+  it('drops any preview once the turn is not working', () => {
+    expect(
+      mobileNativeChatStreamPreview({ lastAssistantMessage: 'Working on it' }, false)
+    ).toBeUndefined()
+  })
+
+  it('tolerates a missing status', () => {
+    expect(mobileNativeChatStreamPreview(null, true)).toBeUndefined()
+    expect(mobileNativeChatStreamPreview(undefined, true)).toBeUndefined()
+  })
+})
 
 describe('deriveMobileNativeChatStreaming', () => {
   it('shows a genuine reply that repeats the previous turn as a prefix', () => {

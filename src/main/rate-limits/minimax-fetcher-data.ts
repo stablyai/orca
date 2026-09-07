@@ -96,7 +96,11 @@ const MINIMAX_SESSION_WINDOW_MINUTES = 300
 // `resetsAt` derived from `weekly_remains_time` + now.
 const MINIMAX_WEEKLY_WINDOW_MINUTES = 10080
 
-export function parseMiniMaxUsageItem(item: MiniMaxUsageItem): MiniMaxUsageSnapshot | null {
+export function parseMiniMaxUsageItem(value: unknown): MiniMaxUsageSnapshot | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const item: MiniMaxUsageItem = value
   const modelName = typeof item.model_name === 'string' ? item.model_name : null
   const remainingPercent = asNumber(item.current_interval_remaining_percent)
   const startTime = asNumber(item.start_time)

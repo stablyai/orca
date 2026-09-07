@@ -17,7 +17,11 @@ import {
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
-import { ANTIGRAVITY_EVENTS, type AntigravityEvent } from './hook-events'
+import {
+  ANTIGRAVITY_EVENTS,
+  ANTIGRAVITY_PRE_TOOL_USE_DECISION,
+  type AntigravityEvent
+} from './hook-events'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 import {
   buildInstalledConfig,
@@ -46,11 +50,20 @@ function getWindowsWrapperScriptPath(event: AntigravityEvent): string {
   return getSharedManagedScriptPath(event.windowsWrapperFileName)
 }
 
+function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): string {
+  return wrapPosixHookCommand(
+    scriptPath,
+    { ORCA_ANTIGRAVITY_EVENT: event.eventName },
+    // Why: a missing managed script must not brick tools; the guard answers PreToolUse itself instead of staying silent.
+    event.eventName === 'PreToolUse' ? { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION } : {}
+  )
+}
+
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
   if (process.platform === 'win32') {
     return wrapWindowsCmdHookCommand(getWindowsWrapperScriptPath(event))
   }
-  return wrapPosixHookCommand(scriptPath, { ORCA_ANTIGRAVITY_EVENT: event.eventName })
+  return getPosixManagedCommand(scriptPath, event)
 }
 
 export class AntigravityHookService {
@@ -174,8 +187,7 @@ export class AntigravityHookService {
 
       buildInstalledConfig(
         config,
-        (event) =>
-          wrapPosixHookCommand(remoteScriptPath, { ORCA_ANTIGRAVITY_EVENT: event.eventName }),
+        (event) => getPosixManagedCommand(remoteScriptPath, event),
         createAntigravityManagedCommandMatcher()
       )
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))

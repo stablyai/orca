@@ -9,6 +9,7 @@ import {
   type ReadAiVaultFirstUserPromptResult
 } from './session-first-user-prompt-read'
 import {
+  clearAiVaultServiceRestartCircuit,
   invalidateAiVaultServiceCache,
   listAiVaultSubagentSessionsInService,
   readAiVaultFirstUserPromptInService,
@@ -34,6 +35,13 @@ export function shouldUseAiVaultServiceProcess(): boolean {
     return false
   }
   return process.env.NODE_ENV !== 'test'
+}
+
+// Let forced refreshes retry after a local service circuit opens.
+export function clearAiVaultBackgroundRestartCircuit(): void {
+  if (shouldUseAiVaultServiceProcess()) {
+    clearAiVaultServiceRestartCircuit()
+  }
 }
 
 export function scanAiVaultSessionsInBackground(

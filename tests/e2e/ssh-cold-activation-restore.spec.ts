@@ -1,4 +1,4 @@
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -6,6 +6,10 @@ import {
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import {
+  createRemoteTerminalTab,
+  readRemoteTerminalTabs
+} from './helpers/docker-ssh-relay-terminal-tabs'
 import {
   cleanupDockerSshRelayTarget,
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
@@ -20,40 +24,6 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const TAB_COUNT = 6
 
 test.use({ seedTestRepo: false })
-
-async function createRemoteTerminalTab(page: Page, worktreeId: string): Promise<void> {
-  const tabId = await page.evaluate((id) => {
-    const state = window.__store?.getState()
-    if (!state) {
-      throw new Error('Store unavailable')
-    }
-    const tab = state.createTab(id, undefined, undefined, { activate: true })
-    state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
-    return tab.id
-  }, worktreeId)
-  await expect
-    .poll(() => page.evaluate(() => window.__store?.getState().activeTabId ?? null), {
-      timeout: 10_000
-    })
-    .toBe(tabId)
-  await waitForActiveTerminalManager(page, 60_000)
-  await waitForActivePanePtyId(page, 60_000)
-}
-
-async function readRemoteTerminalTabs(
-  page: Page,
-  worktreeId: string
-): Promise<{ id: string; ptyId: string | null }[]> {
-  return page.evaluate(
-    (id) =>
-      (window.__store?.getState().tabsByWorktree[id] ?? []).map((tab) => ({
-        id: tab.id,
-        ptyId: tab.ptyId
-      })),
-    worktreeId
-  )
-}
 
 function readRemoteProof(target: DockerSshRelayTarget, path: string): string | null {
   try {
@@ -178,11 +148,40 @@ test.describe('SSH cold activation restore', () => {
       if (!firstTabId) {
         throw new Error('Restored SSH tabs disappeared')
       }
-      await orcaPage.getByRole('button', { name: /^Terminal 1 Close tab Terminal 1/ }).click()
+      // Six restored tabs overflow the strip at CI's window size and the restore pins it to the END,
+      // so Terminal 1 starts outside the scroll viewport. Neither `click()` nor
+      // `scrollIntoViewIfNeeded()` can reach it: both wait for the element to hold still, and the
+      // strip keeps re-laying-out while the relay reconnects behind it — so they time out on an
+      // element they can see but never settle on. This spec had never run in CI before this branch
+      // routed it there, which is why that only shows up now.
+      //
+      // So the pointer is driven directly, and the whole attempt retried, which needs no element to
+      // be stable — only to be somewhere at the moment it is pressed. Activation is deferred to
+      // pointerup and suppressed past a drag threshold (tab-strip-pointer-activation.ts), so this
+      // has to be a real down/up pair at one position; a synthetic click event would not select.
+      // The retry asserts on the store, so a press that lands wrong is retried rather than believed.
+      const tabStrip = orcaPage.locator('.terminal-tab-strip').first()
+      const firstTab = orcaPage.getByRole('button', { name: /^Terminal 1 Close tab Terminal 1/ })
       await expect
-        .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeTabId ?? null), {
-          timeout: 10_000
-        })
+        .poll(
+          async () => {
+            await tabStrip.evaluate((el) => {
+              el.scrollLeft = 0
+            })
+            const box = await firstTab.boundingBox()
+            if (!box) {
+              return null
+            }
+            await orcaPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+            await orcaPage.mouse.down()
+            await orcaPage.mouse.up()
+            return orcaPage.evaluate(() => window.__store?.getState().activeTabId ?? null)
+          },
+          {
+            timeout: 30_000,
+            message: 'pressing the restored first tab never made it active'
+          }
+        )
         .toBe(firstTabId)
       await orcaPage.evaluate((tabId) => {
         const manager = window.__paneManagers?.get(tabId)

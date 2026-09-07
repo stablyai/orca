@@ -4,10 +4,6 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
 
-// Why: parallel to minimax-cookie-store so the API key is only ever kept in a
-// safeStorage-encrypted file on disk. Settings.json (which the renderer can
-// read) only carries a `minimaxApiKeyConfigured: boolean` flag, so the key
-// value itself is never broadcast to the renderer.
 const MINIMAX_API_KEY_FILE = 'minimax-api-key.enc'
 const API_KEY_ENVELOPE_PREFIX = 'orca-minimax-api-key:v1:'
 let cachedMiniMaxApiKey: string | null = null
@@ -26,10 +22,7 @@ function getMiniMaxApiKeyPath(): string {
   return join(getOrcaDir(), MINIMAX_API_KEY_FILE)
 }
 
-function encodeApiKeyEnvelope(
-  kind: MiniMaxApiKeyEnvelope['kind'],
-  payload: Buffer
-): string {
+function encodeApiKeyEnvelope(kind: MiniMaxApiKeyEnvelope['kind'], payload: Buffer): string {
   return `${API_KEY_ENVELOPE_PREFIX}${kind}:${payload.toString('base64')}`
 }
 
@@ -92,7 +85,9 @@ export function saveMiniMaxApiKey(key: string): void {
     cachedMiniMaxApiKey = trimmed
     return
   }
-  console.warn('[minimax] safeStorage encryption unavailable — storing MiniMax API key in plaintext')
+  console.warn(
+    '[minimax] safeStorage encryption unavailable — storing MiniMax API key in plaintext'
+  )
   writeSecureFile(
     getMiniMaxApiKeyPath(),
     encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))

@@ -305,6 +305,35 @@ describe('CodexRuntimeHomeService', () => {
     expect(discovery).toContain(home1)
   })
 
+  it('includes WSL account homes in session discovery', async () => {
+    const wslHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\orca\\codex-accounts\\account-1\\home'
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'wsl@example.com',
+            managedHomePath: wslHome,
+            managedHomeRuntime: 'wsl',
+            wslDistro: 'Ubuntu',
+            wslLinuxHomePath: '/home/me/.local/share/orca/codex-accounts/account-1/home',
+            providerAccountId: null,
+            workspaceLabel: null,
+            workspaceAccountId: null,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ]
+      })
+    )
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(service.getHostCodexHomePathsForSessionDiscovery()).toContain(wslHome)
+  })
+
   it('surfaces per-account rollouts for session discovery on the mirror lane', async () => {
     // A Windows host keeps the shared system-default mirror, but its managed
     // accounts still launch from their own homes and accumulate rollouts there.

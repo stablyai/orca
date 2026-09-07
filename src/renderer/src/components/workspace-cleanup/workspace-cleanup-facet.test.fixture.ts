@@ -1,6 +1,7 @@
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import {
   buildWorkspaceCleanupFacets,
   type WorkspaceCleanupFacetSources,
@@ -99,7 +100,11 @@ export function makeFacets(input: FacetFixtureInput = {}): WorkspaceCleanupFacet
       input.agentStatus === undefined ? new Map() : new Map([[id, input.agentStatus]]),
     reviewInfoByWorktreeId:
       input.review === undefined ? new Map() : new Map([[id, makeReviewInfo(input.review)]]),
-    dismissedWorktreeIds: new Set(input.dismissed ? [id] : [])
+    // Keyed the way the store writes dismissals: host-qualified identity, not a
+    // bare id — a bare-id fixture here would pass while production never matched.
+    dismissedIdentities: new Set(
+      input.dismissed ? [getWorkspaceCleanupCandidateIdentity(candidate)] : []
+    )
   }
   return buildWorkspaceCleanupFacets(candidate, sources)
 }

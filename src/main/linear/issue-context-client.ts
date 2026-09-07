@@ -69,14 +69,16 @@ export async function searchLinearIssuesForAgents(args: {
     .flat()
     .sort((left, right) => Date.parse(right.updatedAt ?? '') - Date.parse(left.updatedAt ?? ''))
   const limited = merged.slice(0, limit)
+  const limitReached = merged.length > limit
   return {
     issues: limited,
+    truncated: limitReached,
     meta: {
       query: args.query,
       workspaceId,
       limit,
       returned: limited.length,
-      limitReached: merged.length > limit,
+      limitReached,
       partial: perWorkspace.failures.length > 0,
       workspaceErrors: perWorkspace.failures.map(({ workspace, code, message }) => ({
         workspace,

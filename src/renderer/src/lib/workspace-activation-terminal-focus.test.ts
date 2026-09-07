@@ -63,7 +63,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     expect(focusRuntimeTerminalSurfaceMock).not.toHaveBeenCalled()
     flushFrame()
 
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1')
+    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1', null, 'wt-1')
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-1')
   })
 
@@ -78,7 +78,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })
     flushFrame()
 
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-adopted')
+    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-adopted', null, 'wt-1')
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-adopted')
   })
 
@@ -94,7 +94,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
     flushFrame()
 
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1')
+    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1', null, 'wt-1')
     expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
   })
 

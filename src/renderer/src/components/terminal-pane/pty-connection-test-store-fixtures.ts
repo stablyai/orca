@@ -91,6 +91,7 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     removeAgentStatus: vi.fn(),
     dropAgentStatus: vi.fn(),
     retireAgentPaneAuthority: vi.fn(),
+    restoreAgentPaneAuthority: vi.fn(),
     setPaneForegroundAgent: vi.fn((paneKey: string, entry: PaneForegroundAgentEntry) => {
       getState().paneForegroundAgentByPaneKey[paneKey] = entry
     }),

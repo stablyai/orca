@@ -47,7 +47,8 @@ export function buildSummary(
       row.inputTokens,
       row.outputTokens,
       row.cacheReadTokens,
-      row.cacheWriteTokens
+      row.cacheWriteTokens,
+      row.cacheWrite1hTokens
     )
     if (cost !== null) {
       hasAnyBillableCost = true
@@ -111,6 +112,8 @@ export function buildBreakdown(
   kind: ClaudeUsageBreakdownKind
 ): ClaudeUsageBreakdownRow[] {
   const rows = new Map<string, ClaudeUsageBreakdownRow>()
+  // Why: the 1h cache-write split only feeds pricing, so it stays off the renderer row type.
+  const cacheWrite1hTokensByKey = new Map<string, number>()
   const filteredDaily = getFilteredDaily(state, scope, range)
   const filteredSessions = getFilteredSessions(state, scope, range)
 
@@ -133,6 +136,10 @@ export function buildBreakdown(
     existing.outputTokens += daily.outputTokens
     existing.cacheReadTokens += daily.cacheReadTokens
     existing.cacheWriteTokens += daily.cacheWriteTokens
+    cacheWrite1hTokensByKey.set(
+      key,
+      (cacheWrite1hTokensByKey.get(key) ?? 0) + daily.cacheWrite1hTokens
+    )
     rows.set(key, existing)
   }
 
@@ -168,7 +175,8 @@ export function buildBreakdown(
         row.inputTokens,
         row.outputTokens,
         row.cacheReadTokens,
-        row.cacheWriteTokens
+        row.cacheWriteTokens,
+        cacheWrite1hTokensByKey.get(row.key) ?? 0
       )
     }
   }

@@ -16,7 +16,7 @@ import {
   useTabDragSplit
 } from './useTabDragSplit'
 
-vi.mock('../browser-pane/webview-registry', () => ({
+vi.mock('../browser-pane/host-guest/webview-registry', () => ({
   acquireWebviewsDragPassthrough: vi.fn(() => vi.fn())
 }))
 

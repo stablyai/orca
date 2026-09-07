@@ -6,10 +6,19 @@ import {
   parseServeUpdateHandoffState,
   type ServeUpdateHandoffState
 } from '../../shared/serve-update-handoff'
+import {
+  QUIT_RENDERER_ACK_TIMEOUT_MS,
+  WILL_QUIT_TEARDOWN_DEADLINE_MS
+} from '../../shared/quit-teardown-deadline'
 import { serveSignalExitError } from './serve-signal-exit-diagnostic'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
 
 export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
+export const SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS = 5_000
+export const SERVE_CHILD_FORCE_KILL_GRACE_MS =
+  QUIT_RENDERER_ACK_TIMEOUT_MS +
+  WILL_QUIT_TEARDOWN_DEADLINE_MS +
+  SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS
 
 type InstallRequestedHandoff = Extract<ServeUpdateHandoffState, { phase: 'install-requested' }>
 type ServeReadiness = 'not-expected' | 'pending' | 'verified' | 'failed'
@@ -77,8 +86,8 @@ export async function superviseForegroundServe(
       handoff?.phase !== 'install-requested' ||
       (child.pid !== undefined && handoff.servingPid !== child.pid)
     ) {
-      if (typeof result.code === 'number') {
-        return result.code
+      if (typeof result.code === 'number' || result.signalWasForwarded) {
+        return result.code ?? 0
       }
       throw serveSignalExitError(result.signal)
     }
@@ -105,15 +114,22 @@ function waitForForegroundChild(
   code: number | null
   signal: NodeJS.Signals | null
   readiness: ServeReadiness
+  signalWasForwarded: boolean
 }> {
   return new Promise((resolveWait, reject) => {
+    const forwardsHangup = process.platform === 'linux'
+    const forwardedSignals = new Set<NodeJS.Signals>()
     let forceKillTimer: ReturnType<typeof setTimeout> | null = null
     let readyTimer: ReturnType<typeof setTimeout> | null = null
     let readiness: ServeReadiness = expected ? 'pending' : 'not-expected'
     let stateWrite = Promise.resolve()
+    let childSettled = false
     const terminateChild = (): void => {
+      if (childSettled) {
+        return
+      }
       child.kill('SIGTERM')
-      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), 5000)
+      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_CHILD_FORCE_KILL_GRACE_MS)
     }
     const recordReplacementFailure = (reason: string): boolean => {
       if (!expected || readiness !== 'pending') {
@@ -140,8 +156,12 @@ function waitForForegroundChild(
       terminateChild()
     }
     const forwardSignal = (signal: NodeJS.Signals): void => {
-      child.kill(signal)
-      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), 5000)
+      // A Windows console delivers Ctrl-C to parent and child; child.kill would terminate the child mid-teardown.
+      if (process.platform !== 'win32') {
+        forwardedSignals.add(signal)
+        child.kill(signal)
+      }
+      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_CHILD_FORCE_KILL_GRACE_MS)
     }
     const handleMessage = (value: unknown): void => {
       const message = parseServeSupervisorMessage(value)
@@ -172,6 +192,9 @@ function waitForForegroundChild(
     const cleanup = (): void => {
       process.off('SIGINT', forwardSignal)
       process.off('SIGTERM', forwardSignal)
+      if (forwardsHangup) {
+        process.off('SIGHUP', forwardSignal)
+      }
       if (typeof child.off === 'function') {
         child.off('message', handleMessage)
       }
@@ -184,6 +207,9 @@ function waitForForegroundChild(
     }
     process.on('SIGINT', forwardSignal)
     process.on('SIGTERM', forwardSignal)
+    if (forwardsHangup) {
+      process.on('SIGHUP', forwardSignal)
+    }
     if (typeof child.on === 'function') {
       child.on('message', handleMessage)
     }
@@ -195,10 +221,13 @@ function waitForForegroundChild(
       }, SERVE_REPLACEMENT_READY_TIMEOUT_MS)
     }
     const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+      childSettled = true
       cleanup()
-      void stateWrite.then(() => resolveWait({ code, signal, readiness }))
+      const signalWasForwarded = signal !== null && forwardedSignals.has(signal)
+      void stateWrite.then(() => resolveWait({ code, signal, readiness, signalWasForwarded }))
     }
     child.once('error', (error) => {
+      childSettled = true
       recordReplacementFailure(`Could not start the replacement process: ${String(error)}`)
       cleanup()
       child.off('exit', handleExit)

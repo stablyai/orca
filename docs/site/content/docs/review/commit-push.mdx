@@ -1,0 +1,60 @@
+---
+title: Commit & push from Orca
+---
+
+You can commit, push, and open the review without leaving Orca. The commit panel lives next to the diff viewer and is designed for the common case — review, stage, commit, push, move on.
+
+## Commit
+
+1. Stage changes by hunk or by file from the diff.
+1. Write a commit message in the bottom panel, or use **Generate with AI** when you want Orca to draft one from the staged changes.
+1. Hit **Commit** (`Cmd-Enter` on macOS, `Ctrl-Enter` on Windows / Linux) when focus is in Source Control and the primary action is Commit.
+
+Pre-commit hooks from the repo run as usual. If a hook fails Orca surfaces the output inline.
+
+When a commit fails, use **Fix with AI** from the failure details to start the default agent in the active worktree with the hook output, attempted commit message, and staged file list. The agent gets a repair prompt only — it is not asked to bypass hooks, commit, push, or open a review.
+
+## Push
+
+**Push** pushes the worktree's branch to `origin`, setting upstream the first time. If the branch is behind, Orca will not silently force-push.
+
+When you've rewritten history (rebase, amend, squash) and the remote only has older copies of your local commits, the Source Control panel surfaces **Force push with lease** as an explicit, separate action — never as a fallback for plain Push. The label shows the commit count being replaced and the upstream branch name so you know exactly what's about to change. Force push uses `--force-with-lease`, so a stale local view of the remote aborts the push instead of clobbering someone else's commits.
+
+## Open a hosted review
+
+After the branch is pushed, use the Source Control panel's hosted review action to create the pull request or merge request. Confirm the base branch, title, description, and draft state before submitting. Bitbucket Cloud can create pull requests from the same composer; it has no draft PRs, so Draft is hidden. For GitHub, when the selected base already has an open PR you can **Stack this PR above #N** — see [Stacked pull requests](/docs/review/github#stacked-pull-requests).
+
+If Orca needs to run a follow-up commit as part of the Create PR flow and that commit fails — hooks reject it, or the working tree has an uncommittable state — the dialog surfaces a detailed failure summary with the hook output and next-step buttons instead of dropping you back into the panel with no context. Use **Fix with AI** from the summary to hand the failure to an agent, or resolve it yourself and rerun.
+
+Use **Generate pull request details with AI** in the create-review dialog when you want Orca to draft the title, description, and draft state from the branch diff and commits. Generated copy aims for short ELI5 problem/solution sections and linked-issue guidance (`Fixes` vs `Refs` when a GitHub issue is attached). Orca keeps your selected base branch, rejects empty descriptions, and surfaces a clear error so you can retry instead of shipping a blank body. Review the fields before creating the review.
+
+## Per-repo AI action recipes
+
+**Generate with AI**, **Generate pull request details with AI**, **Fix with AI**, and **Resolve with AI** are all Source Control AI actions — each one is backed by an **action recipe** that picks the agent, CLI arguments, and prompt template Orca runs when you trigger the action. Edit them under [Settings → Git & Source Control](/docs/settings) → **Action recipes**, either as your global default or scoped to the current repository.
+
+Templates can include variables such as `{basePrompt}`, `{branch}`, `{stagedFiles}`, `{stagedPatch}`, and **`{linkedIssue}`** for commit messages; PR details also support `{baseBranch}`, `{currentTitle}`, `{currentBody}`, `{commitSummary}`, `{changedFiles}`, and `{patch}`.
+
+`{linkedIssue}` expands to the workspace-linked **GitHub issue number**, or empty when none is linked (including pure Linear/GitLab workspaces). Prefer instructional phrasing — a bare `Fixes #{linkedIssue}` becomes `Fixes #` when unlinked.
+
+When a repository has its own recipe for an action, saving changes to the global default won't touch it — the settings pane surfaces a **Repository overrides** note listing which repos diverge and what they override (agent, CLI arguments, or command template), with a **Review** link that jumps to that repository's settings so you can update or remove the override.
+
+## Amend
+
+Amending is explicit — **Commit → Amend**. Orca won't amend commits that have already been pushed unless you confirm.
+
+## Source control panel
+
+The sidebar **Source Control** panel exposes the same actions without leaving your current view: stage and discard files, write a commit message, and run **Commit**, **Push**, **Pull**, or **Sync** as one-click actions. Paths render as UTF-8 even when they contain non-ASCII characters.
+
+The branch context row at the top shows the current branch (or detached HEAD) stacked above the compare base (`branch → base`) so Create PR and remote actions never hide which branch you're on. When the branch has a usable merge base, a compact chip shows total lines added and removed against that fork point (one ranged diff, not a sum of staged/unstaged areas). Hover the chip for a **Code breakdown** when the host publishes splits: **Source**, **Tests**, and **Generated** (generated only when non-zero) — path heuristics only, not content analysis. Long branch names truncate so they do not cover the chip.
+
+Right-click a changed file for **Copy Path** / **Copy Relative Path** (relative to the worktree root).
+
+The panel's primary button at the bottom shifts with state so the next useful action is always one click away: **Stage Files** when there are unstaged changes, then **Commit**, then **Push** / **Pull** / **Sync** depending on how the branch sits against its upstream.
+
+When a merge, rebase, cherry-pick, or revert leaves conflicts, Source Control shows **Resolve with AI** next to **Review conflicts** so you can either hand the conflict set to an agent or inspect it yourself before continuing. For an in-progress merge or rebase you no longer want, use **Abort merge** or **Abort rebase** from Source Control.
+
+## Next steps
+
+- [Hosted reviews, issues & Actions](/docs/review/github) — connect the provider that owns the review.
+- [Annotate AI Diff](/docs/review/annotate-ai-diff) — leave line notes before committing.

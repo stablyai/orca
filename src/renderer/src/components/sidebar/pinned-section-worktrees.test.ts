@@ -52,6 +52,22 @@ describe('getPinnedSectionWorktrees', () => {
     ])
   })
 
+  it('does not include an unpinned row with the same id on another host', () => {
+    const pinnedLocal = makeWorktree('shared', { hostId: 'local', isPinned: true })
+    const unpinnedSsh = makeWorktree('shared', {
+      hostId: 'ssh:box',
+      instanceId: 'shared-ssh-instance'
+    })
+
+    expect(
+      getPinnedSectionWorktrees(
+        [pinnedLocal, unpinnedSsh],
+        {},
+        new Map([[pinnedLocal.id, pinnedLocal]])
+      ).map((candidate) => candidate.hostId)
+    ).toEqual(['local'])
+  })
+
   it('includes visible descendants of a pinned parent', () => {
     const pinnedParent = { ...parent, isPinned: true }
     const map = new Map(worktreeMap)

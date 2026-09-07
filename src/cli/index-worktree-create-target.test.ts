@@ -42,7 +42,7 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
-import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -72,11 +72,14 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'feature',
+      displayName: 'feature',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
       runHooks: false,
       activate: true,
+      navigation: 'all',
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
@@ -86,6 +89,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('resolves project and host flags to the matching repo for worktree.create', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     queueFixtures(
       callMock,
       okFixture('req_project_setups', {
@@ -140,10 +144,13 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-gpu',
       name: 'feature',
+      displayName: 'feature',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,
@@ -256,6 +263,8 @@ describe('orca cli worktree awareness', () => {
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'child',
+      displayName: 'child',
+      displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
       comment: undefined,

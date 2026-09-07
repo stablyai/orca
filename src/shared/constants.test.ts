@@ -182,12 +182,8 @@ describe('MiniMax defaults', () => {
     expect(settings.minimaxUsageModels).toBe('general')
   })
 
-  it('defaults the MiniMax endpoint to overseas and reports no API key configured', () => {
-    // Why: 'overseas' keeps the existing cookie-only auth path so current
-    // users see no behavior change. The apiKey flag must stay false until
-    // the user explicitly saves a key via the minimaxCredentials IPC.
+  it('defaults the MiniMax endpoint to overseas', () => {
     const settings = getDefaultSettings('/tmp')
     expect(settings.minimaxEndpoint).toBe('overseas')
-    expect(settings.minimaxApiKeyConfigured).toBe(false)
   })
 })

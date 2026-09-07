@@ -44,7 +44,12 @@ describe('Task/Dispatch state invariant', () => {
       const task = harness.db.createTask({ spec: 'retain assignment', runId: harness.runId })
       const dispatch =
         dispatchStatus === 'pending'
-          ? harness.db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} }).dispatch
+          ? harness.db.createStartingWorkerDispatch({
+              creator: { kind: 'system' },
+              maxDepth: Number.MAX_SAFE_INTEGER,
+              taskId: task.id,
+              startOptions: {}
+            }).dispatch
           : await dispatchTask(harness, task.id, WORKER_HANDLE)
 
       const response = await updateTask(harness, task.id, 'ready', 'must not persist')
@@ -285,7 +290,12 @@ async function createCapableDispatch(
   status: 'pending' | 'dispatched'
 ): Promise<{ dispatch: { id: string }; capability: string }> {
   if (status === 'pending') {
-    const dispatch = harness.db.createStartingWorkerDispatch({ taskId, startOptions: {} }).dispatch
+    const dispatch = harness.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId,
+      startOptions: {}
+    }).dispatch
     const capability = harness.db.prepareStartingWorkerAuthority({
       dispatchId: dispatch.id,
       handle: WORKER_HANDLE,
@@ -312,7 +322,12 @@ function createSupervisedDispatch(
   taskId: string,
   status: 'pending' | 'dispatched'
 ): { dispatch: { id: string }; capability: string } {
-  const dispatch = harness.db.createStartingWorkerDispatch({ taskId, startOptions: {} }).dispatch
+  const dispatch = harness.db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: Number.MAX_SAFE_INTEGER,
+    taskId,
+    startOptions: {}
+  }).dispatch
   const capability = harness.db.prepareStartingWorkerAuthority({
     dispatchId: dispatch.id,
     handle: WORKER_HANDLE,

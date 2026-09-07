@@ -2,6 +2,7 @@ import type { StoreApi } from 'zustand'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import type { HostLineageSnapshot } from '../../../shared/host-lineage-contract'
 import type { HostRepoCatalogSnapshot } from '../../../shared/host-repo-catalog-contract'
+import { applyManualRepoOrder } from '../../../shared/manual-repo-order'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '../store/types'
@@ -63,12 +64,14 @@ function mergeExactHostCatalog(state: AppState, snapshot: HostRepoCatalogSnapsho
     return state
   }
   const hostId = snapshot.authority.executionHostId
+  // Why re-apply the overlay: re-appending the host's rows puts them at the tail, which would
+  // undo the user's manual cross-host order on every connect.
   return {
     ...state,
-    repos: [
-      ...state.repos.filter((repo) => getRepoExecutionHostId(repo) !== hostId),
-      ...snapshot.repos
-    ]
+    repos: applyManualRepoOrder(
+      [...state.repos.filter((repo) => getRepoExecutionHostId(repo) !== hostId), ...snapshot.repos],
+      state.manualRepoOrder
+    )
   }
 }
 

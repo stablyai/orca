@@ -9,7 +9,8 @@ const {
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
-  clearPendingCookieImportMock
+  clearPendingCookieImportMock,
+  writeCookieIdentityMock
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   createDecipherivMock: vi.fn(),
@@ -17,7 +18,8 @@ const {
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
-  clearPendingCookieImportMock: vi.fn()
+  clearPendingCookieImportMock: vi.fn(),
+  writeCookieIdentityMock: vi.fn()
 }))
 
 vi.mock('node:crypto', async (importOriginal) => {
@@ -51,6 +53,10 @@ vi.mock('./browser-cookie-clear-store', () => ({
     snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
       items.map(({ cookie, url }) => ({ url, ...cookie })),
     restoreClearIdentities: async () => undefined,
+    // Why (STA-4300): imports write through the CDP identity store, not cookies.set. A store double
+    // missing this method throws a TypeError the per-cookie catch swallows, routing every write
+    // down the rejected path while the suite still looks green.
+    writeCookieIdentity: writeCookieIdentityMock,
     dispose: () => undefined
   })
 }))
@@ -89,21 +95,38 @@ function chromeBrowser(cookiesPath: string): DetectedBrowser {
 describe('importCookiesFromBrowser — undecryptable cookies', () => {
   let tmpDir: string
   let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
+  let targetJar: Record<string, unknown>[]
   let platformSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-linux-keyring-test-'))
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    targetJar = []
+    cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
+      const index = targetJar.findIndex((cookie) => cookie.name === name)
+      if (index !== -1) {
+        targetJar.splice(index, 1)
+      }
+    })
+    clearDataMock = vi.fn(async () => {
+      targetJar.splice(0)
+    })
+    writeCookieIdentityMock.mockReset().mockResolvedValue(undefined)
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
-        get: vi.fn().mockResolvedValue([]),
+        get: vi.fn(async () => targetJar),
         set: cookiesSetMock,
-        remove: vi.fn().mockResolvedValue(undefined),
+        remove: cookiesRemoveMock,
         flushStore: vi.fn().mockResolvedValue(undefined)
       },
-      clearData: vi.fn().mockResolvedValue(undefined),
-      setUserAgent: vi.fn()
+      clearData: clearDataMock,
+      setUserAgent: vi.fn(),
+      // Why (STA-4300): the importer derives the partition dir from the session rather than
+      // trusting a caller-supplied partition, so the double must expose it.
+      getStoragePath: vi.fn().mockReturnValue(join(tmpDir, 'userData', 'Partitions', 'test'))
     })
     platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     // Why: both secret-tool lookups failing is exactly the keyring-unavailable case.
@@ -154,6 +177,67 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
       reason: 'linux-keyring-unavailable'
     })
     expect(cookiesSetMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves a populated family when its unreadable partition row cannot decrypt', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const sourceDb = createChromiumCookieTestDatabase(sourceCookiesPath, [
+      {
+        domain: '.preserved.example',
+        name: 'undecryptable',
+        value: '',
+        encryptedValue: encryptLinuxChromiumCookie('wrong-key-garbage', 'peanuts', 'v11'),
+        topFrameSiteKey: 'https://top.example'
+      },
+      { domain: 'sub.preserved.example', name: 'readable-sibling', value: 'do-not-write' },
+      { domain: '.replace.test', name: 'plain', value: 'plain-value' }
+    ])
+    sourceDb.exec("UPDATE cookies SET has_cross_site_ancestor = 2 WHERE name = 'undecryptable'")
+    sourceDb.close()
+    createChromiumCookieTestDatabase(
+      join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
+      []
+    ).close()
+    targetJar.push({
+      name: 'live-session',
+      value: 'must-survive',
+      domain: '.preserved.example',
+      path: '/',
+      secure: true,
+      httpOnly: true,
+      sameSite: 'no_restriction'
+    })
+
+    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(clearDataMock).not.toHaveBeenCalled()
+    expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'live-session')
+    expect(targetJar).toEqual([expect.objectContaining({ name: 'live-session' })])
+    expect(writeCookieIdentityMock).toHaveBeenCalledTimes(1)
+    expect(writeCookieIdentityMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'plain', value: 'plain-value' })
+    )
+    expect(writeCookieIdentityMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'readable-sibling' })
+    )
+    expect(result.summary).toMatchObject({
+      totalCookies: 3,
+      importedCookies: 1,
+      skippedCookies: 2,
+      partitionSkippedCookies: 2,
+      warning: {
+        code: 'cookies-undecryptable',
+        failedCookies: 1,
+        reason: 'linux-keyring-unavailable'
+      }
+    })
+    expect(result.summary.totalCookies).toBe(
+      result.summary.importedCookies + result.summary.skippedCookies
+    )
   })
 
   it.each(['v10', 'v99'])(
@@ -213,9 +297,13 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
     // Mutation guard: replacing the keyring-unavailable branch with `return null` must break v10.
     expect(result.summary.importedCookies).toBe(1)
     expect(result.summary.warning).toBeUndefined()
-    expect(cookiesSetMock).toHaveBeenCalledWith(
+    // Why (STA-4300): the write seam moved from cookies.set to the CDP identity store. The
+    // assertion is adapted, not weakened — and it is now strictly stronger, because cookies.set
+    // must not carry imported user data at all (that is the structural guard #14383/STA-4300 add).
+    expect(writeCookieIdentityMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'sid-0', value: 'v10-value' })
     )
+    expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
   it('uses an unknown warning when app-bound and corrupt failures are tied', async () => {

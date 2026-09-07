@@ -70,6 +70,9 @@ vi.mock('../pty/windows-environment-path', () => ({
 vi.mock('./ssh', () => ({
   getActiveMultiplexer: getActiveMultiplexerMock
 }))
+vi.mock('../ssh/ssh-target-registry', () => ({
+  getActiveMultiplexer: getActiveMultiplexerMock
+}))
 
 vi.mock('../bitbucket/client', () => ({
   getBitbucketAuthStatus: getBitbucketAuthStatusMock

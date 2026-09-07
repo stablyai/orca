@@ -22,6 +22,9 @@ export function agentMapState(card: DashboardCard): AgentMapState {
   if (state === 'done-seen') {
     return 'done'
   }
+  if (state === 'monitoring') {
+    return 'working'
+  }
   return state
 }
 

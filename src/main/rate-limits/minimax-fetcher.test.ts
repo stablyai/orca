@@ -83,6 +83,35 @@ describe('fetchMiniMaxRateLimits', () => {
     vi.restoreAllMocks()
   })
 
+  it.each([null, [], 'invalid', 42])(
+    'rejects invalid payload %j as a parse error',
+    async (payload) => {
+      netFetchMock.mockResolvedValueOnce(makeResponse(payload))
+      const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
+      expect(result.usageMetadata?.failureKind).toBe('parse')
+    }
+  )
+
+  it('skips malformed usage entries without losing valid usage', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      makeResponse({
+        model_remains: [
+          null,
+          'invalid',
+          {
+            model_name: 'general',
+            current_interval_remaining_percent: 25,
+            start_time: Date.now(),
+            end_time: Date.now() + 300 * 60_000
+          }
+        ]
+      })
+    )
+    const result = await fetchMiniMaxRateLimits({ cookie: FULL_COOKIE })
+    expect(result.status).toBe('ok')
+    expect(result.session?.usedPercent).toBe(75)
+  })
+
   it('returns unavailable when cookie is empty', async () => {
     const result = await fetchMiniMaxRateLimits({ cookie: '' })
     expect(result.status).toBe('unavailable')

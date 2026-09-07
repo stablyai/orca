@@ -2,6 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
+import { StrictMode, useSyncExternalStore } from 'react'
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -17,12 +18,27 @@ type MobileRelayStoreState = {
 }
 
 const mocks = vi.hoisted(() => ({
-  state: {} as MobileRelayStoreState
+  state: {} as MobileRelayStoreState,
+  listeners: new Set<() => void>()
 }))
 
+// Why subscribable: a mid-mount auth re-read has to reach the rendered tree, which a
+// plain selector-over-a-mutable-object mock silently swallows.
 vi.mock('../../store', () => ({
-  useAppStore: (selector: (state: MobileRelayStoreState) => unknown) => selector(mocks.state)
+  useAppStore: (selector: (state: MobileRelayStoreState) => unknown) =>
+    useSyncExternalStore(
+      (onStoreChange) => {
+        mocks.listeners.add(onStoreChange)
+        return () => mocks.listeners.delete(onStoreChange)
+      },
+      () => selector(mocks.state)
+    )
 }))
+
+function publishStoreState(next: MobileRelayStoreState): void {
+  mocks.state = next
+  mocks.listeners.forEach((listener) => listener())
+}
 
 vi.mock('../../i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -250,5 +266,40 @@ describe('MobilePairingConnectionOptions', () => {
     expect(lan).toHaveAttribute('aria-disabled', 'false')
     await user.click(lan)
     expect(onChange).toHaveBeenCalledWith('local-only')
+  })
+
+  it('re-reads a session revoked since startup and offers Sign in again', async () => {
+    // Regression: the store cached "connected" at startup and the pane only
+    // fetched when it was empty, so a revoked session stayed invisible.
+    const connectedState: MobileRelayStoreState = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      }
+    }
+    mocks.state = connectedState
+    fetchAuthStatus.mockImplementation(async () => {
+      const revoked: OrcaProfileAuthStatus = {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'reconnect-required',
+        persistence: 'encrypted'
+      }
+      publishStoreState({ ...connectedState, orcaProfileAuthStatus: revoked })
+      return revoked
+    })
+
+    // StrictMode double-invokes the effect: a fetch keyed on what it writes would loop.
+    render(
+      <StrictMode>
+        <MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />
+      </StrictMode>
+    )
+
+    expect(await screen.findByRole('button', { name: 'Sign in again for Relay' })).toBeVisible()
+    expect(fetchAuthStatus).toHaveBeenCalledTimes(2)
   })
 })

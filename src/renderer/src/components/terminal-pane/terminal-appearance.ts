@@ -3,7 +3,6 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { normalizeTerminalPadding } from '../../../../shared/terminal-padding-settings'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -22,6 +21,7 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { setTerminalCursorBlinkOption } from '@/lib/pane-manager/pane-cursor-blink-suspension'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
@@ -159,23 +159,6 @@ export function applyTerminalAppearance(
     settings.terminalLigatures,
     settings.terminalFontFamily
   )
-  // FitAddon parses each CSS padding as an integer, so normalize imported half-pixels before styling and fitting.
-  const paddingX = normalizeTerminalPadding(settings.terminalPaddingX ?? 4)
-  const paddingY = normalizeTerminalPadding(settings.terminalPaddingY ?? 4)
-
-  // Why before the pane loop: FitAddon subtracts live .xterm padding, so the
-  // CSS vars must be stamped before safeFit or a padding shrink leaves a stale grid.
-  manager.setPaneStyleOptions({
-    splitBackground: paneBackground,
-    paneBackground,
-    inactivePaneOpacity: paneStyles.inactivePaneOpacity,
-    activePaneOpacity: paneStyles.activePaneOpacity,
-    opacityTransitionMs: paneStyles.opacityTransitionMs,
-    dividerThicknessPx: paneStyles.dividerThicknessPx,
-    focusFollowsMouse: paneStyles.focusFollowsMouse,
-    paddingX,
-    paddingY
-  })
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
@@ -198,7 +181,9 @@ export function applyTerminalAppearance(
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
-    pane.terminal.options.cursorBlink = settings.terminalCursorBlink
+    // Why not a direct write: a suspended (hidden) pane parks the value instead, so a
+    // settings change mid-hide cannot re-arm its blink timer behind the hidden surface.
+    setTerminalCursorBlinkOption(pane.terminal, settings.terminalCursorBlink)
     const paneSize = paneFontSizes.get(pane.id)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,
@@ -245,4 +230,16 @@ export function applyTerminalAppearance(
       safeFit(pane)
     }
   }
+
+  manager.setPaneStyleOptions({
+    splitBackground: paneBackground,
+    paneBackground,
+    inactivePaneOpacity: paneStyles.inactivePaneOpacity,
+    activePaneOpacity: paneStyles.activePaneOpacity,
+    opacityTransitionMs: paneStyles.opacityTransitionMs,
+    dividerThicknessPx: paneStyles.dividerThicknessPx,
+    focusFollowsMouse: paneStyles.focusFollowsMouse,
+    paddingX: settings.terminalPaddingX,
+    paddingY: settings.terminalPaddingY
+  })
 }

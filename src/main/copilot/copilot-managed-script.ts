@@ -1,5 +1,8 @@
 import { getSharedManagedScriptPath } from '../agent-hooks/installer-utils'
-import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
+import {
+  buildPosixHookPayloadCapture,
+  buildPosixHookSpoolLines
+} from '../agent-hooks/hook-stdin-contract'
 
 export function getManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'copilot-hook.ps1' : 'copilot-hook.sh'
@@ -53,12 +56,14 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     "printf '{}\\n'",
     ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookSpoolLines('copilot'),
     // Why: Copilot consumes stdout for some hooks, so stdout is emitted before
     // endpoint refresh, stdin parsing, or the network POST can fail.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    '  spool_hook_event',
     '  exit 0',
     'fi',
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
@@ -75,7 +80,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "hookEventName=${ORCA_COPILOT_HOOK_EVENT}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
   ].join('\n')

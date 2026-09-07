@@ -2,6 +2,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import {
   getAgentAwakeDescription,
+  getAgentAwakeModeLabel,
   getAgentAwakeSearchKeywords,
   getAgentAwakeTitle
 } from './agent-awake-copy'
@@ -12,7 +13,6 @@ import {
   normalizeComputerAwakeMode,
   type ComputerAwakeMode
 } from '../../../../shared/computer-awake-mode'
-import { translate } from '@/i18n/i18n'
 
 type AgentAwakeSettingProps = {
   settings: GlobalSettings
@@ -53,15 +53,15 @@ export function AgentAwakeSetting({
             options={[
               {
                 value: 'on',
-                label: translate('auto.components.settings.AgentAwakeSetting.on', 'On')
+                label: getAgentAwakeModeLabel('on')
               },
               {
                 value: 'auto',
-                label: translate('auto.components.settings.AgentAwakeSetting.auto', 'Agent')
+                label: getAgentAwakeModeLabel('auto')
               },
               {
                 value: 'off',
-                label: translate('auto.components.settings.AgentAwakeSetting.off', 'Off')
+                label: getAgentAwakeModeLabel('off')
               }
             ]}
           />

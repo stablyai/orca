@@ -58,6 +58,7 @@ function emptyPairingQrMessage(args: {
 
 export function MobileHeroPairingStep({
   pairQrDataUrl,
+  pairQrSize = null,
   pairingUrl,
   pairingQrError,
   relayMintFailure,
@@ -82,6 +83,7 @@ export function MobileHeroPairingStep({
   refreshingNetworkInterfaces
 }: {
   pairQrDataUrl: string | null
+  pairQrSize?: number | null
   pairingUrl: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
@@ -105,6 +107,13 @@ export function MobileHeroPairingStep({
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
 }): React.JSX.Element {
+  const pairingLayoutStyle =
+    pairQrSize == null
+      ? undefined
+      : ({
+          '--mp-pairing-qr-image-size': `${pairQrSize}px`,
+          '--mp-pairing-qr-frame-size': `${pairQrSize + 20}px`
+        } as React.CSSProperties)
   const copyPairingCodeRef = useRef<HTMLButtonElement | null>(null)
   const pairingWasReadyRef = useRef(pairingUrl != null && !pairLoading)
   const usingRelay = connectionMode === 'automatic'
@@ -169,7 +178,10 @@ export function MobileHeroPairingStep({
   )
 
   return (
-    <div className={cn('mp-pairing-layout', relayMintFailure != null && 'has-failure')}>
+    <div
+      className={cn('mp-pairing-layout', relayMintFailure != null && 'has-failure')}
+      style={pairingLayoutStyle}
+    >
       <div className="mp-step2-copy mp-pairing-copy">
         <div className="mp-eyebrow-row">
           <div className="mp-step-num">2</div>

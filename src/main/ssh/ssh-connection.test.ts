@@ -1,8 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   clientInstances,
+  createSsh2Module,
   eventHandlers,
   resetSshConnectionMocks,
+  VALID_ED25519_HOST_KEY,
   ssh2Mock
 } from './ssh-connection-test-harness'
 import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
@@ -60,20 +62,30 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
     const firstVerifier = (
-      clientInstances[0].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+      clientInstances[0].lastConnectConfig as {
+        hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined
+      }
     ).hostVerifier
 
     const privateConn = conn as unknown as { attemptConnect: () => Promise<void> }
     await privateConn.attemptConnect()
     const secondVerifier = (
-      clientInstances[1].lastConnectConfig as { hostVerifier?: (key: Buffer) => boolean }
+      clientInstances[1].lastConnectConfig as {
+        hostVerifier?: (key: Buffer, verify: (ok: boolean) => void) => undefined
+      }
     ).hostVerifier
     expect(firstVerifier).toBeTypeOf('function')
     expect(secondVerifier).toBeTypeOf('function')
 
-    secondVerifier?.(Buffer.from('newer-ssh-host-key'))
+    // Real blobs: the verifier now identifies the key before recording a fingerprint, so a
+    // placeholder string would be refused before it could reach the generation check this covers.
+    const newerKey = Buffer.from(
+      'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7',
+      'base64'
+    )
+    secondVerifier?.(newerKey, () => {})
     const currentFingerprint = conn.getHostKeyFingerprint()
-    firstVerifier?.(Buffer.from('obsolete-ssh-host-key'))
+    firstVerifier?.(VALID_ED25519_HOST_KEY, () => {})
 
     expect(conn.getHostKeyFingerprint()).toBe(currentFingerprint)
   })
@@ -94,6 +106,34 @@ describe('SshConnection', () => {
     expect(eventHandlers.has('ready')).toBe(false)
     // The remaining error listener is the steady-state disconnect handler.
     expect(eventHandlers.has('error')).toBe(true)
+  })
+
+  it('scopes lifecycle events and pending handshake timers to one mock client', async () => {
+    vi.useFakeTimers()
+    try {
+      const { Client } = createSsh2Module()
+      const first = new Client()
+      const second = new Client()
+      const firstClose = vi.fn()
+      const secondClose = vi.fn()
+      const firstError = vi.fn()
+      first.on('close', firstClose)
+      first.on('error', firstError)
+      second.on('close', secondClose)
+
+      first.emit('close')
+      expect(firstClose).toHaveBeenCalledOnce()
+      expect(secondClose).not.toHaveBeenCalled()
+
+      ssh2Mock.connectBehavior = 'pending'
+      first.connect({ readyTimeout: 1_000 })
+      await vi.advanceTimersByTimeAsync(0)
+      first.destroy()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(firstError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
@@ -189,7 +229,7 @@ describe('SshConnection', () => {
     )
   })
 
-  it('keeps disconnected state when ssh2 reports a late startup error', async () => {
+  it('keeps the cancellation outcome when ssh2 reports a late startup error', async () => {
     ssh2Mock.connectBehavior = 'error'
     ssh2Mock.connectErrorMessage = 'Connection lost before handshake'
     const callbacks = createCallbacks()
@@ -204,7 +244,7 @@ describe('SshConnection', () => {
     await conn.disconnect()
 
     await expect(connectResult).resolves.toMatchObject({
-      message: 'Connection lost before handshake'
+      message: 'SSH connection attempt was cancelled'
     })
     expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
     expect(callbacks.onStateChange).not.toHaveBeenCalledWith(

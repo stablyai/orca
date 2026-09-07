@@ -285,6 +285,7 @@ describe('openPopupWithOriginBar', () => {
   it('closes the window when the popup content is destroyed, without re-closing the contents', () => {
     const adopted = createFakeWebContents()
     openPopupWithOriginBar({ webContents: adopted as never }, 'https://example.com/')
+    const { bar } = lastViews()
 
     adopted.emit('destroyed')
 
@@ -292,6 +293,7 @@ describe('openPopupWithOriginBar', () => {
     // The window's closed handler must not call close() on already-destroyed
     // contents — that throws in real Electron.
     expect(adopted.close).not.toHaveBeenCalled()
+    expect(bar.webContents.close).toHaveBeenCalledTimes(1)
   })
 
   it('re-asserts the origin when the popup finishes loading', () => {
@@ -326,11 +328,54 @@ describe('openPopupWithOriginBar', () => {
     const adopted = createFakeWebContents()
     const onClosed = vi.fn()
     const popup = openPopupWithOriginBar({ webContents: adopted as never }, 'https://example.com/')
+    const { bar } = lastViews()
     popup.onClosed(onClosed)
 
     popup.close()
 
     expect(adopted.close).toHaveBeenCalledTimes(1)
+    expect(bar.webContents.close).toHaveBeenCalledTimes(1)
     expect(onClosed).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases every origin bar across repeated popup lifecycles', () => {
+    const cycleCount = 25
+    const originBars: FakeWebContents[] = []
+
+    for (let cycle = 0; cycle < cycleCount; cycle += 1) {
+      const popup = openPopupWithOriginBar({}, `https://example.com/${cycle}`)
+      originBars.push(lastViews().bar.webContents)
+      popup.close()
+    }
+
+    expect(originBars.filter((contents) => contents.close.mock.calls.length === 1)).toHaveLength(
+      cycleCount
+    )
+  })
+
+  it('tolerates an origin bar destroyed before its window closes', () => {
+    const adopted = createFakeWebContents()
+    const onClosed = vi.fn()
+    const popup = openPopupWithOriginBar({ webContents: adopted as never }, 'https://example.com/')
+    popup.onClosed(onClosed)
+    const { bar } = lastViews()
+    const barWebContents = bar.webContents
+    barWebContents.emit('destroyed')
+    Object.defineProperty(bar, 'webContents', { get: () => undefined })
+
+    expect(() => popup.close()).not.toThrow()
+    expect(adopted.close).toHaveBeenCalledTimes(1)
+    expect(barWebContents.close).not.toHaveBeenCalled()
+    expect(onClosed).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes both child contents when popup preparation fails', () => {
+    const adopted = createFakeWebContents()
+
+    openPopupWithOriginBar({ webContents: adopted as never }, 'https://example.com/', () => false)
+
+    expect(adopted.close).toHaveBeenCalledTimes(1)
+    expect(lastViews().bar.webContents.close).toHaveBeenCalledTimes(1)
+    expect(lastWindow().close).toHaveBeenCalledTimes(1)
   })
 })

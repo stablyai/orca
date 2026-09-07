@@ -19,10 +19,6 @@ export type MiniMaxCredentialsStatus = {
 }
 
 function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
-  // Why: each store call hits the filesystem (and potentially safeStorage).
-  // Capture both flags once per status snapshot so the three fields in the
-  // response stay in lockstep — a mock with `mockReturnValueOnce` only
-  // survives a single call otherwise.
   const cookieConfigured = hasMiniMaxSessionCookie()
   const apiKeyConfigured = hasMiniMaxApiKey()
   return {
@@ -67,8 +63,6 @@ export function registerMiniMaxCredentialsHandlers(rateLimits: RateLimitService 
     return getMiniMaxCredentialsStatus()
   })
   ipcMain.handle('minimaxCredentials:saveApiKey', (_event, key: string) => {
-    // Why: the API key never crosses the renderer process boundary unencrypted
-    // — it lands in safeStorage on the main side as soon as it arrives.
     if (typeof key !== 'string') {
       throw new Error('MiniMax API key must be a string')
     }

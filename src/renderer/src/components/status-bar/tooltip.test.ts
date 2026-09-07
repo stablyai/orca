@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
 import type * as ReactModule from 'react'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 
@@ -336,7 +337,6 @@ describe('getWindowSections', () => {
       status: 'ok'
     }
     const sections = getWindowSections(p)
-    // Why: time windows surface via formatWindowLabel (`5h` / `wk`); popover uses TitleCase (`Session` / `Weekly`).
     expect(sections).toEqual([
       { label: 'Session', window: p.session },
       { label: 'Weekly', window: p.weekly }
@@ -464,7 +464,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('Fable')
     expect(markup).toContain('Resets in 6d 17h')
@@ -484,7 +484,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     // Why: bars show consumption (% used), matching harness meters (#7551).
     expect(markup).toContain('35%')
@@ -506,7 +506,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('100%')
     expect(markup).toContain('% used')
@@ -526,7 +526,7 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+    const markup = renderToStaticMarkup(createElement(ProviderPanel, { p }))
 
     expect(markup).toContain('100%')
     expect(markup).toContain('width:100%')
@@ -545,7 +545,9 @@ describe('ProviderPanel reset rendering', () => {
       }
     })
 
-    const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+    const markup = renderToStaticMarkup(
+      createElement(ProviderPanel, { p, usagePercentageDisplay: 'remaining' })
+    )
 
     expect(markup).toContain('75% left')
     expect(markup).toContain('width:75%')

@@ -110,6 +110,15 @@ describe('isTransientError', () => {
     expect(isTransientError(new Error('read ECONNRESET'))).toBe(true)
   })
 
+  it('returns true for the bounded SSH authentication watchdog', () => {
+    const timeout = Object.assign(new Error('Timed out while waiting for SSH authentication'), {
+      level: 'client-timeout'
+    })
+
+    expect(isTransientError(timeout)).toBe(true)
+    expect(isTransientError(new Error('Timed out while waiting for SSH authentication'))).toBe(true)
+  })
+
   it('returns false for auth errors', () => {
     expect(isTransientError(new Error('All configured authentication methods failed'))).toBe(false)
   })
@@ -385,6 +394,11 @@ function makeResolved(overrides?: Partial<SshResolvedConfig>): SshResolvedConfig
     proxyUseFdpass: false,
     controlMaster: 'no',
     controlPersist: 'no',
+    userKnownHostsFiles: [],
+    globalKnownHostsFiles: [],
+    strictHostKeyChecking: 'ask',
+    hashKnownHosts: false,
+    updateHostKeys: 'no',
     ...overrides
   }
 }

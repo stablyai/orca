@@ -15,6 +15,7 @@ import {
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
+import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -56,6 +57,7 @@ import {
   resolveAiVaultSessionTitlesByHost,
   type RuntimeAiVaultSessionTitleResolver
 } from './ai-vault-session-title-routing'
+import { projectStructuredAiVaultSessions } from '../ai-vault/structured-session-ownership'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 // Why: a remote home with many agent roots routinely needs seconds to walk,
@@ -237,10 +239,14 @@ async function scanLocalAiVaultSessionsAsIssue(
     if (isAiVaultScanCancelledError(error)) {
       throw error
     }
+    // Raw supervision text ("restart circuit is open") means nothing to a user,
+    // so the row carries actionable copy and the log keeps the original.
+    const raw = error instanceof Error ? error.message : 'Local session scan failed.'
+    console.error('[ai-vault] local session scan failed:', raw)
     return aiVaultScanIssueResult({
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       path: 'this computer',
-      message: error instanceof Error ? error.message : 'Local session scan failed.'
+      message: describeAiVaultScanError(raw)
     })
   }
 }
@@ -277,7 +283,9 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
         : undefined
     const controller = listCancellations.begin(event, requestToken)
     try {
-      return await listAiVaultSessions(args, { signal: controller?.signal })
+      await handlerOptions.ensureStructuredSessionOwnership?.()
+      const result = await listAiVaultSessions(args, { signal: controller?.signal })
+      return projectStructuredAiVaultSessions(result, true)
     } catch (error) {
       // Why: superseding a scan is normal control flow, but Electron logs every
       // rejected handler — report it as a result so the log stays truthful.
@@ -312,8 +320,7 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     handleAiVaultGetFirstUserPrompt(args)
   )
   registerAiVaultDeleteHandler(aiVaultDeleteDeps)
-  // DOM focus/visibility events don't fire in the renderer on macOS app
-  // activation, so refresh-on-refocus needs this main-process signal.
+  // macOS app activation skips DOM focus events, so emit the refresh signal here.
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {
       window.webContents.send('aiVault:windowFocused')

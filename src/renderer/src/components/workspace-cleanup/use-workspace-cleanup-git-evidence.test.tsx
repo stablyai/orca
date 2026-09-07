@@ -85,7 +85,7 @@ describe('useWorkspaceCleanupGitEvidence', () => {
     })
     await waitFor(() => expect(holders.scan).toHaveBeenCalledTimes(2))
     expect(view.result.current.pendingWorktreeIds.size).toBe(6)
-    expect(view.result.current.evidenceByWorktreeId.size).toBe(0)
+    expect(view.result.current.evidenceByIdentity.size).toBe(0)
 
     await act(async () => {
       pending[1]?.onProgress?.({
@@ -98,7 +98,7 @@ describe('useWorkspaceCleanupGitEvidence', () => {
         candidateMode: 'append'
       })
     })
-    await waitFor(() => expect(view.result.current.evidenceByWorktreeId.size).toBe(1))
+    await waitFor(() => expect(view.result.current.evidenceByIdentity.size).toBe(1))
     expect(view.result.current.pendingWorktreeIds.size).toBe(5)
   })
 
@@ -177,7 +177,7 @@ describe('useWorkspaceCleanupGitEvidence', () => {
       })
     })
     await waitFor(() => expect(holders.scan).toHaveBeenCalledTimes(2))
-    expect(view.result.current.evidenceByWorktreeId.size).toBe(0)
+    expect(view.result.current.evidenceByIdentity.size).toBe(0)
     expect(view.result.current.pendingWorktreeIds).toEqual(new Set(['a']))
 
     await act(async () => {
@@ -187,6 +187,6 @@ describe('useWorkspaceCleanupGitEvidence', () => {
         errors: []
       })
     })
-    await waitFor(() => expect(view.result.current.evidenceByWorktreeId.size).toBe(1))
+    await waitFor(() => expect(view.result.current.evidenceByIdentity.size).toBe(1))
   })
 })

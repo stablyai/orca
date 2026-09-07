@@ -1177,10 +1177,29 @@ private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
     return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
 }
 
+private enum AXElementProbe {
+    case value(AXUIElement)
+    case absent
+    case unavailable
+}
+
+private func copyElementProbe(_ element: AXUIElement, _ attribute: String) -> AXElementProbe {
+    var value: CFTypeRef?
+    switch AXUIElementCopyAttributeValue(element, attribute as CFString, &value) {
+    case .success:
+        guard let value else { return .unavailable }
+        return .value(value as! AXUIElement)
+    case .noValue:
+        return .absent
+    default:
+        return .unavailable
+    }
+}
+
 private func currentSyntheticClickRecipient(
     snapshot: Snapshot,
     point: CGPoint
-) -> SyntheticMouseClickDelivery.Recipient? {
+) -> SyntheticMouseClickDelivery.RecipientObservation {
     let target = syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId)
     var cachedTargetCandidates: [WindowCandidate]?
     func targetCandidates() -> [WindowCandidate] {
@@ -1189,39 +1208,60 @@ private func currentSyntheticClickRecipient(
         cachedTargetCandidates = candidates
         return candidates
     }
-    if let focused = focusedSyntheticClickRecipient(
+    switch focusedSyntheticClickRecipient(
         targetPID: snapshot.app.pid,
         targetCandidates: targetCandidates
     ) {
-        guard focused == target else { return focused }
-    } else {
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.app.pid else {
-            return nil
+    case let .focused(focused):
+        guard focused == target else { return .focused(focused) }
+        switch hitTestSyntheticClickRecipient(
+            at: point,
+            targetPID: snapshot.app.pid,
+            targetCandidates: targetCandidates
+        ) {
+        case let .focused(recipient):
+            return .focused(recipient)
+        case .dismissed, .unavailable:
+            return .unavailable
         }
+    case .dismissed:
+        return .dismissed
+    case .unavailable:
+        return .unavailable
     }
-    return hitTestSyntheticClickRecipient(
-        at: point,
-        targetPID: snapshot.app.pid,
-        targetCandidates: targetCandidates
-    )
 }
 
 private func focusedSyntheticClickRecipient(
     targetPID: pid_t,
     targetCandidates: () -> [WindowCandidate]
-) -> SyntheticMouseClickDelivery.Recipient? {
+) -> SyntheticMouseClickDelivery.RecipientObservation {
     let systemWide = AXUIElementCreateSystemWide()
-    guard let focusedApp = copyElement(systemWide, kAXFocusedApplicationAttribute as String),
-          let ownerPID = pidAttribute(focusedApp),
-          let focusedWindow = copyElement(systemWide, kAXFocusedWindowAttribute as String) ??
-            copyElement(focusedApp, kAXFocusedWindowAttribute as String)
-    else {
-        return nil
+    let focusedApp: AXUIElement
+    switch copyElementProbe(systemWide, kAXFocusedApplicationAttribute as String) {
+    case let .value(value):
+        focusedApp = value
+    case .absent:
+        return .dismissed
+    case .unavailable:
+        return .unavailable
     }
+    guard let ownerPID = pidAttribute(focusedApp) else { return .unavailable }
+
+    let focusedWindow: AXUIElement
+    switch copyElementProbe(focusedApp, kAXFocusedWindowAttribute as String) {
+    case let .value(value):
+        focusedWindow = value
+    case .absent:
+        guard ownerPID == targetPID else { return .unavailable }
+        return .dismissed
+    case .unavailable:
+        return .unavailable
+    }
+
     if let windowId = windowNumber(focusedWindow) {
-        return syntheticClickRecipient(pid: ownerPID, windowId: windowId)
+        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowId))
     }
-    guard ownerPID == targetPID else { return nil }
+    guard ownerPID == targetPID else { return .unavailable }
     guard let frame = absoluteFrame(focusedWindow),
           let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
             from: targetCandidates(),
@@ -1229,35 +1269,38 @@ private func focusedSyntheticClickRecipient(
               windowFramesMatch($0.bounds, frame)
             }
           )
-    else {
-        return nil
-    }
-    return syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId)
+    else { return .unavailable }
+    return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
 }
 
 private func hitTestSyntheticClickRecipient(
     at point: CGPoint,
     targetPID: pid_t,
     targetCandidates: () -> [WindowCandidate]
-) -> SyntheticMouseClickDelivery.Recipient? {
+) -> SyntheticMouseClickDelivery.RecipientObservation {
     let systemWide = AXUIElementCreateSystemWide()
     var hitElement: AXUIElement?
-    guard AXUIElementCopyElementAtPosition(
+    switch AXUIElementCopyElementAtPosition(
         systemWide,
         Float(point.x),
         Float(point.y),
         &hitElement
-    ) == .success,
-          let hitElement,
+    ) {
+    case .success:
+        break
+    case .noValue:
+        return .dismissed
+    default:
+        return .unavailable
+    }
+    guard let hitElement,
           let ownerPID = pidAttribute(hitElement),
           let window = containingWindow(hitElement)
-    else {
-        return nil
-    }
+    else { return .unavailable }
     if let windowId = windowNumber(window) {
-        return syntheticClickRecipient(pid: ownerPID, windowId: windowId)
+        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowId))
     }
-    guard ownerPID == targetPID else { return nil }
+    guard ownerPID == targetPID else { return .unavailable }
     guard let frame = absoluteFrame(window),
           let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
             from: targetCandidates(),
@@ -1265,10 +1308,8 @@ private func hitTestSyntheticClickRecipient(
               windowFramesMatch($0.bounds, frame)
             }
           )
-    else {
-        return nil
-    }
-    return syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId)
+    else { return .unavailable }
+    return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
 }
 
 private func containingWindow(_ element: AXUIElement) -> AXUIElement? {
@@ -2534,7 +2575,7 @@ private enum Input {
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
-                currentRecipient: {
+                currentObservation: {
                     currentSyntheticClickRecipient(snapshot: targetWindow, point: point)
                 },
                 makeEvent: { step in

@@ -1,12 +1,11 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
+import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
-import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
-import { computeVisibleWorktreeIds } from '../../visible-worktrees'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { computeVisibleWorktrees } from '../../visible-worktrees'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -28,13 +27,13 @@ export function useVisibleSidebarWorktrees(args: {
   sortBy: SortBy
   sortedIds: string[]
   repoMap: Map<string, Repo>
-  worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
-  settings: AppState['settings']
+  /** Pre-derived focused host; the whole `settings` object would re-key this
+   *  423-workspace scan on every unrelated settings write. */
+  defaultHostId: ExecutionHostId
   agentSendTargetWorktreeId: string | null
 }) {
-  const { filterState, sortBy, sortedIds, repoMap, worktreeMap, worktreeLineageById, settings } =
-    args
+  const { filterState, sortBy, sortedIds, repoMap, worktreeLineageById, defaultHostId } = args
   const {
     showSleepingWorkspaces,
     filterRepoIds,
@@ -49,6 +48,9 @@ export function useVisibleSidebarWorktrees(args: {
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
+  // sleeping-workspaces list cannot evict the sample the live lists share.
+  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedDeviceIdsByEnvironment = useMemo(
@@ -70,8 +72,10 @@ export function useVisibleSidebarWorktrees(args: {
   )
 
   const recomputedVisibleWorktrees = useMemo(() => {
+    // Keyed on the epoch, not `agentStatusNow`: two bumps in one millisecond
+    // share a sample, so the timestamp alone would not re-key this memo.
     void agentStatusEpoch
-    const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
+    return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
       tabsByWorktree,
@@ -83,7 +87,7 @@ export function useVisibleSidebarWorktrees(args: {
         : getWorktreeIdsWithLiveAgent(
             useAppStore.getState().agentStatusByPaneKey,
             tabsByWorktree,
-            Date.now()
+            agentStatusNow
           ),
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
@@ -95,16 +99,16 @@ export function useVisibleSidebarWorktrees(args: {
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
-      defaultHostId: getSettingsFocusedExecutionHostId(settings),
+      defaultHostId,
       worktreeLineageById,
       forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
         ? [args.agentSendTargetWorktreeId]
         : undefined
     })
-    return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     args.agentSendTargetWorktreeId,
     agentStatusEpoch,
+    agentStatusNow,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
@@ -115,13 +119,12 @@ export function useVisibleSidebarWorktrees(args: {
     alwaysShowDefaultBranchWorkspace,
     workspaceHostScope,
     visibleWorkspaceHostIds,
-    settings,
+    defaultHostId,
     repoMap,
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,
     sortedIds,
-    worktreeMap,
     worktreeLineageById,
     worktreesByRepo,
     pairedDeviceIdsByEnvironment

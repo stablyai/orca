@@ -39,21 +39,20 @@ function gitLabLinksEqual(left: GitLabIssueOrMRLink, right: GitLabIssueOrMRLink)
   )
 }
 
-/** Tri-state like `repoMatchesGitHubSlug`: `'unknown'` stays permissive for forks and host aliases. */
+/** Tri-state: `'unknown'` (no identity, or an unexpanded SSH host alias) stays permissive. */
 function repoMatchesGitLabSlug(repo: Repo | undefined, slug: ProjectSlug): boolean | 'unknown' {
-  const identity = repo?.gitRemoteIdentity
-  const identityParts = splitGitRemoteKey(identity?.canonicalKey, foldComparableGitLabHost)
+  const identityParts = splitGitRemoteKey(
+    repo?.gitRemoteIdentity?.canonicalKey,
+    foldComparableGitLabHost
+  )
   if (!identityParts) {
     return 'unknown'
   }
-  const verdict = matchGitRemoteKeyParts(identityParts, gitLabProjectKeyParts(slug))
-  if (verdict !== false) {
-    return verdict
-  }
-  // Why not false: identity keeps one remote, chosen when the repo was added and never re-probed.
-  // An `upstream` pick means a fork's `origin` existed and is invisible here, so rejecting would
-  // drop MR URLs from the fork itself. A stale snapshot can still misjudge a renamed project.
-  return identity?.remoteName === 'upstream' ? 'unknown' : false
+  // Why trust a project-path mismatch whichever remote it came from: a resolved identity is
+  // re-probed once a repo/project list sweep finds it past its ~6h TTL, so it is not frozen at the
+  // moment the repo was added. Accepted cost: only one remote is stored, so a fork whose `upstream`
+  // outranks its own `origin` loses bare-iid matches for MR URLs on the fork.
+  return matchGitRemoteKeyParts(identityParts, gitLabProjectKeyParts(slug))
 }
 
 export function worktreeMatchesGitLabUrl(

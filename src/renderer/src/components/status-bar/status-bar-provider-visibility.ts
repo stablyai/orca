@@ -16,9 +16,6 @@ export type UsageProviderSettings = Pick<
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
-  // Why: CN endpoint users can configure the MiniMax provider with an API
-  // key only (no cookie). This flag is the parallel durable signal so the
-  // status bar keeps the MiniMax chip visible across reloads.
   minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
 }
@@ -112,11 +109,7 @@ export function hasUsageProviderSettingsForProvider(
     return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
   }
   if (providerId === 'minimax') {
-    // Why: either credential is enough — overseas uses cookies, CN can use
-    // cookies OR an API key. OR keeps the status bar visible across both.
-    return (
-      settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
-    )
+    return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true

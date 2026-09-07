@@ -6,6 +6,7 @@ import { requestLazyChunkRecoveryReload } from './lazy-chunk-recovery-reload'
 describe('requestLazyChunkRecoveryReload', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('refuses the reload when the staged checkpoint never reaches disk', async () => {
@@ -34,6 +35,34 @@ describe('requestLazyChunkRecoveryReload', () => {
       })
     ).resolves.toBe('unload-vetoed')
 
+    expect(order).toEqual(['flushed', 'reload'])
+  })
+
+  it('joins the preload checkpoint before navigating when no override is supplied', async () => {
+    const order: string[] = []
+    let flush: () => void = () => undefined
+    const awaitBeforeUnloadCheckpoint = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          flush = () => {
+            order.push('flushed')
+            resolve()
+          }
+        })
+    )
+    vi.stubGlobal('api', { app: { awaitBeforeUnloadCheckpoint } })
+    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {
+      order.push('reload')
+      window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
+    })
+
+    const outcome = requestLazyChunkRecoveryReload(window)
+    await vi.waitFor(() => expect(awaitBeforeUnloadCheckpoint).toHaveBeenCalledTimes(1))
+    expect(reload).not.toHaveBeenCalled()
+
+    flush()
+
+    await expect(outcome).resolves.toBe('unload-vetoed')
     expect(order).toEqual(['flushed', 'reload'])
   })
 })

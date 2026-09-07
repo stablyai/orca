@@ -1,12 +1,13 @@
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import {
-  canSelectWorkspaceCleanupCandidate,
+  canQueueWorkspaceCleanupCandidate,
+  WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS,
   type WorkspaceCleanupBlocker,
-  type WorkspaceCleanupCandidate,
-  type WorkspaceCleanupTier
+  type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup'
 import { getWorkspaceCleanupGitState } from './workspace-cleanup-filter-sort'
 import type {
@@ -21,6 +22,7 @@ import {
   getWorkspaceCleanupHostIdentity,
   type WorkspaceCleanupWorktreeFacts
 } from './workspace-cleanup-host-identity'
+import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupFacetSources = {
@@ -31,19 +33,21 @@ export type WorkspaceCleanupFacetSources = {
   lastVisitedAtByWorktreeId?: Readonly<Record<string, number>>
   liveAgentStatusByWorktreeId?: ReadonlyMap<string, LiveAgentWorktreeStatus>
   reviewInfoByWorktreeId?: ReadonlyMap<string, WorkspaceCleanupReviewInfo>
-  dismissedWorktreeIds?: ReadonlySet<string>
+  /** Host-qualified identities, matching how dismissals are stored (STA-4343). */
+  dismissedIdentities?: ReadonlySet<string>
 }
 
 export type WorkspaceCleanupFacets = {
   candidate: WorkspaceCleanupCandidate
   worktreeId: string
+  /** Host-qualified row key; `worktreeId` alone repeats across hosts (STA-4343). */
+  identity: string
   repoId: string
   repoName: string
   displayName: string
   path: string
   branch: string
   hostId: ExecutionHostId
-  tier: WorkspaceCleanupTier
   blockers: readonly WorkspaceCleanupBlocker[]
   blockerCount: number
   isDismissed: boolean
@@ -107,22 +111,30 @@ export function buildWorkspaceCleanupFacets(
   const facets: Omit<WorkspaceCleanupFacets, 'searchText'> = {
     candidate,
     worktreeId: candidate.worktreeId,
+    identity: hostIdentity,
     repoId: candidate.repoId,
     repoName: candidate.repoName,
     displayName: candidate.displayName,
     path: candidate.path,
     branch,
     hostId: worktree?.hostId ?? getWorkspaceCleanupCandidateHostId(candidate),
-    tier: candidate.tier,
     blockers: candidate.blockers,
     blockerCount: candidate.blockers.length,
     isDismissed:
-      (sources.dismissedWorktreeIds?.has(candidate.worktreeId) ?? false) ||
+      (sources.dismissedIdentities?.has(getWorkspaceCleanupCandidateIdentity(candidate)) ??
+        false) ||
       candidate.blockers.includes('dismissed'),
-    isSelectable: canSelectWorkspaceCleanupCandidate(candidate),
+    isSelectable:
+      canQueueWorkspaceCleanupCandidate(candidate) &&
+      !candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS.has(blocker)),
     lastActivityAt: candidate.lastActivityAt,
     createdAt: toFiniteOrNull(worktree?.createdAt ?? candidate.createdAt),
-    lastVisitedAt: toFiniteOrNull(sources.lastVisitedAtByWorktreeId?.[candidate.worktreeId]),
+    lastVisitedAt: toFiniteOrNull(
+      getWorktreeVisitTimestamp(sources.lastVisitedAtByWorktreeId, {
+        id: candidate.worktreeId,
+        hostId: worktree?.hostId ?? getWorkspaceCleanupCandidateHostId(candidate)
+      })
+    ),
     sizeBytes: toFiniteOrNull(
       sources.sizeBytesByWorktreeId?.get(hostIdentity) ??
         sources.sizeBytesByWorktreeId?.get(candidate.worktreeId)
@@ -133,7 +145,9 @@ export function buildWorkspaceCleanupFacets(
     isPinned: worktree?.isPinned ?? candidate.blockers.includes('pinned'),
     isUnread: worktree?.isUnread ?? false,
     hasComment,
-    agentState: sources.liveAgentStatusByWorktreeId?.get(candidate.worktreeId) ?? 'idle',
+    agentState: toWorkspaceCleanupAgentState(
+      sources.liveAgentStatusByWorktreeId?.get(candidate.worktreeId)
+    ),
     retainedDoneAgentCount: candidate.localContext.retainedDoneAgentCount,
     gitState: getWorkspaceCleanupGitState(candidate),
     upstreamAhead: toFiniteOrNull(candidate.git.upstreamAhead),
@@ -160,6 +174,17 @@ export function buildWorkspaceCleanupFacetList(
 
 export function countWorkspaceCleanupMeasuredRows(rows: readonly WorkspaceCleanupFacets[]): number {
   return rows.reduce((count, row) => count + (row.sizeBytes === null ? 0 : 1), 0)
+}
+
+// Why: monitoring is still registered background work, so it filters as active — offering
+// such a workspace as idle would invite cleaning up a running dev server (#10997).
+function toWorkspaceCleanupAgentState(
+  status: LiveAgentWorktreeStatus | undefined
+): WorkspaceCleanupAgentState {
+  if (status === undefined) {
+    return 'idle'
+  }
+  return status === 'monitoring' ? 'working' : status
 }
 
 function getLocalContextCount(candidate: WorkspaceCleanupCandidate): number {
@@ -205,7 +230,6 @@ function buildSearchText(facets: Omit<WorkspaceCleanupFacets, 'searchText'>): st
     facets.review.title,
     facets.review.provider,
     facets.gitState,
-    facets.tier,
     ...facets.ticketSources,
     ...facets.blockers
   ]

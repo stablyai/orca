@@ -1,5 +1,11 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
+import {
+  addSelectableSkillResults,
+  eligibleSkillSelectionCount,
+  retainedSkillSelection,
+  type SkillSelectionPolicy
+} from './skill-selection'
 
 export function isSkillShareEligible(skill: DiscoveredSkill, local: boolean): boolean {
   return local && skill.installed && (skill.sourceKind === 'home' || skill.sourceKind === 'repo')
@@ -49,19 +55,25 @@ export function selectedShareSkillNameKeys(
   )
 }
 
-/** How many rows "Select all" would end up holding — duplicate names collapse to
- *  one, so the count has to dedup the same way the selection itself does. */
+const SHARE_SELECTION_POLICY_LOCAL: SkillSelectionPolicy = {
+  isEligible: (skill) => isSkillShareEligible(skill, true),
+  collisionKey: shareSkillNameKey
+}
+
+const SHARE_SELECTION_POLICY_REMOTE: SkillSelectionPolicy = {
+  isEligible: () => false,
+  collisionKey: shareSkillNameKey
+}
+
+function sharePolicy(local: boolean): SkillSelectionPolicy {
+  return local ? SHARE_SELECTION_POLICY_LOCAL : SHARE_SELECTION_POLICY_REMOTE
+}
+
 export function eligibleShareSkillCount(
   results: readonly DiscoveredSkill[],
   local: boolean
 ): number {
-  const names = new Set<string>()
-  for (const skill of results) {
-    if (isSkillShareEligible(skill, local)) {
-      names.add(shareSkillNameKey(skill))
-    }
-  }
-  return names.size
+  return eligibleSkillSelectionCount(results, sharePolicy(local))
 }
 
 export function addShareableSkillResults(
@@ -70,17 +82,7 @@ export function addShareableSkillResults(
   results: readonly DiscoveredSkill[],
   local: boolean
 ): Set<string> {
-  const next = new Set(current)
-  const selectedNames = selectedShareSkillNameKeys(skills, current)
-  for (const skill of results) {
-    const name = shareSkillNameKey(skill)
-    if (!isSkillShareEligible(skill, local) || selectedNames.has(name)) {
-      continue
-    }
-    next.add(skill.id)
-    selectedNames.add(name)
-  }
-  return next
+  return addSelectableSkillResults(current, skills, results, sharePolicy(local))
 }
 
 export function retainedShareableSkillSelection(
@@ -88,26 +90,17 @@ export function retainedShareableSkillSelection(
   skills: readonly DiscoveredSkill[],
   local: boolean
 ): Set<string> {
-  const next = new Set<string>()
-  const names = new Set<string>()
-  for (const skill of skills) {
-    const name = shareSkillNameKey(skill)
-    if (!current.has(skill.id) || !isSkillShareEligible(skill, local) || names.has(name)) {
-      continue
-    }
-    next.add(skill.id)
-    names.add(name)
-  }
-  return next.size === current.size ? current : next
+  return retainedSkillSelection(current, skills, sharePolicy(local))
 }
 
 export function updatedSkillSelection(
   current: ReadonlySet<string>,
   skillId: string,
-  selected: boolean
+  selected: boolean,
+  maxSelection?: number
 ): Set<string> {
   const next = new Set(current)
-  if (selected) {
+  if (selected && (maxSelection === undefined || next.size < maxSelection)) {
     next.add(skillId)
   } else {
     next.delete(skillId)

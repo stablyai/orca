@@ -13,6 +13,13 @@ vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harnes
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+  const harness = await import('./createMainWindow-test-harness')
+  return {
+    attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
+    retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
+  }
+})
 
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
@@ -22,8 +29,10 @@ import {
   resolveExpectedTeardownScope
 } from '../crash-reporting/expected-teardown-state'
 import {
+  attachClientPageRendererMock,
   browserWindowMock,
   resetMainWindowMocks,
+  retireClientPageRendererMock,
   withPlatform
 } from './createMainWindow-test-harness'
 
@@ -65,8 +74,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -82,9 +91,13 @@ describe('createMainWindow', () => {
     expect(() => windowHandlers.closed?.()).not.toThrow()
   })
 
-  it('resets the markdown editor focus flag on renderer crash, navigation, and destroy', () => {
+  it('retires renderer generations and resets focus on crash, navigation, and destroy', async () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+      isDestroyed: vi.fn(() => false),
+      isLoadingMainFrame: vi.fn(() => false),
+      mainFrame: {},
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -107,14 +120,16 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
 
     createMainWindow(null)
+    windowHandlers['did-finish-load']?.()
+    expect(attachClientPageRendererMock).toHaveBeenCalledWith(webContents)
 
     const setFocusedListener = vi
       .mocked(ipcMain.on)
@@ -139,19 +154,44 @@ describe('createMainWindow', () => {
       expect(webContents.send).toHaveBeenCalledWith('ui:toggleLeftSidebar')
     }
 
-    // render-process-gone
+    retireClientPageRendererMock.mockClear()
     setFocusedListener?.({ sender: webContents } as never, true)
     windowHandlers['render-process-gone']?.()
+    expect(retireClientPageRendererMock).toHaveBeenCalledWith(webContents)
     assertInterceptsAfterReset()
+    windowHandlers['did-finish-load']?.()
 
-    // did-start-navigation (main frame)
+    retireClientPageRendererMock.mockClear()
     setFocusedListener?.({ sender: webContents } as never, true)
     windowHandlers['did-start-navigation']?.({} as never, 'https://example.com/', false, true)
+    expect(retireClientPageRendererMock).not.toHaveBeenCalled()
+
+    windowHandlers['did-start-navigation']?.(
+      {} as never,
+      'file:///opt/orca/renderer/index.html?reload=1',
+      false,
+      true
+    )
+    expect(retireClientPageRendererMock).toHaveBeenCalledWith(webContents)
     assertInterceptsAfterReset()
 
-    // did-start-navigation (sub-frame) should NOT reset the flag
+    attachClientPageRendererMock.mockClear()
+    windowHandlers['did-fail-provisional-load']?.(
+      {} as never,
+      -3,
+      'aborted',
+      'file:///opt/orca/renderer/index.html?reload=1',
+      true
+    )
+    await Promise.resolve()
+    expect(attachClientPageRendererMock).toHaveBeenCalledWith(webContents)
+
+    retireClientPageRendererMock.mockClear()
     setFocusedListener?.({ sender: webContents } as never, true)
+    windowHandlers['did-start-navigation']?.({} as never, '#same-document', true, true)
+    expect(retireClientPageRendererMock).not.toHaveBeenCalled()
     windowHandlers['did-start-navigation']?.({} as never, 'https://example.com/', false, false)
+    expect(retireClientPageRendererMock).not.toHaveBeenCalled()
     webContents.send.mockClear()
     const subframePreventDefault = vi.fn()
     windowHandlers['before-input-event'](
@@ -161,9 +201,10 @@ describe('createMainWindow', () => {
     expect(subframePreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:toggleLeftSidebar')
 
-    // destroyed
+    retireClientPageRendererMock.mockClear()
     setFocusedListener?.({ sender: webContents } as never, true)
     windowHandlers['destroyed']?.()
+    expect(retireClientPageRendererMock).toHaveBeenCalledWith(webContents)
     assertInterceptsAfterReset()
   })
 
@@ -190,8 +231,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -231,8 +272,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
@@ -281,8 +322,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     browserWindowMock.mockImplementation(function () {
@@ -312,6 +353,8 @@ describe('createMainWindow', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       id: 143,
+      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
+      isDestroyed: vi.fn(() => false),
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -333,8 +376,8 @@ describe('createMainWindow', () => {
       setSize: vi.fn(),
       maximize: vi.fn(),
       show: vi.fn(),
-      loadFile: vi.fn(),
-      loadURL: vi.fn()
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
     }
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
@@ -374,10 +417,12 @@ describe('createMainWindow', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
     const onBeforeRecoveryReload = vi.fn()
+    const onRendererRecoveryExhausted = vi.fn()
 
     withPlatform('win32', () => {
       createMainWindow(null, {
         onBeforeRecoveryReload,
+        onRendererRecoveryExhausted,
         shouldRecoverRenderer: (details) =>
           shouldRecoverRendererAfterProcessGone({
             reason: details.reason,
@@ -395,10 +440,14 @@ describe('createMainWindow', () => {
       {} as never,
       { reason: 'killed', exitCode: 1 } as Electron.RenderProcessGoneDetails
     )
-    vi.runAllTimers()
+    vi.advanceTimersByTime(250)
 
-    expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143)
+    expect(onBeforeRecoveryReload).toHaveBeenCalledWith(143, 'automatic')
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+    // Why the watchdog must stay quiet here: this reload is deliberate during logoff, and a process that
+    // outlives the session-end signal must not put a native modal on screen mid-teardown.
+    vi.runAllTimers()
+    expect(onRendererRecoveryExhausted).not.toHaveBeenCalled()
     consoleError.mockRestore()
   })
 
@@ -548,6 +597,40 @@ describe('createMainWindow', () => {
     expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
       expect.objectContaining({ recentRecoveryCount: 3 })
     )
+
+    consoleError.mockRestore()
+  })
+
+  it('serves a manual retry while the breaker stays open for the next crash', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    createMainWindow(null, { onRendererRecoveryExhausted })
+
+    const details = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
+    const driveCrashCycle = (): void => {
+      windowHandlers['render-process-gone']?.({} as never, details)
+      vi.advanceTimersByTime(250)
+    }
+    driveCrashCycle()
+    driveCrashCycle()
+    driveCrashCycle()
+    driveCrashCycle()
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
+    // 1 initial load + 3 recoveries; the 4th crash was refused.
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+
+    // The recovery prompt's Reload button takes the watched retry, which the breaker never gates.
+    onRendererRecoveryExhausted.mock.calls[0]?.[0].retry()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
+
+    // Still-poisoned machine: the next crash re-raises the prompt immediately instead of re-arming auto-reloads.
+    driveCrashCycle()
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
+    expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
 
     consoleError.mockRestore()
   })

@@ -124,6 +124,33 @@ describe('RateLimitService', () => {
     expect(state.minimax?.session?.usedPercent).toBe(10)
   })
 
+  it('clears the old quota when replacing a non-empty API key and the refresh fails', async () => {
+    const service = new RateLimitService()
+    let apiKey = 'sk-account-a'
+    service.setMiniMaxConfigResolver(() => ({
+      sessionCookie: '',
+      groupId: '',
+      models: 'general',
+      endpoint: 'cn',
+      apiKey
+    }))
+    vi.mocked(fetchMiniMaxRateLimits)
+      .mockResolvedValueOnce(okProvider('minimax', 40, Date.now()))
+      .mockRejectedValueOnce(new Error('MiniMax unavailable'))
+
+    await service.refresh()
+    expect(service.getState().minimax?.session?.usedPercent).toBe(40)
+
+    apiKey = 'sk-account-b'
+    await service.refresh()
+
+    expect(service.getState().minimax?.status).toBe('error')
+    expect(service.getState().minimax?.session).toBeNull()
+    expect(fetchMiniMaxRateLimits).toHaveBeenLastCalledWith(
+      expect.objectContaining({ apiKey: 'sk-account-b' })
+    )
+  })
+
   it('does not apply an in-flight MiniMax result after credential invalidation', async () => {
     const service = new RateLimitService()
     const firstMiniMax = deferred<ProviderRateLimits>()

@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import {
   checkRgAvailableMock,
   getLocalGitOptionsForRegisteredWorktreeMock,
+  getSshFilesystemProviderMock,
   resolveAuthorizedPathMock,
   searchWithGitGrepMock,
   wslAwareSpawnMock
@@ -68,6 +69,26 @@ async function flushRuntimeSearchMicrotasks(): Promise<void> {
 describe('RuntimeFileCommands', () => {
   useRuntimeFileCommandsLifecycle()
 
+  it('keeps byte-budgeted legacy listings count-bounded across an SSH hop', async () => {
+    const listFiles = vi.fn().mockResolvedValue(['src/index.ts'])
+    getSshFilesystemProviderMock.mockReturnValue({ listFiles })
+    const { commands } = createRuntimeFileCommands({
+      resolveRuntimeFileTarget: vi.fn(async () => ({
+        worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+        executionHostId: 'ssh:ssh-1'
+      }))
+    })
+
+    await expect(commands.listRuntimeFiles('id:wt-1', { maxContentBytes: 1024 })).resolves.toEqual([
+      'src/index.ts'
+    ])
+    expect(listFiles).toHaveBeenCalledWith('/repo', {
+      excludePaths: undefined,
+      maxResults: 20_001,
+      signal: undefined
+    })
+  })
+
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: {
@@ -75,7 +96,7 @@ describe('RuntimeFileCommands', () => {
         repoId: 'repo-1',
         path: '/repo'
       },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
@@ -107,7 +128,7 @@ describe('RuntimeFileCommands', () => {
     async (order) => {
       const resolveRuntimeFileTarget = vi.fn(async () => ({
         worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-        connectionId: null
+        executionHostId: 'local'
       }))
       const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
       const child = createRuntimeSearchChild()
@@ -142,7 +163,7 @@ describe('RuntimeFileCommands', () => {
   it("falls back when a runtime native launcher exits outside ripgrep's contract", async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
@@ -170,7 +191,7 @@ describe('RuntimeFileCommands', () => {
         repoId: 'repo-1',
         path: 'C:\\repo'
       },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands, store } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
@@ -210,7 +231,7 @@ describe('RuntimeFileCommands', () => {
   it('keeps the runtime WSL preflight and falls back before starting real rg', async () => {
     const resolveRuntimeFileTarget = vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo' },
-      connectionId: null
+      executionHostId: 'local'
     }))
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const fallback = { files: [], totalMatches: 0, truncated: false }
@@ -224,5 +245,31 @@ describe('RuntimeFileCommands', () => {
     ).resolves.toBe(fallback)
     expect(checkRgAvailableMock).toHaveBeenCalledWith('C:\\repo', 'Ubuntu')
     expect(wslAwareSpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps legacy SSH Quick Open replies within the frame-sized result bound', async () => {
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+      executionHostId: 'ssh:ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
+    const listFiles = vi.fn(async () => ['src/target.ts'])
+    getSshFilesystemProviderMock.mockReturnValue({
+      supportsQuickOpenSearch: vi.fn(async () => false),
+      listFiles
+    })
+
+    await expect(commands.searchQuickOpenFilePaths('id:wt-1', 'target', 32)).resolves.toMatchObject(
+      {
+        files: [{ relativePath: 'src/target.ts' }],
+        totalCount: 1,
+        truncated: false
+      }
+    )
+    expect(listFiles).toHaveBeenCalledWith('/repo', {
+      excludePaths: undefined,
+      maxResults: 32,
+      signal: undefined
+    })
   })
 })

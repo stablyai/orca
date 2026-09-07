@@ -1,3 +1,7 @@
+import {
+  RELAY_HOST_CLOSE_REASON,
+  type RelayHostCloseReason
+} from '../../../shared/relay-host-close-reason'
 import type { RelayBrokerStatus } from './relay-session-broker'
 import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
 
@@ -14,7 +18,7 @@ export type RelayAuthContext = {
 }
 
 export type CoordinatedRelayBroker = {
-  closeNow(): void
+  closeNow(hostCloseReason?: RelayHostCloseReason): void
   isLive?(): boolean
 }
 
@@ -78,18 +82,29 @@ export class RelayAuthCoordinator {
     void reconcile
   }
 
-  fenceAndCloseNow(): void {
+  // hostCloseReason names an auth loss the phone should be told about. Quit,
+  // relaunch and every other fence pass nothing, so the control socket dies
+  // abruptly exactly as before and the cell records no cause.
+  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
     ++this.authEpoch
     this.cancelLinger()
     this.cancelRetry()
     this.retryAttempt = 0
     this.invalidatePendingOwnerships()
-    this.invalidateOwnership()
+    this.invalidateOwnership(hostCloseReason)
     this.options.onStatus('offline')
   }
 
+  // Raw ownership handle for identity matching (revoke routing); control work uses getLiveBroker.
   getActiveBroker(): CoordinatedRelayBroker | null {
     return this.ownership?.valid ? this.ownership.broker : null
+  }
+
+  // Why: ownership stays valid across a control death, so control work must
+  // apply the same liveness gate reconcile does; unprovable liveness stays usable.
+  getLiveBroker(): CoordinatedRelayBroker | null {
+    const broker = this.getActiveBroker()
+    return broker && (broker.isLive?.() ?? true) ? broker : null
   }
 
   // Why: some broker deaths end with no retry timer — an auth refresh that
@@ -108,16 +123,16 @@ export class RelayAuthCoordinator {
     this.beginReconcile(false)
   }
 
-  async waitForActiveBroker(): Promise<CoordinatedRelayBroker | null> {
+  async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
     while (!this.stopped) {
-      const broker = this.getActiveBroker()
+      const broker = this.getLiveBroker()
       if (broker) {
         return broker
       }
       const pending = this.latestReconcile
       await pending
       if (pending === this.latestReconcile) {
-        return this.getActiveBroker()
+        return this.getLiveBroker()
       }
     }
     return null
@@ -138,7 +153,11 @@ export class RelayAuthCoordinator {
       if (!context || !context.relayEntitled) {
         this.cancelLinger()
         this.retryAttempt = 0
-        this.invalidateOwnership()
+        // Why only the null case: readContext throws on transient failures and
+        // returns null solely when the cloud session is gone (absent, or cleared
+        // by a 401). A present-but-unentitled context is still a signed-in
+        // desktop, and "sign in to reconnect" would be wrong advice for it.
+        this.invalidateOwnership(context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
         this.options.onStatus('offline')
         return
       }
@@ -263,12 +282,12 @@ export class RelayAuthCoordinator {
     return context.accessToken
   }
 
-  private invalidateOwnership(): void {
+  private invalidateOwnership(hostCloseReason?: RelayHostCloseReason): void {
     const ownership = this.ownership
     this.ownership = null
     if (ownership) {
       ownership.valid = false
-      ownership.broker?.closeNow()
+      ownership.broker?.closeNow(hostCloseReason)
     }
   }
 

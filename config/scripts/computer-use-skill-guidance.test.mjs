@@ -12,11 +12,33 @@ const stubPath = join(projectDir, 'skills', 'computer-use', 'SKILL.md')
 const bundledGuide = BUNDLED_SKILL_GUIDES.find((guide) => guide.name === 'computer-use')?.markdown
 
 describe('computer-use skill guidance', () => {
+  it('keeps discovery scoped to desktop control and out of the embedded browser', () => {
+    const frontmatter = /^---\n([\s\S]*?)\n---\n/u.exec(readFileSync(guidePath, 'utf8'))?.[1] ?? ''
+    const description = frontmatter.replace(/\s+/gu, ' ')
+
+    expect(description).toContain('OS/window-level inspection and input')
+    expect(description).toContain('external browser window')
+    expect(description).toContain("Do not use for Orca's embedded browser")
+    expect(description).toContain('page-only browser automation')
+    expect(description).toContain("`orca-cli` for Orca's embedded pages")
+    expect(description).toContain(
+      'page-automation tool such as Playwright or CDP for external pages'
+    )
+    expect(description).not.toContain('read Slack')
+    expect(description).not.toContain('get app state')
+
+    const orcaCli = readFileSync(join(projectDir, 'skill-guides', 'orca-cli.md'), 'utf8').replace(
+      /\s+/gu,
+      ' '
+    )
+    expect(orcaCli).toContain('browser embedded inside the Orca app')
+  })
+
   it('keeps web-app targeting on the computer-use surface', () => {
     const skill = readFileSync(guidePath, 'utf8')
 
     expect(skill).toContain('Use this skill for desktop UI through `orca computer`')
-    expect(skill).toContain('operate the desktop browser app/window that contains the page')
+    expect(skill).toContain('external desktop browser window that needs desktop-level control')
     expect(skill).not.toContain('orca goto')
     expect(skill).not.toContain('orca snapshot')
     expect(skill).not.toContain('orca click')
@@ -45,6 +67,18 @@ describe('computer-use skill guidance', () => {
 
     expect(skill).toContain('`result.snapshot.treeText`')
     expect(skill).not.toContain('`result.elements`')
+  })
+
+  it('explains how JSON and pretty output handle screenshots', () => {
+    expect(bundledGuide).toBeDefined()
+
+    for (const skill of [readFileSync(guidePath, 'utf8'), bundledGuide]) {
+      expect(skill).toContain('request screenshots by default unless `--no-screenshot`')
+      expect(skill).toContain('A successful `--json` capture')
+      expect(skill).toContain('`result.screenshot.path`')
+      expect(skill).toContain('inline base64 `result.screenshot.data`')
+      expect(skill).toContain('Pretty output does not save')
+    }
   })
 
   it('requires atomic modifier-click actions in the source and bundled guide', () => {
