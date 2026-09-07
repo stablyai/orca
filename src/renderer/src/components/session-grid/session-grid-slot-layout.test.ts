@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { computeSessionGridSlotCounts } from './session-grid-slot-layout'
+import { computeGridDimensions, computeSessionGridSlotCounts } from './session-grid-slot-layout'
+
+describe('computeGridDimensions', () => {
+  it.each([
+    { preset: '1x2', cols: 1, rowsPerView: 2 },
+    { preset: '2x1', cols: 2, rowsPerView: 1 },
+    { preset: '2x2', cols: 2, rowsPerView: 2 },
+    { preset: '3x1', cols: 3, rowsPerView: 1 },
+    { preset: '3x2', cols: 3, rowsPerView: 2 },
+    { preset: '3x3', cols: 3, rowsPerView: 3 }
+  ] as const)('$preset reads as columns × rows per view', ({ preset, cols, rowsPerView }) => {
+    expect(computeGridDimensions(preset, 0)).toEqual({ cols, rowsPerView })
+  })
+})
 
 describe('computeSessionGridSlotCounts', () => {
   it.each([

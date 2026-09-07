@@ -110,7 +110,7 @@ const UiUpdateFields = z
     lastActiveWorktreeId: NullableString.optional(),
     // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
     activeView: TopLevelViewSchema.optional(),
-    sessionsGridPreset: z.enum(['auto', '1x2', '2x1', '2x2', '3x2', '3x3']).optional(),
+    sessionsGridPreset: z.enum(['auto', '1x2', '2x1', '2x2', '3x1', '3x2', '3x3']).optional(),
     sessionsGridZoom: z.number().finite().optional(),
     sessionsGridShowEmpty: z.boolean().optional(),
     sessionsGridFilter: z.string().optional(),

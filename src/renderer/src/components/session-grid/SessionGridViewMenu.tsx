@@ -40,6 +40,7 @@ const getPresetLabels = createLocalizedCatalog<Record<SessionGridLayoutPreset, s
   '1x2': '1×2',
   '2x1': '2×1',
   '2x2': '2×2',
+  '3x1': '3×1',
   '3x2': '3×2',
   '3x3': '3×3'
 }))

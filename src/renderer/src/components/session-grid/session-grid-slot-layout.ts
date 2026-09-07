@@ -16,6 +16,8 @@ export function computeGridDimensions(
       return { cols: 2, rowsPerView: 1 }
     case '2x2':
       return { cols: 2, rowsPerView: 2 }
+    case '3x1':
+      return { cols: 3, rowsPerView: 1 }
     case '3x2':
       return { cols: 3, rowsPerView: 2 }
     case '3x3':

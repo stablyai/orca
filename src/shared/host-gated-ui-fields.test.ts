@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   HOST_GATED_UI_FIELDS,
+  HOST_GATED_UI_VALUES,
+  SESSION_GRID_PRESET_3X1_RUNTIME_CAPABILITY,
   SESSION_GRID_UI_FIELDS_RUNTIME_CAPABILITY,
   SESSION_GRID_VISIBILITY_RUNTIME_CAPABILITY,
   SESSION_GRID_WHEEL_TARGET_RUNTIME_CAPABILITY,
@@ -15,6 +17,31 @@ describe('host-gated UI fields', () => {
     for (const gate of HOST_GATED_UI_FIELDS) {
       expect(RUNTIME_CAPABILITIES).toContain(gate.capability)
     }
+    for (const gate of HOST_GATED_UI_VALUES) {
+      expect(RUNTIME_CAPABILITIES).toContain(gate.capability)
+    }
+  })
+
+  it('census: every value gate names a field some field gate already covers', () => {
+    const gatedFields = HOST_GATED_UI_FIELDS.flatMap((gate) => gate.fields as readonly string[])
+    for (const gate of HOST_GATED_UI_VALUES) {
+      expect(gatedFields).toContain(gate.field)
+    }
+  })
+
+  it('strips the 3x1 preset, and only that value, from a host that predates it', () => {
+    const v1Only = [SESSION_GRID_UI_FIELDS_RUNTIME_CAPABILITY]
+    expect(
+      omitUnsupportedHostGatedUiFields({ sessionsGridPreset: '3x1', sessionsGridZoom: 1.2 }, v1Only)
+    ).toEqual({ sessionsGridZoom: 1.2 })
+    const older = { sessionsGridPreset: '2x1', sessionsGridZoom: 1.2 } as const
+    expect(omitUnsupportedHostGatedUiFields(older, v1Only)).toEqual(older)
+    expect(
+      omitUnsupportedHostGatedUiFields({ sessionsGridPreset: '3x1' }, [
+        ...v1Only,
+        SESSION_GRID_PRESET_3X1_RUNTIME_CAPABILITY
+      ])
+    ).toEqual({ sessionsGridPreset: '3x1' })
   })
 
   it('census: the session grid keys are gated and are not also pairing-local', () => {
@@ -87,7 +114,8 @@ describe('host-gated UI fields', () => {
       omitUnsupportedHostGatedUiFields(update, [
         SESSION_GRID_UI_FIELDS_RUNTIME_CAPABILITY,
         SESSION_GRID_WHEEL_TARGET_RUNTIME_CAPABILITY,
-        SESSION_GRID_VISIBILITY_RUNTIME_CAPABILITY
+        SESSION_GRID_VISIBILITY_RUNTIME_CAPABILITY,
+        SESSION_GRID_PRESET_3X1_RUNTIME_CAPABILITY
       ])
     ).toBe(update)
   })

@@ -2,13 +2,14 @@ import type { DashboardCardHostKind } from './dashboard-snapshot'
 import type { ExecutionHostId } from './execution-host'
 import type { TerminalTab } from './terminal-tab-types'
 
-export type SessionGridLayoutPreset = 'auto' | '1x2' | '2x1' | '2x2' | '3x2' | '3x3'
+export type SessionGridLayoutPreset = 'auto' | '1x2' | '2x1' | '2x2' | '3x1' | '3x2' | '3x3'
 
 export const SESSION_GRID_PRESETS: readonly SessionGridLayoutPreset[] = [
   'auto',
   '1x2',
   '2x1',
   '2x2',
+  '3x1',
   '3x2',
   '3x3'
 ]

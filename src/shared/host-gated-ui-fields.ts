@@ -7,6 +7,8 @@ export const SESSION_GRID_UI_FIELDS_RUNTIME_CAPABILITY = 'ui.session-grid-fields
 export const SESSION_GRID_WHEEL_TARGET_RUNTIME_CAPABILITY =
   'ui.session-grid-wheel-target.v1' as const
 export const SESSION_GRID_VISIBILITY_RUNTIME_CAPABILITY = 'ui.session-grid-visibility.v1' as const
+// Why a value gate: the preset enum is strict too, so an old host rejects the batch on a value it never knew.
+export const SESSION_GRID_PRESET_3X1_RUNTIME_CAPABILITY = 'ui.session-grid-preset-3x1.v1' as const
 
 /** Persisted-UI keys a paired client may only send once the host advertises the capability that added them. */
 export const HOST_GATED_UI_FIELDS = [
@@ -32,6 +34,19 @@ export const HOST_GATED_UI_FIELDS = [
 ] as const satisfies readonly { capability: string; fields: readonly (keyof PersistedUIState)[] }[]
 
 export type HostGatedUiField = (typeof HOST_GATED_UI_FIELDS)[number]['fields'][number]
+
+/** Enum members a paired client may only send once the host advertises the capability that added them. */
+export const HOST_GATED_UI_VALUES = [
+  {
+    capability: SESSION_GRID_PRESET_3X1_RUNTIME_CAPABILITY,
+    field: 'sessionsGridPreset',
+    values: ['3x1']
+  }
+] as const satisfies readonly {
+  capability: string
+  field: keyof PersistedUIState
+  values: readonly unknown[]
+}[]
 
 const HOST_GATED_UI_FIELD_SET: ReadonlySet<string> = new Set(
   HOST_GATED_UI_FIELDS.flatMap((gate) => gate.fields)
@@ -59,6 +74,15 @@ export function omitUnsupportedHostGatedUiFields<T extends object>(
       (gate) => gate.fields
     )
   )
+  for (const gate of HOST_GATED_UI_VALUES) {
+    if (
+      !advertised.has(gate.capability) &&
+      gate.field in update &&
+      (gate.values as readonly unknown[]).includes((update as Record<string, unknown>)[gate.field])
+    ) {
+      unsupported.add(gate.field)
+    }
+  }
   if (unsupported.size === 0) {
     return update
   }
