@@ -261,7 +261,9 @@ export const electronViteConfig: UserConfig = {
           // Why: `serve update-helper install` emits this generated installer script.
           'cli/serve-update-helper-installer': resolve(
             'src/main/cli/serve-update-helper-installer.ts'
-          )
+          ),
+          // Why: the same CLI command reads the DEFAULT_SERVE_UPDATE_* install constants.
+          'serve-update-spool': resolve('src/main/serve-update-spool.ts')
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.
