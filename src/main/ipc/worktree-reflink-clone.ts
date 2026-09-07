@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { constants, type Dirent } from 'node:fs'
-import { chmod, copyFile, cp, link, mkdir, readdir, rm, rmdir, stat } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { chmod, copyFile, link, mkdir, readdir, rm, rmdir, stat } from 'node:fs/promises'
+import { dirname, join, resolve, sep } from 'node:path'
+import { runProcess } from '../../shared/child-process/run-process'
 import {
   isAlreadyExistsError,
   WorktreeCloneUnavailableError,
@@ -14,8 +15,8 @@ export type ReflinkCloneDeps = {
   reflinkFileOrFail: (source: string, target: string) => Promise<void>
   /** `FICLONE` per file, a byte copy for any file the kernel declines. */
   reflinkFile: (source: string, target: string) => Promise<void>
-  /** Recursive `reflinkFile` that skips (never clobbers) whatever is already
-   *  at the target. */
+  /** Recursive reflink of a directory's contents into an existing `target`
+   *  that skips (never clobbers) whatever is already there. */
   reflinkTree: (source: string, target: string) => Promise<void>
   randomUUID: () => string
 }
@@ -24,16 +25,31 @@ export type ReflinkCloneDeps = {
 // in the still-open transaction group (EAGAIN unless zfs_bclone_wait_dirty), so
 // a file touched seconds ago would fail a forced tree clone outright. Unforced,
 // that one file is copied byte-for-byte and everything else shares blocks.
+//
+// Why the tree goes through coreutils rather than `fs.cp`: Node pays several
+// syscall round trips per file whether or not the kernel shares blocks, which
+// on a 20k-file node_modules is ~6 s — the same as a byte copy — while `cp`
+// walks the tree in ~0.5 s. Same shape as the APFS backend's `/bin/cp -c`.
 export const defaultReflinkCloneDeps: ReflinkCloneDeps = {
   reflinkFileOrFail: (source, target) => copyFile(source, target, constants.COPYFILE_FICLONE_FORCE),
   reflinkFile: (source, target) => copyFile(source, target, constants.COPYFILE_FICLONE),
-  reflinkTree: (source, target) =>
-    cp(source, target, {
-      recursive: true,
-      force: false,
-      errorOnExist: false,
-      mode: constants.COPYFILE_FICLONE
-    }),
+  reflinkTree: async (source, target) => {
+    // Why `-n`: the target directory is reserved before this runs, so a raced
+    // nested file must be kept, not overwritten. `--update=none` is the modern
+    // spelling but coreutils 8.x (Ubuntu 20.04) only knows `-n`.
+    // Why `source/.`: contents land at the requested path even when the source
+    // is a symlinked directory.
+    const result = await runProcess({
+      program: '/bin/cp',
+      args: ['-n', '-R', '--reflink=auto', `${source}${sep}.`, target],
+      timeoutMs: null
+    })
+    if (result.code !== 0) {
+      throw new Error(
+        `cp --reflink exited ${result.code ?? result.signal ?? 'unknown'}: ${result.stderr.trim()}`
+      )
+    }
+  },
   randomUUID
 }
 
@@ -188,8 +204,8 @@ async function cloneDirectoryWithReflink(
 
   try {
     // Why: the tree clone merges into the reserved directory and skips anything
-    // raced into it; `fs.cp` only applies the source mode to directories it
-    // creates itself, so the reservation is fixed up afterwards.
+    // raced into it; the reservation was created with the default mode, so the
+    // source mode is applied afterwards.
     await deps.reflinkTree(source, target)
     await chmod(target, sourceMode)
   } catch (error) {

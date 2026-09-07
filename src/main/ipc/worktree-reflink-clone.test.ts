@@ -8,8 +8,10 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -323,6 +325,33 @@ describe('cloneWorktreePathWithReflink', () => {
 
     expect(readFileSync(target, 'utf8')).toBe('A=1\n')
     expect(probeLeftovers(join(worktree, 'apps', 'web'))).toEqual([])
+  })
+
+  // Why: the default tree clone is a real coreutils spawn; on tmpfs
+  // `--reflink=auto` degrades to a byte copy, so this exercises the process
+  // plumbing, no-clobber and symlink handling on any Linux host.
+  linuxIt('clones a tree with coreutils cp, keeping raced files and nested symlinks', async () => {
+    const source = join(primary, 'node_modules')
+    mkdirSync(join(source, 'pkg'), { recursive: true })
+    writeFileSync(join(source, 'pkg', 'index.js'), 'module.exports = 1\n')
+    writeFileSync(join(source, 'marker'), 'PRIMARY\n')
+    symlinkSync(join('pkg', 'index.js'), join(source, 'entry.js'))
+    const target = join(worktree, 'node_modules')
+    mkdirSync(target)
+    writeFileSync(join(target, 'marker'), 'RACED\n')
+
+    await defaultReflinkCloneDeps.reflinkTree(source, target)
+
+    expect(readFileSync(join(target, 'pkg', 'index.js'), 'utf8')).toBe('module.exports = 1\n')
+    expect(readFileSync(join(target, 'marker'), 'utf8')).toBe('RACED\n')
+    expect(lstatSync(join(target, 'entry.js')).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(join(target, 'entry.js'))).toBe(join('pkg', 'index.js'))
+  })
+
+  linuxIt('surfaces a non-zero cp exit as an error', async () => {
+    await expect(
+      defaultReflinkCloneDeps.reflinkTree(join(primary, 'missing'), join(worktree, 'x'))
+    ).rejects.toThrow(/cp --reflink exited 1/)
   })
 
   // Why: the only host-dependent test here, and deliberately so — whatever the
