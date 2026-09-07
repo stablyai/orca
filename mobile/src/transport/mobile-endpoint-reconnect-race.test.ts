@@ -192,6 +192,90 @@ describe('mobile endpoint reconnect race', () => {
     supervisor.stop()
   })
 
+  it('withdraws the relay socket before it authenticates once direct wins', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const relaySession = new FakeRelaySession('connecting')
+    const openRelay = vi.fn(() => relaySession)
+    const deps = dependencies({ openRelay, openDirect: unreachableDirect() })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    const release = holdRelayCutover(logical)
+    const starting = supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).toHaveBeenCalledOnce()
+    expect(relaySession.close).not.toHaveBeenCalled()
+
+    // The direct dial authenticates while the cell socket is still pre-handshake.
+    // migrateTo would not withdraw until after E2EE auth, so the cell would have
+    // reserved a splice and the desktop would have finished a handshake for it.
+    logical.publishState('connected')
+    expect(relaySession.close).toHaveBeenCalled()
+    expect(relaySession.getState()).not.toBe('connected')
+
+    release()
+    await starting
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(logical.getActivePath()).toBe('lan')
+    expect(openRelay).toHaveBeenCalledOnce()
+    supervisor.stop()
+  })
+
+  it('damps the race after a loss so a flapping LAN opens one cell socket', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const openRelay = vi.fn(() => new FakeRelaySession('connecting'))
+    const deps = dependencies({ openRelay, openDirect: unreachableDirect() })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    // The first blip races, and the returning direct dial wins it.
+    const release = holdRelayCutover(logical)
+    const starting = supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    logical.publishState('connected')
+    release()
+    await starting
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    // Two more blips inside the damper window open no further cell socket.
+    for (const _blip of [1, 2]) {
+      logical.publishState('reconnecting')
+      await vi.advanceTimersByTimeAsync(100)
+      logical.publishState('connected')
+      await vi.advanceTimersByTimeAsync(400)
+    }
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    // The window lapses against a live direct path, so it still opens nothing.
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(openRelay).toHaveBeenCalledOnce()
+    supervisor.stop()
+  })
+
+  it('lets a foreground resume race immediately inside a damper window', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const openRelay = vi.fn(() => new FakeRelaySession('connecting'))
+    const deps = dependencies({ openRelay, openDirect: unreachableDirect() })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    const release = holdRelayCutover(logical)
+    const starting = supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    logical.publishState('connected')
+    release()
+    await starting
+
+    logical.publishState('reconnecting')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    // A resume is the user waiting on the screen; it never serves out the window.
+    supervisor.setForeground(false)
+    supervisor.setForeground(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(openRelay.mock.calls.length).toBeGreaterThan(1)
+    supervisor.stop()
+  })
+
   it('starts no dial in the background and races both paths on resume', async () => {
     const logical = new FakeLogicalClient('connecting', 'lan')
     const deps = dependencies({ openDirect: unreachableDirect() })

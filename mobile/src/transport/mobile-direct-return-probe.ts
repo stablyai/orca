@@ -159,7 +159,11 @@ export class DirectReturnProbe {
       try {
         await this.hooks.migrate(candidate.client, candidate.path, abortCutover)
       } catch (error) {
-        if (this.stopped) {
+        // Why: a withdrawn cutover is the ordinary end of a lost race, and
+        // migrateTo has already closed the candidate. Only the timer calls this
+        // method, and it discards the promise, so rethrowing here would surface
+        // a routine loss as an unhandled rejection.
+        if (this.stopped || abortCutover()) {
           return
         }
         throw error
