@@ -207,30 +207,40 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
     recordUpdaterLifecycle('headless_serve_update_accepted', { version: pendingVersion || null })
     // Census-and-stop fence: the install-RPC gate ran earlier, so work may have started
     // since. Re-run the census here, as close to the quit as this process can get; the
-    // helper's systemctl stop is the other half of the fence. A blocked census aborts
-    // the install and the server keeps running.
-    if (this.serveUpdateCensusRuntime) {
-      const census = await runServeUpdateCensus(this.serveUpdateCensusRuntime)
-      if (!census.ok) {
-        clearUpdateRequest()
-        recordUpdaterLifecycle(
-          'headless_serve_update_census_blocked',
-          { version: pendingVersion || null, reason: census.reason },
-          {
-            level: 'warn',
-            message: 'Server update blocked at the quit fence: live terminals may exist'
-          }
-        )
-        this.sendErrorStatus(
-          'The server still has live terminals or agents. Close them, then try the update again.',
-          true
-        )
-        this.resetQuitForUpdateState()
-        return
-      }
-    } else {
-      // Diagnostics: an unarmed fence passes silently; distinguish it from a passed one.
-      recordUpdaterLifecycle('headless_serve_update_census_unarmed', {}, { level: 'warn' })
+    // helper's systemctl stop is the other half of the fence. Fail-closed: an unarmed
+    // fence cannot prove the floor is empty, and the continuation authorizes the unit
+    // stop — so it aborts exactly like a blocked census.
+    if (!this.serveUpdateCensusRuntime) {
+      clearUpdateRequest()
+      recordUpdaterLifecycle(
+        'headless_serve_update_census_unarmed',
+        { version: pendingVersion || null },
+        { level: 'warn', message: 'Server update blocked: census fence was never armed' }
+      )
+      this.sendErrorStatus(
+        'The server update could not verify that no terminals are live. Orca remains running.',
+        true
+      )
+      this.resetQuitForUpdateState()
+      return
+    }
+    const census = await runServeUpdateCensus(this.serveUpdateCensusRuntime)
+    if (!census.ok) {
+      clearUpdateRequest()
+      recordUpdaterLifecycle(
+        'headless_serve_update_census_blocked',
+        { version: pendingVersion || null, reason: census.reason },
+        {
+          level: 'warn',
+          message: 'Server update blocked at the quit fence: live terminals may exist'
+        }
+      )
+      this.sendErrorStatus(
+        'The server still has live terminals or agents. Close them, then try the update again.',
+        true
+      )
+      this.resetQuitForUpdateState()
+      return
     }
     // Why before quit: the helper needs the unit stop to look like a supervised exit, and
     // pre-quit cleanup (auth preservation) must still run while this process is alive.

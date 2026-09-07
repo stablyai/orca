@@ -501,13 +501,22 @@ describe('headless serve update install handoff', () => {
         return Promise.resolve(null)
       })
 
+      const updaterModule = await loadUpdaterModule()
+      // Production always arms the census (serve-updater-init); the happy path mirrors that.
+      updaterModule.setServeUpdateCensusRuntime({
+        listTerminals: async () => ({
+          terminals: [],
+          totalCount: 0,
+          hostScope: { hostIds: ['local'], omittedHostIds: [] }
+        })
+      } as never)
       const {
         checkForUpdatesFromMenu,
         downloadUpdate,
         quitAndInstall,
         setServeUpdateRuntimeId,
         setupAutoUpdater
-      } = await loadUpdaterModule()
+      } = updaterModule
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now(),
         installMode: 'supervised-headless-serve'

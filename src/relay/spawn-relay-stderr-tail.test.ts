@@ -36,4 +36,19 @@ describe('spawnRelay stderr tail', () => {
     await expect(relay.sentinelReceived).rejects.toThrow('final-diagnostic')
     await relay.waitForExit()
   })
+
+  it('resolves when the sentinel arrives in stdout after exit is emitted', async () => {
+    // 'exit' can precede the final stdout delivery; the sentinel must still resolve
+    // the await instead of the close handler rejecting a pre-sentinel exit.
+    const dir = mkdtempSync(path.join(tmpdir(), 'relay-stderr-tail-'))
+    const entry = path.join(dir, 'sentinel-after-exit.js')
+    const { RELAY_SENTINEL } = await import('./protocol')
+    writeFileSync(
+      entry,
+      `process.stdout.write(${JSON.stringify(RELAY_SENTINEL)}, () => process.exit(0))`
+    )
+    const relay = spawnRelay(entry)
+    await expect(relay.sentinelReceived).resolves.toBeUndefined()
+    await relay.waitForExit()
+  })
 })
