@@ -89,7 +89,14 @@ function getFieldValueForGrouping(
     }
   }
   const label = deriveStringValue(value)
-  return { key: `raw:${label}`, label, orderHint: 0, iteration: null }
+  return {
+    key: `raw:${label}`,
+    label,
+    // Why: a number's label sorts as text — 10 before 2, and -10 between -1 and
+    // -2 because the collator ignores the minus. compareSort already uses the value.
+    orderHint: value.kind === 'number' ? value.number : 0,
+    iteration: null
+  }
 }
 
 function labelForEmpty(field: GitHubProjectField): string {
@@ -152,6 +159,14 @@ export function groupRows(
     }
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
+    }
+    if (groupField.dataType === 'NUMBER') {
+      const byValue = a[1].orderHint - b[1].orderHint
+      // Why: a cached value that is not a number (field retyped in GitHub) hints 0;
+      // fall through to the label rather than tie or return NaN.
+      if (byValue !== 0 && Number.isFinite(byValue)) {
+        return byValue
+      }
     }
     return a[1].label.localeCompare(b[1].label)
   })
