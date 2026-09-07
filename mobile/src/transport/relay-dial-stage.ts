@@ -14,6 +14,15 @@ export type RelayDialStage =
   // E2EE authenticated; waiting on the desktop's resume confirmation.
   | 'confirming'
 
+// Exhaustive by construction: adding a stage to the union breaks this table, so a
+// persisted-log validator can never silently start accepting an unknown stage.
+export const RELAY_DIAL_STAGE_NAMES: Record<RelayDialStage, true> = {
+  opening: true,
+  'awaiting-hello': true,
+  handshaking: true,
+  confirming: true
+}
+
 // How long a dial spent in one stage. `complete` is false when the dial left the
 // stage by dying in it, so a report can name the stage that never finished.
 export type RelayDialStageTiming = {

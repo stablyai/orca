@@ -99,6 +99,16 @@ export type ConnectionState =
   | 'reconnecting'
   | 'auth-failed'
 
+// Exhaustive by construction; see RELAY_DIAL_STAGE_NAMES for why.
+export const CONNECTION_STATE_NAMES: Record<ConnectionState, true> = {
+  connecting: true,
+  handshaking: true,
+  connected: true,
+  disconnected: true,
+  reconnecting: true,
+  'auth-failed': true
+}
+
 // Why: a user-attention nudge must not tear down a healthy relay (probe it); only a
 // network-change nudge marks the socket suspect enough to replace it.
 export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'

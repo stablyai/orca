@@ -101,6 +101,45 @@ function requestIdAt(call: number): string {
   return (JSON.parse(fakes.sendText.mock.calls[call]![0] as string) as { id: string }).id
 }
 
+async function driveToConnected(session: { getState(): string }): Promise<void> {
+  fakes.linkOptions!.onOpen()
+  fakes.linkOptions!.onHello({
+    type: 'relay-hello',
+    ok: true,
+    credentialKind: 'resume',
+    leaseExpiresAt: Date.now() + 60_000,
+    acceptedCredentialVersion: 3,
+    acceptedAs: 'current',
+    resumeExpiresAt: Date.now() + 300_000
+  })
+  fakes.linkOptions!.onAuthenticated()
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+  fakes.linkOptions!.onText(
+    JSON.stringify({
+      id: requestIdAt(0),
+      ok: true,
+      result: {
+        v: 1,
+        relay,
+        resumeConfirmation: {
+          v: 1,
+          reqId: 'confirm-1',
+          currentVersion: 3,
+          acceptedAs: 'current',
+          renewed: true,
+          resumeExpiresAt: Date.now() + 300_000
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  )
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+  fakes.linkOptions!.onText(
+    JSON.stringify({ id: requestIdAt(1), ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } })
+  )
+  await vi.waitFor(() => expect(session.getState()).toBe('connected'))
+}
+
 describe('relay dial stage timings in the connection log', () => {
   beforeEach(() => {
     fakes.sendText.mockClear()
@@ -127,47 +166,7 @@ describe('relay dial stage timings in the connection log', () => {
   it('records every stage of a dial that reaches connected, all complete', async () => {
     const entries: ConnectionLogEntry[] = []
     const session = openSession(entries)
-    fakes.linkOptions!.onOpen()
-    fakes.linkOptions!.onHello({
-      type: 'relay-hello',
-      ok: true,
-      credentialKind: 'resume',
-      leaseExpiresAt: Date.now() + 60_000,
-      acceptedCredentialVersion: 3,
-      acceptedAs: 'current',
-      resumeExpiresAt: Date.now() + 300_000
-    })
-    fakes.linkOptions!.onAuthenticated()
-    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
-    fakes.linkOptions!.onText(
-      JSON.stringify({
-        id: requestIdAt(0),
-        ok: true,
-        result: {
-          v: 1,
-          relay,
-          resumeConfirmation: {
-            v: 1,
-            reqId: 'confirm-1',
-            currentVersion: 3,
-            acceptedAs: 'current',
-            renewed: true,
-            resumeExpiresAt: Date.now() + 300_000
-          }
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      })
-    )
-    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
-    fakes.linkOptions!.onText(
-      JSON.stringify({
-        id: requestIdAt(1),
-        ok: true,
-        result: {},
-        _meta: { runtimeId: 'runtime-1' }
-      })
-    )
-    await vi.waitFor(() => expect(session.getState()).toBe('connected'))
+    await driveToConnected(session)
 
     const timings = stageTimings(entries)
     expect(timings.map((timing) => timing.name)).toEqual([
@@ -182,6 +181,25 @@ describe('relay dial stage timings in the connection log', () => {
     // A later teardown must not append a second timing for 'confirming'.
     session.close()
     expect(stageTimings(entries)).toHaveLength(4)
+  })
+
+  it('reaches connected even when the log sink throws on every stage', async () => {
+    const session = connectMobileRelayRpcSession({
+      relay,
+      resumeToken: 'resume-secret',
+      resumeCredentialVersion: 3,
+      resumeConfirmReqId: 'confirm-1',
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      requestTimeoutMs: 1000,
+      onLog: () => {
+        throw new Error('sink exploded')
+      }
+    })
+    await driveToConnected(session)
+
+    expect(session.getState()).toBe('connected')
+    expect(session.getFailure()).toBeNull()
   })
 
   it('marks a dial that never opened its socket as stuck in opening', () => {

@@ -16,15 +16,19 @@ describe('connection log buffer', () => {
     expect(store.get('host-b').map((e) => e.id)).toEqual(['log-2'])
   })
 
-  it('retains phase timings through redaction and the cap', () => {
+  it('retains phase timings through redaction and evicts them with the cap', () => {
     const store = createConnectionLogStore(2)
     store.append('host-a', {
       ...entry(1),
+      timing: { kind: 'connection-state', name: 'reconnecting', ms: 800, complete: true }
+    })
+    store.append('host-a', {
+      ...entry(2),
       detail: '4280ms in connecting; resumeToken=secret-resume-token',
       timing: { kind: 'connection-state', name: 'connecting', ms: 4_280, complete: true }
     })
     store.append('host-a', {
-      ...entry(2),
+      ...entry(3),
       timing: { kind: 'relay-dial-stage', name: 'awaiting-hello', ms: 9_100, complete: false }
     })
 

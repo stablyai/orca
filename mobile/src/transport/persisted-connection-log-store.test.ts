@@ -23,7 +23,9 @@ describe('persisted connection log store', () => {
     vi.resetModules()
   })
 
-  it('rehydrates well-formed phase timings and drops corrupted ones', async () => {
+  // 'negotiating' is not a dial stage and 'confirming' is a dial stage rather than a
+  // connection state; the report echoes the name, so neither may survive.
+  it('rehydrates well-formed phase timings and drops names outside their enum', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(
       JSON.stringify([
         {
@@ -39,6 +41,27 @@ describe('persisted connection log store', () => {
           level: 'info',
           message: 'Relay dial stage handshaking finished',
           timing: { kind: 'relay-dial-stage', name: 'handshaking', ms: 'soon' }
+        },
+        {
+          id: 'stage-unknown-name',
+          ts: 960,
+          level: 'info',
+          message: 'Relay dial stage negotiating finished',
+          timing: { kind: 'relay-dial-stage', name: 'negotiating', ms: 12, complete: true }
+        },
+        {
+          id: 'state-borrowed-stage-name',
+          ts: 970,
+          level: 'info',
+          message: 'Connection state confirming → connected',
+          timing: { kind: 'connection-state', name: 'confirming', ms: 12, complete: true }
+        },
+        {
+          id: 'state-unknown-kind',
+          ts: 980,
+          level: 'info',
+          message: 'Something else',
+          timing: { kind: 'wall-clock', name: 'connecting', ms: 12, complete: true }
         }
       ])
     )
