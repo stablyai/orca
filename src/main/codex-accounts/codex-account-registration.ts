@@ -16,6 +16,7 @@ import type { CodexAccountSelection } from './codex-account-selection'
 import type { CodexConfigMirror } from './codex-config-mirror'
 import type { CodexManagedHomeLifecycle } from './codex-managed-home-lifecycle'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
+import { getPiCodexCredential, type PiCodexCredential } from './pi-codex-auth'
 import {
   getCodexSelectionTargetForAccount,
   getSelectedCodexAccountIdForTarget,
@@ -37,6 +38,7 @@ type CodexAccountRegistrationDependencies = {
   managedHomePaths: CodexManagedHomePath
   managedHomes: CodexManagedHomeLifecycle
   login: (managedHomePath: string) => Promise<void>
+  getPiCredential?: () => Promise<PiCodexCredential>
 }
 
 export class CodexAccountRegistration {
@@ -69,6 +71,39 @@ export class CodexAccountRegistration {
       return await this.persistCapturedAccount(accountId, managedHome)
     } catch (error) {
       this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
+      throw error
+    }
+  }
+
+  async addFromPi(): Promise<CodexRateLimitAccountsState> {
+    const credential = await (this.dependencies.getPiCredential ?? getPiCodexCredential)()
+    const settings = this.dependencies.store.getSettings()
+    if (
+      settings.codexManagedAccounts.some(
+        (account) =>
+          (account.managedHomeRuntime ?? 'host') === 'host' &&
+          account.providerAccountId === credential.providerAccountId
+      )
+    ) {
+      throw new Error(`The Pi Codex account ${credential.email} is already imported.`)
+    }
+
+    const accountId = randomUUID()
+    const managedHome = await this.dependencies.managedHomes.create(accountId, { runtime: 'host' })
+    try {
+      this.prepareManagedHomeForLogin(managedHome.managedHomePath, accountId)
+      this.dependencies.managedHomes.importAuthFromPi(
+        credential,
+        managedHome.managedHomePath,
+        accountId
+      )
+      return await this.persistCapturedAccount(accountId, managedHome, 'pi')
+    } catch (error) {
+      this.dependencies.managedHomes.removeUnlessUnproven(
+        error,
+        managedHome.managedHomePath,
+        accountId
+      )
       throw error
     }
   }
@@ -145,7 +180,8 @@ export class CodexAccountRegistration {
 
   private async persistCapturedAccount(
     accountId: string,
-    managedHome: ManagedCodexHomeLocation
+    managedHome: ManagedCodexHomeLocation,
+    credentialSource?: 'pi'
   ): Promise<CodexRateLimitAccountsState> {
     const identity = this.dependencies.readIdentityFromHome(managedHome.managedHomePath, accountId)
     if (!identity.email) {
@@ -160,6 +196,7 @@ export class CodexAccountRegistration {
       wslDistro: managedHome.wslDistro,
       wslLinuxHomePath: managedHome.wslLinuxHomePath,
       providerAccountId: identity.providerAccountId,
+      credentialSource,
       workspaceLabel: identity.workspaceLabel,
       workspaceAccountId: identity.workspaceAccountId,
       createdAt: now,

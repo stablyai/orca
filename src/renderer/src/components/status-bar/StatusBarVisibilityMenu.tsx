@@ -18,6 +18,7 @@ export function StatusBarVisibilityMenu({
   controller: StatusBarController
 }): React.JSX.Element {
   const {
+    codexUsageAvailable,
     detectedAgentIds,
     menuOpen,
     menuPoint,
@@ -50,7 +51,7 @@ export function StatusBarVisibilityMenu({
             {translate('auto.components.status.bar.StatusBar.3885eb74d8', 'Claude Usage')}
           </DropdownMenuCheckboxItem>
         )}
-        {isStatusBarItemAvailable('codex', detectedAgentIds) && (
+        {codexUsageAvailable && (
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('codex')}
             onCheckedChange={() => {

@@ -72,6 +72,14 @@ export function createCodexAccountActionRunner(
       const next = await operation()
       await syncCodexAccounts(next)
       recordFeatureInteraction('codex-account-switching')
+      if (action === 'importing-pi') {
+        toast.success(
+          translate(
+            'auto.components.settings.AccountsPane.piImportSuccess',
+            'Imported Codex usage from Pi.'
+          )
+        )
+      }
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
       const shouldPromptRestart =
         action === 'adding' ||
