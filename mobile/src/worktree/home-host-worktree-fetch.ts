@@ -13,7 +13,7 @@ import { WORKTREE_PS_FULL_LIMIT } from './worktree-catalog-snapshot-client'
 const ACTIVE_STATUSES = new Set(['working', 'active', 'permission'])
 // Why: a relay↔direct cutover rejects in-flight reads without ever leaving 'connected', so the
 // connect gate never re-arms. Re-issue on the replacement session; cap it so a migration loop
-// can't spin. See runtime-status-probe.ts for the same hazard on status.get.
+// can't spin. See runtime-capability-probe.ts for the same hazard on status.get.
 const CUTOVER_RETRY_LIMIT = 2
 
 export type HostWorktreeInfoSetter = (

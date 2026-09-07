@@ -44,12 +44,6 @@ function GateConsumer() {
   return createElement('GateStatus', null, hostCapabilities.join(','))
 }
 
-// Separate from GateStatus so the capability assertions keep their exact rendered shape.
-function VerifiedConsumer() {
-  const { compatVerified } = useHostProtocolGates()
-  return createElement('GateVerified', null, compatVerified ? 'verified' : 'unverified')
-}
-
 // Counts mounts so a test can prove the routes were never torn down, which presence alone can't.
 const probeMounts = { count: 0 }
 function MountProbe() {
@@ -63,13 +57,7 @@ function gateElement() {
   return createElement(
     HostProtocolGate,
     { hostId: 'host-1' },
-    createElement(
-      'HostContent',
-      null,
-      createElement(GateConsumer),
-      createElement(VerifiedConsumer),
-      createElement(MountProbe)
-    )
+    createElement('HostContent', null, createElement(GateConsumer), createElement(MountProbe))
   )
 }
 
@@ -166,90 +154,13 @@ describe('HostProtocolGate', () => {
     expect(client.sendRequest).toHaveBeenCalledOnce()
   })
 
-  it('serves every descendant capability read from the one status.get it issues', async () => {
-    const client = clientWithStatus({
-      protocolVersion: 5,
-      minCompatibleMobileVersion: 0,
-      capabilities: ['browser.screencast.v1', 'terminal.queryReplyInput.v1']
-    })
-    hostClient.current = { client, state: 'connected' }
-    renderer = await act(async () => {
-      const created = create(
-        createElement(
-          HostProtocolGate,
-          { hostId: 'host-1' },
-          createElement(GateConsumer),
-          createElement(GateConsumer)
-        )
-      )
-      await Promise.resolve()
-      return created
-    })
-
-    // Why: the session route used to run its own retrying status.get on top of this one, so a
-    // cold open cost two round trips for the same answer. Consumers now read the gate's copy.
-    expect(client.sendRequest).toHaveBeenCalledOnce()
-    expect(client.sendRequest).toHaveBeenCalledWith('status.get')
-    const statuses = renderer.root.findAllByType('GateStatus')
-    expect(statuses).toHaveLength(2)
-    for (const status of statuses) {
-      expect(status.props.children).toBe('browser.screencast.v1,terminal.queryReplyInput.v1')
-    }
-  })
-
-  it('releases the cover on a failed status.get and upgrades when a retry lands', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const sendRequest = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('status.get timed out'))
-      .mockResolvedValue({
-        ok: true,
-        result: { protocolVersion: 5, minCompatibleMobileVersion: 0, capabilities: ['late.v1'] }
-      })
-    hostClient.current = { client: { sendRequest } as unknown as RpcClient, state: 'connected' }
-    renderer = await renderGate()
-
-    // Why: a wedged status.get must never trap the routes behind the cover, so the first miss
-    // settles conservative gates immediately — no capabilities, but a usable UI.
-    let output = renderedText(renderer)
-    expect(output).toContain('HostContent')
-    expect(output).not.toContain('Checking host compatibility')
-    expect(output).toContain('"type":"GateStatus","props":{},"children":null')
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_100)
-    })
-
-    // The probe kept retrying underneath, so the answer arrives without a remount.
-    expect(sendRequest).toHaveBeenCalledTimes(2)
-    expect(renderedText(renderer)).toContain('late.v1')
-    expect(probeMounts.count).toBe(1)
-    vi.useRealTimers()
-  })
-
-  it('blocks a desktop that omits protocolVersion, so a pending verdict is not a formality', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // Why this case and not just an explicit old version: evaluateCompat reads a missing
-    // protocolVersion as 0, so the everyday shape of an old desktop is a blocking one.
-    hostClient.current = {
-      client: clientWithStatus({ capabilities: [] }),
-      state: 'connected'
-    }
-    renderer = await renderGate()
-    const output = renderedText(renderer)
-    expect(output).toContain('Update Orca on your computer')
-    expect(output).not.toContain('HostContent')
-  })
-
   it('renders the host UI while the host connection is still pending', async () => {
     hostClient.current = { client: null, state: 'connecting' }
     renderer = await renderGate()
     expect(renderedText(renderer)).toContain('HostContent')
   })
 
-  // Was: the routes were held back until status.get resolved, which serialised every route's
-  // own startup RPC behind this one round trip. They now mount immediately and are covered.
-  it('mounts host routes under the pending cover while status.get is still in flight', async () => {
+  it('does not mount host routes before a connected host passes the compatibility probe', async () => {
     const client = {
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
     } as unknown as RpcClient
@@ -257,40 +168,9 @@ describe('HostProtocolGate', () => {
     renderer = await renderGate()
     const output = renderedText(renderer)
     expect(output).toContain('Checking host compatibility')
-    expect(output).toContain('HostContent')
-    expect(probeMounts.count).toBe(1)
-    expect(client.sendRequest).toHaveBeenCalledOnce()
-    // Why: mounting early must not leak an unproven host's capabilities to the routes below;
-    // an empty join renders no children, so the consumer saw none.
-    expect(output).toContain('"type":"GateStatus","props":{},"children":null')
-    const overlay = renderer.root
-      .findAllByType('View')
-      .find((node) => node.props.accessibilityViewIsModal === true)
-    expect(overlay?.props.pointerEvents).toBe('auto')
-  })
-
-  it('unmounts the routes it mounted early when the verdict comes back blocked', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let settle: ((response: unknown) => void) | null = null
-    const client = {
-      sendRequest: vi.fn().mockReturnValue(
-        new Promise((resolve) => {
-          settle = resolve
-        })
-      )
-    } as unknown as RpcClient
-    hostClient.current = { client, state: 'connected' }
-    renderer = await renderGate()
-    expect(renderedText(renderer)).toContain('HostContent')
-
-    await act(async () => {
-      settle?.({ ok: true, result: { protocolVersion: 5, minCompatibleMobileVersion: 999 } })
-      await Promise.resolve()
-    })
-
-    const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
     expect(output).not.toContain('HostContent')
+    expect(probeMounts.count).toBe(0)
+    expect(client.sendRequest).toHaveBeenCalledOnce()
   })
 
   it('overlays the pending spinner instead of unmounting routes mounted while connecting', async () => {
@@ -378,53 +258,5 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     expect(renderedText(renderer)).toContain('HostContent')
-  })
-
-  it('reports a rejected status.get as unverified, so failing open is not a passing verdict', async () => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValue({ ok: false, error: { message: 'no such method' } })
-    hostClient.current = { client: { sendRequest } as unknown as RpcClient, state: 'connected' }
-    renderer = await renderGate()
-
-    // Navigation still works: the host said no, and that must not lock the user out of the route.
-    const output = renderedText(renderer)
-    expect(output).toContain('HostContent')
-    expect(output).not.toContain('Checking host compatibility')
-    // Why: `compatVerdict` is `ok` here purely as a fallback. Nothing about this host was proven,
-    // so callers that write to it read this flag instead of the verdict.
-    expect(output).toContain('["unverified"]')
-  })
-
-  it('reports a passing status reply as verified', async () => {
-    hostClient.current = {
-      client: clientWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 0 }),
-      state: 'connected'
-    }
-    renderer = await renderGate()
-    expect(renderedText(renderer)).toContain('["verified"]')
-  })
-
-  it('stays unverified through a failed status.get and flips once a retry answers', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const sendRequest = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('status.get timed out'))
-      .mockResolvedValue({
-        ok: true,
-        result: { protocolVersion: 5, minCompatibleMobileVersion: 0 }
-      })
-    hostClient.current = { client: { sendRequest } as unknown as RpcClient, state: 'connected' }
-    renderer = await renderGate()
-
-    expect(renderedText(renderer)).toContain('["unverified"]')
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_100)
-    })
-
-    // The retry landed, so the fallback is replaced by a real answer and writes are released.
-    expect(renderedText(renderer)).toContain('["verified"]')
-    vi.useRealTimers()
   })
 })

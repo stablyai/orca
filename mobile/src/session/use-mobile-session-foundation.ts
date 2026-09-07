@@ -14,7 +14,6 @@ import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { useLiveWorktreeName } from './use-live-worktree-name'
 import { useMissingWorktreeBounce } from './use-missing-worktree-bounce'
 import { hostRouteWithNotice } from '../host-route-notice'
-import { useHostProtocolGates } from '../components/HostProtocolGate'
 
 export function useMobileSessionFoundation() {
   const {
@@ -37,14 +36,6 @@ export function useMobileSessionFoundation() {
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
   const { client, clientId, state: connState } = useHostClient(hostId)
-  // Why: HostProtocolGate holds this connection's single status.get. Reading it here gives the
-  // whole route one source for host capabilities and for whether the compatibility verdict has
-  // landed — the routes now mount while it is still in flight, so "not yet known" is a real state.
-  const { compatVerdict, compatVerified, hostCapabilities, statusPending } = useHostProtocolGates()
-  // Why all three: a settled verdict is not necessarily a passing one, and a settled *passing*
-  // verdict is not necessarily an answered one — a host that cannot answer status.get fails open
-  // to `ok` so navigation still works. Writes read this flag, so they wait for a real reply.
-  const protocolVerified = !statusPending && compatVerified && compatVerdict.kind === 'ok'
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
@@ -107,8 +98,6 @@ export function useMobileSessionFoundation() {
     client,
     clientId,
     connState,
-    hostCapabilities,
-    protocolVerified,
     reconnectAttempts,
     lastConnectedAt,
     forceReconnectHost,

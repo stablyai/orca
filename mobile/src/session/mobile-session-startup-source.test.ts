@@ -30,10 +30,6 @@ const autoCreateHookSource = readMobileSessionRouteSource(
   './use-initial-session-terminal-autocreate.ts'
 )
 const foundationSource = readMobileSessionRouteSource('./use-mobile-session-foundation.ts')
-const activeContentSource = readMobileSessionRouteSource('./MobileSessionActiveContent.tsx')
-const subscriptionFoundationSource = readMobileSessionRouteSource(
-  './use-mobile-session-terminal-subscription-foundation.ts'
-)
 const terminalRuntimeSource = readMobileSessionRouteSource(
   './use-mobile-session-terminal-runtime.ts'
 )
@@ -151,72 +147,35 @@ describe('mobile session startup', () => {
     )
   })
 
-  // Was: one effect that awaited tabs, then terminals, and fired worktree.activate alongside them.
-  // The reads are now concurrent and unblocked, while the activation moved to its own effect that
-  // waits for the compatibility verdict, because it writes host state.
-  it('loads session tabs and terminals concurrently, ahead of any desktop activation', () => {
-    const readEffect = sliceBetween(
+  it('loads session tabs without waiting for desktop activation', () => {
+    const startupEffect = sliceBetween(
       'void (async () => {',
       'return () => {\n      disposed = true',
       startupSource
     )
 
-    expect(readEffect).toContain(
-      'await Promise.all([\n        ensureSessionTabs().catch(() => null),\n        fetchTerminals({ allowEmptyLoaded: false }).catch(() => false)\n      ])'
+    expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect).toContain("if (client && created !== '1' && !isFloatingWorkspaceRoute)")
+    expect(startupEffect).toContain("if (client && created === '1' && !isFloatingWorkspaceRoute)")
+    expect(startupEffect).toContain('notifyClients: false')
+    expect(startupEffect).toContain("navigation: 'caller'")
+    expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
+    expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
+      startupEffect.indexOf('await ensureSessionTabs()')
     )
-    // The reads must not wait on the verdict; that is the point of mounting under the gate.
-    expect(readEffect).not.toContain('protocolVerified')
-    expect(readEffect).not.toContain('worktree.activate')
-    expect(startupSource).toContain('}, [connState, fetchTerminals, ensureSessionTabs])')
+    expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
+    expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
   })
 
-  it('holds worktree.activate until the compatibility verdict lands', () => {
-    const activationEffect = sliceBetween(
-      "if (connState !== 'connected' || !client || !protocolVerified || isFloatingWorkspaceRoute) {",
-      'return () => {\n      disposed = true',
-      startupSource.slice(startupSource.indexOf('worktree.activate') - 2000)
-    )
-
-    // Why: a desktop that omits protocolVersion reads as version 0 and IS blocked, so mounting
-    // this route pre-verdict must not let it mutate a host the gate is about to refuse.
-    expect(activationEffect).toContain("sendRequest('worktree.activate'")
-    expect(activationEffect).toContain('notifyClients: false')
-    expect(activationEffect).toContain("navigation: 'caller'")
-    expect(activationEffect).toContain("if (created !== '1') {")
-    expect(activationEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
-    expect(activationEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
-    // The only worktree.activate calls in the route are the two this gated effect owns.
-    expect(startupSource.split("sendRequest('worktree.activate'")).toHaveLength(2)
-    expect(startupSource).toContain('    protocolVerified,\n    showToast,\n    worktreeId\n  ])')
-  })
-
-  // Was: this route ran its own retrying status.get. The gate above every /h/ route already
-  // holds that answer, so the second request is gone and the gates read it instead.
-  it('fails runtime capability gates closed until the shared status.get is proven', () => {
+  it('fails runtime capability gates closed before probing a replacement client', () => {
     const capabilityEffect = sliceBetween(
       'const hostQueryReplyInputSupportedRef = useRef(false)',
       'return {\n    consumeAcceptedSessionTabs',
       tabReconciliationSource
     )
+    const probeStart = capabilityEffect.indexOf('startRuntimeCapabilityProbe(client,')
 
-    expect(tabReconciliationSource).not.toContain('startRuntimeCapabilityProbe')
-    expect(tabReconciliationSource).not.toContain('useHostProtocolGates')
-    // One read of the gate for the whole route, taken in the foundation and passed down.
-    expect(foundationSource).toContain(
-      'const { compatVerdict, compatVerified, hostCapabilities, statusPending } = useHostProtocolGates()'
-    )
-    // Settled is not passing, and passing-by-fallback is not answered. The write gate reads all
-    // three, so a host that never answered status.get cannot be mistaken for a verified one.
-    expect(foundationSource).toContain(
-      "const protocolVerified = !statusPending && compatVerified && compatVerdict.kind === 'ok'"
-    )
-    expect(capabilityEffect).toContain(
-      "if (!client || connState !== 'connected' || !protocolVerified) {"
-    )
-    const readStart = capabilityEffect.indexOf(
-      "setBrowserScreencastSupported(hostCapabilities.includes('browser.screencast.v1'))"
-    )
-    expect(readStart).toBeGreaterThanOrEqual(0)
+    expect(probeStart).toBeGreaterThanOrEqual(0)
     for (const reset of [
       'setBrowserScreencastSupported(null)',
       'setAgentSessionHistorySupported(null)',
@@ -226,7 +185,7 @@ describe('mobile session startup', () => {
     ]) {
       const resetIndex = capabilityEffect.lastIndexOf(reset)
       expect(resetIndex).toBeGreaterThanOrEqual(0)
-      expect(resetIndex).toBeLessThan(readStart)
+      expect(resetIndex).toBeLessThan(probeStart)
     }
   })
 
@@ -330,44 +289,5 @@ describe('mobile session startup', () => {
     expect(source).toContain('getPendingTerminalRecoveryContextKey,')
     expect(source).toContain('onPendingTerminalRecoveryParked: setParkedPendingTerminalContext')
     expect(source).toContain('retryPendingTerminalRecovery()')
-  })
-
-  it('boots the terminal engine while the startup reads are still in flight', () => {
-    // Why: the loading and pending-terminal states are exactly the window in which the startup
-    // RPCs are outstanding, so the engine loads there rather than after terminal.list answers.
-    const loadingBranch = sliceBetween(
-      'return showLoadingState ? (',
-      ') : showEmptyState ? (',
-      activeContentSource
-    )
-    const prewarmElement =
-      '<TerminalEnginePrewarm\n        reservedTabBarHeight={prewarmReservedTabBarHeight}\n        textScale={terminalTextScale}\n        onEngineMeasured={measurePrewarmViewport}\n      />'
-    expect(loadingBranch).toContain(prewarmElement)
-    expect(loadingBranch).toContain('<View style={styles.terminalFrame}>')
-
-    const pendingBranch = sliceBetween(
-      ') : activePendingTerminalTab ? (',
-      ') : (\n    <View\n      style={styles.terminalFrame}',
-      activeContentSource
-    )
-    expect(pendingBranch).toContain(prewarmElement)
-
-    // The pre-warm never reaches a terminal: the pane list is still the only attachment point.
-    expect(activeContentSource).toContain('{terminals.map((terminal) => (')
-    expect(activeContentSource.indexOf('<TerminalEnginePrewarm')).toBeLessThan(
-      activeContentSource.indexOf('{terminals.map((terminal) => (')
-    )
-  })
-
-  it('refuses a pre-warm viewport measured before the frame had a height', () => {
-    const measure = sliceBetween(
-      'const measurePrewarmViewport = useCallback(',
-      '  return {\n    getTerminalRef',
-      subscriptionFoundationSource
-    )
-    expect(measure).toContain('if (viewportMeasuredRef.current || frameHeight <= 0) {')
-    expect(measure).toContain('await engine.measureFitDimensions(frameHeight)')
-    // Why: the latch is re-checked after the await so a real pane that measured first wins.
-    expect(measure).toContain('if (dims && !viewportMeasuredRef.current) {')
   })
 })

@@ -7,7 +7,7 @@ const probe = vi.hoisted(() => ({
   start: vi.fn()
 }))
 
-vi.mock('../transport/runtime-status-probe', () => ({
+vi.mock('../transport/runtime-capability-probe', () => ({
   startRuntimeCapabilityProbe: probe.start
 }))
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
+import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
 import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
@@ -16,8 +17,6 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     worktreeId,
     client,
     connState,
-    hostCapabilities,
-    protocolVerified,
     sessionTabsRef,
     activeSessionTabIdRef,
     terminalsRef,
@@ -145,14 +144,8 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
 
   const hostQueryReplyInputSupportedRef = useRef(false)
 
-  // Why: the gate above every /h/ route already holds this connection's status.get answer (and
-  // retries it until one lands), so the route reads it through the foundation instead of issuing
-  // a second one. It reports no capabilities until the verdict is proven, which keeps the
-  // fail-closed reset below identical to the old pre-probe clear.
   useEffect(() => {
-    // Why: a client swap can keep the route connected while moving to an older
-    // host; clear the prior capability before exposing host-specific actions.
-    if (!client || connState !== 'connected' || !protocolVerified) {
+    if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
       setAgentSessionHistorySupported(null)
       setQuickCommandsSupported(null)
@@ -160,15 +153,26 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       hostQueryReplyInputSupportedRef.current = false
       return
     }
-    setBrowserScreencastSupported(hostCapabilities.includes('browser.screencast.v1'))
-    setAgentSessionHistorySupported(hostCapabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
-    setQuickCommandsSupported(supportsMobileQuickCommands(hostCapabilities))
-    // Why: hosts without this capability strip inputKind from terminal.send,
-    // so a forwarded xterm reply would become floor-stealing shell input.
-    hostQueryReplyInputSupportedRef.current = hostCapabilities.includes(
-      TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
-    )
-  }, [client, connState, hostCapabilities, protocolVerified])
+    // Why: a client swap can keep the route connected while moving to an older
+    // host; clear the prior capability before exposing host-specific actions.
+    setBrowserScreencastSupported(null)
+    setAgentSessionHistorySupported(null)
+    setQuickCommandsSupported(null)
+    setShowQuickCommands(false)
+    hostQueryReplyInputSupportedRef.current = false
+    // Why: the probe retries — a relay→direct cutover or request timeout rejects
+    // status.get without changing connState, which used to latch these hidden.
+    return startRuntimeCapabilityProbe(client, (capabilities) => {
+      setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
+      setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
+      setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
+      // Why: hosts without this capability strip inputKind from terminal.send,
+      // so a forwarded xterm reply would become floor-stealing shell input.
+      hostQueryReplyInputSupportedRef.current = capabilities.includes(
+        TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+      )
+    })
+  }, [client, connState])
   return {
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,

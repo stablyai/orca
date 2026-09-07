@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from './rpc-client'
-import type { ConnectionState } from './types'
-import { readRuntimeCapabilities, startRuntimeStatusProbe } from './runtime-status-probe'
+import type { ConnectionState, RpcSuccess } from './types'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
 import { normalizeHostAppVersion, recordHostAppVersion } from './host-app-version-store'
@@ -11,10 +10,6 @@ export type HostStatusGates = {
   floatingWorkspaceEnabled: boolean
   desktopAppVersion: string | null
   compatVerdict: CompatVerdict
-  // Why: `compatVerdict.kind === 'ok'` is not proof. A host that never answers status.get settles
-  // the same `ok` so navigation is not trapped, and that fallback must not read as a passing
-  // verdict. Only an evaluated status reply sets this, so writes to the host can gate on it.
-  compatVerified: boolean
   statusPending: boolean
 }
 
@@ -26,11 +21,8 @@ type LoadedHostStatusGates = Omit<HostStatusGates, 'statusPending'> & {
 
 const EMPTY_HOST_CAPABILITIES: string[] = []
 
-// The route tree's single status.get: it reads capabilities, the protocol-compat verdict, and
-// the floating-workspace flag once per connection and publishes them through HostProtocolGate,
-// so no descendant issues its own. The verdict really can block — evaluateCompat reads a missing
-// protocolVersion as 0, below MIN_COMPATIBLE_DESKTOP_VERSION — so a pending verdict is a real
-// state, not a formality, and anything that writes to the host must wait for it.
+// Reads status.get on connect for capabilities, protocol-compat verdict, and the
+// floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
 export function useHostStatusGates(args: {
   hostId: string | undefined
   client: RpcClient | null
@@ -47,33 +39,30 @@ export function useHostStatusGates(args: {
       setUnverified(true)
       return
     }
+    let cancelled = false
     const requestClient = client
     const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
       setLoaded({ hostId, client: requestClient, ...gates })
       setUnverified(false)
     }
-    // Why: a transient status failure must not trap navigation, so the first miss settles
-    // conservative gates and releases the pending overlay; the probe keeps retrying underneath
-    // so a cutover or timeout no longer latches capability-gated UI hidden until a remount.
-    // compatVerified stays false: this releases the UI, it proves nothing about the host.
-    let failedOpen = false
-    const failOpen = () => {
-      if (failedOpen) {
-        return
-      }
-      failedOpen = true
-      settle({
-        hostCapabilities: [],
-        floatingWorkspaceEnabled: false,
-        desktopAppVersion: null,
-        compatVerdict: { kind: 'ok' },
-        compatVerified: false
-      })
-    }
-    return startRuntimeStatusProbe(requestClient, {
-      onUnavailable: failOpen,
-      onStatus: (result) => {
-        const status = result as DesktopStatus & { capabilities?: string[] }
+    void (async () => {
+      try {
+        const response = await requestClient.sendRequest('status.get')
+        if (cancelled) {
+          return
+        }
+        if (!response.ok) {
+          settle({
+            hostCapabilities: [],
+            floatingWorkspaceEnabled: false,
+            desktopAppVersion: null,
+            compatVerdict: { kind: 'ok' }
+          })
+          return
+        }
+        const status = (response as RpcSuccess).result as DesktopStatus & {
+          capabilities?: string[]
+        }
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,
           desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
@@ -83,11 +72,10 @@ export function useHostStatusGates(args: {
           void recordHostAppVersion(hostId, desktopAppVersion)
         }
         settle({
-          hostCapabilities: [...readRuntimeCapabilities(result)],
+          hostCapabilities: status.capabilities ?? [],
           floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
           desktopAppVersion,
-          compatVerdict: verdict,
-          compatVerified: true
+          compatVerdict: verdict
         })
         if (verdict.kind === 'blocked') {
           // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
@@ -98,8 +86,21 @@ export function useHostStatusGates(args: {
             requiredDesktopVersion: verdict.requiredDesktopVersion
           })
         }
+      } catch {
+        // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
+        if (!cancelled) {
+          settle({
+            hostCapabilities: [],
+            floatingWorkspaceEnabled: false,
+            desktopAppVersion: null,
+            compatVerdict: { kind: 'ok' }
+          })
+        }
       }
-    })
+    })()
+    return () => {
+      cancelled = true
+    }
   }, [client, connState, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
@@ -110,7 +111,6 @@ export function useHostStatusGates(args: {
       floatingWorkspaceEnabled: false,
       desktopAppVersion: null,
       compatVerdict: { kind: 'ok' },
-      compatVerified: false,
       statusPending: connState === 'connected' && client !== null
     }
   }
@@ -119,7 +119,6 @@ export function useHostStatusGates(args: {
     floatingWorkspaceEnabled: proven.floatingWorkspaceEnabled,
     desktopAppVersion: proven.desktopAppVersion,
     compatVerdict: proven.compatVerdict,
-    compatVerified: proven.compatVerified,
     // Why (F10): unchanged pending timing — the reconnect refetch is still "unknown", it just no
     // longer blanks the capabilities this same host already proved.
     statusPending: connState === 'connected' && unverified

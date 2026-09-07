@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  readRuntimeCapabilities,
-  startRuntimeCapabilityProbe,
-  startRuntimeStatusProbe
-} from './runtime-status-probe'
+import { startRuntimeCapabilityProbe } from './runtime-capability-probe'
 import { LogicalClientCutoverError } from './stable-logical-rpc-client'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
@@ -129,46 +125,19 @@ describe('startRuntimeCapabilityProbe', () => {
     cancel()
   })
 
-  // Was: an ok:false response was retried like a timeout. The probe now backs the gate that sits
-  // above every /h/ route, so polling a host that already answered would run for the life of the
-  // connection. A reply is an answer; only an unanswered request is retried.
-  it('settles once on an ok:false response rather than polling the host', async () => {
+  it('retries an ok:false response instead of settling', async () => {
     const failure: RpcResponse = {
       ok: false,
       id: '1',
       error: { code: 'internal', message: 'nope' },
       _meta: { runtimeId: 'r1' }
     }
-    const { client, calls } = makeClient([failure, ok(['a.v1'])])
+    const { client } = makeClient([failure, ok(['a.v1'])])
     const seen: (readonly string[])[] = []
-    const retrying: boolean[] = []
-    const cancel = startRuntimeStatusProbe(client, {
-      onStatus: (status) => seen.push(readRuntimeCapabilities(status)),
-      onUnavailable: (isRetrying) => retrying.push(isRetrying)
-    })
+    const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
     await flushMicrotasks()
-    expect(retrying).toEqual([false])
     expect(seen).toEqual([])
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(calls()).toBe(1)
-    expect(seen).toEqual([])
-    cancel()
-  })
-
-  it('still retries a request the host never answered', async () => {
-    const { client, calls } = makeClient([new Error('timeout'), ok(['a.v1'])])
-    const seen: (readonly string[])[] = []
-    const retrying: boolean[] = []
-    const cancel = startRuntimeStatusProbe(client, {
-      onStatus: (status) => seen.push(readRuntimeCapabilities(status)),
-      onUnavailable: (isRetrying) => retrying.push(isRetrying)
-    })
-    await flushMicrotasks()
-    expect(retrying).toEqual([true])
-
     await vi.advanceTimersByTimeAsync(1_000)
-    expect(calls()).toBe(2)
     expect(seen).toEqual([['a.v1']])
     cancel()
   })
@@ -212,41 +181,5 @@ describe('startRuntimeCapabilityProbe', () => {
     resolveRequest?.(ok(['a.v1']))
     await flushMicrotasks()
     expect(seen).toEqual([])
-  })
-
-  it('reports the full status, not just capabilities', async () => {
-    const response: RpcResponse = {
-      ok: true,
-      id: '1',
-      result: { appVersion: '1.4.0', protocolVersion: 7, capabilities: ['a.v1'] },
-      _meta: { runtimeId: 'r1' }
-    }
-    const { client } = makeClient([response])
-    const seen: Record<string, unknown>[] = []
-    const cancel = startRuntimeStatusProbe(client, { onStatus: (status) => seen.push(status) })
-    await flushMicrotasks()
-    expect(seen).toEqual([{ appVersion: '1.4.0', protocolVersion: 7, capabilities: ['a.v1'] }])
-    cancel()
-  })
-
-  // Why: the gate needs to release its pending cover on the first miss rather than wait out the
-  // retries, so a wedged status.get cannot hold the whole host UI behind a spinner.
-  it('announces each failed attempt while the retry is still pending', async () => {
-    const { client, calls } = makeClient([new Error('boom'), ok(['a.v1'])])
-    const misses: number[] = []
-    const seen: Record<string, unknown>[] = []
-    const cancel = startRuntimeStatusProbe(client, {
-      onStatus: (status) => seen.push(status),
-      onUnavailable: () => misses.push(calls())
-    })
-    await flushMicrotasks()
-    expect(misses).toEqual([1])
-    expect(seen).toEqual([])
-
-    await vi.advanceTimersByTimeAsync(1_000)
-    await flushMicrotasks()
-    expect(seen).toEqual([{ capabilities: ['a.v1'] }])
-    expect(misses).toEqual([1])
-    cancel()
   })
 })

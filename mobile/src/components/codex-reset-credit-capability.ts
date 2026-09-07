@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CODEX_RESET_CREDIT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
-import { startRuntimeCapabilityProbe } from '../transport/runtime-status-probe'
+import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 
 // Why: source the capability string from the shared contract so a host bump can never
 // silently drift from the mobile probe.

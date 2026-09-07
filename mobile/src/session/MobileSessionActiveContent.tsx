@@ -2,8 +2,6 @@ import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
-import { TerminalEnginePrewarm } from './TerminalEnginePrewarm'
-import { MOBILE_SESSION_TAB_BAR_HEIGHT } from './mobile-session-frame-styles'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
@@ -77,30 +75,15 @@ export function MobileSessionActiveContent({
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
     showLoadingState,
-    measurePrewarmViewport,
-    visibleTabs,
     showEmptyState,
     keyboardLift,
     activeTerminalKeyboardLift,
     toastAnimatedStyle,
     createTabBusy
   } = controller
-  // Why the same list the header gates on: an unmounted tab bar gives the content row its band
-  // back, so the pre-warm would measure a taller box than the pane ever gets. Reading the header's
-  // own condition keeps the two from drifting when what counts as a visible tab changes.
-  const prewarmReservedTabBarHeight = visibleTabs.length > 0 ? 0 : MOBILE_SESSION_TAB_BAR_HEIGHT
   return showLoadingState ? (
-    // Why: the engine boots inside the real terminal frame while the startup RPCs are still in
-    // flight, so the first pane inherits a warm WebView and a measured viewport (see prewarm).
-    <View style={styles.terminalFrame}>
-      <View style={styles.emptyState}>
-        <ActivityIndicator size="small" color={colors.textSecondary} />
-      </View>
-      <TerminalEnginePrewarm
-        reservedTabBarHeight={prewarmReservedTabBarHeight}
-        textScale={terminalTextScale}
-        onEngineMeasured={measurePrewarmViewport}
-      />
+    <View style={styles.emptyState}>
+      <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : showEmptyState ? (
     <View style={styles.emptyState}>
@@ -188,35 +171,25 @@ export function MobileSessionActiveContent({
       )}
     </View>
   ) : activePendingTerminalTab ? (
-    <View style={styles.terminalFrame}>
-      <View style={styles.emptyState}>
-        {!isPendingTerminalRecoveryParked && (
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        )}
-        <Text style={styles.emptyText}>
-          {isPendingTerminalRecoveryParked
-            ? 'Terminal is taking longer than expected'
-            : activePendingTerminalTab.title || 'Loading terminal'}
-        </Text>
-        {isPendingTerminalRecoveryParked && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading terminal"
-            style={({ pressed }) => [
-              styles.createButton,
-              pressed && styles.newTerminalButtonPressed
-            ]}
-            onPress={() => void retryPendingTerminalRecovery()}
-          >
-            <Text style={styles.createButtonText}>Retry</Text>
-          </Pressable>
-        )}
-      </View>
-      <TerminalEnginePrewarm
-        reservedTabBarHeight={prewarmReservedTabBarHeight}
-        textScale={terminalTextScale}
-        onEngineMeasured={measurePrewarmViewport}
-      />
+    <View style={styles.emptyState}>
+      {!isPendingTerminalRecoveryParked && (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      )}
+      <Text style={styles.emptyText}>
+        {isPendingTerminalRecoveryParked
+          ? 'Terminal is taking longer than expected'
+          : activePendingTerminalTab.title || 'Loading terminal'}
+      </Text>
+      {isPendingTerminalRecoveryParked && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading terminal"
+          style={({ pressed }) => [styles.createButton, pressed && styles.newTerminalButtonPressed]}
+          onPress={() => void retryPendingTerminalRecovery()}
+        >
+          <Text style={styles.createButtonText}>Retry</Text>
+        </Pressable>
+      )}
     </View>
   ) : (
     <View

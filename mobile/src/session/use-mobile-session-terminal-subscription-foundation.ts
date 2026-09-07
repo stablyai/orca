@@ -1,6 +1,4 @@
 import { useRef, useCallback } from 'react'
-import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
-import { TERMINAL_ENGINE_PREWARM_HANDLE } from './TerminalEnginePrewarm'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 
 export function useMobileSessionTerminalSubscriptionFoundation(
@@ -103,34 +101,12 @@ export function useMobileSessionTerminalSubscriptionFoundation(
     },
     [getTerminalRef]
   )
-  // Why: the pre-warm engine occupies the frame the first pane will occupy, so let it satisfy
-  // the one-shot measurement. It has no handle, so it is passed its own ref instead of looking
-  // one up, and it must never latch a measurement taken before the frame has a real height.
-  const measurePrewarmViewport = useCallback(
-    async (engine: TerminalWebViewHandle, frameHeight: number) => {
-      if (viewportMeasuredRef.current || frameHeight <= 0) {
-        return
-      }
-      const dims = await engine.measureFitDimensions(frameHeight)
-      terminalDiagnosticsRef.current.viewportMeasured(
-        TERMINAL_ENGINE_PREWARM_HANDLE,
-        dims,
-        frameHeight
-      )
-      if (dims && !viewportMeasuredRef.current) {
-        viewportRef.current = dims
-        viewportMeasuredRef.current = true
-      }
-    },
-    []
-  )
   return {
     getTerminalRef,
     unsubscribeTerminal,
     unsubscribeTerminalRef,
     clearTerminalCache,
-    measureViewportOnce,
-    measurePrewarmViewport
+    measureViewportOnce
   }
 }
 
