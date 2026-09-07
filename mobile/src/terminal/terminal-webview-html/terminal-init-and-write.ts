@@ -103,7 +103,9 @@ export const TERMINAL_HTML_INIT_AND_WRITE = `${TERMINAL_WEBGL_RECOVERY_JS}
         initialOscLinkRowOffset = 0;
         initialOscLinkEvictionReady = true;
         applyFitScale('init-replay');
-        notify({ type: 'ready', cols: cols, rows: rows });
+        // Why: only this 'ready' follows the rAF chain and the drained replay, so only it
+        // proves a committed repaint; native gates the surface reveal on source (#17304).
+        notify({ type: 'ready', cols: cols, rows: rows, source: 'init' });
       });
     });
   }
@@ -132,7 +134,7 @@ export const TERMINAL_HTML_INIT_AND_WRITE = `${TERMINAL_WEBGL_RECOVERY_JS}
     term.resize(cols || term.cols, rows || term.rows);
     emitKeyboardAvoidanceMetrics();
     applyFitScale('resize-msg');
-    notify({ type: 'ready', cols: cols, rows: rows });
+    notify({ type: 'ready', cols: cols, rows: rows, source: 'resize' });
   }
 
   // reflow(): see terminal-webview-reflow-injected.ts (extracted for max-lines).

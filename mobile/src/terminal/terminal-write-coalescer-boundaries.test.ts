@@ -8,6 +8,10 @@ import {
 } from './terminal-write-coalescer'
 
 const webViewSource = readFileSync(new URL('./TerminalWebView.tsx', import.meta.url), 'utf8')
+const lifecycleSource = readFileSync(
+  new URL('./terminal-webview-document-lifecycle.ts', import.meta.url),
+  'utf8'
+)
 
 // Simulates TerminalWebView's postMessage: ready → deliver, not ready → queue.
 // There is no React render harness in the node environment, so the boundary
@@ -145,13 +149,20 @@ describe('terminal write coalescer boundaries', () => {
     }
   })
 
-  it('clears the coalescer in both document-lifecycle hooks alongside pendingMessages', () => {
-    for (const hook of ['const handleLoadStart', 'const handleContentProcessDidTerminate']) {
-      const start = webViewSource.indexOf(hook)
-      expect(start).toBeGreaterThanOrEqual(0)
-      const body = webViewSource.slice(start, webViewSource.indexOf('}, [', start))
-      expect(body).toContain('pendingMessages.clear()')
-      expect(body).toContain('writeCoalescer.clear()')
+  it('clears the coalescer alongside pendingMessages on every document invalidation', () => {
+    const start = lifecycleSource.indexOf('const invalidateDocument')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const body = lifecycleSource.slice(start, lifecycleSource.indexOf('}, [', start))
+    expect(body).toContain('pendingMessages.clear()')
+    expect(body).toContain('writeCoalescer.clear()')
+    // Why: both document-replacement paths must reach it — load start directly, and
+    // content-process death through the reload helper.
+    expect(webViewSource).toContain('onLoadStart={invalidateDocument}')
+    for (const hook of ['const reloadDocument', 'const handleContentProcessDidTerminate']) {
+      const hookStart = lifecycleSource.indexOf(hook)
+      expect(hookStart).toBeGreaterThanOrEqual(0)
+      const hookBody = lifecycleSource.slice(hookStart, lifecycleSource.indexOf('}, [', hookStart))
+      expect(hookBody).toMatch(/invalidateDocument\(\)|reloadDocument\(\)/)
     }
   })
 

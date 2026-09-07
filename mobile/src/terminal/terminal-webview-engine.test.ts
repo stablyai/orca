@@ -234,6 +234,19 @@ describe('terminal WebView bundled engine', () => {
     expect(harness.term.refresh).toHaveBeenCalledTimes(1)
   })
 
+  it('labels the init and resize readiness notifications distinctly', () => {
+    // Why: init() and resize() both notify 'ready', but only init's runs after the rAF
+    // chain and the drained replay. Native gates the surface reveal on the label, so an
+    // unlabeled notify would reveal a blank surface when a resize answers first (#17304).
+    expect(terminalHtmlSource).toContain(
+      "notify({ type: 'ready', cols: cols, rows: rows, source: 'init' })"
+    )
+    expect(terminalHtmlSource).toContain(
+      "notify({ type: 'ready', cols: cols, rows: rows, source: 'resize' })"
+    )
+    expect(terminalHtmlSource).not.toContain("notify({ type: 'ready', cols: cols, rows: rows })")
+  })
+
   it('answers native readiness probes from the live document', () => {
     expect(terminalHtmlSource).toContain("if (msg.type === 'ping')")
     expect(terminalHtmlSource).toContain("notify({ type: 'pong', pingId: msg.id })")
