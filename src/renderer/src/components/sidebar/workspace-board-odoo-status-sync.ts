@@ -6,6 +6,7 @@ import {
 } from '@/runtime/runtime-odoo-client'
 import type { OdooStage, OdooTicket } from '../../../../shared/odoo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
+import { resolveDashboardCardOdooTicket } from '@/components/dashboard/dashboard-card-context'
 export type OdooBoardStatusSyncResult = {
   updated: number
   skipped: number
@@ -70,7 +71,12 @@ function addMessage(result: OdooBoardStatusSyncResult, message: OdooBoardStatusS
 export type SyncOdooBoardStatusArgs = {
   worktreeIds: readonly string[]
   targetStatus: WorkspaceStatusDefinition
-  worktreesById: ReadonlyMap<string, Pick<Worktree, 'linkedOdooTicket' | 'linkedOdooInstanceId'>>
+  /** `linkedWorkItem` is read too: a workspace created from a ticket before the
+   *  flat fields were persisted carries the link only in that shape. */
+  worktreesById: ReadonlyMap<
+    string,
+    Pick<Worktree, 'linkedOdooTicket' | 'linkedOdooInstanceId' | 'linkedWorkItem'>
+  >
   getSettingsForWorktree: (worktreeId: string) => RuntimeOdooSettings
   /** Board moves are local-first; a slow read must not overwrite a newer move. */
   getLatestWorkspaceStatus: (worktreeId: string) => string | null | undefined
@@ -90,7 +96,12 @@ async function syncOneWorktree(
 ): Promise<OdooBoardStatusSyncResult> {
   const result = emptyOdooBoardStatusSyncResult()
   const worktree = args.worktreesById.get(worktreeId)
-  const ticketId = worktree?.linkedOdooTicket
+  // Through the shared resolver rather than the flat field alone: workspaces
+  // created from a ticket before that field was persisted hold the link only as
+  // `linkedWorkItem`, and reading the field alone silently skips every one of
+  // them — the board move looks like it worked while the stage never changed.
+  const linked = worktree ? resolveDashboardCardOdooTicket(worktree) : undefined
+  const ticketId = linked?.id
   if (!ticketId) {
     result.skipped += 1
     return result
@@ -104,7 +115,7 @@ async function syncOneWorktree(
   }
 
   const settings = args.getSettingsForWorktree(worktreeId)
-  const instanceId = worktree?.linkedOdooInstanceId ?? null
+  const instanceId = worktree?.linkedOdooInstanceId ?? linked?.instanceId ?? null
   const ticketRef = `#${ticketId}`
 
   try {

@@ -161,6 +161,62 @@ describe('syncOdooBoardStatuses', () => {
     expect(d.getTicket).not.toHaveBeenCalled()
   })
 
+  // A workspace started from a ticket carries the link as `linkedWorkItem`. Before
+  // the flat fields were persisted at creation, that was the only shape it had —
+  // and reading the flat field alone skipped it, so the board move appeared to
+  // succeed while the Odoo stage never changed.
+  it('moves the stage for a workspace linked only through linkedWorkItem', async () => {
+    const d = deps()
+    const result = await syncOdooBoardStatuses({
+      ...args({
+        worktreesById: new Map([
+          [
+            'wt-1',
+            {
+              linkedWorkItem: {
+                provider: 'odoo' as const,
+                type: 'issue' as const,
+                number: 45514,
+                title: '#45514 Ticket',
+                url: 'https://odoo.example.test/odoo/project.task/45514',
+                odooInstanceId: 'prod'
+              }
+            }
+          ]
+        ])
+      }),
+      deps: asDeps(d)
+    })
+    expect(result.updated).toBe(1)
+    expect(result.skipped).toBe(0)
+    expect(d.updateTicket).toHaveBeenCalled()
+  })
+
+  it('ignores a linkedWorkItem from another provider', async () => {
+    const d = deps()
+    const result = await syncOdooBoardStatuses({
+      ...args({
+        worktreesById: new Map([
+          [
+            'wt-1',
+            {
+              linkedWorkItem: {
+                provider: 'linear' as const,
+                type: 'issue' as const,
+                number: 45514,
+                title: 'ENG-1',
+                url: 'https://linear.app/x/issue/ENG-1'
+              }
+            }
+          ]
+        ])
+      }),
+      deps: asDeps(d)
+    })
+    expect(result.skipped).toBe(1)
+    expect(d.getTicket).not.toHaveBeenCalled()
+  })
+
   it('reports a failed write', async () => {
     const d = deps({ updateTicket: vi.fn().mockResolvedValue({ ok: false, error: 'denied' }) })
     const result = await syncOdooBoardStatuses({ ...args(), deps: asDeps(d) })

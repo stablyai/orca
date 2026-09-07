@@ -10,6 +10,7 @@ import { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details
 import { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 import { useWorktreeCardSecondaryDetails } from './use-worktree-card-secondary-details'
 import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-actions'
+import { resolveDashboardCardOdooTicket } from '@/components/dashboard/dashboard-card-context'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
@@ -44,12 +45,18 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const showComment = foundation.cardProps.includes('comment')
   const showPorts = foundation.cardProps.includes('ports')
   const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
+  // Resolved rather than read flat: a workspace started from a ticket may hold the
+  // link only as `linkedWorkItem`, and the badge would then never appear on it.
+  const linkedOdoo = resolveDashboardCardOdooTicket(worktree)
   const odooTicket = useWorktreeCardOdooTicket({
-    linkedOdooTicket: worktree.linkedOdooTicket,
-    linkedOdooInstanceId: worktree.linkedOdooInstanceId,
+    linkedOdooTicket: linkedOdoo?.id ?? null,
+    linkedOdooInstanceId: worktree.linkedOdooInstanceId ?? linkedOdoo?.instanceId ?? null,
     enabled: showOdooTicket
   })
-  const odooTicketDisplay = getWorktreeCardOdooTicketDisplay(worktree, odooTicket)
+  const odooTicketDisplay = getWorktreeCardOdooTicketDisplay(
+    { linkedOdooTicket: linkedOdoo?.id ?? null },
+    odooTicket
+  )
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 

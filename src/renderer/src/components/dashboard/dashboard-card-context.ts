@@ -36,7 +36,7 @@ export type DashboardCardContext = {
  * the id alone is enough to badge the card.
  */
 export function resolveDashboardCardOdooTicket(
-  worktree: Worktree
+  worktree: Pick<Worktree, 'linkedWorkItem' | 'linkedOdooTicket' | 'linkedOdooInstanceId'>
 ): DashboardCardOdooTicket | undefined {
   const cached = worktree.linkedWorkItem?.provider === 'odoo' ? worktree.linkedWorkItem : undefined
   const id = worktree.linkedOdooTicket ?? cached?.number ?? null

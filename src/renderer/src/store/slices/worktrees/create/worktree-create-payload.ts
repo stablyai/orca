@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-types'
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
 import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
+import { deriveOdooWorktreeLinkFields } from '@/lib/odoo-worktree-link-fields'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
@@ -89,6 +90,10 @@ function sharedCreateFields(
       : {}),
     ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
     ...(options?.linkedWorkItem !== undefined ? { linkedWorkItem: options.linkedWorkItem } : {}),
+    // Why: the stage sync and the sidebar badge read the flat ticket fields, not
+    // `linkedWorkItem`. Without this a workspace started from a ticket carries the
+    // link in a shape neither of them looks at, so the board never moves the stage.
+    ...deriveOdooWorktreeLinkFields(options?.linkedWorkItem),
     ...(options?.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: options.linkedTaskSourceContext }
       : {}),
