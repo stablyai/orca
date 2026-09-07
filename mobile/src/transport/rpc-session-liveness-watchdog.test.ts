@@ -220,6 +220,42 @@ describe('RpcSessionLivenessWatchdog', () => {
     expect(terminate).toHaveBeenCalledOnce()
   })
 
+  it('gives a resume probe its own miss budget, not the one the ordinary probe spent', async () => {
+    // Why: the urgent profile exists to tolerate one slow answer from a cold radio. Inheriting
+    // an ordinary miss spends that tolerance before the resume probe is even sent, so the first
+    // slow answer on a healthy socket kills the session -- the case the profile was added for.
+    const terminate = vi.fn()
+    const sendProbe = vi.fn(() => true)
+    const identity = {}
+    const watchdog = new RpcSessionLivenessWatchdog({
+      transport: 'relay',
+      idleProbeMs: 20_000,
+      probeTimeoutMs: 4_000,
+      missedProbeLimit: 2,
+      urgentProbeTimeoutMs: 2_000,
+      urgentMissedProbeLimit: 2,
+      shouldIdleProbe: () => true,
+      sendProbe,
+      terminate,
+      now: Date.now
+    })
+    watchdog.start(identity)
+
+    // One ordinary miss on the idle sweep, tolerated, and a second ordinary probe in flight.
+    await vi.advanceTimersByTimeAsync(20_000)
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(terminate).not.toHaveBeenCalled()
+
+    // Foreground: the resume probe supersedes the ordinary one still in flight.
+    watchdog.probeNow(identity, 'resume')
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(terminate).not.toHaveBeenCalled()
+
+    // The second urgent miss is the one that may terminate.
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(terminate).toHaveBeenCalledOnce()
+  })
+
   it('still reaches a verdict on a caller probe when the app backgrounds', async () => {
     // The gate covers the idle sweep only. A nudge or resume probe was asked for on
     // purpose, and abandoning it would leave a genuinely dead socket unreported.

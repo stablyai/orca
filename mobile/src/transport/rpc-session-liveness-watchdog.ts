@@ -174,6 +174,12 @@ export class RpcSessionLivenessWatchdog {
       return
     }
     this.clearActiveTimer()
+    // Why: switching profile starts a new observation window on a different clock. Carrying the
+    // ordinary probe's misses into the urgent one spends the tolerated slow answer that profile
+    // exists to give a cold radio, so the first 2s miss would kill a healthy socket.
+    if (profile !== this.profile) {
+      this.missedProbes = 0
+    }
     this.profile = profile
     this.probing = true
     this.idleSweepProbe = fromIdleSweep
