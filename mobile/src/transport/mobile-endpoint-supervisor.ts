@@ -16,7 +16,6 @@ import {
 } from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
-import { RelayRecoveryIntentQueue } from './relay-recovery-intent-queue'
 import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
@@ -39,7 +38,7 @@ export class MobileEndpointSupervisor {
   private bundle: MobileRelayCredentialBundle | null = null
   private stopped = false
   private operationInFlight = false
-  private readonly pending = new RelayRecoveryIntentQueue()
+  private pendingReplace = false
   private readonly nudgeRouter: MobileEndpointNudgeRouter
   private credentialRotationInFlight = false
   private relayRotationPending = false
@@ -129,8 +128,11 @@ export class MobileEndpointSupervisor {
       },
       afterProbe: () => {
         this.operationInFlight = false
-        const queued = this.pending.takeRecovery() || this.pending.hasReplacement()
-        if (queued || this.relayRotationPending || this.logical.getState() !== 'connected') {
+        if (
+          this.pendingReplace ||
+          this.relayRotationPending ||
+          this.logical.getState() !== 'connected'
+        ) {
           void this.recoverRelay(this.relayRotationPending)
         }
       }
@@ -193,7 +195,6 @@ export class MobileEndpointSupervisor {
 
   stop(): void {
     this.stopped = true
-    this.pending.clear()
     this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null
@@ -214,14 +215,13 @@ export class MobileEndpointSupervisor {
       return
     }
     if (this.operationInFlight) {
-      // Why: a direct cutover or a slow post-migration write can own the mutex when
-      // a handoff lands. Every request is queued — an owning replacement keeps its
-      // force/owns intent, anything else replays as a plain recovery — so the
-      // holder's release replays it instead of dropping it.
-      this.pending.queue(forceReplacement, ownsRecovery)
+      // Why: a 12s direct probe can own the mutex when a network handoff lands;
+      // afterProbe replays the queued replacement so the signal is never lost.
+      this.pendingReplace ||= forceReplacement && ownsRecovery
       return
     }
-    if (this.pending.takeReplacement()) {
+    if (this.pendingReplace) {
+      this.pendingReplace = false
       forceReplacement = true
       ownsRecovery = true
     }
@@ -236,7 +236,7 @@ export class MobileEndpointSupervisor {
       if (ownsRecovery) {
         // Why: never tear down a session no dial has disproven — the intent stays
         // queued so the armed retry runs forced once the cooldown lapses.
-        this.pending.holdReplacement()
+        this.pendingReplace = true
       }
       this.logRelay('recovery deferred by cooldown or gate')
       return
@@ -260,7 +260,7 @@ export class MobileEndpointSupervisor {
         if (ownsRecovery) {
           // Why: no dial happened — keep the session and the intent; the reprobe
           // runs forced and replaces make-before-break once a credential exists.
-          this.pending.holdReplacement()
+          this.pendingReplace = true
         }
         return
       }
@@ -273,7 +273,7 @@ export class MobileEndpointSupervisor {
       const dialed = await this.sessionEstablisher.dialEligible(selection.credentials)
       if (dialed.outcome === 'established') {
         // Why: a fresh socket satisfies any replacement intent queued mid-dial.
-        this.pending.clearReplacement()
+        this.pendingReplace = false
         retryAfterOperation = this.logical.getState() !== 'connected'
         return
       }
@@ -293,12 +293,11 @@ export class MobileEndpointSupervisor {
       }
     } finally {
       this.operationInFlight = false
-      const queued = this.pending.takeRecovery()
       if (forceReplacement && this.relayRotationPending && this.isActive()) {
         this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(5000))
       }
       // Why: the active relay can drop while migration follow-up still owns the mutex.
-      if ((retryAfterOperation || queued) && this.isActive()) {
+      if (retryAfterOperation && this.isActive()) {
         void this.recoverRelay()
       }
     }

@@ -88,7 +88,6 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
     this.dialStage.onDialStageChange(listener)
   getResumeExpiresAt = () => Date.now() + 30 * 24 * 3_600_000
   getResumeConfirmation = () => null
-  whenResumeConfirmed = () => Promise.resolve()
   getFailure = () => this.failure
 }
 
@@ -278,7 +277,6 @@ describe('relay runtime recovery without direct connectivity', () => {
       relay,
       expect.objectContaining({ version: 3 }),
       expect.any(String),
-      expect.any(Function),
       expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
@@ -369,7 +367,6 @@ describe('relay runtime recovery without direct connectivity', () => {
       relay,
       expect.objectContaining({ version: 2 }),
       expect.any(String),
-      expect.any(Function),
       expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')
@@ -400,7 +397,6 @@ describe('relay runtime recovery without direct connectivity', () => {
       relay,
       expect.objectContaining({ version: 1 }),
       expect.any(String),
-      expect.any(Function),
       expect.any(Function)
     )
     expect(logical.getActivePath()).toBe('relay')

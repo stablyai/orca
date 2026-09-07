@@ -32,10 +32,7 @@ const relay = {
   e2eeFraming: 2 as const
 }
 
-async function authenticateSession(
-  onLog?: ConnectionLogSink,
-  isForeground: () => boolean = () => true
-) {
+async function authenticateSession(onLog?: ConnectionLogSink) {
   const session = connectMobileRelayRpcSession({
     relay,
     resumeToken: 'resume-secret',
@@ -44,7 +41,6 @@ async function authenticateSession(
     deviceToken: 'device-token',
     desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
     requestTimeoutMs: 30_000,
-    isForeground,
     onLog
   })
   fakes.linkOptions!.onHello({
@@ -56,12 +52,12 @@ async function authenticateSession(
     acceptedAs: 'current',
     resumeExpiresAt: Date.now() + 300_000
   })
-  // Authentication publishes 'connected' and puts both advisories on the wire.
   fakes.linkOptions!.onAuthenticated()
-  const [confirmation, capabilities] = sentRequests()
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+  const confirmation = sentRequests()[0]!
   fakes.linkOptions!.onText(
     JSON.stringify({
-      id: confirmation!.id,
+      id: confirmation.id,
       ok: true,
       result: {
         v: 1,
@@ -78,16 +74,17 @@ async function authenticateSession(
       _meta: { runtimeId: 'runtime-1' }
     })
   )
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+  const capabilities = sentRequests()[1]!
   fakes.linkOptions!.onText(
     JSON.stringify({
-      id: capabilities!.id,
+      id: capabilities.id,
       ok: true,
       result: {},
       _meta: { runtimeId: 'runtime-1' }
     })
   )
-  await session.whenResumeConfirmed()
-  expect(session.getState()).toBe('connected')
+  await vi.waitFor(() => expect(session.getState()).toBe('connected'))
   fakes.sendText.mockClear()
   return session
 }
@@ -95,13 +92,6 @@ async function authenticateSession(
 function sentRequests(): Array<{ id: string; method: string }> {
   return fakes.sendText.mock.calls.map(
     ([value]) => JSON.parse(value as string) as { id: string; method: string }
-  )
-}
-
-function answerProbe(): void {
-  const probe = sentRequests().at(-1)!
-  fakes.linkOptions!.onText(
-    JSON.stringify({ id: probe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
   )
 }
 
@@ -114,64 +104,14 @@ describe('mobile relay RPC session liveness', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  it('sweeps an idle foregrounded relay once per idle interval', async () => {
+  it('sends no periodic traffic while an authenticated relay is idle', async () => {
     const session = await authenticateSession()
 
-    await vi.advanceTimersByTimeAsync(24_999)
-    expect(fakes.sendText).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
-    answerProbe()
-
-    // Inbound traffic re-arms the sweep rather than stacking probes on it.
-    await vi.advanceTimersByTimeAsync(24_999)
-    expect(fakes.sendText).toHaveBeenCalledOnce()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(fakes.sendText).toHaveBeenCalledTimes(2)
-    expect(session.getState()).toBe('connected')
-    session.close()
-  })
-
-  it('spends no idle probe while the app is backgrounded', async () => {
-    let foreground = true
-    const session = await authenticateSession(undefined, () => foreground)
-    foreground = false
-
-    await vi.advanceTimersByTimeAsync(120_000)
+    await vi.advanceTimersByTimeAsync(60_000)
 
     expect(fakes.sendText).not.toHaveBeenCalled()
     expect(session.getState()).toBe('connected')
-
-    // The resume that follows probes at once instead of waiting out the sweep.
-    foreground = true
-    session.notifyForeground('app-resume')
-    expect(sentRequests().map(({ method }) => method)).toEqual(['status.get'])
     session.close()
-  })
-
-  it('terminates a relay whose socket died in the background on two 2s resume misses', async () => {
-    const onLog = vi.fn<ConnectionLogSink>()
-    const session = await authenticateSession(onLog)
-
-    session.notifyForeground('app-resume')
-    expect(fakes.sendText).toHaveBeenCalledOnce()
-    // Why: the first frame after a resume rides a cold radio, so one slow answer is
-    // tolerated — but the verdict still lands at 4s instead of the old 8s.
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(session.getState()).toBe('connected')
-    expect(fakes.sendText).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1_999)
-    expect(session.getState()).toBe('connected')
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(session.getState()).toBe('disconnected')
-    expect(fakes.close).toHaveBeenCalledOnce()
-    expect(onLog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        code: 'liveness-timeout',
-        detail: expect.stringMatching(/^probe-timeout; 2\/2 probes missed;/)
-      })
-    )
   })
 
   it('disconnects after two fair foreground misses', async () => {
@@ -221,25 +161,22 @@ describe('mobile relay RPC session liveness', () => {
     expect(secondId).not.toBe(firstId)
   })
 
-  it('rate-limits focus nudges but never an app resume', async () => {
+  it('rate-limits foreground sequences without suppressing a retry', async () => {
     const session = await authenticateSession()
     session.notifyForeground('focus')
-    answerProbe()
+    const firstProbe = sentRequests()[0]!
+    fakes.linkOptions!.onText(
+      JSON.stringify({ id: firstProbe.id, ok: true, result: {}, _meta: { runtimeId: 'r1' } })
+    )
 
     session.notifyForeground('focus')
     await vi.advanceTimersByTimeAsync(9_999)
-    expect(fakes.sendText).toHaveBeenCalledOnce()
-
-    // The resume owns the only evidence that the suspended socket is still alive.
     session.notifyForeground('app-resume')
-    expect(fakes.sendText).toHaveBeenCalledTimes(2)
-    answerProbe()
-    session.notifyForeground('focus')
-    expect(fakes.sendText).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(10_000)
+    expect(fakes.sendText).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
     session.notifyForeground('focus')
 
-    expect(fakes.sendText).toHaveBeenCalledTimes(3)
+    expect(fakes.sendText).toHaveBeenCalledTimes(2)
     session.close()
   })
 
@@ -252,9 +189,9 @@ describe('mobile relay RPC session liveness', () => {
     session.close()
   })
 
-  it('does not probe when work follows inbound silence', async () => {
+  it('does not probe when work follows prolonged inbound silence', async () => {
     const session = await authenticateSession()
-    await vi.advanceTimersByTimeAsync(20_000)
+    await vi.advanceTimersByTimeAsync(60_000)
 
     const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
     const outcome = pending.catch(() => undefined)

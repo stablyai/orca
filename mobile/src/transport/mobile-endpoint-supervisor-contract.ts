@@ -12,9 +12,7 @@ export type MobileEndpointSupervisorDependencies = {
     relay: MobileRelayEndpoint,
     credential: { token: string; version: number },
     confirmReqId: string,
-    onHostCloseReason?: (reason: RelayHostCloseReason) => void,
-    // Gates the session's idle liveness sweep; a backgrounded app spends no probes.
-    isForeground?: () => boolean
+    onHostCloseReason?: (reason: RelayHostCloseReason) => void
   ) => MobileRelayRpcSession
   resolveRelay: typeof resolveMobileRelayEndpoint
   readBundle: (hostId: string) => Promise<MobileRelayCredentialBundle | null>

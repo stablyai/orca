@@ -142,15 +142,11 @@ export async function persistResumeConfirmation(args: {
   session: {
     getResumeConfirmation(): DeviceResumeConfirmed | null
     getResumeExpiresAt(): number | null
-    whenResumeConfirmed(): Promise<void>
   }
   bundle: MobileRelayCredentialBundle
   usedCredentialVersion: number
   writeBundle: (bundle: MobileRelayCredentialBundle) => Promise<void>
 }): Promise<{ bundle: MobileRelayCredentialBundle; leaseExpiry: number | null }> {
-  // Why: 'connected' is published at E2EE authentication now, so the confirm round
-  // trip can still be in flight here — its answer is what makes the bundle durable.
-  await args.session.whenResumeConfirmed()
   const confirmation = args.session.getResumeConfirmation()
   let bundle = args.bundle
   if (confirmation) {

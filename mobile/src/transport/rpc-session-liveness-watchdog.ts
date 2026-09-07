@@ -13,18 +13,10 @@ type WatchdogOptions = {
   probeTimeoutMs?: number
   missedProbeLimit?: number
   voluntaryProbeMinIntervalMs?: number
-  // Bounds for probeImmediately(); default to the ordinary probe bounds.
-  urgentProbeTimeoutMs?: number
-  urgentMissedProbeLimit?: number
-  // Gates the idle sweep only. False re-arms without probing — a backgrounded app
-  // must not spend a probe, and its resume probes immediately anyway.
-  shouldIdleProbe?: () => boolean
   now?: () => number
   setTimer?: typeof setTimeout
   clearTimer?: typeof clearTimeout
 }
-
-type ProbeProfile = { timeoutMs: number; missedProbeLimit: number }
 
 export type LivenessTimeoutEvidence = {
   transport: 'direct' | 'relay'
@@ -38,15 +30,12 @@ export class RpcSessionLivenessWatchdog {
   private identity: RpcSessionIdentity | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
   private probing = false
-  // Whether the probe in flight came from the idle sweep rather than a caller.
-  private idleSweepProbe = false
   private missedProbes = 0
   private lastInboundAt = 0
   private lastVoluntaryProbeAt: number | null = null
-  private profile: ProbeProfile
   private readonly idleProbeMs: number | null
-  private readonly ordinaryProfile: ProbeProfile
-  private readonly urgentProfile: ProbeProfile
+  private readonly probeTimeoutMs: number
+  private readonly missedProbeLimit: number
   private readonly voluntaryProbeMinIntervalMs: number
   private readonly now: () => number
   private readonly setTimer: typeof setTimeout
@@ -54,15 +43,8 @@ export class RpcSessionLivenessWatchdog {
 
   constructor(private readonly options: WatchdogOptions) {
     this.idleProbeMs = options.idleProbeMs === undefined ? LIVENESS_IDLE_MS : options.idleProbeMs
-    this.ordinaryProfile = {
-      timeoutMs: options.probeTimeoutMs ?? LIVENESS_PROBE_TIMEOUT_MS,
-      missedProbeLimit: options.missedProbeLimit ?? MISSED_PROBE_LIMIT
-    }
-    this.urgentProfile = {
-      timeoutMs: options.urgentProbeTimeoutMs ?? this.ordinaryProfile.timeoutMs,
-      missedProbeLimit: options.urgentMissedProbeLimit ?? this.ordinaryProfile.missedProbeLimit
-    }
-    this.profile = this.ordinaryProfile
+    this.probeTimeoutMs = options.probeTimeoutMs ?? LIVENESS_PROBE_TIMEOUT_MS
+    this.missedProbeLimit = options.missedProbeLimit ?? MISSED_PROBE_LIMIT
     this.voluntaryProbeMinIntervalMs = options.voluntaryProbeMinIntervalMs ?? 0
     this.now = options.now ?? Date.now
     this.setTimer = options.setTimer ?? setTimeout
@@ -73,11 +55,9 @@ export class RpcSessionLivenessWatchdog {
     this.clearActiveTimer()
     this.identity = identity
     this.probing = false
-    this.idleSweepProbe = false
     this.missedProbes = 0
     this.lastInboundAt = this.now()
     this.lastVoluntaryProbeAt = null
-    this.profile = this.ordinaryProfile
     this.armIdle(identity)
   }
 
@@ -104,28 +84,22 @@ export class RpcSessionLivenessWatchdog {
     }
     this.missedProbes = 0
     this.probing = false
-    this.idleSweepProbe = false
     this.armIdle(identity)
   }
 
-  // 'resume' is evidence the socket may have died while the process was suspended:
-  // it ignores the voluntary minimum, runs on the urgent bounds, and replaces any
-  // probe already in flight so the verdict lands on the short clock.
-  probeNow(identity: RpcSessionIdentity, urgency: 'nudge' | 'resume' = 'nudge'): void {
-    const urgent = urgency === 'resume'
-    if (this.identity !== identity || (this.probing && !urgent)) {
+  probeNow(identity: RpcSessionIdentity): void {
+    if (this.identity !== identity || this.probing) {
       return
     }
     const now = this.now()
     if (
-      !urgent &&
       this.lastVoluntaryProbeAt !== null &&
       now - this.lastVoluntaryProbeAt < this.voluntaryProbeMinIntervalMs
     ) {
       return
     }
     this.lastVoluntaryProbeAt = now
-    this.startProbe(identity, urgent ? this.urgentProfile : this.ordinaryProfile)
+    this.startProbe(identity)
   }
 
   stop(identity: RpcSessionIdentity): void {
@@ -135,11 +109,9 @@ export class RpcSessionLivenessWatchdog {
     this.clearActiveTimer()
     this.identity = null
     this.probing = false
-    this.idleSweepProbe = false
     this.missedProbes = 0
     this.lastInboundAt = 0
     this.lastVoluntaryProbeAt = null
-    this.profile = this.ordinaryProfile
   }
 
   private armIdle(identity: RpcSessionIdentity, delayMs = this.idleProbeMs): void {
@@ -152,37 +124,21 @@ export class RpcSessionLivenessWatchdog {
       if (this.identity !== identity) {
         return
       }
-      if (this.options.shouldIdleProbe && !this.options.shouldIdleProbe()) {
-        this.armIdle(identity)
-        return
-      }
       const idleMs = this.now() - this.lastInboundAt
       if (this.idleProbeMs !== null && idleMs < this.idleProbeMs) {
         this.armIdle(identity, Math.max(1, this.idleProbeMs - Math.max(0, idleMs)))
       } else {
-        this.startProbe(identity, this.ordinaryProfile, true)
+        this.startProbe(identity)
       }
     }, delayMs)
   }
 
-  private startProbe(
-    identity: RpcSessionIdentity,
-    profile = this.ordinaryProfile,
-    fromIdleSweep = false
-  ): void {
+  private startProbe(identity: RpcSessionIdentity): void {
     if (this.identity !== identity) {
       return
     }
     this.clearActiveTimer()
-    // Why: switching profile starts a new observation window on a different clock. Carrying the
-    // ordinary probe's misses into the urgent one spends the tolerated slow answer that profile
-    // exists to give a cold radio, so the first 2s miss would kill a healthy socket.
-    if (profile !== this.profile) {
-      this.missedProbes = 0
-    }
-    this.profile = profile
     this.probing = true
-    this.idleSweepProbe = fromIdleSweep
     const sentAt = this.now()
     let sent = false
     try {
@@ -194,7 +150,7 @@ export class RpcSessionLivenessWatchdog {
       this.terminateCurrent(identity, 'probe-send-failed')
       return
     }
-    this.timer = this.setTimer(() => this.handleProbeTimeout(identity, sentAt), profile.timeoutMs)
+    this.timer = this.setTimer(() => this.handleProbeTimeout(identity, sentAt), this.probeTimeoutMs)
   }
 
   private handleProbeTimeout(identity: RpcSessionIdentity, sentAt: number): void {
@@ -202,38 +158,27 @@ export class RpcSessionLivenessWatchdog {
     if (this.identity !== identity) {
       return
     }
-    // Why: the idle sweep is foreground-only because iOS suspends sockets in the
-    // background, where a miss is not evidence of a dead peer. Retrying here would
-    // spend the whole miss budget on that suspension and kill a healthy session.
-    if (this.idleSweepProbe && this.options.shouldIdleProbe && !this.options.shouldIdleProbe()) {
-      this.probing = false
-      this.idleSweepProbe = false
-      this.missedProbes = 0
-      this.armIdle(identity)
-      return
-    }
-    const profile = this.profile
     const elapsedMs = this.now() - sentAt
-    if (elapsedMs < 0 || elapsedMs > profile.timeoutMs * 1.5) {
+    if (elapsedMs < 0 || elapsedMs > this.probeTimeoutMs * 1.5) {
       console.log('[net] activity-probe unfair window skipped', {
         transport: this.options.transport,
         elapsedMs,
-        timeoutMs: profile.timeoutMs
+        timeoutMs: this.probeTimeoutMs
       })
-      this.startProbe(identity, profile, this.idleSweepProbe)
+      this.startProbe(identity)
       return
     }
     this.missedProbes += 1
-    if (this.missedProbes >= profile.missedProbeLimit) {
+    if (this.missedProbes >= this.missedProbeLimit) {
       this.terminateCurrent(identity, 'probe-timeout')
       return
     }
     console.log('[net] activity-probe timeout tolerated', {
       transport: this.options.transport,
       missedProbes: this.missedProbes,
-      missedProbeLimit: profile.missedProbeLimit
+      missedProbeLimit: this.missedProbeLimit
     })
-    this.startProbe(identity, profile, this.idleSweepProbe)
+    this.startProbe(identity)
   }
 
   private terminateCurrent(
@@ -246,17 +191,16 @@ export class RpcSessionLivenessWatchdog {
     this.clearActiveTimer()
     this.identity = null
     this.probing = false
-    this.idleSweepProbe = false
     console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
       transport: this.options.transport,
       missedProbes: this.missedProbes,
-      missedProbeLimit: this.profile.missedProbeLimit
+      missedProbeLimit: this.missedProbeLimit
     })
     this.options.onTimeout?.({
       transport: this.options.transport,
       reason,
       missedProbes: this.missedProbes,
-      missedProbeLimit: this.profile.missedProbeLimit,
+      missedProbeLimit: this.missedProbeLimit,
       lastInboundAgeMs: Math.max(0, this.now() - this.lastInboundAt)
     })
     this.options.terminate(identity)

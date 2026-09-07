@@ -110,8 +110,7 @@ export class MobileRelaySessionEstablisher {
         if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
           args.logical.setHostSignedOut(true)
         }
-      },
-      args.isForeground
+      }
     )
     try {
       // Why: backgrounding or a direct winner withdraws this dial before cutover.
@@ -126,17 +125,6 @@ export class MobileRelaySessionEstablisher {
         return { ok: false, error: new RelayDialAbortedError() }
       }
       return { ok: false, error: session.getFailure() ?? toError(error) }
-    }
-    // Why: migrateTo now resolves at E2EE authentication, so the resume confirm can
-    // still fail this session after the cutover. Booking a dying session as an
-    // established dial skips backoff and redials in a tight loop — the supervisor's
-    // bookkeeping waits for the verdict even though the UI is already connected.
-    await session.whenResumeConfirmed()
-    if (session.getState() !== 'connected') {
-      if (!args.isActive() || directWon(args.logical)) {
-        return { ok: false, error: new RelayDialAbortedError() }
-      }
-      return { ok: false, error: session.getFailure() ?? new Error('relay lost at confirm') }
     }
     args.controller.setActiveSession(session)
     if (!args.isForeground()) {
