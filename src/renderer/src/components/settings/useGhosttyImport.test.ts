@@ -200,6 +200,86 @@ describe('useGhosttyImport', () => {
     expect(updateSettings).not.toHaveBeenCalled()
   })
 
+  it('requests auto discovery for the discovered-config entry point', async () => {
+    const previewMock = vi.fn().mockResolvedValue({ found: false, diff: {}, unsupportedKeys: [] })
+    vi.stubGlobal('window', {
+      api: { settings: { previewGhosttyImport: previewMock } }
+    })
+
+    const ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    resetMockState()
+    await ghostty.handleClick()
+
+    expect(previewMock).toHaveBeenCalledWith({ kind: 'auto' })
+  })
+
+  it('opens the modal only after the file picker returns a config', async () => {
+    const previewResponse: GhosttyImportPreview = {
+      found: true,
+      configPath: '/Users/alice/Documents/config',
+      diff: { terminalFontSize: 15 },
+      unsupportedKeys: []
+    }
+    const previewMock = vi.fn().mockResolvedValue(previewResponse)
+    vi.stubGlobal('window', {
+      api: { settings: { previewGhosttyImport: previewMock } }
+    })
+
+    let ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    expect(ghostty.open).toBe(false)
+
+    resetMockState()
+    await ghostty.handleChooseFileClick()
+
+    expect(previewMock).toHaveBeenCalledWith({ kind: 'chooseFile' })
+
+    resetMockState()
+    ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    expect(ghostty.open).toBe(true)
+    expect(ghostty.loading).toBe(false)
+    expect(ghostty.preview).toEqual(previewResponse)
+  })
+
+  it('leaves the modal closed and the preview untouched when the picker is dismissed', async () => {
+    const previewMock = vi
+      .fn()
+      .mockResolvedValueOnce({ found: false, canceled: true, diff: {}, unsupportedKeys: [] })
+    vi.stubGlobal('window', {
+      api: { settings: { previewGhosttyImport: previewMock } }
+    })
+
+    let ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    resetMockState()
+    await ghostty.handleChooseFileClick()
+
+    resetMockState()
+    ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    expect(ghostty.open).toBe(false)
+    expect(ghostty.preview).toBeNull()
+    expect(ghostty.loading).toBe(false)
+  })
+
+  it('surfaces file-picker preview failures in the modal', async () => {
+    const previewMock = vi.fn().mockRejectedValue(new Error('picker exploded'))
+    vi.stubGlobal('window', {
+      api: { settings: { previewGhosttyImport: previewMock } }
+    })
+
+    let ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    resetMockState()
+    await ghostty.handleChooseFileClick()
+
+    resetMockState()
+    ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    expect(ghostty.open).toBe(true)
+    expect(ghostty.preview).toEqual({
+      found: false,
+      diff: {},
+      unsupportedKeys: [],
+      error: 'picker exploded'
+    })
+  })
+
   it('merges terminalColorOverrides with existing settings on apply', async () => {
     const existingSettings: GlobalSettings = {
       ...baseSettings,

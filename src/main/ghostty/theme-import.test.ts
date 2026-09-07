@@ -7,6 +7,11 @@ const { statMock, readFileMock } = vi.hoisted(() => ({
   readFileMock: vi.fn()
 }))
 
+vi.mock('electron', () => ({
+  BrowserWindow: { fromWebContents: vi.fn() },
+  dialog: { showOpenDialog: vi.fn() }
+}))
+
 vi.mock('fs/promises', () => ({
   stat: statMock,
   readFile: readFileMock

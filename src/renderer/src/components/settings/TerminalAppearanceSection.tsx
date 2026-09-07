@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FileUp } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   matchesSettingsSearch,
@@ -11,6 +12,7 @@ import {
   getTerminalAdvancedTypographySearchEntries,
   getTerminalCursorSearchEntries,
   getTerminalDarkThemeSearchEntries,
+  getTerminalGhosttyConfigFileImportSearchEntries,
   getTerminalGhosttyImportSearchEntries,
   getTerminalLightThemeSearchEntries,
   getTerminalPaneAppearanceSearchEntries,
@@ -84,10 +86,16 @@ export function TerminalAppearanceSection({
   const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
   const showWarpThemeImport = !isWebClientLocation()
+  // Why: the config picker is a native dialog the paired web client cannot open,
+  // so it stays desktop-only rather than adding another silently failing button.
+  const showGhosttyConfigFileImport = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
-  const ghosttyImportEntries = getTerminalGhosttyImportSearchEntries()
+  const ghosttyImportEntries = [
+    ...getTerminalGhosttyImportSearchEntries(),
+    ...(showGhosttyConfigFileImport ? getTerminalGhosttyConfigFileImportSearchEntries() : [])
+  ]
   const themeCatalogSearchEntries = [
     ...getTerminalThemeTargetSearchEntries(),
     ...darkThemeSearchEntries,
@@ -183,18 +191,34 @@ export function TerminalAppearanceSection({
             )}
             action={
               showGhosttyImport ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => void ghostty.handleClick()}
-                >
-                  <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
-                  {translate(
-                    'auto.components.settings.TerminalAppearanceSection.855a76343a',
-                    'Import from Ghostty'
-                  )}
-                </Button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => void ghostty.handleClick()}
+                  >
+                    <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
+                    {translate(
+                      'auto.components.settings.TerminalAppearanceSection.855a76343a',
+                      'Import from Ghostty'
+                    )}
+                  </Button>
+                  {showGhosttyConfigFileImport ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => void ghostty.handleChooseFileClick()}
+                    >
+                      <FileUp className="size-4" />
+                      {translate(
+                        'auto.components.settings.TerminalAppearanceSection.ghostty_choose_config_file',
+                        'Choose Config File'
+                      )}
+                    </Button>
+                  ) : null}
+                </div>
               ) : null
             }
           />

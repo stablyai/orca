@@ -154,6 +154,7 @@ const ghosttyMock = {
   applied: true,
   applyError: null,
   handleClick: vi.fn(),
+  handleChooseFileClick: vi.fn(),
   handleApply: vi.fn(),
   handleOpenChange: vi.fn()
 }
@@ -372,6 +373,43 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
     importButton?.onClick?.()
     expect(ghosttyMock.handleClick).toHaveBeenCalled()
+  })
+
+  it('renders the Choose Config File button next to the discovered-config import', () => {
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    const buttons = findButtons(element)
+    const chooseFileButton = buttons.find((b) => b.text === 'Choose Config File')
+    expect(chooseFileButton).toBeDefined()
+
+    chooseFileButton?.onClick?.()
+    expect(ghosttyMock.handleChooseFileClick).toHaveBeenCalled()
+    expect(ghosttyMock.handleClick).not.toHaveBeenCalled()
+  })
+
+  it('hides the Choose Config File button on the paired web client', () => {
+    vi.stubGlobal('window', { location: { pathname: '/web-index.html' } })
+
+    const element = TerminalAppearanceSection({
+      settings: {} as never,
+      updateSettings: () => {},
+      systemPrefersDark: true,
+      terminalFontSuggestions: [],
+      ghostty: ghosttyMock,
+      warpThemes: warpThemesMock
+    })
+
+    const buttons = findButtons(element)
+    expect(buttons.some((b) => b.text === 'Choose Config File')).toBe(false)
+    // Why: the existing discovered-config button is out of scope here; it stays as-is.
+    expect(buttons.some((b) => b.text === 'Import from Ghostty')).toBe(true)
   })
 
   it('passes shared theme import controls into the theme catalog on desktop', () => {

@@ -318,8 +318,9 @@ export function registerSettingsHandlers(
     return listSystemFontFamilies()
   })
 
-  ipcMain.handle('settings:previewGhosttyImport', () => {
-    return previewGhosttyImport(store)
+  ipcMain.handle('settings:previewGhosttyImport', (event, args?: unknown) => {
+    const source = args === undefined ? { kind: 'auto' } : args
+    return previewGhosttyImport(store, source, event.sender)
   })
 
   ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {

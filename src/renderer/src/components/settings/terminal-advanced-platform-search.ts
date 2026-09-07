@@ -93,6 +93,28 @@ export const getTerminalMacYenSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getTerminalGhosttyConfigFileImportSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.ghostty_choose_config_file',
+      'Choose Config File'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.ghostty_choose_config_file_description',
+      'Import a Ghostty config from a file you pick instead of the discovered paths.'
+    ),
+    keywords: [
+      // Why: product name stays untranslated so search matches "Ghostty".
+      'Ghostty',
+      'ghostty',
+      ...translateSearchKeyword('auto.components.settings.terminal.search.fd752b3cac', 'import'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.2ade3ea490', 'config'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.file', 'file')
+    ]
+  }
+])
+
 export const getTerminalGhosttyImportSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.terminal.search.a979df0083', 'Import from Ghostty'),

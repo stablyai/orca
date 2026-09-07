@@ -269,11 +269,25 @@ describe('registerSettingsHandlers', () => {
 
     const handler = handleMock.mock.calls.find(
       (call) => call[0] === 'settings:previewGhosttyImport'
-    )?.[1] as (_event: unknown, args: unknown) => Promise<unknown>
+    )?.[1] as (event: { sender: unknown }, args?: unknown) => Promise<unknown>
 
-    const result = await handler!(null, {})
+    const sender = { id: 7 }
+    const result = await handler!({ sender })
     expect(result).toEqual(expected)
-    expect(previewGhosttyImportMock).toHaveBeenCalledWith(store)
+    expect(previewGhosttyImportMock).toHaveBeenCalledWith(store, { kind: 'auto' }, sender)
+  })
+
+  it('settings:previewGhosttyImport forwards an explicit import source', async () => {
+    previewGhosttyImportMock.mockResolvedValue({ found: false, diff: {}, unsupportedKeys: [] })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewGhosttyImport'
+    )?.[1] as (event: { sender: unknown }, args?: unknown) => Promise<unknown>
+
+    const sender = { id: 9 }
+    await handler!({ sender }, { kind: 'chooseFile' })
+    expect(previewGhosttyImportMock).toHaveBeenCalledWith(store, { kind: 'chooseFile' }, sender)
   })
 
   it('settings:previewWarpThemeImport returns preview result', async () => {

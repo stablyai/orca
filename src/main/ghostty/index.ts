@@ -1,8 +1,15 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
-import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
+import type { WebContents } from 'electron'
+import type {
+  GhosttyImportPreview,
+  GhosttyImportSource,
+  GlobalSettings
+} from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
 import { findGhosttyConfigPaths } from './discovery'
+import { validateGhosttyImportSource } from './ghostty-import-source-validation'
+import { chooseManualGhosttyConfigPath } from './manual-ghostty-config-file'
 import { parseGhosttyConfig } from './parser'
 import { mapGhosttyToOrca } from './mapper'
 import { resolveGhosttyThemeColors } from './theme-resolution'
@@ -100,8 +107,46 @@ async function applyThemeReference(parsed: Record<string, string | string[]>): P
   return []
 }
 
-export async function previewGhosttyImport(store: Store): Promise<GhosttyImportPreview> {
-  const configPaths = await findGhosttyConfigPaths()
+type GhosttyConfigSelection = { canceled: true } | { canceled: false; configPaths: string[] }
+
+async function resolveGhosttyConfigSource(
+  source: GhosttyImportSource,
+  webContents?: WebContents
+): Promise<GhosttyConfigSelection> {
+  switch (source.kind) {
+    case 'auto': {
+      return { canceled: false, configPaths: await findGhosttyConfigPaths() }
+    }
+    case 'chooseFile': {
+      const chosenPath = await chooseManualGhosttyConfigPath(webContents)
+      return chosenPath === null
+        ? { canceled: true }
+        : { canceled: false, configPaths: [chosenPath] }
+    }
+  }
+}
+
+export async function previewGhosttyImport(
+  store: Store,
+  source: unknown = { kind: 'auto' },
+  webContents?: WebContents
+): Promise<GhosttyImportPreview> {
+  const validatedSource = validateGhosttyImportSource(source)
+  if (!validatedSource) {
+    return {
+      found: false,
+      diff: {},
+      unsupportedKeys: [],
+      error: 'Invalid Ghostty import source.'
+    }
+  }
+
+  const selection = await resolveGhosttyConfigSource(validatedSource, webContents)
+  if (selection.canceled) {
+    return { found: false, canceled: true, diff: {}, unsupportedKeys: [] }
+  }
+
+  const configPaths = selection.configPaths
   if (configPaths.length === 0) {
     return { found: false, diff: {}, unsupportedKeys: [] }
   }
