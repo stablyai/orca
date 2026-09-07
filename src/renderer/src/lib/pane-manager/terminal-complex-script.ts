@@ -9,9 +9,7 @@ const SGR_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[([0-9:;]*)m`, 'g'
 // Pair it with an in-place rewrite — cursor move (H/f), erase (J/K), CR, or
 // backspace — so only repaint-in-place frames (the HUD corruption shape), not
 // ordinary colored scrollback, schedule recovery.
-const CSI_REWRITE_SEQUENCE_PATTERN = new RegExp(
-  `${ESCAPE_CHARACTER}\\[[0-9;?]*(?:[HJfK])|\\r|\\x08`
-)
+const CSI_REWRITE_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[[0-9;?]*(?:[HJfK])|\\x08`)
 
 function containsStandaloneCarriageReturn(data: string): boolean {
   let index = data.indexOf('\r')
@@ -125,7 +123,7 @@ function scanSgrRiskFlags(data: string): SgrRiskFlags {
     match = SGR_SEQUENCE_PATTERN.exec(data)
   ) {
     collectSgrRiskFlags(match[1] ?? '', flags)
-    if (flags.hasBackground && flags.hasInverseVideo) {
+    if (flags.hasBackground) {
       break
     }
   }
@@ -251,7 +249,10 @@ export function terminalOutputPrefersRenderRefresh(data: string): boolean {
   if (sgrFlags.hasBackground) {
     return true
   }
-  if (sgrFlags.hasInverseVideo && CSI_REWRITE_SEQUENCE_PATTERN.test(data)) {
+  if (
+    sgrFlags.hasInverseVideo &&
+    (CSI_REWRITE_SEQUENCE_PATTERN.test(data) || containsStandaloneCarriageReturn(data))
+  ) {
     return true
   }
 
