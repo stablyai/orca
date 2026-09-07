@@ -22,9 +22,12 @@ export type CensusCapableRuntime = {
 export async function runServeUpdateCensus(
   runtime: CensusCapableRuntime
 ): Promise<ServeUpdateCensusResult> {
+  // Why the smallest valid limit: emptiness is decided by totalCount, not the page;
+  // the call only needs to trigger the fresh-PTY-liveness sweep.
+  const MIN_LIVENESS_LIMIT = 1
   let listing: RuntimeTerminalListResult
   try {
-    listing = await runtime.listTerminals(undefined, 1, {
+    listing = await runtime.listTerminals(undefined, MIN_LIVENESS_LIMIT, {
       requireFreshPtyLiveness: true,
       includeVisualLayouts: false
     })

@@ -7,8 +7,9 @@
  *   request.json -> helper accepted -> census-gated stop -> swap -> VERSION ->
  *   systemctl start -> journal readiness -> result.json {phase:"ok"}.
  *
- * Requires: docker (or podman via DOCKER=), an orca-linux AppImage, and a
- * feed server reachable from the container. See --help for options.
+ * Requires: docker, an orca-linux AppImage, and a feed server reachable from the
+ * container. ORCA_UPDATE_TIMEOUT / ORCA_READINESS_TIMEOUT bound the docker exec
+ * call. See --help for options.
  */
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
