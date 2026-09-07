@@ -179,6 +179,7 @@ function createCoordinator(): StructuredAgentSessionHandoffCoordinator {
         { fence, recovered: true }
       )
     },
+    retryPendingSettlement: async () => true,
     prepareTuiHistoryCatchup,
     recoverTuiHistoryCatchup,
     activateTuiHistoryCatchup,
@@ -274,6 +275,7 @@ describe('structured session handoff failure handling', () => {
         }),
         acquireNativeStop: (_sessionId, turnId) => acquireNativeStop(turnId),
         importTuiHistory: vi.fn(async () => undefined),
+        retryPendingSettlement: vi.fn(async () => true),
         prepareTuiHistoryCatchup,
         recoverTuiHistoryCatchup,
         activateTuiHistoryCatchup,

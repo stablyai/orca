@@ -84,6 +84,78 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
   })
 
+  it('applies native-chat option deltas atomically on the runtime host', () => {
+    let settings = {
+      ...store.getSettings(),
+      nativeChatSessionOptions: {
+        claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
+      }
+    }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'apply-picks',
+      agent: 'codex',
+      picks: [
+        { modelId: 'gpt-fast', optionId: 'model', value: 'gpt-fast' },
+        { modelId: 'gpt-fast', optionId: 'effort', value: 'low' }
+      ]
+    })
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'apply-picks',
+      agent: 'claude',
+      picks: [{ modelId: 'sonnet', optionId: 'model', value: 'sonnet' }]
+    })
+
+    expect(settings.nativeChatSessionOptions).toEqual({
+      claude: {
+        model: 'sonnet',
+        valuesByModel: { opus: { effort: 'high' } }
+      },
+      codex: {
+        model: 'gpt-fast',
+        valuesByModel: { 'gpt-fast': { effort: 'low' } }
+      }
+    })
+    expect(updateSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('compares retired models against the host record at mutation time', () => {
+    let settings = {
+      ...store.getSettings(),
+      nativeChatSessionOptions: { grok: { model: 'grok-5' } }
+    }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'clear-model-if-missing',
+      agent: 'grok',
+      availableModelIds: ['grok-5']
+    })
+    expect(updateSettings).not.toHaveBeenCalled()
+
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'clear-model-if-missing',
+      agent: 'grok',
+      availableModelIds: ['grok-4.5']
+    })
+    expect(settings.nativeChatSessionOptions).toEqual({ grok: {} })
+  })
+
   it('rejects a concurrent add after the quick command limit is reached', () => {
     const terminalQuickCommands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) => ({
       id: `command-${index}`,

@@ -15,6 +15,7 @@ export function resolveAgentSessionReplayOutcome<TValue>(input: {
   outcome: AgentSessionOperationOutcome
   reconstruct: () => TValue | null
   rerunWhenReplayMissing?: boolean
+  recoverUnknownFromDurableState?: boolean
 }): AgentSessionReplayOutcomeDecision<TValue> {
   const { operationId, outcome } = input
   if (outcome.status === 'failed') {
@@ -30,6 +31,10 @@ export function resolveAgentSessionReplayOutcome<TValue>(input: {
     }
   }
   if (outcome.status === 'unknown') {
+    const recovered = input.recoverUnknownFromDurableState ? input.reconstruct() : null
+    if (recovered) {
+      return { decision: 'replay', value: recovered }
+    }
     if (input.rerunWhenReplayMissing) {
       return { decision: 'rerun' }
     }

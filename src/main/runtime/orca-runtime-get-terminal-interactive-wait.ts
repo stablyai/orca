@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 import { OrcaRuntimeWithAdoptTerminalOrphansFromInventory } from './orca-runtime-adopt-terminal-orphans-from-inventory'
 import type {
   RuntimeTerminalAgentStatus,
@@ -119,6 +120,13 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
   }
 
   getTerminalProcessIncarnation(handle: string): string | null {
+    const structured = resolveStructuredWorkerAuthority(
+      handle,
+      this.getOrchestrationDbIfAvailable?.() ?? null
+    )
+    if (structured) {
+      return structured.identity.processIncarnation
+    }
     const live = this.getLivePtyForHandle(handle)
     const record = live?.record ?? this.handles.get(handle)
     if (!record?.ptyId) {

@@ -16,6 +16,7 @@ import {
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
 import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
+import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   /** Every pane key this PTY could be addressed by, including restored receipts. */
@@ -40,6 +41,26 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   getOrchestrationDispatchAuthority(
     terminalHandle: string
   ): OrchestrationCompatibilityTerminalAuthority | null {
+    const structured = resolveStructuredWorkerAuthority(
+      terminalHandle,
+      this.getOrchestrationDbIfAvailable?.() ?? null
+    )
+    if (structured) {
+      return {
+        runtimeId: this.runtimeId,
+        terminalHandle,
+        // Both EMPTY on purpose. `verifyOrchestrationCompatibilityCaller` falls back to the
+        // restored-authority receipt keyed by ptyId when there is no launch token, so filling
+        // either of these in would silently open hook attestation to a session that has no PTY,
+        // no launch secret, and no hook to attest with.
+        ptyId: '',
+        worktreeId: structured.identity.worktreeId,
+        processIncarnation: structured.identity.processIncarnation,
+        paneKey: structured.identity.paneKey,
+        launchTokenHash: null,
+        hostScope: structured.identity.hostScope
+      }
+    }
     let ptyId: string | null
     try {
       ptyId =

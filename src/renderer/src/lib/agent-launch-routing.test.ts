@@ -4,7 +4,8 @@ import {
   hasExplicitTuiAgentArgs,
   hasExplicitTuiLaunchCustomization,
   hasSemanticallyNonEmptyAgentArgs,
-  resolveAgentLaunchRoute
+  resolveAgentLaunchRoute,
+  structuredAgentLaunchSupported
 } from './agent-launch-routing'
 
 const settings = {
@@ -189,4 +190,29 @@ describe('resolveAgentLaunchRoute', () => {
     )
     expect(hasExplicitTuiAgentArgs('codex', '--model gpt-5.6-sol')).toBe(true)
   })
+})
+
+describe('explicit structured chat requests', () => {
+  it.each(['claude', 'codex'] as const)(
+    'supports %s history resume when new tabs default to terminal',
+    (agent) => {
+      const input = {
+        agent,
+        settings: { ...settings, openAgentTabsInChatByDefault: false },
+        executionHostId: 'local',
+        platform: 'darwin' as const,
+        hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        workspaceKind: 'folder' as const
+      }
+      expect(resolveAgentLaunchRoute(input)).toBe('terminal-tui')
+      expect(structuredAgentLaunchSupported(input)).toBe(true)
+      expect(structuredAgentLaunchSupported({ ...input, hostCapabilities: [] })).toBe(false)
+      expect(
+        structuredAgentLaunchSupported({
+          ...input,
+          settings: { ...input.settings, experimentalStructuredNativeChat: false }
+        })
+      ).toBe(false)
+    }
+  )
 })

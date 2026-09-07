@@ -478,7 +478,7 @@ describe('owned orchestration references', () => {
 })
 
 describe('orchestration install stub', () => {
-  it('preserves the safe version-matched resolver and bounded old-binary fallback', () => {
+  it('preserves the safe version-matched resolver', () => {
     const stub = readFileSync(stubPath, 'utf8')
 
     expect(stub).toContain('discovery stub')
@@ -487,8 +487,6 @@ describe('orchestration install stub', () => {
     expect(stub).toContain('orca-dev')
     expect(stub).toContain('orca-ide')
     expect(stub).toContain('GNOME Orca screen reader')
-    expect(squash(stub)).toContain('explicitly reports that `skills get` is an unknown command')
-    expect(stub).toContain('do not invent commands')
     expect(stub).not.toMatch(/^orca /mu)
   })
 

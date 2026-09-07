@@ -5780,7 +5780,8 @@
               "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
-              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold."
+              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.",
+              "runningAgentSession": "This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold."
             }
           }
         },
@@ -13005,7 +13006,10 @@
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
-            "sessionDeleteFailed": "Couldn't delete the session"
+            "sessionDeleteFailed": "Couldn't delete the session",
+            "resumeInChatConflict": "Another chat is already holding this conversation.",
+            "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
+            "resumeInChatFailed": "Could not resume this session in a new chat."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -13141,7 +13145,8 @@
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
-            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca."
+            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
+            "resumeInNewChat": "Resume in New Chat"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -17101,11 +17106,6 @@
         "deny": "Deny"
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
-      "orchestrationPaused": {
-        "label": "Orchestration paused",
-        "message": "Structured Chat blocks terminal prompts and sends. Orchestration messages remain queued; switch to Terminal, then check the Orca inbox with",
-        "command": "orca orchestration check"
-      },
       "structuredSessionCloseFailed": "Could not close this chat session",
       "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
       "structuredSessionLaunchPending": "Starting {{value0}} chat…",
@@ -17144,7 +17144,11 @@
       },
       "structuredSessionFellBackToTerminal": "Structured chat isn't available",
       "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
-      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
+      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details.",
+      "conversationCommand": {
+        "pendingWork": "Wait for pending work and messages to finish before using this command.",
+        "unconfirmed": "Conversation operation was not confirmed."
+      }
     },
     "tab": {
       "bar": {
