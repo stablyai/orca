@@ -7,6 +7,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import NativeChatView from './NativeChatView'
+import { usePaneOverlayAssignments } from '../cross-project-panes/use-pane-overlay-assignments'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -82,6 +83,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     worktreeId: string
     isWorktreeActive: boolean
   }): React.JSX.Element {
+    const presentation = usePaneOverlayAssignments(worktreeId)
     const { unifiedTabs, groups, runtimeEnvironmentId } = useAppStore(
       useShallow((state) => ({
         unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
@@ -95,8 +97,9 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       [runtimeEnvironmentId]
     )
     const focusOwningGroup = useCallback(
-      (groupId: string) => focusGroup(worktreeId, groupId),
-      [focusGroup, worktreeId]
+      (groupId: string) =>
+        presentation.assignments ? presentation.focus(groupId) : focusGroup(worktreeId, groupId),
+      [focusGroup, worktreeId, presentation]
     )
     const groupActiveTabById = useMemo(
       () => new Map(groups.map((group) => [group.id, group.activeTabId] as const)),
@@ -118,8 +121,15 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
           <StructuredAgentSessionOverlaySlot
             key={tab.id}
             tab={tab}
-            groupId={tab.groupId}
-            isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
+            groupId={
+              presentation.assignments ? presentation.assignments.get(tab.id)?.groupId : tab.groupId
+            }
+            isActive={Boolean(
+              isWorktreeActive &&
+              (presentation.assignments
+                ? presentation.assignments.get(tab.id)?.isActiveInGroup
+                : groupActiveTabById.get(tab.groupId) === tab.id)
+            )}
             target={target}
             onFocusOwningGroup={focusOwningGroup}
           />

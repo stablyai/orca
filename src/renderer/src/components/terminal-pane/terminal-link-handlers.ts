@@ -1,4 +1,5 @@
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 import {
   extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
@@ -175,7 +176,9 @@ export function createFilePathLinkProvider(
                   cachedExists ??
                   (fileContext.connectionId || isRemoteRuntimePath
                     ? await runtimePathExists(fileContext, mappedPath)
-                    : await window.api.shell.pathExists(mappedPath))
+                    : await getWorkspaceShellApi({ worktreeId, runtimeEnvironmentId }).pathExists(
+                        mappedPath
+                      ))
                 writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
                 if (!exists) {
                   return null

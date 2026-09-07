@@ -52,6 +52,31 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
+  it('keeps stable local window credentials distinct by window name', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      webClientRoot: userDataPath
+    })
+    await server.start()
+
+    try {
+      const first = server.createPairingOffer({ name: 'Window A', reuseDeviceName: true })
+      const second = server.createPairingOffer({ name: 'Window B', reuseDeviceName: true })
+      const restored = server.createPairingOffer({ name: 'Window A', reuseDeviceName: true })
+      expect(first.available && second.available && restored.available).toBe(true)
+      if (first.available && second.available && restored.available) {
+        expect(first.deviceId).not.toBe(second.deviceId)
+        expect(restored.deviceId).toBe(first.deviceId)
+      }
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('reports why pairing is unavailable before the WebSocket listener is ready', () => {
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),

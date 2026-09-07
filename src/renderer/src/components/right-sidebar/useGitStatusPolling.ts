@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { isRuntimeSessionPlaceholderRepo } from '@/store/terminals/workspace-terminal-placeholders'
 import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeById } from '@/store/selectors'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
@@ -68,7 +69,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const activePushTarget = activeWorktree?.pushTarget
   const activeRepoId = activeWorktree?.repoId ?? null
   const activeRepo = useRepoById(activeRepoId)
-  const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
+  const activeRepoSupportsGit =
+    !!activeRepo && !isRuntimeSessionPlaceholderRepo(activeRepo) && isGitRepoKind(activeRepo)
   const activeConnectionId = activeRepo?.connectionId ?? null
   const isConnectionReady = useCallback(
     (connectionId: string | null | undefined): boolean =>

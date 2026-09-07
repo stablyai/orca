@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { WindowPaneLayoutSchema } from '../../../../shared/window-pane-schema'
 import {
   isFeatureInteractionId,
   type FeatureInteractionId
@@ -183,6 +184,26 @@ const UiUpdateFields = z
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     activityClearedAtByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     manuallyUnreadTurnsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
+    workspaceWindowIds: StringArray.optional(),
+    windowPaneLayout: WindowPaneLayoutSchema.nullable().optional(),
+    workspaceWindowPlacements: z
+      .record(
+        z.string(),
+        z
+          .object({
+            bounds: z
+              .object({
+                x: z.number().finite(),
+                y: z.number().finite(),
+                width: z.number().finite(),
+                height: z.number().finite()
+              })
+              .strict(),
+            maximized: z.boolean()
+          })
+          .strict()
+      )
+      .optional(),
     browserDefaultUrl: NullableString.optional(),
     browserDefaultSearchEngine: z
       .enum(['google', 'duckduckgo', 'bing', 'kagi'])

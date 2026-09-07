@@ -29,8 +29,13 @@ import {
   TRAFFIC_LIGHT_X
 } from './main-window-visual-lifecycle'
 import { installMainWindowWebviewSecurity } from './main-window-webview-security'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
+import {
+  isValidWindowPlacement,
+  readMonitorDisplays,
+  recoverWindowPlacement
+} from './monitor-placement'
+import { installMonitorTopologyRecovery } from './monitor-topology'
 
 export { WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS }
 
@@ -60,13 +65,16 @@ export function createMainWindow(
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
   const rawSavedBounds = store?.getUI().windowBounds
-  // Why: reject min-size or substantially off-screen bounds so the titlebar stays reachable after display changes.
+  // Recover saved geometry after display changes while rejecting malformed or teardown bounds.
   const savedBounds =
     rawSavedBounds &&
+    isValidWindowPlacement(rawSavedBounds) &&
     rawSavedBounds.width > MIN_WIDTH &&
-    rawSavedBounds.height > MIN_HEIGHT &&
-    rectHasVisibleAreaOnAnyDisplay(rawSavedBounds, MIN_WIDTH / 2, MIN_HEIGHT / 2)
-      ? rawSavedBounds
+    rawSavedBounds.height > MIN_HEIGHT
+      ? recoverWindowPlacement(
+          rawSavedBounds,
+          readMonitorDisplays(() => screen.getAllDisplays())
+        )
       : undefined
   if (rawSavedBounds && !savedBounds) {
     console.warn(
@@ -140,6 +148,7 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  mainWindow.on('page-title-updated', (event) => event.preventDefault())
   installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
@@ -181,6 +190,16 @@ export function createMainWindow(
     revealOnDidFinishLoad: opts?.revealOnDidFinishLoad === true,
     savedMaximized,
     store
+  })
+  installMonitorTopologyRecovery({
+    displays: () => screen.getAllDisplays(),
+    screen,
+    window: mainWindow,
+    onRecovered: (windowBounds, windowMaximized) => {
+      if (!state.isWindowClosing()) {
+        store?.updateUI({ windowBounds, windowMaximized })
+      }
+    }
   })
   installMainWindowWebviewSecurity(mainWindow)
   const focus = installMainWindowFocusLifecycle({

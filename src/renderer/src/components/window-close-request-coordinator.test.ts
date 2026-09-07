@@ -2,6 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import {
+  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+  type EditorPrepareHotExitDetail
+} from '../../../shared/editor-save-events'
+import {
+  registerUpdaterBeforeUnloadBypass,
+  isIntentionalAppRestartInProgress
+} from '../lib/updater-beforeunload'
+import {
   consumeShutdownCheckpointFailureReason,
   publishShutdownCheckpointFailureReason
 } from '../../../shared/renderer-shutdown-events'
@@ -50,6 +58,68 @@ describe('window-close-request-coordinator', () => {
     // Why: on the no-workspace landing page Terminal is not mounted, so no rich
     // handler is registered and the App-root subscription must close directly.
     expect(getWindowCloseRequestHandler()).toBeNull()
+  })
+
+  it('checkpoints a secondary presentation before closing without invoking session shutdown', async () => {
+    let finish!: () => void
+    const flush = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve
+        })
+    )
+    Object.assign(window, { orcaWorkspaceWindowNative: {} })
+    Object.assign(window.api, { app: { awaitBeforeUnloadCheckpoint: flush } })
+    unregisterFns.push(registerUpdaterBeforeUnloadBypass())
+    const handler = vi.fn()
+    setWindowCloseRequestHandler(handler)
+    const backup = vi.fn((event: Event) => {
+      const detail = (event as CustomEvent<EditorPrepareHotExitDetail>).detail
+      detail.claim()
+      detail.resolve()
+    })
+    window.addEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, backup)
+    const checkpoint = vi.fn(() => expect(isIntentionalAppRestartInProgress()).toBe(true))
+    window.addEventListener('beforeunload', checkpoint)
+    const closing = dispatchWindowCloseRequest({ isQuitting: false })
+    await vi.waitFor(() => expect(flush).toHaveBeenCalledTimes(1))
+    await dispatchWindowCloseRequest({ isQuitting: false })
+    expect(backup).toHaveBeenCalledTimes(1)
+    expect(checkpoint).toHaveBeenCalledTimes(1)
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+    expect(handler).not.toHaveBeenCalled()
+    finish()
+    await closing
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a secondary presentation open when durability fails and permits retry', async () => {
+    const flush = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('draft write failed'))
+      .mockResolvedValue(undefined)
+    Object.assign(window, { orcaWorkspaceWindowNative: {} })
+    Object.assign(window.api, { app: { awaitBeforeUnloadCheckpoint: flush } })
+    unregisterFns.push(registerUpdaterBeforeUnloadBypass())
+    await dispatchWindowCloseRequest({ isQuitting: false })
+    expect(confirmWindowClose).not.toHaveBeenCalled()
+    expect(isIntentionalAppRestartInProgress()).toBe(false)
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('draft write failed'))
+    await dispatchWindowCloseRequest({ isQuitting: false })
+    expect(confirmWindowClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains app quit handling and pre-close guards for a secondary window', async () => {
+    const flush = vi.fn()
+    Object.assign(window, { orcaWorkspaceWindowNative: { presentationStorage: { flush } } })
+    const handler = vi.fn()
+    setWindowCloseRequestHandler(handler)
+    await dispatchWindowCloseRequest({ isQuitting: true })
+    expect(handler).toHaveBeenCalledWith({ isQuitting: true })
+    addGuard(() => false)
+    await dispatchWindowCloseRequest({ isQuitting: false })
+    expect(flush).not.toHaveBeenCalled()
+    expect(confirmWindowClose).not.toHaveBeenCalled()
   })
 
   it('returns the registered handler so the App root delegates to Terminal', () => {

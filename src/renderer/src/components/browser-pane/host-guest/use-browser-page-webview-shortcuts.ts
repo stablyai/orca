@@ -1,6 +1,7 @@
 import { useEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
+import { canControlWorkspaceBrowserPage } from '../../cross-project-panes/workspace-browser-control'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import {
@@ -44,6 +45,9 @@ export function useBrowserPageWebviewShortcuts({
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
+      if (!canControlWorkspaceBrowserPage(browserTabId)) {
+        return
+      }
       const direction = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
         ? 'back'
         : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
@@ -63,7 +67,7 @@ export function useBrowserPageWebviewShortcuts({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings, webviewRef])
+  }, [browserTabId, isActive, keybindings, webviewRef])
 
   // Browser history shortcuts (IPC path: focus inside webview guest)
   // Why: a focused webview is a separate WebContents, so main forwards the chords back here.
@@ -72,6 +76,9 @@ export function useBrowserPageWebviewShortcuts({
       return
     }
     return window.api.ui.onBrowserHistoryNavigate((direction) => {
+      if (!canControlWorkspaceBrowserPage(browserTabId)) {
+        return
+      }
       // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
@@ -79,7 +86,7 @@ export function useBrowserPageWebviewShortcuts({
         webviewRef.current?.goForward()
       }
     })
-  }, [isActive, webviewRef])
+  }, [browserTabId, isActive, webviewRef])
 
   // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
   // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
@@ -89,6 +96,9 @@ export function useBrowserPageWebviewShortcuts({
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
+      if (!canControlWorkspaceBrowserPage(browserTabId)) {
+        return
+      }
       const isHardReload = keybindingMatchesAction(
         'browser.hardReload',
         e,
@@ -108,7 +118,7 @@ export function useBrowserPageWebviewShortcuts({
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isActive, keybindings, reloadWebviewOrRecoverGuest])
+  }, [browserTabId, isActive, keybindings, reloadWebviewOrRecoverGuest])
 
   // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
   // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
@@ -117,25 +127,31 @@ export function useBrowserPageWebviewShortcuts({
       return
     }
     return window.api.ui.onReloadBrowserPage(() => {
+      if (!canControlWorkspaceBrowserPage(browserTabId)) {
+        return
+      }
       reloadWebviewOrRecoverGuest(false)
     })
-  }, [isActive, reloadWebviewOrRecoverGuest])
+  }, [browserTabId, isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
       return
     }
     return window.api.ui.onHardReloadBrowserPage(() => {
+      if (!canControlWorkspaceBrowserPage(browserTabId)) {
+        return
+      }
       reloadWebviewOrRecoverGuest(true)
     })
-  }, [isActive, reloadWebviewOrRecoverGuest])
+  }, [browserTabId, isActive, reloadWebviewOrRecoverGuest])
 
   useEffect(() => {
     if (!isActive) {
       return
     }
     const applyActivePageZoom = (direction: BrowserPageZoomDirection): void => {
-      if (!isActiveRef.current) {
+      if (!isActiveRef.current || !canControlWorkspaceBrowserPage(browserTabId)) {
         return
       }
       // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.

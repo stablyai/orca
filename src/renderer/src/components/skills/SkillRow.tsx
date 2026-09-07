@@ -40,6 +40,7 @@ function formatUpdatedAt(value: number | null): string {
 
 export function SkillRow({
   skill,
+  local,
   selectionMode,
   selected,
   selectable,
@@ -57,6 +58,7 @@ export function SkillRow({
   onKeyDown
 }: {
   skill: DiscoveredSkill
+  local: boolean
   selectionMode: boolean
   selected: boolean
   selectable: boolean
@@ -86,7 +88,10 @@ export function SkillRow({
   const showReason = selectionBlocked && disabledReason !== null
 
   const revealSkill = async (): Promise<void> => {
-    const result = await window.api.shell.openInFileManager(skill.skillFilePath)
+    const result = await window.api.shell.openInFileManager(
+      skill.skillFilePath,
+      local ? { kind: 'local-artifact' } : { kind: 'workspace', runtimeId: null }
+    )
     if (!result.ok) {
       toast.error(
         translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')

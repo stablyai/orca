@@ -16,7 +16,8 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
 import { translate } from '@/i18n/i18n'
-import type { PaletteItem } from './worktree-jump-palette-model'
+import type { PaletteItem, WorkspaceViewPaletteItem } from './worktree-jump-palette-model'
+import { selectWorkspaceViewPlacement } from './cross-project-panes/select-workspace-view-placement'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
@@ -33,12 +34,15 @@ function getSettingsTargetFromSectionId(sectionId: string): {
   return { pane: sectionId as SettingsNavTarget, repoId: null }
 }
 
-type WorktreeJumpPaletteSelectionActionsInput = WorktreeJumpPaletteStoreState &
+type WorktreeJumpPaletteSelectionActionsInput = {
+  allPlacements?: WorkspaceViewPaletteItem[]
+} & WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteLocalState &
   Pick<WorktreeJumpPaletteQuickActions, 'buildQuickActionContext'> &
   Pick<WorktreeJumpPaletteSelectionLifecycle, 'focusFallbackSurface' | 'requestBrowserFocus'>
 
 export function useWorktreeJumpPaletteSelectionActions({
+  allPlacements = [],
   closeModal,
   recordFeatureInteraction,
   skipRestoreFocusRef,
@@ -55,6 +59,22 @@ export function useWorktreeJumpPaletteSelectionActions({
   previousWorktreeIdRef,
   previousFocusElementRef
 }: WorktreeJumpPaletteSelectionActionsInput) {
+  const handleSelectPlacement = useCallback(
+    async (item: WorkspaceViewPaletteItem, action: 'visit' | 'here' | 'beside') => {
+      try {
+        if (!(await selectWorkspaceViewPlacement(item.placement, action))) {
+          toast.error('View unavailable. Refresh Jump and try again.')
+          return
+        }
+        skipRestoreFocusRef.current = true
+        closeModal()
+        setSelectedItemId('')
+      } catch (error) {
+        toast.error(String(error))
+      }
+    },
+    [closeModal, setSelectedItemId, skipRestoreFocusRef]
+  )
   const handleSelectWorktree = useCallback(
     (worktree: Worktree) => {
       const executionHostId = getPaletteWorktreeExecutionHostId(worktree)
@@ -233,7 +253,25 @@ export function useWorktreeJumpPaletteSelectionActions({
   )
   const handleSelectItem = useCallback(
     (item: PaletteItem) => {
-      if (item.type === 'worktree') {
+      const existing = allPlacements.find(
+        ({ localView }) =>
+          localView &&
+          (item.type === 'workspace-tab'
+            ? localView.worktreeId === item.result.worktreeId &&
+              localView.tabId === item.result.tabId
+            : item.type === 'browser-page'
+              ? localView.worktreeId === item.result.worktreeId &&
+                localView.contentType === 'browser' &&
+                localView.entityId === item.result.workspaceId
+              : false)
+      )
+      if (existing) {
+        void handleSelectPlacement(existing, 'visit')
+        return
+      }
+      if (item.type === 'workspace-view') {
+        void handleSelectPlacement(item, 'visit')
+      } else if (item.type === 'worktree') {
         handleSelectWorktree(item.worktree)
       } else if (item.type === 'project-target') {
         handleSelectProjectTarget(item.result)
@@ -250,6 +288,8 @@ export function useWorktreeJumpPaletteSelectionActions({
       }
     },
     [
+      allPlacements,
+      handleSelectPlacement,
       handleSelectBrowserPage,
       handleSelectProjectTarget,
       handleSelectQuickAction,
@@ -259,7 +299,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       handleSelectWorktree
     ]
   )
-  return { handleSelectItem }
+  return { handleSelectItem, handleSelectPlacement }
 }
 
 export type WorktreeJumpPaletteSelectionActions = ReturnType<

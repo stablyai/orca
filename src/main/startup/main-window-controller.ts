@@ -44,11 +44,19 @@ import {
   stopSyntheticTitleSpinnerTimer
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
+import { createWorkspaceWindow, getClosedWorkspaceWindowId } from '../window/workspace-window'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
-export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
+export type OpenMainWindowOptions = {
+  reopen?: boolean
+  kind?: 'primary' | 'workspace'
+  revealOnDidFinishLoad?: boolean
+  windowId?: string
+}
+
+export function openMainWindow(options: OpenMainWindowOptions = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   const { store, keybindings } = requireMainWindowServices({
     store: state.store,
@@ -65,6 +73,22 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     claudeRuntimeAuth: state.claudeRuntimeAuth,
     keybindings: state.keybindings
   })
+  if (options.kind === 'workspace') {
+    if (!state.runtimeRpc) {
+      throw new Error('workspace_window_runtime_unavailable')
+    }
+    const windowId = options.reopen ? getClosedWorkspaceWindowId(store) : options.windowId
+    if (options.reopen && !windowId) {
+      throw new Error('No closed window to reopen')
+    }
+    return createWorkspaceWindow({
+      getIsQuitting: () => state.isQuitting,
+      runtimeRpc: state.runtimeRpc,
+      store,
+      title: state.devInstanceIdentity?.name ?? app.name,
+      ...(windowId ? { windowId } : {})
+    })
+  }
   if (process.platform === 'win32') {
     logStartupMilestone('acl-grant-start')
     ensureWindowsUserDataAclGrant(app.getPath('userData'), {
@@ -212,6 +236,11 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   logStartupMilestone('load-start')
   loadMainWindow(window)
   return window
+}
+
+export function restoreWorkspaceWindows(): BrowserWindow[] {
+  const windowIds = state.store?.getUI().workspaceWindowIds ?? []
+  return windowIds.map((windowId) => openMainWindow({ kind: 'workspace', windowId }))
 }
 
 export function configureWindowActions(): void {

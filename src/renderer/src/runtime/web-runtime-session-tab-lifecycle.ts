@@ -4,6 +4,7 @@ import type {
   RuntimeSessionTabCloseReason
 } from '../../../shared/runtime-types'
 import { useAppStore } from '../store'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
@@ -108,6 +109,11 @@ async function callWebRuntimeSessionTabMethod(
       // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
       closeIntentTabIds.add(hostTabId)
       recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
+      if (!isLifecycleClose && (window.orcaWorkspaceWindowNative || !isPairedWebClientWindow())) {
+        makeWebSessionCloseIntentDurable(intentOwner, args.worktreeId, immediateHostTabId, true)
+        makeWebSessionCloseIntentDurable(intentOwner, args.worktreeId, hostTabId, true)
+        return 'applied'
+      }
     } else {
       activationHostTabId = hostTabId
       recordWebSessionFocusIntent(intentOwner, args.worktreeId, hostTabId)

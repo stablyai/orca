@@ -8,7 +8,7 @@ import type { PreloadApi } from '../api-types'
 export const terminalPreviewApi = {
   connect: (
     ptyId: string,
-    opts?: { scrollbackRows?: number }
+    opts?: { scrollbackRows?: number; viewId?: string }
   ): Promise<TerminalPreviewConnectResult> =>
     ipcRenderer.invoke('terminalPreview:connect', { ptyId, opts }),
   input: (ptyId: string, data: string): Promise<boolean> =>
@@ -19,10 +19,10 @@ export const terminalPreviewApi = {
     rows: number
   ): Promise<{ cols: number; rows: number } | null> =>
     ipcRenderer.invoke('terminalPreview:fit', { ptyId, cols, rows }),
-  ack: (ptyId: string, bytes: number): Promise<void> =>
-    ipcRenderer.invoke('terminalPreview:ack', { ptyId, bytes }),
-  unsubscribe: (ptyId: string): Promise<void> =>
-    ipcRenderer.invoke('terminalPreview:unsubscribe', { ptyId }),
+  ack: (ptyId: string, bytes: number, viewId?: string): Promise<void> =>
+    ipcRenderer.invoke('terminalPreview:ack', { ptyId, bytes, viewId }),
+  unsubscribe: (ptyId: string, viewId?: string): Promise<void> =>
+    ipcRenderer.invoke('terminalPreview:unsubscribe', { ptyId, viewId }),
   onData: (callback: (payload: TerminalPreviewDataPayload) => void): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

@@ -1,4 +1,5 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
+import type { LocalWindowBrowserTarget } from './local-window-browser-target'
 import type { RuntimeBrowserCommands, RuntimeBrowserCommandHost } from './orca-runtime-browser'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
 import { RuntimeBrowserScreencastController } from './runtime-browser-screencast-controller'
@@ -11,6 +12,7 @@ type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreen
     params: Parameters<RuntimeBrowserCommands['browserScreencast']>[0],
     options: {
       connectionId?: string
+      localWindowTarget?: LocalWindowBrowserTarget
       pairedDeviceId?: string
       clientKind?: 'mobile' | 'runtime'
       sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void

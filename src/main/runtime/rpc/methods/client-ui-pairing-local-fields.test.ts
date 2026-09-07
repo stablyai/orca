@@ -39,6 +39,7 @@ describe('client UI RPC pairing-local field seams', () => {
   // Driven off the census so a field added to PAIRING_LOCAL_UI_FIELDS without wiring a seam
   // fails here rather than shipping. Sample values are what a paired web client actually sends.
   const pairingLocalSamples: Record<(typeof PAIRING_LOCAL_UI_FIELDS)[number], unknown> = {
+    windowPaneLayout: null,
     automationHostFilter: { kind: 'host', hostKey: 'authority:desktop|selector:self' },
     hideWorkspacesFromOtherDevices: true,
     manualRepoOrder: [
@@ -52,7 +53,11 @@ describe('client UI RPC pairing-local field seams', () => {
     agentsReadFilter: 'unread',
     agentsGroupBy: 'project',
     activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
-    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
+    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 },
+    workspaceWindowIds: ['window-1'],
+    workspaceWindowPlacements: {
+      'window-1': { bounds: { x: 10, y: 20, width: 900, height: 700 }, maximized: false }
+    }
   }
 
   it.each(PAIRING_LOCAL_UI_FIELDS.map((field) => [field] as const))(

@@ -13,10 +13,19 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.activate',
     params: ActivateTab,
-    handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
+    handler: async (
+      params,
+      {
+        runtime,
+        clientKind,
+        pairedDeviceId,
+        clientNavigationId = pairedDeviceId,
+        clientCapabilities
+      }
+    ) => {
       if (clientKind) {
         const visible = projectSessionTabsForClient(
-          await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
+          await runtime.listMobileSessionTabs(params.worktree, clientNavigationId),
           clientKind,
           clientCapabilities,
           isStructuredNativeChatEnabled(runtime)
@@ -29,7 +38,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
         params.leafId,
         {
           notifyClients: params.notifyClients !== false,
-          clientNavigationId: pairedDeviceId,
+          clientNavigationId,
           ...(params.intent ? { intent: params.intent } : {}),
           navigation: resolveRuntimeNavigationTarget({
             navigation: params.navigation,
@@ -49,10 +58,19 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.move',
     params: MoveTab,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      {
+        runtime,
+        pairedDeviceId,
+        clientNavigationId = pairedDeviceId,
+        clientCapabilities,
+        clientKind
+      }
+    ) => {
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
       if (clientKind) {
-        const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+        const raw = await runtime.listMobileSessionTabs(params.worktree, clientNavigationId)
         const projected = projectSessionTabsForClient(
           raw,
           clientKind,
@@ -86,12 +104,21 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.updatePaneLayout',
     params: UpdatePaneLayout,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      {
+        runtime,
+        pairedDeviceId,
+        clientNavigationId = pairedDeviceId,
+        clientCapabilities,
+        clientKind
+      }
+    ) => {
       await assertVisibleMutationTab(
         runtime,
         params.worktree,
         params.tabId,
-        pairedDeviceId,
+        clientNavigationId,
         clientKind,
         clientCapabilities
       )
@@ -106,12 +133,21 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.setTabProps',
     params: SetTabProps,
-    handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
+    handler: async (
+      params,
+      {
+        runtime,
+        pairedDeviceId,
+        clientNavigationId = pairedDeviceId,
+        clientCapabilities,
+        clientKind
+      }
+    ) => {
       await assertVisibleMutationTab(
         runtime,
         params.worktree,
         params.tabId,
-        pairedDeviceId,
+        clientNavigationId,
         clientKind,
         clientCapabilities
       )

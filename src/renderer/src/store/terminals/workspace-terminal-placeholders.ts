@@ -5,6 +5,12 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/e
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 
+type RuntimeSessionPlaceholderRepo = Repo & { runtimeSessionPlaceholder: true }
+
+export function isRuntimeSessionPlaceholderRepo(repo: Repo): boolean {
+  return 'runtimeSessionPlaceholder' in repo && repo.runtimeSessionPlaceholder === true
+}
+
 export function getPathDisplayName(path: string, fallback: string): string {
   const normalized = path.trim().replace(/[\\/]+$/g, '')
   const basename = normalized.split(/[\\/]/).findLast(Boolean)?.trim()
@@ -46,18 +52,17 @@ export function buildRuntimeSessionPlaceholders({
     const existingRepo = nextRepos.some((repo) => repo.id === parsed.repoId)
     if (!existingRepo) {
       // Why: remote catalogs load after hydration but host-split session writes need owner metadata; skip if the repo id already exists to avoid duplicates.
-      nextRepos = [
-        ...nextRepos,
-        {
-          id: parsed.repoId,
-          path: parsed.worktreePath,
-          displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
-          badgeColor: DEFAULT_REPO_BADGE_COLOR,
-          addedAt: 0,
-          connectionId: null,
-          executionHostId: hostId
-        }
-      ]
+      const placeholder: RuntimeSessionPlaceholderRepo = {
+        id: parsed.repoId,
+        path: parsed.worktreePath,
+        displayName: getPathDisplayName(parsed.worktreePath, parsed.repoId),
+        badgeColor: DEFAULT_REPO_BADGE_COLOR,
+        addedAt: 0,
+        connectionId: null,
+        executionHostId: hostId,
+        runtimeSessionPlaceholder: true
+      }
+      nextRepos = [...nextRepos, placeholder]
     }
     const current = nextWorktreesByRepo[parsed.repoId] ?? []
     if (current.some((worktree) => worktree.id === worktreeId)) {

@@ -5,6 +5,9 @@ import type { TabSplitDirection } from '../../store/slices/tabs'
 export type TabDropZone = 'center' | TabSplitDirection
 
 export type TabDragItemData = {
+  workspaceViewId?: string
+  workspacePaneId?: string
+  projectContext?: { projectName: string; label: string; accentColor?: string }
   kind: 'tab'
   worktreeId: string
   groupId: string

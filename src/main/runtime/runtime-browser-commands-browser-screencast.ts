@@ -24,6 +24,7 @@ import {
   screencastSubscriberIsGhost
 } from './browser-screencast-ghost-subscriber-eviction'
 import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
+import type { LocalWindowBrowserTarget } from './local-window-browser-target'
 
 export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserCommandsWithBrowserClick {
   async browserScreencast(
@@ -32,20 +33,29 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
       sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
       emit?: (event: BrowserScreencastResult) => void
       pairedDeviceId?: string
+      localWindowTarget?: LocalWindowBrowserTarget
     }
   ): Promise<BrowserScreencastStartResult> {
-    if (await this.resolveClientHostedBrowserPage(params)) {
+    if (!stream.localWindowTarget && (await this.resolveClientHostedBrowserPage(params))) {
       throw new BrowserError(
         'browser_error',
         'Client-hosted browser pages do not support server screencast.'
       )
     }
-    const target = await this.resolveBrowserCommandTarget(params)
-    const { browserPageId, webContents: guest } = this.resolveBrowserPageWebContents(
-      target.worktreeId,
-      target.browserPageId
-    )
+    const target = stream.localWindowTarget ?? (await this.resolveBrowserCommandTarget(params))
+    const { browserPageId, webContents: guest } =
+      stream.localWindowTarget ??
+      this.resolveBrowserPageWebContents(target.worktreeId, target.browserPageId)
     const subscriptionId = `browser-screencast:${browserPageId}:${randomUUID()}`
+    const tab = stream.localWindowTarget
+      ? {
+          browserPageId,
+          index: 0,
+          url: guest.getURL(),
+          title: guest.getTitle(),
+          active: true
+        }
+      : this.describeBrowserTab(browserPageId, target.worktreeId)
     const viewport = normalizeScreencastViewport(params)
     const budget = normalizeScreencastFrameBudget(params)
     let resolveSubscriberDone!: () => void
@@ -188,7 +198,7 @@ export class RuntimeBrowserCommandsWithBrowserScreencast extends RuntimeBrowserC
         subscriptionId,
         browserPageId,
         format: active.format,
-        tab: this.describeBrowserTab(browserPageId, target.worktreeId)
+        tab
       }
     }
   }

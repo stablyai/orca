@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { canControlWorkspaceBrowserPage } from '../../cross-project-panes/workspace-browser-control'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
@@ -185,13 +186,16 @@ export function useRemoteBrowserPageLifecycle({
 
   const createRemoteOperationToken = useCallback(
     (remotePageId: string | null = null): RemoteBrowserOperationToken | null =>
-      lifecycle.tokens.createOperationToken(remotePageId),
-    [lifecycle]
+      canControlWorkspaceBrowserPage(browserTab.id)
+        ? lifecycle.tokens.createOperationToken(remotePageId)
+        : null,
+    [lifecycle, browserTab.id]
   )
 
   const isCurrentRemoteOperationToken = useCallback(
-    (token: RemoteBrowserOperationToken): boolean => lifecycle.tokens.isCurrent(token),
-    [lifecycle]
+    (token: RemoteBrowserOperationToken): boolean =>
+      canControlWorkspaceBrowserPage(browserTab.id) && lifecycle.tokens.isCurrent(token),
+    [lifecycle, browserTab.id]
   )
 
   useEffect(() => {

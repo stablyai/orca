@@ -232,7 +232,9 @@ export function useBrowserPageNavigationDownloads({
         )
         return
       }
-      const opened = await window.api.shell.openFilePath(download.savePath)
+      const opened = await window.api.shell.openFilePath(download.savePath, {
+        kind: 'local-artifact'
+      })
       if (!opened) {
         setResourceNotice(
           translate(
@@ -256,7 +258,9 @@ export function useBrowserPageNavigationDownloads({
         )
         return
       }
-      const result = await window.api.shell.openInFileManager(download.savePath)
+      const result = await window.api.shell.openInFileManager(download.savePath, {
+        kind: 'local-artifact'
+      })
       if (!result.ok) {
         setResourceNotice(
           translate(

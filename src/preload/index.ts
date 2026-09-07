@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { exposeWorkspaceViewBridge } from './workspace-view-bridge'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PreloadApi } from './api-types'
 import {
@@ -87,6 +88,7 @@ import { speechApi } from './api/speech-bridge'
 
 installNativeFileDropHandlers()
 installBrowserFindListener()
+exposeWorkspaceViewBridge(contextBridge, ipcRenderer)
 
 // Custom APIs for renderer. Each domain bridge owns its IPC contract.
 const telemetryTrackApi: PreloadApi['telemetryTrack'] = (name, props) =>

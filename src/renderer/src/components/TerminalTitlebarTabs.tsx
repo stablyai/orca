@@ -20,6 +20,7 @@ export function TerminalTitlebarTabs({
 }: {
   controller: TerminalController
 }): React.JSX.Element | null {
+  const hasWindowPanes = useAppStore((state) => Boolean(state.windowPaneLayout))
   const {
     activeBrowserTabId,
     activeFileId,
@@ -58,7 +59,7 @@ export function TerminalTitlebarTabs({
     worktreeClientHostedBrowserRows,
     worktreeFiles
   } = controller
-  if (!renderedActiveWorktreeId || effectiveActiveLayout || !titlebarTabsTarget) {
+  if (hasWindowPanes || !renderedActiveWorktreeId || effectiveActiveLayout || !titlebarTabsTarget) {
     return null
   }
   return createPortal(

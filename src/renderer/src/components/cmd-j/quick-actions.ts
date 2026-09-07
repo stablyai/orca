@@ -9,6 +9,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getNativeChatSplitQuickActions } from './native-chat-split-quick-actions'
+import { getWorkspaceLayoutQuickActions } from './workspace-layout-quick-actions'
 
 export type CmdJQuickActionRunResult =
   | { status: 'ok' }
@@ -65,6 +66,7 @@ async function runWorkspaceAction(
 // Context-heavy setup flows such as Ghostty import and browser cookie import
 // stay inside their Settings panes where explanatory UI and failure states fit.
 export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] => [
+  ...getWorkspaceLayoutQuickActions(),
   {
     id: 'new-browser-tab',
     kind: 'action',

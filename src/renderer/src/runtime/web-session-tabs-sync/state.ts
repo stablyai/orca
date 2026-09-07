@@ -166,35 +166,36 @@ export type MirroredBrowserTab = {
 }
 export type MirroredEditorTab = { file: OpenFile; unifiedTab: Tab; hostTabId: string }
 
-export type WebSessionTabsSyncState = Pick<
-  AppState,
-  | 'activeBrowserTabId'
-  | 'activeBrowserTabIdByWorktree'
-  | 'activeGroupIdByWorktree'
-  | 'activeFileId'
-  | 'activeFileIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeTabType'
-  | 'activeTabTypeByWorktree'
-  | 'activeWorktreeId'
-  | 'agentStatusByPaneKey'
-  | 'agentStatusEpoch'
-  | 'browserPagesByWorkspace'
-  | 'browserCertificateFailuresByPageId'
-  | 'browserTabsByWorktree'
-  | 'groupsByWorktree'
-  | 'layoutByWorktree'
-  | 'openFiles'
-  | 'ptyIdsByTabId'
-  | 'remoteBrowserPageHandlesByPageId'
-  | 'tabBarOrderByWorktree'
-  | 'tabsByWorktree'
-  | 'terminalLayoutsByTabId'
-  | 'unifiedTabsByWorktree'
-  | 'unreadTerminalTabs'
-  | 'sortEpoch'
-> &
+export type WebSessionTabsSyncState = Partial<Pick<AppState, 'editorDrafts'>> &
+  Pick<
+    AppState,
+    | 'activeBrowserTabId'
+    | 'activeBrowserTabIdByWorktree'
+    | 'activeGroupIdByWorktree'
+    | 'activeFileId'
+    | 'activeFileIdByWorktree'
+    | 'activeTabId'
+    | 'activeTabIdByWorktree'
+    | 'activeTabType'
+    | 'activeTabTypeByWorktree'
+    | 'activeWorktreeId'
+    | 'agentStatusByPaneKey'
+    | 'agentStatusEpoch'
+    | 'browserPagesByWorkspace'
+    | 'browserCertificateFailuresByPageId'
+    | 'browserTabsByWorktree'
+    | 'groupsByWorktree'
+    | 'layoutByWorktree'
+    | 'openFiles'
+    | 'ptyIdsByTabId'
+    | 'remoteBrowserPageHandlesByPageId'
+    | 'tabBarOrderByWorktree'
+    | 'tabsByWorktree'
+    | 'terminalLayoutsByTabId'
+    | 'unifiedTabsByWorktree'
+    | 'unreadTerminalTabs'
+    | 'sortEpoch'
+  > &
   Partial<
     Pick<
       AppState,

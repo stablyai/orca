@@ -15,12 +15,14 @@ import type { WorktreeJumpPaletteSections } from './use-worktree-jump-palette-se
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 
-type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections &
-  Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
+type WorktreeJumpPaletteListEntriesInput = WorktreeJumpPaletteSections & {
+  placements?: PaletteItem[]
+} & Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'> &
   Pick<WorktreeJumpPaletteLocalState, 'autoSelectedItemIdRef' | 'taskSourceUrl'> &
   Pick<WorktreeJumpPaletteSections, 'middleLeadsSections' | 'handleExpandSection'>
 
 export function useWorktreeJumpPaletteListEntries({
+  placements,
   hasQuery,
   openTabsLeadSections,
   paletteSections,
@@ -32,6 +34,12 @@ export function useWorktreeJumpPaletteListEntries({
 }: WorktreeJumpPaletteListEntriesInput) {
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
+    if (placements?.length) {
+      entries.push(
+        { id: '__header_placements__', type: 'section-header', label: 'Views across windows' },
+        ...placements
+      )
+    }
     const {
       visibleWorktreeItems,
       visibleProjectTargetItems,
@@ -228,6 +236,7 @@ export function useWorktreeJumpPaletteListEntries({
     }
     return entries
   }, [
+    placements,
     handleExpandSection,
     hasQuery,
     middleLeadsSections,

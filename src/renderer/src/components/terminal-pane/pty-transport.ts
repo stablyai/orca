@@ -1,4 +1,5 @@
 import { attachIpcPty } from './ipc-pty-attach'
+import { canControlWorkspacePty } from '../cross-project-panes/workspace-pty-control'
 import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
@@ -55,7 +56,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       : null
 
   const inputWriteQueue = createPtyInputWriteQueue({
-    isWritable: (id) => !destroyed && connected && ptyId === id,
+    isWritable: (id) => !destroyed && connected && ptyId === id && canControlWorkspacePty(id),
     write: (id, data) => window.api.pty.write(id, data),
     writeAccepted: (id, data) => window.api.pty.writeAccepted(id, data),
     onDrainFailure: (id) => {
@@ -211,6 +212,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data) {
+      if (!canControlWorkspacePty(ptyId)) {
+        return false
+      }
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput)
       }
@@ -218,6 +222,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInputImmediate(data) {
+      if (!canControlWorkspacePty(ptyId)) {
+        return false
+      }
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput)
       }
@@ -230,6 +237,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       ? {}
       : {
           async sendInputAccepted(data: string): Promise<boolean> {
+            if (!canControlWorkspacePty(ptyId)) {
+              return false
+            }
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
               return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput)
             }
@@ -241,6 +251,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         }),
 
     claimViewport(cols, rows) {
+      if (!canControlWorkspacePty(ptyId)) {
+        return false
+      }
       if (!connected || !ptyId) {
         return false
       }
@@ -249,6 +262,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     resize(cols, rows, meta) {
+      if (!canControlWorkspacePty(ptyId)) {
+        return false
+      }
       if (!connected || !ptyId) {
         return false
       }

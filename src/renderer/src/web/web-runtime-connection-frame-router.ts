@@ -2,6 +2,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import {
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
@@ -57,6 +58,7 @@ export async function routeWebRuntimeConnectionFrame(
           type: 'e2ee_auth',
           deviceToken: context.pairingToken,
           clientCapabilities: [
+            ...(window.orcaWorkspaceWindowNative ? [BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY] : []),
             SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
             AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
             WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,

@@ -86,10 +86,17 @@ export function getTabLayoutSignature(
   return `${item.type}:${item.id}:${item.isPinned}:${label}`
 }
 
-export function createUnifiedTabLookup(tabs: readonly Tab[], groupId: string): Map<string, Tab> {
+export function createUnifiedTabLookup(
+  tabs: readonly (Tab & { presentationId?: string })[],
+  groupId?: string
+): Map<string, Tab> {
   const lookup = new Map<string, Tab>()
   for (const tab of tabs) {
-    if (tab.groupId !== groupId) {
+    if (groupId !== undefined && tab.groupId !== groupId) {
+      continue
+    }
+    if (tab.presentationId) {
+      lookup.set(tab.presentationId, tab)
       continue
     }
     lookup.set(tab.id, tab)
@@ -153,7 +160,7 @@ export function buildOrderedTabItems({
       items.push({
         type: 'editor',
         id,
-        unifiedTabId: file.tabId ?? unifiedTab?.id ?? file.id,
+        unifiedTabId: unifiedTab?.id ?? file.tabId ?? file.id,
         isPinned: unifiedTab?.isPinned === true,
         data: file
       })

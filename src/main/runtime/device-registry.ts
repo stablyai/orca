@@ -119,6 +119,20 @@ export class DeviceRegistry {
     return this.addDevice(name, scope, pairingReach)
   }
 
+  getOrCreateNamedDevice(
+    name: string,
+    scope: DeviceScope,
+    pairingReach: RuntimePairingReach
+  ): DeviceEntry {
+    const existing = this.devices.find((device) => device.name === name && device.scope === scope)
+    if (!existing) {
+      return this.addDevice(name, scope, pairingReach)
+    }
+    return pairingReach === 'network' && existing.pairingReach === 'this-computer'
+      ? this.setPairingReach(existing, 'network')
+      : existing
+  }
+
   private setPairingReach(existing: DeviceEntry, pairingReach: RuntimePairingReach): DeviceEntry {
     const updated: DeviceEntry = { ...existing, pairingReach }
     const nextDevices = this.devices.map((device) =>

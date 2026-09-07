@@ -3,6 +3,7 @@ import { posix as pathPosix } from 'node:path'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { OpenFile } from '../store/slices/editor'
+import { buildOwnedEditorFileId } from '../store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
 import {
   ENV,
@@ -23,6 +24,106 @@ vi.mock('../store', () => ({
 
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
+
+  it('does not copy a same-path draft or disk baseline from another runtime owner', () => {
+    const foreign: OpenFile = {
+      id: '/repo/README.md',
+      filePath: '/repo/README.md',
+      relativePath: 'README.md',
+      worktreeId: WT,
+      language: 'markdown',
+      isDirty: true,
+      runtimeEnvironmentId: 'other-owner',
+      mode: 'edit',
+      lastKnownDiskSignature: 'foreign-baseline'
+    }
+    const state = makeState({
+      openFiles: [foreign],
+      editorDrafts: { [foreign.id]: 'foreign draft' }
+    })
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([
+        {
+          type: 'markdown',
+          id: 'host-readme',
+          title: 'README.md',
+          filePath: foreign.filePath,
+          relativePath: foreign.relativePath,
+          language: 'markdown',
+          mode: 'edit',
+          isDirty: false,
+          isActive: true,
+          sourceFileId: foreign.filePath,
+          sourceFilePath: foreign.filePath,
+          sourceRelativePath: foreign.relativePath,
+          documentVersion: 'file:1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    expect(patch.openFiles).toContainEqual(foreign)
+    const own = patch.openFiles!.find((file) => file.runtimeEnvironmentId === ENV)!
+    expect(own.id).toBe(buildOwnedEditorFileId(foreign.filePath, WT, ENV))
+    expect(own.isDirty).toBe(false)
+    expect(own.lastKnownDiskSignature).toBeUndefined()
+    expect(state.editorDrafts).toEqual({ [foreign.id]: 'foreign draft' })
+  })
+
+  it('reuses a restored owner-qualified editor instead of duplicating it from the host path', () => {
+    const file: OpenFile = {
+      id: buildOwnedEditorFileId('/repo/README.md', WT, ENV),
+      filePath: '/repo/README.md',
+      relativePath: 'README.md',
+      worktreeId: WT,
+      language: 'markdown',
+      isDirty: true,
+      runtimeEnvironmentId: ENV,
+      mode: 'edit',
+      pendingDiskBaselineVerification: true
+    }
+    const state = makeState({ openFiles: [file], editorDrafts: { [file.id]: 'unsaved' } })
+    const snapshot = makeSnapshot([
+      {
+        type: 'markdown',
+        id: 'host-readme',
+        title: 'README.md',
+        filePath: file.filePath,
+        relativePath: file.relativePath,
+        language: 'markdown',
+        mode: 'edit',
+        isDirty: false,
+        isActive: true,
+        sourceFileId: file.filePath,
+        sourceFilePath: file.filePath,
+        sourceRelativePath: file.relativePath,
+        documentVersion: 'file:1'
+      }
+    ])
+    const patch = applyWebSessionTabsSnapshot(
+      state,
+      snapshot,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    expect(patch.openFiles ?? state.openFiles).toEqual([
+      expect.objectContaining({ id: file.id, isDirty: true })
+    ])
+    expect(patch.unifiedTabsByWorktree?.[WT]).toEqual([
+      expect.objectContaining({ entityId: file.id })
+    ])
+    const hydrated = { ...state, ...patch } as WebSessionTabsSyncState
+    const reconciled = {
+      ...hydrated,
+      ...applyWebSessionTabsSnapshot(hydrated, snapshot, ENV, NOW + 1)
+    }
+    expect(reconciled.openFiles).toEqual([expect.objectContaining({ id: file.id, isDirty: true })])
+    expect(reconciled.editorDrafts).toEqual({ [file.id]: 'unsaved' })
+    expect(reconciled.unifiedTabsByWorktree[WT]).toEqual([
+      expect.objectContaining({ entityId: file.id })
+    ])
+  })
 
   it('hydrates active host markdown tabs as remote editor tabs', () => {
     const patch = applyWebSessionTabsSnapshot(

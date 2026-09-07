@@ -5,6 +5,7 @@ import { getRepoOwnerRoutedSettings } from '@/lib/repo-runtime-owner'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { useAppStore } from '@/store'
+import { isRuntimeSessionPlaceholderRepo } from '@/store/terminals/workspace-terminal-placeholders'
 import { useActiveWorktree, useRepoById, useWorktreeMap } from '@/store/selectors'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
@@ -125,7 +126,10 @@ export function useSourceControlWorktreeContext() {
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
 
   const isFolder = activeRepo ? isFolderRepo(activeRepo) : false
-  const worktreePath = activeWorktree?.path ?? null
+  const worktreePath =
+    activeRepo && !isRuntimeSessionPlaceholderRepo(activeRepo)
+      ? (activeWorktree?.path ?? null)
+      : null
   const activeConnectionId = activeWorktreeId
     ? (getConnectionId(activeWorktreeId) ?? activeRepoConnectionId)
     : null

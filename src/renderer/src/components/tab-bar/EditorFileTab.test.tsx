@@ -25,6 +25,7 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
     ...actual,
+    useContext: () => null,
     useEffect: () => {},
     useCallback<T extends (...args: never[]) => unknown>(callback: T) {
       return callback

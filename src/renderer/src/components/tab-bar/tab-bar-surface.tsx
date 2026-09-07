@@ -222,6 +222,7 @@ export function renderTabBarSurface({
       >
         <DropdownMenuTrigger asChild>
           <button
+            disabled={props.creationDisabled}
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}

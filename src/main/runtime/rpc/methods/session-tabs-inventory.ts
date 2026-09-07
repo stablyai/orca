@@ -67,18 +67,18 @@ async function collectSessionTabsInventory(
   inventory: SessionTabsInventory
   changeSequence: number
 }> {
-  const { runtime, pairedDeviceId, signal } = context
+  const { runtime, pairedDeviceId, clientNavigationId = pairedDeviceId, signal } = context
   // Why: a failed census degrades inside the runtime to the same scan without
   // the authoritative label, so no client ever pays a second full collection.
   if (!includeChangeSequence) {
     const inventory = runtime.supportsAuthoritativeSessionTabsInventory()
-      ? await runtime.listAllMobileSessionTabsInventory(pairedDeviceId, signal)
-      : { snapshots: await runtime.listAllMobileSessionTabs(pairedDeviceId) }
+      ? await runtime.listAllMobileSessionTabsInventory(clientNavigationId, signal)
+      : { snapshots: await runtime.listAllMobileSessionTabs(clientNavigationId) }
     return { inventory: projectInventory(inventory, context), changeSequence: 0 }
   }
   const collected = runtime.supportsAuthoritativeSessionTabsInventory()
-    ? await runtime.listAllMobileSessionTabsInventoryWithChangeSequence(pairedDeviceId, signal)
-    : await runtime.listAllMobileSessionTabsWithChangeSequence(pairedDeviceId)
+    ? await runtime.listAllMobileSessionTabsInventoryWithChangeSequence(clientNavigationId, signal)
+    : await runtime.listAllMobileSessionTabsWithChangeSequence(clientNavigationId)
   return {
     inventory: projectInventory(collected, context),
     changeSequence: collected.changeSequence
@@ -93,11 +93,18 @@ export async function subscribeSessionTabsInventory(
   context: RpcContext,
   emit: (result: unknown) => void
 ): Promise<void> {
-  const { runtime, connectionId, requestId, pairedDeviceId } = context
+  const {
+    runtime,
+    connectionId,
+    requestId,
+    pairedDeviceId,
+    clientNavigationId = pairedDeviceId,
+    subscriptionNamespace
+  } = context
   if (context.signal?.aborted) {
     throw new Error('client_disconnected')
   }
-  const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
+  const cleanupPrefix = `session.tabs:${subscriptionNamespace ?? connectionId ?? 'local'}:*`
   const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
   const inventoryController = new AbortController()
   const abortInventory = (): void => inventoryController.abort()
@@ -216,7 +223,7 @@ export async function subscribeSessionTabsInventory(
       return
     }
     publishChange(snapshot, changeSequence)
-  }, pairedDeviceId)
+  }, clientNavigationId)
   runtime.registerSubscriptionCleanup(
     subscriptionId,
     () => {

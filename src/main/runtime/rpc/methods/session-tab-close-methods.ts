@@ -15,7 +15,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
       if (context.clientKind) {
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
-          context.pairedDeviceId
+          context.clientNavigationId ?? context.pairedDeviceId
         )
         const visible = projectSessionTabsForClient(
           raw,
@@ -53,7 +53,9 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
             params.tabId,
             {
               reason: 'user',
-              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
+              ...((context.clientNavigationId ?? context.pairedDeviceId)
+                ? { clientNavigationId: context.clientNavigationId ?? context.pairedDeviceId }
+                : {})
             }
           )
           span.setAttribute(
@@ -92,7 +94,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
       if (context.clientKind) {
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
-          context.pairedDeviceId
+          context.clientNavigationId ?? context.pairedDeviceId
         )
         const visible = projectSessionTabsForClient(
           raw,
@@ -118,7 +120,9 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
               reason: params.reason,
               expectedPublicationEpoch: params.publicationEpoch,
               expectedTerminalHandle: params.terminal,
-              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
+              ...((context.clientNavigationId ?? context.pairedDeviceId)
+                ? { clientNavigationId: context.clientNavigationId ?? context.pairedDeviceId }
+                : {})
             }
           )
           span.setAttribute(

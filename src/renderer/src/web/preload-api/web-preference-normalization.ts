@@ -25,6 +25,21 @@ import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
 
+const WEB_WINDOW_NAVIGATION_FIELDS = [
+  'activeView',
+  'lastActiveRepoId',
+  'lastActiveWorktreeId'
+] as const satisfies readonly (keyof PersistedUIState)[]
+
+export function omitWebWindowNavigationFields<T extends object>(
+  updates: T
+): Omit<T, (typeof WEB_WINDOW_NAVIGATION_FIELDS)[number]> {
+  const navigationFields = new Set<string>(WEB_WINDOW_NAVIGATION_FIELDS)
+  return Object.fromEntries(
+    Object.entries(updates).filter(([field]) => !navigationFields.has(field))
+  ) as Omit<T, (typeof WEB_WINDOW_NAVIGATION_FIELDS)[number]>
+}
+
 export function mergeWebUIState(
   base: PersistedUIState,
   updates: Partial<PersistedUIState>
@@ -76,9 +91,18 @@ export function mergeHostWebUIState(
     agentsReadFilter: local.agentsReadFilter,
     agentsGroupBy: local.agentsGroupBy,
     activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
-    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
+    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey,
+    workspaceWindowIds: local.workspaceWindowIds,
+    workspaceWindowPlacements: local.workspaceWindowPlacements,
+    windowPaneLayout: local.windowPaneLayout
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
-  return { ...mergeWebUIState(local, incoming), ...pinned }
+  return {
+    ...mergeWebUIState(local, incoming),
+    ...pinned,
+    activeView: local.activeView,
+    lastActiveRepoId: local.lastActiveRepoId,
+    lastActiveWorktreeId: local.lastActiveWorktreeId
+  }
 }
 
 export function mergeFeatureInteractionState(

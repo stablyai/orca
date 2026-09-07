@@ -90,6 +90,14 @@ describe('createMainWindow', () => {
     expect(browserWindowInstance.loadFile).not.toHaveBeenCalled()
     expect(browserWindowInstance.loadURL).not.toHaveBeenCalled()
 
+    const preventDefault = vi.fn()
+    for (const [event, handler] of browserWindowInstance.on.mock.calls) {
+      if (event === 'page-title-updated') {
+        handler({ preventDefault }, 'Orca')
+      }
+    }
+    expect(preventDefault).toHaveBeenCalledOnce()
+
     loadMainWindow(win)
 
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(1)
@@ -490,8 +498,8 @@ describe('createMainWindow', () => {
 
     expect(webContents.setBackgroundThrottling).toHaveBeenCalledWith(true)
     expect(webContents.setBackgroundThrottling).not.toHaveBeenCalledWith(false)
-    expect(windowHandlers.get('restore')).toHaveLength(1)
-    expect(windowHandlers.get('show')).toHaveLength(1)
+    expect(windowHandlers.get('restore')).toHaveLength(2)
+    expect(windowHandlers.get('show')).toHaveLength(2)
     expect(windowHandlers.get('focus')).toHaveLength(1)
 
     windowHandlers.get('show')?.[0]?.()

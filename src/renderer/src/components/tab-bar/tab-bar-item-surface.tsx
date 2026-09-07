@@ -1,4 +1,5 @@
 import React from 'react'
+import { WorkspaceViewPresentationContext } from '../cross-project-panes/workspace-view-presentation-context'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -34,7 +35,6 @@ export function renderTabBarItems({
   togglePinned: (item: TabBarItem) => void
 }): React.ReactNode[] {
   const {
-    worktreeId,
     activeTabId,
     activeFileId,
     activeBrowserTabId,
@@ -59,7 +59,6 @@ export function renderTabBarItems({
     onMakePreviewFilePermanent
   } = props
   const {
-    resolvedGroupId,
     generatedTabTitlesEnabled,
     unifiedTabByVisibleId,
     nativeChatEnabled,
@@ -84,129 +83,209 @@ export function renderTabBarItems({
     }
   }
 
-  return items.map((item, index) => {
-    const dragData: TabDragItemData = {
-      kind: 'tab',
-      worktreeId,
-      groupId: resolvedGroupId,
-      unifiedTabId: item.unifiedTabId,
-      visibleTabId: item.id,
-      tabType: item.type,
-      label: getTabDragLabel(item, generatedTabTitlesEnabled),
-      iconPath: item.type === 'editor' ? item.data.filePath : undefined,
-      color: item.type === 'terminal' ? (item.data.color ?? null) : null
-    }
-    if (item.type === 'terminal') {
-      const terminalTab = {
-        ...item.data,
-        title: resolveTerminalTabTitle(item.data, generatedTabTitlesEnabled, item.data.title)
-      }
-      const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
-      // Carry the agent *identity* (not just "an agent exists") so the native-chat gate can reject agents like Grok.
-      const resolvedAgent = resolveNativeChatTabAgentEvidence(terminalTab, unifiedTabForItem)
-      // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
-      const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
-      const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
-      const canToggleViewMode =
-        unifiedTabForItem !== undefined &&
-        canSwitchNativeChatView({
-          experimentalNativeChatEnabled: nativeChatEnabled,
-          contentType: 'terminal',
-          launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
-          detectedAgent,
-          resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
-          nativeChatTranscriptIsLocalReadable,
-          isChatViewMode: unifiedTabForItem.viewMode === 'chat',
-          structuredSessionId: unifiedTabForItem.structuredSessionId ?? null
-        })
-      return (
-        <SortableTab
-          key={item.id}
-          tab={terminalTab}
-          unifiedTabId={item.unifiedTabId}
-          groupId={resolvedGroupId}
-          tabCount={items.length}
-          canToggleViewMode={canToggleViewMode}
-          isChatView={nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'}
-          onToggleViewMode={
-            unifiedTabForItem ? () => toggleTabViewMode(unifiedTabForItem.id) : undefined
-          }
-          hasTabsToRight={index < items.length - 1}
-          hasTabsToLeft={index > 0}
-          isActive={
-            !clientHostedRowOwnsActiveState &&
-            (activeTabType === 'terminal' || activeTabType === 'simulator') &&
-            item.id === activeTabId
-          }
-          isPinned={item.isPinned}
-          isExpanded={expandedPaneByTabId[item.id] === true}
-          onActivate={activateRealTab(onActivate)}
-          onClose={onClose}
-          onCloseOthers={onCloseOthers}
-          onCloseToRight={onCloseToRight}
-          onCloseToLeft={onCloseToLeft}
-          onSetCustomTitle={onSetCustomTitle}
-          onSetTabColor={onSetTabColor}
-          onTogglePin={() => togglePinned(item)}
-          onToggleExpand={onTogglePaneExpand}
-          dragData={dragData}
-          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
-          includeTopTabBorder={includeTopTabBorder}
-        />
-      )
-    }
-    if (item.type === 'browser') {
-      return (
-        <BrowserTab
-          key={item.id}
-          tab={item.data}
-          isActive={
-            !clientHostedRowOwnsActiveState &&
-            activeTabType === 'browser' &&
-            activeBrowserTabId === item.id
-          }
-          isPinned={item.isPinned}
-          hasTabsToRight={index < items.length - 1}
-          hasTabsToLeft={index > 0}
-          tabCount={items.length}
-          onActivate={() => activateRealTab(onActivateBrowserTab)(item.id)}
-          onClose={() => onCloseBrowserTab?.(item.id)}
-          onCloseOthers={() => onCloseOthers(item.id)}
-          onCloseToRight={() => onCloseToRight(item.id)}
-          onCloseToLeft={() => onCloseToLeft(item.id)}
-          onDuplicate={
-            runtime.managedBrowserCreationEnabled
-              ? () => onDuplicateBrowserTab?.(item.id)
-              : undefined
-          }
-          onTogglePin={() => togglePinned(item)}
-          dragData={dragData}
-          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
-          includeTopTabBorder={includeTopTabBorder}
-        />
-      )
-    }
-    if (item.type === 'simulator') {
-      const simulatorLabel = item.data.label || 'Mobile Emulator'
-      const simulatorFile: OpenFile & { tabId: string } = {
-        id: item.id,
-        tabId: item.id,
-        filePath: simulatorLabel,
-        relativePath: simulatorLabel,
+  return items
+    .map((item, index) => {
+      const worktreeId = item.data.worktreeId
+      const resolvedGroupId = unifiedTabByVisibleId.get(item.id)?.groupId ?? runtime.resolvedGroupId
+      const dragData: TabDragItemData = {
+        workspaceViewId: props.presentationContext?.[item.id]?.viewId,
+        workspacePaneId: props.presentationPaneId,
+        projectContext: props.presentationContext?.[item.id],
+        kind: 'tab',
         worktreeId,
-        language: 'simulator',
-        isPreview: false,
-        isDirty: false,
-        mode: 'edit'
+        groupId: resolvedGroupId,
+        unifiedTabId: item.unifiedTabId,
+        visibleTabId: item.id,
+        tabType: item.type,
+        label: getTabDragLabel(item, generatedTabTitlesEnabled),
+        iconPath: item.type === 'editor' ? item.data.filePath : undefined,
+        color: item.type === 'terminal' ? (item.data.color ?? null) : null
+      }
+      if (item.type === 'terminal') {
+        const terminalTab = {
+          ...item.data,
+          title: resolveTerminalTabTitle(item.data, generatedTabTitlesEnabled, item.data.title)
+        }
+        const unifiedTabForItem = unifiedTabByVisibleId.get(item.id)
+        // Carry the agent *identity* (not just "an agent exists") so the native-chat gate can reject agents like Grok.
+        const resolvedAgent = resolveNativeChatTabAgentEvidence(terminalTab, unifiedTabForItem)
+        // Key the live-agent lookup by the backing terminal tab id: agent-status pane keys use it, not the unified tab id.
+        const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
+        const tabWideFallbackSafe = nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
+        const canToggleViewMode =
+          unifiedTabForItem !== undefined &&
+          canSwitchNativeChatView({
+            experimentalNativeChatEnabled: nativeChatEnabled,
+            contentType: 'terminal',
+            launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
+            detectedAgent,
+            resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
+            nativeChatTranscriptIsLocalReadable,
+            isChatViewMode: unifiedTabForItem.viewMode === 'chat',
+            structuredSessionId: unifiedTabForItem.structuredSessionId ?? null
+          })
+        return (
+          <SortableTab
+            key={item.id}
+            tab={terminalTab}
+            unifiedTabId={item.unifiedTabId}
+            groupId={resolvedGroupId}
+            tabCount={items.length}
+            canToggleViewMode={canToggleViewMode}
+            isChatView={nativeChatEnabled && unifiedTabForItem?.viewMode === 'chat'}
+            onToggleViewMode={
+              unifiedTabForItem ? () => toggleTabViewMode(unifiedTabForItem.id) : undefined
+            }
+            hasTabsToRight={index < items.length - 1}
+            hasTabsToLeft={index > 0}
+            isActive={
+              !clientHostedRowOwnsActiveState &&
+              (activeTabType === 'terminal' || activeTabType === 'simulator') &&
+              item.id === activeTabId
+            }
+            isPinned={item.isPinned}
+            isExpanded={expandedPaneByTabId[item.id] === true}
+            onActivate={activateRealTab(onActivate)}
+            onClose={onClose}
+            onCloseOthers={onCloseOthers}
+            onCloseToRight={onCloseToRight}
+            onCloseToLeft={onCloseToLeft}
+            onSetCustomTitle={onSetCustomTitle}
+            onSetTabColor={onSetTabColor}
+            onTogglePin={() => togglePinned(item)}
+            onToggleExpand={onTogglePaneExpand}
+            dragData={dragData}
+            dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+            includeTopTabBorder={includeTopTabBorder}
+          />
+        )
+      }
+      if (item.type === 'browser') {
+        return (
+          <BrowserTab
+            key={item.id}
+            tab={item.data}
+            isActive={
+              !clientHostedRowOwnsActiveState &&
+              activeTabType === 'browser' &&
+              activeBrowserTabId === item.id
+            }
+            isPinned={item.isPinned}
+            hasTabsToRight={index < items.length - 1}
+            hasTabsToLeft={index > 0}
+            tabCount={items.length}
+            onActivate={() => activateRealTab(onActivateBrowserTab)(item.id)}
+            onClose={() => onCloseBrowserTab?.(item.id)}
+            onCloseOthers={() => onCloseOthers(item.id)}
+            onCloseToRight={() => onCloseToRight(item.id)}
+            onCloseToLeft={() => onCloseToLeft(item.id)}
+            onDuplicate={
+              runtime.managedBrowserCreationEnabled
+                ? () => onDuplicateBrowserTab?.(item.id)
+                : undefined
+            }
+            onTogglePin={() => togglePinned(item)}
+            dragData={dragData}
+            dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+            includeTopTabBorder={includeTopTabBorder}
+          />
+        )
+      }
+      if (item.type === 'simulator') {
+        const simulatorLabel = item.data.label || 'Mobile Emulator'
+        const simulatorFile: OpenFile & { tabId: string } = {
+          id: item.id,
+          tabId: item.id,
+          filePath: simulatorLabel,
+          relativePath: simulatorLabel,
+          worktreeId,
+          language: 'simulator',
+          isPreview: false,
+          isDirty: false,
+          mode: 'edit'
+        }
+        return (
+          <EditorFileTab
+            key={item.id}
+            file={simulatorFile}
+            isActive={
+              !clientHostedRowOwnsActiveState &&
+              activeTabType === 'simulator' &&
+              item.id === activeSimulatorTabId
+            }
+            isPinned={item.isPinned}
+            hasTabsToRight={index < items.length - 1}
+            hasTabsToLeft={index > 0}
+            tabCount={items.length}
+            statusByRelativePath={statusByRelativePath}
+            onActivate={() => activateRealTab(onActivateFile)(item.id)}
+            onClose={() => onCloseFile?.(item.id)}
+            onCloseOthers={() => onCloseOthers(item.id)}
+            onCloseToRight={() => onCloseToRight(item.id)}
+            onCloseToLeft={() => onCloseToLeft(item.id)}
+            onCloseAll={() => onCloseAllFiles?.()}
+            onMakePermanent={() => {}}
+            onTogglePin={() => togglePinned(item)}
+            dragData={dragData}
+            dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+            includeTopTabBorder={includeTopTabBorder}
+          />
+        )
+      }
+      if (item.type === 'agent-session') {
+        const structuredTab: TerminalTab = {
+          id: item.id,
+          ptyId: null,
+          worktreeId,
+          title: item.data.label,
+          customTitle: item.data.customLabel,
+          color: item.data.color,
+          sortOrder: item.data.sortOrder,
+          createdAt: item.data.createdAt,
+          ...(isAgentSessionHandleProvider(item.data.agentSessionAgent)
+            ? { launchAgent: item.data.agentSessionAgent as TuiAgent }
+            : {})
+        }
+        return (
+          <SortableTab
+            key={item.id}
+            tab={structuredTab}
+            unifiedTabId={item.unifiedTabId}
+            groupId={resolvedGroupId}
+            tabCount={items.length}
+            hasTabsToRight={index < items.length - 1}
+            hasTabsToLeft={index > 0}
+            isActive={
+              !clientHostedRowOwnsActiveState &&
+              activeTabType === 'agent-session' &&
+              item.id === activeTabId
+            }
+            isPinned={item.isPinned}
+            isExpanded={false}
+            onActivate={() => activateRealTab(onActivateAgentSession)(item.id)}
+            onClose={() => onClose(item.id)}
+            onCloseOthers={() => onCloseOthers(item.id)}
+            onCloseToRight={() => onCloseToRight(item.id)}
+            onCloseToLeft={() => onCloseToLeft(item.id)}
+            onSetCustomTitle={onSetCustomTitle}
+            onSetTabColor={onSetTabColor}
+            onTogglePin={() => togglePinned(item)}
+            onToggleExpand={() => {}}
+            canSplitTerminal={false}
+            dragData={dragData}
+            dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+            includeTopTabBorder={includeTopTabBorder}
+          />
+        )
       }
       return (
         <EditorFileTab
           key={item.id}
-          file={simulatorFile}
+          file={item.data}
           isActive={
             !clientHostedRowOwnsActiveState &&
-            activeTabType === 'simulator' &&
-            item.id === activeSimulatorTabId
+            (activeTabType === 'editor' || activeTabType === 'simulator') &&
+            activeFileId === item.id
           }
           isPinned={item.isPinned}
           hasTabsToRight={index < items.length - 1}
@@ -219,86 +298,24 @@ export function renderTabBarItems({
           onCloseToRight={() => onCloseToRight(item.id)}
           onCloseToLeft={() => onCloseToLeft(item.id)}
           onCloseAll={() => onCloseAllFiles?.()}
-          onMakePermanent={() => {}}
+          onMakePermanent={() => onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)}
           onTogglePin={() => togglePinned(item)}
           dragData={dragData}
           dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
           includeTopTabBorder={includeTopTabBorder}
         />
       )
-    }
-    if (item.type === 'agent-session') {
-      const structuredTab: TerminalTab = {
-        id: item.id,
-        ptyId: null,
-        worktreeId,
-        title: item.data.label,
-        customTitle: item.data.customLabel,
-        color: item.data.color,
-        sortOrder: item.data.sortOrder,
-        createdAt: item.data.createdAt,
-        ...(isAgentSessionHandleProvider(item.data.agentSessionAgent)
-          ? { launchAgent: item.data.agentSessionAgent as TuiAgent }
-          : {})
-      }
-      return (
-        <SortableTab
-          key={item.id}
-          tab={structuredTab}
-          unifiedTabId={item.unifiedTabId}
-          groupId={resolvedGroupId}
-          tabCount={items.length}
-          hasTabsToRight={index < items.length - 1}
-          hasTabsToLeft={index > 0}
-          isActive={
-            !clientHostedRowOwnsActiveState &&
-            activeTabType === 'agent-session' &&
-            item.id === activeTabId
-          }
-          isPinned={item.isPinned}
-          isExpanded={false}
-          onActivate={() => activateRealTab(onActivateAgentSession)(item.id)}
-          onClose={() => onClose(item.id)}
-          onCloseOthers={() => onCloseOthers(item.id)}
-          onCloseToRight={() => onCloseToRight(item.id)}
-          onCloseToLeft={() => onCloseToLeft(item.id)}
-          onSetCustomTitle={onSetCustomTitle}
-          onSetTabColor={onSetTabColor}
-          onTogglePin={() => togglePinned(item)}
-          onToggleExpand={() => {}}
-          canSplitTerminal={false}
-          dragData={dragData}
-          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
-          includeTopTabBorder={includeTopTabBorder}
-        />
+    })
+    .map((element, index) => {
+      const context = props.presentationContext?.[items[index].id]
+      return context ? (
+        <WorkspaceViewPresentationContext.Provider key={items[index].id} value={context}>
+          <div className="flex shrink-0 self-stretch" data-workspace-view-id={context.viewId}>
+            {element}
+          </div>
+        </WorkspaceViewPresentationContext.Provider>
+      ) : (
+        element
       )
-    }
-    return (
-      <EditorFileTab
-        key={item.id}
-        file={item.data}
-        isActive={
-          !clientHostedRowOwnsActiveState &&
-          (activeTabType === 'editor' || activeTabType === 'simulator') &&
-          activeFileId === item.id
-        }
-        isPinned={item.isPinned}
-        hasTabsToRight={index < items.length - 1}
-        hasTabsToLeft={index > 0}
-        tabCount={items.length}
-        statusByRelativePath={statusByRelativePath}
-        onActivate={() => activateRealTab(onActivateFile)(item.id)}
-        onClose={() => onCloseFile?.(item.id)}
-        onCloseOthers={() => onCloseOthers(item.id)}
-        onCloseToRight={() => onCloseToRight(item.id)}
-        onCloseToLeft={() => onCloseToLeft(item.id)}
-        onCloseAll={() => onCloseAllFiles?.()}
-        onMakePermanent={() => onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)}
-        onTogglePin={() => togglePinned(item)}
-        dragData={dragData}
-        dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
-        includeTopTabBorder={includeTopTabBorder}
-      />
-    )
-  })
+    })
 }

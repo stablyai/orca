@@ -1,4 +1,5 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import { parseWindowPaneLayout } from '../../../../../shared/window-pane-schema'
 import type { AppState } from '../../types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import { normalizeRightSidebarRoute } from '../../right-sidebar-route'
@@ -120,6 +121,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ui.rightSidebarExplorerView
         )
         const hydrated = {
+          windowPaneLayout: parseWindowPaneLayout(ui.windowPaneLayout),
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
             ui.sidebarWidth,

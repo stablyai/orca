@@ -4,6 +4,7 @@ import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { ProjectAccentMark } from '@/components/repo/ProjectAccentMark'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspace-path-status'
@@ -308,6 +309,15 @@ export function renderWorktreeSectionHeaderRow(args: {
               'cursor-grab active:cursor-grabbing'
           )}
         >
+          {isRepoHeader && row.repo ? (
+            <ProjectAccentMark color={row.repo.badgeColor} />
+          ) : isProjectGroupHeader ? (
+            <ProjectAccentMark
+              color={
+                row.projectGroup && 'color' in row.projectGroup ? row.projectGroup.color : undefined
+              }
+            />
+          ) : null}
           {row.icon ? (
             <div
               className={cn(

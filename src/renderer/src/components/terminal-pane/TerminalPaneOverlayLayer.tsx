@@ -11,6 +11,7 @@ import { shouldMountBackgroundWorktreeTab } from '../terminal/background-termina
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import { usePaneOverlayAssignments } from '../cross-project-panes/use-pane-overlay-assignments'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -47,6 +48,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Cold-activation deferred tabs receive immediate parked watcher coverage. */
   activationDeferredMountTabIds?: ReadonlySet<string> | null
 }): React.JSX.Element | null {
+  const presentation = usePaneOverlayAssignments(worktreeId)
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
@@ -60,7 +62,12 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
 
-  useNativeChatToggleShortcut(worktreeId, isWorktreeActive)
+  useNativeChatToggleShortcut(
+    worktreeId,
+    isWorktreeActive &&
+      (!presentation.assignments ||
+        Array.from(presentation.assignments.values()).some((a) => a.isActiveInGroup && a.isFocused))
+  )
 
   const leaveWorktreeIfEmpty = useCallback(() => {
     const state = useAppStore.getState()
@@ -74,8 +81,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   }, [reconcileWorktreeTabModel, setActiveWorktree, worktreeId])
 
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
-    [focusGroup, worktreeId]
+    (groupId: string) =>
+      presentation.assignments ? presentation.focus(groupId) : focusGroup(worktreeId, groupId),
+    [focusGroup, worktreeId, presentation]
   )
 
   const groupActiveTabById = useMemo(() => {
@@ -92,14 +100,18 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
       if (tab.contentType !== 'terminal') {
         continue
       }
+      const placement = presentation.assignments?.get(tab.id)
+      if (presentation.assignments && !placement) {
+        continue
+      }
       entries.set(tab.entityId, {
         unifiedTabId: tab.id,
-        groupId: tab.groupId,
-        isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
+        groupId: placement?.groupId ?? tab.groupId,
+        isActiveInGroup: placement?.isActiveInGroup ?? groupActiveTabById[tab.groupId] === tab.id
       })
     }
     return entries
-  }, [groupActiveTabById, unifiedTabs])
+  }, [groupActiveTabById, unifiedTabs, presentation.assignments])
 
   const activeTerminalTabId = useMemo(() => {
     if (!activeGroupId) {
@@ -139,7 +151,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
         .map((terminalTab) => {
           const assignment = assignments.get(terminalTab.id)
           const isVisible = Boolean(isWorktreeActive && assignment?.isActiveInGroup)
-          const isActive = Boolean(isVisible && assignment?.groupId === activeGroupId)
+          const isActive = Boolean(
+            isVisible && assignment?.groupId === (presentation.activePaneId ?? activeGroupId)
+          )
           const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
             worktreeId,
             tabId: terminalTab.id

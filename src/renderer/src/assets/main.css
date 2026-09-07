@@ -130,6 +130,7 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  --project-accent-mix: 70%;
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -253,7 +254,20 @@
 
 /* ── Dark Mode ───────────────────────────────────────── */
 
+.project-accent-mark {
+  display: inline-block;
+  width: 3px;
+  height: 0.75rem;
+  border-radius: 1px;
+  background: color-mix(
+    in srgb,
+    var(--project-accent-source) var(--project-accent-mix),
+    var(--foreground)
+  );
+}
+
 .dark {
+  --project-accent-mix: 85%;
   --orca-security-background: #0a0a0a;
   --orca-security-foreground: #fafafa;
   --orca-security-card: #171717;

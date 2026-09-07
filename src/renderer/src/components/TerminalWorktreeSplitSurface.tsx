@@ -1,4 +1,6 @@
 import React from 'react'
+import { useAppStore } from '@/store'
+import { WorkspaceEditorSurfaces } from './cross-project-panes/WorkspaceEditorSurfaces'
 import type { TabGroupLayoutNode } from '../../../shared/tab-types'
 import type { ActivityTerminalPortalTarget } from './activity/activity-terminal-portal'
 import {
@@ -41,6 +43,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
+  const presentation = useAppStore((s) => Boolean(s.windowPaneLayout))
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
@@ -51,21 +54,26 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   return (
     <div
       className={
-        isVisible
-          ? 'absolute inset-0 flex'
-          : shouldKeepPaintable
-            ? 'absolute inset-0 flex opacity-0 pointer-events-none'
-            : 'absolute inset-0 hidden'
+        presentation && (isVisible || shouldKeepPaintable)
+          ? 'contents'
+          : isVisible
+            ? `absolute inset-0 flex${presentation ? ' pointer-events-none' : ''}`
+            : shouldKeepPaintable
+              ? 'absolute inset-0 flex opacity-0 pointer-events-none'
+              : 'absolute inset-0 hidden'
       }
       inert={!isVisible}
       aria-hidden={!isVisible}
     >
-      <TabGroupSplitLayout
-        layout={layout}
-        worktreeId={worktreeId}
-        focusedGroupId={focusedGroupId}
-        isWorktreeActive={isVisible}
-      />
+      {!presentation && (
+        <TabGroupSplitLayout
+          layout={layout}
+          worktreeId={worktreeId}
+          focusedGroupId={focusedGroupId}
+          isWorktreeActive={isVisible}
+        />
+      )}
+      {presentation && <WorkspaceEditorSurfaces worktreeId={worktreeId} isVisible={isVisible} />}
       <TerminalPaneOverlayLayer
         worktreeId={worktreeId}
         worktreePath={worktreePath}
