@@ -122,13 +122,15 @@ export function spawnRelay(
   })
   proc.once('close', () => {
     stderrTail += stderrDecoder.end()
+    // Close firing makes the fallback moot on every branch; clear it unconditionally.
+    if (stdioCloseFallback) {
+      clearTimeout(stdioCloseFallback)
+      stdioCloseFallback = null
+    }
     if (rejectSentinelAfterClose && !sentinelResolved) {
       rejectSentinelAfterClose()
-    } else if (stdioCloseFallback) {
-      clearTimeout(stdioCloseFallback)
+      rejectSentinelAfterClose = null
     }
-    rejectSentinelAfterClose = null
-    stdioCloseFallback = null
   })
 
   const send = (method: string, params?: Record<string, unknown>): number => {
