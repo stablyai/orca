@@ -63,7 +63,7 @@ describe('native handoff acquisition', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  it('drains queued rows before unbinding the old target and acquiring the native child', async () => {
+  it('keeps handoff liveness false until queued rows drain and acquisition succeeds', async () => {
     const location: AgentSessionExecutionLocation = {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       wslDistro: null,
@@ -126,25 +126,27 @@ describe('native handoff acquisition', () => {
       order.push('unbind')
       originalUnbind()
     })
+    const acquired = {
+      process: {
+        hostId: 'local',
+        pid: 5300,
+        processStartTimeMs: now - 1_000,
+        spawnToken: 'native-handoff'
+      },
+      link: {
+        linkId: 'native-link',
+        handle: { provider: 'codex' as const, threadId },
+        origin: 'created' as const,
+        mintedAtFence: reserved.record.lease.runtimeFence,
+        observedAt: now
+      },
+      acquisitionGeneration: 'generation-native'
+    }
+    const acquisition = Promise.withResolvers<typeof acquired>()
     const adapter = {
-      acquire: vi.fn(async ({ fence, spawnToken }) => {
+      acquire: vi.fn(async () => {
         order.push('acquire')
-        return {
-          process: {
-            hostId: 'local',
-            pid: 5300,
-            processStartTimeMs: now - 1_000,
-            spawnToken
-          },
-          link: {
-            linkId: 'native-link',
-            handle: { provider: 'codex' as const, threadId },
-            origin: 'created' as const,
-            mintedAtFence: fence,
-            observedAt: now
-          },
-          acquisitionGeneration: 'generation-native'
-        }
+        return acquisition.promise
       })
     }
     const session = {
@@ -199,9 +201,13 @@ describe('native handoff acquisition', () => {
     expect(unbind).not.toHaveBeenCalled()
 
     appendGate.resolve()
+    await vi.waitFor(() => expect(adapter.acquire).toHaveBeenCalledOnce())
+    expect(session.hasProviderChild).toBe(false)
+    acquisition.resolve(acquired)
     await acquiring
 
     expect(order).toEqual(['append-entered', 'append-complete', 'unbind', 'acquire'])
+    expect(session.hasProviderChild).toBe(true)
   })
 
   it('refuses an unsupported adapter before unbinding the TUI owner', async () => {

@@ -15,6 +15,7 @@ import type {
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -30,19 +31,23 @@ const CALLER = { callerKey: 'client-1' }
 
 const hosts: StructuredAgentSessionHost[] = []
 let root = ''
+let providerEvents: StructuredAgentSessionEventSink | undefined
 
 function adapter(): StructuredAgentSessionAdapter {
   return {
-    acquire: async ({ fence, spawnToken }) => ({
-      process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
-      link: {
-        linkId: `link-${fence}`,
-        handle: { provider: 'codex', threadId: THREAD },
-        origin: 'created',
-        mintedAtFence: fence,
-        observedAt: NOW
+    acquire: async ({ fence, spawnToken, events }) => {
+      providerEvents = events
+      return {
+        process: { hostId: 'local', pid: 4242, processStartTimeMs: 1_700_000_000_000, spawnToken },
+        link: {
+          linkId: `link-${fence}`,
+          handle: { provider: 'codex', threadId: THREAD },
+          origin: 'created',
+          mintedAtFence: fence,
+          observedAt: NOW
+        }
       }
-    }),
+    },
     dispatch: async () => ({
       state: 'accepted',
       providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
@@ -87,8 +92,9 @@ function sendEnvelope(
 }
 
 /** Persists one turn, then hands back a restarted host over the same directories. */
-async function restartWithPersistedTurn(): Promise<StructuredAgentSessionHost> {
+async function restartWithPersistedTurn(running = false): Promise<StructuredAgentSessionHost> {
   root = await mkdtemp(join(tmpdir(), 'orca-restart-status-'))
+  providerEvents = undefined
   resetHostTestOperationIds()
   const directory = join(root, 'store')
   const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
@@ -96,6 +102,17 @@ async function restartWithPersistedTurn(): Promise<StructuredAgentSessionHost> {
   expect(await host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const body = hostTestMessage('persisted conversation')
   await host.send(CALLER, { envelope: sendEnvelope(store, { body }), body })
+  if (running) {
+    const events = providerEvents as StructuredAgentSessionEventSink | undefined
+    if (!events) {
+      throw new Error('provider event sink was not acquired')
+    }
+    events.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 },
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
+      { lifecycle: true }
+    )
+  }
   await host.flushAllStreamedEvents()
   return createHost(await AgentSessionRecordStore.open({ directory, hostId: 'local' }))
 }
@@ -109,10 +126,20 @@ afterEach(async () => {
 describe('structured session restart status publication', () => {
   // Served by the subscribe-time re-projection rather than the restore's own publish, so this
   // covers what a restored journal projects — not the restore wiring. The test below pins that.
-  it('projects the persisted turn of a session restored without a provider', async () => {
-    const restarted = await restartWithPersistedTurn()
+  it('projects a boot-restored running turn as idle without a provider child', async () => {
+    const restarted = await restartWithPersistedTurn(true)
 
     await restarted.restoreReadableSessions()
+    const history = restarted.history({ sessionId: SESSION, direction: 'tail' })
+    expect(history.ok && history.page.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          body: expect.objectContaining({
+            turnLifecycle: { turnId: 'turn-1', state: 'running' }
+          })
+        })
+      ])
+    )
     const events: AgentSessionStatusEvent[] = []
     restarted.subscribeStatus({ id: 'session-list', emit: (event) => events.push(event) })
 

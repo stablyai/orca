@@ -53,15 +53,21 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
   })
 }
 
-function indexed(session: { journal: Awaited<ReturnType<typeof openJournal>> }) {
+type FeedSession = {
+  journal: Awaited<ReturnType<typeof openJournal>>
+  hasProviderChild?: boolean
+}
+
+function indexed(session: FeedSession) {
   return {
     journal: session.journal,
+    hasProviderChild: session.hasProviderChild ?? true,
     params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
   }
 }
 
 function feedFor(
-  sessions: Map<string, { journal: Awaited<ReturnType<typeof openJournal>> }>,
+  sessions: Map<string, FeedSession>,
   record: Partial<AgentSessionRecord> | null = null,
   onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
 ) {
@@ -143,6 +149,35 @@ describe('StructuredAgentSessionStatusFeed', () => {
       session: expect.objectContaining({ sessionId: SESSION, status: 'idle' })
     })
     expect(events).toHaveLength(3)
+  })
+
+  it('projects a running journal as working only while this host has a provider child', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
+      { fence: 1 }
+    )
+    await journal.appendItem(
+      TURN_IDENTITY,
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
+      { fence: 1 }
+    )
+    const session: FeedSession = { journal, hasProviderChild: false }
+    const { feed, events } = feedFor(new Map([[SESSION, session]]))
+
+    expect(events[0]).toMatchObject({
+      type: 'snapshot',
+      sessions: [{ status: 'idle' }]
+    })
+
+    session.hasProviderChild = true
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'working' } })
+
+    session.hasProviderChild = false
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
   })
 
   it('preserves the completion tombstone time when the journal and host reopen', async () => {
@@ -286,7 +321,7 @@ describe('StructuredAgentSessionStatusFeed', () => {
 
   it('reports a pending approval as attention', async () => {
     const journal = await openJournal()
-    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
+    const { feed, events } = feedFor(new Map([[SESSION, { journal, hasProviderChild: false }]]))
     await journal.appendItem(
       USER_IDENTITY,
       { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'run it' }] },

@@ -13,6 +13,7 @@ import {
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
 import { performAttach } from './structured-agent-session-attach-flow'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-alpha'
@@ -64,6 +65,52 @@ function attachParams(
 }
 
 describe('processless structured session reservation', () => {
+  it('sets provider-child liveness only after adapter acquisition succeeds', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-provider-child-acquisition-'))
+    const store = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    const acquisition =
+      Promise.withResolvers<Awaited<ReturnType<StructuredAgentSessionAdapter['acquire']>>>()
+    const adapter = {
+      acquire: vi.fn(() => acquisition.promise)
+    } as unknown as StructuredAgentSessionAdapter
+    const host = new StructuredAgentSessionHost({
+      store,
+      adapter,
+      journalRoot: root,
+      claimKeyId: 'key-1',
+      mintSpawnToken: () => 'spawn-a',
+      now: () => NOW
+    })
+    const attaching = host.attach({ callerKey: 'client-1' }, attachParams())
+
+    await vi.waitFor(() => expect(adapter.acquire).toHaveBeenCalledOnce())
+    const sessions = (host as unknown as { sessions: Map<string, { hasProviderChild: boolean }> })
+      .sessions
+    expect(sessions.get(SESSION)?.hasProviderChild).not.toBe(true)
+
+    acquisition.resolve({
+      process: {
+        hostId: 'local',
+        pid: 4242,
+        processStartTimeMs: NOW,
+        spawnToken: 'spawn-a'
+      },
+      link: {
+        linkId: 'link-1',
+        handle: { provider: 'codex', threadId: 'thread-1' },
+        origin: 'created',
+        mintedAtFence: 1,
+        observedAt: NOW
+      }
+    })
+    await expect(attaching).resolves.toMatchObject({ ok: true })
+    expect(sessions.get(SESSION)?.hasProviderChild).toBe(true)
+    await host.flushAllStreamedEvents()
+  })
+
   it('refuses an adapter that declares no create support before reserving a lease', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-unsupported-attach-'))
     const store = await AgentSessionRecordStore.open({

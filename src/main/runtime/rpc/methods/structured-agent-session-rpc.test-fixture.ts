@@ -100,6 +100,7 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
             lastActivityAt: () => 2,
             snapshot: () => ({ items: STATUS_ITEMS })
           } as unknown as AgentSessionJournal,
+          hasProviderChild: true,
           params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
         }
       ]

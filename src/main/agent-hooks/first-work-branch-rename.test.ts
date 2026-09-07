@@ -114,7 +114,14 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       })
       const feed = new StructuredAgentSessionStatusFeed({
         sessions: new Map([
-          ['session', { journal, params: { location: { workspaceId }, provider: agent } }]
+          [
+            'session',
+            {
+              journal,
+              hasProviderChild: true,
+              params: { location: { workspaceId }, provider: agent }
+            }
+          ]
         ]),
         getRecord: () => null,
         now: () => 1,
@@ -191,7 +198,9 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     const location = { workspaceId, workspaceKind: 'git-worktree' as const }
     const pending: Promise<void>[] = []
     const feed = new StructuredAgentSessionStatusFeed({
-      sessions: new Map([['session', { journal, params: { location, provider: 'codex' } }]]),
+      sessions: new Map([
+        ['session', { journal, hasProviderChild: true, params: { location, provider: 'codex' } }]
+      ]),
       getRecord: () => null,
       now: () => 1,
       onStatusChanged: (summary, options) => {
